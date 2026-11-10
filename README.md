@@ -12,6 +12,18 @@ Push an assembled page to `renders/<slug>.html` (output of `assemble.py`, voice 
 `https://github.com/Leon1304/what-if-engine/releases/download/render-<slug>/<slug>.mp4`
 Manual run: Actions → render → Run workflow (page path, width 1440 / 2160 / 1080).
 
+## Engine v2.7 (Nov 2026): conspiracy board, meters, split screen, globe, size comparison, loop
+- **Conspiracy board:** `conspiracyBoard(p, x, z, { items: [{ kind: 'photo' | 'note' | 'clip', icon, text }], links: [[i, j, snapT], …], cross: [[i, t], …], fall, wall })` — cork board on an easel with drawn photos (ufo, moon, pyramid, eye, globe, bird, ship, monster, camera, rocket, skull, question), sticky notes and clippings; red strings snap and swing down one by one, red ✗ stamps, the board topples. `B.item(i)` anchors callouts.
+- **Meter stat:** `{ type: 'meter', left: 'Nope', right: 'Totally real' }` — needle gauge 0–100 (red / yellow / green), the needle swings and trembles while it moves (Believability, risk, danger).
+- **Timeline stat:** `{ type: 'timeline', from, to, marks: [[1969, 'Apollo 11'], …] }` — year strip with playhead; close marks put their label below; `fmt: 'year'` (negative = BC).
+- **Split screen:** `SPLIT = [{ t, dur, a: 'main' | { p, l, fov, p2, l2 }, b: { … }, labels: ['Myth', 'Reality'], kinds: ['bad', 'good'] }]` — two cameras at once (top / bottom), wipes in from below with labelled halves; each half has its own aspect, sky and shadow box (no AO, lens blur or callouts meanwhile).
+- **Globe tools:** `globeMark(planet, lat, lon)` (pin + pulsing ring), `globeArc(planet, [lat, lon], [lat, lon], { t0, t1, h })` (great-circle arc that draws itself, with a head dot), `globeArea(planet, [[lat, lon], …])` (filled region + outline) on `planet()` and `layers()`; they spin with the surface and return callout anchors.
+- **Size comparison:** `lineup(p, x, z, [{ kind, h, label }], { labels })` — human, dog, cow, car, bus, truck, house, tree, palm, tower, lighthouse, silo, rocket, pyramid, plane, ship, whale, block, each scaled to its real height and placed side by side; height tags in metric · imperial; `L.shot(t, dur)` gives CAM keys that pan from the smallest to the biggest.
+- **X-ray skeleton:** capsule bones with knobbly ends, curved ribs, vertebrae, pelvis, sternum, collarbones, skull with eye sockets.
+- **Cutaway globe:** finer, smooth surface with soft coastlines and a cloud layer (`clouds: false` to drop it).
+- **Loop ending:** `CFG.loop: true` — the last 0.3 s whip away and the cards fade, so the restart lands on the hook like the next shot.
+- Callout `text` / `sub` may be functions; hidden why chips and delta pop-ups take no room in their stat row.
+
 ## Engine v2.6 (Nov 2026): explainer shorts
 `CFG.kind: 'explain'` turns a video into an explainer: badge **Explaining** — `'conspiracy'` does the same for conspiracy and myth checks with the badge **Conspiracy** (no episode number; colour = `CFG.accent`, `'auto'` picks one from the title), calm `documentary` voice by default, review foot "Sources in the description" (`review.badge` changes "Verified survivor"). Every tool also works in story videos. Full notes: end of the STORY block in `template.html`.
 - **Callouts on 3D points:** `CALLOUTS = [{ t, dur, at, kind: 'label' | 'arrow' | 'ring' | 'tag', text, sub, side, off, value, fmt }]` or `callout(at, t, o)` from the scene. `at` = track name, `[x,y,z]`, `t => [x,y,z]` or a rig. Leader lines and arrows draw on, rings draw round, labels stay in the safe area, flip sides when cramped and never stack (layout is a pure function of t). Live values: `text: 'Falling at {v}', value: t => v, fmt: 'speed'`.
