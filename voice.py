@@ -50,7 +50,7 @@ if LANG != 'en':   # translated texts: { beats: [{ text, say }], end: { say }, r
         if tb: b.update({k: v for k, v in tb.items() if k in ('text', 'say', 'kick')})
     if END and TR.get('end'): END.update({k: v for k, v in TR['end'].items() if k in ('say', 'q', 'cta')})
     if END and END.get('review') and TR.get('review'): END['review'].update({k: v for k, v in TR['review'].items() if k in ('say', 'text', 'title')})
-vc = CFG.get('voice', 'deep')
+vc = CFG.get('voice', 'documentary' if CFG.get('kind') == 'explain' else 'deep')   # explainers: calm documentary narrator by default
 if vc in (None, False, 'none', 'off'):
     for f in (f'{OUT}.voice.json', f'{OUT}.voice.mp3'):
         if os.path.exists(f): os.remove(f)

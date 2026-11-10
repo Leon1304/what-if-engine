@@ -12,6 +12,18 @@ Push an assembled page to `renders/<slug>.html` (output of `assemble.py`, voice 
 `https://github.com/Leon1304/what-if-engine/releases/download/render-<slug>/<slug>.mp4`
 Manual run: Actions → render → Run workflow (page path, width 1440 / 2160 / 1080).
 
+## Engine v2.6 (Nov 2026): explainer shorts
+`CFG.kind: 'explain'` turns a video into an explainer: badge **Explaining** (no episode number; colour = `CFG.accent`, `'auto'` picks one from the title), calm `documentary` voice by default, review foot "Sources in the description" (`review.badge` changes "Verified survivor"). Every tool also works in story videos. Full notes: end of the STORY block in `template.html`.
+- **Callouts on 3D points:** `CALLOUTS = [{ t, dur, at, kind: 'label' | 'arrow' | 'ring' | 'tag', text, sub, side, off, value, fmt }]` or `callout(at, t, o)` from the scene. `at` = track name, `[x,y,z]`, `t => [x,y,z]` or a rig. Leader lines and arrows draw on, rings draw round, labels stay in the safe area, flip sides when cramped and never stack (layout is a pure function of t). Live values: `text: 'Falling at {v}', value: t => v, fmt: 'speed'`.
+- **Freeze frame:** `FREEZE = [{ t, dur, label, sub }]` stops the scene dead (camera, voice and captions go on), drains the colour, white frame + label chip, impact/whoosh. After it the scene runs `dur` s behind: scene times = `ST(videoTime)`.
+- **X-ray:** `xray(rig, { t0, t1, path: 'bolt' | 'venom' | 'blood' | [joints], grow: [a, b] })` — glassy see-through body, skeleton, glowing path (lightning, venom, blood) with pulses.
+- **Cutaway sphere:** `layers(p, x, y, z, { r, kind: 'earth' | 'moon' | 'sun' | 'plain', layers, cut: 90 | 180, face, open: [t0, t1], tunnel, labels })` — wedge cut out, unlit layer faces with gradient, hot cores glow, lid lifts out; `E.at(i)` anchors callouts.
+- **Cross-section block:** `strata(p, x, z, { w, d, layers: [{ h, color, name, opacity }], top, labels })` — soil, quicksand (see-through layers), snow pack, ocean depth; `Q.at(i)`.
+- **Gauge:** `RULER = { label, show, hide, min, max, fmt, value | keys, marks: [[v, 'Everest'], …], invert, log }` — vertical scale on the left, pointer with the value, marks light up and pop when passed.
+- **Cards:** `FACTS` (big number that counts up + source line), `MYTH` (claim + FALSE / TRUE / HALF TRUE / MYTH stamp that slams on), `GUESS` (guess-first card with countdown, answer card later). Captions move to the lower third and callouts/gauge step aside while a card is up.
+- **Steps:** `STEPS = [[t, 'The heat'], …]` → numbered chip next to the badge (1/3 The heat), tick on each step.
+- **Units and graph:** stat `fmt: 'speed' | 'dist' | 'height' | 'depth' | 'temp' | 'mass' | 'g'` (metric in) → "195 km/h · 121 mph" (`CFG.units: 'both' | 'metric' | 'imperial'`); stat `type: 'graph'` draws the value's curve (`mark` = dashed reference line). Long stat rows wrap instead of running into the app buttons.
+
 ## Engine v2 (Nov 2026): motion, faces, nature, image
 - **Jointed figures:** hips, knees, feet, elbows; feet are placed by IK and stay planted, hips bob and sway, shoulders counter-rotate, arms swing opposite to the legs. Everybody breathes, blinks and glances around. `walk()` accelerates/brakes, turns ahead of corners and blends walk ↔ idle.
 - **Acting:** `react(f, t, 'startle'|'hit'|'shrug'|'nod'|'shake'|'facepalm'|'wave'|'sigh'|'flinch')`, `jump(obj, t, { h })` (crouch, stretch, squash; any object), `figure({ look: 'cam' | [x,y,z] | name })`.
