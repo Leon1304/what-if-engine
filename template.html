@@ -3447,6 +3447,7 @@ const liveSrc = (s, t) => typeof s === 'function' ? s(t) : s;
 const WK = {
   sword: { cls: 'melee', tipZ: 1.15 }, axe: { cls: 'melee', tipZ: 0.68, heavy: true }, spear: { cls: 'melee', tipZ: 1.62, both: true, reach: 0.42, thrust: true }, bat: { cls: 'melee', tipZ: 0.78, blunt: true },
   knife: { cls: 'melee', tipZ: 0.32 }, hammer: { cls: 'melee', tipZ: 0.9, both: true, heavy: true, blunt: true }, saber: { cls: 'melee', tipZ: 1.2, glow: true },
+  katana: { cls: 'melee', tipZ: 1.08 }, cutlass: { cls: 'melee', tipZ: 0.86 }, club: { cls: 'melee', tipZ: 0.78, blunt: true, heavy: true }, mace: { cls: 'melee', tipZ: 0.74, blunt: true },
   shield: { cls: 'shield' }, bow: { cls: 'bow' },
   pistol:   { cls: 'one', rate: 3, vel: 150, snd: 'shot', flash: 0.26, kick: 1, recT: 0.09, tracer: 1, brass: true, scale: 1.45 },
   revolver: { cls: 'one', rate: 2, vel: 150, snd: 'shot', flash: 0.32, kick: 1.3, recT: 0.12, tracer: 1, scale: 1.45 },
@@ -3489,7 +3490,29 @@ function buildWeapon(kind, o = {}) {
       rod(g, 0.021, 0.021, 2.0, wood, 0, 0, 0.3); const hd = rod(g, 0, 0.07, 0.32, '', 0, 0, 1.46, { mat: steel, seg: 4 }); hd.rotation.z = Math.PI / 4; hd.scale.x = 0.32;
       rod(g, 0.027, 0.027, 0.09, leather, 0, 0, 1.27, NC); break;
     }
+    case 'katana': {
+      rod(g, 0.022, 0.022, 0.3, '#1E1E24', 0, 0, 0.02); for (let i = 0; i < 6; i++) box(g, 0.047, 0.02, 0.02, '#E8E0C8', 0, 0, -0.1 + i * 0.045, { rx: 0.7, ...NC }); rod(g, 0.065, 0.065, 0.015, '#C9A64A', 0, 0, 0.18, { seg: 12 });
+      for (let i = 0; i < 4; i++) { const z0 = 0.2 + i * 0.22, dy = -0.012 * i * i; box(g, 0.012, 0.055, 0.225, '', 0, dy - 0.0275, z0 + 0.11, { mat: steel, rx: 0.03 * i }); box(g, 0.013, 0.01, 0.225, '#F4F8FC', 0, dy + 0.022, z0 + 0.11, { rx: 0.03 * i, ...NC }); }
+      const tp = rod(g, 0, 0.04, 0.12, '', 0, -0.11, 1.08, { mat: steel, seg: 4, ...NC }); tp.rotation.z = Math.PI / 4; tp.scale.x = 0.25; break;
+    }
+    case 'cutlass': {
+      rod(g, 0.022, 0.022, 0.16, '#3A2A1E', 0, 0, 0); const gd = grp(g, 0, -0.02, 0.0); for (let i = 0; i < 7; i++) { const a = -0.2 + i * 0.45; box(gd, 0.02, 0.025, 0.05, '#C9A64A', 0, Math.sin(a) * -0.08 - 0.02, 0.09 + Math.cos(a) * -0.09 + 0.02, NC); }
+      box(g, 0.05, 0.03, 0.12, '#C9A64A', 0, 0.0, 0.1); for (let i = 0; i < 3; i++) box(g, 0.012, 0.075 - i * 0.008, 0.23, '', 0, -0.035 - 0.015 * i * i, 0.22 + i * 0.22, { mat: steel, rx: 0.05 * i }); break;
+    }
+    case 'club': { rod(g, 0.07, 0.03, 0.85, '#7A5236', 0, 0, 0.32, { seg: 7 }); for (let i = 0; i < 6; i++) ball(g, 0.035, '#6A4428', Math.cos(i * 2.1) * 0.06, Math.sin(i * 2.1) * 0.06, 0.45 + (i % 3) * 0.1, { detail: 0, ...NC }); rod(g, 0.032, 0.032, 0.16, '#3A2618', 0, 0, -0.02, NC); break; }
+    case 'mace': { rod(g, 0.02, 0.022, 0.62, '#4A3020', 0, 0, 0.22); ball(g, 0.085, '', 0, 0, 0.6, { mat: steel, detail: 1 }); for (let i = 0; i < 10; i++) { const a = i / 10 * TAU, q = grp(g, 0, 0, 0.6); q.rotation.set(i % 2 ? 0.7 : -0.7, 0, a); cone(q, 0.025, 0.09, '', 0, 0.06, 0, { mat: steel, seg: 4, ...NC }); } cone(g, 0.03, 0.1, '', 0, 0, 0.68, { mat: steel, rx: Math.PI / 2, seg: 4 }); break; }
     case 'shield': {
+      const st = o.style ?? 'round', col = o.color ?? '#9A6A3E', acc = o.accent ?? '#F2F2F2';
+      if (st !== 'round') { const sg = grp(g), shapeG = pts => { const sh = new THREE.Shape(); pts.forEach(([x, y], i) => i ? sh.lineTo(x, y) : sh.moveTo(x, y)); sh.closePath(); return new THREE.ExtrudeGeometry(sh, { depth: 0.04, bevelEnabled: false }); };
+        if (st === 'kite' || st === 'heater') { const K = st === 'kite' ? [[-0.3, 0.42], [0.3, 0.42], [0.32, 0.1], [0.18, -0.35], [0, -0.68], [-0.18, -0.35], [-0.32, 0.1]] : [[-0.32, 0.36], [0.32, 0.36], [0.31, 0.0], [0.18, -0.28], [0, -0.42], [-0.18, -0.28], [-0.31, 0.0]];
+          const m1 = new THREE.Mesh(shapeG(K), mat(col)); m1.castShadow = true; sg.add(m1); const m2 = new THREE.Mesh(shapeG(K.map(([x, y]) => [x * 1.08, y * 1.06 + 0.005])), mat('#6E747C', { metal: 0.5 })); m2.position.z = -0.012; sg.add(m2);
+          box(sg, 0.07, 0.75, 0.01, acc, 0, -0.42, 0.045, NC); box(sg, 0.5, 0.07, 0.01, acc, 0, 0.12, 0.045, NC); }
+        else if (st === 'scutum') { const cm = new THREE.Mesh(new THREE.CylinderGeometry(0.7, 0.7, 1.1, 16, 1, true, -0.5, 1.0), mat(o.color ?? '#A8281E', { own: true })); cm.material.side = THREE.DoubleSide; cm.position.z = -0.66; cm.castShadow = true; sg.add(cm);
+          for (const y of [-0.53, 0.53]) box(sg, 0.68, 0.04, 0.06, '#C9A64A', 0, y - 0.02, 0.02, NC); ball(sg, 0.1, '#C9A64A', 0, 0, 0.05, { detail: 1, metal: 0.6 }).scale.z = 0.5; for (const sx of [-1, 1]) for (const sy of [-1, 1]) box(sg, 0.04, 0.3, 0.01, '#E8C02A', sx * 0.17, sy * 0.3 - 0.15, 0.045, { rz: sx * sy * 0.5, ...NC }); }
+        else if (st === 'aspis') { cyl(sg, 0.52, 0.52, 0.06, '', 0, 0, 0, { rx: Math.PI / 2, seg: 22, mat: mat('#C9963A', { metal: 0.7, rough: 0.3 }) }); cyl(sg, 0.56, 0.56, 0.04, '', 0, 0, -0.02, { rx: Math.PI / 2, seg: 22, mat: mat('#A8782A', { metal: 0.6, rough: 0.35 }), ...NC });
+          for (const sx of [-1, 1]) box(sg, 0.07, 0.62, 0.01, o.accent ?? '#B8302A', sx * 0.13, -0.3, 0.065, { rz: sx * 0.42, ...NC }); }
+        else if (st === 'riot') { box(sg, 0.62, 1.15, 0.03, '', 0, -0.6, 0, { mat: mat('#AFC8DA', { opacity: 0.45, rough: 0.1 }), cast: false }); for (const sx of [-1, 1]) box(sg, 0.04, 1.17, 0.04, '#1A1A1A', sx * 0.31, -0.61, 0); box(sg, 0.62, 0.04, 0.04, '#1A1A1A', 0, 0.53, 0); box(sg, 0.62, 0.04, 0.04, '#1A1A1A', 0, -0.62, 0); box(sg, 0.4, 0.1, 0.005, '#E8E8E8', 0, -0.2, 0.02, NC); }
+        break; }
       const s = grp(g); cyl(s, 0.4, 0.4, 0.045, o.color ?? '#9A6A3E', 0, 0, 0, { rx: Math.PI / 2, seg: 18 }); cyl(s, 0.425, 0.425, 0.03, dark, 0, 0, -0.008, { rx: Math.PI / 2, seg: 18, metal: 0.4 });
       ball(s, 0.09, '#B8C0C8', 0, 0, 0.05, { detail: 1, metal: 0.6, rough: 0.3 }).scale.z = 0.55;
       for (const x of [-0.14, 0.14]) box(s, 0.012, 0.78, 0.004, shade(o.color ?? '#9A6A3E', -0.12), x, -0.39, 0.046, NC);
@@ -4647,6 +4670,181 @@ function press(p, x, z, o = {}) {
   for (const s of times) { sfx(s - 0.05, 'hiss', 0.7); sfx(s + 0.12, 'impact', 1); sfx(s + 0.12, 'clang', 0.5); SHAKES.push({ t: VT(s + 0.12), amp: 0.25, dur: 0.4 }); cbBurst('puff', [x, groundH(x, z) + 0.35, z], s + 0.12, { n: 18, dir: [0, 0.15, 0], cone: 1.4, speed: 3, size: 0.4 }); }
   for (const v of [].concat(o.victims ?? [])) { const [vv, tv] = Array.isArray(v) ? v : [v, times[0]]; trapVictim(vv, tv + 0.12, 'squash', { at: [x, z] }); }
   return { g, ram, times };
+}
+
+/* ====================================================================== */
+/* GEAR (v2.13) — warrior(kind, o) · squad(kind, n, { at, ry, cols, gap, seed }) · gear(rig, kind, { seed })                                        */
+/* kinds: soldier · knight · viking · spartan · roman · samurai · ninja · pirate · cowboy · bandit · swat · caveman — every member differs (seeded) */
+/* ====================================================================== */
+const GEARK = ['soldier', 'knight', 'viking', 'spartan', 'roman', 'samurai', 'ninja', 'pirate', 'cowboy', 'bandit', 'swat', 'caveman'];
+const SKINS = ['#F1C7A5', '#E8B892', '#D9A47E', '#C68B62', '#A8714F', '#8A5A3C', '#6E4630'], HAIRS = ['#2A211D', '#4A3426', '#6A4A30', '#B88A5A', '#D8B25A', '#B5562A', '#1E1A18', '#8A8A8A'];
+function warrior(kind, o = {}) {
+  const sd = o.seed ?? (++_cbId * 7.13), V = k => hash(sd * 13.71 + k * 3.17), P = (k, arr) => arr[Math.floor(V(k) * arr.length) % arr.length];
+  const skin = o.skin ?? P(1, kind === 'viking' ? SKINS.slice(0, 3) : kind === 'samurai' || kind === 'ninja' ? ['#E8C49A', '#D9AE84', '#C99A70'] : SKINS), hair = o.hair ?? P(2, kind === 'viking' ? ['#D8B25A', '#B5562A', '#C9A04A', '#8A5A30'] : HAIRS);
+  const base = {
+    soldier: [P(3, ['#5E6B3C', '#6E6A4A', '#4E5A3A', '#8A7A56', '#5A5E50']), P(4, ['#4E5A36', '#5E5A42', '#6A6048', '#4A5040'])],
+    knight:  ['#8A8F96', '#6E737A'], viking: [P(3, ['#7A5A3A', '#5A6A4A', '#6A4A3A', '#4A5A6A', '#8A6A4A']), P(4, ['#5A4632', '#4A4A3A', '#6A5A4A'])], spartan: [skin, '#B8302A'],
+    roman:   ['#B8302A', '#B8302A'], samurai: [P(3, ['#2A2A3A', '#5A1E1E', '#1E2A3A']), '#2A2A30'], ninja: [P(3, ['#1E1E24', '#2A2A3A', '#3A2A2A']), '#1E1E24'],
+    pirate:  [P(3, ['#F2EEE6', '#E8E0C8', '#C9C2B0']), P(4, ['#3A3A44', '#5A4632', '#2E3A5C'])], cowboy: [P(3, ['#C96A4A', '#E8E0C8', '#5A7AB8', '#8A5A3A']), P(4, ['#3A4A6A', '#5A4632'])],
+    bandit:  [P(3, ['#3A3A3A', '#4A3A2A', '#2A3A2A', '#5A4A3A']), P(4, ['#2A2A2A', '#3A3026'])], swat: ['#1E2024', '#1E2024'], caveman: [skin, skin]
+  }[kind] ?? ['#3D7BD9', '#2E3A5C'];
+  const f = figure({ shirt: o.shirt ?? base[0], pants: o.pants ?? base[1], skin, hair, hairStyle: o.hairStyle ?? P(5, kind === 'caveman' ? ['curly', 'long', 'spiky'] : kind === 'viking' ? ['long', 'bun', 'short'] : ['short', 'buzz', 'short', 'spiky']),
+    shoes: o.shoes ?? (kind === 'spartan' || kind === 'roman' || kind === 'caveman' ? '#8A5A34' : '#2B2622'), expr: o.expr ?? (V(6) < 0.5 ? 'angry' : 'calm'), look: o.look });
+  if (o.add !== false) world.add(f.root);
+  gear(f, kind, { ...o, seed: sd });
+  if (o.weapon !== false) arm(f, kind, sd, o.weapon);
+  if (o.at) { f.root.position.set(o.at[0], groundH(o.at[0], o.at[1]), o.at[1]); } if (o.ry != null) f.root.rotation.y = o.ry;
+  f.faction = kind; return f;
+}
+function arm(f, kind, sd, pickW) {   // weapon loadout per kind, varied per member
+  const V = k => hash(sd * 5.31 + k * 2.71), P = (k, arr) => arr[Math.floor(V(k) * arr.length) % arr.length], W = (k, o) => weapon(f, k, o);
+  const sh = (style, color, accent) => W('shield', { style, color, accent, emblem: true });
+  const pick = pickW ?? {
+    soldier: P(1, ['rifle', 'rifle', 'rifle', 'smg', 'rifle', 'sniper', 'shotgun', 'launcher', 'minigun']), knight: P(1, ['sword+kite', 'sword+heater', 'mace+heater', 'hammer', 'spear+kite']),
+    viking: P(1, ['axe+round', 'sword+round', 'spear+round', 'axe', 'axe+round']), spartan: P(1, ['spear+aspis', 'spear+aspis', 'sword+aspis']), roman: P(1, ['sword+scutum', 'sword+scutum', 'spear+scutum']),
+    samurai: P(1, ['katana', 'katana', 'spear', 'bow']), ninja: P(1, ['katana', 'knife', 'katana']), pirate: P(1, ['cutlass', 'cutlass', 'revolver', 'cutlass']), cowboy: P(1, ['revolver', 'revolver', 'rifle', 'shotgun']),
+    bandit: P(1, ['knife', 'axe', 'club', 'bow', 'revolver', 'mace']), swat: P(1, ['smg', 'rifle', 'shotgun', 'pistol+riot']), caveman: P(1, ['club', 'club', 'spear'])
+  }[kind] ?? 'sword';
+  const [wk, sk] = pick.split('+'), shieldCol = { knight: P(2, ['#B8302A', '#2E5AA8', '#E8C02A', '#2E7A3A', '#F2F2F2']), viking: P(2, ['#B8302A', '#E8C02A', '#2E5AA8', '#F2F2F2', '#2E7A3A']), spartan: '#C9A04A', roman: '#A8281E' }[kind] ?? '#9A6A3E';
+  const w = wk === 'mace' || wk === 'club' || wk === 'katana' || wk === 'cutlass' ? W(wk, { guard: V(3) < 0.3 }) : W(wk, { guard: V(3) < 0.3 && ['sword', 'axe', 'spear', 'hammer', 'knife'].includes(wk) });
+  if (sk) sh(sk, sk === 'riot' ? undefined : shieldCol, P(4, ['#F2F2F2', '#E8C02A', '#1E1E1E', '#B8302A']));
+  return w;
+}
+function gear(f, kind, o = {}) {
+  const sd = o.seed ?? 1, V = k => hash(sd * 13.71 + k * 3.17), P = (k, arr) => arr[Math.floor(V(k) * arr.length) % arr.length], NC = { cast: false };
+  const H = f.head, C = f.chest, Hp = f.hips, hideHair = () => { if (f.hair) f.hair.visible = false; };
+  const M = (c, o2) => mat(c, o2), steel = M('#A8B0B8', { metal: 0.65, rough: 0.32 }), dsteel = M('#6E747C', { metal: 0.6, rough: 0.4 }), bronze = M('#C9963A', { metal: 0.7, rough: 0.3 }), leather = '#6A4428', dleather = '#3A2618';
+  const both = fn => { fn(f.armL, -1, f.foreL, f.legL, f.shinL, f.footL); fn(f.armR, 1, f.foreR, f.legR, f.shinR, f.footR); };
+  const cape = (color, len = 1.15) => { if (f.cape) return; const cp = grp(C, 0, 0.58, -0.17); cp.add(Object.assign(new THREE.Mesh(new THREE.PlaneGeometry(0.62, len, 6, 10).translate(0, -len / 2, 0), clothMat(color, { pin: 'top', len, amp: 0.5, speed: 1.4 })), { castShadow: true })); f.cape = cp; };
+  const beard = (c, long) => { rbox(H, 0.4, 0.14, 0.1, c, 0, 0.0, 0.16); rbox(H, 0.12, 0.05, 0.05, c, 0, 0.1, 0.2); if (long) { rbox(H, 0.3, 0.3, 0.12, c, 0, -0.26, 0.14); for (const sx of [-1, 1]) cyl(H, 0.03, 0.025, 0.2, c, sx * 0.09, -0.44, 0.15, { seg: 5, ...NC }); } };
+  const hairC = f.hair?.children?.[0]?.material?.color ? '#' + f.hair.children[0].material.color.getHexString() : '#3A2A1E';
+  const mask = (c, full) => { rbox(H, 0.405, full ? 0.19 : 0.16, 0.405, c, 0, 0, 0.0); if (full) { rbox(H, 0.405, 0.12, 0.405, c, 0, 0.29, 0); box(H, 0.44, 0.06, 0.3, c, 0, 0.36, -0.06, NC); } };
+  switch (kind) {
+    case 'soldier': {
+      const cam = '#' + f.chest.children[0]?.material?.color?.getHexString?.() || '#5E6B3C', hel = V(10);
+      if (hel < 0.68) { hideHair(); const h = grp(H, 0, 0.19, -0.01); ball(h, 0.255, P(11, ['#5A6440', '#6E6A4A', '#4E5A3A', '#7A6E50']), 0, 0.06, 0, { detail: 2 }).scale.set(1, 0.78, 1.06); box(h, 0.5, 0.04, 0.5, P(11, ['#4A5432', '#5E5A3A']), 0, -0.02, -0.01, NC);
+        for (const sx of [-1, 1]) box(h, 0.025, 0.2, 0.03, '#2A2A2A', sx * 0.2, -0.2, 0.04, NC); box(h, 0.08, 0.06, 0.04, '#2A2D33', 0, 0.11, 0.25, NC);
+        if (V(12) < 0.35) { box(h, 0.38, 0.08, 0.06, '#1A1A1A', 0, 0.09, 0.22); for (const sx of [-1, 1]) box(h, 0.13, 0.065, 0.02, '', sx * 0.08, 0.1, 0.25, { mat: M('#3A6A8A', { rough: 0.1, metal: 0.4 }), ...NC }); } }
+      else if (hel < 0.84) { hideHair(); const h = grp(H, 0, 0.32, 0); cyl(h, 0.36, 0.36, 0.03, '#6E6A4A', 0, 0, 0, { seg: 14 }); cyl(h, 0.22, 0.23, 0.14, '#6E6A4A', 0, 0.02, 0, { seg: 12 }); }
+      else { const h = grp(H, 0, 0.36, 0); rbox(h, 0.41, 0.13, 0.41, '#4E5A3A', 0, -0.04, 0, { rf: 0.4 }); box(h, 0.34, 0.03, 0.22, '#3E4A2E', 0, -0.03, 0.29, NC); }
+      if (V(13) < 0.3) box(H, 0.36, 0.07, 0.02, '#1A1A1A', 0, 0.18, 0.2, NC);
+      if (V(14) < 0.25) beard(hairC);
+      const vc = P(15, ['#4E5A36', '#6A6048', '#3A3E34', '#5A5A40']); rbox(C, 0.58, 0.42, 0.38, vc, 0, 0.1, 0); for (let i = 0; i < 3; i++) rbox(C, 0.13, 0.13, 0.08, shade(vc, -0.06), -0.16 + i * 0.16, 0.12, 0.2); box(C, 0.08, 0.16, 0.06, '#2A2D33', 0.2, 0.36, 0.2, NC); cyl(C, 0.006, 0.006, 0.35, '#1A1A1A', 0.23, 0.5, 0.2, { seg: 4, ...NC });
+      both((ua, s) => { box(ua, 0.17, 0.07, 0.17, vc, 0, -0.05, 0, NC); if (s > 0) box(ua, 0.02, 0.08, 0.1, P(16, ['#B8302A', '#2E5AA8', '#E8C02A', '#F2F2F2']), s * 0.085, -0.12, 0, NC); });
+      both((ua, s, fa, th, sh) => { rbox(sh, 0.19, 0.14, 0.08, '#2A2D33', 0, -0.12, 0.09); rbox(fa, 0.16, 0.16, 0.16, '#2A2A2A', 0, -0.4, 0); });
+      rbox(Hp, 0.47, 0.08, 0.3, '#2A2A2A', 0, 0.06, 0); box(Hp, 0.12, 0.14, 0.08, vc, -0.18, -0.06, 0.14, NC);
+      if (V(17) < 0.55) { rbox(C, 0.42, 0.5, 0.22, P(18, ['#5A5A40', '#4E5A36', '#6A6048']), 0, 0.02, -0.27); rbox(C, 0.3, 0.12, 0.16, '#3A3E34', 0, 0.48, -0.27); }
+      break;
+    }
+    case 'knight': {
+      const tab = P(10, ['#B8302A', '#2E5AA8', '#E8C02A', '#2E7A3A', '#F2F2F2', '#5A2A6A']), em = P(11, ['#F2F2F2', '#E8C02A', '#1E1E1E']), helm = V(12);
+      hideHair(); if (helm < 0.5) { const h = grp(H, 0, 0, 0); box(h, 0.46, 0.5, 0.46, '', 0, -0.06, 0, { mat: steel }); box(h, 0.36, 0.035, 0.02, '#0A0A0A', 0, 0.2, 0.232, NC); box(h, 0.035, 0.2, 0.02, M('#C9A64A', { metal: 0.6 }), 0, 0.02, 0.235, NC); for (let i = 0; i < 5; i++) box(h, 0.02, 0.02, 0.01, '#0A0A0A', -0.08 + i * 0.04, 0.06, 0.233, NC); }
+      else if (helm < 0.8) { const h = grp(H, 0, 0, 0); ball(h, 0.25, '', 0, 0.24, -0.01, { mat: steel, detail: 2 }).scale.set(1, 1.1, 1.05); rod(h, 0, 0.2, 0.32, '', 0, 0.12, 0.2, { mat: steel, seg: 6 }).scale.y = 0.7; box(h, 0.24, 0.02, 0.01, '#0A0A0A', 0, 0.2, 0.33, NC); box(h, 0.46, 0.18, 0.44, '', 0, -0.02, -0.02, { mat: M('#8A9098', { metal: 0.5, rough: 0.5 }) }); }
+      else { const h = grp(H, 0, 0.3, 0); cyl(h, 0.36, 0.3, 0.06, '', 0, 0, 0, { mat: steel, seg: 14 }); ball(h, 0.22, '', 0, 0.06, 0, { mat: steel, detail: 1 }).scale.y = 0.6; box(H, 0.46, 0.2, 0.44, '', 0, -0.06, -0.02, { mat: M('#8A9098', { metal: 0.5, rough: 0.5 }) }); }
+      if (V(13) < 0.6 && helm < 0.8) { const pl = grp(H, 0, helm < 0.5 ? 0.46 : 0.54, -0.04); for (let i = 0; i < 5; i++) ball(pl, 0.08, P(14, ['#B8302A', '#F2F2F2', '#2E5AA8', '#E8C02A']), 0, 0.03 + i * 0.03, -i * 0.06, { detail: 0, ...NC }); }
+      rbox(C, 0.58, 0.5, 0.38, '', 0, 0.08, 0, { mat: steel }); box(C, 0.03, 0.42, 0.03, '', 0, 0.12, 0.19, { mat: dsteel, ...NC });
+      box(C, 0.44, 0.7, 0.02, tab, 0, -0.45, 0.2); box(C, 0.44, 0.5, 0.02, tab, 0, -0.32, -0.2, NC); const cr = P(15, ['cross', 'chevron', 'stripe', 'quarter']);
+      if (cr === 'cross') { box(C, 0.08, 0.38, 0.005, em, 0, -0.02, 0.212, NC); box(C, 0.3, 0.08, 0.005, em, 0, 0.12, 0.212, NC); } else if (cr === 'chevron') for (const sx of [-1, 1]) box(C, 0.06, 0.3, 0.005, em, sx * 0.08, -0.05, 0.212, { rz: sx * 0.6, ...NC }); else if (cr === 'stripe') box(C, 0.12, 0.6, 0.005, em, 0, -0.42, 0.212, NC); else { box(C, 0.21, 0.18, 0.005, em, -0.11, 0.06, 0.212, NC); box(C, 0.21, 0.18, 0.005, em, 0.11, -0.12, 0.212, NC); }
+      both((ua, s, fa, th, sh, ft) => { rbox(ua, 0.24, 0.14, 0.24, '', 0, -0.06, 0, { mat: steel }); rbox(ua, 0.2, 0.06, 0.2, '', 0, -0.18, 0, { mat: dsteel }); rbox(fa, 0.17, 0.17, 0.17, '', 0, -0.41, 0, { mat: dsteel }); rbox(fa, 0.165, 0.2, 0.165, '', 0, -0.25, 0, { mat: steel }); rbox(sh, 0.19, 0.32, 0.2, '', 0, -0.33, 0, { mat: steel }); rbox(th, 0.21, 0.24, 0.22, '', 0, -0.3, 0, { mat: steel }); rbox(ft, 0.18, 0.1, 0.3, '', 0, -ANK - 0.005, 0.05, { mat: dsteel }); });
+      rbox(Hp, 0.48, 0.24, 0.32, '', 0, -0.16, 0, { mat: M('#7A8088', { metal: 0.4, rough: 0.6 }) }); box(Hp, 0.5, 0.05, 0.33, leather, 0, 0.05, 0, NC);
+      if (V(16) < 0.45) cape(P(17, ['#5A1E1E', '#1E2A5A', '#2A4A2A', '#3A3A3A']));
+      break;
+    }
+    case 'viking': {
+      const helm = V(10); if (helm < 0.6) { hideHair(); const h = grp(H, 0, 0.19, 0); ball(h, 0.245, '', 0, 0.06, 0, { mat: dsteel, detail: 2 }).scale.set(1, 0.85, 1.02); box(h, 0.5, 0.05, 0.5, '', 0, -0.0, 0, { mat: steel, ...NC }); box(h, 0.05, 0.3, 0.04, '', 0, 0.02, 0.25, { mat: steel, ...NC }); box(h, 0.05, 0.24, 0.04, '', 0, 0.2, 0.0, { mat: steel, rx: 0, ...NC });
+        if (V(11) < 0.15) for (const sx of [-1, 1]) { const hn = rod(h, 0, 0.06, 0.32, '#E8E0C8', sx * 0.26, 0.15, 0, { seg: 6 }); hn.rotation.set(0, sx * Math.PI / 2, sx * -0.6); } }
+      beard(hairC, V(12) < 0.75); if (V(13) < 0.5) box(H, 0.06, 0.12, 0.02, '#1E3A6A', 0.1, 0.2, 0.197, NC);   // beard, war paint
+      const fur = P(14, ['#5A4632', '#7A6A5A', '#3A3026', '#8A8A80']); for (let i = 0; i < 10; i++) { const a = i / 10 * TAU; rbox(C, 0.2, 0.16, 0.16, shade(fur, (hash(i + sd) - 0.5) * 0.1), Math.sin(a) * 0.26, 0.54, Math.cos(a) * 0.17, { ry: a }); }
+      rbox(Hp, 0.48, 0.07, 0.31, dleather, 0, 0.06, 0); box(Hp, 0.09, 0.08, 0.02, M('#C9A64A', { metal: 0.6 }), 0, 0.055, 0.16, NC); box(Hp, 0.46, 0.25, 0.3, shade(f.chest.children[0]?.material?.color ? '#' + f.chest.children[0].material.color.getHexString() : '#7A5A3A', -0.05), 0, -0.3, 0);
+      both((ua, s, fa, th, sh) => { cyl(fa, 0.085, 0.085, 0.04, '', 0, -0.16, 0, { mat: M('#C9A64A', { metal: 0.6 }), seg: 8, ...NC }); for (let i = 0; i < 4; i++) rbox(sh, 0.18, 0.05, 0.19, i % 2 ? '#C9B58A' : '#8A7A5A', 0, -0.36 + i * 0.07, 0); });
+      if (V(15) < 0.4) cape(P(16, ['#5A1E1E', '#2A3A5A', '#3A3A2A']), 1.0);
+      break;
+    }
+    case 'spartan': {
+      hideHair(); const h = grp(H, 0, 0, 0); box(h, 0.46, 0.5, 0.46, '', 0, -0.07, 0, { mat: bronze }); box(h, 0.26, 0.05, 0.02, '#0A0A0A', 0, 0.18, 0.232, NC); box(h, 0.07, 0.22, 0.02, '#0A0A0A', 0, -0.04, 0.232, NC); box(h, 0.05, 0.16, 0.03, '', 0, 0.06, 0.24, { mat: bronze, ...NC });
+      const crest = grp(H, 0, 0.45, 0), trans = V(10) < 0.2, cc = P(11, ['#B8302A', '#B8302A', '#1E1E1E', '#E8E0C8']); for (let i = 0; i < 9; i++) { const a = (i / 8 - 0.5) * 2.6; box(crest, trans ? 0.1 : 0.06, 0.22, trans ? 0.06 : 0.1, cc, trans ? Math.sin(a) * 0.3 : 0, Math.cos(a) * 0.2 - 0.12, trans ? 0 : Math.sin(a) * 0.3, { rx: trans ? 0 : a, rz: trans ? -a : 0, ...NC }); }
+      rbox(C, 0.58, 0.62, 0.38, '', 0, -0.02, 0, { mat: bronze }); for (const sx of [-1, 1]) rbox(C, 0.18, 0.14, 0.02, '', sx * 0.11, 0.38, 0.19, { mat: M('#B8853A', { metal: 0.7, rough: 0.35 }), ...NC }); for (let i = 0; i < 3; i++) box(C, 0.3, 0.012, 0.02, '#8A6A2A', 0, 0.08 + i * 0.08, 0.19, NC);
+      for (let i = 0; i < 9; i++) { const a = (i / 9) * TAU; box(Hp, 0.09, 0.3, 0.02, i % 2 ? '#E8D8B8' : '#B8302A', Math.sin(a) * 0.23, -0.34, Math.cos(a) * 0.16, { ry: a, ...NC }); }
+      both((ua, s, fa, th, sh) => { rbox(sh, 0.19, 0.34, 0.2, '', 0, -0.36, 0.01, { mat: bronze }); });
+      cape('#A8281E', 1.25); if (V(12) < 0.4) beard(hairC);
+      break;
+    }
+    case 'roman': {
+      hideHair(); const h = grp(H, 0, 0.19, 0); ball(h, 0.245, '', 0, 0.06, 0, { mat: steel, detail: 2 }).scale.set(1, 0.85, 1.02); box(h, 0.46, 0.06, 0.12, '', 0, -0.02, -0.22, { mat: steel, rx: 0.4 }); for (const sx of [-1, 1]) box(h, 0.03, 0.22, 0.16, '', sx * 0.21, -0.2, 0.08, { mat: steel });
+      const cr = grp(h, 0, 0.27, 0); for (let i = 0; i < 7; i++) { const a = (i / 6 - 0.5) * 2.2; box(cr, 0.06, 0.12, 0.08, V(10) < 0.25 ? '#E8E0C8' : '#B8302A', V(11) < 0.3 ? Math.sin(a) * 0.2 : 0, Math.cos(a) * 0.08, V(11) < 0.3 ? 0 : Math.sin(a) * 0.2, NC); }
+      rbox(C, 0.58, 0.5, 0.38, '', 0, 0.08, 0, { mat: steel }); for (let i = 0; i < 5; i++) box(C, 0.6, 0.012, 0.4, '#5E646C', 0, 0.12 + i * 0.09, 0, NC); for (const sx of [-1, 1]) rbox(C, 0.2, 0.06, 0.34, '', sx * 0.25, 0.56, 0, { mat: steel });
+      for (let i = 0; i < 8; i++) box(Hp, 0.06, 0.28, 0.02, '#8A5A34', -0.16 + i * 0.046, -0.32, 0.17, NC); rbox(Hp, 0.47, 0.07, 0.31, dleather, 0, 0.04, 0); rbox(Hp, 0.46, 0.25, 0.3, '#B8302A', 0, -0.3, 0);
+      both((ua, s, fa, th, sh, ft) => { for (let i = 0; i < 3; i++) box(sh, 0.18, 0.02, 0.19, dleather, 0, -0.38 + i * 0.1, 0, NC); });
+      if (V(12) < 0.35) cape('#8A1E1E', 1.05);
+      break;
+    }
+    case 'samurai': {
+      hideHair(); const h = grp(H, 0, 0.19, 0), lac = P(10, ['#B8302A', '#2E5AA8', '#E8C02A', '#2E2E2E']), ar = P(11, ['#2A2A30', '#5A1E1E', '#3A2A1E']); ball(h, 0.25, ar, 0, 0.07, 0, { detail: 2 }).scale.set(1, 0.8, 1.02);
+      for (let i = 0; i < 3; i++) { const sh2 = new THREE.Mesh(new THREE.CylinderGeometry(0.29 + i * 0.05, 0.33 + i * 0.05, 0.07, 14, 1, true, Math.PI * 0.35, Math.PI * 1.3), mat(i % 2 ? lac : ar, { own: true })); sh2.material.side = THREE.DoubleSide; sh2.position.set(0, 0.02 - i * 0.07, -0.02); h.add(sh2); }
+      for (const sx of [-1, 1]) { const k = grp(h, sx * 0.07, 0.24, 0.24); k.rotation.z = -sx * 0.5; box(k, 0.04, 0.3, 0.015, M('#E8C02A', { metal: 0.7, rough: 0.3 }), 0, 0, 0, NC); }
+      if (V(12) < 0.6) { box(H, 0.38, 0.16, 0.05, M('#5A1E1E', { rough: 0.6 }), 0, 0.0, 0.18); box(H, 0.1, 0.03, 0.02, '#E8E0C8', 0, 0.06, 0.21, NC); }
+      rbox(C, 0.58, 0.5, 0.38, ar, 0, 0.08, 0); for (let i = 0; i < 5; i++) box(C, 0.59, 0.015, 0.39, lac, 0, 0.12 + i * 0.08, 0, NC);
+      for (let k = 0; k < 2; k++) for (let i = 0; i < 4; i++) { const a = (i / 4) * TAU + 0.4; box(Hp, 0.22, 0.12, 0.03, k % 2 ? lac : ar, Math.sin(a) * 0.2, -0.2 - k * 0.12, Math.cos(a) * 0.15, { ry: a }); }
+      both((ua, s, fa, th, sh) => { box(ua, 0.26, 0.26, 0.04, ar, s * 0.03, -0.24, 0, { rz: s * 0.15 }); for (let i = 0; i < 3; i++) box(ua, 0.27, 0.012, 0.045, lac, s * 0.03, -0.18 - i * 0.07, 0, { rz: s * 0.15, ...NC }); rbox(sh, 0.19, 0.3, 0.2, ar, 0, -0.34, 0); });
+      break;
+    }
+    case 'ninja': {
+      hideHair(); const nc = '#' + (f.chest.children[0]?.material?.color?.getHexString?.() ?? '1E1E24'); mask(nc, true); box(H, 0.36, 0.07, 0.01, '#E8C49A', 0, 0.17, 0.206, NC); for (const sx of [-1, 1]) box(H, 0.08, 0.04, 0.012, '#1A1A1A', sx * 0.085, 0.19, 0.208, NC);
+      box(H, 0.44, 0.05, 0.44, P(10, ['#B8302A', '#1E1E24', '#2E5AA8']), 0, 0.26, 0, NC); box(H, 0.05, 0.25, 0.02, P(10, ['#B8302A', '#1E1E24', '#2E5AA8']), 0.06, 0.05, -0.22, { rz: 0.3, ...NC });
+      rbox(Hp, 0.47, 0.07, 0.31, P(11, ['#3A3A44', '#5A1E1E']), 0, 0.06, 0); const kb = grp(C, 0, 0.3, -0.2); kb.rotation.z = 0.8; box(kb, 0.04, 0.9, 0.04, '#1A1A1A', 0, -0.45, 0); box(kb, 0.1, 0.02, 0.1, '#C9A64A', 0, 0.25, 0, NC); box(kb, 0.035, 0.25, 0.035, '#3A2A2A', 0, 0.26, 0);
+      both((ua, s, fa, th, sh) => { for (let i = 0; i < 3; i++) box(sh, 0.18, 0.02, 0.19, '#3A3A44', 0, -0.36 + i * 0.09, 0, NC); for (let i = 0; i < 3; i++) box(fa, 0.15, 0.015, 0.15, '#3A3A44', 0, -0.2 + i * 0.06, 0, NC); });
+      break;
+    }
+    case 'pirate': {
+      const hat = V(10); if (hat < 0.55) { hideHair(); const h = grp(H, 0, 0.36, 0); for (let i = 0; i < 3; i++) { const a = i / 3 * TAU; box(h, 0.5, 0.16, 0.08, '#1E1E1E', Math.sin(a) * 0.17, 0.02, Math.cos(a) * 0.17, { ry: a, rx: -0.3 }); } cyl(h, 0.22, 0.24, 0.16, '#1E1E1E', 0, 0, 0, { seg: 10 }); if (V(11) < 0.5) box(h, 0.08, 0.06, 0.01, '#F2F2F2', 0, 0.06, 0.26, NC); }
+      else { const bc = P(12, ['#B8302A', '#2E5AA8', '#1E1E1E', '#E8C02A']); rbox(H, 0.42, 0.14, 0.42, bc, 0, 0.27, 0, { rf: 0.4 }); box(H, 0.06, 0.18, 0.06, bc, -0.2, 0.18, -0.2, NC); }
+      if (V(13) < 0.5) { box(H, 0.1, 0.09, 0.02, '#1A1A1A', 0.085, 0.17, 0.205, NC); box(H, 0.4, 0.02, 0.41, '#1A1A1A', 0, 0.24, 0, { rz: 0.4, ...NC }); } if (V(14) < 0.7) beard(hairC, V(15) < 0.3);
+      if (V(16) < 0.25) cyl(H, 0.03, 0.03, 0.01, '#E8C02A', 0.21, 0.08, 0.02, { rz: Math.PI / 2, seg: 8, ...NC });
+      const coat = P(17, ['#5A1E1E', '#1E2A5A', '#3A2A1E', '#1E1E1E']); if (V(18) < 0.6) { rbox(C, 0.6, 0.6, 0.38, coat, 0, -0.04, -0.02); for (const sx of [-1, 1]) box(C, 0.04, 0.5, 0.02, '#C9A64A', sx * 0.12, 0.0, 0.18, NC); box(Hp, 0.5, 0.6, 0.06, coat, 0, -0.62, -0.13); both((ua, s, fa) => { rbox(fa, 0.17, 0.1, 0.17, '#C9A64A', 0, -0.25, 0); }); }
+      box(Hp, 0.48, 0.09, 0.32, P(19, ['#B8302A', '#E8C02A', '#2E5AA8']), 0, 0.03, 0); box(Hp, 0.08, 0.3, 0.02, P(19, ['#B8302A', '#E8C02A', '#2E5AA8']), 0.15, -0.25, 0.16, { rz: 0.2, ...NC });
+      both((ua, s, fa, th, sh, ft) => { rbox(sh, 0.2, 0.3, 0.21, '#2A1E16', 0, -0.36, 0); }); if (V(20) < 0.15) { f.foreL.children.forEach(c => { if (Math.abs(c.position.y + 0.315) < 0.01) c.visible = false; }); cone(f.foreL, 0.03, 0.12, '#C9CED4', 0, -0.47, 0.0, { rx: Math.PI, metal: 0.7 }); }   // hook hand
+      break;
+    }
+    case 'cowboy': {
+      hideHair(); const hc = P(10, ['#8A5A3C', '#5A3A2A', '#E8D8B8', '#2A2A2A']), h = grp(H, 0, 0.36, 0); box(h, 0.8, 0.04, 0.62, hc); for (const sx of [-1, 1]) box(h, 0.1, 0.12, 0.62, hc, sx * 0.38, 0.02, 0, { rz: -sx * 0.6, ...NC }); rbox(h, 0.4, 0.24, 0.38, hc, 0, 0.02, 0); box(h, 0.41, 0.05, 0.39, shade(hc, -0.25), 0, 0.05, 0, NC);
+      if (V(11) < 0.6) beard(hairC); const bd = P(12, ['#B8302A', '#2E5AA8', '#1E1E1E']); if (V(13) < 0.3) mask(bd); else { box(C, 0.3, 0.12, 0.08, bd, 0, 0.56, 0.15, { rx: 0.4 }); }
+      const vest = P(14, ['#5A3A2A', '#2A2A2A', '#8A6A4A']); for (const sx of [-1, 1]) box(C, 0.22, 0.56, 0.32, vest, sx * 0.17, 0.02, 0.0); box(C, 0.04, 0.05, 0.01, '#C9A64A', -0.14, 0.42, 0.165, NC);
+      rbox(Hp, 0.48, 0.08, 0.31, dleather, 0, 0.04, 0); box(Hp, 0.1, 0.07, 0.02, M('#C9CED4', { metal: 0.7 }), 0, 0.04, 0.16, NC); box(Hp, 0.1, 0.24, 0.12, dleather, 0.27, -0.18, 0.02); for (let i = 0; i < 8; i++) cyl(Hp, 0.012, 0.012, 0.05, '#C9A64A', -0.2 + i * 0.05, 0.03, -0.16, { rx: Math.PI / 2, seg: 4, ...NC });
+      both((ua, s, fa, th, sh, ft) => { if (V(15) < 0.5) rbox(th, 0.22, 0.4, 0.22, '#6A4A30', 0, -0.4, 0.01); rbox(sh, 0.2, 0.3, 0.21, '#5A3A2A', 0, -0.36, 0); cyl(ft, 0.03, 0.03, 0.02, '#C9CED4', 0, -0.03, -0.1, { rx: Math.PI / 2, seg: 6, ...NC }); });
+      break;
+    }
+    case 'bandit': {
+      const hood = V(10) < 0.55, mc = P(11, ['#1E1E1E', '#5A1E1E', '#3A3A2A', '#2A2A3A']); if (hood) { hideHair(); rbox(H, 0.46, 0.44, 0.46, mc, 0, 0.02, -0.03); box(H, 0.42, 0.3, 0.02, '#0A0A0A', 0, 0.06, 0.2, NC); rbox(H, 0.2, 0.25, 0.25, mc, 0, -0.1, -0.25); }
+      else { const bc = P(12, ['#B8302A', '#1E1E1E', '#3A5A3A']); rbox(H, 0.42, 0.12, 0.42, bc, 0, 0.29, 0, { rf: 0.4 }); for (let i = 0; i < 2; i++) box(H, 0.05, 0.16, 0.02, bc, -0.08 + i * 0.05, 0.16, -0.21, { rz: 0.3 - i * 0.6, ...NC }); }
+      mask(P(13, ['#1E1E1E', '#4A3A2A', '#5A1E1E', '#2A2A3A'])); if (V(14) < 0.35) box(H, 0.04, 0.12, 0.01, '#C9A07A', -0.11, 0.25, 0.206, { rz: 0.4, ...NC });
+      const vc = P(15, ['#4A3020', '#3A2A1E', '#2A2A2A']); for (const sx of [-1, 1]) box(C, 0.22, 0.5, 0.33, vc, sx * 0.16, 0.05, 0); rbox(Hp, 0.48, 0.08, 0.31, dleather, 0, 0.05, 0); for (let i = 0; i < 3; i++) box(Hp, 0.09, 0.1, 0.06, '#5A3A22', -0.18 + i * 0.12, -0.04, 0.16, NC);
+      box(C, 0.06, 0.8, 0.02, dleather, 0, 0.0, 0.17, { rz: 0.7, ...NC }); if (V(16) < 0.5) cape(P(17, ['#2A2A2A', '#3A2A1E', '#2A3A2A']), 1.0);
+      break;
+    }
+    case 'swat': {
+      hideHair(); const h = grp(H, 0, 0.19, -0.01); ball(h, 0.26, '#1A1A1E', 0, 0.06, 0, { detail: 2 }).scale.set(1, 0.8, 1.06); box(h, 0.4, 0.2, 0.03, '', 0, -0.02, 0.25, { mat: M('#1A2A3A', { rough: 0.05, metal: 0.4, opacity: 0.75 }), rx: -0.2, ...NC }); mask('#141418');
+      rbox(C, 0.6, 0.48, 0.4, '#141418', 0, 0.08, 0); for (let i = 0; i < 3; i++) rbox(C, 0.14, 0.14, 0.08, '#202024', -0.17 + i * 0.17, 0.12, 0.21); box(C, 0.4, 0.08, 0.005, '#E8E8E8', 0, 0.4, 0.205, NC);
+      both((ua, s, fa, th, sh) => { rbox(sh, 0.2, 0.14, 0.08, '#2A2A2E', 0, -0.12, 0.09); rbox(fa, 0.16, 0.16, 0.16, '#141418', 0, -0.4, 0); rbox(ua, 0.2, 0.12, 0.2, '#202024', 0, -0.06, 0); });
+      rbox(Hp, 0.48, 0.09, 0.31, '#202024', 0, 0.05, 0); box(Hp, 0.1, 0.18, 0.1, '#202024', 0.26, -0.12, 0.02);
+      break;
+    }
+    case 'caveman': {
+      const fur = P(10, ['#8A6A4A', '#6A5A4A', '#A8885A', '#5A4632']); box(C, 0.56, 0.5, 0.34, fur, 0, -0.02, 0, { rz: 0.0 }); box(C, 0.28, 0.2, 0.34, fur, -0.15, 0.48, 0, { rz: 0.3 }); for (let i = 0; i < 8; i++) box(C, 0.07, 0.1, 0.02, shade(fur, -0.12), -0.24 + i * 0.07, -0.08, 0.175, { rz: (i % 2 ? 0.3 : -0.3), ...NC });
+      rbox(Hp, 0.48, 0.28, 0.32, fur, 0, -0.18, 0); for (let i = 0; i < 6; i++) box(Hp, 0.08, 0.12, 0.02, shade(fur, -0.1), -0.2 + i * 0.08, -0.4, 0.165, { rz: (i % 2 ? 0.25 : -0.25), ...NC });
+      beard(hairC, V(11) < 0.5); box(H, 0.42, 0.04, 0.42, dleather, 0, 0.27, 0, NC); if (V(12) < 0.4) { const bn = grp(H, 0, 0.38, -0.05); cyl(bn, 0.025, 0.025, 0.28, '#F2EEE6', 0, -0.14, 0, { rz: Math.PI / 2, seg: 5, ...NC }); for (const sx of [-1, 1]) ball(bn, 0.035, '#F2EEE6', sx * 0.14, 0, 0, { detail: 0, ...NC }); }
+      both((ua, s, fa, th, sh, ft) => { box(ft, 0.19, 0.11, 0.3, fur, 0, -ANK - 0.01, 0.05); });
+      break;
+    }
+  }
+  f.faction = kind; return f;
+}
+// squad(kind, n, { at: [x, z], ry, cols, gap, seed, jitter, mix }) → array of warriors in a loose formation, each one different
+function squad(kind, n, o = {}) {
+  const [cx, cz] = o.at ?? [0, 0], ry = o.ry ?? 0, cols = o.cols ?? Math.ceil(Math.sqrt(n * 1.6)), gap = o.gap ?? 1.4, jit = o.jitter ?? 0.25, sd = o.seed ?? 1, out = [];
+  for (let i = 0; i < n; i++) { const r = Math.floor(i / cols), c = i % cols, lx = (c - (Math.min(cols, n - r * cols) - 1) / 2) * gap + (hash(i * 3.3 + sd) - 0.5) * jit, lz = -r * gap + (hash(i * 7.7 + sd) - 0.5) * jit;
+    const x = cx + Math.cos(ry) * lx + Math.sin(ry) * lz, z = cz - Math.sin(ry) * lx + Math.cos(ry) * lz, k = o.mix ? o.mix[i % o.mix.length] : kind;
+    out.push(warrior(k, { ...o, at: [x, z], ry: ry + (hash(i * 9.1 + sd) - 0.5) * 0.25, seed: sd * 101 + i * 17.3, mix: undefined })); }
+  return out;
 }
 
 /* ====================================================================== */
