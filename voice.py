@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # voice.py — offline voice-over (Kokoro TTS) for a video: one spoken line per caption beat + the end-card question
-#   python3 voice.py <slug> [--voice deep|deep-uk|narrator|<kokoro voice>] [--speed 0.98] [--pitch -1.5]   CFG.voice: { gap: 0.38 } = pause between sentences
+#   python3 voice.py <slug> [--voice deep|deep-uk|narrator|<kokoro voice>] [--speed 1.06] [--pitch -1.1]   CFG.voice: { gap: 0.22 } = pause after a sentence
 #   reads <slug>.story.js (CFG.voice, BEATS[].say, END.say), writes <slug>.voice.mp3 + <slug>.voice.json (word timings)
 #   assemble.py runs this automatically and embeds the result; the music ducks under the voice.
 import hashlib, json, os, re, subprocess, sys, tempfile
@@ -9,7 +9,7 @@ import numpy as np
 HERE = os.path.dirname(os.path.abspath(__file__))
 TTS = os.path.join(HERE, 'tts')
 PRESETS = {   # style blends; F0 ≈ 80–90 Hz before the pitch shift
-    'deep':     {'mix': {'am_onyx': 0.7, 'am_michael': 0.3}, 'lang': 'en-us', 'pitch': -1.5},
+    'deep':     {'mix': {'am_michael': 0.55, 'am_onyx': 0.35, 'am_fenrir': 0.1}, 'lang': 'en-us', 'pitch': -1.1},   # warmer, more expressive
     'deep-uk':  {'mix': {'bm_lewis': 0.7, 'bm_george': 0.3}, 'lang': 'en-gb', 'pitch': -1.2},
     'narrator': {'mix': {'am_michael': 0.6, 'am_onyx': 0.4}, 'lang': 'en-us', 'pitch': -0.8},
     'steve':    {'mix': {'am_puck': 0.75, 'am_echo': 0.25}, 'lang': 'en-us', 'pitch': 0},   # Dr. Steve: lighter, smug
@@ -40,8 +40,8 @@ if vc in (None, False, 'none', 'off'):
 if isinstance(vc, str): vc = {'name': vc}
 name = opt('voice', vc.get('name', 'deep'))
 P = PRESETS.get(name, {'mix': {name: 1.0}, 'lang': 'en-gb' if name.startswith('b') else 'en-us', 'pitch': 0})
-speed = float(opt('speed', vc.get('speed', 0.98)))   # slower, calmer narrator (was 1.08)
-GAP = float(vc.get('gap', 0.38))                       # silence between sentences in one line (s)
+speed = float(opt('speed', vc.get('speed', 1.06)))   # natural pace
+GAP = float(vc.get('gap', 0.22))                       # short natural pause after a sentence (s)
 pitch = float(opt('pitch', vc.get('pitch', P['pitch'])))
 gain = float(vc.get('gain', 1.0))
 
@@ -94,7 +94,7 @@ def synth(text, sp, v=None):
     np.save(f, a.astype(np.float32)); return a.astype(np.float32)
 
 def speak(say, sp, vo, gap):   # sentence by sentence, with a real pause between sentences
-    parts = [p for p in re.split(r'(?<=[.!?:])\s+', say) if p.strip()]
+    parts = [p for p in re.split(r'(?<=[.!?])\s+', say) if p.strip()]   # pause only after full stops, ? and !
     out = []
     for k, p in enumerate(parts):
         if k: out.append(np.zeros(int(gap * SR), np.float32))
@@ -106,7 +106,7 @@ report, timing, segs = [], {}, []
 for key, t0, win, say, cap, pre, vo in lines:
     sp, gap = speed, GAP; a = speak(say, sp, vo, gap); d = len(a) / SR
     if d > win and win > 0.4:   # too long: first shorter pauses, then speak faster (max 1.3×)
-        gap = 0.15; a = speak(say, sp, vo, gap); d = len(a) / SR
+        gap = 0.12; a = speak(say, sp, vo, gap); d = len(a) / SR
         if d > win:
             sp = min(1.3, speed * d / win * 1.03); a = speak(say, sp, vo, gap); d = len(a) / SR
     ok = d <= win + 0.05
@@ -128,7 +128,7 @@ tmp = tempfile.mkdtemp(); raw = os.path.join(tmp, 'v.f32')
 track.tofile(raw); rr = 2 ** (pitch / 12)
 af = (f'asetrate={SR * rr:.1f},aresample=48000,atempo={1 / rr:.5f},highpass=f=70,'
       'equalizer=f=140:t=q:w=1:g=3,equalizer=f=3200:t=q:w=1.2:g=2,'
-      f'acompressor=threshold=-20dB:ratio=3:attack=5:release=120:makeup=2,volume={gain}')
+      f'acompressor=threshold=-20dB:ratio=2:attack=8:release=160:makeup=1.6,volume={gain}')
 cmd = ['ffmpeg', '-y', '-loglevel', 'error', '-f', 'f32le', '-ar', str(SR), '-ac', '1', '-i', raw, '-af', af,
        '-t', f'{DUR:.3f}', '-c:a', 'libmp3lame', '-b:a', '96k', f'{slug}.voice.mp3']
 subprocess.run(cmd, check=True)

@@ -57,6 +57,10 @@
   #prev .o.pick { background: var(--accent); }
   #prev .o.pick b { background: #111; color: var(--accent); }
   #prev .st { margin-top: 3.6cqw; font: 400 7.6cqw/1 var(--cap); text-transform: uppercase; color: var(--accent); text-shadow: 0 .5cqw 2cqw rgba(0, 0, 0, .7); opacity: 0; }
+  /* ending card (END.ending): big ✓ / ☠, 'You survived' / 'You didn't make it', 'Ending 2 of 4' */
+  #end .eic { font: 900 15cqw/1 var(--ui); margin-bottom: 2.4cqw; text-shadow: 0 .6cqw 2.4cqw rgba(0, 0, 0, .6); }
+  #end .eic.ok { color: #6BE36B; } #end .eic.dead { color: #fff; }
+  #end .en { margin-top: 3.4cqw; display: inline-block; font: 900 3.2cqw/1 var(--ui); letter-spacing: .12em; text-transform: uppercase; background: var(--accent); color: #111; padding: 1.4cqw 2.4cqw 1.3cqw; border-radius: 1.3cqw; }
   #end .follow { margin-top: 3cqw; font: 800 3.2cqw/1.25 var(--ui); color: #fff; text-shadow: 0 .3cqw 1cqw #000; }
   #end .follow b { color: var(--accent); }
   #chan { display: block; margin: 0 0 1.5cqw; font: 800 2.6cqw/1 var(--ui); letter-spacing: .03em; color: rgba(255, 255, 255, .9); text-shadow: 0 .3cqw 1cqw #000; white-space: nowrap; }   /* channel handle: top-left, first line of the HUD */
@@ -157,7 +161,7 @@ const CFG = {
   capPos: 'mid',           // captions: mid = exact centre of the frame | low = lower third (per beat: pos)
   karaoke: true,           // words appear as if spoken, the current word gets a coloured box
   wordRate: 0.085,         // fastest seconds per word
-  voice: 'deep',           // voice-over: deep | deep-uk | narrator | false — or { name, speed: 0.98, gap: 0.38 (pause between sentences), pitch: -1.5, gain: 1 }
+  voice: 'deep',           // voice-over: deep | deep-uk | narrator | false — or { name, speed: 1.06, gap: 0.22 (pause after a sentence), pitch: -1.1, gain: 1 }
   series: null,            // { name: 'What If Lab', handle: '@whatiflab', ep: 1, next: 'part 2', prev: { q, opts, pick, dur: 3.2 } } → series intro + outro; prev (ep 2+) = last end card with the chosen option, from frame 0
   cast: {},                // extra name cards for BEATS[].who, e.g. { mayor: { name: 'The Mayor', role: 'Has a plan' } } (steve is built in)
   statStagger: 0.45,       // stats appear one after another (s between them); countUp: 0.7 = numbers count up when they appear
@@ -207,6 +211,7 @@ const STATS = [
   { label: 'Survival', keys: [[0, 64], ['b2-0.1', 64], ['b2+0.6', 41], [11.1, 41], [12.6, 12], ['b5+1.2', 12], ['b5+2.4', 81]], fmt: 'pct', show: 'b1', up: 'good' }
 ];
 // End card: question drives comments. review: { t, stars, title, text, by, foot, say } = closing review card (narrator reads it)
+// END.ending = { type: 'survived' | 'dead', n: 2, of: 4, title } → result card instead of a vote (q/opts not needed), then the review
 const END = { t: 18.3, q: 'Silo, cellar or tractor – where do *you* hide?', opts: ['Silo', 'Cellar', 'Tractor'], cta: 'Comment A, B or C' };
 // Sound: mood horror | epic | action | funny | science | chill. sections [t, level 0..3]. sfx kinds: see SND below.
 const AUDIO = {
@@ -1114,6 +1119,7 @@ function statVal(s, t) {
   for (let i = 0; i < K.length - 1; i++) if (t < K[i + 1][0]) return lerp(K[i][1], K[i + 1][1], EASE[s.e ?? 'out'](clamp((t - K[i][0]) / (K[i + 1][0] - K[i][0]))));
   return K[K.length - 1][1];
 }
+if (END?.ending) { END.q = END.q ?? (END.ending.type === 'dead' ? 'You _didn’t make it._' : 'You *survived.*'); END.opts = []; }   // ending: no vote, just the result
 if (END) {
   endEl.innerHTML = `<div class="m q">${markup(END.q)}</div>` + (END.opts?.length ? `<div class="opts">${END.opts.map((o, i) => `<div class="o"><b>${'ABCD'[i]}</b><span>${esc(o)}</span></div>`).join('')}</div>` : '') + (END.cta ? `<div class="cta">${esc(END.cta)}</div>` : '')
     + (SERIES ? `<div class="follow">Follow ${SERIES.handle ?? SERIES.name ? `<b>${esc(SERIES.handle ?? SERIES.name)}</b> ` : ''}for ${esc(SERIES.next ?? 'part ' + ((SERIES.ep ?? 1) + 1))}</div>` : '');
@@ -1128,6 +1134,12 @@ if (PREV) {
 }
 const prevOpts = PREV ? [...prevEl.querySelectorAll('.o')] : [], prevSt = PREV ? prevEl.querySelector('.st') : null, prevOk = PREV ? prevEl.querySelector('.o i') : null;
 let prevDim = 0;
+if (END?.ending) {
+  const E2 = END.ending, dead = E2.type === 'dead';
+  endEl.insertAdjacentHTML('afterbegin', `<div class="eic ${dead ? 'dead' : 'ok'}">${dead ? '☠' : '✓'}</div>`);
+  endEl.querySelector('.q').insertAdjacentHTML('afterend', `<div><div class="en">Ending ${E2.n} of ${E2.of}${E2.title ? ' · ' + esc(E2.title) : ''}</div></div>`);
+}
+const endIc = endEl.querySelector('.eic'), endEn = endEl.querySelector('.en');
 const endOpts = [...endEl.querySelectorAll('.o')], endWords = [...endEl.querySelectorAll('.w')], endCta = endEl.querySelector('.cta'), endFollow = endEl.querySelector('.follow');
 const REV = END?.review ?? null, revEl = $('rev');
 if (REV) {
@@ -1203,7 +1215,7 @@ function updateHud(t) {
   // end card
   if (END) {
     const revK = REV ? span(t, REV.t, 0.45, 'back') : 0, revOut = REV ? span(t, REV.t - 0.3, 0.3) : 0;
-    endEl.style.opacity = (endK * (1 - revOut)).toFixed(3); dimEl.style.opacity = Math.max(0.55 * endK + 0.15 * revOut, prevDim).toFixed(3);
+    endEl.style.opacity = (endK * (1 - revOut)).toFixed(3); dimEl.style.opacity = Math.max((END.ending?.type === 'dead' ? 0.85 : 0.55) * endK + 0.15 * revOut, prevDim).toFixed(3);
     if (REV) {
       revEl.style.opacity = clamp(revK * 1.4).toFixed(3); revEl.style.transform = `translateY(-50%) scale(${(0.86 + 0.14 * revK).toFixed(4)})`;
       revStars.forEach((s, i) => { const k = span(t, REV.t + 0.45 + i * 0.14, 0.26, 'back'); s.style.opacity = clamp(k * 2).toFixed(3); s.style.transform = `scale(${(0.3 + 0.7 * k).toFixed(3)})`; });
@@ -1211,6 +1223,8 @@ function updateHud(t) {
     }
     endWords.forEach((w, i) => { const k = clamp((t - END.t - i * 0.06) / 0.16); w.style.opacity = (k > 0 ? 1 : 0); w.style.transform = `scale(${(k <= 0 ? 0.6 : EASE.back(k)).toFixed(3)})`; });
     endOpts.forEach((o, i) => { const k = span(t, END.t + 0.55 + i * 0.16, 0.32, 'back'); o.style.opacity = clamp(k).toFixed(3); o.style.transform = `translateY(${((1 - clamp(k)) * 3).toFixed(2)}cqw) scale(${(0.9 + 0.1 * k).toFixed(3)})`; });
+    if (endIc) { const k = span(t, END.t + 0.05, 0.4, 'back'); endIc.style.opacity = clamp(k * 1.5).toFixed(3); endIc.style.transform = `scale(${(0.3 + 0.7 * k).toFixed(3)})`; }
+    if (endEn) { const k = span(t, END.t + 0.7, 0.35, 'back'); endEn.style.opacity = clamp(k * 1.5).toFixed(3); endEn.style.transform = `scale(${(0.7 + 0.3 * k).toFixed(3)})`; }
     if (endCta) { const k = span(t, END.t + 1.2, 0.4, 'out'); endCta.style.opacity = (k * (0.75 + 0.25 * Math.sin(t * 6))).toFixed(3); }
     if (endFollow) { const k = span(t, END.t + 1.6, 0.4, 'back'); endFollow.style.opacity = clamp(k).toFixed(3); endFollow.style.transform = `scale(${(0.85 + 0.15 * k).toFixed(3)})`; }
   }
