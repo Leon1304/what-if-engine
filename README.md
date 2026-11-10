@@ -12,6 +12,15 @@ Push an assembled page to `renders/<slug>.html` (output of `assemble.py`, voice 
 `https://github.com/Leon1304/what-if-engine/releases/download/render-<slug>/<slug>.mp4`
 Manual run: Actions → render → Run workflow (page path, width 1440 / 2160 / 1080).
 
+## Engine v2.8 (Nov 2026): polish for explainers and conspiracy videos
+- **Lens blur fix:** see-through x-ray bodies, skeletons and quicksand layers count as solid in the depth pass → they stay sharp in close-ups.
+- **planet():** smooth surface (soft coasts, deep water, desert belt, ice caps), soft cloud layer with per-vertex alpha, fresnel atmosphere rim; `smooth: false` keeps the old faceted look.
+- **Conspiracy board:** strings sag, the board shakes on every snap, photos are aged with tape and coffee rings, bigger marker-pen notes; new sounds: rope `snap`, rubber `stamp` (also the MYTH verdict), record `scratch` on freeze frames, `needle` ticks while a meter moves.
+- **Readable on phones:** bigger labels on meter and timeline; timeline labels at the ends stay inside the strip.
+- **focusShot(anchor, t, dur, { dist, az, el, center, fov, push })** from the scene: cut + slow push-in on any anchor (board item, globe pin with `center`, layer, lineup item) — added to CAM automatically.
+- **Thumbnails:** `THUMB.stamp: 'False' | { text, color, x, y }`, `THUMB.meter: 0–100` (Believability needle), `THUMB.big: '384,400 km'` (big number chip).
+- **Fitting outro:** in explainer / conspiracy videos the end card CTA follows its options ("Comment A, B or C") and the narrator closes with the end card question ("Did you believe it? A, B or C — drop your pick in the comments."); a stray "What would you have done?" is replaced, and `assemble.py` warns about it.
+
 ## Engine v2.7 (Nov 2026): conspiracy board, meters, split screen, globe, size comparison, loop
 - **Conspiracy board:** `conspiracyBoard(p, x, z, { items: [{ kind: 'photo' | 'note' | 'clip', icon, text }], links: [[i, j, snapT], …], cross: [[i, t], …], fall, wall })` — cork board on an easel with drawn photos (ufo, moon, pyramid, eye, globe, bird, ship, monster, camera, rocket, skull, question), sticky notes and clippings; red strings snap and swing down one by one, red ✗ stamps, the board topples. `B.item(i)` anchors callouts.
 - **Meter stat:** `{ type: 'meter', left: 'Nope', right: 'Totally real' }` — needle gauge 0–100 (red / yellow / green), the needle swings and trembles while it moves (Believability, risk, danger).

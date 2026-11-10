@@ -13,6 +13,8 @@ t = open('template.html', encoding='utf-8').read()
 story = open(f'{slug}.story.js', encoding='utf-8').read().strip()
 scene = open(f'{slug}.scene.js', encoding='utf-8').read().strip()
 
+if re.search(r"kind:\s*'(explain|conspiracy|debunk)'", story) and re.search(r'would you have done', story, re.I):
+    print('WARNING: explainer / conspiracy videos end on a fitting question, not "What would you have done?" — change END.cta / say / review.say')
 def put(t, tag, body):
     a, b = f'/* @{tag}-BEGIN */', f'/* @{tag}-END */'
     i, j = t.index(a) + len(a), t.index(b)

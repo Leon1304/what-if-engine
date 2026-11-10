@@ -96,12 +96,22 @@ for i, b in enumerate(BEATS):
     who = b.get('who') if isinstance(b.get('who'), str) else None
     lines.append((i, b['t'] + (0.1 if b['t'] < 0.05 else 0.06), nxt - b['t'] - 0.16, say, cap, pre, b.get('voice') or CAST_VOICE.get(who), b.get('pace', 1) * TONES.get(b.get('tone'), (1, 1))[0], who, TONES.get(b.get('tone'), (1, 1))[1]))
 RV = (END or {}).get('review')
+# explainer / conspiracy videos: the closing line follows the question on the end card ("Did you believe it? A, B or C — drop your pick in the comments.")
+# instead of the story outro "What would you have done?"; a stray story outro in END.say / review.say is replaced
+EXPL = CFG.get('kind') in ('explain', 'conspiracy', 'debunk')
+WWYD = re.compile(r"\s*What would you have done\??(\s*Drop it in the comments\.?)?", re.I)
+def outro():
+    opts = (END or {}).get('opts') or []; q = clean((END or {}).get('q') or '')
+    ab = ', '.join('ABCD'[:len(opts) - 1]) + ' or ' + 'ABCD'[len(opts) - 1] if len(opts) > 1 else ''
+    return f"{q} {ab} — drop your pick in the comments." if ab else f"{q} Tell me in the comments."
 if END and END.get('say') is not False and (isinstance(END.get('say'), str) or END.get('q')):
-    say = clean(END['say']) if isinstance(END.get('say'), str) else clean(END['q'])
+    say = clean(END['say']) if isinstance(END.get('say'), str) else (outro() if EXPL and END.get('q') else clean(END['q']))
+    if EXPL and WWYD.search(say): say = WWYD.sub(' ', say).strip() or outro()
     lines.append(('end', END['t'] + 0.35, (RV['t'] - 0.35 if RV else DUR) - END['t'] - 0.6, say, [], 0, None, END.get('pace', 1), None, 1))
 if RV and RV.get('say') is not False and (LANG == 'en' or isinstance(RV.get('say'), str)):
     n = int(RV.get('stars', 1)); words = ['Zero', 'One', 'Two', 'Three', 'Four', 'Five']
     say = clean(RV['say']) if isinstance(RV.get('say'), str) else clean(f"{words[n] if 0 <= n <= 5 else n} star{'' if n == 1 else 's'}. {RV.get('text', '')}")
+    if EXPL and WWYD.search(say): say = WWYD.sub(' ', say).strip() or clean(f"{words[n] if 0 <= n <= 5 else n} star{'' if n == 1 else 's'}. {RV.get('text', '')}")
     lines.append(('review', RV['t'] + 1.3, DUR - RV['t'] - 1.6, say, [], 0, None, RV.get('pace', 1), None, 1))
 
 # --- synthesis (cached per line) ---
