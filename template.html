@@ -374,6 +374,7 @@ function applySky(t) {
   scene.environmentIntensity = lerp(ENVI[na] ?? 0.2, ENVI[nb] ?? 0.2, k) * (typeof CFG.env === 'number' ? CFG.env : 1);
   WIND.a.value = (CFG.wind ?? 1) * lerp(WINDY[na] ?? 1, WINDY[nb] ?? 1, k);
   for (const m of NIGHTGLOW) m.emissiveIntensity = 2.6 * skyU.stars.value;
+  const lk = strikeK(t); if (lk) { hemi.intensity += 3 * lk; sun.intensity += 2 * lk; }
 }
 
 // --- materials & primitives (y = bottom of the shape; ball is centred) ---
@@ -445,15 +446,18 @@ function house(p, x, z, o = {}) {   // farmhouse: stone plinth, corner boards, f
   for (const sz of [-1, 1]) { for (let k = 1; k < 5; k++) { const u = k / 5; box(g, w + 0.52, 0.04, 0.06, sh, 0, h + rh * u - 0.02, sz * (D / 2) * (1 - u), NC); } box(g, w + 0.56, 0.08, 0.08, trim, 0, h - 0.04, sz * D / 2, NC); }
   box(g, w + 0.56, 0.1, 0.24, sh, 0, h + rh - 0.05, 0, NC);
   if (o.chimney !== false) { box(g, 0.45, 1.5, 0.45, '#7A6A5E', w * 0.26, h + 0.2, -d * 0.16); box(g, 0.56, 0.1, 0.56, '#5E5048', w * 0.26, h + 1.7, -d * 0.16, NC); }
-  box(g, 1.15, 1.92, 0.06, trim, 0, 0.2, d / 2 + 0.03, NC); box(g, 0.95, 1.78, 0.06, doorC, 0, 0.2, d / 2 + 0.07);
-  for (const yy of [0.45, 1.2]) box(g, 0.6, 0.5, 0.02, shade(doorC, -0.06), 0, yy, d / 2 + 0.105, NC);
-  ball(g, 0.045, '#D9B65C', 0.33, 1.1, d / 2 + 0.13, { detail: 0, ...NC });
+  box(g, 1.15, 1.92, 0.06, trim, 0, 0.2, d / 2 + 0.03, NC); box(g, 0.95, 1.78, 0.02, '#1A140F', 0, 0.2, d / 2 + 0.065, NC);   // frame + dark doorway (seen when open)
+  const door = dyn(grp(g, -0.475, 0.2, d / 2 + 0.085)); door.userData.sign = 1; door.userData.angle = 1.7;   // openDoor(house, t)
+  box(door, 0.95, 1.78, 0.05, doorC, 0.475, 0, 0); for (const yy of [0.25, 1.0]) box(door, 0.6, 0.5, 0.02, shade(doorC, -0.06), 0.475, yy, 0.03, NC); ball(door, 0.045, '#D9B65C', 0.8, 0.9, 0.06, { detail: 0, ...NC });
+  const windows = [];
   const winMat = mat(o.win ?? '#FFE2A0', { em: o.win ?? '#FFC060', ei: o.lit ?? 0, own: true });
   const win = (cx, cy, cz, ry, front) => {   // local +z points out of the wall
     const q = grp(g, cx, cy, cz, ry);
     box(q, 1.05, 1.05, 0.06, trim, 0, -0.525, 0, NC);
-    box(q, 0.85, 0.85, 0.08, '', 0, -0.425, 0.02, { mat: winMat, ...NC });
-    box(q, 0.06, 0.85, 0.04, trim, 0, -0.425, 0.08, NC); box(q, 0.85, 0.06, 0.04, trim, 0, -0.03, 0.08, NC);
+    box(q, 0.85, 0.85, 0.02, '#1A140F', 0, -0.425, 0.0, NC);   // room behind the glass (seen when the window is open)
+    const sh2 = front ? dyn(grp(q, -0.425, 0, 0.02)) : q, ox = front ? 0.425 : 0, oz = front ? 0 : 0.02; if (front) { sh2.userData.sign = -1; windows.push(sh2); }
+    box(sh2, 0.85, 0.85, 0.08, '', ox, -0.425, oz, { mat: winMat, ...NC });
+    box(sh2, 0.06, 0.85, 0.04, trim, ox, -0.425, oz + 0.06, NC); box(sh2, 0.85, 0.06, 0.04, trim, ox, -0.03, oz + 0.06, NC);
     box(q, 1.15, 0.08, 0.16, trim, 0, -0.6, 0.06, NC);
     if (o.shutters !== false && Math.abs(front ? cx : 0) + 0.9 < w / 2) for (const s of [-1, 1]) box(q, 0.3, 1.0, 0.04, shut, s * 0.69, -0.5, 0.02, NC);
     if (front && o.flowers !== false) { box(q, 0.9, 0.18, 0.2, '#7A5236', 0, -0.8, 0.14, NC); for (let i = 0; i < 5; i++) ball(q, 0.07, pick2(['#E8506A', '#FFD84A', '#FFFFFF', '#B070E0'], hash(cx * 7 + i)), -0.32 + i * 0.16, -0.58, 0.16, { detail: 0, ...NC }); }
@@ -466,7 +470,7 @@ function house(p, x, z, o = {}) {   // farmhouse: stone plinth, corner boards, f
       box(g, rl, 0.06, 0.06, trim, sx * (0.65 + rl / 2), 0.95, d / 2 + 1.33, NC); for (let i = 0; i <= Math.floor(rl / 0.25); i++) box(g, 0.04, 0.75, 0.04, trim, sx * (0.65 + i * 0.25), 0.18, d / 2 + 1.33, NC); }
     box(g, w * 0.76, 0.14, 1.6, roofC, 0, 2.3, d / 2 + 0.75); box(g, w * 0.76, 0.06, 0.06, trim, 0, 2.27, d / 2 + 1.55, NC);
   }
-  return { g, winMat, w, d, h };
+  return { g, winMat, w, d, h, door, doors: [door], windows };
 }
 function barn(p, x, z, o = {}) {   // red barn: foundation, plank seams, white corner trims, side windows, X door, hayloft, ridge cap and a cupola with weathervane
   const w = o.w ?? 6.5, d = o.d ?? 8.5, h = o.h ?? 3.6, col = o.color ?? '#A8322A', trim = o.trim ?? '#F4EFE6', roofC = o.roof ?? '#4E535B', g = stat(grp(p, x, 0, z, o.ry ?? 0)), NC = { cast: false };
@@ -482,15 +486,17 @@ function barn(p, x, z, o = {}) {   // red barn: foundation, plank seams, white c
   box(roof, d + 0.5, 0.18, w + 0.5, roofC, 0, -0.05, 0);
   prism(roof, d + 0.5, 2.6, w + 0.5, roofC, 0, 0.1, 0);
   box(g, 0.26, 0.12, d + 0.56, shade(roofC, -0.08), 0, h + 2.64, 0, NC);
-  box(g, w * 0.5, h * 0.78, 0.1, trim, 0, 0, d / 2 + 0.03); box(g, w * 0.44, h * 0.72, 0.12, col, 0, 0.12, d / 2 + 0.05);
+  box(g, w * 0.5, h * 0.78, 0.1, trim, 0, 0, d / 2 + 0.03); box(g, w * 0.44, h * 0.72, 0.02, '#120E0B', 0, 0.12, d / 2 + 0.085, NC);   // frame + dark inside
+  const dg = dyn(grp(g, 0, 0, 0)); dg.userData.slide = w * 0.3;   // sliding door: openDoor(barn, t)
+  box(dg, w * 0.44, h * 0.72, 0.12, col, 0, 0.12, d / 2 + 0.05);
   const L = Math.hypot(w * 0.44, h * 0.72), ang = Math.atan2(h * 0.72, w * 0.44);
-  for (const s of [-1, 1]) box(g, L, 0.14, 0.06, trim, 0, h * 0.36 + 0.05, d / 2 + 0.12, { rz: s * ang });
-  box(g, 0.08, h * 0.72, 0.07, trim, 0, 0.12, d / 2 + 0.13, NC);
+  for (const s of [-1, 1]) box(dg, L, 0.14, 0.06, trim, 0, h * 0.36 + 0.05, d / 2 + 0.12, { rz: s * ang });
+  box(dg, 0.08, h * 0.72, 0.07, trim, 0, 0.12, d / 2 + 0.13, NC);
   box(g, 1.1, 0.9, 0.1, trim, 0, h + 0.35, d / 2 + 0.25); box(g, 0.9, 0.7, 0.12, shade(col, -0.12), 0, h + 0.45, d / 2 + 0.27, NC);
   const cu = grp(g, 0, h + 2.55, 0);   // cupola + weathervane on the ridge
   box(cu, 0.9, 0.8, 0.9, trim); box(cu, 0.6, 0.5, 0.94, '#3A3E46', 0, 0.15, 0, NC); box(cu, 0.94, 0.5, 0.6, '#3A3E46', 0, 0.15, 0, NC);
   prism(cu, 1.1, 0.5, 1.1, roofC, 0, 0.8, 0); box(cu, 0.04, 0.9, 0.04, '#2A2A2A', 0, 1.25, 0, NC); box(cu, 0.7, 0.04, 0.04, '#2A2A2A', 0, 1.9, 0, NC); prism(cu, 0.04, 0.2, 0.18, '#2A2A2A', 0.38, 1.82, 0, { rz: -Math.PI / 2, ...NC });
-  return { g, w, d, h };
+  return { g, w, d, h, door: dg, doors: [dg] };
 }
 function silo(p, x, z, o = {}) {   // steel silo: concrete footing, rusty foot band, rings, railing and ladder
   const r = o.r ?? 1.6, h = o.h ?? 9, g = stat(grp(p, x, 0, z, o.ry ?? 0)), NC = { cast: false };
@@ -783,10 +789,10 @@ const haybale = (p, x, z, ry = 0) => { const g = stat(grp(p, x, 0, z, ry)); cyl(
 function vehicle(p, x, z, o = {}) {   // kind: car | sports | taxi | police | van | pickup | bus | truck | tractor — returns { g, wheels } (police: { siren } light bar)
   const kind = o.kind ?? 'car', g = grp(p, x, 0, z, o.ry ?? 0), wheels = [], NC = { cast: false };
   const c = o.color ?? (kind === 'taxi' ? '#F2C230' : kind === 'police' ? '#F2F2F2' : kind === 'bus' ? '#E3B23C' : '#3A7BD5');
-  const head = mat('#FFF6D8', { em: '#FFF2C0', ei: o.lights ?? 0.6 }), tail = mat('#C8202A', { em: '#FF2020', ei: o.lights ?? 0.5 }), dark = '#24272D', glass = '#9FC3D9';
+  const head = mat('#FFF6D8', { em: '#FFF2C0', ei: o.lights ?? 0.6, own: true }), tail = mat('#C8202A', { em: '#FF2020', ei: o.lights ?? 0.5 }), dark = '#24272D', glass = '#9FC3D9';
   const wheel = (wx, wz, r, w) => { const pv = grp(g, wx, r, wz); cyl(pv, r, r, w, '#22252B', 0, -w / 2, 0, { rz: Math.PI / 2, seg: 12 }); cyl(pv, r * 0.55, r * 0.55, w + 0.02, '#B8BEC6', 0, -(w + 0.02) / 2, 0, { rz: Math.PI / 2, seg: 8, ...NC }); wheels.push(pv); };
   const lights = (hw, hy, zf, zb, tw = 0.3) => { for (const sx of [-1, 1]) { box(g, tw, 0.14, 0.04, '', sx * hw, hy, zf, { mat: head, ...NC }); box(g, tw * 0.9, 0.14, 0.04, '', sx * hw, hy, zb, { mat: tail, ...NC }); } };
-  let siren = null;
+  let siren = null; const doors = [], meta = { len: 3.8, lampX: 0.55, lampY: 0.66, trackW: 1.7 };
   if (kind === 'tractor') {
     box(g, 1.3, 0.9, 2.4, c, 0, 0.55, 0.2); box(g, 1.1, 1.2, 1.1, c, 0, 1.45, -0.45); box(g, 1.0, 0.8, 1.0, glass, 0, 1.6, -0.45, { opacity: 0.55, rough: 0.2 });
     box(g, 1.22, 0.08, 1.22, dark, 0, 2.62, -0.45, NC); box(g, 0.9, 0.5, 0.04, dark, 0, 0.75, 1.41, NC);
@@ -832,9 +838,17 @@ function vehicle(p, x, z, o = {}) {   // kind: car | sports | taxi | police | va
       siren = t => { const k = Math.floor(t * 6) % 2; r.emissiveIntensity = k ? 2.2 : 0.2; b.emissiveIntensity = k ? 0.2 : 2.2; };
       if (o.siren !== false) tick(siren);
     }
+    for (const sx of [1, -1]) { const hg = grp(g, sx * 0.86, 0.32, 0.55); hg.userData.sign = sx > 0 ? -1 : 1; hg.userData.angle = 1.1; doors.push(hg);   // doors: openDoor(car, t, { i: 0 driver, 1 passenger })
+      box(hg, 0.05, H * 0.92, 1.05, c, 0, 0.02, -0.525, NC); box(hg, 0.04, 0.5, 0.95, glass, -sx * 0.1, H, -0.5, { rough: 0.25, ...NC }); box(hg, 0.03, 0.03, 0.14, dark, sx * 0.03, H * 0.62, -0.85, NC); }
+    Object.assign(meta, { len: L, lampY: 0.66 });
     for (const wz of [1.2 * L / 3.8, -1.2 * L / 3.8]) { wheel(0.85, wz, sp ? 0.36 : 0.38, 0.28); wheel(-0.85, wz, sp ? 0.36 : 0.38, 0.28); }
   }
-  return { g, wheels, siren };
+  if (kind === 'van') Object.assign(meta, { len: 4.26, front: 2.13, lampX: 0.68, lampY: 0.82, trackW: 1.84 });
+  if (kind === 'pickup') Object.assign(meta, { len: 4.82, front: 2.41, lampX: 0.65, lampY: 0.92, trackW: 1.8 });
+  if (kind === 'bus') Object.assign(meta, { len: 10, front: 5.02, lampX: 0.85, lampY: 0.82, trackW: 2.2 });
+  if (kind === 'truck') Object.assign(meta, { len: 6.6, front: 3.32, lampX: 0.78, lampY: 0.78, trackW: 2.0 });
+  if (kind === 'tractor') Object.assign(meta, { len: 2.4, front: 1.41, lampX: 0.4, lampY: 1.27, trackW: 1.7 });
+  return { g, wheels, siren, kind, headMat: head, doors, ...meta };
 }
 // --- aircraft: plane(p, { kind: 'jet' | 'prop' | 'airliner', color, scale }) and heli(p, { color }) → { g, prop/rotor }; move them with fly() ---
 const rod = (p, rFront, rBack, len, c, x, y, z, o = {}) => cyl(p, rFront, rBack, len, c, x, y - len / 2, z, { ...o, rx: Math.PI / 2 });   // cylinder along z, centred at (x, y, z); rFront at +z
@@ -1074,6 +1088,9 @@ function rigState(mode, u, t, o = {}) {   // pure: (mode, cycle position u, time
     else { const Hh = HIP - 0.01 - dip; [S.lt, S.lk] = legIK(0.04, ANK - Hh); [S.rt, S.rk] = legIK(-0.02, ANK - Hh); S.H = Hh; }
     S.las = -2.85 + 0.2 * pm; S.ras = -2.85 - 0.2 * pm; S.laz = -0.3; S.raz = 0.3; S.lae = -0.25 - 0.35 * (0.5 + 0.5 * pm); S.rae = -0.25 - 0.35 * (0.5 - 0.5 * pm);
     S.nrx = -0.22; S.crx = -0.05; S.coat = 0.2 * Math.sin(TAU * q);
+  } else if (mode === 'sit') {   // seated: hips at seat height, feet on the floor in front, hands on the thighs
+    const Hh = (o.seatH ?? 0.45) + 0.08; S.H = Hh; [S.lt, S.lk] = legIK(0.44, ANK - Hh); [S.rt, S.rk] = legIK(0.42, ANK - Hh); S.lz = -0.05; S.rz = 0.05;
+    S.crx = 0.03 + 0.01 * breath; S.las = S.ras = -0.6; S.lae = S.rae = -0.55; S.laz = -0.08; S.raz = 0.08; S.nry = 0.35 * noise1(t * 0.2 + sd * 30); S.nrx = 0.04 * noise1(t * 0.3 + sd * 9);
   } else {   // idle · point · hold (and anything unknown): weight shifts from leg to leg, breathing, looking around
     const w1 = Math.sin(TAU * t / 5.3 + sd * 10), Hh = HIP - 0.012 - 0.005 * (0.5 + 0.5 * breath);
     S.hx = 0.025 * w1; S.hrz = -0.025 * w1; S.crz = 0.02 * w1; S.H = Hh; S.crx = 0.02;
@@ -1277,6 +1294,18 @@ function walk(obj, pts, o = {}) {
   const yawAt = s => { const a = path.dir(s - 0.35), b = path.dir(s + 0.35), x = a.x + b.x, z = a.z + b.z; return Math.hypot(x, z) > 1e-5 ? Math.atan2(x, z) : null; };
   const sc = (obj.root ?? obj).scale.x, Cl = obj.legL ? cycleLen(mode, v) * sc : 0, stride = o.stride ?? (obj.kind === 'chicken' ? 16 : 4), bl = Math.max(ra, 0.22);
   let y0 = yawAt(0) ?? 0;
+  const rt = obj.root ?? obj; (rt._walks ??= []).push({ t0, pos: t => { const P = path.at(dist(t - t0)); return new THREE.Vector3(P.x, groundH(P.x, P.z) + (o.y ?? 0), P.z); }, yaw: t => o.face ?? (yawAt(dist(t - t0)) ?? y0) });
+  const pick = t => { let w = rt._walks[0]; for (const x of rt._walks) if (x.t0 <= t) w = x; return w; };
+  obj._posAt = t => pick(t).pos(t); obj._yawAt = t => pick(t).yaw(t);
+  if (o.prints && obj.legL) {   // footprints (snow, sand, mud): o.prints = true | hex colour; o.printLife (s)
+    const g0 = GAIT[mode] ?? GAIT.walk, Sd = g0.b * Cl, items = [], fwd = s => yawAt(s) ?? y0;
+    for (let k = 0; k < 600; k++) { const sk = k * Cl / 2, s = sk + Sd / 2; if (s > path.len && !o.loop) break; if (sk > dist(Te)) break;
+      let lo = 0, hi = Math.min(Te, 1e4); for (let i = 0; i < 40; i++) { const m = (lo + hi) / 2; if (dist(m) < sk) lo = m; else hi = m; }
+      const P = path.at(s), yw = fwd(s), lx = (k % 2 ? 1 : -1) * 0.12 * sc; items.push([P.x + Math.cos(yw) * lx, P.z - Math.sin(yw) * lx, yw, t0 + hi]); }
+    const im = new THREE.InstancedMesh(G('print', () => new THREE.CylinderGeometry(0.07, 0.07, 0.01, 8).scale(1, 1, 2)), mat(typeof o.prints === 'string' ? o.prints : '#4A3A2A', { opacity: 0.55 }), items.length), o3 = new THREE.Object3D();
+    im.castShadow = false; im.frustumCulled = false; im.userData.cover = true; world.add(dyn(im)); const life = o.printLife ?? 1e9;
+    tick(t => { items.forEach(([x, z, yw, ta], i) => { const u = t - ta, k = u < 0 ? 0 : u > life ? Math.max(0, 1 - (u - life) / 2) : 1; o3.position.set(x, groundH(x, z) + 0.012, z); o3.rotation.set(0, yw, 0); o3.scale.setScalar(k * sc); o3.updateMatrix(); im.setMatrixAt(i, o3.matrix); }); im.instanceMatrix.needsUpdate = true; });
+  }
   return tick(t => {
     const tau = t - t0, s = dist(tau), moving = tau > 0 && tau < Te;
     const P = path.at(s); node.position.set(P.x, groundH(P.x, P.z) + (o.y ?? 0), P.z);
@@ -1348,6 +1377,226 @@ function anim(r, list, o = {}) {   // model rig: [[t, clip, { once, speed }], �
     const prev = lay(L[i - 1], t); cur[2] = EASE.inOut(k); prev[2] = 1 - cur[2]; return [cur, prev];
   };
   return r;
+}
+
+// --- interactions: people and objects — everything a pure function of t (frame-exact export) ---
+// carry/throw/drop, toss + bounce, push, knock, shatter, wobble · doors, gates, windows, sit, enter/exit vehicles · flashlight, headlights, phone, lightning · footprints, drive() with tyre tracks and brake dust, splash
+const LATE = [], late = f => (LATE.push(f), f);   // runs after all ticks and crowds (hands are posed) — attachments, seats
+const sfx = (t, k, v = 1) => { (AUDIO.hits ??= []).push({ t: VT(t), k, v }); };
+const _ia = new THREE.Vector3(), _ib = new THREE.Vector3(), _iq = new THREE.Quaternion(), _ie = new THREE.Euler();
+const handAt = (f, side, out) => { const fa = side === 'L' ? f.foreL : f.foreR; fa.updateWorldMatrix(true, false); return out.set(0, -0.36, 0.05).applyMatrix4(fa.matrixWorld); };
+const rigPos = (f, t, out = new THREE.Vector3()) => f._posAt ? out.copy(f._posAt(t)) : out.copy((f.root ?? f).position);
+const rigYaw = (f, t) => f._yawAt ? f._yawAt(t) : (f.root ?? f).rotation.y;
+const env3 = (t, a, b, fi = 0.25, fo = 0.25) => t < a || t > b ? 0 : Math.min(sm01((t - a) / fi), 1 - sm01((t - b + fo) / fo));
+
+// ballistic flight with bounces: from [x,y,z] → to [x,z] (or [x,y,z]); o: h (apex above the higher end), bounces (3), bounce (0.42 restitution), spin (rad/s), r (resting height), float
+function tossPath(from, to, t0, o = {}) {
+  const g = 9.8, e = o.bounce ?? 0.42, [x0, y0, z0] = from, x1 = to[0], z1 = to.length > 2 ? to[2] : to[1];
+  const wet = waterH(x1, z1, t0) > groundH(x1, z1) + 0.05, rest = o.r ?? 0.15;
+  const y1 = to.length > 2 ? to[1] : (wet ? waterH(x1, z1, t0) : groundH(x1, z1)) + rest;
+  const ya = Math.max(y0, y1) + (o.h ?? 2), vy = Math.sqrt(2 * g * (ya - y0)), T1 = vy / g + Math.sqrt(2 * (ya - y1) / g);
+  const segs = [{ a: t0, T: T1, p: [x0, y0, z0], v: [(x1 - x0) / T1, vy, (z1 - z0) / T1] }];
+  let vl = Math.sqrt(2 * g * (ya - y1)), hx = segs[0].v[0], hz = segs[0].v[2], tt = t0 + T1, px = x1, pz = z1;
+  if (!wet) for (let i = 0; i < (o.bounces ?? 3) && vl > 0.6; i++) { vl *= e; hx *= 0.55; hz *= 0.55; const T = 2 * vl / g; segs.push({ a: tt, T, p: [px, y1, pz], v: [hx, vl, hz] }); tt += T; px += hx * T; pz += hz * T; }
+  const end = [px, y1, pz], land = t0 + T1, spin = o.spin ?? 9;
+  if (wet) splash(x1, z1, land, { size: o.splashSize ?? 1 });
+  else segs.forEach((s, i) => i < segs.length && sfx(s.a + s.T, 'impact', 0.25 * Math.pow(0.6, i)));
+  return { end, land, stop: tt, wet, at(t, out) {
+    if (t <= t0) return out.set(x0, y0, z0);
+    for (const s of segs) if (t <= s.a + s.T) { const u = t - s.a; return out.set(s.p[0] + s.v[0] * u, s.p[1] + s.v[1] * u - 0.5 * g * u * u, s.p[2] + s.v[2] * u); }
+    if (wet) return out.set(end[0], o.float ? waterH(end[0], end[2], t) - 0.05 : end[1] - Math.min(1.5, (t - tt) * 0.8), end[2]);
+    return out.set(end[0], end[1], end[2]);
+  }, rot(t) { const u = clamp(t - t0, 0, tt - t0); return spin * (u < T1 ? u : T1 + (u - T1) * 0.35); } };
+}
+// toss(obj, t0, { from, to, h, bounces, spin, float }) — throw anything along an arc; it bounces and comes to rest (in water: splash, then sinks or floats)
+function toss(obj, t0, o = {}) {
+  const node = dyn(obj.g ?? obj.root ?? obj), p0 = node.position.clone(), r0 = node.rotation.clone();
+  const P = tossPath(o.from ?? [p0.x, p0.y, p0.z], o.to ?? [p0.x + 4, p0.z], t0, o), ax = o.axis ?? 'x';
+  tick(t => { if (t < t0) return; P.at(t, node.position); node.rotation[ax] = r0[ax] + P.rot(t); });
+  return P;
+}
+// carry(rig, obj, { pick, drop, throw: { t, to: [x,z], h, spin }, both, hand }) — bend down and pick it up, carry it (one hand or both), then put it down or throw it
+function carry(f, obj, o = {}) {
+  const node = dyn(obj.g ?? obj.root ?? obj), p0 = node.position.clone(), r0 = node.rotation.clone(), both = o.both ?? false, side = o.hand ?? 'R';
+  const tp = o.pick ?? 0, ta = tp + 0.35, th = o.throw?.t, td = o.drop, tEnd = th ?? td ?? 1e9;
+  const off = new THREE.Vector3(...(o.offset ?? (both ? [0, -0.05, 0.28] : [0, -0.1, 0.05])));
+  let P = null, dropAt = null;
+  (f.fx ??= []).push((t, S) => {   // body: bend + reach, hold, wind-up and follow-through
+    const bend = (tc) => { const k = (t - tc) / 0.7; if (k < 0 || k > 1) return 0; return Math.sin(Math.PI * k); };
+    const b = Math.max(bend(tp), td != null ? bend(td - 0.35) : 0);
+    if (b > 0) { S.H -= 0.34 * b; S.crx += 0.7 * b; S.nrx += 0.15 * b; S.las = lerp(S.las, -0.95, b); S.ras = lerp(S.ras, -0.95, b); S.lae = lerp(S.lae, -0.2, b); S.rae = lerp(S.rae, -0.2, b);
+      [S.lt, S.lk] = legIK(0.1, ANK - S.H); [S.rt, S.rk] = legIK(-0.02, ANK - S.H); }
+    const hold = env3(t, ta, tEnd + (th != null ? 0 : -0.35), 0.3, 0.2);
+    if (hold > 0) {
+      if (both) { S.las = lerp(S.las, -1.0, hold); S.ras = lerp(S.ras, -1.0, hold); S.lae = lerp(S.lae, -0.95, hold); S.rae = lerp(S.rae, -0.95, hold); S.laz = lerp(S.laz, 0.18, hold); S.raz = lerp(S.raz, -0.18, hold); S.crx -= 0.06 * hold; }
+      else if (side === 'R') { S.ras = lerp(S.ras, -0.5, hold); S.rae = lerp(S.rae, -1.0, hold); } else { S.las = lerp(S.las, -0.5, hold); S.lae = lerp(S.lae, -1.0, hold); }
+    }
+    if (th != null) { const w = (t - th + 0.32) / 0.32, ft = (t - th) / 0.4;
+      if (w > 0 && w <= 1) { const k = sm01(w); S.ras = lerp(S.ras, 1.0, k); S.rae = lerp(S.rae, -1.2, k); S.cry += 0.35 * k; S.crx -= 0.1 * k; if (both) { S.las = lerp(S.las, 0.6, k); } }
+      if (ft > 0 && ft < 1) { const k = 1 - sm01(ft); S.ras = lerp(S.ras, -2.3, k); S.rae = lerp(S.rae, -0.15, k); S.cry -= 0.35 * k; S.crx += 0.18 * k; if (both) { S.las = lerp(S.las, -2.1, k); S.lae = lerp(S.lae, -0.15, k); } } }
+  });
+  if (th != null) sfx(th, 'whoosh', 0.6);
+  late(t => {
+    if (t < ta) { node.position.copy(p0); node.rotation.copy(r0); return; }
+    if (t < tEnd) {   // in the hand(s)
+      if (both) { handAt(f, 'L', _ia); handAt(f, 'R', _ib); node.position.addVectors(_ia, _ib).multiplyScalar(0.5); } else handAt(f, side, node.position);
+      _ie.set(0, rigYaw(f, t), 0); node.position.add(_ib.copy(off).applyEuler(_ie)); node.rotation.set(r0.x, rigYaw(f, t) + (o.ry ?? 0), r0.z); return;
+    }
+    if (th != null) {   // flying
+      if (!P) { const yw = rigYaw(f, th), rp = rigPos(f, th, _ia); P = tossPath([rp.x + Math.sin(yw) * 0.45 + Math.cos(yw) * 0.3, rp.y + 1.75, rp.z + Math.cos(yw) * 0.45 - Math.sin(yw) * 0.3], o.throw.to, th, o.throw); }
+      P.at(t, node.position); node.rotation.set(r0.x + P.rot(t), rigYaw(f, th), r0.z); return;
+    }
+    if (!dropAt) { const yw = rigYaw(f, td), rp = rigPos(f, td, _ia); dropAt = [rp.x + Math.sin(yw) * 0.6, rp.z + Math.cos(yw) * 0.6, yw]; }
+    node.position.set(dropAt[0], groundH(dropAt[0], dropAt[1]) + (o.restY ?? 0), dropAt[1]); node.rotation.set(r0.x, dropAt[2], r0.z);
+  });
+  return f;
+}
+// push(rig, obj, { t0, t1, to: [x,z] }) — the rig leans in with both arms and shoves the object (crate, car, sofa …) to the target, walking behind it
+function push(f, obj, o = {}) {
+  const node = dyn(obj.g ?? obj.root ?? obj), p0 = node.position.clone(), t0 = o.t0 ?? 0, t1 = o.t1 ?? t0 + 3, [tx, tz] = o.to ?? [p0.x, p0.z + 3];
+  const yaw = Math.atan2(tx - p0.x, tz - p0.z), back = o.gap ?? 0.85;
+  f.fx.push((t, S) => { const e = env3(t, t0 - 0.3, t1 + 0.3, 0.3, 0.3); if (!e) return; S.crx += 0.35 * e; S.las = lerp(S.las, -1.35, e); S.ras = lerp(S.ras, -1.35, e); S.lae = lerp(S.lae, -0.35, e); S.rae = lerp(S.rae, -0.35, e); S.nrx -= 0.2 * e; });
+  const k = t => EASE.inOut(clamp((t - t0) / (t1 - t0)));
+  tick(t => { const u = k(t), x = lerp(p0.x, tx, u), z = lerp(p0.z, tz, u); node.position.set(x, groundH(x, z) + (p0.y - groundH(p0.x, p0.z)), z); node.rotation.z = (t > t0 && t < t1 ? 0.03 * Math.sin(t * 11) : 0); });
+  let bob = 0; const cl = cycleLen('walk', 0.8);
+  late(t => { if (t < t0 - 0.3 || t > t1 + 0.6) return; const u = k(t), x = lerp(p0.x, tx, u) - Math.sin(yaw) * back, z = lerp(p0.z, tz, u) - Math.cos(yaw) * back;
+    f.root.position.set(x, groundH(x, z), z); f.root.rotation.y = yaw; if (t > t0 && t < t1) { bob = Math.hypot(tx - p0.x, tz - p0.z) * u; pose(f, 'walk', TAU * bob / cl, t, { v: 0.8 }); } });
+  return f;
+}
+// knock(obj …) topples; knockAway(obj, t0, { dir: [dx, dz], power, h }) sends it flying and bouncing
+function knockAway(obj, t0, o = {}) { const node = obj.g ?? obj.root ?? obj, p = node.position, [dx, dz] = o.dir ?? [0, 1], L = Math.hypot(dx, dz) || 1, pw = o.power ?? 5;
+  sfx(t0, 'impact', 0.6); return toss(obj, t0, { to: [p.x + dx / L * pw, p.z + dz / L * pw], h: o.h ?? 1.2, spin: o.spin ?? 12, bounces: o.bounces ?? 3, axis: o.axis }); }
+// shatter(obj, t0, { pieces, colors, power }) — glass, vase, window: gone in a burst of shards (+ sound)
+function shatter(obj, t0, o = {}) {
+  const node = obj.g ?? obj.root ?? obj; node.updateWorldMatrix(true, false); const w = new THREE.Vector3().setFromMatrixPosition(node.matrixWorld);
+  vanish(node, t0, { dur: 0.02 });
+  emit('debris', { at: [w.x, w.y + (o.dy ?? 0.3), w.z], t0, burst: o.pieces ?? 45, colors: o.colors ?? ['#DDEFF8', '#B8DCEC', '#FFFFFF'], size: o.size ?? 0.11, speed: o.power ?? 5, spread: 1.3, basic: true, life: 1.8 });
+  sfx(t0, 'crack', 0.9); sfx(t0 + 0.04, 'ding', 0.35); return node;
+}
+// wobble(obj, t0, { amp, dur, axis }) — after a hit things rock back and forth and settle
+function wobble(obj, t0, o = {}) { const node = dyn(obj.g ?? obj.root ?? obj), ax = o.axis ?? 'z', r0 = node.rotation[ax], a = o.amp ?? 0.25, d = o.dur ?? 1.4;
+  return tick(t => { const u = t - t0; node.rotation[ax] = r0 + (u > 0 && u < d ? a * Math.exp(-u * 4.5 / d) * Math.sin(u * 22 / d) : 0); }); }
+
+// doors: openDoor(house | barn | vehicle | gate, t0, { i, close: t, angle, dur }) — swings (or slides) open with a small overshoot, closes with a thud
+function openDoor(target, t0, o = {}) {
+  const h = (target.doors ?? [target.door ?? target])[o.i ?? 0]; if (!h) return console.warn('openDoor: nothing to open');
+  dyn(h); const ud = h.userData, ang = o.angle ?? ud.angle ?? 1.5, d = o.dur ?? 0.55, tc = o.close, base = ud.slide ? h.position.x : h.rotation.y;
+  sfx(t0, 'tick', 0.5); if (tc != null) sfx(tc + 0.3, 'impact', 0.35);
+  return tick(t => {
+    let k = t < t0 ? 0 : EASE.back(clamp((t - t0) / d)); if (tc != null && t > tc) k *= 1 - EASE.in(clamp((t - tc) / 0.32));
+    if (ud.slide) h.position.x = base + ud.slide * clamp(k, 0, 1.05); else h.rotation.y = base + (ud.sign ?? 1) * ang * k;
+  });
+}
+const openWindow = (house, t0, o = {}) => openDoor({ doors: house.windows }, t0, { angle: 1.2, ...o });
+function gate(p, x, z, o = {}) {   // farm gate on two posts; returns { g, door } for openDoor()
+  const w = o.w ?? 3, c = o.color ?? '#8C6A48', g = stat(grp(p, x, groundH(x, z), z, o.ry ?? 0));
+  for (const s of [-1, 1]) { box(g, 0.2, 1.5, 0.2, c, s * (w / 2 + 0.12), 0, 0); box(g, 0.26, 0.06, 0.26, shade(c, -0.1), s * (w / 2 + 0.12), 1.5, 0, { cast: false }); }
+  const door = dyn(grp(g, -w / 2, 0, 0)); door.userData.sign = 1; door.userData.angle = 1.6;
+  for (const y of [0.35, 0.75, 1.15]) box(door, w, 0.12, 0.07, c, w / 2, y, 0);
+  box(door, 0.1, 1.1, 0.08, c, 0.08, 0.2, 0); box(door, 0.1, 1.1, 0.08, c, w - 0.08, 0.2, 0); box(door, Math.hypot(w, 0.8), 0.1, 0.07, c, w / 2, 0.75, 0.01, { rz: Math.atan2(0.8, w) });
+  return { g, door };
+}
+// sit(rig, t0, { t1, seat: bench | [x, y, z], ry, h }) — sits down (seat height h, default 0.45) and gets up again at t1
+function sit(f, t0, o = {}) {
+  const t1 = o.t1 ?? 1e9, sh = o.h ?? 0.45, opt = { sd: f.sd };
+  f.fx.push((t, S) => { const e = env3(t, t0, t1, 0.5, 0.5); if (!e) return; const A = rigState('sit', 0, t, { ...opt, seatH: sh }); for (const k in S) S[k] = lerp(S[k], A[k], e); });
+  if (o.seat) {
+    let sp = null, sy = 0;
+    late(t => { const e = env3(t, t0, t1, 0.5, 0.5); if (!e) return;
+      if (!sp) { if (Array.isArray(o.seat)) { sp = new THREE.Vector3(...o.seat); sy = o.ry ?? 0; } else { const g = o.seat.g ?? o.seat; g.updateWorldMatrix(true, false); sp = new THREE.Vector3(0, 0, 0.12).applyMatrix4(g.matrixWorld); sy = new THREE.Euler().setFromQuaternion(g.getWorldQuaternion(_iq)).y; } }
+      const r = f.root; r.position.lerp(sp, e); r.position.y = lerp(r.position.y, sp.y, e); r.rotation.y = lerp(r.rotation.y, sy, e); });
+  }
+  return f;
+}
+// enter(rig, vehicle, t0, { dur, door, seat }) / exit(rig, vehicle, t0) — door opens, the rig climbs in (sitting, riding along) or out
+const SEATS = { car: [0.38, -0.14, -0.2], sports: [0.36, -0.2, -0.3], taxi: [0.38, -0.14, -0.2], police: [0.38, -0.14, -0.2], pickup: [0.42, 0.25, 0.45], van: [0.48, 0.45, 1.35], bus: [0.75, 0.55, 4.0], truck: [0.5, 0.6, 2.3], tractor: [0, 1.25, -0.35] };
+function enter(f, v, t0, o = {}) {
+  const kind = v.kind ?? 'car', seat = new THREE.Vector3(...(o.seat ?? SEATS[kind] ?? SEATS.car)), dur = o.dur ?? 1.1, standing = kind === 'tractor';
+  if (v.doors?.length) openDoor(v, t0, { i: o.door ?? 0, close: t0 + dur + 0.15 });
+  if (!standing) sit(f, t0 + 0.25, { t1: o.out ?? 1e9, h: o.h ?? 0.38 });
+  f.fx.push((t, S) => { if (t > t0 + 0.4 && t < (o.out ?? 1e9) + 0.6) S.crx -= 0.12; });   // leaning back in the seat
+  const outside = new THREE.Vector3(seat.x + Math.sign(seat.x || 1) * 1.1, 0, seat.z);
+  late(t => { if (t < t0 || t > (o.out ?? 1e9) + dur) return;
+    const k = t > (o.out ?? 1e9) ? 1 - sm01((t - o.out) / dur) : sm01((t - t0) / dur), g = v.g ?? v.root ?? v; g.updateWorldMatrix(true, false);
+    _ia.copy(outside).lerp(seat, k).applyMatrix4(g.matrixWorld); if (k < 1) _ia.y += 0.12 * Math.sin(Math.PI * k);
+    f.root.position.copy(_ia); f.root.rotation.y = new THREE.Euler().setFromQuaternion(g.getWorldQuaternion(_iq)).y; });
+  return f;
+}
+
+// light: flashlight(rig, { t0, t1, color, intensity, dist }) · headlights(vehicle, { t0, t1, light }) · phone(rig, { t0, t1, screen, light }) · lightning(t, { x, z }) · lightningStorm(t0, t1, { every })
+function flashlight(f, o = {}) {
+  const t0 = o.t0 ?? 0, t1 = o.t1 ?? 1e9, fa = f.foreR, NC = { cast: false };
+  const torch = dyn(grp(fa, 0, -0.42, 0.06)); cyl(torch, 0.05, 0.045, 0.28, '#2A2D33', 0, -0.14, 0, { seg: 8, ...NC }); ball(torch, 0.05, '', 0, -0.17, 0, { mat: mat('#FFF6D0', { basic: true, glow: 2 }), detail: 0, ...NC });
+  const sp = new THREE.SpotLight(o.color ?? '#FFF1D0', 0, o.dist ?? 26, o.angle ?? 0.38, 0.55, 1.3); sp.position.set(0, -0.2, 0); torch.add(sp, sp.target); sp.target.position.set(0, -6, 0);
+  const beam = new THREE.Mesh(G('beam', () => new THREE.ConeGeometry(1, 1, 18, 1, true).translate(0, -0.5, 0)), mat('#FFF3C4', { basic: true, opacity: 0.08 })); beam.scale.set(2.2, 6, 2.2); beam.position.y = -0.2; torch.add(beam);
+  f.fx.push((t, S) => { const e = env3(t, t0, t1, 0.3, 0.3); if (!e) return; S.ras = lerp(S.ras, -1.4, e); S.rae = lerp(S.rae, -0.12, e); S.raz = lerp(S.raz, -0.05, e); });
+  tick(t => { const on = t >= t0 && t <= t1; torch.visible = on; sp.intensity = on ? (o.intensity ?? 80) * (o.flicker ? 0.85 + 0.15 * noise1(t * 20) : 1) : 0; beam.visible = on; });
+  return { torch, light: sp };
+}
+function headlights(v, o = {}) {   // light cones (+ one real spot light unless light: false) and glowing lamps
+  const g = v.g ?? v, t0 = o.t0 ?? 0, t1 = o.t1 ?? 1e9, L = v.len ?? 3.8, y = v.lampY ?? 0.62, NC = { cast: false }, cones = [];
+  for (const sx of [-1, 1]) { const c = new THREE.Mesh(G('hbeam', () => new THREE.ConeGeometry(1, 1, 14, 1, true).rotateX(Math.PI / 2).translate(0, 0, 0.5)), mat('#FFF6D8', { basic: true, opacity: 0.07 }));
+    c.position.set(sx * (v.lampX ?? 0.55), y, (v.front ?? L / 2) + 0.05); c.scale.set(1.6, 1.0, 9); c.rotation.x = 0.06; g.add(c); cones.push(c); }
+  let sp = null; if (o.light !== false) { sp = new THREE.SpotLight('#FFF1D0', 0, 32, 0.5, 0.6, 1.2); sp.position.set(0, y + 0.05, (v.front ?? L / 2) + 0.2); sp.target.position.set(0, 0, (v.front ?? L / 2) + 12); g.add(sp, sp.target); }
+  tick(t => { const on = t >= t0 && t <= t1; cones.forEach(c => { c.visible = on; }); if (sp) sp.intensity = on ? (o.intensity ?? 140) : 0; if (v.headMat) v.headMat.emissiveIntensity = on ? 3 : 0.6; });
+  return v;
+}
+function phone(f, o = {}) {
+  const t0 = o.t0 ?? 0, t1 = o.t1 ?? 1e9, NC = { cast: false }, ph = dyn(grp(f.foreR, 0, -0.38, 0.1)); ph.rotation.x = -1.2;
+  box(ph, 0.08, 0.15, 0.014, '#1A1A1A', 0, -0.075, 0, NC); box(ph, 0.07, 0.13, 0.004, '', 0, -0.065, 0.009, { mat: mat(o.screen ?? '#7FD3FF', { basic: true, glow: 1.4 }), ...NC });
+  let pl = null; if (o.light) { pl = new THREE.PointLight(o.screen ?? '#9FDCFF', 0, 1.6, 2); pl.position.set(0, -0.07, 0.15); ph.add(pl); }
+  f.fx.push((t, S) => { const e = env3(t, t0, t1, 0.35, 0.3); if (!e) return; S.ras = lerp(S.ras, -0.85, e); S.rae = lerp(S.rae, -1.55, e); S.raz = lerp(S.raz, -0.25, e); S.nrx = lerp(S.nrx, 0.35, e); S.nry *= 1 - e; });
+  tick(t => { const on = t >= t0 && t <= t1; ph.visible = on; if (pl) pl.intensity = on ? 1.5 : 0; });
+  return ph;
+}
+const STRIKES = [];   // lightning: brightens the sky light for a few frames (applySky)
+function lightning(t0, o = {}) {
+  const x = o.x ?? 0, z = o.z ?? -60, top = o.h ?? 70, gy = groundH(x, z), pts = [[x + (o.dx ?? 8), gy + top, z]];
+  for (let i = 1; i <= 9; i++) { const k = i / 9; pts.push([lerp(pts[0][0], x, k) + (hash(t0 * 7 + i) - 0.5) * 7 * (1 - k), lerp(gy + top, gy, k), z + (hash(t0 * 3 + i * 2) - 0.5) * 4]); }
+  const bolt = dyn(grp(world)), m = mat('#E6EEFF', { basic: true, glow: 3 });
+  for (let i = 1; i < pts.length; i++) { const a = new THREE.Vector3(...pts[i - 1]), b = new THREE.Vector3(...pts[i]), L = a.distanceTo(b), me = new THREE.Mesh(G('bolt', () => new THREE.CylinderGeometry(0.12, 0.12, 1, 5)), m);
+    me.scale.set(1, L, 1); me.position.copy(a).add(b).multiplyScalar(0.5); me.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), b.clone().sub(a).normalize()); bolt.add(me); }
+  tick(t => { const u = t - t0; bolt.visible = u >= 0 && u < 0.32 && (u < 0.08 || (u > 0.14 && u < 0.2) || u > 0.26); });
+  STRIKES.push(t0); FLASHES.push({ t: t0, dur: 0.3, a: o.flash ?? 0.45, color: '#E8F0FF' }); sfx(t0, 'crack', 0.8); sfx(t0 + (o.delay ?? 0.7), 'thunder', o.loud ?? 1);
+  return bolt;
+}
+function lightningStorm(t0, t1, o = {}) { for (let t = t0 + (o.every ?? 4) * 0.4, i = 0; t < t1; t += (o.every ?? 4) * (0.6 + 0.8 * hash(i * 3.7 + t0)), i++) { const a = hash(i * 9.1 + 2) * TAU, r = (o.r ?? 70) * (0.6 + 0.4 * hash(i * 5.3)); lightning(t, { x: Math.sin(a) * r, z: -Math.abs(Math.cos(a)) * r - 20, loud: 0.7 }); } }
+const strikeK = t => { let k = 0; for (const s of STRIKES) { const u = t - s; if (u >= 0 && u < 0.32) k = Math.max(k, u < 0.08 || (u > 0.14 && u < 0.2) ? 1 : 0.35); } return k; };
+
+// traces: splash(x, z, t0, { size }) · drive(vehicle, pts, { t0, t1, speed, ramp, tracks, dust, loop }) — wheels turn, nose dips when braking, tyre tracks, brake dust
+function splash(x, z, t0, o = {}) {
+  const s = o.size ?? 1, y = Math.max(waterH(x, z, t0), groundH(x, z));
+  emit('debris', { at: [x, y + 0.1, z], t0, burst: Math.round(36 * s), colors: ['#E8F6FF', '#BFE3F5', '#9FD0EA'], size: 0.09 * s, speed: 4.2 * Math.sqrt(s), spread: 0.55, basic: true, life: 1.2 });
+  const rings = [0, 0.18].map(dl => { const r = new THREE.Mesh(G('ripple', () => new THREE.RingGeometry(0.85, 1, 28).rotateX(-Math.PI / 2)), mat('#EAF6FF', { basic: true, opacity: 0.55, own: true })); r.position.set(x, y + 0.03, z); world.add(dyn(r)); return [r, dl]; });
+  tick(t => rings.forEach(([r, dl]) => { const u = t - t0 - dl; r.visible = u > 0 && u < 1.4; if (r.visible) { r.scale.setScalar(0.3 + u * 2.2 * s); r.material.opacity = 0.55 * (1 - u / 1.4); } }));
+  sfx(t0, 'splash', Math.min(1.2, 0.5 + 0.4 * s));
+}
+function drive(v, pts, o = {}) {
+  const path = new Path(pts, o.loop), g = dyn(v.g ?? v), t0 = o.t0 ?? 0, t1 = o.t1 ?? 1e9, sp = o.speed ?? 8, ra = o.ramp ?? clamp(sp / 5, 0.6, 2.5);
+  PATHS.push(path);
+  const Tp = o.loop ? 1e9 : path.len < sp * ra ? 2 * Math.sqrt(path.len * ra / sp) : path.len / sp + ra, Te = Math.min(Tp, t1 - t0), a = sp / ra, tr = Math.min(ra, Te / 2), vp = a * tr;
+  const dist = u => u <= 0 ? 0 : u >= Te ? vp * (Te - tr) : u < tr ? 0.5 * a * u * u : u > Te - tr ? vp * (Te - tr) - 0.5 * a * (Te - u) ** 2 : 0.5 * a * tr * tr + vp * (u - tr);
+  const yawAt = s => { const A = path.dir(s - 0.8), B = path.dir(s + 0.8); return Math.atan2(A.x + B.x, A.z + B.z); }, wr = v.wheels?.[0]?.position.y ?? 0.4, body = v.g ?? v;
+  if (o.dust !== false && Te < 1e8) { const P = path.at(dist(Te - tr)); emit('dust', { at: tt => { const s = dist(tt - t0), Q = path.at(s); return [Q.x, 0.2, Q.z]; }, t0: t0 + Te - tr, t1: t0 + Te, rate: 26, size: 0.5, jitter: 0.6 }); }
+  if (o.engine !== false) sfx(t0, 'engine', 0.5);
+  if (o.tracks) {   // tyre tracks: revealed as the car passes, darker skid marks while braking
+    const step = 0.45, n = Math.floor(path.len / step), im = new THREE.InstancedMesh(boxG(0.24, 0.012, step * 1.02), mat(o.trackColor ?? '#3A322A', { opacity: 0.55 }), n * 2), o3 = new THREE.Object3D(), half = (v.trackW ?? 1.7) / 2;
+    im.castShadow = false; im.frustumCulled = false; im.userData.cover = true; world.add(dyn(im)); const S0 = [];
+    for (let i = 0; i < n; i++) { const s = (i + 0.5) * step, P = path.at(s), yw = yawAt(s); S0.push(s); for (const k of [0, 1]) { const lx = (k ? 1 : -1) * half; o3.position.set(P.x + Math.cos(yw) * lx, groundH(P.x, P.z) + 0.02, P.z - Math.sin(yw) * lx); o3.rotation.set(0, yw, 0); o3.scale.set(1, 1, 1); o3.updateMatrix(); im.setMatrixAt(2 * i + k, o3.matrix); } }
+    const M0 = [...Array(n * 2).keys()].map(k => { const m4 = new THREE.Matrix4(); im.getMatrixAt(k, m4); return m4; }), Z = new THREE.Matrix4().makeScale(0, 0, 0), sb = dist(Te - tr);
+    tick(t => { const s = dist(t - t0) - (v.len ?? 3.8) * 0.3; for (let i = 0; i < n; i++) for (const k of [0, 1]) im.setMatrixAt(2 * i + k, S0[i] < s ? M0[2 * i + k] : Z); im.instanceMatrix.needsUpdate = true; });
+    if (sb > 0 && Te < 1e8) { const skid = new THREE.InstancedMesh(boxG(0.26, 0.014, step * 1.02), mat('#1E1A16', { opacity: 0.7 }), n * 2); skid.castShadow = false; skid.frustumCulled = false; skid.userData.cover = true; world.add(dyn(skid));
+      for (let i = 0; i < n; i++) for (const k of [0, 1]) skid.setMatrixAt(2 * i + k, S0[i] > sb ? M0[2 * i + k] : Z);
+      tick(t => { const s = dist(t - t0) - (v.len ?? 3.8) * 0.3; for (let i = 0; i < n; i++) for (const k of [0, 1]) skid.setMatrixAt(2 * i + k, S0[i] > sb && S0[i] < s ? M0[2 * i + k] : Z); skid.instanceMatrix.needsUpdate = true; }); }
+  }
+  v._posAt = t => { const P = path.at(dist(t - t0)); return new THREE.Vector3(P.x, groundH(P.x, P.z), P.z); };
+  return tick(t => {
+    const u = t - t0, s = dist(u), P = path.at(s), yw = yawAt(s), acc = (dist(u + 0.1) - 2 * s + dist(u - 0.1)) / 0.01;
+    body.position.set(P.x, groundH(P.x, P.z) + (o.y ?? 0.05), P.z); body.rotation.order = 'YXZ'; body.rotation.y = yw;
+    let turn = yawAt(s + 1.5) - yawAt(s - 1.5); turn = Math.atan2(Math.sin(turn), Math.cos(turn));
+    body.rotation.x = clamp(acc * 0.012, -0.06, 0.06); body.rotation.z = clamp(turn * (dist(u + 0.05) - dist(u - 0.05)) * 0.5, -0.08, 0.08);
+    for (const w of v.wheels ?? []) w.rotation.x = s / wr;
+  });
 }
 
 // --- crowds: hundreds of figures as instanced meshes, deterministic in t ---
@@ -2408,6 +2657,7 @@ function stepScene(t) {   // everything in the 3D scene at time t (no HUD) — a
   applySky(t); WIND.t.value = st;
   for (const f of tickers) f(st);
   for (const h of hordes) h.update(st);
+  for (const f of LATE) f(st);
   updateEmitters(st);
   updateCamera(t);
   if (THUMB_ON) thumbCam();
