@@ -76,8 +76,9 @@ if (opt('shots')) {
 
 if (opt('cover')) {
   const { browser, page, errors } = await openPage();
-  const t = +opt('t', await page.evaluate(() => window.whatif.cover));
-  await page.evaluate(t => window.whatif.seek(t), t);
+  const t0 = opt('t') != null ? +opt('t') : null;   // --plain: the bare frame without thumbnail text
+  const t = flag('plain') || !(await page.evaluate(() => !!window.whatif.thumb)) ? (await page.evaluate(t => { const tt = t ?? window.whatif.cover; window.whatif.seek(tt); return tt; }, t0))
+    : await page.evaluate(t => window.whatif.thumb(t), t0);
   await page.screenshot({ path: opt('cover'), type: 'jpeg', quality: 92 });
   console.log('wrote', opt('cover'), 'at t =', t); report(errors); await browser.close();
 }
