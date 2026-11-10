@@ -2,7 +2,7 @@
 //   node render.mjs page.html --shots 0.5,3,8,12 [--out shots] [--w 540]   → PNGs + <out>/sheet.jpg (contact sheet)
 //   node render.mjs page.html --video out.mp4 [--w 1440 (2K, default)|1080|2160] [--fps 30] [--workers 2] [--draft] [--redo 10.2-14.2] [--clean] [--ig] [--shard i/N --frames-only]
 //     → out.mp4 (master, YouTube: CRF 18); with --ig also out-ig.mp4 (Instagram: 1080x1920, ~12 Mbps)
-//   node render.mjs page.html --cover cover.jpg [--t 1.2]
+//   node render.mjs page.html --cover cover.jpg [--t 1.2]   (THUMB = [A, B] → also cover-b.jpg: A/B test thumbnails)
 //   node render.mjs page.html --audio out.wav
 // Needs in this folder: npm i three@0.170.0 playwright ; ffmpeg on PATH.
 // Frames stay in <out>.frames/: a stopped run resumes, and --redo a-b re-renders only that time range (after a scene/caption
@@ -80,7 +80,13 @@ if (opt('cover')) {
   const t = flag('plain') || !(await page.evaluate(() => !!window.whatif.thumb)) ? (await page.evaluate(t => { const tt = t ?? window.whatif.cover; window.whatif.seek(tt); return tt; }, t0))
     : await page.evaluate(t => window.whatif.thumb(t), t0);
   await page.screenshot({ path: opt('cover'), type: 'jpeg', quality: 92 });
-  console.log('wrote', opt('cover'), 'at t =', t); report(errors); await browser.close();
+  console.log('wrote', opt('cover'), 'at t =', t);
+  const nv = flag('plain') ? 1 : await page.evaluate(() => window.whatif.thumbs?.() ?? 1); report(errors); await browser.close();
+  for (let i = 1; i < nv; i++) {   // A/B thumbnails: THUMB = [A, B, …] → cover-b.jpg, cover-c.jpg …
+    const { browser: b2, page: p2, errors: e2 } = await openPage(), f = opt('cover').replace(/(\.\w+)$/, '-' + 'abcdefgh'[i] + '$1');
+    const t2 = await p2.evaluate(([t, i]) => window.whatif.thumb(t, i), [t0, i]); await p2.screenshot({ path: f, type: 'jpeg', quality: 92 });
+    console.log('wrote', f, 'at t =', t2, '(variant ' + 'ABCDEFGH'[i] + ')'); report(e2); await b2.close();
+  }
 }
 
 async function renderAudio(wav) {

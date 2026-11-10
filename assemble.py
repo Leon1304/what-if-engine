@@ -2,6 +2,7 @@
 # assemble.py — build a video page from template.html + your STORY and SCENE blocks, then syntax-check it
 #   python3 assemble.py <slug> --title "What if …?" [--lang en] [--no-voice]   (voice-over via voice.py when tts/ exists)
 #   reads <slug>.story.js and <slug>.scene.js, writes <slug>.html
+#   --lang es|fr|it|pt (+ <slug>.<lang>.json with the translated texts) → <slug>.<lang>.html: captions, HUD texts and voice in that language
 import base64, html, json, os, re, subprocess, sys
 
 args = sys.argv[1:]
@@ -17,6 +18,9 @@ def put(t, tag, body):
     i, j = t.index(a) + len(a), t.index(b)
     return t[:i] + '\n' + body + '\n' + t[j:]
 
+LANG = opt('lang', 'en'); OUT = slug if LANG == 'en' else f'{slug}.{LANG}'
+if LANG != 'en':
+    t = t.replace('/* @TR */null', json.dumps(json.load(open(f'{slug}.{LANG}.json', encoding='utf-8')), ensure_ascii=False, separators=(',', ':')), 1)
 t = put(t, 'STORY', story)
 t = put(t, 'SCENE', '{\n' + scene + '\n}')   # own block scope: scene names never clash with the engine
 # series cast: series/<series>/cast.json → the same look for recurring characters in every episode
@@ -37,22 +41,29 @@ if names:
             if os.path.exists(f): found[nm] = base64.b64encode(open(f, 'rb').read()).decode(); print('model:', f); break
         else: print('model missing:', nm + '.glb')
     t = t.replace('/* @MODELS */{}', '/* @MODELS */' + json.dumps(found, separators=(',', ':')), 1)
+# real sound effects: sfx/<kind>.mp3 (CC0) → embedded, played for AUDIO.hits of that kind
+here_ = os.path.dirname(os.path.abspath(__file__)); sfx = {}
+for d in (os.path.join(here_, 'sfx'), os.path.join(here_, '.engine', 'sfx')):
+    if os.path.isdir(d):
+        for f in sorted(os.listdir(d)):
+            if f.endswith('.mp3') and f[:-4] not in sfx: sfx[f[:-4]] = base64.b64encode(open(os.path.join(d, f), 'rb').read()).decode()
+if sfx: t = t.replace('/* @SFX */{}', '/* @SFX */' + json.dumps(sfx, separators=(',', ':')), 1)
 # voice-over: voice.py (cached) → embed mp3 + word timings; CFG.voice: false = no voice
 if os.path.exists(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'tts', 'voices-v1.0.bin')) and '--no-voice' not in args:
-    v = subprocess.run([sys.executable, os.path.join(os.path.dirname(os.path.abspath(__file__)), 'voice.py'), slug], capture_output=True, text=True)
+    v = subprocess.run([sys.executable, os.path.join(os.path.dirname(os.path.abspath(__file__)), 'voice.py'), slug] + (['--lang', LANG] if LANG != 'en' else []), capture_output=True, text=True)
     print((v.stdout or '').rstrip() or ('voice failed: ' + v.stderr[-600:]))
-if os.path.exists(f'{slug}.voice.json') and os.path.exists(f'{slug}.voice.mp3'):
-    vj = json.load(open(f'{slug}.voice.json')); vj['mp3'] = base64.b64encode(open(f'{slug}.voice.mp3', 'rb').read()).decode()
+if os.path.exists(f'{OUT}.voice.json') and os.path.exists(f'{OUT}.voice.mp3'):
+    vj = json.load(open(f'{OUT}.voice.json')); vj['mp3'] = base64.b64encode(open(f'{OUT}.voice.mp3', 'rb').read()).decode()
     t = t.replace('/* @VOICE */null', json.dumps(vj, separators=(',', ':')), 1)
 title = opt('title')
 if title:
     t = re.sub(r'<title>.*?</title>', lambda m: f'<title>{html.escape(title)}</title>', t, count=1, flags=re.S)
     t = re.sub(r'aria-label="[^"]*"', lambda m: f'aria-label="Animated vertical video: {html.escape(title)}"', t, count=1)
 t = re.sub(r'<html lang="[^"]*">', f'<html lang="{opt("lang", "en")}">', t, count=1)
-open(f'{slug}.html', 'w', encoding='utf-8').write(t)
+open(f'{OUT}.html', 'w', encoding='utf-8').write(t)
 
 code = re.search(r'<script type="module">(.*?)</script>', t, re.S).group(1)
-open(f'.{slug}.check.mjs', 'w', encoding='utf-8').write(code)
-r = subprocess.run(['node', '--check', f'.{slug}.check.mjs'], capture_output=True, text=True)
-print(f'wrote {slug}.html · syntax ok' if r.returncode == 0 else 'SYNTAX ERROR\n' + r.stderr[-2000:])
+open(f'.{OUT}.check.mjs', 'w', encoding='utf-8').write(code)
+r = subprocess.run(['node', '--check', f'.{OUT}.check.mjs'], capture_output=True, text=True)
+print(f'wrote {OUT}.html · syntax ok' if r.returncode == 0 else 'SYNTAX ERROR\n' + r.stderr[-2000:])
 sys.exit(r.returncode)

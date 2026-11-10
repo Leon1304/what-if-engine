@@ -1,0 +1,44 @@
+# Publishes rendered videos: YouTube (scheduled via publishAt) and Instagram Reels (posted once publishAt has passed).
+# Needs renders/<slug>.post.json (see upload.py) and the secrets YT_CLIENT_ID, YT_CLIENT_SECRET, YT_REFRESH_TOKEN, IG_USER_ID, IG_TOKEN.
+# Runs after every render, every hour (for due Instagram posts) and manually for one slug.
+name: publish
+
+on:
+  workflow_run:
+    workflows: [render]
+    types: [completed]
+  schedule:
+    - cron: '17 * * * *'
+  workflow_dispatch:
+    inputs:
+      slug:
+        description: 'Publish this slug now (empty = everything that is due)'
+        required: false
+
+permissions:
+  contents: write
+
+concurrency: { group: publish, cancel-in-progress: false }
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
+    steps:
+      - uses: actions/checkout@v4
+      - name: upload
+        env:
+          YT_CLIENT_ID: ${{ secrets.YT_CLIENT_ID }}
+          YT_CLIENT_SECRET: ${{ secrets.YT_CLIENT_SECRET }}
+          YT_REFRESH_TOKEN: ${{ secrets.YT_REFRESH_TOKEN }}
+          IG_USER_ID: ${{ secrets.IG_USER_ID }}
+          IG_TOKEN: ${{ secrets.IG_TOKEN }}
+        run: |
+          ls renders/*.post.json >/dev/null 2>&1 || { echo "no post.json – nothing to publish"; exit 0; }
+          if [ -n "${{ inputs.slug }}" ]; then python3 upload.py --slug "${{ inputs.slug }}"; else python3 upload.py --due; fi
+      - name: save state
+        run: |
+          git add renders/*.published.json 2>/dev/null || true
+          git diff --cached --quiet && exit 0
+          git -c user.name=publish-bot -c user.email=publish-bot@users.noreply.github.com commit -m "published: $(git diff --cached --name-only | xargs -n1 basename | sed 's/.published.json//' | paste -sd, -)"
+          git push

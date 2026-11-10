@@ -118,6 +118,6 @@ jobs:
         run: |
           S=${{ steps.s.outputs.slug }}; TAG=render-$S
           gh release view $TAG >/dev/null 2>&1 || gh release create $TAG --title "$S" --notes "Rendered by GitHub Actions (${{ github.sha }})"
-          gh release upload $TAG out/$S.mp4 out/$S-cover.jpg --clobber
+          gh release upload $TAG out/$S.mp4 out/$S-cover*.jpg --clobber
           gh release delete-asset $TAG $S-ig.mp4 -y >/dev/null 2>&1 || true
           echo "done: https://github.com/${{ github.repository }}/releases/tag/$TAG"
