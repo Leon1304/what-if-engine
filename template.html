@@ -623,7 +623,8 @@ const hordes = [];
 function horde(o = {}) {
   // o: kind 'zombie'|'human', n, from:[x,z], r, to:[x,z], stop, pile, around, t0, t1 (spawn window), speed:[a,b], rise (emerge from ground),
   //    mode 'shamble'|'walk'|'run', wait:{ line:[[x,z],[x,z]] | at:[x,z], until, stop, pile } (gather at a barrier, then push on to `to`),
-  //    lift:(t,i)=>dy (jumps, waves), armsUp:(t,i)=>bool (cheer/panic), skin/shirts/pants/eyes colours, scale
+  //    lift:(t,i)=>dy (jumps, waves), armsUp:(t,i)=>bool (cheer/panic), skin/shirts/pants/eyes colours, scale,
+  //    freeze: t (frozen solid from t on: motion stops, icy tint; ice: colour)
   const human = o.kind === 'human', n = o.n ?? 200, [sx, sz] = o.from ?? [0, -30], R = o.r ?? 10, [tx, tz] = o.to ?? [0, 0];
   const mode = o.mode ?? (human ? 'walk' : 'shamble'), t0 = o.t0 ?? 0, t1 = o.t1 ?? t0 + 4, sp = o.speed ?? [0.8, 1.2], rise = o.rise ?? !human, run = mode === 'run', walkM = mode === 'walk';
   const skins = o.skin ?? (human ? ['#F1C7A5', '#D9A47E', '#A8714F', '#7A4E34', '#E8B892'] : ['#9CCB7C', '#88B86A', '#A8D48C', '#93C277']);
@@ -664,9 +665,18 @@ function horde(o = {}) {
     }
     const r = go(q.x0, q.z0, q.ex, q.ez, q.v * age); return [...r, q.v * age];
   };
+  // freeze: t → from then on the horde is frozen solid (motion stops, colours tint icy over 1.2 s)
+  const fz = o.freeze, ICE = new THREE.Color(o.ice ?? '#CFEAF5');
+  const C0 = fz == null ? null : [torso, head, arms, legs].map(im => [...Array(im.count).keys()].map(k => { const c = new THREE.Color(); im.getColorAt(k, c); return c; }));
+  let lastK = -1;
   const api = {
     count: t => { let c = 0; for (const q of M) if (t >= q.b) c++; return c; },   // members already on screen
     update(t) {
+      if (fz != null) {
+        const k = clamp((t - fz) / 1.2) * 0.75;
+        if (k !== lastK) { lastK = k; [torso, head, arms, legs].forEach((im, j) => { C0[j].forEach((c, m) => im.setColorAt(m, col.copy(c).lerp(ICE, k))); im.instanceColor.needsUpdate = true; }); }
+        if (t > fz) t = fz;
+      }
       for (let i = 0; i < n; i++) {
         const q = M[i];
         if (t < q.b) { for (const [im, k] of [[torso, i], [head, i], [eyes, i], [mouths, i], [arms, 2 * i], [arms, 2 * i + 1], [legs, 2 * i], [legs, 2 * i + 1]]) im.setMatrixAt(k, Z); continue; }
