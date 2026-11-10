@@ -1,5 +1,5 @@
 const CFG = {
-  dur: 22,                 // seconds (15–60; with all running gags 45–50)
+  dur: 25,                 // seconds (15–60; with all running gags 45–50)
   seed: 7,                 // change for a different random layout
   locale: 'en-US',         // every on-screen text is English
   badge: 'What if',
@@ -16,7 +16,7 @@ const CFG = {
   karaoke: true,           // words appear as if spoken, the current word gets a coloured box
   wordRate: 0.085,         // fastest seconds per word
   voice: 'deep',           // voice-over: deep | deep-uk | narrator | false — or { name, speed: 1.08, pitch: -1.5, gain: 1 }
-  series: null,            // { name: 'What If Lab', handle: '@whatiflab', ep: 1, next: 'part 2' } → series intro + outro
+  series: { name: 'Zombie Farm', handle: '@whatifthishappenedscenarios', ep: 1, next: 'part 2' },            // { name: 'What If Lab', handle: '@whatiflab', ep: 1, next: 'part 2' } → series intro + outro
   cast: {},                // extra name cards for BEATS[].who, e.g. { mayor: { name: 'The Mayor', role: 'Has a plan' } } (steve is built in)
   transition: 'auto'       // cuts: auto (whip, whip, zoom …) | whip | zoom | dip | blur | cut — per key: tr, td, dir
 };
@@ -26,7 +26,7 @@ const LIVE = {};           // scene → story bridge (e.g. LIVE.zombies = t => �
 // who: 'steve' = Dr. Steve name card above the caption + his own voice (voice: '<preset>' overrides the voice of any beat)
 const BEATS = [
   { t: 0, dur: 2.6, kick: 'What if …', text: 'zombies attacked your *farm?*', big: true, instant: true },
-  { t: 2.75, dur: 3.2, text: 'Your farm: 1~house, 1~silo, *0~plan.*' },
+  { t: 2.75, dur: 3.2, text: 'Your farm: 1~house, 1~silo, *0~plan.*', say: 'One house, one silo, zero plan.' },
   { t: 6.15, dur: 3.95, text: 'Zombies are *slow* – but they _never get tired._' },
   { t: 10.3, dur: 2.15, text: 'The fence holds *a few minutes.*' },
   { t: 12.55, dur: 1.6, text: '_Then the barn burns._' },
@@ -53,7 +53,7 @@ const SLOWMO = [{ t: 11.1, dur: 0.9, rate: 0.3, catch: 0.5 }];
 const SHAKES = [{ t: 0, amp: 0.22, dur: 0.7 }, { t: 11.2, amp: 0.25, dur: 0.45 }, { t: 11.85, amp: 0.3, dur: 0.5 }, { t: 12.55, amp: 0.55, dur: 1.0 }];
 const FLASHES = [{ t: 2.6, dur: 0.2, a: 0.35 }, { t: 6.05, dur: 0.18, a: 0.25 }, { t: 12.55, dur: 0.4, a: 0.6, color: '#FFB070' }, { t: 14.2, dur: 0.18, a: 0.25 }];
 // Sky keys: [t, preset] — blends between consecutive keys. Presets: day golden dusk night dawn storm apocalypse space
-const SKY = [[0, 'night'], [17.2, 'night'], [21.5, 'dawn']];
+const SKY = [[0, 'night'], [17.2, 'night'], [21.5, 'dawn'], [25, 'dawn']];
 // Top-left time/phase label: function of t, or [[t, text], …]
 const PHASES = t => 'Night 1 · ' + clockText(t, 0, CFG.dur, '23:47', '05:52');
 // Stats: keys [[t, value], …] or value: t => number (scene time). t may be 'b3', 'b3+0.6', 'end' (story moments), also show/hide.
@@ -64,7 +64,7 @@ const STATS = [
   { label: 'Survival', keys: [[0, 64], ['b2-0.1', 64], ['b2+0.6', 41], [11.1, 41], [12.6, 12], ['b5+1.2', 12], ['b5+2.4', 81]], fmt: 'pct', show: 'b1', up: 'good' }
 ];
 // End card: question drives comments. review: { t, stars, title, text, by, foot, say } = closing review card (narrator reads it)
-const END = { t: 18.3, q: 'Silo, cellar or tractor – where do *you* hide?', opts: ['Silo', 'Cellar', 'Tractor'], cta: 'Comment A, B or C' };
+const END = { t: 18.3, q: 'Silo, cellar or tractor – where do *you* hide?', opts: ['Silo', 'Cellar', 'Tractor'], cta: 'Most votes decides part 2', say: 'Silo, cellar or tractor? What would you have done? Drop it in the comments.' };
 // Sound: mood horror | epic | action | funny | science | chill. sections [t, level 0..3]. sfx kinds: see SND below.
 const AUDIO = {
   mood: 'horror', music: 0.55, sfx: 0.95,
