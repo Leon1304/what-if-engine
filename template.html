@@ -70,6 +70,10 @@
   #cap .who { display: inline-flex; flex-direction: column; align-items: flex-start; gap: 1cqw; background: #fff; color: #111; padding: 1.7cqw 2.8cqw 1.6cqw 2.4cqw; border-radius: 1.6cqw; border-left: 1.1cqw solid #3FA9F5; margin-bottom: 2.6cqw; text-align: left; box-shadow: 0 1cqw 2.6cqw rgba(0, 0, 0, .45); }
   #cap .who b { font: 900 3.8cqw/1 var(--ui); letter-spacing: .02em; text-transform: uppercase; }
   #cap .who span { font: 700 2.6cqw/1 var(--ui); color: #5A5A5A; }
+  /* Dr. Steve verdict stamp (BEATS[].stamp: 'wrong' | 'right') */
+  #stamp { position: absolute; left: 7cqw; right: 0; top: 24cqh; text-align: center; opacity: 0; pointer-events: none; }
+  #stamp b { display: inline-block; font: 400 9cqw/1 var(--cap); text-transform: uppercase; letter-spacing: .02em; padding: 1.6cqw 3.4cqw 1.2cqw; border: 1.1cqw solid; border-radius: 2cqw; background: rgba(10, 10, 12, .55); transform: rotate(-8deg); text-shadow: 0 .4cqw 1.6cqw rgba(0, 0, 0, .6); }
+  #stamp.wrong b { color: #FF3B4A; border-color: #FF3B4A; } #stamp.right b { color: #3EE07A; border-color: #3EE07A; }
   /* review card: the last card of every video */
   #rev { position: absolute; left: 7cqw; right: 0; top: 43cqh; transform: translateY(-50%); text-align: center; opacity: 0; }
   #rev .card { display: inline-block; width: 82%; text-align: left; background: #fff; color: #111; border-radius: 3cqw; padding: 4cqw 4.4cqw 3.4cqw; box-shadow: 0 2cqw 5cqw rgba(0, 0, 0, .5); }
@@ -106,6 +110,7 @@
     <div class="top" id="top"><span class="badge" id="badge"></span><span id="phase"></span></div>
     <div id="stats"></div>
     <div id="cap"></div>
+    <div id="stamp"></div>
     <div id="end"></div>
     <div id="prev"></div>
     <div id="rev"></div>
@@ -170,7 +175,7 @@ const CFG = {
 const LIVE = {};           // scene → story bridge (e.g. LIVE.zombies = t => …)
 
 // Captions: *word* = accent, _word_ = red. big = hook size, instant = visible on frame 0, pos 'low' | 'mid'. say: 'other spoken text' | false (silent beat)
-// who: 'steve' = Dr. Steve name card above the caption + his own voice (voice: '<preset>' overrides the voice of any beat)
+// who: 'steve' = Dr. Steve name card above the caption + his own voice + jingle (CFG.steveTitle = his fake credential). stamp: 'wrong' | 'right' = verdict stamp + trombone / ding (stampAt, stampText). sigh: true = narrator sighs before the beat
 const BEATS = [
   { t: 0, dur: 2.6, kick: 'What if …', text: 'zombies attacked your *farm?*', big: true, instant: true },
   { t: 2.75, dur: 3.2, text: 'Your farm: 1~house, 1~silo, *0~plan.*' },
@@ -1122,7 +1127,9 @@ function markup(str) {   // *accent*  _red_  a~b keeps words together → word s
   }
   return out.join(' ');
 }
-const CAST = { steve: { name: 'Dr. Steve', role: 'Scientist (online certificate)' }, ...(CFG.cast ?? {}) };
+const CAST = { steve: { name: 'Dr. Steve', role: CFG.steveTitle ?? 'Scientist (online certificate)' } };   // CFG.steveTitle: a new fake credential every video
+for (const [k, v] of Object.entries(CFG.cast ?? {})) CAST[k] = { ...(CAST[k] ?? {}), ...v };
+const stampEl = $('stamp'), STAMPS = BEATS.filter(b => b.stamp).map(b => ({ t: b.t + (b.stampAt ?? 0.5), kind: b.stamp === 'right' ? 'right' : 'wrong', text: b.stampText }));
 const whoHtml = w => { const c = typeof w === 'string' ? (CAST[w] ?? { name: w }) : w; return `<div class="who"><b>${esc(c.name)}</b>${c.role ? `<span>${esc(c.role)}</span>` : ''}</div>`; };
 const statNodes = STATS.map(s => { const d = document.createElement('div'); d.className = 'stat' + (s.bad ? ' bad' : ''); d.innerHTML = '<span class="l"></span><span class="v"></span><span class="d"></span>'; d.querySelector('.l').textContent = s.label; statsEl.appendChild(d); return { d, v: d.querySelector('.v'), dl: d.querySelector('.d'), last: null }; });
 // key times may name a story moment: 'b3' = start of BEATS[3], 'b3+0.8', 'end' = end card → numbers stay in sync when timing changes
@@ -1209,6 +1216,10 @@ function updateHud(t) {
     if (prevSt) { const k = span(t, 0.9, 0.35, 'back'); prevSt.style.opacity = clamp(k * 1.5).toFixed(3); prevSt.style.transform = `scale(${(0.6 + 0.4 * k).toFixed(3)})`; }
     prevDim = t < PREV.dur ? 0.5 * out : 0;
   }
+  { const st = STAMPS.find(x => t >= x.t && t < x.t + 1.9);
+    if (st) { const html = `<b>${st.kind === 'right' ? '✓ ' + esc(st.text ?? 'Steve was… right?!') : '✗ ' + esc(st.text ?? 'Steve was wrong')}</b>`; if (stampEl.dataset.k !== st.t + '') { stampEl.innerHTML = html; stampEl.className = st.kind; stampEl.dataset.k = st.t + ''; }
+      const k = span(t, st.t, 0.22, 'out'), out = span(t, st.t + 1.55, 0.35); stampEl.style.opacity = (k * (1 - out)).toFixed(3); stampEl.style.transform = `scale(${(1.8 - 0.8 * k).toFixed(3)})`; }
+    else stampEl.style.opacity = '0'; }
   let idx = -1; BEATS.forEach((b, i) => { if (t >= b.t && t < b.t + b.dur && t < endT) idx = i; });
   if (PREV && t < PREV.dur) idx = -1;   // the intro card speaks for itself (the beat underneath is still voiced)
   if (idx !== capIdx) {
@@ -1420,6 +1431,10 @@ const SND = (() => {
       explosion: (t, v) => { SFX.boom(t, v); nz(t, 0.005, 0.1, 2.2, 0.5 * v, fx, 'bandpass', 600, 120, 0.6); },
       laser: (t, v) => tone('sawtooth', 1800, t, 0.002, 0.02, 0.22, 0.12 * v, fx, { to: 180, glide: 0.24, lp: 3000 }),
       coin: (t, v) => { tone('square', 988, t, 0.001, 0.05, 0.02, 0.08 * v, fx); tone('square', 1319, t + 0.07, 0.001, 0.2, 0.15, 0.08 * v, fx); },
+      jingle: (t, v) => { [72, 76, 79, 84].forEach((m, i) => { tone('sine', mtof(m), t + i * 0.085, 0.002, 0, 0.22, 0.2 * v, fx); tone('sine', mtof(m) * 4, t + i * 0.085, 0.001, 0, 0.06, 0.04 * v, fx); }); tone('sine', 260, t + 0.36, 0.002, 0.02, 0.18, 0.18 * v, fx, { to: 620, glide: 0.12 }); },   // Dr. Steve's entrance
+      trombone: (t, v) => { [311, 294, 277].forEach((f, i) => tone('sawtooth', f, t + i * 0.34, 0.03, 0.2, 0.08, 0.1 * v, fx, { lp: 1500, q: 1 }));   // sad "wah-wah-wah-waaah"
+        const os = tone('sawtooth', 262, t + 1.02, 0.04, 0.85, 0.3, 0.1 * v, fx, { lp: 1300, q: 1 }); const l = ctx.createOscillator(), lg = ctx.createGain(); l.frequency.value = 6; lg.gain.value = 9; l.connect(lg); lg.connect(os.frequency); l.start(t + 1.02); l.stop(t + 2.3); },
+      sigh: (t, v) => { nz(t, 0.18, 0.35, 0.7, 0.13 * v, fx, 'bandpass', 1100, 380, 0.8); nz(t + 0.05, 0.2, 0.3, 0.6, 0.05 * v, fx, 'lowpass', 500, 200); },   // the narrator sighs
       drop: (t, v) => { tone('sine', 230, t, 0.01, 0.1, 0.9, 0.7 * v, fx, { to: 36, glide: 0.8 }); nz(t, 0.25, 0, 0.7, 0.22 * v, fx, 'lowpass', 2400, 180); ducks.push(t); }   // slow-motion hit
     };
     // ambience beds: AUDIO.amb = [[t0, t1, kind, vol], …] — background sound of the place, fades in/out 0.35 s (cuts between places)
@@ -1446,7 +1461,10 @@ const SND = (() => {
     function bellFx(t, f, v) { tone('sine', f, t, 0.002, 0, 1.8, 0.12 * v, fx); tone('sine', f * 2.76, t, 0.002, 0, 0.7, 0.05 * v, fx); }
     if (CFG.series) for (const t0 of [0.05, (END ? END.t : DUR - 3) + 1.6]) [0, 7, 12].forEach((iv, k) => bellFx(t0 + k * 0.11, mtof(Md.root + 36 + iv), 0.7));   // series jingle
     const RV = END?.review, revHits = RV ? [{ t: RV.t - 0.15, k: 'whoosh' }, ...Array.from({ length: RV.stars ?? 1 }, (_, i) => ({ t: RV.t + 0.47 + i * 0.14, k: 'pop', v: 1.2 })), { t: RV.t + 0.55 + (RV.stars ?? 1) * 0.14, k: 'ding', v: 0.7 }] : [];
-    for (const h of [...(A.hits ?? []), ...revHits]) (SFX[h.k] ?? (() => {}))(h.t, h.v ?? 1, h.dur, h.p);
+    const steveHits = [...BEATS.filter(b => b.who === 'steve').map(b => ({ t: Math.max(0, b.t - 0.05), k: 'jingle', v: 0.9 })),
+      ...BEATS.filter(b => b.stamp).map(b => ({ t: b.t + (b.stampAt ?? 0.5), k: b.stamp === 'right' ? 'ding' : 'trombone', v: 1 })),
+      ...BEATS.filter(b => b.sigh).map(b => ({ t: b.t - 0.05, k: 'sigh', v: 1 }))];   // automatic: Steve's jingle, verdict sound, narrator sigh (BEATS[].sigh)
+    for (const h of [...(A.hits ?? []), ...revHits, ...steveHits]) (SFX[h.k] ?? (() => {}))(h.t, h.v ?? 1, h.dur, h.p);
     ducks.sort((a, b) => a - b).forEach(t => { music.gain.setTargetAtTime(mBase * 0.4, t, 0.015); music.gain.setTargetAtTime(mBase, t + 0.25, 0.4); });
     if (vbuf) {
       const vs = ctx.createBufferSource(), vg = ctx.createGain(); vs.buffer = vbuf; vg.gain.value = (VOICE.gain ?? 1) * 1.15; vs.connect(vg); vg.connect(master); vs.start(0);
