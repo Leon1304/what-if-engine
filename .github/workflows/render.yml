@@ -1,0 +1,122 @@
+# Renders /whatif videos in parallel: every page in renders/<slug>.html is split into SHARDS frame blocks,
+# rendered on parallel runners, then encoded (YouTube master + Instagram copy + cover) and attached to the
+# release "render-<slug>". Trigger: push of renders/*.html, or manually with a page path.
+name: render
+
+on:
+  push:
+    branches: [main]
+    paths: ['renders/*.html']
+  workflow_dispatch:
+    inputs:
+      page:
+        description: 'Page to render, e.g. renders/zombie-farm-2.html (empty = all pages changed in the last commit)'
+        required: false
+      width:
+        description: 'Output width (1440 = 2K, 2160 = 4K, 1080)'
+        required: false
+        default: '1440'
+
+permissions:
+  contents: write
+
+env:
+  SHARDS: 12
+  WIDTH: ${{ inputs.width || '1440' }}
+  PW_VERSION: 1.65.0
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    outputs:
+      pages: ${{ steps.p.outputs.pages }}
+      shards: ${{ steps.p.outputs.shards }}
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 2 }
+      - id: p
+        run: |
+          if [ -n "${{ inputs.page }}" ]; then
+            P=$(printf '%s\n' "${{ inputs.page }}" | jq -R . | jq -sc .)
+          else
+            P=$(git diff --name-only --diff-filter=AM HEAD~1 HEAD -- 'renders/*.html' | jq -R . | jq -sc 'map(select(length > 0))')
+          fi
+          echo "pages=$P" >> "$GITHUB_OUTPUT"
+          echo "shards=$(seq 0 $((SHARDS - 1)) | jq -sc .)" >> "$GITHUB_OUTPUT"
+          echo "pages: $P"
+
+  frames:
+    needs: plan
+    if: needs.plan.outputs.pages != '[]'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        page: ${{ fromJSON(needs.plan.outputs.pages) }}
+        shard: ${{ fromJSON(needs.plan.outputs.shards) }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: pw-${{ env.PW_VERSION }}
+      - name: deps
+        run: |
+          npm init -y >/dev/null && npm i --no-audit --no-fund three@0.170.0 playwright@$PW_VERSION >/dev/null
+          npx playwright install --with-deps chromium >/dev/null
+      - id: s
+        run: echo "slug=$(basename '${{ matrix.page }}' .html)" >> "$GITHUB_OUTPUT"
+      - name: render frames
+        run: node render.mjs "${{ matrix.page }}" --video "out/${{ steps.s.outputs.slug }}.mp4" --w $WIDTH --workers 3 --shard ${{ matrix.shard }}/$SHARDS --frames-only
+      - uses: actions/upload-artifact@v4
+        with:
+          name: frames-${{ steps.s.outputs.slug }}--${{ matrix.shard }}
+          path: out/${{ steps.s.outputs.slug }}.mp4.frames/*.jpg
+          retention-days: 1
+          compression-level: 0
+
+  encode:
+    needs: [plan, frames]
+    if: needs.plan.outputs.pages != '[]'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        page: ${{ fromJSON(needs.plan.outputs.pages) }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: pw-${{ env.PW_VERSION }}
+      - name: deps
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg >/dev/null
+          npm init -y >/dev/null && npm i --no-audit --no-fund three@0.170.0 playwright@$PW_VERSION >/dev/null
+          npx playwright install --with-deps chromium >/dev/null
+      - id: s
+        run: echo "slug=$(basename '${{ matrix.page }}' .html)" >> "$GITHUB_OUTPUT"
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: frames-${{ steps.s.outputs.slug }}--*
+          path: out/${{ steps.s.outputs.slug }}.mp4.frames
+          merge-multiple: true
+      - name: encode + cover
+        run: |
+          S=${{ steps.s.outputs.slug }}
+          ls out/$S.mp4.frames | wc -l
+          node render.mjs "${{ matrix.page }}" --video out/$S.mp4 --w $WIDTH
+          node render.mjs "${{ matrix.page }}" --cover out/$S-cover.jpg --w $WIDTH
+          ffprobe -v error -show_entries format=duration:stream=codec_type,width,height -of csv=p=0 out/$S.mp4
+      - name: publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          S=${{ steps.s.outputs.slug }}; TAG=render-$S
+          gh release view $TAG >/dev/null 2>&1 || gh release create $TAG --title "$S" --notes "Rendered by GitHub Actions (${{ github.sha }})"
+          gh release upload $TAG out/$S.mp4 out/$S-ig.mp4 out/$S-cover.jpg --clobber
+          echo "done: https://github.com/${{ github.repository }}/releases/tag/$TAG"

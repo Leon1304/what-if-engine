@@ -1,6 +1,6 @@
 // render.mjs — headless renderer for /what-if pages (frame-exact, deterministic)
 //   node render.mjs page.html --shots 0.5,3,8,12 [--out shots] [--w 540]   → PNGs + <out>/sheet.jpg (contact sheet)
-//   node render.mjs page.html --video out.mp4 [--w 1440 (2K, default)|1080|2160] [--fps 30] [--workers 2] [--draft] [--redo 10.2-14.2] [--clean] [--no-ig]
+//   node render.mjs page.html --video out.mp4 [--w 1440 (2K, default)|1080|2160] [--fps 30] [--workers 2] [--draft] [--redo 10.2-14.2] [--clean] [--no-ig] [--shard i/N --frames-only]
 //     → out.mp4 (master, YouTube: CRF 18) + out-ig.mp4 (Instagram: 1080x1920, ~12 Mbps) when --w > 1080
 //   node render.mjs page.html --cover cover.jpg [--t 1.2]
 //   node render.mjs page.html --audio out.wav
@@ -104,11 +104,14 @@ if (opt('remux')) {   // --remux out.mp4 : render audio again and swap it into t
 if (opt('video')) {
   const video = opt('video'), dir = video + '.frames', wav = video + '.wav';
   mkdirSync(dir, { recursive: true });
-  await renderAudio(wav);
+  const framesOnly = flag('frames-only');                       // CI shard: frames only, no audio / encode
+  if (!framesOnly) await renderAudio(wav);
   if (opt('redo')) { const [a, b] = opt('redo').split('-').map(Number); for (let i = Math.floor(a * fps); i <= Math.ceil(b * fps); i++) rmSync(path.join(dir, `f${String(i).padStart(5, '0')}.jpg`), { force: true }); }
   const probe = await openPage(); const dur = await probe.page.evaluate(() => window.whatif.dur); await probe.browser.close();
   const total = Math.round(dur * fps), fr = i => path.join(dir, `f${String(i).padStart(5, '0')}.jpg`);
-  const todo = [...Array(total).keys()].filter(i => !(existsSync(fr(i)) && statSync(fr(i)).size > 0));
+  const [si, sn] = (opt('shard') || '0/1').split('/').map(Number);   // --shard i/N : contiguous frame block i of N (0-based)
+  const lo = Math.floor(si * total / sn), hi = Math.floor((si + 1) * total / sn);
+  const todo = [...Array(total).keys()].filter(i => i >= lo && i < hi && !(existsSync(fr(i)) && statSync(fr(i)).size > 0));
   console.log(`${total} frames at ${W}px, ${fps} fps · ${total - todo.length} already done · ${workers} worker(s)`);
   const started = Date.now(); let done = 0;
   await Promise.all([...Array(Math.min(workers, todo.length || 1)).keys()].map(async w => {
@@ -126,6 +129,9 @@ if (opt('video')) {
     }
     report(errors); await browser.close();
   }));
+  if (framesOnly) { console.log(`frames ${lo}-${hi - 1} done in ${Math.round((Date.now() - started) / 60000)} min`); process.exit(0); }
+  const missing = [...Array(total).keys()].filter(i => !existsSync(fr(i)));
+  if (missing.length) { console.log(`failed: ${missing.length} frames missing (first ${missing[0]})`); process.exit(1); }
   const tmpMp4 = video.replace(/\.mp4$/, '') + '.part.mp4';
   // master (YouTube): CRF 18, capped near YouTube's useful max (1440p ≈ 30 Mbps, 4K ≈ 60 Mbps)
   const cap = W >= 2160 ? 60 : W > 1080 ? 30 : 15;
