@@ -160,7 +160,8 @@
 <script type="importmap">
 { "imports": {
   "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
-  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/",
+  "rapier": "https://cdn.jsdelivr.net/npm/@dimforge/rapier3d-deterministic-compat@0.21.0/dist/rapier.mjs"
 } }
 </script>
 
@@ -961,6 +962,38 @@ function lamp(p, x, z, o = {}) {   // post lamp with base, lantern housing and o
   return { g, light };
 }
 
+// --- cloth: flags, banners, laundry, curtains and capes that wave in the wind (vertex shader, flat-shaded folds; stronger in storms) ---
+const CLOTH_T = { value: 0 };
+function clothMat(c, o = {}) {   // pin: 'left' (flag on a pole) | 'top' (curtain, laundry, cape); amp, speed
+  const m = mat(c, { own: true, flat: true }); m.side = THREE.DoubleSide;
+  m.onBeforeCompile = sh => { Object.assign(sh.uniforms, { uT: CLOTH_T, uW: WIND.a, uA: { value: o.amp ?? 1 }, uL: { value: o.len ?? 1 }, uS: { value: o.speed ?? 1 } });
+    sh.vertexShader = 'uniform float uT, uW, uA, uL, uS;\n' + sh.vertexShader.replace('#include <begin_vertex>', `#include <begin_vertex>
+      ${o.pin === 'top' ? 'float k = clamp(-position.y / uL, 0.0, 1.0); float u = -position.y, v = position.x;' : 'float k = clamp(position.x / uL, 0.0, 1.0); float u = position.x, v = position.y;'}
+      float w = (0.35 + 0.65 * uW) * uA, ph = uT * 5.5 * uS;
+      transformed.z += k * w * (0.16 * sin(u * 3.1 - ph) + 0.07 * sin(u * 6.7 - ph * 1.7 + v * 2.3) + 0.04 * sin(v * 5.0 + ph * 0.9));
+      ${o.pin === 'top' ? 'transformed.x += k * w * 0.05 * sin(ph * 0.6 + v);' : 'transformed.y -= k * k * 0.12 * (1.2 - min(uW, 1.0)) * uL;'}`); };
+  m.customProgramCacheKey = () => 'cloth' + (o.pin ?? 'left');
+  return m;
+}
+// cloth(p, { w, h, color, stripes: [hex…], x, y, z, ry, pin: 'left' | 'top', amp }) — a waving sheet; returns its group
+function cloth(p, o = {}) {
+  const w = o.w ?? 1.4, h = o.h ?? 0.9, top = o.pin === 'top', g = dyn(grp(p, o.x ?? 0, o.y ?? 0, o.z ?? 0, o.ry ?? 0)), cs = o.stripes ?? [o.color ?? '#D94F3D'];
+  cs.forEach((c, i) => { const n = cs.length, geo = top ? new THREE.PlaneGeometry(w / n, h, 6, 10).translate(-w / 2 + (i + 0.5) * w / n, -h / 2, 0) : new THREE.PlaneGeometry(w, h / n, 14, 4).translate(w / 2, h / 2 - (i + 0.5) * h / n, 0);
+    const me = new THREE.Mesh(geo, clothMat(c, { pin: o.pin, len: top ? h : w, amp: o.amp, speed: o.speed })); me.castShadow = true; me.receiveShadow = true; g.add(me); });
+  return g;
+}
+// flagpole(p, x, z, { h, colors: [hex…], w, fh }) — pole with a waving flag (horizontal stripes)
+function flagpole(p, x, z, o = {}) { const H = o.h ?? 5, g = stat(grp(p, x, groundH(x, z), z, o.ry ?? 0)); cyl(g, 0.05, 0.06, H, '#D8DCE2', 0, 0, 0, { seg: 8 }); ball(g, 0.08, '#E3B23C', 0, H + 0.05, 0, { detail: 0 });
+  cloth(p, { x, y: groundH(x, z) + H - 0.05, z, ry: o.ry ?? 0, w: o.w ?? 1.5, h: o.fh ?? 0.95, stripes: o.colors ?? ['#2E6FD9', '#F2F2F2', '#D94F3D'] }); return g; }
+// laundry(p, [[x,z],[x,z]], { h, items }) — washing line with clothes that flap
+function laundry(p, ends, o = {}) { const [[ax, az], [bx, bz]] = ends, H = o.h ?? 1.9, g = stat(grp(p, 0, 0, 0)), L = Math.hypot(bx - ax, bz - az), yw = Math.atan2(bx - ax, bz - az) - Math.PI / 2;
+  for (const [x, z] of ends) cyl(g, 0.04, 0.05, H + 0.1, '#8A6A48', x, groundH(x, z), z, { seg: 6 });
+  const line = grp(p, ax, groundH(ax, az) + H, az, yw); box(line, L, 0.015, 0.015, '#E8E8E8', L / 2, 0, 0, { cast: false }); stat(line);
+  const cols = o.items ?? ['#F2F2F2', '#3D7BD9', '#E3B23C', '#D94F3D', '#F2F2F2'], n = cols.length;
+  cols.forEach((c, i) => { const u = (i + 0.7) / (n + 0.4), x = lerp(ax, bx, u), z = lerp(az, bz, u); cloth(p, { pin: 'top', x, y: groundH(x, z) + H, z, ry: yw, w: 0.5 + hash(i) * 0.4, h: 0.6 + hash(i * 3) * 0.4, color: c, amp: 0.8 }); });
+  return g; }
+tick(st => { CLOTH_T.value = st; });
+
 // --- figures (humans / zombies), face +z, 1.85 m tall — jointed rig: hips → thigh → shin → foot · chest → upper arm → forearm + hand · neck → head ---
 // Motion is procedural but physical: feet are placed by IK and stay planted while the body moves over them, the hips bob and sway,
 // shoulders counter-rotate, arms swing opposite to the legs with a little lag, everybody breathes, blinks and looks around.
@@ -1015,7 +1048,9 @@ function figure(o = {}) {
   const hs = o.hatStyle ?? (o.hat ? 'straw' : null), hst = o.hairStyle ?? 'short';
   const hairC = zb ? null : o.hat ? (o.hair ?? (hs === 'straw' || hs === 'cowboy' ? null : '#3A2A1E')) : o.hair ?? pick(['#2A211D', '#5C3F2A', '#B88A5A']);
   const brows = zb ? [] : [-0.085, 0.085].map(sx => { const b = grp(head, sx, 0.285, 0.196); box(b, 0.11, 0.032, 0.02, '', 0, 0, 0, { mat: mat(hairC ? shade(hairC, -0.05) : '#2A211D'), ...NC }); return b; });
+  const hairG = grp(head);
   const HAIR = (st, c, under) => {   // short · buzz · spiky · long · bun · curly · mohawk (under = a cap or beanie covers the top)
+    const head = hairG;
     if (!under) {
       if (st === 'buzz') rbox(head, 0.395, 0.05, 0.395, c, 0, 0.345, 0);
       else if (st === 'curly') for (let i = 0; i < 9; i++) ball(head, 0.1, c, ((i % 3) - 1) * 0.13, 0.37 + (i % 2) * 0.03, (Math.floor(i / 3) - 1) * 0.13 - 0.02, { detail: 0, ...NC });
@@ -1040,10 +1075,11 @@ function figure(o = {}) {
   } else if (!zb) HAIR(hst, hairC, false);
   else box(chest, 0.2, 0.2, 0.02, '#5A2A2A', 0.1, 0.12, 0.16, { cast: false });
   if (o.glasses) { box(head, 0.34, 0.08, 0.02, '', 0, 0.175, 0.205, { mat: mat(o.glasses === true ? '#111111' : o.glasses, { rough: 0.2 }), ...NC }); for (const sx of [-1, 1]) box(head, 0.02, 0.025, 0.2, '#111111', sx * 0.18, 0.2, 0.1, NC); }
-  if (o.coat) { coat = grp(hips, 0, 0.06, -0.16); rbox(coat, 0.5, 0.5, 0.04, shirt, 0, -0.5, 0); }   // lab-coat tail: swings with the steps, flies back when running
+  if (o.coat) { coat = grp(hips, 0, 0.06, -0.16); rbox(coat, 0.5, 0.5, 0.04, shirt, 0, -0.5, 0); }
+  let cape = null; if (o.cape) { cape = grp(chest, 0, 0.58, -0.17); cape.add(Object.assign(new THREE.Mesh(new THREE.PlaneGeometry(0.62, 1.15, 6, 10).translate(0, -0.575, 0), clothMat(o.cape, { pin: 'top', len: 1.15, amp: 0.5, speed: 1.4 })), { castShadow: true })); }   // cape: flows back when running, waves   // lab-coat tail: swings with the steps, flies back when running
   if (o.hold) o.holdShape === 'board' ? box(foreR, 0.27, 0.34, 0.03, o.hold, 0, -0.62, 0.08) : box(foreR, 0.09, 0.24, 0.09, o.hold, 0, -0.6, 0.03);   // held item: flashlight/megaphone (along the forearm) or holdShape 'board' (clipboard)
   root.scale.setScalar(o.scale ?? 1);
-  const f = { root, body, hips, chest, neck, head, legL, legR, shinL, shinR, footL, footR, armL, armR, foreL, foreR, mouth, brows, eyes, hat, coat,
+  const f = { root, body, hips, chest, neck, head, legL, legR, shinL, shinR, footL, footR, armL, armR, foreL, foreR, mouth, brows, eyes, hat, coat, hair: hairG, cape,
     expr: o.expr, kind: o.kind ?? 'human', id, sd: hash(id * 7.31 + 0.5), look: o.look, talk: o.talk, who: o.who, M, fx: [] };
   RIGS.push(f);
   tick(t => pose(f, 'idle', 0, t));   // breathes, blinks and looks around even if the scene never poses it; later pose()/walk() calls win
@@ -1183,6 +1219,7 @@ function applyRig(f, S) {
   f.armL.rotation.set(S.las, 0, S.laz); f.foreL.rotation.x = S.lae; f.armR.rotation.set(S.ras, 0, S.raz); f.foreR.rotation.x = S.rae;
   if (f.hat) f.hat.rotation.x = S.hat;
   if (f.coat) f.coat.rotation.x = S.coat;
+  if (f.cape) f.cape.rotation.x = 0.06 + S.coat * 1.35;
 }
 function pose(f, mode, ph, t = 0, o = {}) {   // walk run shamble idle panic cheer point hold — o: { v: speed m/s, w: weight of mode (0..1), from: mode blended in with 1 − w, turn }
   if (f.isModel) return f.pose(mode, ph / TAU, t, o);
@@ -1341,12 +1378,13 @@ class Path {
   }
   dir(s) { const a = this.at(s - 0.08), b = this.at(s + 0.08); return { x: b.x - a.x, z: b.z - a.z }; }
 }
+const WALKS = [];
 const PATHS = [];   // every walk() path — biome() keeps them free of trees and rocks
 // move a figure/animal rig (or any Object3D) along [[x, z], …]: speeds up and slows down smoothly, turns ahead of corners, blends walk ↔ idle.
 // o: t0, t1, speed, mode, loop, endMode, startMode, ramp (s to reach full speed; 0 = instant), face (fixed heading), y, stride (animals), graze
 function walk(obj, pts, o = {}) {
   const path = new Path(pts, o.loop), node = dyn(obj.root ?? obj), t0 = o.t0 ?? 0, t1 = o.t1 ?? 1e9, v = o.speed ?? 1.4, mode = o.mode ?? 'walk';
-  PATHS.push(path);
+  PATHS.push(path); WALKS.push({ obj, path });
   const rig = !!(obj.legL || obj.quad || obj.isModel), ra = o.ramp ?? (rig ? clamp(0.16 + 0.07 * v, 0.2, 0.55) : 0);
   const Tp = o.loop ? 1e9 : ra && path.len < v * ra ? 2 * Math.sqrt(path.len * ra / v) : path.len / v + ra, Te = Math.min(Tp, t1 - t0);
   const dist = tau => {   // trapezoid speed profile: accelerate (ra), cruise, brake — stops exactly at Te
@@ -1482,7 +1520,7 @@ function toss(obj, t0, o = {}) {
   return P;
 }
 // carry(rig, obj, { pick, drop, throw: { t, to: [x,z], h, spin }, both, hand }) — bend down and pick it up, carry it (one hand or both), then put it down or throw it
-function carry(f, obj, o = {}) {
+function carry(f, obj, o = {}) {   // o.heavy: true | kg — leans back, knees soft, arms strained (walk it slower, speed ~0.8)
   const node = dyn(obj.g ?? obj.root ?? obj), p0 = node.position.clone(), r0 = node.rotation.clone(), both = o.both ?? false, side = o.hand ?? 'R';
   const tp = o.pick ?? 0, ta = tp + 0.35, th = o.throw?.t, td = o.drop, tEnd = th ?? td ?? 1e9;
   const off = new THREE.Vector3(...(o.offset ?? (both ? [0, -0.05, 0.28] : [0, -0.1, 0.05])));
@@ -1496,6 +1534,8 @@ function carry(f, obj, o = {}) {
     if (hold > 0) {
       if (both) { S.las = lerp(S.las, -1.0, hold); S.ras = lerp(S.ras, -1.0, hold); S.lae = lerp(S.lae, -0.95, hold); S.rae = lerp(S.rae, -0.95, hold); S.laz = lerp(S.laz, 0.18, hold); S.raz = lerp(S.raz, -0.18, hold); S.crx -= 0.06 * hold; }
       else if (side === 'R') { S.ras = lerp(S.ras, -0.5, hold); S.rae = lerp(S.rae, -1.0, hold); } else { S.las = lerp(S.las, -0.5, hold); S.lae = lerp(S.lae, -1.0, hold); }
+      if (o.heavy) { const hv = hold * (o.heavy === true ? 1 : clamp(o.heavy / 40)); S.crx -= 0.17 * hv; S.hrx -= 0.04 * hv; S.H -= 0.04 * hv; S.nrx += 0.12 * hv; S.las = lerp(S.las, -0.7, hv); S.ras = lerp(S.ras, -0.7, hv); S.lae = lerp(S.lae, -0.6, hv); S.rae = lerp(S.rae, -0.6, hv);   // heavy: lean back, knees soft, arms strained
+        S.crz += 0.03 * hv * Math.sin(t * 3.1 + f.sd * 7); }
     }
     if (th != null) { const w = (t - th + 0.32) / 0.32, ft = (t - th) / 0.4;
       if (w > 0 && w <= 1) { const k = sm01(w); S.ras = lerp(S.ras, 1.0, k); S.rae = lerp(S.rae, -1.2, k); S.cry += 0.35 * k; S.crx -= 0.1 * k; if (both) { S.las = lerp(S.las, 0.6, k); } }
@@ -1637,7 +1677,7 @@ function splash(x, z, t0, o = {}) {
   tick(t => rings.forEach(([r, dl]) => { const u = t - t0 - dl; r.visible = u > 0 && u < 1.4; if (r.visible) { r.scale.setScalar(0.3 + u * 2.2 * s); r.material.opacity = 0.55 * (1 - u / 1.4); } }));
   sfx(t0, 'splash', Math.min(1.2, 0.5 + 0.4 * s));
 }
-function drive(v, pts, o = {}) {
+function drive(v, pts, o = {}) {   // o.jumps: [[t, h, airtime]] · o.bumpy: 0..2 (off-road) · see crash() for accidents
   const path = new Path(pts, o.loop), g = dyn(v.g ?? v), t0 = o.t0 ?? 0, t1 = o.t1 ?? 1e9, sp = o.speed ?? 8, ra = o.ramp ?? clamp(sp / 5, 0.6, 2.5);
   PATHS.push(path);
   const Tp = o.loop ? 1e9 : path.len < sp * ra ? 2 * Math.sqrt(path.len * ra / sp) : path.len / sp + ra, Te = Math.min(Tp, t1 - t0), a = sp / ra, tr = Math.min(ra, Te / 2), vp = a * tr;
@@ -1655,12 +1695,17 @@ function drive(v, pts, o = {}) {
       for (let i = 0; i < n; i++) for (const k of [0, 1]) skid.setMatrixAt(2 * i + k, S0[i] > sb ? M0[2 * i + k] : Z);
       tick(t => { const s = dist(t - t0) - (v.len ?? 3.8) * 0.3; for (let i = 0; i < n; i++) for (const k of [0, 1]) skid.setMatrixAt(2 * i + k, S0[i] > sb && S0[i] < s ? M0[2 * i + k] : Z); skid.instanceMatrix.needsUpdate = true; }); }
   }
-  v._posAt = t => { const P = path.at(dist(t - t0)); return new THREE.Vector3(P.x, groundH(P.x, P.z), P.z); };
+  v._posAt = t => { const P = path.at(dist(t - t0)); return new THREE.Vector3(P.x, groundH(P.x, P.z), P.z); }; v._yawAt = t => yawAt(dist(t - t0));
+  for (const [tj, h = 1.5, dj = 0.9] of o.jumps ?? []) { const P = path.at(dist(tj + dj - t0)); sfx(tj + dj, 'impact', 0.9); emit('dust', { at: [P.x, groundH(P.x, P.z) + 0.2, P.z], t0: tj + dj, burst: 26, speed: 2.2, spread: 1.3, size: 0.7, life: 1.6 }); }   // landing
   return tick(t => {
     const u = t - t0, s = dist(u), P = path.at(s), yw = yawAt(s), acc = (dist(u + 0.1) - 2 * s + dist(u - 0.1)) / 0.01;
     body.position.set(P.x, groundH(P.x, P.z) + (o.y ?? 0.05), P.z); body.rotation.order = 'YXZ'; body.rotation.y = yw;
     let turn = yawAt(s + 1.5) - yawAt(s - 1.5); turn = Math.atan2(Math.sin(turn), Math.cos(turn));
     body.rotation.x = clamp(acc * 0.012, -0.06, 0.06); body.rotation.z = clamp(turn * (dist(u + 0.05) - dist(u - 0.05)) * 0.5, -0.08, 0.08);
+    let jy = 0, jp = 0;   // jumps: [[t, height, airtime]] — nose up at take-off, down before landing, then the suspension bounces
+    for (const [tj, h = 1.5, dj = 0.9] of o.jumps ?? []) { const q = (t - tj) / dj; if (q >= 0 && q <= 1) { jy += 4 * h * q * (1 - q); jp += 0.2 * (2 * q - 1); } else if (q > 1) { const k = t - tj - dj; if (k < 1.5) { jy -= 0.1 * Math.exp(-5 * k) * Math.sin(k * 16); jp += 0.07 * Math.exp(-4 * k) * Math.sin(k * 13); } } }
+    const bz = o.bumpy ?? 0, vk = clamp((dist(u + 0.05) - dist(u - 0.05)) * 2.5);   // bumpy: 0..2 off-road shake (scales with speed)
+    body.position.y += jy + bz * vk * (0.05 * noise1(s * 1.9) + 0.025 * noise1(s * 4.3 + 7)); body.rotation.x += jp + bz * vk * 0.025 * noise1(s * 2.3 + 3); body.rotation.z += bz * vk * 0.03 * noise1(s * 1.7 + 11);
     for (const w of v.wheels ?? []) w.rotation.x = s / wr;
   });
 }
@@ -1821,6 +1866,7 @@ const PART = {
   goo:      { burst: 30, life: 1.6, speed: 4.5, spread: 1, g: -9.8, size: 0.14, grow: 0, colors: ['#7CFF4F', '#4FCF2F'], basic: true, floor: true, pick: true },
   confetti: { burst: 140, life: 3.4, speed: 9, spread: 0.55, g: -4, size: 0.16, grow: 0, colors: ['#FFD23F', '#FF5A4E', '#3DA5FF', '#6BE36B', '#FFFFFF'], basic: true, geo: 'flat', spin: 10, drag: 0.9, pick: true },
   rain:     { rate: 420, life: 0.9, fall: 26, area: [70, 70], height: 22, size: 0.9, grow: 0, colors: ['#AFC4DA'], basic: true, geo: 'streak', opacity: 0.55 },
+  spray:    { rate: 12, life: 0.7, speed: 2, spread: 0.6, g: -9.8, size: 0.07, grow: -0.3, colors: ['#F4FAFF', '#CFEAF6'], basic: true, opacity: 0.8, jitter: 0.25 },
   bubble:   { rate: 6, life: 3.5, speed: 1.6, spread: 0.25, g: 0.4, size: 0.07, grow: 0.4, colors: ['#E8FBFF', '#BFEFFF'], basic: true, opacity: 0.7, jitter: 0.15, drag: 0.6 },
   snow:     { rate: 140, life: 8, fall: 2.4, area: [70, 70], height: 18, size: 0.1, grow: 0, colors: ['#FFFFFF'], basic: true, wind: [0.15, 0.05] }
 };
@@ -2192,7 +2238,40 @@ function submarine(p, o = {}) {   // submarine: hull with rounded ends, sail wit
   tick(t => { prop.rotation.z = t * (o.spin ?? 6); });
   return { g };
 }
-function bob(obj, o = {}) { const x = obj.position.x, z = obj.position.z; dyn(obj); return tick(t => { obj.position.y = waterH(x, z, t) - (o.depth ?? 0.2); obj.rotation.z = 0.05 * Math.sin(t * 1.3 + x); obj.rotation.x = 0.04 * Math.sin(t * 1.1 + z); }); }
+
+function bob(obj, o = {}) {   // floats on the waves: pitches and rolls with the wave slope; o.drop: { t, from: y } falls in, splashes, sinks and pops back up; o.depth, o.size (m)
+  const x = obj.position.x, z = obj.position.z, L = o.size ?? 2, dep = o.depth ?? 0.2; dyn(obj); const y0 = o.drop?.from ?? obj.position.y, td = o.drop?.t;
+  let tHit = null; if (o.drop) { const h0 = waterH(x, z, td) - dep; tHit = td + Math.sqrt(Math.max(0, 2 * (y0 - h0) / 9.81)); splash(x, z, tHit, { size: clamp(L / 2, 0.6, 2.5) }); }
+  return tick(t => { const h = waterH(x, z, t), sx = (waterH(x + L / 2, z, t) - waterH(x - L / 2, z, t)) / L, sz = (waterH(x, z + L / 2, t) - waterH(x, z - L / 2, t)) / L;
+    if (tHit != null && t < tHit) { if (t < td) return; obj.position.y = y0 - 0.5 * 9.81 * (t - td) ** 2; obj.rotation.x = 0.6 * (t - td); return; }
+    const k = tHit != null ? t - tHit : 1e9, vh = tHit != null ? 9.81 * (tHit - td) : 0;
+    obj.position.y = h - dep - (k < 6 ? Math.min(1.4, vh * 0.12) * Math.exp(-1.8 * k) * Math.cos(4.5 * k) : 0);
+    obj.rotation.x = -Math.atan(sz) * 0.85 + 0.03 * Math.sin(t * 1.1 + z) + (k < 6 ? 0.25 * Math.exp(-2 * k) * Math.sin(5 * k) : 0); obj.rotation.z = Math.atan(sx) * 0.85 + 0.04 * Math.sin(t * 1.3 + x); });
+}
+// sail(boat, [[x,z], …], { t0, speed, depth, wake, spray }) — moves a boat on the water: rides the waves, leans into turns, white wake trail behind it, spray at the bow
+function sail(b, pts, o = {}) {
+  const g = dyn(b.g ?? b), path = new Path(pts, o.loop), t0 = o.t0 ?? 0, sp = o.speed ?? 6, ra = o.ramp ?? 2, dep = o.depth ?? 0.25; PATHS.push(path);
+  const Te = path.len / sp + ra, a = sp / ra, dist = u => u <= 0 ? 0 : u < ra ? 0.5 * a * u * u : Math.min(path.len, 0.5 * a * ra * ra + sp * (u - ra));
+  const yawAt = s => { const A = path.dir(s - 1.5), B = path.dir(s + 1.5); return Math.atan2(A.x + B.x, A.z + B.z); }, L = o.len ?? 6;
+  g._posAt = t => { const P = path.at(dist(t - t0)); return new THREE.Vector3(P.x, 0, P.z); }; b._posAt = g._posAt; b._yawAt = t => yawAt(dist(t - t0));
+  if (o.wake !== false) {   // foam trail: flat white patches dropped along the path, widening and fading
+    const step = 0.7, n = Math.ceil(path.len / step), im = new THREE.InstancedMesh(G('wake', () => new THREE.CircleGeometry(1, 10).rotateX(-Math.PI / 2)), mat('#F4FAFF', { opacity: 0.55 }), n), o3 = new THREE.Object3D();
+    im.castShadow = false; im.frustumCulled = false; world.add(dyn(im));
+    const tAt = s => { let lo = 0, hi = Te + 1; for (let i = 0; i < 30; i++) { const m = (lo + hi) / 2; if (dist(m) < s) lo = m; else hi = m; } return t0 + hi; }, T = [...Array(n).keys()].map(i => tAt(i * step));
+    tick(t => { for (let i = 0; i < n; i++) { const age = t - T[i], s = i * step, P = path.at(s); if (age < 0 || age > 9) { o3.scale.setScalar(0); } else { const k = age / 9; o3.position.set(P.x, waterH(P.x, P.z, t) + 0.03, P.z); o3.rotation.set(0, yawAt(s), 0); o3.scale.set((0.6 + 2.2 * Math.sqrt(k)) * (1 - k * 0.3), 1, 1.2 + k); }
+      o3.updateMatrix(); im.setMatrixAt(i, o3.matrix); } im.instanceMatrix.needsUpdate = true; im.material.opacity = 0.55; });
+  }
+  if (o.spray !== false) emit('spray', { at: st => { const s = dist(st - t0), P = path.at(Math.min(path.len, s + L * 0.45)); return [P.x, waterH(P.x, P.z, st) + 0.2, P.z]; }, t0, t1: t0 + Te, rate: 30, speed: 2.4, spread: 0.9, size: 0.09 });
+  return tick(t => { const u = t - t0, s = dist(u), P = path.at(s), yw = yawAt(s), h = waterH(P.x, P.z, t), f = 0.5 * L, fx = Math.sin(yw) * f, fz = Math.cos(yw) * f;
+    let turn = yawAt(s + 3) - yawAt(s - 3); turn = Math.atan2(Math.sin(turn), Math.cos(turn)); const v = (dist(u + 0.05) - dist(u - 0.05)) * 10;
+    g.position.set(P.x, h - dep + 0.05 * clamp(v / sp), P.z); g.rotation.order = 'YXZ'; g.rotation.y = yw;
+    g.rotation.x = Math.atan((waterH(P.x - fx, P.z - fz, t) - waterH(P.x + fx, P.z + fz, t)) / L) * 0.8 - 0.06 * clamp(v / sp); g.rotation.z = clamp(-turn * v * 0.04, -0.25, 0.25) + 0.03 * Math.sin(t * 1.4); });
+}
+DEFER.push(() => {   // wading: figures whose walk goes through water splash with every step
+  if (waterH(0, 0, 0) < -900) return;
+  for (const W of WALKS) { if (!W.obj.legL || !W.obj._posAt) continue; let wet = false; for (let i = 0; i <= 30 && !wet; i++) { const P = W.path.at(W.path.len * i / 30); wet = waterH(P.x, P.z, 0) - groundH(P.x, P.z) > 0.12; } if (!wet) continue;
+    emit('spray', { at: st => { const P = W.obj._posAt(st), wl = waterH(P.x, P.z, st); return wl - groundH(P.x, P.z) > 0.12 ? [P.x, wl + 0.05, P.z] : [0, -999, 0]; }, rate: 16, speed: 1.6, spread: 0.7, size: 0.07, life: 0.55 }); }
+});
 function boat(p, x, z, o = {}) {   // kind: boat | ship | yacht — then bob(b.g) to float it
   const g = dyn(grp(p, x, 0, z, o.ry ?? 0)), c = o.color ?? '#D94F3D', NC = { cast: false };
   if (o.kind === 'ship') {
@@ -2507,6 +2586,210 @@ function rocket(p, x, z, o = {}) {   // stands on the ground, launches at t0 wit
   emit('smoke', { at: [x, gy + 0.5, z], t0, t1: t0 + 2.5, rate: 16, size: 1.3 * s, jitter: 2 * s, speed: 3, spread: 1.4, life: 3 });
   return { g, nozzle };
 }
+
+// --- physics (baked): rigid bodies, explosions, things breaking apart, ragdolls, vehicle crashes ---
+// Simulated once before the first frame (Rapier, deterministic build, fixed 1/120 s step: same result on every machine), then played back as a pure function of t.
+// Before its start time every object keeps its normal animation; from then on the simulation owns it.
+const PHYS = { bodies: [], blasts: [], rags: [], kin: [], ready: false, t0: 1e9 };
+const _pv = new THREE.Vector3(), _pv2 = new THREE.Vector3(), _pq = new THREE.Quaternion(), _pq2 = new THREE.Quaternion(), _pm = new THREE.Matrix4(), _pm2 = new THREE.Matrix4(), _ps = new THREE.Vector3(1, 1, 1);
+const physT = ts => typeof VT === 'function' ? VT(ts) : ts;   // scene time → video time (slow motion)
+function localBox(node) {   // bounding box in the node's own frame (unscaled)
+  node.updateWorldMatrix(true, true); const inv = _pm.copy(node.matrixWorld).invert(), B = new THREE.Box3(), b = new THREE.Box3(), M = new THREE.Matrix4();
+  node.traverse(m => { if (!m.isMesh || m.isInstancedMesh || !m.visible) return; const mt = m.material; if (mt && (mt.blending === THREE.AdditiveBlending || mt.opacity < 0.3)) return;
+    if (!m.geometry.boundingBox) m.geometry.computeBoundingBox(); b.copy(m.geometry.boundingBox).applyMatrix4(M.multiplyMatrices(inv, m.matrixWorld)); B.union(b); });
+  return B.isEmpty() ? B.set(new THREE.Vector3(-0.25, 0, -0.25), new THREE.Vector3(0.25, 0.5, 0.25)) : B;
+}
+// phys(obj, { t0, shape: 'box' | 'sphere' | 'cyl', mass, vel: [x,y,z], spin: [x,y,z], bounce, friction }) — obj is simulated from t0 (falls, tumbles, bounces, gets pushed by blasts and other bodies)
+function phys(obj, o = {}) { const node = dyn(obj.g ?? obj.root ?? obj), B = { node, o, t0: o.t0 ?? 0 }; PHYS.bodies.push(B); PHYS.t0 = Math.min(PHYS.t0, B.t0); return B; }
+// blast(x, y, z, t, { power, r, up }) — pushes every simulated body (and ragdoll) within r away from the point; explode() adds one automatically
+function blast(x, y, z, t, o = {}) { PHYS.blasts.push({ p: [x, y, z], t, power: o.power ?? 9, r: o.r ?? 9, up: o.up ?? 0.45 }); }
+// collider(obj, { moving }) — solid obstacle for simulated bodies (houses, barns, silos, towers and vehicles are solid automatically); moving: follows walk()/drive()/fly()
+function collider(obj, o = {}) { const node = obj.g ?? obj.root ?? obj; node.userData.solid = true; if (o.moving) PHYS.kin.push({ node, src: obj }); return obj; }
+// breakApart(obj, t, { n: [nx, ny, nz], power, from: [x,y,z], spin }) — obj shatters into chunks (its own colours) that fly apart and tumble to the ground
+function breakApart(obj, t, o = {}) {
+  const node = dyn(obj.g ?? obj.root ?? obj), lb = localBox(node), [nx, ny, nz] = o.n ?? [3, 3, 2], sz = lb.getSize(new THREE.Vector3()), cs = [sz.x / nx, sz.y / ny, sz.z / nz];
+  node.updateWorldMatrix(true, true); const cols = []; node.traverse(m => { if (m.isMesh && m.material?.color && !m.material.transparent) { const bb = new THREE.Box3().setFromObject(m); cols.push([bb.getCenter(new THREE.Vector3()), '#' + m.material.color.getHexString(), bb.getSize(new THREE.Vector3()).length()]); } });
+  const g = dyn(grp(node.parent ?? world)), pieces = [];
+  for (let i = 0; i < nx; i++) for (let j = 0; j < ny; j++) for (let k = 0; k < nz; k++) {
+    const lc = new THREE.Vector3(lb.min.x + (i + 0.5) * cs[0], lb.min.y + (j + 0.5) * cs[1], lb.min.z + (k + 0.5) * cs[2]), wc = lc.clone().applyMatrix4(node.matrixWorld), h = hash(i * 7.1 + j * 3.3 + k * 1.9 + node.id);
+    let best = null, bd = 1e9; for (const [c, hex, s] of cols) { const d = c.distanceTo(wc) - s * 0.15; if (d < bd) { bd = d; best = hex; } }
+    const ws = node.getWorldScale(new THREE.Vector3()), q = node.getWorldQuaternion(new THREE.Quaternion());
+    const piece = dyn(grp(g)); piece.position.copy(wc); piece.quaternion.copy(q); box(piece, cs[0] * ws.x * (0.82 + 0.16 * h), cs[1] * ws.y * (0.82 + 0.16 * hash(h * 9)), cs[2] * ws.z * (0.82 + 0.16 * hash(h * 5)), shade(best ?? '#8A6A48', (h - 0.5) * 0.12), 0, -cs[1] * ws.y * 0.41, 0);
+    piece.visible = false; pieces.push(piece);
+    const from = o.from ? new THREE.Vector3(...o.from) : lb.getCenter(new THREE.Vector3()).applyMatrix4(node.matrixWorld).add(new THREE.Vector3(0, -sz.y * 0.4, 0)), d = wc.clone().sub(from), L = d.length() || 1, pw = (o.power ?? 7) * (0.6 + 0.8 * h);
+    phys(piece, { t0: t, vel: [d.x / L * pw, d.y / L * pw + (o.up ?? 2.5), d.z / L * pw], spin: [(hash(h * 3) - 0.5) * (o.spin ?? 10), (hash(h * 4) - 0.5) * (o.spin ?? 10), (hash(h * 6) - 0.5) * (o.spin ?? 10)], mass: Math.max(0.5, cs[0] * cs[1] * cs[2] * 300) });
+  }
+  tick(st => { const on = st >= t; node.visible = !on; for (const p of pieces) p.visible = on; });
+  sfx(t, 'crack', 1); sfx(t, 'impact', 0.8);
+  return { g, pieces };
+}
+// ragdoll(rig, t, { from: [x,y,z], power, dir: [x,y,z], getUp: t2 }) — the figure is thrown and goes limp (real physics: joints, gravity, ground, obstacles); getUp: stands up again on the spot
+function ragdoll(f, t, o = {}) { if (!f.legL) return f; dyn(f.root); f._rag = { t, o }; PHYS.rags.push(f); PHYS.t0 = Math.min(PHYS.t0, t); return f; }
+// crash(vehicle, t, { impulse: [x,y,z], spin: [x,y,z], smoke }) — the vehicle leaves its drive() path and tumbles with its momentum (+ impulse), glass bursts, smoke
+function crash(v, t, o = {}) {
+  const B = phys(v, { t0: t, mass: 1200, vel: o.impulse ?? [0, 3, 0], spin: o.spin ?? [0.6, 0.4, 1.4], keepVel: true }); B.crash = v;
+  emit('debris', { at: st => v._crashAt?.(st) ?? [0, -99, 0], t0: t, burst: 30, speed: 4, size: 0.08, colors: ['#BFE8FF', '#E8F8FF', '#9FCBE0'], basic: true });
+  if (o.smoke !== false) emit('smoke', { at: st => v._crashAt?.(st) ?? [0, -99, 0], t0: t + 0.3, t1: t + 9, rate: 6, size: 0.9, jitter: 0.4 });
+  sfx(t, 'impact', 1.2); sfx(t + 0.05, 'crack', 0.9);
+  return v;
+}
+// solid by default: big buildings and vehicles (simulated debris bounces off them)
+for (const nm of ['house', 'barn', 'silo', 'tower', 'vehicle', 'lander', 'windmill']) try {
+  const F = { house, barn, silo, tower, vehicle, lander, windmill }[nm]; if (typeof F !== 'function') continue;
+  const W = (...a) => { const r = F(...a); const n = r?.g ?? r; if (n?.userData) n.userData.solid = true; return r; };
+  ({ house: () => { house = W; }, barn: () => { barn = W; }, silo: () => { silo = W; }, tower: () => { tower = W; }, vehicle: () => { vehicle = W; }, lander: () => { lander = W; }, windmill: () => { windmill = W; } })[nm]();
+} catch (e) {}
+{ const E0 = explode; explode = (x, y, z, t0, o = {}) => { const r = E0(x, y, z, t0, o); blast(x, y, z, t0, { power: 9 * (o.size ?? 1), r: 9 * (o.size ?? 1) }); return r; }; }
+
+const RAGSEG = [   // name, rig part, parent, size [w,h,d], centre in the part's frame, mass, joint ('ball' | 'knee' | 'elbow')
+  ['pelvis', 'hips', null, [0.44, 0.26, 0.28], [0, 0.01, 0], 11, null], ['chest', 'chest', 'pelvis', [0.5, 0.6, 0.3], [0, 0.29, 0], 20, 'ball'],
+  ['head', 'head', 'chest', [0.36, 0.36, 0.36], [0, 0.19, 0], 5, 'ball'],
+  ['armL', 'armL', 'chest', [0.15, 0.34, 0.15], [0, -0.16, 0], 3, 'ball'], ['armR', 'armR', 'chest', [0.15, 0.34, 0.15], [0, -0.16, 0], 3, 'ball'],
+  ['foreL', 'foreL', 'armL', [0.14, 0.42, 0.14], [0, -0.24, 0], 2, 'elbow'], ['foreR', 'foreR', 'armR', [0.14, 0.42, 0.14], [0, -0.24, 0], 2, 'elbow'],
+  ['legL', 'legL', 'pelvis', [0.18, 0.44, 0.19], [0, -0.2, 0], 8, 'ball'], ['legR', 'legR', 'pelvis', [0.18, 0.44, 0.19], [0, -0.2, 0], 8, 'ball'],
+  ['shinL', 'shinL', 'legL', [0.16, 0.46, 0.17], [0, -0.21, 0], 5, 'knee'], ['shinR', 'shinR', 'legR', [0.16, 0.46, 0.17], [0, -0.21, 0], 5, 'knee']
+];
+const SOLIDS = [];   // oriented boxes of solid buildings/vehicles, captured before bake() merges static meshes
+DEFER.push(() => { if (!PHYS.bodies.length && !PHYS.rags.length) return; world.updateMatrixWorld(true);
+  world.traverse(nd => { if (!nd.userData.solid || PHYS.bodies.some(B => B.node === nd) || PHYS.kin.some(K => K.node === nd)) return; const lb = localBox(nd), s = nd.getWorldScale(new THREE.Vector3());
+    SOLIDS.push({ p: nd.getWorldPosition(new THREE.Vector3()), q: nd.getWorldQuaternion(new THREE.Quaternion()), h: lb.getSize(new THREE.Vector3()).multiply(s).multiplyScalar(0.5), c: lb.getCenter(new THREE.Vector3()).multiply(s) }); }); });
+async function physicsBake() {
+  if (!PHYS.bodies.length && !PHYS.rags.length) return;
+  let RA; try { RA = (await import('rapier')).default; await RA.init(); } catch (e) { console.warn('physics engine could not be loaded – objects keep their animation'); return; }
+  const HZ = 120, REC = 2, tA = Math.max(0, PHYS.t0), tB = DUR + 0.5, W = new RA.World({ x: 0, y: -9.81, z: 0 }); W.timestep = 1 / HZ;
+  const GW = (0x0001 << 16) | 0xffff, GR = (0x0002 << 16) | 0x0001;   // world/objects collide with everything; ragdoll parts not with each other
+  const Q = q => ({ x: q.x, y: q.y, z: q.z, w: q.w });
+  // ground: triangle mesh of groundH around the action (a slab if flat)
+  const R = 80, st = 2, n = R / st * 2 + 1; let flat = true; const vs = new Float32Array(n * n * 3), ix = [];
+  for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) { const x = -R + i * st, z = -R + j * st, h = groundH(x, z); if (Math.abs(h) > 0.02) flat = false; vs.set([x, h, z], (i * n + j) * 3); }
+  const gbody = W.createRigidBody(RA.RigidBodyDesc.fixed());
+  if (flat) W.createCollider(RA.ColliderDesc.cuboid(400, 1, 400).setTranslation(0, -1, 0).setFriction(0.7).setCollisionGroups(GW), gbody);
+  else { for (let i = 0; i < n - 1; i++) for (let j = 0; j < n - 1; j++) { const a = i * n + j, b = a + 1, c = a + n, d = c + 1; ix.push(a, b, c, b, d, c); }
+    W.createCollider(RA.ColliderDesc.trimesh(vs, new Uint32Array(ix)).setFriction(0.7).setCollisionGroups(GW), gbody); }
+  for (const S of SOLIDS) { const b = W.createRigidBody(RA.RigidBodyDesc.fixed().setTranslation(S.p.x, S.p.y, S.p.z).setRotation(Q(S.q)));
+    W.createCollider(RA.ColliderDesc.cuboid(Math.max(0.03, S.h.x), Math.max(0.03, S.h.y), Math.max(0.03, S.h.z)).setTranslation(S.c.x, S.c.y, S.c.z).setFriction(0.6).setCollisionGroups(GW), b); }
+  // kinematic movers (collider(obj, { moving: true })): pose from their pure path functions
+  const kinPose = (K, ts) => { const s = K.src, nd = K.node; if (nd._fly) { const [p, rx, ry, rz] = nd._fly(ts); return [p, new THREE.Quaternion().setFromEuler(new THREE.Euler(rx, ry, rz, 'YXZ'))]; }
+    if (s._posAt) { const p = s._posAt(ts); return [[p.x, p.y, p.z], new THREE.Quaternion().setFromEuler(new THREE.Euler(0, s._yawAt ? s._yawAt(ts) : nd.rotation.y, 0))]; } return null; };
+  const kin = PHYS.kin.map(K => { const lb = localBox(K.node), sc = K.node.getWorldScale(new THREE.Vector3()), h = lb.getSize(new THREE.Vector3()).multiply(sc).multiplyScalar(0.5), c = lb.getCenter(new THREE.Vector3()).multiply(sc);
+    const b = W.createRigidBody(RA.RigidBodyDesc.kinematicPositionBased()); W.createCollider(RA.ColliderDesc.cuboid(h.x, h.y, h.z).setTranslation(c.x, c.y, c.z).setCollisionGroups(GW), b); return { ...K, b }; });
+  // start states: one scene evaluation per start time (and one 1/60 s earlier for the speed things already have)
+  const starts = new Map(), snap = nd => { nd.getWorldPosition(_pv); nd.getWorldQuaternion(_pq); return [_pv.clone(), _pq.clone()]; }, times = [...new Set([...PHYS.bodies.map(B => B.t0), ...PHYS.rags.map(f => f._rag.t)])];
+  for (const tt of times) { const now = [], prev = [];
+    for (const [arr, dt] of [[now, 0], [prev, 1 / 60]]) { stepScene(physT(tt - dt)); world.updateMatrixWorld(true);
+      for (const B of PHYS.bodies) if (B.t0 === tt) arr.push(['b', B, snap(B.node)]); for (const f of PHYS.rags) if (f._rag.t === tt) arr.push(['r', f, RAGSEG.map(([, part]) => snap(f[part]))]); }
+    now.forEach(([k, X, a], i) => { const b = prev[i][2]; if (k === 'b') starts.set(X, { p: a[0], q: a[1], v: a[0].clone().sub(b[0]).multiplyScalar(60) }); else { X._rag.a = a; X._rag.b = b; } }); }
+  const live = [];
+  const mkBody = (B, k0) => { const S = starts.get(B), o = B.o, ws = B.node.getWorldScale(new THREE.Vector3()), lb = localBox(B.node), h = lb.getSize(new THREE.Vector3()).multiply(ws).multiplyScalar(0.5), c = lb.getCenter(new THREE.Vector3()).multiply(ws);
+    const kv = o.keepVel !== false ? S.v : _pv2.set(0, 0, 0), v0 = o.vel ?? [0, 0, 0], w0 = o.spin ?? [0, 0, 0], mass = o.mass ?? clamp(8 * h.x * h.y * h.z * 250, 0.3, 3000);
+    const b = W.createRigidBody(RA.RigidBodyDesc.dynamic().setTranslation(S.p.x, S.p.y, S.p.z).setRotation(Q(S.q)).setLinvel(v0[0] + kv.x, v0[1] + kv.y, v0[2] + kv.z).setAngvel({ x: w0[0], y: w0[1], z: w0[2] })
+      .setLinearDamping(0.05).setAngularDamping(0.15).setCanSleep(true).setCcdEnabled(Math.min(h.x, h.y, h.z) < 0.2));
+    const cd = o.shape === 'sphere' ? RA.ColliderDesc.ball(Math.max(h.x, h.y, h.z)) : RA.ColliderDesc.cuboid(Math.max(0.02, h.x), Math.max(0.02, h.y), Math.max(0.02, h.z));
+    W.createCollider(cd.setTranslation(c.x, c.y, c.z).setMass(mass).setFriction(o.friction ?? 0.6).setRestitution(o.bounce ?? 0.2).setCollisionGroups(GW), b);
+    live.push({ kind: 'b', B, b, f0: Math.ceil(k0 / REC), data: [] }); };
+  const mkRag = (f, k0) => { const R0 = f._rag, s = f.root.scale.x, bodies = {}, o = R0.o;
+    RAGSEG.forEach(([nm, part, par, size, c, m, jt], i) => { const [p, q] = R0.a[i], [pp] = R0.b[i], cl = new THREE.Vector3(...c).multiplyScalar(s), cw = cl.clone().applyQuaternion(q).add(p), v = p.clone().sub(pp).multiplyScalar(60);
+      if (o.from || o.dir) { const d = o.dir ? new THREE.Vector3(...o.dir) : cw.clone().sub(new THREE.Vector3(...o.from)), L = d.length() || 1, pw = (o.power ?? 6) * (nm === 'chest' || nm === 'pelvis' ? 1 : 0.85); v.add(new THREE.Vector3(d.x / L * pw, d.y / L * pw + (o.up ?? 3), d.z / L * pw)); }
+      const b = W.createRigidBody(RA.RigidBodyDesc.dynamic().setTranslation(cw.x, cw.y, cw.z).setRotation(Q(q)).setLinvel(v.x, v.y, v.z).setAngvel({ x: (hash(i + f.sd) - 0.5) * 4, y: (hash(i * 3 + f.sd) - 0.5) * 4, z: (hash(i * 7 + f.sd) - 0.5) * 4 })
+        .setLinearDamping(0.05).setAngularDamping(1.2).setCanSleep(true).setCcdEnabled(true));
+      W.createCollider(RA.ColliderDesc.cuboid(size[0] * s / 2, size[1] * s / 2, size[2] * s / 2).setMass(m * s * s * s).setFriction(0.8).setRestitution(0.05).setCollisionGroups(GR), b);
+      bodies[nm] = { b, p, q, cl };
+      if (par) { const P = bodies[par], pq = new THREE.Quaternion(P.q.x, P.q.y, P.q.z, P.q.w), pc = P.cl.clone().applyQuaternion(pq).add(P.p), a1 = p.clone().sub(pc).applyQuaternion(pq.clone().invert()), a2 = cl.clone().negate();
+        const V3 = v3 => ({ x: v3.x, y: v3.y, z: v3.z });
+        let jd; if (jt === 'knee' || jt === 'elbow') { jd = RA.JointData.revolute(V3(a1), V3(a2), { x: 1, y: 0, z: 0 }); jd.limitsEnabled = true; jd.limits = jt === 'knee' ? [-0.05, 2.5] : [-2.5, 0.05]; } else jd = RA.JointData.spherical(V3(a1), V3(a2));
+        const J = W.createImpulseJoint(jd, P.b, b, true);
+        if (jt === 'ball' && J.configureMotorPosition) for (const ax of [RA.JointAxis.AngX, RA.JointAxis.AngY, RA.JointAxis.AngZ]) J.configureMotorPosition(ax, 0, nm === 'head' ? 6 : 1.2, nm === 'head' ? 2 : 0.6); } });   // a little muscle tone
+    live.push({ kind: 'r', f, bodies, f0: Math.ceil(k0 / REC), data: [] }); };
+  const pend = [...PHYS.bodies.map(B => [B.t0, k => mkBody(B, k)]), ...PHYS.rags.map(f => [f._rag.t, k => mkRag(f, k)])].sort((a, b) => a[0] - b[0]), bl = [...PHYS.blasts].sort((a, b) => a.t - b.t), steps = Math.ceil((tB - tA) * HZ);
+  for (let k = 0; k <= steps; k++) {
+    const ts = tA + k / HZ;
+    while (pend.length && pend[0][0] <= ts + 1e-6) pend.shift()[1](k);
+    while (bl.length && bl[0].t <= ts + 1e-6) { const X = bl.shift();
+      for (const L of live) { if (L.kind !== 'b') continue; const b = L.b, p = b.translation(), dx = p.x - X.p[0], dy = p.y - X.p[1], dz = p.z - X.p[2], d = Math.hypot(dx, dy, dz); if (d > X.r) continue;
+        const k2 = (1 - d / X.r) * X.power, m = b.mass(), nx = d > 1e-3 ? dx / d : 0, ny = d > 1e-3 ? dy / d : 1, nz = d > 1e-3 ? dz / d : 0;
+        b.applyImpulse({ x: nx * k2 * m, y: (ny + X.up) * k2 * m, z: nz * k2 * m }, true); b.applyTorqueImpulse({ x: nz * k2 * m * 0.3, y: k2 * m * 0.1, z: -nx * k2 * m * 0.3 }, true); } }
+    for (const K of kin) { const P = kinPose(K, ts); if (!P) continue; K.b.setNextKinematicTranslation({ x: P[0][0], y: P[0][1], z: P[0][2] }); K.b.setNextKinematicRotation(Q(P[1])); }
+    if (k % REC === 0) for (const L of live) { const put = b => { const p = b.translation(), q = b.rotation(); L.data.push(p.x, p.y, p.z, q.x, q.y, q.z, q.w); };
+      if (L.kind === 'b') put(L.b); else for (const [nm] of RAGSEG) put(L.bodies[nm].b); }
+    W.step();
+  }
+  for (const L of live) { L.d = Float32Array.from(L.data); L.data = null; L.n = L.kind === 'b' ? 7 : 7 * RAGSEG.length; L.frames = Math.max(1, L.d.length / L.n); L.tS = tA + L.f0 * REC / HZ;
+    if (L.kind === 'b') L.B.rec = L; else L.f._rag.rec = L; }
+  PHYS.fps = HZ / REC; PHYS.ready = true; W.free?.();
+  for (const B of PHYS.bodies) if (B.crash && B.rec) { const L = B.rec; B.crash._crashAt = ts => { physFrame(L, ts, _pf3); return [_pf3[0].x, _pf3[0].y + 0.7, _pf3[0].z]; }; }
+}
+const _pf3 = [new THREE.Vector3(), new THREE.Quaternion()];
+function physFrame(L, ts, out, j = 0) {   // interpolated pose of record L (segment j) at scene time ts → [Vector3, Quaternion]
+  const fr = clamp((ts - L.tS) * PHYS.fps, 0, L.frames - 1), i0 = Math.floor(fr), i1 = Math.min(L.frames - 1, i0 + 1), k = fr - i0, a = i0 * L.n + j * 7, b = i1 * L.n + j * 7, D = L.d;
+  out[0].set(lerp(D[a], D[b], k), lerp(D[a + 1], D[b + 1], k), lerp(D[a + 2], D[b + 2], k));
+  out[1].set(D[a + 3], D[a + 4], D[a + 5], D[a + 6]); _pq2.set(D[b + 3], D[b + 4], D[b + 5], D[b + 6]); out[1].slerp(_pq2, k); return out;
+}
+const _pf = [new THREE.Vector3(), new THREE.Quaternion()], _pf2 = [new THREE.Vector3(), new THREE.Quaternion()], _pinv = new THREE.Quaternion(), RQ = {};
+late(ts => {   // playback
+  if (!PHYS.ready) return;
+  for (const B of PHYS.bodies) { const L = B.rec; if (!L || ts < B.t0) continue; physFrame(L, ts, _pf); const nd = B.node;
+    _pm2.compose(_pf[0], _pf[1], nd.getWorldScale(_ps)); if (nd.parent) { nd.parent.updateWorldMatrix(true, false); _pm2.premultiply(_pm.copy(nd.parent.matrixWorld).invert()); } _pm2.decompose(nd.position, nd.quaternion, _pv2); }
+  for (const f of PHYS.rags) { const R0 = f._rag, L = R0.rec; if (!L || ts < R0.t) continue; const s = f.root.scale.x, up = R0.o.getUp, gk = up != null ? sm01((ts - up) / 1.2) : 0;
+    const keep = gk > 0 ? { hips: f.hips.quaternion.clone(), parts: RAGSEG.map(([, part]) => f[part].quaternion.clone()), neck: f.neck.quaternion.clone() } : null;
+    RAGSEG.forEach(([nm, part], j) => { physFrame(L, ts, _pf, j); RQ[nm] = RQ[nm] ?? [new THREE.Vector3(), new THREE.Quaternion()]; RQ[nm][0].copy(_pf[0]); RQ[nm][1].copy(_pf[1]); });
+    const pq = RQ.pelvis[1], c0 = new THREE.Vector3(...RAGSEG[0][4]).multiplyScalar(s).applyQuaternion(pq), joint = RQ.pelvis[0].clone().sub(c0), rootQ = pq.clone(), rootP = joint.clone().sub(new THREE.Vector3(0, HIP * s, 0).applyQuaternion(pq));
+    if (gk > 0) { const e = new THREE.Euler().setFromQuaternion(pq, 'YXZ'), upQ = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, e.y, 0)); rootQ.slerp(upQ, gk); rootP.lerp(_pv.set(joint.x, groundH(joint.x, joint.z), joint.z), gk); }
+    f.root.position.copy(rootP); f.root.quaternion.copy(rootQ); f.body.position.set(0, 0, 0); f.body.quaternion.identity(); f.hips.position.set(0, HIP, 0); f.hips.quaternion.identity();
+    const wq = { pelvis: pq };
+    RAGSEG.forEach(([nm, part, par], j) => { if (!par) return; wq[nm] = RQ[nm][1]; const parQ = wq[par], loc = _pinv.copy(parQ).invert().multiply(RQ[nm][1]);
+      if (nm === 'head') { f.neck.quaternion.copy(loc); f.head.quaternion.identity(); if (keep) { f.neck.quaternion.slerp(keep.neck, gk); f.head.quaternion.slerp(keep.parts[j], gk); } }
+      else { f[part].quaternion.copy(loc); if (keep) f[part].quaternion.slerp(keep.parts[j], gk); } });
+    if (keep) f.hips.quaternion.slerp(keep.hips, gk);
+    if (f.coat) f.coat.rotation.x = 0.3;
+  }
+});
+
+// --- body dynamics for figures (automatic): inertia — torso, head, hat, hair and coat lag behind speed changes and turns (they swing forward when someone stops) ·
+//     feet adapt to slopes (IK, hips drop on the low side) · walking figures keep their distance instead of walking through each other ---
+function springResp(fn, t, w = 8, z = 0.32, T = 1.1, n = 18) {   // damped-spring response to the input fn(τ) over the last T s (static gain 1) — a pure function of t
+  const wd = w * Math.sqrt(1 - z * z), dt = T / n; let s = 0;
+  for (let i = 1; i <= n; i++) { const tau = i * dt; s += fn(t - tau) * (w * w / wd) * Math.exp(-z * w * tau) * Math.sin(wd * tau) * dt; }
+  return s;
+}
+const legFK = (lt, lk) => [-LEG1 * Math.sin(lt) - LEG2 * Math.sin(lt + lk), -LEG1 * Math.cos(lt) - LEG2 * Math.cos(lt + lk)];   // ankle (z, y) relative to the hip joint
+const _mv = new THREE.Vector3(), _mv2 = new THREE.Vector3();
+late(ts => {
+  const active = RIGS.filter(f => f.legL && f.root.parent && !(f._rag && ts >= f._rag.t) && !f.isModel && !f.diver && !f._seated);
+  // 1) keep distance (walkers give way; standing figures are fixed obstacles)
+  for (let i = 0; i < active.length; i++) for (let j = i + 1; j < active.length; j++) {
+    const A = active[i], B = active[j], ma = !!A._posAt, mb = !!B._posAt; if (!ma && !mb) continue;
+    const pa = A.root.position, pb = B.root.position, dx = pb.x - pa.x, dz = pb.z - pa.z, d = Math.hypot(dx, dz), min = 0.55 * (A.root.scale.x + B.root.scale.x);
+    if (d >= min || d < 1e-4 || Math.abs(pa.y - groundH(pa.x, pa.z)) > 0.1 || Math.abs(pb.y - groundH(pb.x, pb.z)) > 0.1) continue;   // only figures on the ground (not seated in cars, on roofs …)
+    const push = (min - d) * (ma && mb ? 0.5 : 1), ux = dx / d, uz = dz / d;
+    if (ma) { pa.x -= ux * push; pa.z -= uz * push; } if (mb) { pb.x += ux * push; pb.z += uz * push; }
+  }
+  for (const f of active) {
+    // 2) inertia from the walk path: forward/sideways acceleration through a damped spring
+    if (f._posAt && f._yawAt && CFG.inertia !== false) {
+      const acc = (tt, side) => { const h = 0.06, p0 = f._posAt(tt - h), p1 = f._posAt(tt), p2 = f._posAt(tt + h), ax = (p2.x - 2 * p1.x + p0.x) / (h * h), az = (p2.z - 2 * p1.z + p0.z) / (h * h), yw = f._yawAt(tt);
+        return side ? ax * Math.cos(yw) - az * Math.sin(yw) : ax * Math.sin(yw) + az * Math.cos(yw); };
+      const rf = clamp(springResp(tt => acc(tt, false), ts), -12, 12), rs = clamp(springResp(tt => acc(tt, true), ts), -12, 12);
+      if (Math.abs(rf) + Math.abs(rs) > 0.05) {
+        f.chest.rotation.x += clamp(-0.016 * rf, -0.16, 0.16); f.chest.rotation.z += clamp(0.01 * rs, -0.08, 0.08); f.neck.rotation.x += clamp(-0.012 * rf, -0.12, 0.12);
+        if (f.hat) { f.hat.rotation.x += clamp(-0.04 * rf, -0.35, 0.35); f.hat.rotation.z += clamp(0.035 * rs, -0.3, 0.3); }
+        if (f.hair) { f.hair.rotation.x += clamp(-0.018 * rf, -0.12, 0.12); f.hair.rotation.z += clamp(0.012 * rs, -0.08, 0.08); }
+        if (f.coat) f.coat.rotation.x += clamp(0.06 * rf, -0.5, 0.6);
+        if (f.cape) { f.cape.rotation.x += clamp(0.08 * rf, -0.4, 0.8); f.cape.rotation.z += clamp(-0.05 * rs, -0.4, 0.4); }
+      }
+    }
+    // 3) feet on slopes: drop the hips on the low side, bend the knee on the high side, tilt the feet with the ground
+    if (CFG.footIK === false) continue;
+    const r = f.root.position, gy = groundH(r.x, r.z); if (Math.abs(r.y - gy) > 0.06) continue;
+    const s = f.root.scale.x, legs = [[f.legL, f.shinL, f.footL], [f.legR, f.shinR, f.footR]], d = [];
+    f.root.updateWorldMatrix(true, true);
+    for (const [, , ft] of legs) { ft.getWorldPosition(_mv); d.push(groundH(_mv.x, _mv.z) - gy); }
+    if (Math.max(Math.abs(d[0]), Math.abs(d[1])) < 0.015) continue;
+    const low = Math.min(0, d[0], d[1]), hrx = f.hips.rotation.x, yw = f.root.rotation.y; f.hips.position.y += low / s;
+    legs.forEach(([th, sh, ft], i) => { const lt = th.rotation.x + hrx, lk = sh.rotation.x, [z, y] = legFK(lt, lk), [nt, nk] = legIK(z, y + (d[i] - low) / s);
+      ft.getWorldPosition(_mv); const fx = Math.sin(yw) * 0.15, fz = Math.cos(yw) * 0.15, slope = (groundH(_mv.x + fx, _mv.z + fz) - groundH(_mv.x - fx, _mv.z - fz)) / 0.3;
+      th.rotation.x = nt - hrx; sh.rotation.x = nk; ft.rotation.x += (lt + lk) - (nt + nk) - Math.atan(slope) * 0.85; });
+  }
+});
 
 /* ====================================================================== */
 /* SCENE — written per video between the markers (wrapped in a block: names are free) */
@@ -3339,6 +3622,7 @@ function thumbOn() {
   const U = fin.uniforms; U.uSat.value = (CFG.saturation ?? 1.08) * 1.25; U.uCon.value = (CFG.contrast ?? 1.05) * 1.12; U.uVig.value = Math.max(U.uVig.value, 0.55); U.uGrain.value = 0;
 }
 if (PENDING.length) await Promise.all(PENDING);
+await physicsBake();   // simulate once, then every frame plays it back
 document.querySelectorAll('.err').forEach(n => n.remove());
 window.whatif = {
   dur: DUR, cover: CFG.coverT,

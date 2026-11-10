@@ -64,7 +64,7 @@ jobs:
           key: pw-${{ env.PW_VERSION }}
       - name: deps
         run: |
-          npm init -y >/dev/null && npm i --no-audit --no-fund three@0.170.0 playwright@$PW_VERSION >/dev/null
+          npm init -y >/dev/null && npm i --no-audit --no-fund three@0.170.0 @dimforge/rapier3d-deterministic-compat@0.21.0 playwright@$PW_VERSION >/dev/null
           npx playwright install --with-deps chromium >/dev/null
       - id: s
         run: echo "slug=$(basename '${{ matrix.page }}' .html)" >> "$GITHUB_OUTPUT"
@@ -96,7 +96,7 @@ jobs:
       - name: deps
         run: |
           (command -v ffmpeg >/dev/null || { sudo apt-get update -qq && sudo apt-get install -y -qq --no-install-recommends ffmpeg >/dev/null; })
-          npm init -y >/dev/null && npm i --no-audit --no-fund three@0.170.0 playwright@$PW_VERSION >/dev/null
+          npm init -y >/dev/null && npm i --no-audit --no-fund three@0.170.0 @dimforge/rapier3d-deterministic-compat@0.21.0 playwright@$PW_VERSION >/dev/null
           npx playwright install --with-deps chromium >/dev/null
       - id: s
         run: echo "slug=$(basename '${{ matrix.page }}' .html)" >> "$GITHUB_OUTPUT"

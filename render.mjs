@@ -35,6 +35,8 @@ async function openPage() {
     if (url === 'http://whatif.local/') return route.fulfill({ contentType: 'text/html', body: html });
     const m = url.match(/cdn\.jsdelivr\.net\/npm\/three@[\d.]+\/(.*)$/);
     if (m) return route.fulfill({ contentType: 'application/javascript', body: readFileSync(path.join(THREE_DIR, m[1])) });
+    const c = url.match(/cdn\.jsdelivr\.net\/npm\/(@dimforge\/rapier3d-deterministic-compat)@[\d.]+\/(.*)$/);   // physics engine from node_modules when installed
+    if (c && existsSync(path.join(HERE, 'node_modules', c[1], c[2]))) return route.fulfill({ contentType: 'application/javascript', body: readFileSync(path.join(HERE, 'node_modules', c[1], c[2])) });
     return route.continue();
   });
   const page = await ctx.newPage();
