@@ -213,7 +213,8 @@ const STATS = [
 // End card: question drives comments. review: { t, stars, title, text, by, foot, say } = closing review card (narrator reads it)
 // END.ending = { type: 'survived' | 'dead', n: 2, of: 4, title } → result card instead of a vote (q/opts not needed), then the review
 const END = { t: 18.3, q: 'Silo, cellar or tractor – where do *you* hide?', opts: ['Silo', 'Cellar', 'Tractor'], cta: 'Comment A, B or C' };
-// Sound: mood horror | epic | action | funny | science | chill. sections [t, level 0..3]. sfx kinds: see SND below.
+// Sound: mood horror | epic | action | funny | science | chill | tense | party | triumph | sad — or score: [[t, mood], …] (music follows the scene).
+// sections [t, level 0..3]. amb: [[t0, t1, kind, vol]] ambience beds: night farm wind blizzard rain storm fire indoor crowd city ocean space engine. sfx kinds: see SND below.
 const AUDIO = {
   mood: 'horror', music: 0.55, sfx: 0.95,
   sections: [[0, 1], [2.6, 1], [6.05, 2], [10.2, 3], [14.2, 2], [18.3, 1]],
@@ -578,6 +579,18 @@ function animal(o = {}) {   // kind: cow | pig | sheep | dog | chicken — retur
   for (const [lx, lz] of n) for (const sx of [-1, 1]) { const pv = grp(root, sx * lx, legH, lz); box(pv, k === 'chicken' ? 0.04 : w * 0.2, legH, k === 'chicken' ? 0.04 : w * 0.2, k === 'chicken' ? '#F0A030' : k === 'cow' ? '#E6E2DA' : col, 0, -legH, 0); legs.push(pv); }
   root.scale.setScalar(o.scale ?? 1);
   return { root, body, head, legs, kind: k, quad: true };
+}
+// --- recurring characters: always the same look. Engine CHARS (channel-wide) + the series' cast.json (assemble.py) → char(name, { expr, hold, … }) ---
+const CHARS = {
+  you:   { shirt: '#C0392B', pants: '#2E3A5C', hat: '#D9B65C', skin: '#E8B892' },   // the viewer ("you"), protagonist of every scenario
+  steve: { shirt: '#F4F6F8', pants: '#5A6170', skin: '#F1C7A5', hold: '#C9A66B' }    // Dr. Steve: lab coat, clipboard
+};
+const SERIES_CAST = /* @CAST */{};
+function char(name, o = {}) {   // look keys (shirt, pants, hat, skin, kind) can't be overridden here: change them in cast.json, then they change everywhere
+  const base = { ...(CHARS[name] ?? {}), ...(SERIES_CAST[name] ?? {}) };
+  if (!CHARS[name] && !SERIES_CAST[name]) console.warn('char: unknown character ' + name + ' – add it to the series cast.json');
+  const rest = Object.fromEntries(Object.entries(o).filter(([k]) => !['shirt', 'pants', 'hat', 'skin', 'kind'].includes(k)));
+  return figure({ ...base, ...rest });
 }
 function gerald(o = {}) {   // Gerald, the channel's chicken: in every video, never does anything, always survives
   const g = animal({ kind: 'chicken', scale: o.scale ?? 1.5 });
@@ -1282,11 +1295,20 @@ const SND = (() => {
     action:  { bpm: 132, root: 40, scale: [0, 2, 3, 5, 7, 8, 10], prog: [0, 5, 6, 4], lead: 'pluck',   drums: 'drive' },
     funny:   { bpm: 116, root: 48, scale: [0, 2, 4, 5, 7, 9, 11], prog: [0, 3, 4, 0], lead: 'marimba', drums: 'bounce', bright: true },
     science: { bpm: 104, root: 45, scale: [0, 2, 3, 5, 7, 9, 10], prog: [0, 3, 5, 4], lead: 'arp',     drums: 'light' },
-    chill:   { bpm: 86,  root: 43, scale: [0, 2, 4, 5, 7, 9, 11], prog: [0, 5, 3, 4], lead: 'keys',    drums: 'lofi', sevenths: true }
+    chill:   { bpm: 86,  root: 43, scale: [0, 2, 4, 5, 7, 9, 11], prog: [0, 5, 3, 4], lead: 'keys',    drums: 'lofi', sevenths: true },
+    tense:   { bpm: 96,  root: 40, scale: [0, 1, 3, 5, 7, 8, 10], prog: [0, 0, 1, 0], lead: 'arp',     drums: 'sparse', drone: true },   // creeping danger, waiting
+    party:   { bpm: 124, root: 45, scale: [0, 2, 4, 5, 7, 9, 10], prog: [0, 3, 4, 3], lead: 'pluck',   drums: 'drive', bright: true },   // dancing, celebration
+    triumph: { bpm: 100, root: 43, scale: [0, 2, 4, 5, 7, 9, 11], prog: [0, 4, 5, 3], lead: 'brass',   drums: 'toms', bright: true },    // rescue, survived
+    sad:     { bpm: 68,  root: 45, scale: [0, 2, 3, 5, 7, 8, 10], prog: [0, 5, 3, 4], lead: 'keys',    drums: 'none', sevenths: true }   // didn't make it
   };
   function build(ctx, vbuf) {
     let s = 987654321; const ar = () => (s = (s * 16807) % 2147483647) / 2147483647;
-    const sr = ctx.sampleRate, A = AUDIO, Md = MOODS[A.mood] ?? MOODS.horror, beat = 60 / (A.bpm ?? Md.bpm), bar = beat * 4;
+    const sr = ctx.sampleRate, A = AUDIO;
+    // score: the music follows the scene. AUDIO.score = [[t, mood], …] (else AUDIO.mood for the whole video); an ending adds sad / triumph automatically
+    const SCORE = (A.score?.length ? A.score : [[0, A.mood ?? 'horror']]).map(x => [...x]).sort((a, b) => a[0] - b[0]);
+    if (END?.ending && !SCORE.some(x => x[0] >= END.t - 0.05)) SCORE.push([END.t, END.ending.type === 'dead' ? 'sad' : 'triumph']);
+    const moodAt = t => { let m = SCORE[0][1]; for (const [ts, mm] of SCORE) if (ts <= t + 1e-6) m = mm; return MOODS[m] ?? MOODS.horror; };
+    const Md = moodAt(0);
     const noise = ctx.createBuffer(1, sr * 2, sr); { const d = noise.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = ar() * 2 - 1; }
     const ir = ctx.createBuffer(2, Math.floor(sr * 2.6), sr); for (let c = 0; c < 2; c++) { const d = ir.getChannelData(c); for (let i = 0; i < d.length; i++) d[i] = (ar() * 2 - 1) * (1 - i / d.length) ** 3.4; }
     const comp = ctx.createDynamicsCompressor(); comp.threshold.value = -16; comp.knee.value = 10; comp.ratio.value = 3.5; comp.attack.value = 0.005; comp.release.value = 0.2;
@@ -1327,18 +1349,24 @@ const SND = (() => {
     const brass = (t, fs_, d, v = 1) => fs_.forEach(f => tone('sawtooth', f, t, 0.05, d * 0.6, 0.3, 0.05 * v, music, { lp: 700, lpTo: 2200, q: 1.2 }));
     // score
     const levelAt = t => { let l = 0; for (const [ts, lv] of A.sections ?? [[0, 2]]) if (ts <= t) l = lv; return l; };
-    const deg = (d, oct = 0) => Md.root + 12 * oct + Md.scale[((d % 7) + 7) % 7] + 12 * Math.floor(d / 7);
-    const chord = (d, oct) => [deg(d, oct), deg(d + 2, oct), deg(d + 4, oct), ...(Md.sevenths ? [deg(d + 6, oct)] : [])].map(mtof);
+    const degM = (M, d, oct = 0) => M.root + 12 * oct + M.scale[((d % 7) + 7) % 7] + 12 * Math.floor(d / 7);
+    const chordM = (M, d, oct) => [degM(M, d, oct), degM(M, d + 2, oct), degM(M, d + 4, oct), ...(M.sevenths ? [degM(M, d + 6, oct)] : [])].map(mtof);
     const end = END ? END.t : DUR;
-    if (Md.drone) { tone('sawtooth', mtof(Md.root - 12), 0, 1.5, Math.max(0, DUR - 3), 1.5, 0.07, music, { lp: 220, q: 3 }); tone('sine', mtof(Md.root - 12) * 1.5, 0, 2, Math.max(0, DUR - 4), 2, 0.04, music); }
-    for (let b0 = 0, n = 0; b0 < DUR; b0 += bar, n++) {
+    SCORE.forEach(([ts, mm], i) => {   // drones per mood segment
+      const M = MOODS[mm] ?? MOODS.horror, te = i + 1 < SCORE.length ? SCORE[i + 1][0] : DUR, d0 = te - ts; if (!M.drone || d0 < 1.2) return;
+      tone('sawtooth', mtof(M.root - 12), ts, 0.8, Math.max(0, d0 - 1.6), 0.8, 0.07, music, { lp: 220, q: 3 }); tone('sine', mtof(M.root - 12) * 1.5, ts, 1, Math.max(0, d0 - 2), 1, 0.04, music);
+    });
+    for (let b0 = 0, n = 0; b0 < DUR - 0.05; n++) {
+      const Md = moodAt(b0 + 0.01), beat = 60 / (A.bpm ?? Md.bpm), barF = beat * 4;
+      const nxt = SCORE.map(x => x[0]).find(ts => ts > b0 + 0.05 && ts < b0 + barF), bar = nxt ? nxt - b0 : barF;   // a mood change starts a new bar
+      const deg = (d, oct = 0) => degM(Md, d, oct), chord = (d, oct) => chordM(Md, d, oct);
       const lv = levelAt(b0 + 0.01), d = Md.prog[n % Md.prog.length], ch = chord(d, 1), cut = 500 + lv * 550;
       if (lv >= 0 && Md.lead !== 'marimba') pad(b0, ch, bar, Md.bright ? 0.6 : 1, cut);
       for (let q = 0; q < 4; q++) {
-        const t = b0 + q * beat; if (t >= DUR - 0.05) break;
+        const t = b0 + q * beat; if (t >= DUR - 0.05 || t >= b0 + bar - 0.01) break;
         const lq = levelAt(t), root = mtof(deg(d, -1));
         if (lq >= 1) { if (Md.drums === 'drive') { bass(t, root, beat / 2); bass(t + beat / 2, root, beat / 2, 0.8); } else if (Md.lead === 'marimba') bass(t, q % 2 ? mtof(deg(d + 4, -1)) : root, beat * 0.5, 0.9); else if (q % 2 === 0) bass(t, root, beat * 1.6); }
-        if (lq >= 2) {
+        if (lq >= 2 && Md.drums !== 'none') {
           if (Md.drums === 'sparse') { if (q === 0) kick(t); if (q === 2) kick(t, 0.6); if (q === 3) hat(t + beat / 2, 0.8, true); }
           else { if (q % 2 === 0 || Md.drums === 'drive') kick(t, q % 2 ? 0.7 : 1); if (q % 2 === 1) snare(t, Md.drums === 'lofi' ? 0.6 : 1); hat(t, 0.8); hat(t + beat / 2, 0.55); }
           if (Md.drums === 'toms' && q === 3 && n % 2 === 1) { tom(t, 140); tom(t + beat / 3, 110); tom(t + 2 * beat / 3, 85); }
@@ -1351,6 +1379,7 @@ const SND = (() => {
         if (L === 'keys' && lq >= 1 && q % 2 === 0) keys(t, ch[q % ch.length] * 2);
         if (L === 'brass' && lq >= 2 && q === 0) brass(t, ch, beat * 1.5, 1);
       }
+      b0 += bar;
     }
     // SFX
     const ducks = [];
@@ -1374,7 +1403,7 @@ const SND = (() => {
       ticks: (t, v, d = 1) => { for (let x = 0; x < d * 14; x++) tone('square', 1900, t + x / 14, 0.001, 0, 0.025, 0.08 * v, fx); },
       tick: (t, v) => tone('square', 1900, t, 0.001, 0, 0.03, 0.1 * v, fx),
       ding: (t, v) => { bellFx(t, 1568, v); bellFx(t + 0.08, 2093, v * 0.7); },
-      stinger: (t, v) => { const r = Md.root + 24; for (const iv of [0, 7, 12, 15]) bellFx(t, mtof(r + iv), v * 0.8); tone('sine', 70, t, 0.003, 0.05, 1.2, 0.7 * v, fx, { to: 35, glide: 0.6 }); ducks.push(t); },
+      stinger: (t, v) => { const r = moodAt(t).root + 24; for (const iv of [0, 7, 12, 15]) bellFx(t, mtof(r + iv), v * 0.8); tone('sine', 70, t, 0.003, 0.05, 1.2, 0.7 * v, fx, { to: 35, glide: 0.6 }); ducks.push(t); },
       pop: (t, v) => tone('sine', 320, t, 0.002, 0, 0.09, 0.3 * v, fx, { to: 900, glide: 0.06 }),
       alarm: (t, v, d = 2) => { const os = tone('square', 880, t, 0.01, d - 0.02, 0.01, 0.06 * v, fx, { lp: 2400 }); for (let x = 0; x < d * 4; x++) os.frequency.setValueAtTime(x % 2 ? 660 : 880, t + x / 4); },
       glitch: (t, v, d = 0.5) => { for (let x = 0; x < 10; x++) { const tt = t + ar() * d; ar() < 0.5 ? tone('square', 200 + ar() * 2000, tt, 0.001, 0.02, 0.02, 0.08 * v, fx) : nz(tt, 0.001, 0.02, 0.02, 0.25 * v, fx, 'highpass', 2000); } },
@@ -1387,6 +1416,27 @@ const SND = (() => {
       coin: (t, v) => { tone('square', 988, t, 0.001, 0.05, 0.02, 0.08 * v, fx); tone('square', 1319, t + 0.07, 0.001, 0.2, 0.15, 0.08 * v, fx); },
       drop: (t, v) => { tone('sine', 230, t, 0.01, 0.1, 0.9, 0.7 * v, fx, { to: 36, glide: 0.8 }); nz(t, 0.25, 0, 0.7, 0.22 * v, fx, 'lowpass', 2400, 180); ducks.push(t); }   // slow-motion hit
     };
+    // ambience beds: AUDIO.amb = [[t0, t1, kind, vol], …] — background sound of the place, fades in/out 0.35 s (cuts between places)
+    const amb = ctx.createGain(); amb.gain.value = A.ambVol ?? 0.7; const aduck = ctx.createGain(); amb.connect(aduck); aduck.connect(master);
+    const bed = (t0, t1, peak, type, f0, q = 0.7, f1) => nz(t0, 0.35, Math.max(0, t1 - t0 - 0.7), 0.35, peak, amb, type, f0, f1, q);
+    const every = (t0, t1, gap, jit, fn) => { for (let t = t0 + ar() * gap; t < t1 - 0.2; t += gap + ar() * jit) fn(t); };
+    const AMB = {
+      night: (a, b, v) => { bed(a, b, 0.05 * v, 'lowpass', 450); every(a, b, 0.22, 0.5, t => { const f = 4100 + ar() * 700; for (let k = 0; k < 3; k++) tone('sine', f, t + k * 0.05, 0.004, 0.012, 0.02, 0.022 * v, amb); }); },   // crickets
+      farm: (a, b, v) => { bed(a, b, 0.04 * v, 'lowpass', 600); every(a, b, 0.9, 1.6, t => { const f = 2600 + ar() * 1800, n = 2 + Math.floor(ar() * 3); for (let k = 0; k < n; k++) tone('sine', f, t + k * 0.11, 0.005, 0.03, 0.05, 0.03 * v, amb, { to: f * (1.15 + ar() * 0.3), glide: 0.07 }); });
+        every(a, b, 7, 6, t => tone('sawtooth', 150, t, 0.25, 0.7, 0.4, 0.035 * v, amb, { to: 112, glide: 1.3, lp: 600 })); },   // birds + distant cow
+      wind: (a, b, v) => { bed(a, b, 0.12 * v, 'lowpass', 380); every(a, b, 2.5, 3, t => nz(t, 0.8, 0.4, 1.0, 0.07 * v, amb, 'bandpass', 500, 1300, 1.2)); },
+      blizzard: (a, b, v) => { bed(a, b, 0.16 * v, 'lowpass', 700); bed(a, b, 0.05 * v, 'highpass', 4000); every(a, b, 1.6, 2, t => nz(t, 0.6, 0.3, 0.9, 0.1 * v, amb, 'bandpass', 700, 1800, 1.4)); },
+      rain: (a, b, v) => { bed(a, b, 0.14 * v, 'highpass', 1400); bed(a, b, 0.06 * v, 'lowpass', 300); every(a, b, 0.05, 0.08, t => nz(t, 0.001, 0, 0.01, 0.05 * v, amb, 'bandpass', 2500 + ar() * 3000, 0, 3)); },
+      storm: (a, b, v) => { AMB.rain(a, b, v); AMB.wind(a, b, v * 0.8); every(a, b, 5, 5, t => nz(t, 0.2, 0.5, 2.2, 0.18 * v, amb, 'lowpass', 220, 80)); },
+      fire: (a, b, v) => { bed(a, b, 0.12 * v, 'lowpass', 520); every(a, b, 0.06, 0.12, t => nz(t, 0.001, 0, 0.015, (0.05 + ar() * 0.1) * v, amb, 'bandpass', 1400 + ar() * 2200, 0, 4)); },
+      indoor: (a, b, v) => { tone('sine', 58, a, 0.35, Math.max(0, b - a - 0.7), 0.35, 0.03 * v, amb); bed(a, b, 0.025 * v, 'lowpass', 220); every(a, b, 2.2, 2.5, t => tone('sine', 1300 + ar() * 400, t, 0.002, 0, 0.12, 0.03 * v, amb, { to: 700, glide: 0.08 })); },   // room tone + drips
+      crowd: (a, b, v) => { bed(a, b, 0.08 * v, 'bandpass', 380, 1.2); every(a, b, 0.7, 1.0, t => SFX.groan(t, 0.18 * v, 0.9 + ar() * 0.8, 0.7 + ar() * 0.6)); },   // zombie murmur
+      city: (a, b, v) => { bed(a, b, 0.1 * v, 'lowpass', 160); bed(a, b, 0.03 * v, 'bandpass', 900, 0.8); every(a, b, 4, 6, t => tone('square', ar() < 0.5 ? 440 : 554, t, 0.01, 0.25, 0.05, 0.02 * v, amb, { lp: 1600 })); },
+      ocean: (a, b, v) => { bed(a, b, 0.05 * v, 'lowpass', 400); every(a, b, 4.5, 2, t => nz(t, 1.6, 0.4, 2.2, 0.16 * v, amb, 'lowpass', 900, 300)); },
+      space: (a, b, v) => { tone('sine', 55, a, 0.6, Math.max(0, b - a - 1.2), 0.6, 0.04 * v, amb); tone('sine', 82.5, a, 0.8, Math.max(0, b - a - 1.6), 0.8, 0.02 * v, amb); bed(a, b, 0.02 * v, 'bandpass', 1200, 4); },
+      engine: (a, b, v) => SFX.engine(a, 0.6 * v, b - a)
+    };
+    for (const [t0, t1, k, v] of A.amb ?? []) (AMB[k] ?? (() => console.warn('amb: unknown kind ' + k)))(Math.max(0, t0), Math.min(DUR, t1), v ?? 1);
     function bellFx(t, f, v) { tone('sine', f, t, 0.002, 0, 1.8, 0.12 * v, fx); tone('sine', f * 2.76, t, 0.002, 0, 0.7, 0.05 * v, fx); }
     if (CFG.series) for (const t0 of [0.05, (END ? END.t : DUR - 3) + 1.6]) [0, 7, 12].forEach((iv, k) => bellFx(t0 + k * 0.11, mtof(Md.root + 36 + iv), 0.7));   // series jingle
     const RV = END?.review, revHits = RV ? [{ t: RV.t - 0.15, k: 'whoosh' }, ...Array.from({ length: RV.stars ?? 1 }, (_, i) => ({ t: RV.t + 0.47 + i * 0.14, k: 'pop', v: 1.2 })), { t: RV.t + 0.55 + (RV.stars ?? 1) * 0.14, k: 'ding', v: 0.7 }] : [];
@@ -1394,7 +1444,7 @@ const SND = (() => {
     ducks.sort((a, b) => a - b).forEach(t => { music.gain.setTargetAtTime(mBase * 0.4, t, 0.015); music.gain.setTargetAtTime(mBase, t + 0.25, 0.4); });
     if (vbuf) {
       const vs = ctx.createBufferSource(), vg = ctx.createGain(); vs.buffer = vbuf; vg.gain.value = (VOICE.gain ?? 1) * 1.15; vs.connect(vg); vg.connect(master); vs.start(0);
-      for (const [a, b] of VOICE.segs) { vduck.gain.setTargetAtTime(A.duck ?? 0.38, Math.max(0, a - 0.12), 0.05); vduck.gain.setTargetAtTime(1, b + 0.15, 0.3); }
+      for (const [a, b] of VOICE.segs) { vduck.gain.setTargetAtTime(A.duck ?? 0.38, Math.max(0, a - 0.12), 0.05); vduck.gain.setTargetAtTime(1, b + 0.15, 0.3); aduck.gain.setTargetAtTime(0.6, Math.max(0, a - 0.12), 0.08); aduck.gain.setTargetAtTime(1, b + 0.15, 0.4); }
     }
   }
   return { build };

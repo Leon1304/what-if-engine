@@ -19,6 +19,14 @@ def put(t, tag, body):
 
 t = put(t, 'STORY', story)
 t = put(t, 'SCENE', '{\n' + scene + '\n}')   # own block scope: scene names never clash with the engine
+# series cast: series/<series>/cast.json → the same look for recurring characters in every episode
+m = re.search(r"series:\s*\{[^}]*?name:\s*'([^']+)'", story)
+if m:
+    S = re.sub(r'[^a-z0-9]+', '-', m.group(1).lower()).strip('-'); here = os.path.dirname(os.path.abspath(__file__))
+    for d in (os.path.join(here, '.engine', 'series', S), os.path.join(here, 'series', S)):
+        f = os.path.join(d, 'cast.json')
+        if os.path.exists(f):
+            t = t.replace('/* @CAST */{}', '/* @CAST */' + json.dumps(json.load(open(f, encoding='utf-8')), separators=(',', ':')), 1); print('cast:', f); break
 # voice-over: voice.py (cached) → embed mp3 + word timings; CFG.voice: false = no voice
 if os.path.exists(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'tts', 'voices-v1.0.bin')) and '--no-voice' not in args:
     v = subprocess.run([sys.executable, os.path.join(os.path.dirname(os.path.abspath(__file__)), 'voice.py'), slug], capture_output=True, text=True)
