@@ -1,6 +1,7 @@
 // render.mjs — headless renderer for /what-if pages (frame-exact, deterministic)
 //   node render.mjs page.html --shots 0.5,3,8,12 [--out shots] [--w 540]   → PNGs + <out>/sheet.jpg (contact sheet)
-//   node render.mjs page.html --video out.mp4 [--w 1440 (2K, default)|1080|2160] [--fps 30] [--workers 2] [--draft] [--redo 10.2-14.2] [--clean]
+//   node render.mjs page.html --video out.mp4 [--w 1440 (2K, default)|1080|2160] [--fps 30] [--workers 2] [--draft] [--redo 10.2-14.2] [--clean] [--no-ig]
+//     → out.mp4 (master, YouTube: CRF 18) + out-ig.mp4 (Instagram: 1080x1920, ~12 Mbps) when --w > 1080
 //   node render.mjs page.html --cover cover.jpg [--t 1.2]
 //   node render.mjs page.html --audio out.wav
 // Needs in this folder: npm i three@0.170.0 playwright ; ffmpeg on PATH.
@@ -48,6 +49,7 @@ async function openPage() {
   return { browser, page, errors };
 }
 const report = errors => { if (errors.length) console.log('PAGE ERRORS:\n' + [...new Set(errors)].slice(0, 12).join('\n')); };
+const AF = 'loudnorm=I=-14:TP=-1.5:LRA=11,aresample=48000', igPath = v => v.replace(/\.mp4$/, '') + '-ig.mp4';
 const ff = args => { const r = spawnSync('ffmpeg', ['-y', '-loglevel', 'error', ...args], { stdio: 'inherit' }); if (r.status !== 0) { console.log('ffmpeg failed'); process.exit(1); } };
 
 if (opt('shots')) {
@@ -90,10 +92,13 @@ async function renderAudio(wav) {
 if (opt('audio')) await renderAudio(opt('audio'));
 
 if (opt('remux')) {   // --remux out.mp4 : render audio again and swap it into the finished video (video stream copied)
-  const video = opt('remux'), wav = video + '.wav', tmp = video.replace(/\.mp4$/, '') + '.part.mp4';
+  const video = opt('remux'), wav = video + '.wav';
   await renderAudio(wav);
-  ff(['-i', video, '-i', wav, '-map', '0:v', '-map', '1:a', '-c:v', 'copy', '-af', 'loudnorm=I=-14:TP=-1.5:LRA=11,aresample=48000', '-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart', '-shortest', tmp]);
-  renameSync(tmp, video); console.log('new audio in', video);
+  for (const v of [video, igPath(video)].filter(existsSync)) {
+    const tmp = v.replace(/\.mp4$/, '') + '.part.mp4';
+    ff(['-i', v, '-i', wav, '-map', '0:v', '-map', '1:a', '-c:v', 'copy', '-af', AF, '-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart', '-shortest', tmp]);
+    renameSync(tmp, v); console.log('new audio in', v);
+  }
 }
 
 if (opt('video')) {
@@ -122,11 +127,22 @@ if (opt('video')) {
     report(errors); await browser.close();
   }));
   const tmpMp4 = video.replace(/\.mp4$/, '') + '.part.mp4';
+  // master (YouTube): CRF 18, capped near YouTube's useful max (1440p ≈ 30 Mbps, 4K ≈ 60 Mbps)
+  const cap = W >= 2160 ? 60 : W > 1080 ? 30 : 15;
   ff(['-framerate', String(fps), '-i', path.join(dir, 'f%05d.jpg'), '-i', wav, '-map', '0:v', '-map', '1:a',
-    '-c:v', 'libx264', '-preset', 'veryfast', '-crf', W > 1080 ? '23' : '21', '-pix_fmt', 'yuv420p', '-r', String(fps),
-    '-af', 'loudnorm=I=-14:TP=-1.5:LRA=11,aresample=48000', '-c:a', 'aac', '-b:a', '192k',
-    '-movflags', '+faststart', '-shortest', tmpMp4]);
+    '-c:v', 'libx264', '-preset', draft ? 'veryfast' : 'medium', '-profile:v', 'high', '-crf', draft ? '23' : '18',
+    '-maxrate', cap + 'M', '-bufsize', 2 * cap + 'M', '-pix_fmt', 'yuv420p', '-r', String(fps),
+    '-af', AF, '-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart', '-shortest', tmpMp4]);
   renameSync(tmpMp4, video);
+  // Instagram copy: 1080x1920 from the same frames (one encode only), ~12 Mbps VBR
+  if (W > 1080 && !draft && !flag('no-ig')) {
+    const ig = igPath(video), tmpIg = ig.replace(/\.mp4$/, '') + '.part.mp4';
+    ff(['-framerate', String(fps), '-i', path.join(dir, 'f%05d.jpg'), '-i', wav, '-map', '0:v', '-map', '1:a',
+      '-vf', 'scale=1080:1920:flags=lanczos', '-c:v', 'libx264', '-preset', 'medium', '-profile:v', 'high',
+      '-b:v', '12M', '-maxrate', '15M', '-bufsize', '24M', '-pix_fmt', 'yuv420p', '-r', String(fps),
+      '-af', AF, '-c:a', 'aac', '-b:a', '192k', '-ar', '48000', '-movflags', '+faststart', '-shortest', tmpIg]);
+    renameSync(tmpIg, ig); console.log('wrote', ig, `${(statSync(ig).size / 1e6).toFixed(1)} MB (Instagram 1080x1920)`);
+  }
   if (flag('clean')) { rmSync(dir, { recursive: true, force: true }); rmSync(wav, { force: true }); }
   console.log('wrote', video, `${(statSync(video).size / 1e6).toFixed(1)} MB`, `in ${Math.round((Date.now() - started) / 60000)} min`);
 }
