@@ -1,6 +1,6 @@
 // render.mjs — headless renderer for /what-if pages (frame-exact, deterministic)
 //   node render.mjs page.html --shots 0.5,3,8,12 [--out shots] [--w 540]   → PNGs + <out>/sheet.jpg (contact sheet)
-//   node render.mjs page.html --video out.mp4 [--w 1080|2160] [--fps 30] [--workers 2] [--draft] [--redo 10.2-14.2] [--clean]
+//   node render.mjs page.html --video out.mp4 [--w 1440 (2K, default)|1080|2160] [--fps 30] [--workers 2] [--draft] [--redo 10.2-14.2] [--clean]
 //   node render.mjs page.html --cover cover.jpg [--t 1.2]
 //   node render.mjs page.html --audio out.wav
 // Needs in this folder: npm i three@0.170.0 playwright ; ffmpeg on PATH.
@@ -15,7 +15,7 @@ const argv = process.argv.slice(2), file = argv[0];
 const opt = (k, d) => { const i = argv.indexOf('--' + k); return i > -1 ? argv[i + 1] : d; };
 const flag = k => argv.includes('--' + k);
 const draft = flag('draft');
-const W = +opt('w', draft ? 540 : 1080), fps = +opt('fps', draft ? 15 : 30), workers = Math.max(1, +opt('workers', 2));
+const W = +opt('w', draft ? 540 : 1440), fps = +opt('fps', draft ? 15 : 30), workers = Math.max(1, +opt('workers', 2));
 const HERE = path.dirname(new URL(import.meta.url).pathname);
 const THREE_DIR = path.join(HERE, 'node_modules/three');
 const src = readFileSync(file, 'utf8');
