@@ -440,6 +440,8 @@ function VT(s) { if (!SLOW.length || s <= 0) return s; let a = 0, b = _stT.lengt
 // --- shot helper for CAM: two keys (start with cut + transition, end with a slow move). kind: wide | mid | close | macro
 //   ...shot('close', 6.05, 2, [x, y, z] | 'name from track()', { az, dist, h, fov, fy, dof, move: push|pull|orbit|crane|static, tr, td, dir, dy })
 function shot(kind, t, dur, at, o = {}) {
+  if (kind === 'pov') { const base = { pov: at, look: o.look, pitch: o.pitch, free: o.free, fov: o.fov ?? 66, fy: 0.5, dof: o.dof ?? 0, hand: o.hand ?? 0.5 };   // first person: through the eyes of a track()ed figure
+    return [{ t, ...base, cut: true, tr: o.tr, td: o.td, dir: o.dir }, { t: t + dur, ...base, e: 'lin' }]; }
   const [D, H, F, FY, DF] = { wide: [48, 26, 44, 0.5, 0], mid: [13, 3.5, 46, 0.5, 0], close: [4.2, 0.3, 34, 0.36, 0.5], macro: [1.7, 0.1, 28, 0.3, 0.9] }[kind] ?? [13, 3.5, 46, 0.5, 0];
   const d = o.dist ?? D, h = o.h ?? H, az = (o.az ?? 30) * Math.PI / 180, mv = o.move ?? (kind === 'wide' ? 'orbit' : 'push'), fol = typeof at === 'string', dy = o.dy ?? 1.55;
   const d2 = mv === 'push' ? d * 0.8 : mv === 'pull' ? d * 1.3 : d, az2 = az + (mv === 'orbit' ? o.turn ?? 25 : mv === 'static' ? 0 : o.drift ?? 6) * Math.PI / 180, h2 = mv === 'crane' ? h + (o.rise ?? d * 0.4) : h;
@@ -478,7 +480,7 @@ const tick = f => (tickers.push(f), f);   // f(t) runs every frame; must be a pu
 const dyn = o => { o.userData.dyn = true; return o; };    // this object moves or changes later → never merged by bake()
 const stat = o => { o.userData.stat = true; return o; };  // static prop → merged into a few draw calls by bake() (much faster renders)
 const TRACK = {};
-function track(name, obj, dy = 1.55) { TRACK[name] = { obj: dyn(obj.root ?? obj), dy }; return obj; }   // camera can follow it: CAM key { follow: name, off }
+function track(name, obj, dy = 1.55) { TRACK[name] = { obj: dyn(obj.root ?? obj), dy, rig: obj }; return obj; }   // camera can follow it: CAM key { follow: name, off }
 
 // --- sky dome with gradient, stars and sun/moon disc ---
 const skyU = { top: { value: new THREE.Color() }, bot: { value: new THREE.Color() }, stars: { value: 0 }, orbDir: { value: new THREE.Vector3(0, 1, 0) }, orbCol: { value: new THREE.Color() }, orbSize: { value: 0 }, orbGlow: { value: 0 } };
@@ -3709,6 +3711,12 @@ function cbPose(f, t, S) {
     W.g.quaternion.copy(W.restQ).slerp(qF.invert().multiply(qD), want.w);
   }
 }
+function cbAimSight(f, t, P, L) {   // first person + aiming: camera behind the sight line of the gun in hand
+  let best = null, w = 0; for (const a of f._cb.A) if (a.type === 'aim') { const k = a.wt(t); if (k > w) { w = k; best = a; } }
+  if (!best || w <= 0 || best.W.cls === 'bow') return; const W = best.W, m = W.g.children[0] ?? W.g; W.g.updateWorldMatrix(true, true);
+  const long = W.cls !== 'one', sight = v3(0, long ? 0.2 : 0.09, long ? (W.grip?.z ?? 0.3) - 0.1 : -0.04).applyMatrix4(m.matrixWorld), dir = v3(0, 0, 1).transformDirection(m.matrixWorld);
+  const E = sight.clone().addScaledVector(dir, long ? -0.3 : -0.42).add(v3(0, 0.03, 0)), k = sm01(w) * 0.92; P.lerp(E, k); L.lerp(E.clone().addScaledVector(dir, 12), k);
+}
 // muzzle / tip of a weapon in world space (live, this frame)
 function wMuzzle(W) { W.g.updateWorldMatrix(true, true); const p = (W.muzzle ?? v3(0, 0, W.tipZ ?? 0.2)).clone().applyMatrix4((W.g.children[0] ?? W.g).matrixWorld), q = (W.g.children[0] ?? W.g).getWorldQuaternion(new THREE.Quaternion()); return [p, _AZ.clone().applyQuaternion(q)]; }
 // analytic approximations at any time (build time): chest-frame point → world, with the figure's root pose at t
@@ -4770,7 +4778,20 @@ const TRANS = [];
   for (const x of TRANS) if (x.tr !== 'dip' && !H.some(h => h.k === 'whoosh' && Math.abs(h.t - x.t) < 0.45)) H.push({ t: x.t - 0.32, k: 'whoosh', v: 0.8 });
   for (const s of SLOW) if (s.sfx !== false) H.push({ t: s.t, k: 'drop' });
 }
-function keyPose(k, t, P, L) {   // key → camera position P and look-at L; follow: name from track(), off: offset from it
+let POV_ON = null; const POV_RIGS = new Set(), _pvv = new THREE.Vector3(), _pvq = new THREE.Quaternion();
+function povPose(k, t, P, L) {   // first person: eye point in the head; look along the body (head bob from the gait), at a target (look) or with the head (free)
+  const T = TRACK[k.pov]; if (!T) { P.set(0, 1.7, 4); L.set(0, 1.5, 0); return; }
+  const r = T.rig, head = r?.head ?? T.obj; head.updateWorldMatrix(true, false); if (r?.head) POV_RIGS.add(r);
+  P.copy(_pvv.set(0, k.eyeY ?? (r?.quad ? 0.05 : 0.2), k.eyeZ ?? (r?.quad ? 0.1 : 0.06))).applyMatrix4(head.matrixWorld);
+  const lk = k.look;
+  if (lk != null) { if (typeof lk === 'string' && TRACK[lk]) { TRACK[lk].obj.getWorldPosition(L); L.y += TRACK[lk].dy ?? 1.55; } else if (typeof lk === 'function') L.fromArray(lk(t)); else L.fromArray(lk); }
+  else if (k.free) L.copy(P).add(_pvv.set(0, 0, 10).applyQuaternion(head.getWorldQuaternion(_pvq)));
+  else { const f = _pvv.set(0, 0, 1).applyQuaternion(T.obj.getWorldQuaternion(_pvq)); f.y = 0; f.normalize(); L.copy(P).addScaledVector(f, 10); L.y += Math.tan(k.pitch ?? -0.1) * 10; }
+  if (r?._cb && typeof cbAimSight === 'function') cbAimSight(r, t, P, L);   // aiming a gun: the eye glides down behind the sights (aim down sights)
+  POV_ON = r ?? null;
+}
+function keyPose(k, t, P, L) {   // key → camera position P and look-at L; follow: name from track(), off: offset from it; pov: first person
+  if (k.pov) { povPose(k, t, P, L); return; }
   if (k.follow) {
     const T = TRACK[k.follow]; if (T) { T.obj.updateWorldMatrix(true, false); T.obj.getWorldPosition(_tp); } else _tp.set(0, 0, 0);
     const o = k.off ?? [2.5, 2.9, 3.5]; P.set(_tp.x + o[0], _tp.y + o[1], _tp.z + o[2]); L.set(_tp.x, _tp.y + (k.dy ?? T?.dy ?? 1.55), _tp.z); return;
@@ -4781,7 +4802,7 @@ function updateCamera(t) {
   let i = 0; for (let j = 0; j < CAM.length; j++) if (CAM[j].t <= t) i = j;
   const a = CAM[i], b = CAM[i + 1];
   let fov = a.fov ?? 45, fy = a.fy ?? 0.5, dof = a.dof ?? 0, kf = 0;
-  keyPose(a, t, _pa, _la);
+  POV_ON = null; keyPose(a, t, _pa, _la); const povOn = POV_ON;
   if (!b || b.cut) { _p.copy(_pa); _l.copy(_la); }
   else {
     const k = EASE[b.e ?? 'inOut'](clamp((t - a.t) / (b.t - a.t)));
@@ -4815,6 +4836,8 @@ function updateCamera(t) {
     else if (x.tr === 'blur') camFx.def = pk ** 1.2 * 0.03;
   }
   if (CFG.loop) { const u = clamp((t - (DUR - 0.32)) / 0.32); if (u > 0) { yaw += -0.6 * u ** 3; camFx.blur = Math.max(camFx.blur, u ** 1.4 * 0.13); camFx.dx = 1; } }   // loop: whip out of the last shot into the hook
+  for (const r of POV_RIGS) r.head.visible = r !== povOn;   // first person: hide the own head (no clipping), hands and weapon stay in view
+  const nr = a.pov ? 0.03 : 0.1; if (camera.near !== nr) { camera.near = nr; camera.updateProjectionMatrix(); }
   camera.position.copy(_p); camera.lookAt(_l);
   const fv = fov * fk; if (Math.abs(camera.fov - fv) > 1e-3) { camera.fov = fv; camera.updateProjectionMatrix(); }
   if (Math.abs(fy - 0.5) > 1e-3) camera.rotateX(-Math.atan((0.5 - fy) * 2 * Math.tan(THREE.MathUtils.degToRad(fv) / 2)));   // subject at fy (0 = top) instead of behind the centred caption
