@@ -1905,7 +1905,7 @@ function horde(o = {}) {
       for (let i = 0; i < n; i++) { const q = M[i]; if (t < q.b + (rise ? 0.9 : 0) || (q.down && !o2.any)) continue; const [x, z] = state(q, t), d = Math.hypot(x - px, z - pz); if (d < bd && d >= (o2.min ?? 0)) { bd = d; best = i; } } return best; },
     hit(i, t, o2 = {}) { const q = M[i]; if (!q || (q.down && q.down.t <= t)) return api; const s0 = state(q, t), fr = o2.from ? [o2.from.x ?? o2.from[0], o2.from.z ?? o2.from[o2.from.length === 2 ? 1 : 2]] : [s0[0] - Math.sin(s0[3]), s0[1] - Math.cos(s0[3])];
       const L = Math.hypot(s0[0] - fr[0], s0[1] - fr[1]) || 1, dx = (s0[0] - fr[0]) / L, dz = (s0[1] - fr[1]) / L, back = Math.sin(s0[3]) * dx + Math.cos(s0[3]) * dz < 0 ? 1 : -1;   // hit from the front → falls on its back
-      q.down = { t, dx, dz, push: o2.push ?? 0.35, dir: o2.dir ?? back, sink: o2.sink ?? !human }; return api; },
+      q.down = { t, dx, dz, push: o2.drop || o2.squash ? 0 : o2.push ?? 0.35, dir: o2.dir ?? back, sink: o2.sink ?? !human, drop: o2.drop, squash: o2.squash }; return api; },
     alive: (i, t) => !(M[i].down && t >= M[i].down.t),
     update(t) {
       if (fz != null) {
@@ -1917,13 +1917,14 @@ function horde(o = {}) {
         const q = M[i];
         if (t < q.b) { for (const im of [torso, head, eyes, mouths]) im.setMatrixAt(i, Z); for (const im of [uarm, farm, thigh, shin, foot]) { im.setMatrixAt(2 * i, Z); im.setMatrixAt(2 * i + 1, Z); } continue; }
         const dn = q.down && t >= q.down.t ? q.down : null;   // knocked down by h.hit(): stays where it was hit, topples, lies (zombies sink back into the ground)
-        if (dn && dn.sink && t - dn.t > 5.4) { for (const im of [torso, head, eyes, mouths]) im.setMatrixAt(i, Z); for (const im of [uarm, farm, thigh, shin, foot]) { im.setMatrixAt(2 * i, Z); im.setMatrixAt(2 * i + 1, Z); } continue; }
+        if (dn && ((dn.sink && t - dn.t > 5.4) || (dn.drop && t - dn.t > 0.9))) { for (const im of [torso, head, eyes, mouths]) im.setMatrixAt(i, Z); for (const im of [uarm, farm, thigh, shin, foot]) { im.setMatrixAt(2 * i, Z); im.setMatrixAt(2 * i + 1, Z); } continue; }
         let [x, z, moving, yaw0, walked] = state(q, dn ? dn.t : t); const u = q.ph / TAU + walked / q.cl; if (dn) moving = false;
         const yaw = moving ? yaw0 + Math.sin(Math.PI * u) * (human ? 0.04 : 0.1) : yaw0;
         const em = rise ? EASE.out(clamp((t - q.b) / 0.8)) : 1; let y = groundH(x, z) - (1 - em) * 1.9 + (o.lift ? o.lift(t, i) : 0), fa = 0;
         if (dn) { const a = t - dn.t, k = clamp(a / 0.5); fa = (Math.PI / 2 - 0.05) * EASE.in(k) - (a > 0.5 ? 0.1 * Math.exp(-(a - 0.5) * 7) * Math.abs(Math.sin((a - 0.5) * 16)) : 0);
           x += dn.dx * dn.push * EASE.out(k); z += dn.dz * dn.push * EASE.out(k); y += 0.16 * sm01(k) * q.sc - (dn.sink && a > 2.4 ? Math.min(2.6, (a - 2.4) * 0.9) : 0); }
-        base.compose(V.set(x, y, z), Q.setFromEuler(E.set(-fa * (dn?.dir ?? 1), yaw, 0, 'YXZ')), SC.setScalar(q.sc));
+        if (dn?.drop) { fa = 0; y = groundH(x, z) - Math.min(3.2, 4.9 * (t - dn.t) ** 2); } if (dn?.squash) fa = 0;
+        base.compose(V.set(x, y, z), Q.setFromEuler(E.set(-fa * (dn?.dir ?? 1), yaw, 0, 'YXZ')), dn?.squash ? SC.set(q.sc * 1.35, q.sc * Math.max(0.12, 1 - 14 * (t - dn.t)), q.sc * 1.35) : SC.setScalar(q.sc));
         const S = rigState(moving ? mode : 'idle', u, t, q.o), up = !dn && (o.armsUp ? o.armsUp(t, i) : false);
         if (dn) { const a = t - dn.t, k = clamp(a / 0.45), tw = human ? 0 : 0.12 * Math.sin(t * 9 + q.ph) * Math.exp(-a * 0.8);
           S.las = lerp(S.las, -2.5 + tw, k); S.ras = lerp(S.ras, -2.4 - tw, k); S.laz = -0.4 * k; S.raz = 0.4 * k; S.lae = S.rae = -0.2; S.lt = S.rt = lerp(S.lt, -0.12, k); S.lk = S.rk = lerp(S.lk, 0.3, k); S.lz = -0.1 * k; S.rz = 0.1 * k; S.crx = 0; S.nrx = -0.1 * k; S.nry *= 1 - k; }
@@ -3285,7 +3286,7 @@ function conspiracyBoard(p, x, z, o = {}) {
 // guns: shoot(rig, t, { at, n, rate, spread, acc, kill, tracer }) — at: rig | [x,y,z] | horde (each shot drops the nearest member) · reload(rig, t) · grenade(rig, t, { to, fuse, size })
 // fall(rig, t, { dir, from, getUp, dazed, sink }) — knocked down, stars circle the head · horde: h.hit(i, t, { from }) · h.near(p, t) · h.pos(i, t) · h.alive(i, t)
 // vehicles: tank(p, x, z, o) (+ drive) · aimTurret(T, t, at) · cannon(T, t, { at, size }) · jet(p, o) (+ fly) · missile({ from, at, t0 }) · bomb(V, t) · flares(V, t) · strafe(V, t0, t1, { at, horde }) · shotDown(J, t)
-const CB = { on: false, rigs: [], fl: [], tr: [], arrows: [], gren: [], falls: [], tanks: [], jets: [], mis: [], bombs: [], stars: [], rain: [], downs: [] };
+const CB = { on: false, rigs: [], fl: [], tr: [], arrows: [], gren: [], falls: [], tanks: [], jets: [], mis: [], bombs: [], stars: [], rain: [], downs: [], pre: [], post: [] };
 let _cbId = 0;
 const _k1 = new THREE.Vector3(), _k2 = new THREE.Vector3(), _k3 = new THREE.Vector3(), _k4 = new THREE.Vector3(), _k5 = new THREE.Vector3();
 const _kq1 = new THREE.Quaternion(), _kq2 = new THREE.Quaternion(), _kq3 = new THREE.Quaternion(), _km1 = new THREE.Matrix4(), _km2 = new THREE.Matrix4(), _km3 = new THREE.Matrix4(), _kmi = new THREE.Matrix4(), _ke = new THREE.Euler();
@@ -3715,7 +3716,7 @@ const chestToWorld = (f, t, c) => fromRig(rigF(f, t), v3(c.x, c.y + CH0, c.z));
 
 // --- hit effects & reactions ---
 function hitFx(T, P, th, o = {}) {   // P: world point · T: target (or null = ground/object)
-  const toward = o.from ? o.from.clone().sub(P).normalize() : v3(0, 1, 0), quiet = o.quiet;
+  const toward = o.from ? toV(o.from).sub(P).normalize() : v3(0, 1, 0), quiet = o.quiet;
   if (T?.zombie) { cbBurst('goo', P, th, { n: o.n ?? 14, dir: toward.clone().add(v3(0, 0.6, 0)), speed: 3.4 }); if (!quiet) sfx(th, 'splat', 0.6); }
   else if (T?.rig || T?.animal) { cbBurst('puff', P, th, { n: 5, size: 0.25, speed: 1.4, dir: toward }); cbBurst('spark', P, th, { n: 6, colors: ['#FFFFFF', '#FFE27A'], speed: 3, dir: toward }); if (!quiet) sfx(th, 'punch', 0.55); }
   else if (T?.metal) { cbBurst('spark', P, th, { n: 16, dir: toward, speed: 7 }); if (!quiet) sfx(th, hash(th * 7.3) < 0.5 ? 'ricochet' : 'tick', 0.7); }
@@ -3723,7 +3724,7 @@ function hitFx(T, P, th, o = {}) {   // P: world point · T: target (or null = g
     cbBurst('spark', P, th, { n: 4, dir: toward, speed: 4 }); if (!quiet && hash(th * 3.1) < 0.35) sfx(th, 'ricochet', 0.5); }
 }
 function hitReact(T, th, o = {}) {   // react / knock down / drop the horde member
-  if (!T) return;
+  if (!T) return; if (o.from) o = { ...o, from: toV(o.from) };
   if (T.h) { if (!T.done) T.h.hit(T.i, th, { from: o.from }); return; }
   if (T.rig) { if (o.kill) (o.ragdoll ? ragdoll(T.rig, th, { from: o.from ? [o.from.x, o.from.y, o.from.z] : undefined, power: o.power ?? 5 }) : fall(T.rig, th, { from: o.from, dazed: o.dazed })); else react(T.rig, th, 'hit', { amp: o.amp ?? 0.8 }); return; }
   if (T.animal) { jump(T.animal, th, { h: 0.35 }); return; }
@@ -4041,7 +4042,7 @@ function flares(V, t, o = {}) { const n = o.n ?? 8; for (let i = 0; i < n; i++) 
 // strafe(V, t0, t1, { at, rate, gun: [x,y,z] local, spread, horde, r }) — guns of a jet, heli or tank: tracers, impacts walk across the ground toward `at`
 function strafe(V, t0, t1, o = {}) {
   cbInit(); const T = cbTarget(o.at ?? [0, 0]), rate = o.rate ?? (V.kind === 'fighter' ? 26 : 16), n = Math.max(1, Math.round((t1 - t0) * rate)), isTank = V.kind === 'tank';
-  const loc = toV(o.gun ?? (V.kind === 'fighter' ? V.gun.toArray() : V.rotor ? [0, -1.3, 1.6] : [0, 0, 0]));
+  const loc = toV(o.gun ?? (V.gun ? V.gun.toArray() : V.rotor ? [0, -1.3, 1.6] : [0, 0, 0]));
   const at = tb => { if (isTank) { const [m, d] = V.muzzleAt(tb); return [m.addScaledVector(d, -2.2), d]; } return [carrierPoint(V, tb, loc), _AZ.clone().applyQuaternion(flyPose(V, tb).q)]; };
   const live = tt => { if (isTank) return at(tt); const nd = V.B ?? V.g ?? V; nd.updateWorldMatrix(true, false); return [loc.clone().applyMatrix4(nd.matrixWorld), _AZ.clone().transformDirection(nd.matrixWorld)]; };
   const fwd = carrierVel(V, (t0 + t1) / 2); fwd.y = 0; const fast = fwd.length() > 8; if (fwd.lengthSq() < 1e-6) fwd.copy(at(t0)[1]).setY(0); fwd.normalize();
@@ -4060,6 +4061,7 @@ function strafe(V, t0, t1, o = {}) {
 function cbLate(t) {
   for (const f of CB.rigs) if (f._faceOn && !f._rag && !(f._falls?.some(F => t >= F.t))) f.root.rotation.y = f._yawAt(t);
   for (const F of CB.falls) fallLate(F, t);
+  for (const fn of CB.pre) fn(t);
   const upd = new Set([...CB.rigs, ...CB.falls.map(F => F.f), ...CB.arrows.filter(A => A.stickRig).map(A => A.stickRig)]); for (const f of upd) f.root.updateWorldMatrix(true, true);
   for (const f of CB.rigs) for (const W of f._cb.W) {
     if (W.cls === 'bow') bowLate(W, t);
@@ -4080,6 +4082,7 @@ function cbLate(t) {
   for (const D of CB.downs) if (t >= D.t) { const q = D.path(t), n = D.node; n.position.copy(q.p); n.rotation.order = 'YXZ'; n.rotation.set(q.rx, q.ry, q.rz); n.visible = t < D.t + D.tg + 0.05; }
   for (const M of CB.mis) misLate(M, t);
   for (const B of CB.bombs) { const on = t >= B.t && t < B.t + B.tg; B.m.visible = on; if (on) { const u = t - B.t, p = B.pos(u); B.m.position.copy(p); qLook(B.pos(u + 0.03).sub(p), _AY, B.m.quaternion); } }
+  for (const fn of CB.post) fn(t);
   // muzzle flashes + the two combat lights
   let c = 0; const lit = [];
   for (const e of CB.fl) { const a = t - e.t; if (a < 0 || a > Math.max(e.dur, e.ld)) continue; const sv = liveSrc(e.src, t); if (!sv) continue; const [p, d] = sv;
@@ -4344,6 +4347,298 @@ function interior(p, x, z, o = {}) {
   R.seat = (name, i = 0) => { const s = (R.seats[name] ?? [])[i]; if (!s) return R.at(name); g.updateWorldMatrix(true, false); return g.localToWorld(v3(...s)).toArray(); };
   R.toWorld = (lx, lz, ly = 0) => { g.updateWorldMatrix(true, false); return g.localToWorld(v3(lx, ly, lz)).toArray(); };
   return R;
+}
+
+/* ====================================================================== */
+/* TRAPS & MACHINES (v2.11) — trap(p, kind, x, z, { t, victim, ry, … }) · turret(p, x, z, { kind }) + turretAim / turretFire · drone(p, o) · press(p, x, z, o)  */
+/* trap kinds: bear · pit · spikes · log · pendulum · net · snare · mine · flame · saw · boulder · darts · cage · trapdoor · laser · electric · banana · rake */
+/* victim: rig | { h, i } horde member | horde (nearest member) — reactions stay comic: stuck, lifted, launched, squashed flat (pops back), never gory     */
+/* ====================================================================== */
+CB.pre ??= []; CB.post ??= [];
+const HOLDS = [], SQUASH = [];
+// hold a figure: position/rotation from t on (pure functions of t); pose via fx
+function holdRig(f, t0, pos, o = {}) { cbInit(); HOLDS.push({ f, t0, t1: o.t1 ?? 1e9, pos, rot: o.rot, hide: o.hide }); if (o.pose) (f.fx ??= []).push((t, S) => { if (t >= t0 && t < (o.t1 ?? 1e9)) o.pose(t, S); }); return f; }
+function squash(obj, t, o = {}) { cbInit(); const node = obj.root ?? obj.g ?? obj; dyn(node); SQUASH.push({ node, t, dur: o.dur ?? 1.4, s0: node.scale.clone(), flat: o.flat ?? 0.14 }); sfx(t, 'boing', 0.8); return obj; }
+CB.pre.push(t => {
+  for (const H of HOLDS) { if (t < H.t0 || t >= H.t1) continue; const r = H.f.root ?? H.f, p = H.pos(t); r.position.set(p[0], p[1], p[2]); if (H.rot) { const q = H.rot(t); r.rotation.set(q[0], q[1], q[2], q[3] ?? 'YXZ'); } if (H.hide) r.visible = !H.hide(t); }
+  for (const Q of SQUASH) { const a = t - Q.t; if (a < 0) { continue; } const flat = a < Q.dur ? Math.max(Q.flat, 1 - a / 0.06) : 1 + 0.35 * Math.exp(-(a - Q.dur) * 6) * Math.sin((a - Q.dur) * 20), w = a < Q.dur ? 1 + (1 - flat) * 0.45 : 1 / Math.sqrt(Math.max(0.3, flat));
+    Q.node.scale.set(Q.s0.x * w, Q.s0.y * flat, Q.s0.z * w); }
+});
+// victim helper: what a trap does to whoever triggers it
+function trapVictim(V, t, how, o = {}) {
+  if (!V) return null; const T = cbTarget(V);
+  if (T.horde) { const k = T.horde.near(o.at ?? [0, 0], t, { max: o.r ?? 3 }); if (k < 0) return null; T.horde.hit(k, t, { from: o.from, drop: how === 'drop', squash: how === 'squash', push: how === 'launch' ? 1.4 : 0.35 }); return { h: T.horde, i: k }; }
+  if (T.h) { T.h.hit(T.i, t, { from: o.from, drop: how === 'drop', squash: how === 'squash', push: how === 'launch' ? 1.4 : 0.35 }); return T; }
+  if (!T.rig) { if (T.obj) { if (how === 'squash') squash(T.obj, t); else if (how === 'launch') knockAway(T.obj, t, { power: 6 }); else wobble(T.obj, t); } return T; }
+  const f = T.rig, zb = f.kind === 'zombie';
+  if (how === 'kill') { hitFx(T, T.pos(t), t, { from: o.from }); fall(f, t, { from: o.from, dazed: !zb }); }
+  else if (how === 'launch') { hitFx(T, T.pos(t), t, { from: o.from }); ragdoll(f, t, { from: o.from ? [o.from.x ?? o.from[0], o.from.y ?? 0.2, o.from.z ?? o.from[2]] : undefined, power: o.power ?? 7 }); }
+  else if (how === 'squash') { squash(f, t, { dur: o.dur ?? 1.6 }); }
+  else if (how === 'hit') { react(f, t, 'hit', { amp: 1.2 }); }
+  return T;
+}
+const shoutFace = (f, t0, t1, ex = 'shout') => { const e0 = f.expr; f.expr = tt => tt >= t0 && tt < t1 ? ex : typeof e0 === 'function' ? e0(tt) : e0; };
+function trapBase(p, x, z, o) { cbInit(); const g = dyn(grp(p, x, groundH(x, z), z, o.ry ?? 0)); return g; }
+const steelM = () => mat('#7A8088', { metal: 0.6, rough: 0.35 }), darkM = () => mat('#2A2D33', { metal: 0.4, rough: 0.5 });
+
+function trap(p, kind, x, z, o = {}) {
+  const g = trapBase(p, x, z, o), t = o.t ?? o.at ?? 1e9, NC = { cast: false }, Tr = { kind, g, x, z, t }, V = o.victim, here = v3(x, groundH(x, z), z), from = o.from ?? [x, 0.3, z];
+  const vf = typeof V === 'object' && V?.legL ? V : null, tick2 = fn => tick(tt => fn(tt));
+  switch (kind) {
+    case 'bear': {   // steel jaws with teeth snap shut; the victim is stuck and hops on one leg
+      cyl(g, 0.24, 0.26, 0.04, '', 0, 0, 0, { mat: darkM(), seg: 14 }); for (const sx of [-1, 1]) cyl(g, 0.05, 0.05, 0.3, '', sx * 0.3, 0.05, 0, { mat: steelM(), rz: Math.PI / 2, seg: 8 });
+      const jaws = [-1, 1].map(sj => { const j = dyn(grp(g, 0, 0.05, sj * 0.012));
+        for (let i = 0; i < 14; i++) { const a = Math.PI * i / 13; box(j, 0.075, 0.035, 0.03, '', Math.cos(a) * 0.3, Math.sin(a) * 0.3 - 0.0175, 0, { mat: steelM(), rz: a + Math.PI / 2 }); }
+        for (let i = 1; i < 9; i++) { const a = Math.PI * i / 9, q = grp(j, Math.cos(a) * 0.28, Math.sin(a) * 0.28, 0); q.rotation.z = a + Math.PI / 2; cone(q, 0.022, 0.08, '', 0, 0, 0, { mat: steelM(), seg: 4, ...NC }); } return j; });
+      const chain = grp(g, 0.35, 0.02, 0); for (let i = 0; i < 6; i++) cyl(chain, 0.03, 0.03, 0.012, '#5A5E66', i * 0.07, 0, 0.02 * Math.sin(i), { seg: 6, rx: i % 2 ? Math.PI / 2 : 0, ...NC }); cyl(g, 0.02, 0.01, 0.3, '#5A5E66', 0.8, -0.2, 0, { seg: 5 });
+      tick2(tt => { const k = tt < t ? 0 : tt < t + 0.07 ? (tt - t) / 0.07 : 1 + 0.12 * Math.exp(-(tt - t - 0.07) * 14) * Math.sin((tt - t - 0.07) * 40); jaws.forEach((j, i) => { j.rotation.x = (i ? -1 : 1) * (1 - k) * 1.45; }); });
+      sfx(t, 'snap', 1); cbBurst('spark', [x, here.y + 0.25, z], t + 0.04, { n: 10, speed: 3 });
+      if (V) { if (vf) { const pin = [x, here.y, z]; holdRig(vf, t, () => pin, { pose: (tt, S) => { const k = Math.abs(Math.sin((tt - t) * 7)); S.by += 0.12 * k; S.rk = Math.max(S.rk, 1.1); S.rt = Math.min(S.rt, -0.8); S.las = -2.2 + 0.3 * k; S.ras = -2.3 - 0.3 * k; S.laz = -0.5; S.raz = 0.5; } }); shoutFace(vf, t, t + 3); react(vf, t, 'startle'); sfx(t + 0.1, 'punch', 0.5); }
+        else trapVictim(V, t, 'kill', { at: [x, z], from }); }
+      break;
+    }
+    case 'pit': {   // covered with branches and leaves; the cover gives way and the victim drops out of sight
+      const r = o.r ?? 1.1; cyl(g, r, r, 0.012, '#0A0806', 0, 0.004, 0, { seg: 20, ...NC }); const wall = new THREE.Mesh(new THREE.CylinderGeometry(r, r * 0.95, 2.4, 20, 1, true), mat('#3A2A1E', { own: true })); wall.material.side = THREE.BackSide; wall.position.y = -1.19; g.add(wall);
+      if (o.spikes) for (let i = 0; i < 9; i++) rod(g, 0, 0.04, 0.5, '#8A8F96', (hash(i) - 0.5) * r, -2.0, (hash(i * 3) - 0.5) * r, { rx: -Math.PI / 2, seg: 4 });
+      const cov = dyn(grp(g)); for (let i = 0; i < 9; i++) { const a = i / 9 * Math.PI; box(cov, 0.06, 0.05, r * 2.1, '#6A4A2A', 0, 0.02, 0, { ry: a, ...NC }); } for (let i = 0; i < 40; i++) { const a = hash(i) * TAU, rr2 = Math.sqrt(hash(i * 2.3)) * r; box(cov, 0.16, 0.012, 0.1, _fc(i, 3, 1, ['#6A8A3A', '#8A7A3A', '#A8703A', '#5A7A2A']), Math.cos(a) * rr2, 0.05, Math.sin(a) * rr2, { ry: hash(i * 5) * 3, ...NC }); }
+      tick2(tt => { const k = clamp((tt - t) / 0.5); cov.position.y = -3.5 * k * k; cov.rotation.z = 0.4 * k; cov.visible = k < 1; });
+      sfx(t, 'crack', 0.7); sfx(t + 0.05, 'whoosh', 0.6); sfx(t + 0.7, 'impact', 0.6); cbBurst('puff', [x, here.y + 0.2, z], t + 0.6, { n: 16, size: 0.5, speed: 1.6, cone: 0.4 });
+      if (V) { if (vf) { holdRig(vf, t, tt => { const a = tt - t; return [x, here.y - Math.min(2.6, 0.5 * 9.8 * Math.max(0, a - 0.08) ** 2), z]; }, { pose: (tt, S) => { S.las = -2.8; S.ras = -2.7; S.laz = -0.3; S.raz = 0.3; S.lk = 0.4; S.rk = 0.2; }, hide: tt => tt - t > 0.9 }); shoutFace(vf, t, t + 2, 'scared'); }
+        else trapVictim(V, t, 'drop', { at: [x, z], from }); }
+      break;
+    }
+    case 'spikes': {   // floor plate: spikes shoot up, hold, retract
+      const s = o.size ?? 1.4, n = 5; box(g, s, 0.06, s, '', 0, 0, 0, { mat: darkM() }); const sp = dyn(grp(g, 0, -0.62, 0)); const M = mat('#B8C0C8', { metal: 0.7, rough: 0.25 });
+      for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) { const px = (i - (n - 1) / 2) * s / n, pz = (j - (n - 1) / 2) * s / n; box(g, 0.08, 0.005, 0.08, '#0A0A0A', px, 0.06, pz, NC); cyl(sp, 0, 0.045, 0.6, '', px, 0, pz, { mat: M, seg: 4 }); }
+      const hold = o.hold ?? 1.2; tick2(tt => { const u = tt - t, k = u < 0 ? 0 : u < 0.08 ? u / 0.08 : u < 0.08 + hold ? 1 : Math.max(0, 1 - (u - 0.08 - hold) / 0.6); sp.position.y = -0.62 + 0.66 * k; });
+      sfx(t, 'slash', 1); sfx(t, 'clang', 0.4); if (V) { if (vf) { jump(vf, t, { h: 1.1, dur: 0.6, pre: 0.02 }); react(vf, t, 'startle'); shoutFace(vf, t, t + 1.5); hitFx(cbTarget(vf), cbTarget(vf).pos(t).setY(here.y + 0.3), t, {}); if (vf.kind === 'zombie') fall(vf, t + 0.7, { dir: 'back' }); } else trapVictim(V, t, 'kill', { at: [x, z], from }); }
+      break;
+    }
+    case 'log': {   // spiked log on two ropes, pulled back, swings down when released
+      const L = o.rope ?? 3.4, H = L + 1.2, W = 2.4, wd = '#6A4A2A'; for (const sx of [-1, 1]) cyl(g, 0.12, 0.15, H + 0.2, wd, sx * (W / 2 + 0.3), 0, 0, { seg: 7 }); cyl(g, 0.1, 0.1, W + 0.9, wd, 0, H, 0, { rz: Math.PI / 2, seg: 7 });
+      const pv = dyn(grp(g, 0, H, 0)), lg = grp(pv, 0, -L, 0); cyl(lg, 0.3, 0.3, 2.0, '#8A6A44', 0, -1.0, 0, { rz: Math.PI / 2, seg: 10 }); for (const sx of [-1, 1]) cyl(lg, 0.3, 0.3, 0.02, '#C9A06A', sx * 1.0, -0.01, 0, { rz: Math.PI / 2, seg: 10, ...NC });
+      for (let i = 0; i < 15; i++) { const q = grp(lg, -0.85 + (i % 5) * 0.42, 0, 0); q.rotation.x = Math.floor(i / 5) * TAU / 3 + (i % 2) * 0.6; cone(q, 0.05, 0.3, '#B8C0C8', 0, 0.27, 0, { seg: 4, metal: 0.6 }); }
+      for (const sx of [-1, 1]) cyl(pv, 0.015, 0.015, L, '#C9B58A', sx * 0.8, -L, 0, { seg: 4, ...NC });
+      const th0 = o.pull ?? 1.25, w = Math.sqrt(9.8 / L); tick2(tt => { const a = tt - t; pv.rotation.x = a < 0 ? th0 : th0 * Math.cos(w * a) * Math.exp(-a * 0.25); });
+      const hitT = t + Math.PI / 2 / w; sfx(t, 'whoosh', 0.7); sfx(hitT, 'impact', 1); SHAKES.push({ t: VT(hitT), amp: 0.3, dur: 0.4 }); if (V) trapVictim(V, hitT, 'launch', { at: [x, z], from: [x, 1.2, z - 2], power: 8 });
+      Tr.hitT = hitT; break;
+    }
+    case 'pendulum': {   // crescent blade swinging under a beam (o.t0 → o.t1), passes the middle every half period
+      const L = o.arm ?? 3.0, H = L + 0.9; for (const sx of [-1, 1]) box(g, 0.3, H + 0.3, 0.3, '#5A5E66', sx * 1.6, 0, 0); box(g, 3.6, 0.35, 0.4, '#4A4E56', 0, H, 0);
+      const pv = dyn(grp(g, 0, H, 0)); cyl(pv, 0.04, 0.04, L, '#3A3D44', 0, -L, 0, { seg: 6 }); cyl(pv, 0.12, 0.12, 0.2, '#3A3D44', 0, -0.1, 0, { rx: Math.PI / 2, seg: 8 });
+      const bl = grp(pv, 0, -L, 0), BM = mat('#C9D1DA', { metal: 0.7, rough: 0.2 }); for (let i = 0; i <= 10; i++) { const a = -0.9 + 1.8 * i / 10; box(bl, 0.03, 0.12, 0.2, '', 0, -Math.cos(a) * 0.55 + 0.45, Math.sin(a) * 0.55, { mat: BM, rx: a }); box(bl, 0.012, 0.04, 0.2, '#F2F6FA', 0, -Math.cos(a) * 0.62 + 0.45, Math.sin(a) * 0.62, { rx: a, ...NC }); }
+      const t0 = o.t0 ?? 0, t1 = o.t1 ?? 1e9, A = o.amp ?? 1.0, w = Math.sqrt(9.8 / L) * 1.1; tick2(tt => { pv.rotation.x = tt < t0 ? 0 : A * Math.sin(w * (Math.min(tt, t1) - t0)) * (tt > t1 ? Math.exp(-(tt - t1)) : 1); });
+      for (let k = 0; t0 + k * Math.PI / w < Math.min(t1, DUR); k++) sfx(t0 + k * Math.PI / w - 0.1, 'swing', 0.6);
+      Tr.passes = k => t0 + k * Math.PI / w; if (V) { const tp = Tr.passes(o.pass ?? 1); trapVictim(V, tp, 'launch', { at: [x, z], from: [x, 1, z - 1], power: 6 }); } break;
+    }
+    case 'net': {   // net on the ground snaps up into a bag hanging from a branch
+      const H = o.h ?? 4.6, n = 9, m = 6; cyl(g, 0.16, 0.2, H + 0.6, '#6A4A2A', 1.6, 0, 0, { seg: 7 }); cyl(g, 0.08, 0.1, 2.0, '#6A4A2A', 0.7, H, 0, { rz: Math.PI / 2, seg: 6 });
+      const segs = new THREE.InstancedMesh(boxG(1, 1, 1), mat('#C9B58A', { rough: 0.9 }), n * m * 2 + n); segs.frustumCulled = false; segs.castShadow = true; g.add(dyn(segs)); const rope = box(dyn(grp(g)), 0.02, 1, 0.02, '#C9B58A', 0, 0, 0, NC);
+      for (let i = 0; i < 18; i++) box(g, 0.14, 0.01, 0.09, _fc(i, 7, 2, ['#6A8A3A', '#8A7A3A', '#5A7A2A']), Math.cos(i * 2.4) * 0.9, 0.01, Math.sin(i * 2.4) * 0.9, { ry: i, ...NC });
+      const node = (i, j, k, sw) => { const a = i / n * TAU, u = j / (m - 1), flat = v3(Math.cos(a) * 1.2 * u, 0.03, Math.sin(a) * 1.2 * u), th = Math.PI * (1 - u * 0.92), bag = v3(Math.cos(a) * Math.sin(th) * 0.62 + sw, H - 1.6 + Math.cos(th) * 0.75, Math.sin(a) * Math.sin(th) * 0.62); return flat.lerp(bag, k); };
+      tick2(tt => { const k = EASE.out(clamp((tt - t) / 0.45)), sw = tt > t ? 0.25 * Math.sin((tt - t) * 2.3) * Math.exp(-(tt - t) * 0.4) : 0; let c = 0; const A = v3(), B = v3();
+        for (let i = 0; i < n; i++) for (let j = 0; j < m; j++) { if (j < m - 1) { A.copy(node(i, j, k, sw)); B.copy(node(i, j + 1, k, sw)); segBox(_o3, A, B, 0.025, 0.025); _o3.updateMatrix(); segs.setMatrixAt(c++, _o3.matrix); }
+          A.copy(node(i, j, k, sw)); B.copy(node((i + 1) % n, j, k, sw)); segBox(_o3, A, B, 0.025, 0.025); _o3.updateMatrix(); segs.setMatrixAt(c++, _o3.matrix); }
+        segs.count = c; segs.instanceMatrix.needsUpdate = true; const top = node(0, m - 1, k, sw); segBox(rope, top, v3(1.2, H, 0), 0.03, 0.03); rope.visible = k > 0.05; });
+      sfx(t, 'whoosh', 0.9); sfx(t + 0.05, 'snap', 0.5); if (V) { if (vf) { holdRig(vf, t, tt => { const k = EASE.out(clamp((tt - t) / 0.45)), sw = 0.25 * Math.sin((tt - t) * 2.3) * Math.exp(-(tt - t) * 0.4); return [x + sw, here.y + k * (H - 2.25), z]; },
+          { pose: (tt, S) => { S.lk = 1.6; S.rk = 1.5; S.lt = -1.3; S.rt = -1.2; S.las = -1.2; S.ras = -1.3; S.lae = -1.6; S.rae = -1.6; S.crx = 0.4; S.nrx = 0.2; } }); shoutFace(vf, t, 1e9, 'surprised'); }
+        else trapVictim(V, t, 'kill', { at: [x, z] }); }
+      break;
+    }
+    case 'snare': {   // rope loop on the ground: yanks the victim up by one foot, upside down, swinging from a bent sapling
+      const H = o.h ?? 3.4; const tr = grp(g, 1.2, 0, -0.4); cyl(tr, 0.14, 0.2, H + 1.2, '#6A4A2A', 0, 0, 0, { seg: 7 }); for (const [bx, by, bz, br2] of [[0, H + 1.6, 0, 1.0], [0.5, H + 1.2, 0.3, 0.75], [-0.4, H + 1.3, -0.3, 0.7]]) ball(tr, br2, '#4E7A3A', bx, by, bz, { detail: 1 }); const br = dyn(grp(tr, 0, H + 0.6, 0)); cyl(br, 0.04, 0.07, 1.65, '#6A4A2A', -0.8, -0.05, 0, { rz: Math.PI / 2 + 0.12, seg: 6 }); ball(br, 0.32, '#5A8A3A', -1.55, 0.05, 0, { detail: 0 });
+      const loop = dyn(grp(g)); for (let i = 0; i < 12; i++) { const a = i / 12 * TAU; box(loop, 0.06, 0.02, 0.02, '#C9B58A', Math.cos(a) * 0.3, 0.01, Math.sin(a) * 0.3, { ry: -a, ...NC }); } const rope = box(dyn(grp(g)), 0.02, 1, 0.02, '#C9B58A', 0, 0, 0, NC);
+      const anchor = v3(1.2 - 1.55, H + 0.75, -0.4), foot = tt => { const a = tt - t, k = EASE.out(clamp(a / 0.35)), sw = a > 0 ? 0.35 * Math.sin(a * 2.6) * Math.exp(-a * 0.35) : 0; return v3(anchor.x * k + sw, lerp(0.05, H - 0.4, k) - 0.1 * Math.sin(a * 5.2) * Math.exp(-a * 0.6) * (a > 0.35 ? 1 : 0), anchor.z * k); };
+      const L2W = v => v.clone().applyAxisAngle(_AY, o.ry ?? 0).add(here);
+      tick2(tt => { const f = foot(tt); loop.position.copy(f); loop.visible = true; segBox(rope, f, anchor, 0.025, 0.025); br.rotation.z = tt < t ? -0.6 : -0.6 + 0.6 * EASE.out(clamp((tt - t) / 0.3)); });
+      sfx(t, 'whoosh', 1); sfx(t + 0.35, 'boing', 0.9);
+      if (V) { if (vf) { const ry0 = (vf.root ?? vf).rotation.y; holdRig(vf, t, tt => { const f = L2W(foot(tt)); return [f.x, f.y - 0.05, f.z]; }, { rot: tt => [Math.PI * EASE.out(clamp((tt - t) / 0.35)), ry0, 0.25 * Math.sin((tt - t) * 2.6) * Math.exp(-(tt - t) * 0.35), 'YXZ'],
+          pose: (tt, S) => { S.las = -2.95 + 0.15 * Math.sin(tt * 3); S.ras = -2.9 - 0.15 * Math.sin(tt * 3 + 1); S.laz = -0.25; S.raz = 0.25; S.lt = -0.05; S.rt = 0.6; S.rk = 1.1; S.nrx = -0.4; } }); shoutFace(vf, t, 1e9, 'surprised'); }
+        else trapVictim(V, t, 'kill', { at: [x, z] }); }
+      break;
+    }
+    case 'mine': {   // pressure mine: click, a blinking light, then the blast
+      cyl(g, 0.18, 0.2, 0.06, '#4A5236', 0, -0.02, 0, { seg: 12 }); cyl(g, 0.06, 0.06, 0.04, '#3A4228', 0, 0.04, 0, { seg: 10 }); for (let i = 0; i < 3; i++) box(g, 0.012, 0.06, 0.012, '#2A2D33', Math.cos(i * 2.1) * 0.03, 0.08, Math.sin(i * 2.1) * 0.03, NC);
+      const led = ball(g, 0.018, '', 0.1, 0.05, 0, { mat: mat('#FF2A2A', { basic: true, glow: 1.5 }), detail: 0, ...NC }); const del = o.delay ?? 0.45; tick2(tt => { led.visible = tt < t ? (tt * 1.2) % 1 < 0.1 : tt < t + del ? (tt * 12) % 1 < 0.5 : false; g.visible = tt < t + del; });
+      sfx(t, 'tick', 1); sfx(t + 0.15, 'beep', 0.8); explode(x, here.y, z, t + del, { size: o.size ?? 1.1 }); if (V) trapVictim(V, t + del + 0.02, 'launch', { at: [x, z], from: [x, here.y - 0.5, z], power: 9 }); if (o.horde) killNear(o.horde, here, t + del, o.r ?? 3.5); Tr.boom = t + del; break;
+    }
+    case 'flame': {   // nozzle grate in the floor: roaring flame column for o.dur
+      box(g, 0.6, 0.08, 0.6, '', 0, 0, 0, { mat: darkM() }); for (let i = 0; i < 5; i++) box(g, 0.5, 0.012, 0.03, '#1A1A1A', 0, 0.08, -0.2 + i * 0.1, NC); cyl(g, 0.08, 0.1, 0.12, '#5A5E66', 0, 0.08, 0, { seg: 8 });
+      const dur = o.dur ?? 1.6, dir = o.dir ?? [0, 1, 0]; cbBurst('flame', [x, here.y + 0.15, z], t, { rate: 90, n: Math.round(dur * 90), dir, cone: 0.18, speed: 9, size: 0.6, life: 0.4, drag: 2 }); cbBurst('smoke', [x, here.y + 2.2, z], t + 0.2, { rate: 12, n: Math.round(dur * 12), size: 0.6, speed: 0.8, life: 2.5 });
+      glow(x, here.y + 1.5, z, { t0: t, t1: t + dur, intensity: 70, dist: 12, rampIn: 0.05 }); sfx(t, 'launch', 0.5); sfx(t, 'fire', 0.9); AUDIO.hits[AUDIO.hits.length - 1].dur = dur;
+      if (V) { if (vf) { jump(vf, t + 0.05, { h: 0.9 }); react(vf, t, 'startle'); shoutFace(vf, t, t + 2.5); cbBurst('smoke', () => cbTarget(vf).pos(t + 0.6).toArray(), t + 0.4, { n: 14, size: 0.3, speed: 0.6, colors: ['#3A3634', '#5A5450'] }); if (vf.kind === 'zombie') fall(vf, t + 0.6, {}); } else trapVictim(V, t + 0.1, 'kill', { at: [x, z] }); }
+      break;
+    }
+    case 'saw': {   // circular saw blade racing back and forth along a floor slot
+      const L = o.len ?? 4, rr = o.r ?? 0.45; box(g, 0.14, 0.02, L + 0.4, '#0A0A0A', 0, 0, 0, NC); box(g, 0.5, 0.05, L + 0.6, '', 0, -0.03, 0, { mat: darkM(), cast: false });
+      const car = dyn(grp(g, 0, 0, 0)), bl = dyn(grp(car, 0, 0.05, 0)), BM = mat('#C9D1DA', { metal: 0.75, rough: 0.2 }); cyl(bl, rr, rr, 0.025, '', 0, -0.0125, 0, { mat: BM, rz: Math.PI / 2, seg: 24 }); cyl(bl, rr * 0.25, rr * 0.25, 0.04, '#3A3D44', 0, -0.02, 0, { rz: Math.PI / 2, seg: 8 });
+      for (let i = 0; i < 18; i++) { const a = i / 18 * TAU, q = grp(bl, 0, 0, 0); q.rotation.x = a; box(q, 0.02, 0.07, 0.06, '', 0, rr - 0.02, 0, { mat: BM, rz: 0, rx: 0.5 }); }
+      const t0 = o.t0 ?? t, t1 = o.t1 ?? t0 + 6, per = o.period ?? 2.4, zAt = tt => { const u = clamp(tt, t0, t1) - t0; return (L / 2) * Math.sin(u / per * TAU); };
+      tick2(tt => { car.position.z = zAt(tt); bl.rotation.x = -tt * 40 * (tt >= t0 && tt <= t1 + 1 ? 1 : 0.05); });
+      cbBurst('spark', tt => g.localToWorld(v3(0, 0.05, zAt(tt))).toArray(), t0, { rate: 30, n: Math.round((t1 - t0) * 30), speed: 4, dir: [0, 1, 0], cone: 0.9 });
+      sfx(t0, 'saw', 0.8); AUDIO.hits[AUDIO.hits.length - 1].dur = t1 - t0;
+      Tr.cross = k => t0 + per * k / 2; if (V) trapVictim(V, Tr.cross(o.pass ?? 1), vf && vf.kind !== 'zombie' ? 'launch' : 'kill', { at: [x, z], from: [x, 0.2, z - 1], power: 5 }); break;
+    }
+    case 'boulder': {   // giant rolling rock along a path; flattens what's in the way (pops back)
+      const pts = o.path ?? [[x, z - 20], [x, z + 20]], R = o.r ?? 1.6, sp = o.speed ?? 7, path = new Path(pts); g.position.set(0, 0, 0); g.rotation.y = 0;
+      const rock = dyn(grp(g)), inner = grp(rock), geo = new THREE.IcosahedronGeometry(R, 1), pos = geo.attributes.position; for (let i = 0; i < pos.count; i++) { const v = v3(pos.getX(i), pos.getY(i), pos.getZ(i)), k = 1 + 0.12 * (hash(Math.round(v.x * 7) * 3.1 + Math.round(v.y * 7) * 7.7 + Math.round(v.z * 7) * 1.3) - 0.5); pos.setXYZ(i, v.x * k, v.y * k, v.z * k); }
+      geo.computeVertexNormals(); const me = new THREE.Mesh(geo, mat('#8A8580', { rough: 1 })); me.castShadow = true; inner.add(me); for (let i = 0; i < 6; i++) ball(inner, R * 0.25, '#6E6A66', Math.cos(i) * R * 0.85, Math.sin(i * 1.7) * R * 0.6, Math.sin(i) * R * 0.7, { detail: 0 });
+      const t0 = o.t0 ?? t, dist = tt => Math.max(0, tt - t0) * sp; tick2(tt => { const s = Math.min(dist(tt), path.len), P = path.at(s), d = path.dir(s); rock.position.set(P.x, groundH(P.x, P.z) + R, P.z); rock.rotation.y = Math.atan2(d.x, d.z); inner.rotation.x = s / R; });
+      cbBurst('puff', tt => { const P = path.at(Math.min(dist(tt), path.len)); return [P.x, groundH(P.x, P.z) + 0.2, P.z]; }, t0, { rate: 16, n: Math.round(path.len / sp * 16), size: 0.7, speed: 1, life: 1.6 });
+      sfx(t0, 'rumble', 1); AUDIO.hits[AUDIO.hits.length - 1].dur = path.len / sp; for (let k = 0; k < path.len / sp; k += 0.7) SHAKES.push({ t: VT(t0 + k), amp: 0.08, dur: 0.6 });
+      Tr.at = (px, pz) => { let best = 0, bd = 1e9; for (let s = 0; s <= path.len; s += 0.25) { const P = path.at(s), d2 = Math.hypot(P.x - px, P.z - pz); if (d2 < bd) { bd = d2; best = s; } } return t0 + best / sp; };
+      for (const v of [].concat(V ?? [])) { const T = cbTarget(v); if (T.horde) continue; const P = T.pos(t0 + 1); trapVictim(v, Tr.at(P.x, P.z) - 0.05, 'squash', { at: [P.x, P.z] }); }
+      if (o.horde) for (let s = 0; s < path.len; s += 0.8) { const P = path.at(s), tt = t0 + s / sp; for (let k = 0; k < 40; k++) { const i = o.horde.near([P.x, P.z], tt, { max: R + 0.4 }); if (i < 0) break; o.horde.hit(i, tt, { squash: true }); } }
+      break;
+    }
+    case 'darts': {   // wall panel (faces +z): a volley of darts across the corridor
+      box(g, 1.4, 1.2, 0.2, '#7A6A5A', 0, 0.6, 0); const holes = 6; for (let i = 0; i < holes; i++) box(g, 0.05, 0.05, 0.01, '#0A0A0A', -0.5 + (i % 3) * 0.5, 0.95 - Math.floor(i / 3) * 0.4, 0.105, NC);
+      const tgt = V ? cbTarget(V) : null, len = o.len ?? 6; g.updateWorldMatrix(true, false);
+      for (let i = 0; i < holes; i++) { const P0 = g.localToWorld(v3(-0.5 + (i % 3) * 0.5, 0.95 - Math.floor(i / 3) * 0.4, 0.2)), aim = tgt && i < 3 ? tgt.pos(t + 0.15).add(v3((hash(i) - 0.5) * 0.3, (hash(i * 2) - 0.5) * 0.4, 0)) : g.localToWorld(v3(-0.5 + (i % 3) * 0.5 + (hash(i) - 0.5), 0.95 - Math.floor(i / 3) * 0.4, len));
+        const ts = t + i * 0.04, Tf = P0.distanceTo(aim) / 30, v = aim.clone().sub(P0).multiplyScalar(1 / Tf), mesh = arrowMesh(world, { color: '#3A6A9A' }); mesh.scale.setScalar(0.45); dyn(mesh); mesh.visible = false;
+        const A = { t: ts, th: ts + Tf, P0, v, g: 0, mesh, P1: aim, T: null }; if (tgt?.rig && i < 3) { A.stickRig = tgt.rig; const l = toRig(rigF(tgt.rig, A.th), P0).sub(v3(0, CH0 + 0.35, 0)).normalize(); A.local = v3(l.x * 0.22, 0.2 + i * 0.12, l.z * 0.17); A.ldir = l.clone().negate(); } CB.arrows.push(A); sfx(ts, 'arrow', 0.5); }
+      sfx(t, 'tick', 0.8); if (V) { if (vf) { react(vf, t + 0.2, 'startle'); jump(vf, t + 0.22, { h: 0.5 }); shoutFace(vf, t + 0.2, t + 2); if (vf.kind === 'zombie') fall(vf, t + 0.3, {}); } else trapVictim(V, t + 0.2, 'kill', { at: [x, z + 2] }); }
+      break;
+    }
+    case 'cage': {   // cage drops from above and traps whoever is under it
+      const H = o.h ?? 5, R = 0.75; const post = grp(g, 1.4, 0, 0); cyl(post, 0.12, 0.15, H + 1.2, '#5A5E66', 0, 0, 0, { seg: 8 }); box(post, 1.6, 0.14, 0.14, '#5A5E66', -0.8, H + 1.1, 0);
+      const cg = dyn(grp(g)), M = mat('#3A3D44', { metal: 0.6, rough: 0.4 }); for (let i = 0; i < 14; i++) { const a = i / 14 * TAU; cyl(cg, 0.025, 0.025, 2.0, '', Math.cos(a) * R, 0, Math.sin(a) * R, { mat: M, seg: 4 }); }
+      for (const y of [0.02, 1.0, 1.98]) { for (let i = 0; i < 14; i++) { const a = (i + 0.5) / 14 * TAU; box(cg, 0.05, 0.05, TAU * R / 14 + 0.02, '', Math.cos(a) * R, y, Math.sin(a) * R, { mat: M, ry: -a, cast: false }); } } cyl(cg, R, R, 0.06, '', 0, 2.0, 0, { mat: M, seg: 14 }); const rope = box(dyn(grp(g)), 0.025, 1, 0.025, '#C9B58A', 0, 0, 0, NC);
+      tick2(tt => { const a = tt - t, y = a < 0 ? H - 1.8 : Math.max(0, H - 1.8 - 0.5 * 9.8 * a * a), land = Math.sqrt(2 * (H - 1.8) / 9.8), b = a - land; cg.position.y = y + (b > 0 && b < 0.4 ? 0.12 * Math.sin(b / 0.4 * Math.PI) : 0); segBox(rope, v3(0, cg.position.y + 2.05, 0), v3(0, H + 1.1, 0), 0.03, 0.03); rope.visible = a < 0; });
+      const land = t + Math.sqrt(2 * (H - 1.8) / 9.8); sfx(t, 'whoosh', 0.6); sfx(land, 'clang', 1); sfx(land + 0.02, 'impact', 0.7); SHAKES.push({ t: VT(land), amp: 0.15, dur: 0.3 }); cbBurst('puff', [x, here.y + 0.1, z], land, { n: 18, size: 0.4, speed: 2, dir: [0, 0.2, 0], cone: 1.5 });
+      if (V && vf) { const pin = [x, here.y, z]; holdRig(vf, land, () => pin, { pose: (tt, S) => { const k = Math.sin(tt * 9); S.las = -1.6 + 0.3 * k; S.ras = -1.6 - 0.3 * k; S.lae = -0.9; S.rae = -0.9; S.laz = -0.3; S.raz = 0.3; } }); react(vf, land, 'startle'); shoutFace(vf, land, 1e9, 'scared'); }
+      Tr.land = land; break;
+    }
+    case 'trapdoor': {   // floor hatch: both halves swing down, the victim drops
+      const s = o.size ?? 1.6; box(g, s, 0.01, s, '#050505', 0, 0.003, 0, NC); for (const sx of [-1, 1]) box(g, 0.08, 0.04, s + 0.16, '#3A3D44', sx * (s / 2 + 0.04), 0, 0); for (const sz of [-1, 1]) box(g, s, 0.04, 0.08, '#3A3D44', 0, 0, sz * (s / 2 + 0.04));
+      const halves = [-1, 1].map(sx => { const pv = dyn(grp(g, sx * s / 2, 0.02, 0)); box(pv, s / 2, 0.04, s, o.color ?? '#8A6A48', -sx * s / 4, 0, 0); for (let i = 0; i < 3; i++) box(pv, s / 2, 0.005, 0.02, '#5A4632', -sx * s / 4, 0.04, -s / 3 + i * s / 3, NC); return pv; });
+      tick2(tt => { const a = tt - t, k = a < 0 ? 0 : Math.min(1.75, a * a * 18) - (a > 0.32 ? 0.15 * Math.exp(-(a - 0.32) * 6) * Math.abs(Math.sin((a - 0.32) * 14)) : 0); halves.forEach((h, i) => { h.rotation.z = (i ? -1 : 1) * -k; }); });
+      sfx(t, 'door', 0.8); sfx(t + 0.6, 'impact', 0.4);
+      if (V) { if (vf) { holdRig(vf, t + 0.05, tt => [x, here.y - Math.min(3, 4.9 * (tt - t - 0.05) ** 2), z], { pose: (tt, S) => { S.las = -2.8; S.ras = -2.7; S.laz = -0.3; S.raz = 0.3; }, hide: tt => tt - t > 0.95 }); shoutFace(vf, t, t + 2, 'scared'); } else trapVictim(V, t + 0.05, 'drop', { at: [x, z] }); }
+      break;
+    }
+    case 'laser': {   // laser fence between two posts: beams glow, the victim gets zapped
+      const W = o.w ?? 3, n = o.beams ?? 5, H = 1.9; for (const sx of [-1, 1]) { box(g, 0.16, H + 0.2, 0.16, '#2A2D33', sx * W / 2, 0, 0); for (let i = 0; i < n; i++) box(g, 0.05, 0.05, 0.05, '', sx * (W / 2 - 0.09), 0.25 + i * (H - 0.3) / (n - 1), 0, { mat: mat('#FF2A2A', { basic: true, glow: 1.5 }), ...NC }); }
+      const beamM = new THREE.MeshBasicMaterial({ color: new THREE.Color('#FF2A2A').multiplyScalar(2.6), transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending, depthWrite: false });
+      const beams = Array.from({ length: n }, (_, i) => { const b = new THREE.Mesh(boxG(1, 1, 1), beamM); b.scale.set(W - 0.18, 0.022, 0.022); b.position.y = 0.25 + i * (H - 0.3) / (n - 1); g.add(dyn(b)); return b; });
+      const t0 = o.t0 ?? 0, t1 = o.t1 ?? 1e9, sweep = o.sweep; tick2(tt => { const on = tt >= t0 && tt < t1; beams.forEach((b, i) => { b.visible = on && (tt < t || tt > t + 0.12 || (tt * 30) % 1 < 0.5); if (sweep) b.position.y = 0.25 + ((i * (H - 0.3) / (n - 1) + (tt - t0) * 0.7) % (H - 0.3)); b.scale.y = b.scale.z = 0.022 * (1 + 0.15 * Math.sin(tt * 40 + i)); }); });
+      if (V && t < 1e8) { sfx(t, 'buzz', 0.9); AUDIO.hits[AUDIO.hits.length - 1].dur = 0.6; sfx(t + 0.1, 'alarm', 0.6); cbBurst('spark', () => cbTarget(V).pos(t).toArray(), t, { n: 24, speed: 4, colors: ['#FF8A8A', '#FFFFFF'] }); cbFlash([here.clone().add(v3(0, 1.2, 0)), _AY], t, { size: 0.01, dur: 0.2, light: 40, color: '#FF3030' });
+        if (vf) { if (typeof xray === 'function') xray(vf, { t0: t, t1: t + 0.7, path: 'bolt' }); react(vf, t, 'startle'); shoutFace(vf, t, t + 2); if (vf.kind === 'zombie') fall(vf, t + 0.7, {}); } else trapVictim(V, t, 'kill', { at: [x, z] }); }
+      break;
+    }
+    case 'electric': {   // electrified plate: arcs crackle across it; whoever steps on it lights up (x-ray skeleton)
+      const s = o.size ?? 2; box(g, s, 0.05, s, '#3A3D44', 0, 0, 0); for (let i = 0; i < 4; i++) box(g, s, 0.006, 0.04, '#E8C02A', 0, 0.05, -s / 2 + (i + 0.5) * s / 4, NC);
+      const arcs = new THREE.InstancedMesh(boxG(1, 1, 1), new THREE.MeshBasicMaterial({ color: new THREE.Color('#8AD8FF').multiplyScalar(3), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false }), 40); arcs.frustumCulled = false; g.add(dyn(arcs));
+      const t0 = o.t0 ?? 0, t1 = o.t1 ?? 1e9; tick2(tt => { let c = 0; if (tt >= t0 && tt < t1) { const fr = Math.floor(tt * 24); for (let a = 0; a < 4; a++) { if (hash(fr * 3.1 + a) < 0.35) continue; let P = v3((hash(fr + a * 7) - 0.5) * s, 0.06, (hash(fr * 1.3 + a) - 0.5) * s);
+          for (let k = 0; k < 8 && c < 40; k++) { const Q = P.clone().add(v3((hash(fr + k + a * 13) - 0.5) * 0.4, 0.02 + hash(fr * 2 + k) * 0.25 * (k < 4 ? 1 : -1), (hash(fr * 3 + k + a) - 0.5) * 0.4)); Q.y = Math.max(0.06, Q.y); segBox(_o3, P, Q, 0.018, 0.018); _o3.updateMatrix(); arcs.setMatrixAt(c++, _o3.matrix); P = Q; } } } arcs.count = c; arcs.instanceMatrix.needsUpdate = true; });
+      sfx(t0, 'buzz', 0.35); AUDIO.hits[AUDIO.hits.length - 1].dur = Math.min(t1, DUR) - t0;
+      if (V && t < 1e8) { cbBurst('spark', () => cbTarget(V).pos(t).toArray(), t, { n: 30, speed: 5, colors: ['#BFEFFF', '#FFFFFF'] }); sfx(t, 'buzz', 1); AUDIO.hits[AUDIO.hits.length - 1].dur = 0.8; FLASHES.push({ t: VT(t), dur: 0.15, a: 0.35, color: '#BFEFFF' });
+        if (vf) { if (typeof xray === 'function') xray(vf, { t0: t, t1: t + 0.9, path: 'bolt' }); holdRig(vf, t, tt => { const p = rigPos(vf, t); return [p.x, p.y + 0.04 * Math.sin(tt * 70), p.z]; }, { t1: t + 0.9, pose: (tt, S) => { const k = Math.sin(tt * 60); S.las = -2.5 + 0.2 * k; S.ras = -2.5 - 0.2 * k; S.laz = -0.6; S.raz = 0.6; S.by += 0.03 * k; } }); shoutFace(vf, t, t + 2); fall(vf, t + 0.9, { dazed: vf.kind !== 'zombie' }); } else trapVictim(V, t, 'kill', { at: [x, z] }); }
+      break;
+    }
+    case 'banana': {   // the classic: step on it, feet fly up, land on the back
+      const pe = grp(g); for (let i = 0; i < 4; i++) { const q = grp(pe, 0, 0.02, 0, i * Math.PI / 2 + 0.3); box(q, 0.06, 0.02, 0.2, i % 2 ? '#F2D23A' : '#E8C02A', 0, 0, 0.1, { rx: -0.15 }); } ball(pe, 0.04, '#7A5A2A', 0, 0.03, 0, { detail: 0 });
+      tick2(tt => { if (tt > t) { const a = tt - t; pe.position.set(a < 0.4 ? a * 1.5 : 0.6, a < 0.4 ? Math.sin(a / 0.4 * Math.PI) * 0.5 : 0, 0); pe.rotation.y = a * 9; } });
+      if (vf) { fall(vf, t + 0.05, { dir: 'back', dur: 0.42, getUp: o.getUp, dazed: true }); jump(vf, t, { h: 0.45, dur: 0.25, pre: 0.01 }); (vf.fx ??= []).push((tt, S) => { const a = tt - t; if (a > 0 && a < 0.5) { S.lt = -1.5; S.rt = -1.2; S.lk = 0.1; S.rk = 0.2; S.las = -2.6; S.ras = -2.6; } }); shoutFace(vf, t, t + 0.6, 'surprised'); sfx(t, 'swing', 0.6); }
+      else if (V) trapVictim(V, t, 'kill', { at: [x, z] });
+      break;
+    }
+    case 'rake': {   // step on the teeth, the handle swings up into the face: stars, no fall
+      const pv = dyn(grp(g, 0, 0.03, 0)); box(pv, 0.5, 0.04, 0.05, '#5A5E66', 0, 0, -0.05); for (let i = 0; i < 9; i++) box(pv, 0.015, 0.1, 0.015, '#5A5E66', -0.24 + i * 0.06, 0, -0.07); cyl(pv, 0.018, 0.018, 1.5, '#9A7448', 0, 0, 0.75, { rx: Math.PI / 2, seg: 5 });
+      tick2(tt => { const a = tt - t; pv.rotation.x = a < 0 ? 0 : a < 0.12 ? -1.45 * a / 0.12 : -1.45 + 0.08 * Math.exp(-(a - 0.12) * 8) * Math.sin((a - 0.12) * 30); });
+      if (vf) { react(vf, t + 0.12, 'hit', { amp: 1.6 }); CB.stars.push({ f: vf, t0: t + 0.15, t1: t + 2.2 }); sfx(t + 0.12, 'punch', 1); sfx(t + 0.2, 'daze', 0.8); shoutFace(vf, t + 0.12, t + 2, 'annoyed'); }
+      break;
+    }
+    default: console.warn('trap: unknown kind ' + kind);
+  }
+  return Tr;
+}
+
+// --- turrets: gatling (default) · rocket · flame · laser · cannon — base, yaw ring, pitch cradle, sensor eye; aim, spin up, fire, auto-hunt a horde ---
+function turret(p, x, z, o = {}) {
+  cbInit(); const kind = o.kind ?? 'gatling', c = o.color ?? '#5A6068', dk = shade(c, -0.12), lt = shade(c, 0.08), s = o.scale ?? 1, NC = { cast: false }, H = o.height ?? 1.1;
+  const g = dyn(grp(p, x, groundH(x, z), z, o.ry ?? 0)), B = grp(g); B.scale.setScalar(s);
+  cyl(B, 0.9, 1.05, 0.35, dk, 0, 0, 0, { seg: 8 }); for (let i = 0; i < 16; i++) { const a = i / 16 * TAU; box(B, 0.4, 0.12, 0.05, i % 2 ? '#1A1A1A' : '#F2C230', Math.cos(a) * 0.98, 0.12, Math.sin(a) * 0.98, { ry: -a + Math.PI / 2, ...NC }); }
+  for (let i = 0; i < 8; i++) { const a = (i + 0.5) / 8 * TAU; cyl(B, 0.035, 0.035, 0.04, '#9AA4AE', Math.cos(a) * 0.8, 0.35, Math.sin(a) * 0.8, { seg: 6, ...NC }); }
+  cyl(B, 0.45, 0.55, H - 0.35, c, 0, 0.35, 0, { seg: 10 }); cyl(B, 0.62, 0.62, 0.1, '#2A2D33', 0, H - 0.05, 0, { seg: 16 }); box(B, 0.25, 0.4, 0.12, '#2A2D33', 0.0, 0.5, 0.5, NC); rod(B, 0.04, 0.04, 1.4, '#1A1A1A', -0.35, 0.05, -0.9, { seg: 5, ...NC });   // cable
+  const yawG = dyn(grp(B, 0, H + 0.05, 0)); box(yawG, 1.1, 0.5, 1.1, c, 0, 0, -0.05); box(yawG, 1.16, 0.08, 1.16, dk, 0, 0.5, -0.05); for (const sx of [-1, 1]) { box(yawG, 0.1, 0.62, 0.8, lt, sx * 0.6, 0.05, 0); for (let i = 0; i < 4; i++) box(yawG, 0.11, 0.03, 0.5, '#2A2D33', sx * 0.61, 0.2 + i * 0.09, 0, NC); }
+  const pitchG = dyn(grp(yawG, 0, 0.62, 0.1)); for (const sx of [-1, 1]) cyl(yawG, 0.13, 0.13, 0.14, '#3A3D44', sx * 0.52, 0.62, 0.1, { rz: Math.PI / 2, seg: 10 });
+  const gun = dyn(grp(pitchG)), sp = dyn(grp(gun, 0, 0, 0.35)); let muzzleZ = 1.5, barrels = [];
+  if (kind === 'gatling') { cyl(gun, 0.2, 0.2, 0.55, '#2A2D33', 0, 0, 0.0, { rx: Math.PI / 2, seg: 12 }); for (let i = 0; i < 10; i++) rod(gun, 0.215, 0.215, 0.025, dk, 0, 0, -0.2 + i * 0.045, { seg: 12, ...NC });
+    for (let i = 0; i < 6; i++) { const a = i / 6 * TAU; rod(sp, 0.022, 0.022, 1.15, '#1E2024', Math.cos(a) * 0.08, Math.sin(a) * 0.08, 0.6, { seg: 6 }); barrels.push(a); } for (const zz of [0.25, 0.75, 1.15]) rod(sp, 0.12, 0.12, 0.04, '#3A3D44', 0, 0, zz, { seg: 10 }); rod(sp, 0.03, 0.03, 1.2, '#3A3D44', 0, 0, 0.6, { seg: 6, ...NC });
+    const ab = grp(yawG, -0.72, 0.42, 0.0); box(ab, 0.38, 0.42, 0.55, '#4A5236', 0, -0.21, 0); box(ab, 0.4, 0.05, 0.57, '#3A4228', 0, 0.2, 0, NC); for (let i = 0; i < 8; i++) { const u = i / 7; box(ab, 0.06, 0.03, 0.04, '#C9A64A', 0.15 + u * 0.4, 0.22 + Math.sin(u * Math.PI) * 0.15, 0.05, { rz: 0.3, ...NC }); } muzzleZ = 1.55; }
+  else if (kind === 'rocket') { for (const sx of [-1, 1]) { const pod = grp(gun, sx * 0.45, 0, 0.2); box(pod, 0.42, 0.42, 0.9, c, 0, -0.21, 0); for (let i = 0; i < 4; i++) { rod(pod, 0.07, 0.07, 0.02, '#0A0A0A', -0.1 + (i % 2) * 0.2, -0.1 + Math.floor(i / 2) * 0.2 + 0.0, 0.455, { seg: 8, ...NC }); barrels.push([sx * 0.45 - 0.1 + (i % 2) * 0.2, -0.1 + Math.floor(i / 2) * 0.2]); } } muzzleZ = 0.7; }
+  else if (kind === 'flame') { rod(gun, 0.1, 0.13, 1.0, '#3A3D44', 0, 0, 0.5, { seg: 10 }); rod(gun, 0.15, 0.1, 0.18, '#2A2D33', 0, 0, 1.05, { seg: 10 }); for (const sx of [-1, 1]) cyl(yawG, 0.16, 0.16, 0.7, '#C0392B', sx * 0.35, 0.35, -0.55, { seg: 10 }); ball(gun, 0.035, '', 0, -0.12, 1.12, { mat: mat('#5AAEFF', { basic: true, glow: 1.5 }), detail: 0, ...NC }); muzzleZ = 1.15; }
+  else if (kind === 'laser') { rod(gun, 0.16, 0.2, 0.6, '#E8ECF0', 0, 0, 0.3, { seg: 12 }); for (let i = 0; i < 4; i++) rod(gun, 0.22 - i * 0.02, 0.22 - i * 0.02, 0.03, '#3A3D44', 0, 0, 0.1 + i * 0.15, { seg: 12, ...NC }); rod(gun, 0.05, 0.08, 0.5, '#B8C0C8', 0, 0, 0.85, { seg: 10 }); rod(gun, 0.06, 0.06, 0.02, '', 0, 0, 1.1, { mat: mat(o.beam ?? '#FF3A3A', { basic: true, glow: 2 }), seg: 10, ...NC }); muzzleZ = 1.12; }
+  else { rod(gun, 0.14, 0.17, 2.2, '#3A3D44', 0, 0, 1.1, { seg: 10 }); box(gun, 0.34, 0.26, 0.34, '#2E3134', 0, -0.13, 2.25); box(gun, 0.6, 0.5, 0.5, c, 0, -0.25, 0); muzzleZ = 2.4; }
+  // sensor head: camera box, glowing red eye, antenna, status light
+  const eyeM = mat('#FF2A2A', { basic: true, glow: 1.2, own: true }), head = grp(yawG, 0.32, 0.95, 0.1); box(head, 0.3, 0.22, 0.32, '#2A2D33', 0, 0, 0); rod(head, 0.07, 0.07, 0.05, '#0A0A0A', 0, 0.11, 0.17, { seg: 10, ...NC }); rod(head, 0.045, 0.045, 0.02, '', 0, 0.11, 0.2, { mat: eyeM, seg: 10, ...NC });
+  cyl(head, 0.008, 0.008, 0.45, '#1A1A1A', -0.1, 0.22, -0.1, { seg: 4, ...NC }); const led = ball(yawG, 0.03, '', -0.4, 0.55, 0.5, { mat: mat('#5AFF5A', { basic: true, glow: 1.4, own: true }), detail: 0, ...NC });
+  const T = { g, B, yawG, pitchG, gun, sp, kind, s, aims: [], fire: [], muzzleZ, barrels, eyeM, led, scan: o.scan ?? true, H };
+  T.frame = t => { const hp = g.position, hy = g.rotation.y; let yaw = 0, pit = 0, any = false;   // pure: yaw/pitch from the aim keys; idle scan sweep
+    if (T.scan) yaw = 0.7 * Math.sin(t * 0.6 + x);
+    for (const a of T.aims) { const k = span(t, a.t, a.dur, 'inOut'); if (k <= 0) break; any = true; if (!a.T) { yaw = lerpA(yaw, 0, k); pit = lerp(pit, 0, k); continue; } const P = a.T.pos(Math.min(t, a.t1 ?? t)), dx = P.x - hp.x, dz = P.z - hp.z; yaw = lerpA(yaw, Math.atan2(dx, dz) - hy, k); pit = lerp(pit, clamp(Math.atan2(P.y - (hp.y + (H + 0.67) * s), Math.hypot(dx, dz)), -0.4, 0.8), k); }
+    return [yaw, pit, any]; };
+  T.muzzleAt = (t, bi = 0) => { const [yaw, pit] = T.frame(t), m = new THREE.Matrix4().compose(g.position, new THREE.Quaternion().setFromAxisAngle(_AY, g.rotation.y), v3(s, s, s)).multiply(new THREE.Matrix4().makeTranslation(0, H + 0.05 + 0.62, 0.1)).multiply(new THREE.Matrix4().makeRotationY(yaw)).multiply(new THREE.Matrix4().makeRotationX(-pit));
+    const off = kind === 'rocket' ? v3(T.barrels[bi % T.barrels.length][0], T.barrels[bi % T.barrels.length][1], muzzleZ) : v3(0, kind === 'gatling' ? 0.08 : 0, muzzleZ); return [off.applyMatrix4(m), v3(0, 0, 1).transformDirection(m)]; };
+  CB.post.push(t => { const [yaw, pit, any] = T.frame(t); T.yawG.rotation.y = yaw; T.pitchG.rotation.x = -pit;
+    let spin = 0, firing = false; for (const f of T.fire) { if (t < f.t0 - 0.5) continue; const up = clamp(t - (f.t0 - 0.5), 0, 0.5), st = clamp(t - f.t0, 0, f.t1 - f.t0), dn = clamp(t - f.t1, 0, 1.2); spin += 50 * up * up + 50 * st + 50 * dn - 20.83 * dn * dn; if (t >= f.t0 && t <= f.t1) firing = true; }
+    T.sp.rotation.z = spin; T.gun.position.z = firing ? -0.02 * Math.abs(Math.sin(t * 90)) : 0; T.eyeM.color.set(any ? '#FF2A2A' : '#FF8A2A').multiplyScalar(any ? 2.4 + 0.6 * Math.sin(t * 20) : 1.4); T.led.material.color.set(firing ? '#FF3A3A' : any ? '#FFC23A' : '#5AFF5A').multiplyScalar(2.2); T.g.updateWorldMatrix(true, true); });
+  return T;
+}
+function turretAim(T, t, at, o = {}) { const tg = at == null ? null : cbTarget(at); T.aims.push({ t, dur: o.dur ?? 0.5, T: tg, t1: o.t1 }); T.aims.sort((a, b) => a.t - b.t); sfx(t, 'servo', 0.6); AUDIO.hits[AUDIO.hits.length - 1].dur = o.dur ?? 0.5; if (o.beep !== false && tg) sfx(t, 'beep', 0.5); return T; }
+// turretFire(T, t0, t1, { at, horde, rate, burst, r }) — at: fixed target; horde: hunts the nearest members one after another (aim → burst → down → next)
+function turretFire(T, t0, t1, o = {}) {
+  const rate = o.rate ?? (T.kind === 'gatling' ? 18 : T.kind === 'rocket' ? 3 : T.kind === 'cannon' ? 0.7 : 12), list = [];
+  if (o.horde) { let tc = t0; const H = o.horde; while (tc < t1 - 0.2) { const me = T.g.position, k = H.near(me, tc + 0.3, { max: o.range ?? 40 }); if (k < 0) { tc += 0.4; continue; } const burst = o.burst ?? (T.kind === 'gatling' ? 0.35 : 0.1), tb = tc + 0.28, th = tb + burst;
+      const ref = { h: H, i: k }; turretAim(T, tc, ref, { dur: 0.26, beep: list.length === 0, t1: th }); H.hit(k, th + 0.02, { from: me, push: T.kind === 'cannon' || T.kind === 'rocket' ? 1.4 : 0.4 }); list.push({ t0: tb, t1: th, T: cbTarget(ref), kill: false }); tc = th + 0.12; } }
+  else { const tg = cbTarget(o.at ?? [T.g.position.x, 1, T.g.position.z + 20]); if (!T.aims.some(a => a.t <= t0 - 0.3)) turretAim(T, t0 - 0.6, tg, { dur: 0.5, t1 }); list.push({ t0, t1, T: tg, kill: o.kill }); }
+  for (const L of list) { T.fire.push({ t0: L.t0, t1: L.t1 });
+    const n = Math.max(1, Math.round((L.t1 - L.t0) * rate)); if (T.kind === 'gatling') { sfx(L.t0 - 0.45, 'minigun', 1); AUDIO.hits[AUDIO.hits.length - 1].dur = L.t1 - L.t0 + 0.5; }
+    if (T.kind === 'laser') { laserBeam(T, L); continue; }
+    if (T.kind === 'flame') { for (let i = 0; i < Math.round((L.t1 - L.t0) * 10); i++) { const tt = L.t0 + i / 10, [M, d] = T.muzzleAt(tt); cbBurst('flame', M, tt, { rate: 90, n: 9, dir: d, cone: 0.12, speed: 14, size: 0.55, life: 0.45, drag: 1.2 }); } sfx(L.t0, 'fire', 1); AUDIO.hits[AUDIO.hits.length - 1].dur = L.t1 - L.t0; sfx(L.t0, 'launch', 0.4);
+      cbFlash(() => T.muzzleAt(L.t0), L.t0, { size: 0.01, dur: L.t1 - L.t0, light: 50, dist: 12, lightDur: L.t1 - L.t0 }); hitFx(L.T, L.T.pos(L.t0 + 0.4), L.t0 + 0.4, { from: T.g.position }); if (L.T.rig) fall(L.T.rig, L.t0 + 0.6, { from: T.g.position }); continue; }
+    for (let i = 0; i < n; i++) { const ts = L.t0 + i / rate, [M, d] = T.muzzleAt(ts, i), P = L.T.pos(ts);
+      if (T.kind === 'rocket') { missile({ from: M, at: L.T, t0: ts, speed: 45, size: 0.9, small: true, quiet: false }); cbBurst('smoke', M, ts, { n: 8, size: 0.4, dir: d.clone().negate(), speed: 2 }); continue; }
+      if (T.kind === 'cannon') { cbFlash(tt => T.muzzleAt(tt), ts, { size: 1.0, dur: 0.08, light: 60, dist: 16 }); cbBurst('smoke', M, ts, { n: 14, dir: d, speed: 2.5, size: 0.7, life: 2.4 }); cbTracer(M, P, ts, { vel: 200, len: 3, w: 0.1 }); explode(P.x, Math.max(groundH(P.x, P.z), P.y - 0.8), P.z, ts + M.distanceTo(P) / 200, { size: 1.0 }); sfx(ts, 'cannon', 0.8); continue; }
+      const Ph = P.clone().add(v3((hash(ts * 7) - 0.5) * 0.4, (hash(ts * 9) - 0.5) * 0.5, (hash(ts * 11) - 0.5) * 0.4)), th = ts + M.distanceTo(Ph) / 200;
+      cbFlash(tt => { const [m, dd] = T.muzzleAt(tt); return [m, dd]; }, ts, { size: 0.42, dur: 0.045, light: i % 2 ? 0 : 22, dist: 9 }); if (i % 2 === 0) cbTracer(M, Ph, ts, { vel: 200, len: 2.2, w: 0.045 });
+      hitFx(L.T.h || L.T.rig ? L.T : null, Ph, th, { from: M, quiet: i % 3 !== 0 }); if (i % 2 === 0) { const E = M.clone().addScaledVector(d, -1.1).add(v3(0, 0.1, 0)); cbBurst('brass', E, ts, { n: 1, dir: v3(d.z, 0.8, -d.x), speed: 2.2 }); }
+      if (L.T.rig && i === n - 1 && L.kill) fall(L.T.rig, th, { from: M }); }
+    cbBurst('smoke', () => T.muzzleAt(L.t1)[0].toArray(), L.t1, { n: 6, size: 0.25, speed: 0.4, life: 2, opacity: 0.35 }); }
+  return list;
+}
+function laserBeam(T, L) {   // continuous beam: glowing core + halo from the emitter to the target, sparks at the hit
+  const core = new THREE.Mesh(boxG(1, 1, 1), new THREE.MeshBasicMaterial({ color: new THREE.Color('#FF3A3A').multiplyScalar(3), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false })), halo = new THREE.Mesh(boxG(1, 1, 1), new THREE.MeshBasicMaterial({ color: new THREE.Color('#FF5A3A').multiplyScalar(1.2), transparent: true, opacity: 0.35, blending: THREE.AdditiveBlending, depthWrite: false }));
+  for (const m of [core, halo]) { m.frustumCulled = false; world.add(dyn(m)); }
+  CB.post.push(t => { const on = t >= L.t0 && t < L.t1; core.visible = halo.visible = on; if (!on) return; const [M] = T.muzzleAt(t), P = L.T.pos(t), fl = 1 + 0.2 * Math.sin(t * 60); segBox(core, M, P, 0.05 * fl, 0.05 * fl); segBox(halo, M, P, 0.16 * fl, 0.16 * fl); });
+  cbBurst('spark', tt => L.T.pos(tt).toArray(), L.t0, { rate: 40, n: Math.round((L.t1 - L.t0) * 40), speed: 4, colors: ['#FFAA8A', '#FFFFFF'] }); cbFlash(tt => T.muzzleAt(tt), L.t0, { size: 0.01, dur: L.t1 - L.t0, light: 30, dist: 8, lightDur: L.t1 - L.t0, color: '#FF3A3A' });
+  sfx(L.t0, 'laser', 0.8); sfx(L.t0, 'buzz', 0.5); AUDIO.hits[AUDIO.hits.length - 1].dur = L.t1 - L.t0; if (L.T.rig) { if (typeof xray === 'function') xray(L.T.rig, { t0: L.t0, t1: L.t0 + 0.5, path: 'bolt' }); fall(L.T.rig, L.t0 + 0.5, {}); }
+}
+// --- drone: quadcopter with spinning rotors, camera gimbal, LEDs; fly() it, strafe() with its gun, carry a spotlight ---
+function drone(p, o = {}) {
+  cbInit(); const c = o.color ?? '#E8ECF0', s = o.scale ?? 1, g = dyn(grp(p, o.x ?? 0, o.y ?? 5, o.z ?? 0)), B = grp(g); B.scale.setScalar(s); const NC = { cast: false };
+  rbox(B, 0.5, 0.16, 0.6, c, 0, -0.08, 0); box(B, 0.3, 0.06, 0.4, '#2A2D33', 0, 0.08, 0, NC); const rot = [];
+  for (const [sx, sz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) { box(B, 0.06, 0.04, 0.62, '#2A2D33', sx * 0.3, 0, sz * 0.32, { ry: sx * sz * 0.8 }); cyl(B, 0.06, 0.06, 0.08, '#2A2D33', sx * 0.52, 0.0, sz * 0.52, { seg: 8 });
+    const r = dyn(grp(B, sx * 0.52, 0.09, sz * 0.52)); for (let k = 0; k < 2; k++) box(r, 0.5, 0.008, 0.05, '#1A1A1A', 0, 0, 0, { ry: k * Math.PI / 2, ...NC }); cyl(r, 0.26, 0.26, 0.004, '', 0, 0.002, 0, { mat: mat('#AAAAAA', { opacity: 0.18 }), seg: 16, ...NC }); rot.push(r);
+    ball(B, 0.025, '', sx * 0.52, -0.06, sz * 0.52, { mat: mat(sz > 0 ? '#5AFF5A' : '#FF3A3A', { basic: true, glow: 1.5 }), detail: 0, ...NC }); }
+  const gim = grp(B, 0, -0.2, 0.15); ball(gim, 0.09, '#1A1A1A', 0, 0, 0, { detail: 1 }); rod(gim, 0.045, 0.045, 0.04, '#0A0A0A', 0, 0, 0.08, { seg: 10, ...NC });
+  if (o.gun) { box(B, 0.08, 0.08, 0.45, '#2A2D33', 0, -0.26, 0.15); rod(B, 0.018, 0.018, 0.3, '#1A1A1A', 0, -0.22, 0.48, NC); }
+  if (o.light) { const L = new THREE.SpotLight('#FFF6D8', 40, 25, 0.35, 0.5, 1.2); L.position.set(0, -0.2, 0.2); B.add(L); L.target.position.set(0, -6, 4); B.add(L.target); }
+  tick(t => { rot.forEach((r, i) => { r.rotation.y = t * 70 * (i % 3 ? 1 : -1); }); B.position.y = 0.06 * Math.sin(t * 2.3); B.rotation.z = 0.03 * Math.sin(t * 1.7); });
+  return { g, B, kind: 'drone', s, gun: v3(0, -0.22, 0.65), rotor: rot };
+}
+// --- hydraulic press: slams down at each time in o.at, crushes (squashes) what's under it ---
+function press(p, x, z, o = {}) {
+  cbInit(); const W = o.w ?? 2.2, H = o.h ?? 4, g = stat(grp(p, x, groundH(x, z), z, o.ry ?? 0)), c = o.color ?? '#C9A02A', NC = { cast: false };
+  box(g, W + 0.8, 0.3, 1.6, '#3A3D44', 0, 0, 0); for (const sx of [-1, 1]) { box(g, 0.35, H, 0.6, c, sx * (W / 2 + 0.2), 0.3, 0); for (let i = 0; i < 6; i++) box(g, 0.36, 0.08, 0.61, i % 2 ? '#1A1A1A' : '#F2C230', sx * (W / 2 + 0.2), 0.6 + i * 0.12, 0, NC); }
+  box(g, W + 0.9, 0.6, 1.0, c, 0, H + 0.3, 0); cyl(g, 0.35, 0.35, 0.9, '#3A3D44', 0, H + 0.9, 0, { seg: 12 }); for (const sx of [-1, 1]) rod(g, 0.05, 0.05, 1.2, '#1A1A1A', sx * 0.5, H + 1.2, -0.3, { seg: 5, ...NC });
+  const ram = dyn(grp(g, 0, H + 0.3, 0)); cyl(ram, 0.2, 0.2, 1.2, '#D8DEE4', 0, -1.2, 0, { seg: 12, metal: 0.7, rough: 0.2 }); box(ram, W, 0.35, 1.3, '#5A5E66', 0, -1.55, 0); for (let i = 0; i < 4; i++) box(ram, W, 0.02, 0.02, '#1A1A1A', 0, -1.5 + i * 0.07, 0.66, NC);
+  const top = H + 0.3, down = 0.3 + 1.55, times = [].concat(o.at ?? []); const yAt = t => { let y = 0; for (const s of times) { const a = t - s; if (a < -0.25 || a > 2.2) continue; y = Math.max(y, a < 0 ? 0 : a < 0.12 ? a / 0.12 : a < 0.5 ? 1 : 1 - (a - 0.5) / 1.6); } return y; };
+  tick(t => { ram.position.y = top - (top - down) * clamp(yAt(t)); });
+  for (const s of times) { sfx(s - 0.05, 'hiss', 0.7); sfx(s + 0.12, 'impact', 1); sfx(s + 0.12, 'clang', 0.5); SHAKES.push({ t: VT(s + 0.12), amp: 0.25, dur: 0.4 }); cbBurst('puff', [x, groundH(x, z) + 0.35, z], s + 0.12, { n: 18, dir: [0, 0.15, 0], cone: 1.4, speed: 3, size: 0.4 }); }
+  for (const v of [].concat(o.victims ?? [])) { const [vv, tv] = Array.isArray(v) ? v : [v, times[0]]; trapVictim(vv, tv + 0.12, 'squash', { at: [x, z] }); }
+  return { g, ram, times };
 }
 
 /* ====================================================================== */
@@ -5336,6 +5631,15 @@ const SND = (() => {
       servo: (t, v, d = 1) => tone('sawtooth', 95, t, 0.06, Math.max(0, d - 0.16), 0.1, 0.05 * v, fx, { to: 130, glide: d, lp: 700 }),
       tread: (t, v, d = 3) => { for (let k = 0; k < d * 9; k++) nz(t + k / 9 + ar() * 0.02, 0.001, 0.01, 0.05, 0.12 * v, fx, 'bandpass', 700 + ar() * 500, 0, 2); SFX.engine(t, v * 0.8, d); },
       daze: (t, v) => { for (let k = 0; k < 4; k++) tone('sine', 2200 + 400 * (k % 2), t + k * 0.13, 0.005, 0.02, 0.08, 0.05 * v, fx, { to: 2900 - 300 * (k % 2), glide: 0.08 }); }
+    });
+    Object.assign(SFX, {   // traps & machines (v2.11)
+      snap: (t, v) => { nz(t, 0.001, 0.004, 0.05, 0.9 * v, fx, 'highpass', 2500); SFX.clang(t + 0.005, 0.6 * v); tone('sine', 180, t, 0.001, 0.01, 0.1, 0.5 * v, fx, { to: 70, glide: 0.08 }); },
+      boing: (t, v) => { const os = tone('triangle', 180, t, 0.005, 0.25, 0.35, 0.22 * v, fx, { lp: 1800 }); const l = ctx.createOscillator(), lg = ctx.createGain(); l.frequency.value = 18; lg.gain.value = 60; l.connect(lg); lg.connect(os.frequency); l.start(t); l.stop(t + 0.7); os.frequency.exponentialRampToValueAtTime(420, t + 0.5); },
+      saw: (t, v, d = 3) => { tone('sawtooth', 820, t, 0.15, Math.max(0, d - 0.3), 0.15, 0.05 * v, fx, { lp: 4000 }); tone('square', 1640, t, 0.15, Math.max(0, d - 0.3), 0.15, 0.02 * v, fx, { lp: 5000 }); nz(t, 0.1, Math.max(0, d - 0.2), 0.1, 0.08 * v, fx, 'bandpass', 3200, 0, 2); },
+      buzz: (t, v, d = 1) => { const os = tone('sawtooth', 60, t, 0.02, Math.max(0, d - 0.05), 0.03, 0.12 * v, fx, { lp: 2400 }); tone('square', 120, t, 0.02, Math.max(0, d - 0.05), 0.03, 0.05 * v, fx, { lp: 3000 }); for (let k = 0; k < d * 14; k++) nz(t + ar() * d, 0.001, 0.004, 0.02, 0.18 * v, fx, 'highpass', 3000); },
+      beep: (t, v) => { tone('square', 1760, t, 0.003, 0.06, 0.02, 0.05 * v, fx, { lp: 4000 }); tone('square', 1760, t + 0.12, 0.003, 0.06, 0.02, 0.05 * v, fx, { lp: 4000 }); },
+      rumble: (t, v, d = 4) => { nz(t, 0.4, Math.max(0, d - 0.8), 0.4, 0.4 * v, fx, 'lowpass', 160); nz(t, 0.4, Math.max(0, d - 0.8), 0.4, 0.12 * v, fx, 'bandpass', 420, 0, 1.2); for (let k = 0; k < d * 3; k++) tone('sine', 50 + ar() * 20, t + k / 3, 0.01, 0.05, 0.25, 0.25 * v, fx); },
+      hiss: (t, v) => { nz(t, 0.02, 0.15, 0.25, 0.3 * v, fx, 'highpass', 3500); nz(t, 0.02, 0.1, 0.2, 0.15 * v, fx, 'bandpass', 1800, 0, 1); }
     });
     // ambience beds: AUDIO.amb = [[t0, t1, kind, vol], …] — background sound of the place, fades in/out 0.35 s (cuts between places)
     const amb = ctx.createGain(); amb.gain.value = A.ambVol ?? 0.7; const aduck = ctx.createGain(); amb.connect(aduck); aduck.connect(master);
