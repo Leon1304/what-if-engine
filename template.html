@@ -1899,7 +1899,14 @@ function horde(o = {}) {
   const C0 = fz == null ? null : PARTS.map(im => [...Array(im.count).keys()].map(k => { const c = new THREE.Color(); im.getColorAt(k, c); return c; }));
   let lastK = -1;
   const api = {
-    fast: run, count: t => { let c = 0; for (const q of M) if (t >= q.b) c++; return c; },   // members already on screen
+    fast: run, human, count: t => { let c = 0; for (const q of M) if (t >= q.b && !(q.down && t >= q.down.t)) c++; return c; },   // members on screen and still standing
+    pos(i, t, out = new THREE.Vector3()) { const q = M[i], dn = q.down && t >= q.down.t ? q.down : null, [x, z] = state(q, dn ? dn.t : t); return out.set(x + (dn ? dn.dx * dn.push : 0), groundH(x, z) + (dn ? 0.3 : 1.2) * q.sc, z + (dn ? dn.dz * dn.push : 0)); },
+    near(p, t, o2 = {}) { const px = p.x ?? p[0], pz = p.z ?? (p.length === 2 ? p[1] : p[2]); let best = -1, bd = o2.max ?? 1e9;   // nearest standing member (members already marked by hit() are skipped)
+      for (let i = 0; i < n; i++) { const q = M[i]; if (t < q.b + (rise ? 0.9 : 0) || (q.down && !o2.any)) continue; const [x, z] = state(q, t), d = Math.hypot(x - px, z - pz); if (d < bd && d >= (o2.min ?? 0)) { bd = d; best = i; } } return best; },
+    hit(i, t, o2 = {}) { const q = M[i]; if (!q || (q.down && q.down.t <= t)) return api; const s0 = state(q, t), fr = o2.from ? [o2.from.x ?? o2.from[0], o2.from.z ?? o2.from[o2.from.length === 2 ? 1 : 2]] : [s0[0] - Math.sin(s0[3]), s0[1] - Math.cos(s0[3])];
+      const L = Math.hypot(s0[0] - fr[0], s0[1] - fr[1]) || 1, dx = (s0[0] - fr[0]) / L, dz = (s0[1] - fr[1]) / L, back = Math.sin(s0[3]) * dx + Math.cos(s0[3]) * dz < 0 ? 1 : -1;   // hit from the front → falls on its back
+      q.down = { t, dx, dz, push: o2.push ?? 0.35, dir: o2.dir ?? back, sink: o2.sink ?? !human }; return api; },
+    alive: (i, t) => !(M[i].down && t >= M[i].down.t),
     update(t) {
       if (fz != null) {
         const k = clamp((t - fz) / 1.2) * 0.75;
@@ -1909,12 +1916,18 @@ function horde(o = {}) {
       for (let i = 0; i < n; i++) {
         const q = M[i];
         if (t < q.b) { for (const im of [torso, head, eyes, mouths]) im.setMatrixAt(i, Z); for (const im of [uarm, farm, thigh, shin, foot]) { im.setMatrixAt(2 * i, Z); im.setMatrixAt(2 * i + 1, Z); } continue; }
-        const [x, z, moving, yaw0, walked] = state(q, t), u = q.ph / TAU + walked / q.cl;
+        const dn = q.down && t >= q.down.t ? q.down : null;   // knocked down by h.hit(): stays where it was hit, topples, lies (zombies sink back into the ground)
+        if (dn && dn.sink && t - dn.t > 5.4) { for (const im of [torso, head, eyes, mouths]) im.setMatrixAt(i, Z); for (const im of [uarm, farm, thigh, shin, foot]) { im.setMatrixAt(2 * i, Z); im.setMatrixAt(2 * i + 1, Z); } continue; }
+        let [x, z, moving, yaw0, walked] = state(q, dn ? dn.t : t); const u = q.ph / TAU + walked / q.cl; if (dn) moving = false;
         const yaw = moving ? yaw0 + Math.sin(Math.PI * u) * (human ? 0.04 : 0.1) : yaw0;
-        const em = rise ? EASE.out(clamp((t - q.b) / 0.8)) : 1, y = groundH(x, z) - (1 - em) * 1.9 + (o.lift ? o.lift(t, i) : 0);
-        base.compose(V.set(x, y, z), Q.setFromEuler(E.set(0, yaw, 0)), SC.setScalar(q.sc));
-        const S = rigState(moving ? mode : 'idle', u, t, q.o), up = o.armsUp ? o.armsUp(t, i) : false;
-        if (!moving && !human) {   // arrived: hammer on whatever is in front
+        const em = rise ? EASE.out(clamp((t - q.b) / 0.8)) : 1; let y = groundH(x, z) - (1 - em) * 1.9 + (o.lift ? o.lift(t, i) : 0), fa = 0;
+        if (dn) { const a = t - dn.t, k = clamp(a / 0.5); fa = (Math.PI / 2 - 0.05) * EASE.in(k) - (a > 0.5 ? 0.1 * Math.exp(-(a - 0.5) * 7) * Math.abs(Math.sin((a - 0.5) * 16)) : 0);
+          x += dn.dx * dn.push * EASE.out(k); z += dn.dz * dn.push * EASE.out(k); y += 0.16 * sm01(k) * q.sc - (dn.sink && a > 2.4 ? Math.min(2.6, (a - 2.4) * 0.9) : 0); }
+        base.compose(V.set(x, y, z), Q.setFromEuler(E.set(-fa * (dn?.dir ?? 1), yaw, 0, 'YXZ')), SC.setScalar(q.sc));
+        const S = rigState(moving ? mode : 'idle', u, t, q.o), up = !dn && (o.armsUp ? o.armsUp(t, i) : false);
+        if (dn) { const a = t - dn.t, k = clamp(a / 0.45), tw = human ? 0 : 0.12 * Math.sin(t * 9 + q.ph) * Math.exp(-a * 0.8);
+          S.las = lerp(S.las, -2.5 + tw, k); S.ras = lerp(S.ras, -2.4 - tw, k); S.laz = -0.4 * k; S.raz = 0.4 * k; S.lae = S.rae = -0.2; S.lt = S.rt = lerp(S.lt, -0.12, k); S.lk = S.rk = lerp(S.lk, 0.3, k); S.lz = -0.1 * k; S.rz = 0.1 * k; S.crx = 0; S.nrx = -0.1 * k; S.nry *= 1 - k; }
+        if (!moving && !human && !dn) {   // arrived: hammer on whatever is in front
           const p1 = Math.abs(Math.sin(t * 5.5 + q.ph)), p2 = Math.abs(Math.sin(t * 5.5 + q.ph + 0.9));
           S.las = -1.45 - 0.45 * p1 + q.o.armOff; S.ras = -1.5 - 0.45 * p2; S.lae = -0.35 + 0.25 * p1; S.rae = -0.35 + 0.25 * p2; S.crx = 0.18 + 0.05 * p1;
         }
@@ -3263,6 +3276,851 @@ function conspiracyBoard(p, x, z, o = {}) {
 }
 
 /* ====================================================================== */
+/* COMBAT (v2.8) — weapons, fights and war machines. Cartoon action, never gory: no blood (zombies spill goo), knocked-down people see stars */
+/* ====================================================================== */
+// weapon(rig, kind, { from, to, guard, color, scale }) → W — kinds: sword · axe · spear · bat · knife · hammer · saber (glowing blade) · shield | bow |
+//   pistol · revolver · blaster · smg · rifle · sniper · shotgun · minigun · launcher. One-handed things sit in the right hand, shield and bow in the left, long guns in both.
+// melee: swing(rig, t, { kind: 'slash'|'back'|'chop'|'thrust'|'rise', at, kill, power }) — t = moment of impact · block(rig, t, { dur, parry }) · duel(a, b, { t0, n, every, finish }) · punch / kick
+// bow(rig, t, { at, draw, hold, speed, fire, miss }) — t = release · arrowRain({ from, to, r, n, t0, t1 })
+// guns: shoot(rig, t, { at, n, rate, spread, acc, kill, tracer }) — at: rig | [x,y,z] | horde (each shot drops the nearest member) · reload(rig, t) · grenade(rig, t, { to, fuse, size })
+// fall(rig, t, { dir, from, getUp, dazed, sink }) — knocked down, stars circle the head · horde: h.hit(i, t, { from }) · h.near(p, t) · h.pos(i, t) · h.alive(i, t)
+// vehicles: tank(p, x, z, o) (+ drive) · aimTurret(T, t, at) · cannon(T, t, { at, size }) · jet(p, o) (+ fly) · missile({ from, at, t0 }) · bomb(V, t) · flares(V, t) · strafe(V, t0, t1, { at, horde }) · shotDown(J, t)
+const CB = { on: false, rigs: [], fl: [], tr: [], arrows: [], gren: [], falls: [], tanks: [], jets: [], mis: [], bombs: [], stars: [], rain: [], downs: [] };
+let _cbId = 0;
+const _k1 = new THREE.Vector3(), _k2 = new THREE.Vector3(), _k3 = new THREE.Vector3(), _k4 = new THREE.Vector3(), _k5 = new THREE.Vector3();
+const _kq1 = new THREE.Quaternion(), _kq2 = new THREE.Quaternion(), _kq3 = new THREE.Quaternion(), _km1 = new THREE.Matrix4(), _km2 = new THREE.Matrix4(), _km3 = new THREE.Matrix4(), _kmi = new THREE.Matrix4(), _ke = new THREE.Euler();
+const _AX = new THREE.Vector3(1, 0, 0), _AY = new THREE.Vector3(0, 1, 0), _AZ = new THREE.Vector3(0, 0, 1), _ONE = new THREE.Vector3(1, 1, 1);
+const _bx = new THREE.Vector3(), _by = new THREE.Vector3(), _bz = new THREE.Vector3(), _bm = new THREE.Matrix4(), _o3 = new THREE.Object3D(), _pc2 = new THREE.Color();
+const v3 = (x = 0, y = 0, z = 0) => new THREE.Vector3(x, y, z);
+const toV = a => a == null ? null : a.isVector3 ? a.clone() : a.length === 2 ? v3(a[0], groundH(a[0], a[1]), a[1]) : v3(a[0], a[1], a[2]);
+const nlerp = (a, b, k, out = new THREE.Vector3()) => out.copy(a).lerp(b, k).normalize();
+function qLook(fwd, up, out = new THREE.Quaternion()) {   // rotation mapping +z → fwd and +y → up (orthogonalised)
+  _bz.copy(fwd).normalize(); _bx.crossVectors(up, _bz);
+  if (_bx.lengthSq() < 1e-8) _bx.crossVectors(Math.abs(_bz.y) < 0.9 ? _AY : _AX, _bz);
+  _bx.normalize(); _by.crossVectors(_bz, _bx); _bm.makeBasis(_bx, _by, _bz); return out.setFromRotationMatrix(_bm);
+}
+function segBox(m, a, b, w, h) { m.position.addVectors(a, b).multiplyScalar(0.5); const L = a.distanceTo(b); m.scale.set(w, h, Math.max(1e-3, L)); if (L > 1e-5) qLook(_k4.subVectors(b, a), _AY, m.quaternion); }
+
+// --- rig math: two-bone arm IK / FK in the chest frame (shoulders at ±0.34, 0.54) ---
+const UA = 0.29, FA = 0.36;
+function armIK(side, T) {   // chest-frame hand target → [shoulder pitch, shoulder roll, elbow]
+  const dx = T.x - (side === 'L' ? -0.34 : 0.34), dy = T.y - 0.54, dz = T.z, D = Math.hypot(dx, dy, dz) || 1e-3, Dc = clamp(D, 0.16, (UA + FA) * 0.995);
+  const e = -Math.acos(clamp((Dc * Dc - UA * UA - FA * FA) / (2 * UA * FA), -1, 1));
+  const hy = -UA - FA * Math.cos(e) - 0.05 * Math.sin(e), hz = -FA * Math.sin(e) + 0.05 * Math.cos(e), k = Math.hypot(hy, hz) / D;
+  const az = Math.asin(clamp(-dx * k / hy, -1, 1)); let as = Math.atan2(dz * k, dy * k) - Math.atan2(hz, hy * Math.cos(az));
+  while (as > 0.6 * Math.PI) as -= TAU; while (as < -1.6 * Math.PI) as += TAU;
+  return [as, az, e];
+}
+function armQ(as, az, ae, out) { _ke.set(as, 0, az, 'XYZ'); out.setFromEuler(_ke); return out.multiply(_kq3.setFromAxisAngle(_AX, ae)); }   // forearm orientation (chest frame)
+function setArm(S, side, ik, w) {
+  if (!(w > 0)) return;
+  if (side === 'L') { S.las = lerp(S.las, ik[0], w); S.laz = lerp(S.laz, ik[1], w); S.lae = lerp(S.lae, ik[2], w); }
+  else { S.ras = lerp(S.ras, ik[0], w); S.raz = lerp(S.raz, ik[1], w); S.rae = lerp(S.rae, ik[2], w); }
+}
+function chestM(S, out) {   // rig-frame matrix of the chest for joint state S
+  _ke.set(S.hrx, S.hry, S.hrz); _km1.compose(_k1.set(S.hx, S.H + S.by, 0), _kq1.setFromEuler(_ke), _ONE);
+  _ke.set(S.crx, S.cry, S.crz); _km2.compose(_k1.set(0, 0.02, 0), _kq2.setFromEuler(_ke), _ONE);
+  return out.multiplyMatrices(_km1, _km2);
+}
+function rigF(f, t) { return { p: rigPos(f, t, new THREE.Vector3()), y: rigYaw(f, t), s: (f.root ?? f).scale.x }; }
+const toRig = (F, w, out = new THREE.Vector3()) => out.copy(w).sub(F.p).applyAxisAngle(_AY, -F.y).divideScalar(F.s);
+const fromRig = (F, l, out = new THREE.Vector3()) => out.copy(l).multiplyScalar(F.s).applyAxisAngle(_AY, F.y).add(F.p);
+const CH0 = 0.86;   // chest origin height above the feet (standing)
+const rigStill = (f, t) => !(f._posAt) || rigPos(f, t - 0.06, _k1).distanceTo(rigPos(f, t + 0.06, _k2)) < 0.05;
+
+// --- targets: rig · animal · horde member { h, i } · horde (shoot picks members) · [x,y,z] · [x,z] · t => [x,y,z] · track name · object/vehicle ---
+function cbTarget(at) {
+  if (at == null) return null;
+  if (at._cbT) return at;
+  const T = { _cbT: true, src: at };
+  if (at.h && at.i != null) { T.h = at.h; T.i = at.i; T.zombie = !at.h.human; T.pos = t => at.h.pos(at.i, t); return T; }
+  if (at.near && at.hit && at.pos) { T.horde = at; T.zombie = !at.human; T.pos = t => v3(0, -99, 0); return T; }
+  if (Array.isArray(at)) { const p = at.length === 2 ? v3(at[0], groundH(at[0], at[1]) + 1.1, at[1]) : v3(at[0], at[1], at[2]); T.pos = () => p.clone(); T.point = true; return T; }
+  if (at.isVector3) { const p = at.clone(); T.pos = () => p.clone(); T.point = true; return T; }
+  if (typeof at === 'function') { T.pos = t => toV(at(t)); return T; }
+  if (typeof at === 'string') { const tr = TRACK[at]; if (!tr) { console.warn('combat: unknown track ' + at); return null; } const r = RIGS.find(r => r.root === tr.obj); return cbTarget(r ?? tr.obj); }
+  if (at.legL) { T.rig = at; T.zombie = at.kind === 'zombie'; const hy = at.hitY ?? 1.22; T.pos = t => rigPos(at, t, new THREE.Vector3()).add(_k5.set(0, hy * (at.root?.scale.x ?? 1), 0)); return T; }
+  if (at.quad) { T.animal = at; T.pos = t => rigPos(at, t, new THREE.Vector3()).add(_k5.set(0, (at.by0 ?? 0.5) + 0.3, 0)); return T; }
+  const node = at.g ?? at.root ?? at, dy = at.hitY ?? (at.kind === 'tank' ? 1.6 : at.wheels ? 0.9 : 0.6); T.obj = at; T.node = node; T.metal = !!(at.wheels || at.kind === 'tank' || at.kind === 'fighter' || at.rotor);
+  T.pos = t => { if (node._fly) { const [p] = node._fly(t); return v3(p[0], p[1], p[2]); } if (at._posAt) return at._posAt(t).clone().add(_k5.set(0, dy, 0)); node.updateWorldMatrix(true, false); return new THREE.Vector3().setFromMatrixPosition(node.matrixWorld).add(_k5.set(0, dy, 0)); };
+  return T;
+}
+
+// --- pooled effects (one instanced mesh per kind): sparks, chips, goo, brass, dust puffs, smoke, flame, flares ---
+const BKIND = {
+  spark: { cap: 1600, geo: 'box', basic: true, hot: 2.6, g: -9.8, drag: 1.4, life: 0.42, size: 0.022, speed: 7, cone: 0.9, colors: ['#FFF6C8', '#FFB443'], streak: true },
+  chip:  { cap: 900, geo: 'box', g: -9.8, life: 1.9, size: 0.065, speed: 4, cone: 0.7, colors: ['#6E5C46', '#8C7A62', '#55483A'], floor: true, spin: 14, bounce: 0.3 },
+  goo:   { cap: 900, geo: 'ico', basic: true, hot: 1.25, g: -9.8, life: 1.5, size: 0.1, speed: 3.6, cone: 0.85, colors: ['#8CFF5A', '#4FD02F', '#B6FF7A'], floor: true, flat: true, bounce: 0 },
+  brass: { cap: 320, geo: 'shell', metal: true, g: -9.8, life: 3.2, size: 1, speed: 2.4, cone: 0.25, colors: ['#E0B54C'], floor: true, spin: 24, bounce: 0.35 },
+  puff:  { cap: 600, soft: 'dust', g: 0.25, drag: 3.2, life: 1.1, size: 0.4, grow: 1.6, speed: 2.2, cone: 0.9, colors: ['#A89C84', '#8E836E'], opacity: 0.55 },
+  smoke: { cap: 700, soft: 'smoke', g: 0.6, drag: 1.6, life: 2.8, size: 0.55, grow: 2.4, speed: 1.2, cone: 0.6, colors: ['#9A9590', '#C2BDB6'], opacity: 0.5 },
+  flame: { cap: 500, soft: 'fire', g: 0.8, drag: 5, life: 0.3, size: 0.55, grow: 1.1, speed: 8, cone: 0.3, colors: ['#FFF2B0', '#FFA43A', '#E04A1A'], opacity: 1 },
+  flare: { cap: 240, geo: 'ico', basic: true, hot: 3.2, g: -2.5, drag: 1.0, life: 2.0, size: 0.32, speed: 6, cone: 0.6, colors: ['#FFFFFF', '#FFE6A0'] }
+};
+const BP = {};
+function bpool(kind) {
+  if (BP[kind]) return BP[kind]; const K = BKIND[kind]; let im;
+  if (K.soft) { const geo = softGeo(K.cap); im = new THREE.InstancedMesh(geo, softMaterial({}, K.soft === 'fire' ? 'fire' : 'smoke'), K.cap); im.renderOrder = 2; im.fade = geo.attributes.aFade; }
+  else {
+    const geo = K.geo === 'box' ? boxG(1, 1, 1) : K.geo === 'shell' ? G('cbShell', () => new THREE.CylinderGeometry(0.014, 0.014, 0.05, 6).rotateX(Math.PI / 2)) : G('ico0', () => new THREE.IcosahedronGeometry(0.5, 0));
+    im = new THREE.InstancedMesh(geo, K.basic ? new THREE.MeshBasicMaterial({ color: '#ffffff' }) : new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: K.metal ? 0.35 : 0.95, metalness: K.metal ? 0.75 : 0, flatShading: true }), K.cap);
+  }
+  im.castShadow = false; im.frustumCulled = false; im.setColorAt(0, new THREE.Color()); im.count = 0; im.instanceMatrix.setUsage(THREE.DynamicDrawUsage); world.add(dyn(im));
+  return (BP[kind] = { kind, K, im, cols: K.colors.map(c => new THREE.Color(c).multiplyScalar(K.hot ?? 1)), list: [] });
+}
+// cbBurst(kind, at, t0, { n, rate, dir, cone, speed, size, life, g, drag, grow, jitter, vel, colors, opacity }) — at: [x,y,z] | Vector3 | t => [x,y,z] (birth time); rate > 0 = stream
+function cbBurst(kind, at, t0, o = {}) {
+  const P = bpool(kind), K = P.K, n = Math.max(1, Math.round(o.n ?? 10)), rate = o.rate ?? 0, life = o.life ?? K.life;
+  const e = { id: ++_cbId, at: typeof at === 'function' ? null : toV(at), fn: typeof at === 'function' ? at : null, t0, n, rate, life,
+    dir: (o.dir ? toV(o.dir) : v3(0, 1, 0)).normalize(), cone: o.cone ?? K.cone, speed: o.speed ?? K.speed, size: o.size ?? K.size, g: o.g ?? K.g, drag: o.drag ?? K.drag ?? 0, grow: o.grow ?? K.grow ?? 0,
+    jit: o.jitter ?? 0.03, vel: o.vel ? toV(o.vel) : null, cols: o.colors ? o.colors.map(c => new THREE.Color(c).multiplyScalar(K.hot ?? 1)) : P.cols, op: o.opacity ?? K.opacity ?? 1 };
+  e.t1 = rate ? t0 + n / rate : t0 + 0.03; e.tEnd = e.t1 + life * 1.4;
+  e.u = new THREE.Vector3().crossVectors(Math.abs(e.dir.y) < 0.9 ? _AY : _AX, e.dir).normalize(); e.w = new THREE.Vector3().crossVectors(e.dir, e.u);
+  P.list.push(e); return e;
+}
+function cbBall(x0, y0, z0, vx, vy, vz, g, fy, age, eb) {   // ballistic with one bounce on the floor → [x, y, z, resting]
+  const Gd = -g, disc = vy * vy + 2 * Gd * (y0 - fy);
+  if (Gd <= 0 || disc < 0) return [x0 + vx * age, y0 + vy * age + 0.5 * g * age * age, z0 + vz * age, false];
+  const t1 = (vy + Math.sqrt(disc)) / Gd; if (age < t1) return [x0 + vx * age, y0 + vy * age - 0.5 * Gd * age * age, z0 + vz * age, false];
+  const vb = -(vy - Gd * t1) * eb, hx = vx * 0.4, hz = vz * 0.4, t2 = 2 * vb / Gd, u = age - t1, bx = x0 + vx * t1, bz = z0 + vz * t1;
+  if (u < t2) return [bx + hx * u, fy + vb * u - 0.5 * Gd * u * u, bz + hz * u, false];
+  return [bx + hx * t2, fy, bz + hz * t2, true];
+}
+function bpoolUpdate(P, t) {
+  const K = P.K, im = P.im; let c = 0;
+  for (const e of P.list) {
+    if (t < e.t0 || t > e.tEnd) continue;
+    for (let i = 0; i < e.n && c < K.cap; i++) {
+      const b = e.rate ? e.t0 + i / e.rate : e.t0 + hash(e.id * 31 + i) * 0.025, age = t - b, h1 = hash(e.id * 17 + i * 1.7), h2 = hash(e.id * 29 + i * 2.3), h3 = hash(e.id * 41 + i * 3.9), h4 = hash(e.id * 53 + i * 5.3);
+      const life = e.life * (0.65 + 0.7 * h4); if (age < 0 || age > life) continue;
+      const src = e.fn ? toV(e.fn(b)) : e.at;
+      const a = h1 * TAU, cs = e.cone * Math.sqrt(h2), sp = e.speed * (0.45 + 0.9 * h3), sn = Math.sin(cs), cn = Math.cos(cs), ca = Math.cos(a), sa = Math.sin(a);
+      let vx = (e.dir.x * cn + (e.u.x * ca + e.w.x * sa) * sn) * sp, vy = (e.dir.y * cn + (e.u.y * ca + e.w.y * sa) * sn) * sp, vz = (e.dir.z * cn + (e.u.z * ca + e.w.z * sa) * sn) * sp;
+      if (e.vel) { vx += e.vel.x; vy += e.vel.y; vz += e.vel.z; }
+      const x0 = src.x + (h3 - 0.5) * 2 * e.jit, y0 = src.y + (h4 - 0.5) * 2 * e.jit, z0 = src.z + (h1 - 0.5) * 2 * e.jit;
+      let px, py, pz, rest = false;
+      if (K.floor) { const fy = groundH(x0, z0) + (K.flat ? 0.012 : e.size * 0.35); [px, py, pz, rest] = cbBall(x0, y0, z0, vx, vy, vz, e.g, fy, age, K.bounce ?? 0.25); }
+      else { const ta = e.drag ? (1 - Math.exp(-e.drag * age)) / e.drag : age; px = x0 + vx * ta; py = y0 + vy * ta + 0.5 * e.g * age * age; pz = z0 + vz * ta; }
+      const k = age / life; let s;
+      if (K.soft) { s = e.size * Math.max(0.05, 1 + e.grow * k) * (0.55 + 0.45 * Math.min(1, age / 0.12)); im.fade.array[c] = e.op * Math.min(1, age / 0.05) * (1 - sm01((k - 0.35) / 0.65)); }
+      else s = e.size * (1 + e.grow * k) * (k > 0.78 ? (1 - k) / 0.22 : 1) * Math.min(1, age / 0.03);
+      _o3.position.set(px, py, pz); _o3.scale.setScalar(s); _o3.rotation.set(0, 0, 0); _o3.quaternion.identity();
+      if (K.streak) { const dk = Math.exp(-e.drag * age); qLook(_k1.set(vx * dk, vy * dk + e.g * age, vz * dk), _AY, _o3.quaternion); _o3.scale.set(s, s, s * 6); }
+      else if (K.geo === 'shell') { if (rest) _o3.rotation.set(0, h1 * TAU, 0); else _o3.rotation.set(age * K.spin * (h1 - 0.3), age * K.spin * 0.5 * (h2 - 0.5), age * K.spin * (h3 - 0.5)); _o3.scale.setScalar(1); }
+      else if (K.flat && rest) _o3.scale.set(s * 1.7, s * 0.22, s * 1.7);
+      else if (K.spin && !rest) _o3.rotation.set(age * K.spin * (h1 - 0.5), age * K.spin * (h2 - 0.5), age * K.spin * (h3 - 0.5));
+      else if (K.spin) _o3.rotation.set(h1 * 3, h2 * 3, 0);
+      _o3.updateMatrix(); im.setMatrixAt(c, _o3.matrix);
+      if (e.cols.length === 1 || !K.soft) _pc2.copy(e.cols[Math.floor(h2 * e.cols.length) % e.cols.length]); else { const cf = k * (e.cols.length - 1), ci = Math.min(e.cols.length - 2, Math.floor(cf)); _pc2.copy(e.cols[ci]).lerp(e.cols[ci + 1], cf - ci); }
+      im.setColorAt(c, _pc2); c++;
+    }
+  }
+  im.count = c; if (c) { im.instanceMatrix.needsUpdate = true; im.instanceColor.needsUpdate = true; if (im.fade) im.fade.needsUpdate = true; }
+}
+
+// --- muzzle flashes, combat lights (2, shared), tracers, daze stars ---
+function flashGeo() {
+  const P = [], q = (...a) => P.push(...a);
+  for (const [ax, ay] of [[1, 0], [0, 1]]) { const w = 0.3; q(0, 0, 0, w * ax, w * ay, 0.35, 0, 0, 1, 0, 0, 0, 0, 0, 1, -w * ax, -w * ay, 0.35); }
+  for (let i = 0; i < 6; i++) { const a0 = i / 6 * TAU, a1 = (i + 0.5) / 6 * TAU, a2 = (i + 1) / 6 * TAU, R = 0.45, r = 0.15;
+    q(0, 0, 0.02, Math.cos(a0) * r, Math.sin(a0) * r, 0.02, Math.cos(a1) * R, Math.sin(a1) * R, 0.02, 0, 0, 0.02, Math.cos(a1) * R, Math.sin(a1) * R, 0.02, Math.cos(a2) * r, Math.sin(a2) * r, 0.02); }
+  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(P, 3)); return g;
+}
+function starGeo() { const s = new THREE.Shape(); for (let i = 0; i < 10; i++) { const a = Math.PI / 2 + i * Math.PI / 5, r = i % 2 ? 0.045 : 0.1; i ? s.lineTo(Math.cos(a) * r, Math.sin(a) * r) : s.moveTo(Math.cos(a) * r, Math.sin(a) * r); } s.closePath(); return new THREE.ExtrudeGeometry(s, { depth: 0.03, bevelEnabled: false }).translate(0, 0, -0.015); }
+const addMat = () => new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, fog: false });
+function cbInit() {
+  if (CB.on) return; CB.on = true;
+  const mk = (geo, m, n) => { const im = new THREE.InstancedMesh(geo, m, n); im.frustumCulled = false; im.castShadow = false; im.renderOrder = 3; im.count = 0; im.setColorAt(0, new THREE.Color()); im.instanceMatrix.setUsage(THREE.DynamicDrawUsage); world.add(dyn(im)); return im; };
+  CB.flashIm = mk(flashGeo(), addMat(), 48); CB.tracerIm = mk(boxG(1, 1, 1), addMat(), 120); CB.starIm = mk(starGeo(), new THREE.MeshBasicMaterial({ color: '#ffffff' }), 60);
+  CB.lights = [0, 1].map(() => { const L = new THREE.PointLight('#FFC27A', 0, 14, 1.6); world.add(L); return L; });
+  DEFER.push(() => { for (const f of CB.rigs) cbFinalize(f); late(cbLate); });
+}
+// flash(at, t, { dur, size, color, light, dist }) — at: () => [pos, dir] (live) or [x,y,z]
+function cbFlash(src, t, o = {}) { CB.fl.push({ id: ++_cbId, t, dur: o.dur ?? 0.06, size: o.size ?? 0.3, src, col: new THREE.Color(o.color ?? '#FFD27A'), I: o.light ?? 30, dist: o.dist ?? 14, ld: o.lightDur ?? 0.12 }); }
+function cbTracer(src, to, t0, o = {}) { CB.tr.push({ t0, src, to: to.clone(), vel: o.vel ?? 150, len: o.len ?? 1.6, w: o.w ?? 0.035, col: new THREE.Color(o.color ?? '#FFD27A').multiplyScalar(o.hot ?? 3) }); }
+const liveSrc = (s, t) => typeof s === 'function' ? s(t) : s;
+
+// --- weapon models: ranged — origin at the grip (one-handed) or the butt (long guns), barrel along +z · melee — origin at the grip, blade along +z, edge toward +y ---
+const WK = {
+  sword: { cls: 'melee', tipZ: 1.15 }, axe: { cls: 'melee', tipZ: 0.68, heavy: true }, spear: { cls: 'melee', tipZ: 1.62, both: true, reach: 0.42, thrust: true }, bat: { cls: 'melee', tipZ: 0.78, blunt: true },
+  knife: { cls: 'melee', tipZ: 0.32 }, hammer: { cls: 'melee', tipZ: 0.9, both: true, heavy: true, blunt: true }, saber: { cls: 'melee', tipZ: 1.2, glow: true },
+  shield: { cls: 'shield' }, bow: { cls: 'bow' },
+  pistol:   { cls: 'one', rate: 3, vel: 150, snd: 'shot', flash: 0.26, kick: 1, recT: 0.09, tracer: 1, brass: true, scale: 1.45 },
+  revolver: { cls: 'one', rate: 2, vel: 150, snd: 'shot', flash: 0.32, kick: 1.3, recT: 0.12, tracer: 1, scale: 1.45 },
+  blaster:  { cls: 'one', rate: 4, vel: 55, snd: 'laser', flash: 0.28, kick: 0.5, recT: 0.08, bolt: '#FF4A5A', scale: 1.45 },
+  smg:      { cls: 'long', rate: 12, vel: 170, snd: 'smg', flash: 0.22, kick: 0.45, recT: 0.06, tracer: 0.6, brass: true, auto: true, scale: 1.15 },
+  rifle:    { cls: 'long', rate: 8, vel: 190, snd: 'rifle', flash: 0.32, kick: 0.7, recT: 0.07, tracer: 0.7, brass: true, auto: true, scale: 1.12 },
+  sniper:   { cls: 'long', rate: 0.8, vel: 280, snd: 'sniper', flash: 0.4, kick: 1.6, recT: 0.18, tracer: 1, brass: true, scale: 1.08 },
+  shotgun:  { cls: 'long', rate: 1.2, vel: 150, snd: 'shotgun', flash: 0.46, kick: 1.8, recT: 0.16, tracer: 0.6, pellets: 7, spread: 0.06, pump: true, scale: 1.12 },
+  minigun:  { cls: 'heavy', rate: 28, vel: 190, snd: 'minigun', flash: 0.28, kick: 0.22, recT: 0.05, tracer: 0.5, brass: true, auto: true, spin: true, scale: 1.1 },
+  launcher: { cls: 'heavy', rate: 0.5, vel: 40, snd: 'launch', flash: 0.55, kick: 1.2, recT: 0.25, rocket: true, scale: 1.1 }
+};
+function arrowMesh(p, o = {}) {   // origin at the nock, shaft along +z (0.84 m)
+  const g = grp(p), NC = { cast: false };
+  rod(g, 0.011, 0.011, 0.84, '#C8A26A', 0, 0, 0.42, NC); rod(g, 0, 0.032, 0.11, '', 0, 0, 0.895, { mat: o.fire ? mat('#FF8A3A', { basic: true, glow: 1.2 }) : mat('#A8B2BC', { metal: 0.6, rough: 0.3 }), seg: 4, ...NC });
+  for (let i = 0; i < 3; i++) { const q = grp(g); q.rotation.z = i * TAU / 3; box(q, 0.004, 0.042, 0.13, i ? '#F2F2F2' : (o.color ?? '#D94F3D'), 0, 0.01, 0.1, NC); }
+  return g;
+}
+function buildWeapon(kind, o = {}) {
+  const g = new THREE.Group(), NC = { cast: false }, M = { g }, dark = '#24272C', gunC = o.color ?? '#363A41', wood = '#8A5A34', leather = '#3A2A22';
+  const steel = mat(o.color && kind !== 'saber' ? o.color : '#CDD5DE', { metal: 0.65, rough: 0.28 }), brassC = '#C9A64A';
+  switch (kind) {
+    case 'sword': {
+      rod(g, 0.022, 0.022, 0.2, leather, 0, 0, 0); ball(g, 0.04, brassC, 0, 0, -0.12, { detail: 0, ...NC });
+      box(g, 0.036, 0.26, 0.042, brassC, 0, -0.13, 0.12); box(g, 0.014, 0.078, 0.86, '', 0, -0.039, 0.57, { mat: steel });
+      box(g, 0.016, 0.02, 0.68, '#98A2AC', 0, -0.01, 0.52, NC); const tp = rod(g, 0, 0.055, 0.16, '', 0, 0, 1.08, { mat: steel, seg: 4, ...NC }); tp.rotation.z = Math.PI / 4; tp.scale.x = 0.25; break;
+    }
+    case 'saber': {
+      rod(g, 0.03, 0.03, 0.28, '#B8C0C8', 0, 0, 0.02, { metal: 0.6 }); for (const z of [-0.06, 0.04]) rod(g, 0.034, 0.034, 0.03, dark, 0, 0, z, NC);
+      const c = o.glow ?? '#5AD8FF'; rod(g, 0.03, 0.03, 1.02, '', 0, 0, 0.67, { mat: mat(c, { basic: true, glow: 1.6 }), seg: 10, ...NC }); rod(g, 0.014, 0.014, 1.0, '', 0, 0, 0.67, { mat: mat('#FFFFFF', { basic: true, glow: 2 }), seg: 6, ...NC });
+      M.trailC = c; break;
+    }
+    case 'axe': {
+      rod(g, 0.024, 0.024, 0.82, wood, 0, 0, 0.25); box(g, 0.036, 0.2, 0.17, '', 0, 0, 0.56, { mat: steel }); box(g, 0.042, 0.035, 0.21, '#EEF2F6', 0, 0.185, 0.56, { metal: 0.6, rough: 0.25, ...NC });
+      box(g, 0.05, 0.07, 0.08, dark, 0, -0.08, 0.56); box(g, 0.05, 0.05, 0.06, leather, 0, -0.025, -0.05, NC); break;
+    }
+    case 'hammer': { rod(g, 0.024, 0.024, 0.96, wood, 0, 0, 0.33); box(g, 0.17, 0.36, 0.17, dark, 0, -0.18, 0.8, { metal: 0.5, rough: 0.4 }); break; }
+    case 'bat': { rod(g, 0.047, 0.02, 0.86, o.color ?? '#C9A06A', 0, 0, 0.33, { seg: 10 }); rod(g, 0.024, 0.024, 0.22, dark, 0, 0, 0.0, NC); ball(g, 0.03, dark, 0, 0, -0.11, { detail: 0, ...NC }); break; }
+    case 'knife': { rod(g, 0.02, 0.02, 0.13, dark, 0, 0, 0); box(g, 0.01, 0.045, 0.2, '', 0, -0.0225, 0.16, { mat: steel }); box(g, 0.02, 0.09, 0.02, dark, 0, -0.045, 0.065, NC); break; }
+    case 'spear': {
+      rod(g, 0.021, 0.021, 2.0, wood, 0, 0, 0.3); const hd = rod(g, 0, 0.07, 0.32, '', 0, 0, 1.46, { mat: steel, seg: 4 }); hd.rotation.z = Math.PI / 4; hd.scale.x = 0.32;
+      rod(g, 0.027, 0.027, 0.09, leather, 0, 0, 1.27, NC); break;
+    }
+    case 'shield': {
+      const s = grp(g); cyl(s, 0.4, 0.4, 0.045, o.color ?? '#9A6A3E', 0, 0, 0, { rx: Math.PI / 2, seg: 18 }); cyl(s, 0.425, 0.425, 0.03, dark, 0, 0, -0.008, { rx: Math.PI / 2, seg: 18, metal: 0.4 });
+      ball(s, 0.09, '#B8C0C8', 0, 0, 0.05, { detail: 1, metal: 0.6, rough: 0.3 }).scale.z = 0.55;
+      for (const x of [-0.14, 0.14]) box(s, 0.012, 0.78, 0.004, shade(o.color ?? '#9A6A3E', -0.12), x, -0.39, 0.046, NC);
+      if (o.emblem !== false) cyl(s, 0.2, 0.2, 0.004, o.accent ?? '#C0392B', 0, 0, 0.046, { rx: Math.PI / 2, seg: 18, ...NC });
+      break;
+    }
+    case 'pistol': {
+      box(g, 0.034, 0.12, 0.05, dark, 0, -0.1, -0.012, { rx: 0.22 }); box(g, 0.036, 0.048, 0.2, gunC, 0, 0.012, 0.055); box(g, 0.03, 0.03, 0.12, dark, 0, -0.016, 0.06);
+      box(g, 0.008, 0.032, 0.04, dark, 0, -0.045, 0.035, NC); box(g, 0.01, 0.012, 0.012, '#111111', 0, 0.06, 0.145, NC); box(g, 0.014, 0.012, 0.01, '#111111', 0, 0.06, -0.035, NC);
+      M.muzzle = v3(0, 0.036, 0.16); M.eject = v3(0.02, 0.05, 0.05); break;
+    }
+    case 'revolver': {
+      box(g, 0.034, 0.12, 0.05, wood, 0, -0.11, -0.02, { rx: 0.3 }); box(g, 0.032, 0.05, 0.1, gunC, 0, -0.01, 0.02); rod(g, 0.034, 0.034, 0.062, gunC, 0, 0.035, 0.035, { seg: 8 });
+      rod(g, 0.013, 0.013, 0.16, gunC, 0, 0.045, 0.145, { seg: 8 }); box(g, 0.012, 0.03, 0.025, dark, 0, 0.04, -0.035, { rx: -0.4, ...NC }); M.muzzle = v3(0, 0.045, 0.23); break;
+    }
+    case 'blaster': {
+      const c = o.glow ?? '#4AE0FF'; box(g, 0.05, 0.075, 0.22, o.color ?? '#E8ECF0', 0, -0.005, 0.07); box(g, 0.036, 0.12, 0.05, dark, 0, -0.11, -0.01, { rx: 0.25 });
+      rod(g, 0.024, 0.03, 0.11, dark, 0, 0.03, 0.22); box(g, 0.054, 0.012, 0.16, '', 0, 0.035, 0.07, { mat: mat(c, { basic: true, glow: 1.2 }), ...NC }); rod(g, 0.026, 0.026, 0.012, '', 0, 0.03, 0.28, { mat: mat(c, { basic: true, glow: 1.5 }), ...NC });
+      M.muzzle = v3(0, 0.03, 0.29); M.bolt = c; break;
+    }
+    case 'rifle': case 'smg': case 'sniper': {
+      const L = kind === 'smg' ? 0.72 : kind === 'sniper' ? 1.42 : 1.12, rcv = kind === 'smg' ? 0.2 : 0.26;
+      box(g, 0.05, 0.12, rcv, kind === 'sniper' ? '#5A4A3A' : dark, 0, -0.09, rcv / 2, { rx: -0.08 }); box(g, 0.055, 0.085, 0.32, gunC, 0, -0.03, rcv + 0.16);
+      box(g, 0.04, 0.12, 0.05, dark, 0, -0.14, rcv + 0.07, { rx: 0.3 }); const mg = box(g, 0.036, kind === 'sniper' ? 0.08 : 0.16, 0.07, dark, 0, kind === 'sniper' ? -0.1 : -0.17, rcv + 0.22, { rx: 0.25 }); M.mag = mg;
+      const hg = L - 0.24 - (rcv + 0.32); box(g, 0.06, 0.065, hg, '#3E434B', 0, -0.03, rcv + 0.32 + hg / 2); rod(g, 0.013, 0.013, 0.26, '#1E2024', 0, 0.002, L - 0.13);
+      if (kind === 'sniper') { rod(g, 0.032, 0.032, 0.34, dark, 0, 0.1, rcv + 0.2); for (const z of [rcv + 0.03, rcv + 0.37]) rod(g, 0.04, 0.04, 0.05, dark, 0, 0.1, z, NC); box(g, 0.02, 0.05, 0.03, dark, 0, 0.04, rcv + 0.2, NC); }
+      else { box(g, 0.04, 0.05, 0.14, '#1E2024', 0, 0.055, rcv + 0.16); box(g, 0.02, 0.035, 0.04, '#1E2024', 0, 0.035, L - 0.27, NC); }
+      M.muzzle = v3(0, 0.002, L); M.eject = v3(0.035, 0.03, rcv + 0.18); M.grip = v3(0, -0.075, rcv + 0.07); M.fore = v3(0, -0.04, Math.min(L - 0.32, rcv + 0.42)); M.magZ = rcv + 0.22; break;
+    }
+    case 'shotgun': {
+      box(g, 0.05, 0.12, 0.28, wood, 0, -0.1, 0.14, { rx: -0.1 }); box(g, 0.055, 0.08, 0.26, gunC, 0, -0.035, 0.41); box(g, 0.04, 0.11, 0.05, wood, 0, -0.14, 0.32, { rx: 0.3 });
+      rod(g, 0.017, 0.017, 0.56, '#1E2024', 0, 0.012, 0.82); rod(g, 0.015, 0.015, 0.46, '#2A2D33', 0, -0.025, 0.77); const pm = grp(g, 0, 0, 0.72); box(pm, 0.065, 0.06, 0.2, wood, 0, -0.06, 0); M.pump = pm;
+      M.muzzle = v3(0, 0.012, 1.1); M.eject = v3(0.035, 0.0, 0.42); M.grip = v3(0, -0.075, 0.32); M.fore = v3(0, -0.045, 0.72); break;
+    }
+    case 'minigun': {
+      box(g, 0.2, 0.2, 0.42, gunC, 0, -0.1, 0.22); const sp = grp(g, 0, 0, 0.45); M.spin = sp; for (let i = 0; i < 6; i++) { const a = i / 6 * TAU; rod(sp, 0.016, 0.016, 0.64, '#1E2024', Math.cos(a) * 0.055, Math.sin(a) * 0.055, 0.32, { seg: 6 }); }
+      for (const z of [0.2, 0.6]) rod(sp, 0.085, 0.085, 0.03, dark, 0, 0, z, { seg: 10 }); box(g, 0.04, 0.12, 0.05, dark, 0, -0.2, 0.06, { rx: 0.2 }); box(g, 0.035, 0.03, 0.26, dark, 0, 0.12, 0.25); box(g, 0.14, 0.18, 0.12, '#4A5236', -0.17, -0.22, 0.18);
+      M.muzzle = v3(0, 0, 1.1); M.eject = v3(0.11, -0.05, 0.25); M.grip = v3(0, -0.15, 0.06); M.fore = v3(0, 0.135, 0.3); break;
+    }
+    case 'launcher': {
+      rod(g, 0.075, 0.075, 1.1, o.color ?? '#56603A', 0, 0, 0.35, { seg: 10 }); rod(g, 0.095, 0.075, 0.12, dark, 0, 0, 0.94, { seg: 10 }); rod(g, 0.075, 0.105, 0.12, dark, 0, 0, -0.26, { seg: 10 });
+      box(g, 0.035, 0.12, 0.05, dark, 0, -0.2, 0.13, { rx: 0.15 }); box(g, 0.035, 0.11, 0.05, dark, 0, -0.19, 0.42); box(g, 0.03, 0.06, 0.12, dark, -0.095, 0.02, 0.3);
+      const w = grp(g, 0, 0, 1.0); rod(w, 0, 0.07, 0.24, '#6A7444', 0, 0, 0.17, { seg: 8 }); rod(w, 0.035, 0.035, 0.08, '#4A5236', 0, 0, 0.02, NC); M.war = w;
+      M.muzzle = v3(0, 0, 1.0); M.grip = v3(0, -0.15, 0.14); M.fore = v3(0, -0.14, 0.43); break;
+    }
+  }
+  return M;
+}
+function buildBow(o = {}) {   // bow frame: grip at the origin, limbs along ±z, string toward +y (the archer)
+  const g = new THREE.Group(), wood = mat(o.color ?? '#7A4A2A', { rough: 0.7 }), str = mat('#EDE6D2'), NC = { cast: false };
+  box(g, 0.055, 0.07, 0.18, '#3A2A22', 0, -0.035, 0);
+  const seg = m => { const s = new THREE.Mesh(boxG(1, 1, 1), m); s.castShadow = true; g.add(s); return s; };
+  const M = { g, limb: [seg(wood), seg(wood), seg(wood), seg(wood)], str: [seg(str), seg(str)], rel: [] };
+  M.str.forEach(s => { s.castShadow = false; }); M.nock = arrowMesh(g, o); M.nock.visible = false; return M;
+}
+function quiver(f, o = {}) { const q = grp(f.chest, 0.14, 0.32, -0.21); q.rotation.set(0.15, 0, -0.42); cyl(q, 0.075, 0.065, 0.56, '#6A4428', 0, 0, 0, { seg: 8 }); cyl(q, 0.08, 0.08, 0.04, '#3A2A22', 0, 0.5, 0, { seg: 8 });
+  for (let i = 0; i < 5; i++) { const a = i / 5 * TAU; for (let j = 0; j < 2; j++) box(q, 0.004, 0.12, 0.04, j ? '#F2F2F2' : (o.color ?? '#D94F3D'), Math.cos(a) * 0.035 + (j ? 0.012 : 0), 0.56, Math.sin(a) * 0.035, { ry: a + j * 1.2, cast: false }); } return q; }
+function makeTrail(c) {
+  const N = 14, geo = new THREE.BufferGeometry(), pos = new Float32Array(N * 6), col = new Float32Array(N * 6), idx = [];
+  for (let i = 0; i < N - 1; i++) { const a = 2 * i; idx.push(a, a + 1, a + 2, a + 1, a + 3, a + 2); }
+  geo.setAttribute('position', new THREE.BufferAttribute(pos, 3).setUsage(THREE.DynamicDrawUsage)); geo.setAttribute('color', new THREE.BufferAttribute(col, 3).setUsage(THREE.DynamicDrawUsage)); geo.setIndex(idx);
+  const m = new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, fog: false });
+  const me = new THREE.Mesh(geo, m); me.frustumCulled = false; me.visible = false; me.renderOrder = 3; world.add(dyn(me)); me.N = N; me.c = new THREE.Color(c).multiplyScalar(0.75); return me;
+}
+// weapon(rig, kind, { from, to, guard, scale, color, oneHand, quiver }) — from/to: time window it is in the hand (pops in with a sound)
+function weapon(f, kind, o = {}) {
+  if (!f?.legL) { console.warn('weapon: needs a figure (char / figure / astronaut)'); return null; }
+  const K = WK[kind] ?? (console.warn('weapon: unknown kind ' + kind), WK.pistol), C = cbRig(f);
+  const M = kind === 'bow' ? buildBow(o) : buildWeapon(kind, o), g = dyn(new THREE.Group()), sc = o.scale ?? K.scale ?? 1;
+  g.add(M.g); M.g.scale.setScalar(sc);
+  const W = { ...K, ...M, f, kind, g, sc, from: o.from ?? -1e9, to: o.to ?? 1e9, shots: [], guard: o.guard ?? false, id: ++_cbId, o };
+  if (K.cls === 'one' || K.cls === 'melee') { f.foreR.add(g); g.position.set(0, -0.36, 0.05); W.part = 'R'; }
+  else if (K.cls === 'shield') { f.foreL.add(g); g.position.set(0, -0.2, 0.1); W.part = 'L'; }
+  else if (K.cls === 'bow') { f.foreL.add(g); g.position.set(0, -0.36, 0.05); W.part = 'L'; if (o.quiver !== false) quiver(f, o); }
+  else { f.chest.add(g); W.part = 'C'; }
+  W.restQ = K.cls === 'one' ? new THREE.Quaternion().setFromAxisAngle(_AX, Math.PI / 2) : K.cls === 'melee' ? qLook(v3(0, 0.45, 0.89), v3(0, 0.89, -0.45)) : K.cls === 'bow' ? new THREE.Quaternion().setFromAxisAngle(_AX, -Math.PI / 2) : new THREE.Quaternion();
+  g.quaternion.copy(W.restQ);
+  if (K.cls === 'melee') W.trail = makeTrail(o.trail ?? M.trailC ?? '#DDEBFF');
+  if (o.from != null) sfx(o.from, K.cls === 'melee' ? 'draw' : 'reload', 0.5);
+  C.W.push(W); return W;
+}
+function cbRig(f) {
+  if (f._cb) return f._cb; cbInit();
+  const C = f._cb = { f, W: [], A: [], face: [] }; const fx = (t, S) => cbPose(f, t, S); fx._cb = true; (f.fx ??= []).push(fx); CB.rigs.push(f); return C;
+}
+function cbFace(f, t0, t1, T, off = 0) { if (T) cbRig(f).face.push({ t0, t1, T, off }); }
+function cbFinalize(f) {   // after the scene is built: combat pose runs last; face windows turn the whole figure toward its target
+  const C = f._cb; f.fx = [...f.fx.filter(x => !x._cb), ...f.fx.filter(x => x._cb)];
+  if (!C.face.length) return; C.face.sort((a, b) => a.t0 - b.t0);
+  const y0 = (f.root ?? f).rotation.y, base = f._yawAt ?? (() => y0), basePos = f._posAt ?? (() => (f.root ?? f).position);
+  f._yawAt = t => { let y = base(t); for (const w of C.face) { const k = env3(t, w.t0, w.t1, 0.3, 0.45); if (!k) continue; const P = w.T.pos(clamp(t, w.t0, w.t1)), p = basePos(t);
+      let d = Math.atan2(P.x - p.x, P.z - p.z) + w.off - y; d = Math.atan2(Math.sin(d), Math.cos(d)); y += d * k; } return y; };
+  f._faceOn = true;
+}
+const recoil = (W, t) => { let r = 0; for (const s of W.shots) { const a = t - s; if (a >= 0 && a < 0.5) r += Math.exp(-a / W.recT); } return Math.min(1.6, r); };
+
+// --- melee key poses (chest frame): hand position, blade direction, edge direction ---
+const MKEY = (h, b, e) => ({ h: v3(...h), b: v3(...b).normalize(), e: v3(...e).normalize() });
+const MGUARD = MKEY([0.24, 0.28, 0.4], [0.1, 0.82, 0.56], [0, -0.56, 0.82]), MBLOCK = MKEY([0.14, 0.8, 0.4], [-0.95, 0.12, 0.28], [0, 1, 0.1]);
+const SWINGS = {   // [windup, impact, follow-through] · body: chest twist (cry), lean (crx), hip turn (hry), dip, lunge per key [guard, windup, impact, follow, guard]
+  slash:  { k: [MKEY([0.6, 0.66, -0.02], [0.45, 0.35, -0.82], [-0.4, 0, 0.9]), MKEY([0.05, 0.5, 0.56], [-0.35, 0.05, 0.94], [-1, 0, 0.3]), MKEY([-0.12, 0.45, 0.4], [-0.92, -0.12, -0.35], [-0.3, 0, -1])],
+            cry: [0, 0.55, -0.15, -0.5, 0], crx: [0, 0, 0.1, 0.12, 0], hry: [0, 0.2, -0.05, -0.2, 0] },
+  back:   { k: [MKEY([-0.2, 0.62, 0.26], [-0.85, 0.3, -0.42], [1, 0, 0.3]), MKEY([0.22, 0.5, 0.6], [0.4, 0.05, 0.92], [1, 0, -0.3]), MKEY([0.62, 0.44, 0.22], [0.92, -0.1, -0.35], [0.3, 0, -1])],
+            cry: [0, -0.5, 0.15, 0.45, 0], crx: [0, 0, 0.08, 0.1, 0], hry: [0, -0.18, 0.05, 0.18, 0] },
+  chop:   { k: [MKEY([0.18, 1.02, 0.02], [0.05, 0.35, -0.93], [0, 1, 0.2]), MKEY([0.12, 0.45, 0.58], [0, -0.2, 0.98], [0, -1, 0.1]), MKEY([0.14, 0.14, 0.44], [0, -0.85, 0.5], [0, -0.5, -0.85])],
+            cry: [0, 0.15, 0, -0.05, 0], crx: [0, -0.15, 0.3, 0.4, 0], dip: [0, 0, 0.06, 0.1, 0] },
+  thrust: { k: [MKEY([0.4, 0.42, -0.12], [0.02, 0.06, 1], [0, 1, 0]), MKEY([0.16, 0.52, 0.6], [-0.02, 0.02, 1], [0, 1, 0]), MKEY([0.16, 0.5, 0.56], [0, 0, 1], [0, 1, 0])],
+            cry: [0, 0.25, -0.1, -0.1, 0], crx: [0, 0, 0.18, 0.15, 0] },
+  rise:   { k: [MKEY([0.42, 0.02, 0.28], [0.3, -0.75, 0.55], [0, 1, 0.4]), MKEY([0.12, 0.62, 0.55], [0, 0.6, 0.8], [0, 0.8, -0.6]), MKEY([0.02, 0.98, 0.22], [-0.1, 0.95, -0.25], [0, 0.2, -1])],
+            cry: [0, 0.3, -0.1, -0.2, 0], crx: [0, 0.25, -0.1, -0.15, 0] }
+};
+const SPEAR_SW = { thrust: SWINGS.thrust };
+const catmull = (p0, p1, p2, p3, u, out = new THREE.Vector3()) => { const u2 = u * u, u3 = u2 * u; return out.set(
+  0.5 * (2 * p1.x + (-p0.x + p2.x) * u + (2 * p0.x - 5 * p1.x + 4 * p2.x - p3.x) * u2 + (-p0.x + 3 * p1.x - 3 * p2.x + p3.x) * u3),
+  0.5 * (2 * p1.y + (-p0.y + p2.y) * u + (2 * p0.y - 5 * p1.y + 4 * p2.y - p3.y) * u2 + (-p0.y + 3 * p1.y - 3 * p2.y + p3.y) * u3),
+  0.5 * (2 * p1.z + (-p0.z + p2.z) * u + (2 * p0.z - 5 * p1.z + 4 * p2.z - p3.z) * u2 + (-p0.z + 3 * p1.z - 3 * p2.z + p3.z) * u3)); };
+function swingAt(a, t) {   // pure: key pose of swing action a at time t
+  const K = SWINGS[a.kind] ?? SWINGS.slash, P = [MGUARD, ...K.k, MGUARD], T = [a.s0, a.t - 0.12, a.t, a.t + 0.13, a.s4];
+  let i = 0; while (i < 3 && t > T[i + 1]) i++;
+  const u = clamp((t - T[i]) / (T[i + 1] - T[i])), e = i === 0 ? EASE.inOut(u) : i === 1 ? u * u : i === 2 ? EASE.out(u) : EASE.inOut(u);
+  const hand = catmull(P[Math.max(0, i - 1)].h, P[i].h, P[i + 1].h, P[Math.min(4, i + 2)].h, e), blade = nlerp(P[i].b, P[i + 1].b, e), edge = nlerp(P[i].e, P[i + 1].e, e);
+  const B = k => { const A = K[k]; return A ? lerp(A[i], A[i + 1], e) : 0; }, lungeA = [0, 0.15, 1, 0.9, 0];
+  return { hand, blade, edge, cry: B('cry'), crx: B('crx'), hry: B('hry'), dip: B('dip'), lunge: lerp(lungeA[i], lungeA[i + 1], e) };
+}
+
+// --- the per-figure combat pose (runs last in pose(): arms, torso, head, weapon orientation) ---
+function cbPose(f, t, S) {
+  const C = f._cb; if (!C || f._rag) return;
+  if (f._falls?.some(F => t >= F.t && (F.up == null || t < F.up + 0.9))) { for (const W of C.W) { const on = t >= W.from && t < W.to; W.g.visible = on; if (W.part !== 'C') W.g.quaternion.copy(W.restQ); else { W.g.position.set(0.2, 0.34, 0.16); qLook(_k1.set(-0.38, -0.42, 0.82), _AY, W.g.quaternion); } } return; }
+  if (C.A.length === 0 && C.W.every(W => W.cls !== 'long' && W.cls !== 'heavy' && !W.guard)) { for (const W of C.W) { const on = t >= W.from && t < W.to; W.g.visible = on; if (on && W.part !== 'C') W.g.quaternion.copy(W.restQ); } return; }
+  const F = rigF(f, t), Mc = chestM(S, _km3), Mi = _kmi.copy(Mc).invert(), toC = w => toRig(F, w).applyMatrix4(Mi);
+  let gun = null, mel = null, bowW = null, shield = null;
+  for (const W of C.W) { const on = t >= W.from && t < W.to; W.g.visible = on; W._want = null; W.g.scale.setScalar(on ? EASE.back(clamp((t - W.from) / 0.16)) : 1e-4); if (!on) continue;
+    if (W.cls === 'one' || W.cls === 'long' || W.cls === 'heavy') gun = W; else if (W.cls === 'melee') mel = W; else if (W.cls === 'bow') bowW = W; else shield = W; }
+  const best = {}; for (const a of C.A) { const w = a.wt(t); if (w > (best[a.type]?.w ?? 0)) best[a.type] = { a, w }; }
+  const aim = best.aim, sw = best.swing, bl = best.block, bw = best.bow, th = best.throw, rl = best.reload, st = best.strike;
+  const still = rigStill(f, t);
+  // stance: feet apart, knees soft (only while standing)
+  const stW = Math.max(aim ? aim.w * 0.9 : 0, sw ? sw.w : 0, bl ? bl.w * 0.7 : 0, bw ? bw.w : 0, st ? st.w : 0, mel?.guard ? 0.6 : 0);
+  if (still && stW > 0) {
+    const lg = sw ? swingAt(sw.a, t).lunge * sw.w : 0, dip = 0.04 * stW + 0.07 * lg; S.H -= dip;
+    [S.lt, S.lk] = legIK(lerp(0.04, 0.17 + 0.2 * lg, stW), ANK - S.H); [S.rt, S.rk] = legIK(lerp(-0.03, -0.13 - 0.1 * lg, stW), ANK - S.H); S.lz = -0.06 * stW; S.rz = 0.06 * stW; S.lf = S.rf = 0;
+  }
+  const look = (d, w, k = 0.85) => { if (!(w > 0)) return; S.nry = lerp(S.nry, clamp(Math.atan2(d.x, d.z) * k, -1, 1), w); S.nrx = lerp(S.nrx, clamp(-Math.asin(clamp(d.y, -1, 1)) * 0.75, -0.7, 0.6), w); };
+  // --- long guns & heavy weapons: in both hands all the time (low ready ↔ aim)
+  if (gun && (gun.cls === 'long' || gun.cls === 'heavy')) {
+    const W = gun, kd = W.kind, mini = kd === 'minigun', rpg = kd === 'launcher';
+    const restS = mini ? v3(0.2, 0.18, 0.3) : rpg ? v3(0.3, 0.42, 0.04) : v3(0.2, 0.34, 0.16), restD = (mini ? v3(-0.05, -0.12, 1) : rpg ? v3(-0.1, -0.4, 0.92) : v3(-0.38, -0.42, 0.82)).normalize();
+    const aimS = mini ? v3(0.2, 0.2, 0.28) : rpg ? v3(0.26, 0.68, -0.12) : v3(0.19, 0.52, 0.12);
+    const aw = aim ? aim.w : 0, dir = restD.clone(), stock = restS.clone();
+    if (aw > 0) { const d = toC(aim.a.at(t)).sub(aimS).normalize(); if (d.z < 0.3) { d.z = 0.3; d.normalize(); } nlerp(dir, d, aw, dir); stock.lerp(aimS, aw); }
+    const r = recoil(W, t); stock.addScaledVector(dir, -0.06 * r * W.kick); dir.y += 0.09 * r * W.kick; dir.normalize();
+    let roll = 0, rk = 0; if (rl) { rk = rl.w; nlerp(dir, v3(dir.x * 0.4 - 0.12, 0.18, 0.95), 0.5 * rk, dir); roll = 0.55 * rk; }
+    W.g.position.copy(stock); qLook(dir, _AY, W.g.quaternion); if (roll) W.g.quaternion.multiply(_kq1.setFromAxisAngle(_AZ, roll));
+    const gp = p => p.clone().multiplyScalar(W.sc).applyQuaternion(W.g.quaternion).add(stock);
+    let pumpK = 0; if (W.pump) { for (const s of W.shots) { const a = t - s - 0.2; if (a > 0 && a < 0.38) pumpK = Math.sin(Math.PI * a / 0.38); } W.pump.position.z = 0.72 - 0.12 * pumpK; }
+    let L = gp(W.fore.clone().add(_k1.set(0, 0, -0.12 * pumpK)));
+    if (rl) { const u = clamp((t - rl.a.t0) / (rl.a.t1 - rl.a.t0)), mw = gp(v3(0, -0.2, W.magZ ?? 0.45)), belt = v3(-0.12, 0.08, 0.22), chg = gp(v3(0.06, 0.06, (W.magZ ?? 0.45) - 0.05));
+      const path = [[0, L], [0.18, mw], [0.42, belt], [0.62, mw], [0.78, chg], [1, L]]; let j = 0; while (j < 4 && u > path[j + 1][0]) j++;
+      const k2 = EASE.inOut(clamp((u - path[j][0]) / (path[j + 1][0] - path[j][0]))); L = path[j][1].clone().lerp(path[j + 1][1], k2);
+      if (W.mag) W.mag.visible = !(u > 0.2 && u < 0.6); }
+    else if (W.mag) W.mag.visible = true;
+    if (W.war) W.war.visible = !W.shots.some(s => t >= s);
+    if (W.spin) W.spin.rotation.z = W.shots.reduce((acc, s) => acc + clamp(t - s + 0.3, 0, 0.5) * 22, 0) + (aw > 0 ? (t % 100) * 6 * aw : 0);
+    if (!th) setArm(S, 'R', armIK('R', gp(W.grip)), 1); setArm(S, 'L', armIK('L', L), 1);
+    if (aw > 0) { look(dir, aw, 0.9); S.nrz = lerp(S.nrz, rpg ? -0.18 : -0.12, aw); S.crx -= 0.04 * r; }
+  }
+  // --- one-handed guns: raise and aim (two-handed grip unless oneHand)
+  if (gun && gun.cls === 'one' && aim) {
+    const W = gun, w = aim.w, sh = v3(0.34, 0.54, 0), d = toC(aim.a.at(t)).sub(sh).normalize(); if (d.z < 0.25) { d.z = 0.25; d.normalize(); }
+    const r = recoil(W, t), H = sh.clone().addScaledVector(d, 0.6); H.y += 0.05 * r * W.kick; H.addScaledVector(d, -0.03 * r);
+    setArm(S, 'R', armIK('R', H), w); if (!W.o.oneHand) setArm(S, 'L', armIK('L', H.clone().add(v3(-0.05, -0.07, -0.03))), 0.95 * w);
+    look(d, w); const gd = d.clone(); gd.y += 0.35 * r * W.kick; W._want = { d: gd.normalize(), up: _AY, w };
+  }
+  // --- melee: guard, swings, blocks
+  if (mel) {
+    const W = mel; let w = W.guard ? 1 : 0; for (const a of C.A) if ((a.type === 'swing' || a.type === 'block') && a.W === W) w = Math.max(w, env3(t, a.s0 - 0.2, a.s4 + 0.9, 0.3, 0.5));
+    let K = { hand: MGUARD.h.clone(), blade: MGUARD.b.clone(), edge: MGUARD.e.clone() };
+    if (sw && sw.a.W === W) { const k = swingAt(sw.a, t), ws = sw.w; K = { hand: K.hand.lerp(k.hand, ws), blade: nlerp(K.blade, k.blade, ws), edge: nlerp(K.edge, k.edge, ws) };
+      S.cry += k.cry * ws; S.crx += k.crx * ws; S.hry += k.hry * ws; S.H -= k.dip * ws; w = Math.max(w, ws); }
+    if (bl && bl.a.W === W) { const wb = bl.w; K.hand.lerp(MBLOCK.h, wb); nlerp(K.blade, MBLOCK.b, wb, K.blade); nlerp(K.edge, MBLOCK.e, wb, K.edge); w = Math.max(w, wb); S.crx -= 0.06 * wb; S.nrx += 0.05 * wb; }
+    if (w > 0) { setArm(S, 'R', armIK('R', K.hand), w); if (W.both) setArm(S, 'L', armIK('L', K.hand.clone().addScaledVector(K.blade, W.kind === 'spear' ? 0.42 : -0.15)), w);
+      W._want = { d: K.blade, up: K.edge, w }; }
+    const tg = (sw ?? bl)?.a.T; if (tg && w > 0) { const d = toC(tg.pos(t)).sub(v3(0, 0.72, 0)).normalize(); look(d, w * 0.8); }
+  }
+  // --- shield (left arm): up in a block, half-raised while the weapon is in guard
+  if (shield) { const wb = bl ? bl.w : 0, wg = mel ? Math.max(mel.guard ? 1 : 0, sw ? sw.w : 0) * 0.7 : 0, w = Math.max(wb, wg);
+    if (w > 0) { const H = v3(-0.12, 0.32, 0.36).lerp(v3(-0.04, 0.6, 0.44), wb); setArm(S, 'L', armIK('L', H), w); shield._want = { d: _AZ, up: _AY, w }; } }
+  // --- bow: raise, nock, draw to the cheek, hold, release
+  if (bowW) { const W = bowW; W._draw = 0; W._nock = false; W._drawn = false;
+    if (bw) { const a = bw.a, wR = bw.w, Cn = v3(0, 0.72, 0.12), d = toC(a.at(t)).sub(Cn).normalize(); if (d.z < 0.15) { d.z = 0.15; d.normalize(); }
+      const LH = Cn.clone().addScaledVector(d, 0.7); if (t > a.td + a.draw && t < a.tr) LH.y += 0.005 * Math.sin(t * 41);
+      const strP = LH.clone().addScaledVector(d, -0.13).add(v3(0.02, 0, 0)), anc = Cn.clone().addScaledVector(d, 0.03).add(v3(0.05, -0.05, 0)); let RH;
+      if (t < a.td) RH = strP; else if (t < a.tr) { const k = EASE.out(clamp((t - a.td) / a.draw)); RH = strP.clone().lerp(anc, k); W._draw = k; W._drawn = true; }
+      else { const k = EASE.out(clamp((t - a.tr) / 0.14)); RH = anc.clone().add(v3(0.1 * k, 0.04 * k, -0.12 * k)); }
+      W._nock = t >= a.td - 0.3 && t < a.tr;
+      setArm(S, 'L', armIK('L', LH), wR); setArm(S, 'R', armIK('R', RH), wR * (t < a.tr + 0.25 ? 1 : 1 - clamp((t - a.tr - 0.25) / 0.4)));
+      look(d, wR, 0.95); W._want = { d: v3(0, 1, 0).addScaledVector(d, -d.y).normalize(), up: d.clone().negate(), w: wR };
+    } }
+  // --- throw (grenade): pull the pin, wind up, release over the shoulder
+  if (th) { const a = th.a, w = th.w, keys = [[a.tp, v3(0.16, 0.36, 0.36)], [a.t - 0.36, v3(0.16, 0.42, 0.36)], [a.t - 0.05, v3(0.4, 0.98, -0.28)], [a.t + 0.1, v3(0.06, 0.82, 0.62)], [a.t + 0.5, v3(0.2, 0.15, 0.3)]];
+    let j = 0; while (j < 3 && t > keys[j + 1][0]) j++; const k = clamp((t - keys[j][0]) / (keys[j + 1][0] - keys[j][0])), e = j === 1 ? k * k : EASE.inOut(k);
+    setArm(S, 'R', armIK('R', keys[j][1].clone().lerp(keys[j + 1][1], e)), w);
+    const pin = env3(t, a.tpin - 0.3, a.tpin + 0.25, 0.18, 0.2); if (pin > 0) setArm(S, 'L', armIK('L', v3(0.1, 0.4, 0.4).lerp(v3(-0.2, 0.48, 0.48), clamp((t - a.tpin) / 0.2))), pin);
+    const tw = j >= 2 ? lerp(j === 2 ? 0.4 : -0.35, j === 2 ? -0.35 : 0, e) : 0.4 * (j === 1 ? e : 0); S.cry += tw * w; S.crx += (j === 2 ? 0.2 * e : j === 3 ? 0.2 * (1 - e) : -0.08) * w;
+  }
+  // --- punch / kick
+  if (st) { const a = st.a, w = st.w, k = a.t - t;
+    const ext = k > 0 ? sm01(1 - k / 0.16) : 1 - sm01(-k / 0.28);   // snap out, slower back
+    if (a.kind === 'kick') { S.rt = lerp(S.rt, -1.45, ext * w); S.rk = lerp(S.rk, 0.15 + 0.9 * (1 - ext), w); S.crx -= 0.22 * ext * w; S.las = lerp(S.las, -0.9, w); S.ras = lerp(S.ras, -0.6, w); S.laz = -0.5 * w; S.raz = 0.5 * w; }
+    else { const g0 = a.side === 'L' ? v3(-0.12, 0.62, 0.24) : v3(0.18, 0.62, 0.22), hit = a.side === 'L' ? v3(-0.04, 0.66, 0.62) : v3(0.08, 0.66, 0.62);
+      setArm(S, a.side === 'L' ? 'L' : 'R', armIK(a.side === 'L' ? 'L' : 'R', g0.clone().lerp(hit, ext)), w); setArm(S, a.side === 'L' ? 'R' : 'L', armIK(a.side === 'L' ? 'R' : 'L', a.side === 'L' ? v3(0.16, 0.62, 0.26) : v3(-0.12, 0.62, 0.26)), w); S.cry += (a.side === 'L' ? 0.3 : -0.35) * ext * w; }
+    if (a.T) look(toC(a.T.pos(t)).sub(v3(0, 0.72, 0)).normalize(), w * 0.8);
+  }
+  // --- final: orient hand-held weapons (the arms are posed now)
+  for (const W of C.W) { if (!W.g.visible || W.part === 'C') continue; const want = W._want;
+    if (!want || !(want.w > 0)) { W.g.quaternion.copy(W.restQ); continue; }
+    const qF = W.part === 'R' ? armQ(S.ras, S.raz, S.rae, _kq2) : armQ(S.las, S.laz, S.lae, _kq2), qD = qLook(want.d, want.up ?? _AY, _kq1);
+    W.g.quaternion.copy(W.restQ).slerp(qF.invert().multiply(qD), want.w);
+  }
+}
+// muzzle / tip of a weapon in world space (live, this frame)
+function wMuzzle(W) { W.g.updateWorldMatrix(true, true); const p = (W.muzzle ?? v3(0, 0, W.tipZ ?? 0.2)).clone().applyMatrix4((W.g.children[0] ?? W.g).matrixWorld), q = (W.g.children[0] ?? W.g).getWorldQuaternion(new THREE.Quaternion()); return [p, _AZ.clone().applyQuaternion(q)]; }
+// analytic approximations at any time (build time): chest-frame point → world, with the figure's root pose at t
+const chestToWorld = (f, t, c) => fromRig(rigF(f, t), v3(c.x, c.y + CH0, c.z));
+
+// --- hit effects & reactions ---
+function hitFx(T, P, th, o = {}) {   // P: world point · T: target (or null = ground/object)
+  const toward = o.from ? o.from.clone().sub(P).normalize() : v3(0, 1, 0), quiet = o.quiet;
+  if (T?.zombie) { cbBurst('goo', P, th, { n: o.n ?? 14, dir: toward.clone().add(v3(0, 0.6, 0)), speed: 3.4 }); if (!quiet) sfx(th, 'splat', 0.6); }
+  else if (T?.rig || T?.animal) { cbBurst('puff', P, th, { n: 5, size: 0.25, speed: 1.4, dir: toward }); cbBurst('spark', P, th, { n: 6, colors: ['#FFFFFF', '#FFE27A'], speed: 3, dir: toward }); if (!quiet) sfx(th, 'punch', 0.55); }
+  else if (T?.metal) { cbBurst('spark', P, th, { n: 16, dir: toward, speed: 7 }); if (!quiet) sfx(th, hash(th * 7.3) < 0.5 ? 'ricochet' : 'tick', 0.7); }
+  else { const gnd = Math.abs(P.y - groundH(P.x, P.z)) < 0.25; cbBurst('puff', P, th, { n: 6, size: 0.32, dir: gnd ? v3(0, 1, 0) : toward, speed: 2 }); cbBurst('chip', P, th, { n: 7, dir: gnd ? v3(0, 1, 0) : toward, speed: 3.5, colors: o.chips });
+    cbBurst('spark', P, th, { n: 4, dir: toward, speed: 4 }); if (!quiet && hash(th * 3.1) < 0.35) sfx(th, 'ricochet', 0.5); }
+}
+function hitReact(T, th, o = {}) {   // react / knock down / drop the horde member
+  if (!T) return;
+  if (T.h) { if (!T.done) T.h.hit(T.i, th, { from: o.from }); return; }
+  if (T.rig) { if (o.kill) (o.ragdoll ? ragdoll(T.rig, th, { from: o.from ? [o.from.x, o.from.y, o.from.z] : undefined, power: o.power ?? 5 }) : fall(T.rig, th, { from: o.from, dazed: o.dazed })); else react(T.rig, th, 'hit', { amp: o.amp ?? 0.8 }); return; }
+  if (T.animal) { jump(T.animal, th, { h: 0.35 }); return; }
+  if (T.obj && o.power && !T.metal) knockAway(T.obj, th, { dir: o.from ? [T.pos(th).x - o.from.x, T.pos(th).z - o.from.z] : [0, 1], power: o.power });
+  else if (T.obj && !T.metal) wobble(T.obj, th, { amp: 0.12 });
+}
+const missPoint = (P0, P, k) => { const d = P.clone().sub(P0), L = d.length(), side = v3(-d.z, 0, d.x).normalize(), off = side.multiplyScalar((hash(k) - 0.5) * 2.4).add(v3(0, (hash(k * 1.7) - 0.6) * 1.2, 0));
+  const dir = d.add(off).normalize(); for (let s = L * 0.9; s < L * 4 + 30; s += 0.5) { const q = P0.clone().addScaledVector(dir, s); if (q.y <= groundH(q.x, q.z) + 0.02) return q; } return P0.clone().addScaledVector(dir, L * 4); };
+
+// --- melee actions ---
+function swing(f, t, o = {}) {   // t = moment of impact; o: kind slash | back | chop | thrust | rise · at · hit (false = blocked/missed) · kill · power · wind
+  const C = cbRig(f), W = [...C.W].reverse().find(w => w.cls === 'melee') ?? weapon(f, 'sword'), kind = o.kind ?? (W.thrust ? 'thrust' : 'slash'), wind = o.wind ?? (W.heavy ? 0.4 : 0.3);
+  const a = { type: 'swing', W, kind, t, s0: t - 0.12 - wind, s4: t + 0.55, T: cbTarget(o.at) }; a.wt = tt => env3(tt, a.s0, a.s4, 0.1, 0.22); C.A.push(a);
+  if (a.T) cbFace(f, a.s0 - 0.25, a.s4, a.T);
+  W.swings = (W.swings ?? 0) + 1; sfx(t - 0.11, W.glow ? 'laser' : 'swing', W.glow ? 0.35 : 0.8);
+  if (a.T && o.hit !== false) { const P = a.T.pos(t), from = rigPos(f, t, new THREE.Vector3()).add(v3(0, 1.3, 0));
+    if (a.T.zombie) hitFx(a.T, P, t, { from, n: 18 }); else if (a.T.metal) hitFx(a.T, P, t, { from }); else { cbBurst('spark', P, t, { n: 8, colors: ['#FFFFFF', '#FFE27A'], speed: 3.5, dir: from.clone().sub(P) }); cbBurst('puff', P, t, { n: 4, size: 0.25, speed: 1.2 }); }
+    sfx(t, W.blunt ? 'punch' : W.glow ? 'laser' : 'slash', 0.9); SHAKES.push({ t: VT(t), amp: 0.12, dur: 0.25 });
+    hitReact(a.T, t, { from, kill: o.kill, power: o.power, ragdoll: o.ragdoll, amp: 1 }); }
+  return a;
+}
+function block(f, t, o = {}) {   // raise the blade (and shield) — t = moment the blow lands; parry: sparks + clang
+  const C = cbRig(f), W = [...C.W].reverse().find(w => w.cls === 'melee') ?? null, dur = o.dur ?? 0.5;
+  const a = { type: 'block', W, t, s0: t - 0.2, s4: t + dur, T: cbTarget(o.at) }; a.wt = tt => env3(tt, a.s0, a.s4, 0.14, 0.25); C.A.push(a);
+  if (a.T) cbFace(f, a.s0 - 0.3, a.s4, a.T);
+  if (o.parry !== false) { const P = chestToWorld(f, t, v3(0.0, 0.85, 0.62)); cbBurst('spark', P, t, { n: 22, speed: 6, cone: 1.4 }); cbFlash(() => [P, _AY], t, { size: 0.3, dur: 0.07, light: 8, dist: 6, color: '#FFF0C0' }); sfx(t, W?.glow ? 'laser' : 'clang', 0.9); }
+  return a;
+}
+function duel(a, b, o = {}) {   // a and b trade blows: attacks alternate, the other blocks with a clang; finish: 'a' | 'b' → the last blow lands
+  const n = o.n ?? 4, ev = o.every ?? 0.8, t0 = o.t0 ?? 0, kinds = o.kinds ?? ['slash', 'back', 'chop', 'thrust', 'rise'], out = [];
+  for (let i = 0; i < n; i++) { const att = i % 2 ? b : a, def = i % 2 ? a : b, t = t0 + i * ev;
+    swing(att, t, { kind: kinds[(i * 3 + (o.seed ?? 0)) % kinds.length], at: def, hit: false }); block(def, t, { at: att, dur: 0.4 }); out.push(t); }
+  if (o.finish) { const att = o.finish === 'a' ? a : b, def = att === a ? b : a, t = t0 + n * ev + 0.15;   // the decisive blow: a big chop or slash that lands
+    swing(att, t, { kind: o.last ?? 'chop', at: def, hit: true, kill: o.kill !== false, wind: 0.42 }); out.push(t); }
+  return out;
+}
+function punch(f, t, o = {}) { return strike(f, t, { ...o, kind: 'punch' }); }
+function kick(f, t, o = {}) { return strike(f, t, { ...o, kind: 'kick' }); }
+function strike(f, t, o) { const C = cbRig(f), a = { type: 'strike', kind: o.kind, side: o.side ?? 'R', t, T: cbTarget(o.at) }; a.wt = tt => env3(tt, t - 0.35, t + 0.45, 0.12, 0.2); C.A.push(a);
+  if (a.T) cbFace(f, t - 0.6, t + 0.45, a.T); sfx(t - 0.06, 'swing', 0.5);
+  if (a.T && o.hit !== false) { const P = a.T.pos(t), from = rigPos(f, t, new THREE.Vector3()).add(v3(0, 1.3, 0)); cbBurst('spark', P, t, { n: 7, colors: ['#FFFFFF', '#FFE27A'], speed: 3 }); sfx(t, 'punch', 1); SHAKES.push({ t: VT(t), amp: 0.14, dur: 0.25 }); hitReact(a.T, t, { from, kill: o.kill, ragdoll: o.ragdoll, power: o.power }); }
+  return a; }
+
+// --- bow & arrows ---
+function bow(f, t, o = {}) {   // t = release · o: at, draw (s), hold (s), speed (m/s), arc (gravity 0..1), fire, miss, kill
+  const C = cbRig(f), W = [...C.W].reverse().find(w => w.cls === 'bow') ?? weapon(f, 'bow'), T = cbTarget(o.at ?? [0, 1, 20]);
+  const draw = o.draw ?? 0.7, hold = o.hold ?? 0.3, td = t - hold - draw, t0 = td - 0.45;
+  const a = { type: 'bow', W, t0, td, tr: t, draw, t1: t + 0.9, T, at: tt => T.pos(Math.min(tt, t)) }; a.wt = tt => env3(tt, a.t0, a.t1, 0.3, 0.45); C.A.push(a); W.rel.push(t);
+  cbFace(f, t0 - 0.2, a.t1, T, 0.75);   // archers stand side-on (left shoulder toward the target)
+  sfx(td, 'tick', 0.4); sfx(td + 0.05, 'servo', 0.12); sfx(t, 'twang', 1); sfx(t + 0.03, 'arrow', 0.9);
+  // flight: from the bow grip at release toward the target (gravity arc), sticks where it lands
+  const F = rigF(f, t), tgt0 = T.pos(t), y = F.y; F.y = Math.atan2(tgt0.x - F.p.x, tgt0.z - F.p.z) + 0.75; const P0 = fromRig(F, v3(0, 0, 0)).add(v3(0, 1.58 * F.s, 0));
+  const dirW = tgt0.clone().sub(P0).normalize(); P0.addScaledVector(dirW, 0.62);
+  const sp = o.speed ?? 34, g = 9.8 * (o.arc ?? 0.5); let P1 = T.pos(t + P0.distanceTo(tgt0) / sp); const miss = !!o.miss || T.point;
+  if (o.miss) P1 = missPoint(P0, P1, t * 13.7);
+  const Tf = Math.max(0.05, P0.distanceTo(P1) / sp), th = t + Tf, v = P1.clone().sub(P0).multiplyScalar(1 / Tf); v.y += 0.5 * g * Tf;
+  const A = { t, th, P0, v, g, mesh: arrowMesh(world, o), T: o.miss ? null : T, fire: o.fire, P1 }; dyn(A.mesh); A.mesh.visible = false; CB.arrows.push(A);
+  if (o.fire) { cbBurst('flame', tt => { const u = clamp(tt - t, 0, Tf); return [P0.x + v.x * u, P0.y + v.y * u - 0.5 * g * u * u, P0.z + v.z * u]; }, t, { rate: 60, n: Math.ceil(Tf * 60), size: 0.22, speed: 0.4, life: 0.25 }); }
+  if (A.T?.h) { A.vanish = true; hitFx(A.T, P1, th, { from: P0, n: 12 }); hitReact(A.T, th, { from: P0 }); }
+  else if (A.T?.rig) { A.stickRig = A.T.rig; const tf = rigF(A.T.rig, th), l = toRig(tf, P0).sub(v3(0, CH0 + 0.35, 0)).normalize(); A.local = v3(l.x * 0.22, 0.34 + (hash(t) - 0.5) * 0.2, l.z * 0.17); A.ldir = l.clone().negate().add(v3(0, -0.15, 0)).normalize();
+    hitFx(A.T, P1, th, { from: P0 }); sfx(th, A.T.zombie ? 'splat' : 'thunk', 0.8); hitReact(A.T, th, { from: P0, kill: o.kill ?? A.T.zombie, dazed: o.dazed }); }
+  else { sfx(th, 'thunk', 0.8); cbBurst('puff', P1, th, { n: 4, size: 0.22, speed: 1 }); if (A.T && !A.T.point) hitReact(A.T, th, { from: P0 }); if (o.fire) cbBurst('flame', P1, th + 0.05, { rate: 22, n: 60, size: 0.3, speed: 0.8, life: 0.45 }); }
+  return A;
+}
+function arrowRain(o = {}) {   // a volley from the sky: n arrows from `from` ([x,y,z]) onto a circle (to [x,z], r) between t0 and t1 — they stick in the ground
+  cbInit(); const n = o.n ?? 60, [fx, fy, fz] = o.from ?? [0, 2, -40], [tx, tz] = o.to ?? [0, 0], R = o.r ?? 6, t0 = o.t0 ?? 0, t1 = o.t1 ?? t0 + 0.8, g = 9.8;
+  const geo = mergeArrowGeo(), im = new THREE.InstancedMesh(geo, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.8, flatShading: true }), n); im.castShadow = true; im.frustumCulled = false; world.add(dyn(im));
+  const L = [];
+  for (let i = 0; i < n; i++) { const tl = t0 + (t1 - t0) * hash(i * 3.3 + 1), a = hash(i * 5.1) * TAU, r = Math.sqrt(hash(i * 7.7)) * R, P1 = v3(tx + Math.cos(a) * r, 0, tz + Math.sin(a) * r); P1.y = groundH(P1.x, P1.z);
+    const P0 = v3(fx + (hash(i * 2.9) - 0.5) * 6, fy, fz + (hash(i * 4.1) - 0.5) * 3), Tf = o.flight ?? 2.2 + hash(i) * 0.4, v = P1.clone().sub(P0).multiplyScalar(1 / Tf); v.y += 0.5 * g * Tf; L.push({ tl, P0, v, Tf }); }
+  CB.rain.push({ im, L, g }); for (let k = 0; k < Math.min(6, n); k++) { const e = L[Math.floor(k * n / 6)]; sfx(e.tl + e.Tf - 0.6, 'arrow', 0.6); sfx(e.tl + e.Tf, 'thunk', 0.5); }
+  return { land: t => L.filter(e => e.tl + e.Tf <= t).length };
+}
+let _arrowGeo = null;
+function mergeArrowGeo() {   // single geometry (vertex colours) for instanced arrows
+  if (_arrowGeo) return _arrowGeo; const parts = [], add = (geo, c, m) => { geo = geo.toNonIndexed(); geo.applyMatrix4(m); const n = geo.attributes.position.count, col = new Float32Array(n * 3), cc = new THREE.Color(c); for (let i = 0; i < n; i++) col.set([cc.r, cc.g, cc.b], i * 3); geo.setAttribute('color', new THREE.BufferAttribute(col, 3)); for (const k of Object.keys(geo.attributes)) if (k !== 'position' && k !== 'color' && k !== 'normal') geo.deleteAttribute(k); parts.push(geo); };
+  const M4 = (x, y, z, rx = 0, rz = 0) => new THREE.Matrix4().compose(v3(x, y, z), new THREE.Quaternion().setFromEuler(new THREE.Euler(rx, 0, rz)), _ONE);
+  add(new THREE.CylinderGeometry(0.011, 0.011, 0.84, 5), '#C8A26A', M4(0, 0, 0.42, Math.PI / 2)); add(new THREE.CylinderGeometry(0, 0.032, 0.11, 4), '#A8B2BC', M4(0, 0, 0.895, Math.PI / 2));
+  for (let i = 0; i < 3; i++) { const g = new THREE.BoxGeometry(0.004, 0.042, 0.13).translate(0, 0.031, 0.1); add(g, i ? '#F2F2F2' : '#D94F3D', M4(0, 0, 0, 0, i * TAU / 3)); }
+  let tot = 0; for (const p of parts) tot += p.attributes.position.count; const pos = new Float32Array(tot * 3), col = new Float32Array(tot * 3); let o = 0;
+  for (const p of parts) { pos.set(p.attributes.position.array, o * 3); col.set(p.attributes.color.array, o * 3); o += p.attributes.position.count; }
+  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(pos, 3)); g.setAttribute('color', new THREE.BufferAttribute(col, 3)); g.computeVertexNormals(); return (_arrowGeo = g);
+}
+
+// --- guns ---
+function shoot(f, t, o = {}) {   // t = first shot · o: at (rig | point | horde | [targets]), n, rate, spread, acc (0..1 hit chance), kill, tracer, raise, hold, vel, ragdoll
+  const C = cbRig(f), W = [...C.W].reverse().find(w => w.cls === 'one' || w.cls === 'long' || w.cls === 'heavy') ?? weapon(f, 'pistol'), rate = o.rate ?? W.rate;
+  const n = o.n ?? (W.auto ? 6 : 1), list = Array.isArray(o.at) && o.at.length && (o.at[0]?.legL || o.at[0]?.h || o.at[0]?.isVector3 || Array.isArray(o.at[0]) || o.at[0]?.g) ? o.at.map(cbTarget) : null, T0 = list ? null : cbTarget(o.at ?? [0, 1.2, 30]);
+  const shots = [];
+  for (let i = 0; i < n; i++) { const ts = t + i / rate; let T = list ? list[Math.min(i, list.length - 1)] : T0;
+    if (T?.horde) { const H = T.horde, me = rigPos(f, ts, new THREE.Vector3()), k = H.near(me, ts, { max: o.range ?? 60 }); T = k >= 0 ? cbTarget({ h: H, i: k }) : cbTarget([me.x + Math.sin(rigYaw(f, ts)) * 20, 0.3, me.z + Math.cos(rigYaw(f, ts)) * 20]); T.autoKill = true;
+      if (k >= 0) { H.hit(k, ts + me.distanceTo(H.pos(k, ts)) / (o.vel ?? W.vel), { from: me }); T.done = true; } }
+    shots.push({ ts, T }); W.shots.push(ts); }
+  W.shots.sort((a, b) => a - b);
+  const raise = o.raise ?? (W.cls === 'long' ? 0.28 : 0.34), t0 = t - raise, t1 = shots[shots.length - 1].ts + (o.hold ?? 0.55);
+  const a = { type: 'aim', W, t0, t1, shots, at: tt => { let s = shots[0]; for (const x of shots) if (x.ts - 0.6 / rate <= tt) s = x; return s.T.pos(Math.min(tt, s.ts)); } }; a.wt = tt => env3(tt, t0, t1, raise * 0.85, 0.35); C.A.push(a);
+  cbRig(f).face.push({ t0: t0 - 0.15, t1, T: { pos: tt => a.at(tt) }, off: 0 });
+  // sound: one long bed for the minigun, else one per shot
+  if (W.snd === 'minigun') { sfx(t - 0.2, 'minigun', 1); const last = AUDIO.hits[AUDIO.hits.length - 1]; last.dur = shots[shots.length - 1].ts - t + 0.45; }
+  const aimC = W.cls === 'long' ? v3(0.19, 0.52, 0.12) : W.kind === 'minigun' ? v3(0.2, 0.2, 0.28) : W.kind === 'launcher' ? v3(0.26, 0.68, -0.12) : v3(0.34, 0.54, 0), reach = W.cls === 'one' ? 0.6 + 0.22 : (W.muzzle?.z ?? 1) * W.sc;
+  shots.forEach((s, i) => {
+    const { ts, T } = s, F = rigF(f, ts), P = T.pos(ts); F.y = Math.atan2(P.x - F.p.x, P.z - F.p.z); const Pr = toRig(F, P), base = aimC.clone().add(v3(0, CH0, 0)), d = Pr.clone().sub(base).normalize(), M0 = fromRig(F, base.clone().addScaledVector(d, reach));
+    if (W.snd !== 'minigun') sfx(ts, W.snd, W.auto ? 0.85 : 1);
+    cbFlash(() => wMuzzle(W), ts, { size: W.flash, dur: W.kind === 'launcher' ? 0.12 : 0.06, light: W.kind === 'launcher' ? 40 : W.cls === 'one' ? 9 : 13, dist: W.kind === 'launcher' ? 14 : 7, color: W.bolt ?? '#FFD27A' });
+    if (i % (W.auto ? 3 : 1) === 0) cbBurst('smoke', M0, ts + 0.02, { n: W.kind === 'launcher' ? 14 : 3, size: W.kind === 'launcher' ? 0.5 : 0.18, speed: 0.6, dir: fromRig(F, base.clone().addScaledVector(d, 2)).sub(M0), life: 1.6, opacity: 0.35 });
+    if (W.brass && i % (W.auto ? 2 : 1) === 0) { const E = fromRig(F, base.clone().addScaledVector(d, reach * 0.42).add(v3(0.06, 0.05, 0))); cbBurst('brass', E, ts + 0.03, { n: 1, dir: fromRig(F, v3(1, 1.2, -0.3).normalize().add(base)).sub(fromRig(F, base)), speed: 2.6, cone: 0.25 }); if (i % 3 === 0) sfx(ts + 0.45, 'shell', 0.6); }
+    if (W.pump) { sfx(ts + 0.2, 'pump', 0.8); cbBurst('brass', fromRig(F, base.clone().addScaledVector(d, 0.42)), ts + 0.32, { n: 1, dir: [1, 1, 0], speed: 2.2, colors: ['#C0392B'] }); }
+    if (W.kind === 'launcher') { const back = fromRig(F, base.clone().addScaledVector(d, -0.5)); cbBurst('smoke', back, ts, { n: 10, dir: back.clone().sub(M0), speed: 2.6, size: 0.38, life: 1.8, opacity: 0.4, cone: 0.4 }); cbBurst('flame', back, ts, { n: 6, dir: back.clone().sub(M0), speed: 4, size: 0.3, cone: 0.3 });
+      missile({ from: M0, at: T, t0: ts, speed: W.vel, size: o.size ?? 1, quiet: true, small: true }); SHAKES.push({ t: VT(ts), amp: 0.2, dur: 0.35 }); return; }
+    const pel = W.pellets ?? 1;
+    for (let p = 0; p < pel; p++) {
+      const key = ts * 31.7 + p * 3.3, hitIt = !T.point && (o.miss ? false : hash(key) < (o.acc ?? (T.autoKill ? 1 : 0.92)));
+      let Ph = hitIt ? T.pos(ts + M0.distanceTo(P) / (o.vel ?? W.vel)).add(v3((hash(key + 1) - 0.5) * 0.25, (hash(key + 2) - 0.5) * 0.3, (hash(key + 3) - 0.5) * 0.25)) : (T.point ? P.clone() : missPoint(M0, P, key));
+      if (pel > 1) { const sp = (o.spread ?? W.spread) * M0.distanceTo(Ph); Ph.add(v3((hash(key + 4) - 0.5) * 2 * sp, (hash(key + 5) - 0.5) * 2 * sp, (hash(key + 6) - 0.5) * 2 * sp)); }
+      const vel = o.vel ?? W.vel, th = ts + M0.distanceTo(Ph) / vel;
+      if (W.bolt) cbTracer(() => wMuzzle(W)[0], Ph, ts, { vel, len: 1.1, w: 0.07, color: W.bolt, hot: 3.2 });
+      else if ((o.tracer ?? W.tracer ?? 1) >= hash(key + 7)) cbTracer(() => wMuzzle(W)[0], Ph, ts, { vel, len: W.kind === 'sniper' ? 4 : 1.5, w: W.kind === 'sniper' ? 0.03 : 0.035 });
+      if (p === 0 || hash(key + 8) < 0.4) hitFx(hitIt ? T : null, Ph, th, { from: M0, quiet: p > 0 || (W.auto && i % 2 === 1) });
+      if (hitIt && p === 0) { const kill = T.autoKill || o.kill === true && i === shots.length - 1 || o.kill === i; hitReact(T, th, { from: M0, kill, ragdoll: o.ragdoll, power: (o.power ?? 0) + (W.pellets ? 4 : 0), amp: W.pellets ? 1.3 : 0.7, dazed: o.dazed }); }
+    }
+  });
+  return a;
+}
+function reload(f, t, o = {}) {
+  const C = cbRig(f), W = [...C.W].reverse().find(w => w.cls === 'one' || w.cls === 'long' || w.cls === 'heavy'); if (!W) return null;
+  const dur = o.dur ?? (W.cls === 'one' ? 1.0 : 1.4), a = { type: 'reload', W, t0: t, t1: t + dur }; a.wt = tt => env3(tt, t - 0.1, t + dur, 0.2, 0.25); C.A.push(a);
+  sfx(t + dur * 0.18, 'reload', 0.8); sfx(t + dur * 0.62, 'tick', 0.7); sfx(t + dur * 0.8, 'pump', 0.6);
+  const F = rigF(f, t + dur * 0.2), mp = fromRig(F, v3(0.0, CH0 + 0.2, 0.45)), m = grp(world); box(m, 0.04, 0.16, 0.07, '#24272C', 0, -0.08, 0); dyn(m); m.position.copy(mp); m.visible = false;
+  tick(tt => { m.visible = tt >= t + dur * 0.2; }); toss(m, t + dur * 0.2, { from: [mp.x, mp.y, mp.z], to: [mp.x + 0.3, mp.z + 0.2], h: 0.1, bounces: 2, spin: 6 });
+  return a;
+}
+function grenade(f, t, o = {}) {   // t = release · o: to [x,z] (or target), h, fuse (s after it settles), boom (absolute time), size
+  const C = cbRig(f), Ttg = cbTarget(o.to ?? [rigPos(f, t).x, rigPos(f, t).z + 12]), P1 = Ttg.pos(t);
+  const a = { type: 'throw', tp: t - 0.85, tpin: t - 0.55, t, t1: t + 0.5 }; a.wt = tt => env3(tt, a.tp - 0.1, a.t1, 0.2, 0.25); C.A.push(a); cbFace(f, a.tp - 0.2, a.t1, Ttg);
+  const g = dyn(grp(world)), body = grp(g); ball(body, 0.065, '#4A5A2A', 0, 0, 0, { detail: 1 }).scale.set(1, 1.25, 1); box(body, 0.03, 0.06, 0.03, '#2A2D33', 0, 0.07, 0); box(body, 0.015, 0.11, 0.02, '#8A8F96', 0.03, -0.02, 0, { cast: false });
+  body.scale.setScalar(o.scale ?? 1.6);
+  const F = rigF(f, t); F.y = Math.atan2(P1.x - F.p.x, P1.z - F.p.z); const H = fromRig(F, v3(0.08, CH0 + 0.82 + 0.1, 0.55)), P = tossPath([H.x, H.y, H.z], [P1.x, P1.z], t, { h: o.h ?? 2.4, bounces: 2, spin: 9, r: 0.1 });
+  const boom = o.boom ?? Math.max(P.stop + (o.fuse ?? 0.5), P.land + 0.3); CB.gren.push({ f, g, a, P, boom });
+  sfx(a.tpin, 'pin', 1); sfx(t, 'whoosh', 0.6); explode(P.end[0], P.end[1], P.end[2], boom, { size: o.size ?? 0.9 });
+  if (o.hits) for (const T of [].concat(o.hits)) hitReact(cbTarget(T), boom + 0.02, { from: v3(...P.end), kill: true, ragdoll: true, power: 6 });
+  return { boom, at: P.end };
+}
+
+// --- knocked down: fall over (comic), lie, optional get up; humans see stars, zombies can sink back into the ground ---
+function fall(f, t, o = {}) {
+  if (!f?.legL) return f; cbInit(); const dur = o.dur ?? 0.6, F = { f, t, dur, up: o.getUp, sink: o.sink, freeze: o.freeze !== false, dazed: o.dazed ?? f.kind !== 'zombie' };
+  F.geo = () => F._g ?? (F._g = (() => { const p = rigPos(f, t, new THREE.Vector3()), y = rigYaw(f, t); let d;   // evaluated at render time (after all paths and face turns exist)
+    if (Array.isArray(o.dir) && o.dir.length === 2) d = v3(o.dir[0], 0, o.dir[1]); else if (o.from) { d = p.clone().sub(toV(o.from)); d.y = 0; }
+    else d = ({ back: v3(0, 0, -1), front: v3(0, 0, 1), left: v3(-1, 0, 0), right: v3(1, 0, 0) }[o.dir ?? 'back'] ?? v3(0, 0, -1)).clone().applyAxisAngle(_AY, y);
+    if (d.lengthSq() < 1e-6) d.set(0, 0, -1).applyAxisAngle(_AY, y); d.normalize(); const dl = d.clone().applyAxisAngle(_AY, -y);
+    return { p, y, d, axis: v3(dl.z, 0, -dl.x).normalize(), back: dl.z < 0 }; })());
+  CB.falls.push(F); (f._falls ??= []).push(F); f.fx ??= [];
+  f.fx.push((tt, S) => { const k = (tt - t) / dur; if (k < 0) return; const bk = F.geo().back, up = F.up != null ? clamp((tt - F.up) / 0.9) : 0, w = (k < 1 ? sm01(k * 1.6) : 1) * (1 - sm01(up * 1.2)), fl = k < 1 ? Math.sin(Math.PI * k) : 0;
+    S.las = lerp(S.las, -2.3 - 0.4 * fl, w); S.ras = lerp(S.ras, -2.2 - 0.4 * fl, w); S.laz = lerp(S.laz, -0.7, w); S.raz = lerp(S.raz, 0.7, w); S.lae = lerp(S.lae, -0.3, w); S.rae = lerp(S.rae, -0.3, w);
+    S.lt = lerp(S.lt, bk ? -0.25 : 0.1, w); S.rt = lerp(S.rt, bk ? -0.1 : 0.15, w); S.lk = lerp(S.lk, 0.25 + 0.4 * fl, w); S.rk = lerp(S.rk, 0.15 + 0.4 * fl, w); S.lz = lerp(S.lz, -0.12, w); S.rz = lerp(S.rz, 0.12, w);
+    S.H = lerp(S.H, HIP - 0.05, w); S.crx = lerp(S.crx, bk ? -0.1 : 0.1, w); S.cry *= 1 - w; S.nry *= 1 - w; S.nrx = lerp(S.nrx, bk ? -0.25 : 0.2, w);
+    if (f.kind === 'zombie' && k > 1) S.las += 0.12 * Math.sin(tt * 11) * Math.exp(-(k - 1) * 1.2); });
+  const e0 = f.expr; if (f.kind !== 'zombie') f.expr = tt => tt >= t && (F.up == null || tt < F.up + 0.6) ? (tt < t + dur + 0.25 ? 'surprised' : 'sad') : typeof e0 === 'function' ? e0(tt) : e0;
+  sfx(t, 'whoosh', 0.35); sfx(t + dur * 0.95, 'impact', 0.6); cbBurst('puff', () => { const G = F.geo(); return G.p.clone().addScaledVector(G.d, 1.1).add(v3(0, 0.1, 0)); }, t + dur * 0.95, { n: 10, size: 0.45, speed: 1.6, cone: 1.3 });
+  if (F.dazed) { CB.stars.push({ f, t0: t + dur + 0.1, t1: F.up ?? t + dur + 2.6 }); sfx(t + dur + 0.15, 'daze', 0.7); }
+  if (F.up != null) sfx(F.up, 'whoosh', 0.3);
+  return f;
+}
+function fallLate(F, t) {
+  if (t < F.t) return; const f = F.f, G = F.geo(), a = t - F.t, k = clamp(a / F.dur), up = F.up != null ? EASE.inOut(clamp((t - F.up) / 0.9)) : 0;
+  let ang = (Math.PI / 2 - 0.04) * EASE.in(k); if (a > F.dur) ang -= 0.09 * Math.exp(-(a - F.dur) * 7) * Math.abs(Math.sin((a - F.dur) * 15)); ang *= 1 - up;
+  if (F.freeze && up < 1) { f.root.position.copy(G.p); f.root.rotation.y = G.y; }
+  f.body.quaternion.setFromAxisAngle(G.axis, ang); f.body.position.y += 0.17 * sm01(k) * (1 - up) - (F.sink && a > 2.4 ? Math.min(2.4, (a - 2.4) * 0.8) : 0);
+}
+
+// --- tank: tracks with moving links, road wheels, turret that aims, gun with recoil ---
+function tank(p, x, z, o = {}) {
+  cbInit(); const c = o.color ?? '#5F6B3C', dk = shade(c, -0.1), lt = shade(c, 0.06), steel = '#3A3D40', rub = '#222427', NC = { cast: false }, s = o.scale ?? 1;
+  const g = dyn(grp(p, x, groundH(x, z), z, o.ry ?? 0)), B = grp(g); B.scale.setScalar(s); const wheels = [];
+  box(B, 2.2, 0.62, 6.0, dk, 0, 0.42, 0); box(B, 3.5, 0.42, 6.3, c, 0, 1.02, -0.1);   // lower hull between the tracks, upper hull over them
+  const gl = box(B, 3.3, 0.1, 1.25, lt, 0, 1.0, 3.25, { rx: 0.62 }); box(B, 3.3, 0.5, 0.12, dk, 0, 0.6, 3.6, { rx: -0.55 });   // glacis, lower front plate
+  box(B, 3.4, 0.36, 0.14, dk, 0, 0.8, -3.2); for (const sx of [-0.6, 0.6]) { rod(B, 0.11, 0.11, 0.28, '#2A2A2A', sx, 1.0, -3.36, NC); }   // rear plate, exhausts
+  for (const sx of [-1, 1]) { box(B, 0.07, 0.48, 6.2, dk, sx * 1.78, 0.58, -0.05); for (let i = 0; i < 5; i++) box(B, 0.075, 0.04, 1.1, shade(c, -0.18), sx * 1.785, 0.64, -2.5 + i * 1.25, NC); }   // side skirts
+  for (let i = 0; i < 5; i++) box(B, 1.6, 0.03, 0.2, '#2A2D2A', 0, 1.44, -2.0 - i * 0.24, NC);   // engine grille
+  for (const sx of [-1, 1]) { box(B, 0.55, 0.32, 1.3, dk, sx * 1.35, 1.44, -1.5); box(B, 0.25, 0.14, 0.12, '', sx * 1.4, 1.12, 3.05, { mat: mat('#FFF6D8', { em: '#FFF2C0', ei: 0.4 }), ...NC }); box(B, 0.4, 0.08, 0.5, steel, sx * 1.0, 1.44, 2.2, NC); }
+  for (const sx of [-1, 1]) {   // running gear: 6 road wheels, sprocket (front), idler (rear), return rollers
+    for (let i = 0; i < 6; i++) { const pv = grp(B, sx * 1.42, 0.38, -2.45 + i * 0.98); cyl(pv, 0.36, 0.36, 0.5, '#3A3F33', 0, -0.25, 0, { rz: Math.PI / 2, seg: 12 }); cyl(pv, 0.2, 0.2, 0.52, '#6A6F62', 0, -0.26, 0, { rz: Math.PI / 2, seg: 8, ...NC }); wheels.push(pv); }
+    for (const [zz, r] of [[3.0, 0.34], [-3.0, 0.3]]) { const pv = grp(B, sx * 1.42, 0.54, zz); cyl(pv, r, r, 0.46, steel, 0, -0.23, 0, { rz: Math.PI / 2, seg: 10 }); for (let k = 0; k < 8; k++) box(pv, 0.5, 0.08, 0.12, steel, 0, r - 0.04, 0, { rx: k * Math.PI / 4, ...NC }); wheels.push(pv); }
+    for (const zz of [-1.5, 0, 1.5]) cyl(B, 0.1, 0.1, 0.3, steel, sx * 1.42 - 0.15, 0.92, zz, { rz: Math.PI / 2, seg: 6, ...NC });
+  }
+  const N = 52, Lp = 12 + Math.PI, tread = new THREE.InstancedMesh(boxG(0.64, 0.075, 0.24), mat(rub, { rough: 0.9 }), 2 * N); tread.castShadow = true; tread.receiveShadow = true; tread.frustumCulled = false; B.add(dyn(tread));
+  const linkAt = (u, o3) => { u = ((u % Lp) + Lp) % Lp; if (u < 6) { o3.position.set(0, 0.04, 3 - u); o3.rotation.set(0, 0, 0); } else if (u < 6 + Math.PI / 2) { const a = (u - 6) / 0.5; o3.position.set(0, 0.54 - 0.5 * Math.cos(a), -3 - 0.5 * Math.sin(a)); o3.rotation.set(-a, 0, 0); }
+    else if (u < 12 + Math.PI / 2) { o3.position.set(0, 1.04, -3 + (u - 6 - Math.PI / 2)); o3.rotation.set(Math.PI, 0, 0); } else { const a = (u - 12 - Math.PI / 2) / 0.5; o3.position.set(0, 0.54 + 0.5 * Math.cos(a), 3 + 0.5 * Math.sin(a)); o3.rotation.set(Math.PI - a, 0, 0); } };
+  // turret
+  const tur = dyn(grp(B, 0, 1.44, -0.35)); box(tur, 2.3, 0.62, 2.7, c, 0, 0, -0.05); box(tur, 1.9, 0.5, 0.9, c, 0, 0.06, -1.75); box(tur, 2.36, 0.08, 0.6, dk, 0, 0.0, -2.0, NC);
+  for (const sx of [-1, 1]) { box(tur, 0.5, 0.58, 0.9, lt, sx * 0.9, 0, 1.25, { ry: -sx * 0.45 }); for (let k = 0; k < 3; k++) rod(tur, 0.05, 0.05, 0.22, '#2A2D2A', sx * 1.22, 0.42 + k * 0.09, 0.75, { rx: -0.5, ...NC }); }
+  cyl(tur, 0.36, 0.4, 0.24, dk, 0.52, 0.62, -0.55, { seg: 10 }); const hatch = grp(tur, 0.52, 0.88, -0.86); cyl(hatch, 0.34, 0.34, 0.05, dk, 0, 0, 0.32, { seg: 10 }); hatch.rotation.x = -1.1;
+  const mg = grp(tur, 0.52, 0.9, -0.45); box(mg, 0.06, 0.12, 0.08, steel, 0, 0, 0); rod(mg, 0.022, 0.022, 0.7, '#1E2024', 0, 0.06, 0.4, NC); box(mg, 0.1, 0.12, 0.3, steel, 0, 0.0, 0.12, NC);
+  cyl(tur, 0.3, 0.3, 0.06, dk, -0.55, 0.62, -0.7, { seg: 10, ...NC }); box(tur, 0.42, 0.3, 0.3, steel, -0.6, 0.62, 0.35, NC);   // loader hatch, sight
+  const ants = [-0.9, 0.9].map(ax => { const a = dyn(grp(tur, ax, 0.62, -1.9)); cyl(a, 0.012, 0.02, 2.2, '#1E2024', 0, 0, 0, { seg: 4, ...NC }); return a; });
+  let crew = null; if (o.crew !== false) { crew = grp(tur, 0.52, 0.72, -0.55); box(crew, 0.36, 0.3, 0.26, o.crewColor ?? '#4A5A36', 0, 0, 0); ball(crew, 0.17, '#E8B892', 0, 0.42, 0, { detail: 1 }); cyl(crew, 0.19, 0.19, 0.14, '#3A4A2A', 0, 0.5, 0, { seg: 10 }); box(crew, 0.2, 0.04, 0.02, '#1A1A1A', 0, 0.42, 0.165, NC); }
+  const gun = dyn(grp(tur, 0, 0.3, 1.5)), bar = dyn(grp(gun)); box(gun, 0.95, 0.5, 0.34, dk, 0, -0.25, 0.05);
+  rod(bar, 0.1, 0.12, 3.6, steel, 0, 0, 2.0, { seg: 10 }); rod(bar, 0.15, 0.15, 0.55, steel, 0, 0, 2.1, { seg: 10 }); box(bar, 0.28, 0.22, 0.34, '#2E3134', 0, -0.11, 3.9); for (const sx of [-1, 1]) box(bar, 0.02, 0.12, 0.2, '#111111', sx * 0.141, -0.06, 3.9, NC);
+  if (o.camo !== false) for (let i = 0; i < 18; i++) { const hx = hash(i * 3.1 + x), hz = hash(i * 5.7 + z), on = i < 12 ? B : tur; box(on, 0.6 + hash(i * 1.3) * 0.9, 0.012, 0.5 + hash(i * 2.2) * 0.8, i % 2 ? shade(c, -0.22, -0.05) : '#7A6A48', (hx - 0.5) * (on === B ? 3.2 : 2.1), on === B ? 1.445 : 0.62, (hz - 0.5) * (on === B ? 5.5 : 2.4), { ...NC, ry: hash(i) * 2 }); }
+  const T = { g, B, turret: tur, gun, barrel: bar, wheels, tread, linkAt, N, Lp, ants, hatch, kind: 'tank', len: 7.4 * s, trackW: 2.84 * s, lampX: 1.4, lampY: 1.12, front: 3.6, aims: [], shots: [], s, crew };
+  T.yaw0 = o.turret ?? 0; CB.tanks.push(T);
+  T.turretAt = t => { let yaw = T.yaw0, pit = 0; const hp = T._posAt ? T._posAt(t) : T.g.position, hy = T._yawAt ? T._yawAt(t) : T.g.rotation.y;
+    for (const a of T.aims) { const k = span(t, a.t, a.dur, 'inOut'); if (k <= 0) break; if (!a.T) { yaw = lerpA(yaw, 0, k); pit = lerp(pit, 0, k); continue; }
+      const P = a.T.pos(t), dx = P.x - hp.x, dz = P.z - hp.z, dyaw = Math.atan2(dx, dz) - hy, hd = Math.hypot(dx, dz); yaw = lerpA(yaw, dyaw, k); pit = lerp(pit, clamp(Math.atan2(P.y - (hp.y + 2.0 * s), hd), -0.12, 0.35), k); }
+    return [yaw, pit]; };
+  T.muzzleAt = t => { const [yaw, pit] = T.turretAt(t), hp = T._posAt ? T._posAt(t).clone() : T.g.position.clone(), hy = T._yawAt ? T._yawAt(t) : T.g.rotation.y;
+    const m = new THREE.Matrix4().compose(hp, new THREE.Quaternion().setFromAxisAngle(_AY, hy), v3(s, s, s)).multiply(new THREE.Matrix4().makeTranslation(0, 1.44, -0.35)).multiply(new THREE.Matrix4().makeRotationY(yaw)).multiply(new THREE.Matrix4().makeTranslation(0, 0.3, 1.5)).multiply(new THREE.Matrix4().makeRotationX(-pit));
+    return [v3(0, 0, 4.1).applyMatrix4(m), v3(0, 0, 1).transformDirection(m)]; };
+  return T;
+}
+const lerpA = (a, b, k) => { let d = b - a; d = Math.atan2(Math.sin(d), Math.cos(d)); return a + d * k; };
+function aimTurret(T, t, at, o = {}) { const tg = at == null ? null : cbTarget(at), dur = o.dur ?? 1.2; T.aims.push({ t, dur, T: tg }); T.aims.sort((a, b) => a.t - b.t); sfx(t, 'servo', 0.9); const h = AUDIO.hits[AUDIO.hits.length - 1]; h.dur = dur; return T; }
+function cannon(T, t, o = {}) {   // fire the main gun: recoil, muzzle blast, dust ring, shell → explosion at the target
+  const tg = cbTarget(o.at); if (tg && !T.aims.some(a => a.t <= t - 0.3)) aimTurret(T, t - 1.5, tg, { dur: 1.1 });
+  T.shots.push(t); const [M, d] = T.muzzleAt(t), P = tg ? tg.pos(t) : M.clone().addScaledVector(d, 60); if (!tg) P.y = groundH(P.x, P.z);
+  cbFlash(() => [T.barrel.localToWorld(v3(0, 0, 4.15)), v3(0, 0, 1).transformDirection(T.barrel.matrixWorld)], t, { size: 1.6, dur: 0.1, light: 70, dist: 22, lightDur: 0.2 });
+  cbBurst('flame', M, t, { n: 16, dir: d, cone: 0.35, speed: 10, size: 0.9, life: 0.3 }); cbBurst('smoke', M, t + 0.02, { n: 22, dir: d, cone: 0.9, speed: 3.2, size: 1.0, life: 3.6, opacity: 0.55, drag: 1.8 });
+  for (const sx of [-1, 1]) cbBurst('smoke', M, t, { n: 6, dir: v3(d.z * sx, 0.1, -d.x * sx), cone: 0.3, speed: 5, size: 0.6, life: 1.8 });
+  const gp = v3(M.x, groundH(M.x, M.z) + 0.15, M.z); cbBurst('puff', gp, t + 0.03, { n: 30, dir: [0, 0.15, 0], cone: 1.5, speed: 6, size: 0.8, life: 1.8, drag: 2.4 });
+  const vel = o.vel ?? 230, th = t + M.distanceTo(P) / vel; cbTracer(() => T.barrel.localToWorld(v3(0, 0, 4.15)), P, t, { vel, len: 5, w: 0.12, color: '#FFE3A0', hot: 4 });
+  explode(P.x, Math.max(P.y - 0.6, groundH(P.x, P.z)), P.z, th, { size: o.size ?? 1.4 }); if (tg) hitReact(tg, th, { from: M, kill: true, ragdoll: o.ragdoll ?? true, power: 7 });
+  sfx(t, 'cannon', 1); SHAKES.push({ t: VT(t), amp: o.shake ?? 0.4, dur: 0.75 }); FLASHES.push({ t: VT(t), dur: 0.12, a: 0.25, color: '#FFE0B0' });
+  return { th, at: P };
+}
+function tankLate(T, t) {
+  const [yaw, pit] = T.turretAt(t); T.turret.rotation.y = yaw; T.gun.rotation.x = -pit;
+  let rec = 0, rock = 0; for (const s of T.shots) { const a = t - s; if (a < 0 || a > 2) continue; rec = Math.max(rec, a < 0.05 ? a / 0.05 : Math.exp(-(a - 0.05) * 3.2)); rock += -0.045 * Math.exp(-a * 3.5) * Math.cos(a * 10); }
+  T.barrel.position.z = -0.7 * rec; T.B.rotation.x = rock;
+  const s = (T.wheels[0].rotation.x || 0) * 0.38, M4 = new THREE.Matrix4(); for (const [k, sx] of [[0, -1], [1, 1]]) for (let i = 0; i < T.N; i++) { T.linkAt(i * T.Lp / T.N + s, _o3); _o3.position.x = sx * 1.42; _o3.scale.set(1, 1, 1); _o3.updateMatrix(); T.tread.setMatrixAt(k * T.N + i, _o3.matrix); }
+  T.tread.instanceMatrix.needsUpdate = true;
+  const sp = T._posAt ? T._posAt(t + 0.05).distanceTo(T._posAt(t - 0.05)) * 10 : 0; T.ants.forEach((a, i) => { a.rotation.x = -0.06 * clamp(sp / 6) + 0.05 * Math.sin(t * 7 + i) * clamp(sp / 4) + rec * 0.25 * Math.sin(t * 22); a.rotation.z = 0.04 * Math.sin(t * 5.3 + i * 2) * clamp(sp / 4); });
+  T.g.updateWorldMatrix(true, true);
+}
+
+// --- fighter jet: twin tails, intakes, canopy with pilot, afterburner, missiles under the wings ---
+function slab(p, pts, th, c, y = 0, o = {}) {   // flat polygon in the xz plane (pts [[x, z], …]), thickness th
+  const s = new THREE.Shape(); pts.forEach(([x, z], i) => i ? s.lineTo(x, z) : s.moveTo(x, z)); s.closePath();
+  const geo = new THREE.ExtrudeGeometry(s, { depth: th, bevelEnabled: false }).rotateX(Math.PI / 2).translate(0, th / 2, 0); return mesh(p, geo, o.mat ?? mat(c, o), 0, y, 0, o);
+}
+function jet(p, o = {}) {
+  cbInit(); const c = o.color ?? '#8A949E', dk = shade(c, -0.12), lt = shade(c, 0.08), NC = { cast: false }, s = o.scale ?? 1;
+  const g = dyn(grp(p, o.x ?? 0, o.y ?? 0, o.z ?? 0)), B = grp(g); B.scale.setScalar(s);
+  rod(B, 0.72, 0.62, 6.6, c, 0, 0, -0.2, { seg: 10 }); rod(B, 0.12, 0.72, 3.0, c, 0, 0.02, 4.6, { seg: 10 }); rod(B, 0.0, 0.12, 0.6, dk, 0, 0.03, 6.4, { seg: 8 });   // fuselage, nose, radome tip
+  box(B, 1.2, 0.42, 5.4, c, 0, 0.25, -1.2); box(B, 0.5, 0.3, 2.2, lt, 0, 0.55, 1.4);   // spine, canopy fairing
+  const can = ball(B, 0.55, '', 0, 0.78, 2.7, { mat: mat('#203248', { rough: 0.1, metal: 0.3, opacity: 0.75 }), detail: 2, ...NC }); can.scale.set(0.72, 0.6, 2.1);
+  ball(B, 0.2, '#E8E8E8', 0, 0.82, 2.5, { detail: 1, ...NC }); box(B, 0.24, 0.07, 0.04, '#1A1A1A', 0, 0.82, 2.69, NC);   // pilot helmet + visor
+  for (const sx of [-1, 1]) { box(B, 0.6, 0.78, 2.6, dk, sx * 0.95, -0.55, 1.0); box(B, 0.5, 0.62, 0.06, '#111418', sx * 0.95, -0.47, 2.31, NC); }   // intakes
+  for (const sx of [-1, 1]) {
+    const W = grp(B, 0, 0, 0); W.scale.x = sx; slab(W, [[0.6, 1.8], [5.4, -2.0], [5.4, -2.8], [0.6, -3.3]], 0.16, c, -0.15);   // swept wings
+    slab(W, [[0.5, -3.6], [2.7, -4.9], [2.7, -5.4], [0.5, -5.3]], 0.12, c, -0.05);   // stabilisers
+    const tl = grp(B, sx * 0.85, 0.35, 0); tl.rotation.z = -sx * 0.32; const tg = grp(tl); tg.rotation.z = Math.PI / 2; const TW = grp(tg); slab(TW, [[0, -3.0], [2.5, -4.7], [2.5, -5.4], [0, -5.4]], 0.11, lt, 0);   // canted twin tails
+    box(B, 0.06, 0.06, 0.06, '', sx * 5.42, -0.1, -2.4, { mat: mat(sx < 0 ? '#FF3030' : '#30FF60', { basic: true, glow: 1 }), ...NC });
+    rod(B, 0.42, 0.5, 0.95, '#3A3D40', sx * 0.42, 0, -4.4, { seg: 10 }); rod(B, 0.36, 0.36, 0.05, '', sx * 0.42, 0, -4.9, { mat: mat('#FF8A3A', { basic: true, glow: 0.8 }), seg: 10, ...NC });
+  }
+  const flames = [-1, 1].map(sx => { const f = dyn(grp(B, sx * 0.42, 0, -4.92)); rod(f, 0.34, 0.0, 2.2, '', 0, 0, -1.1, { mat: Object.assign(addMat(), { color: new THREE.Color('#FF7A2A').multiplyScalar(2.2) }), seg: 10, ...NC }); rod(f, 0.2, 0.0, 1.4, '', 0, 0, -0.7, { mat: Object.assign(addMat(), { color: new THREE.Color('#FFF4C8').multiplyScalar(3) }), seg: 8, ...NC }); return f; });
+  const hard = []; for (const [hx, kind] of [[2.4, 'missile'], [3.6, 'missile'], [-2.4, 'missile'], [-3.6, 'missile'], [1.5, o.bombs ? 'bomb' : null], [-1.5, o.bombs ? 'bomb' : null]]) { if (!kind || (kind === 'missile' && o.missiles === 0)) continue;
+    box(B, 0.08, 0.2, 0.9, dk, hx, -0.35, -0.6, NC); const m = dyn(grp(B, hx, -0.48, -0.6)); if (kind === 'missile') { rod(m, 0.09, 0.09, 2.3, '#F0F0F0', 0, 0, 0, { seg: 8 }); rod(m, 0, 0.09, 0.32, '#5A5F66', 0, 0, 1.31, { seg: 8 }); for (let k = 0; k < 4; k++) { const q = grp(m, 0, 0, -0.95); q.rotation.z = k * Math.PI / 2 + Math.PI / 4; box(q, 0.01, 0.2, 0.28, '#D0D0D0', 0, 0.08, 0, NC); } }
+    else { rod(m, 0.17, 0.17, 1.6, '#4A5236', 0, -0.06, 0, { seg: 10 }); rod(m, 0, 0.17, 0.35, '#4A5236', 0, -0.06, 0.97, { seg: 10 }); for (let k = 0; k < 4; k++) { const q = grp(m, 0, -0.06, -0.85); q.rotation.z = k * Math.PI / 2; box(q, 0.01, 0.24, 0.3, '#3A4228', 0, 0.06, 0, NC); } }
+    hard.push({ node: m, kind, used: false }); }
+  const strobe = box(B, 0.08, 0.08, 0.08, '', 0, 2.95, -5.3, { mat: mat('#FFFFFF', { basic: true, glow: 2 }), ...NC });
+  const J = { g, B, flames, hard, strobe, kind: 'fighter', s, burner: o.burner ?? 0.55, len: 13 * s, gun: v3(0.6, 0.2, 4.6) }; CB.jets.push(J); return J;
+}
+function jetLate(J, t) {
+  const b = typeof J.burner === 'function' ? J.burner(t) : J.burner; J.flames.forEach((f, i) => { const fl = 1 + 0.12 * Math.sin(t * 61 + i * 2) + 0.08 * Math.sin(t * 37 + i); f.scale.set(0.6 + 0.4 * b, 0.6 + 0.4 * b, Math.max(0.05, b * fl)); f.visible = b > 0.02; });
+  J.strobe.visible = (t * 1.25) % 1 < 0.08;
+}
+const flyPose = (obj, t) => { const n = obj.g ?? obj; if (n._fly) { const [p, rx, ry, rz] = n._fly(t); return { p: v3(p[0], p[1], p[2]), q: new THREE.Quaternion().setFromEuler(new THREE.Euler(rx, ry, rz, 'YXZ')) }; }
+  if (obj._posAt) return { p: obj._posAt(t).clone(), q: new THREE.Quaternion().setFromAxisAngle(_AY, obj._yawAt ? obj._yawAt(t) : n.rotation.y) }; n.updateWorldMatrix(true, false); return { p: new THREE.Vector3().setFromMatrixPosition(n.matrixWorld), q: n.getWorldQuaternion(new THREE.Quaternion()) }; };
+const carrierPoint = (V, t, local) => { const P = flyPose(V, t); return local.clone().multiplyScalar(V.s ?? 1).applyQuaternion(P.q).add(P.p); };
+const carrierVel = (V, t) => carrierPoint(V, t + 0.05, v3()).sub(carrierPoint(V, t - 0.05, v3())).multiplyScalar(10);
+function missile(o = {}) {   // { from: [x,y,z] | jet/heli/tank, at, t0, t1 | speed, arc, size, smoke } — homing on moving targets, smoke trail, explodes on arrival
+  cbInit(); const t0 = o.t0 ?? 0, T = cbTarget(o.at ?? [0, 0, 0]); let P0, V0, hp = null;
+  if (o.from && !Array.isArray(o.from) && !o.from.isVector3) { const V = o.from; hp = V.hard?.find(h => h.kind === 'missile' && !h.used); if (hp) hp.used = true; const loc = hp ? hp.node.position.clone() : v3(0, -0.6, 1);
+    P0 = carrierPoint(V, t0, loc); V0 = carrierVel(V, t0); if (hp) tick(t => { hp.node.visible = t < t0; }); }
+  else { P0 = toV(o.from ?? [0, 1, 0]); V0 = v3(); }
+  const P3_0 = T.pos(t0), D = P0.distanceTo(P3_0), t1 = o.t1 ?? t0 + D / (o.speed ?? 70) + 0.3, f0 = V0.length() > 1 ? V0.clone().normalize() : P3_0.clone().sub(P0).normalize().add(v3(0, 0.25, 0)).normalize();
+  const g = dyn(grp(world)), sm = o.small ? 0.55 : 1; rod(g, 0.09 * sm, 0.09 * sm, 2.0 * sm, '#F2F2F2', 0, 0, 0, { seg: 8 }); rod(g, 0, 0.09 * sm, 0.3 * sm, o.small ? '#6A7444' : '#C0392B', 0, 0, 1.15 * sm, { seg: 8 });
+  for (let k = 0; k < 4; k++) { const q = grp(g, 0, 0, -0.85 * sm); q.rotation.z = k * Math.PI / 2 + Math.PI / 4; box(q, 0.012, 0.22 * sm, 0.28 * sm, '#D0D0D0', 0, 0.06 * sm, 0, { cast: false }); }
+  const fl = dyn(grp(g, 0, 0, -1.0 * sm)); rod(fl, 0.08, 0, 0.7, '', 0, 0, -0.35, { mat: Object.assign(addMat(), { color: new THREE.Color('#FFE6A0').multiplyScalar(3) }), seg: 8, cast: false }); g.visible = false;
+  const path = t => { const u = clamp((t - t0) / (t1 - t0)), w = u * 0.75 + 0.25 * u * u, P3 = T.pos(Math.min(t, t1)), dd = P0.distanceTo(P3), P1 = P0.clone().addScaledVector(f0, dd * 0.35).add(v3(0, o.small ? 0 : -Math.min(2.5, dd * 0.05), 0)), P2 = P3.clone().add(v3(0, (o.arc ?? (o.small ? 0.02 : 0.15)) * dd, 0));
+    const a = 1 - w, p = P0.clone().multiplyScalar(a * a * a).addScaledVector(P1, 3 * a * a * w).addScaledVector(P2, 3 * a * w * w).addScaledVector(P3, w * w * w); return p; };
+  const Mi = { g, fl, t0, t1, path }; CB.mis.push(Mi);
+  cbBurst('smoke', tt => path(tt), t0 + 0.08, { rate: 45, n: Math.ceil((t1 - t0) * 45), size: 0.35 * sm, speed: 0.25, grow: 2.6, life: 2.4, opacity: 0.55, drag: 2 });
+  cbBurst('flame', tt => path(tt), t0 + 0.05, { rate: 50, n: Math.ceil((t1 - t0) * 50), size: 0.28 * sm, speed: 0.4, life: 0.16 });
+  if (!o.quiet) sfx(t0, 'launch', 0.7); sfx(t0 + 0.05, 'missile', 0.8); AUDIO.hits[AUDIO.hits.length - 1].dur = t1 - t0;
+  const P3 = T.pos(t1);
+  if (o.boom !== false) { if (T.src?.g?._fly) { explode(P3.x, P3.y, P3.z, t1, { size: o.size ?? 1.3, crater: false }); if (o.down !== false) shotDown(T.src, t1); }
+    else { explode(P3.x, Math.max(groundH(P3.x, P3.z), P3.y - 0.8), P3.z, t1, { size: o.size ?? 1.3 }); hitReact(T, t1, { from: P0, kill: true, ragdoll: true, power: 7 }); } }
+  return { t1, at: P3 };
+}
+function misLate(M, t) { const on = t >= M.t0 && t < M.t1; M.g.visible = on; if (!on) return; const p = M.path(t), q = M.path(t + 0.02); M.g.position.copy(p); qLook(q.sub(p), _AY, M.g.quaternion); M.fl.scale.z = 0.8 + 0.3 * Math.sin(t * 57); }
+function shotDown(J, t, o = {}) {   // hit: smoke and fire trail, rolls, dives and crashes
+  const P = flyPose(J, t), V = carrierVel(J, t), g = 9.8 * 0.7, e = new THREE.Euler().setFromQuaternion(P.q, 'YXZ'); let tg = 0;
+  for (let k = 0; k < 600; k++) { tg = k * 0.02; const y = P.p.y + V.y * tg - 0.5 * g * tg * tg; if (y <= groundH(P.p.x + V.x * tg, P.p.z + V.z * tg)) break; }
+  const D = { node: J.g ?? J, t, tg }; CB.downs.push(D); J.downPath = D.path = tt => { const u = tt - t, uu = Math.min(u, tg), p = v3(P.p.x + V.x * uu, P.p.y + V.y * uu - 0.5 * g * uu * uu, P.p.z + V.z * uu); return { p, rx: e.x + Math.min(1.1, uu * 0.5), ry: e.y, rz: e.z + uu * 3.2 }; };
+  cbBurst('smoke', tt => J.downPath(tt).p, t, { rate: 40, n: Math.ceil(tg * 40), size: 0.9, speed: 0.4, life: 3.2, colors: ['#3A3634', '#5A5450'], opacity: 0.7 });
+  cbBurst('flame', tt => J.downPath(tt).p, t, { rate: 50, n: Math.ceil(tg * 50), size: 0.8, speed: 0.6, life: 0.3 });
+  const G = J.downPath(t + tg).p; explode(G.x, groundH(G.x, G.z), G.z, t + tg, { size: 2.2 });
+  return t + tg;
+}
+function bomb(V, t, o = {}) {   // release from the belly; falls with the carrier's speed, whistles, explodes on the ground
+  cbInit(); const hp = V.hard?.find(h => h.kind === 'bomb' && !h.used); if (hp) { hp.used = true; tick(tt => { hp.node.visible = tt < t; }); }
+  const P0 = carrierPoint(V, t, hp ? hp.node.position.clone() : v3(0, -1.0, 0)), V0 = carrierVel(V, t), g = 9.8; let tg = 0;
+  for (let k = 0; k < 800; k++) { tg = k * 0.02; const x = P0.x + V0.x * tg, z = P0.z + V0.z * tg, y = P0.y + V0.y * tg - 0.5 * g * tg * tg; if (y <= groundH(x, z)) break; }
+  const m = dyn(grp(world)); rod(m, 0.17, 0.17, 1.6, '#4A5236', 0, 0, 0, { seg: 10 }); rod(m, 0, 0.17, 0.35, '#4A5236', 0, 0, 0.97, { seg: 10 }); for (let k = 0; k < 4; k++) { const q = grp(m, 0, 0, -0.85); q.rotation.z = k * Math.PI / 2; box(q, 0.01, 0.24, 0.3, '#3A4228', 0, 0.06, 0, { cast: false }); }
+  m.scale.setScalar(V.s ?? 1); m.visible = false; const pos = u => v3(P0.x + V0.x * u, P0.y + V0.y * u - 0.5 * g * u * u, P0.z + V0.z * u);
+  CB.bombs.push({ m, t, tg, pos }); sfx(t + 0.1, 'whistle', 0.9); AUDIO.hits[AUDIO.hits.length - 1].dur = Math.max(0.3, tg - 0.1);
+  const G = pos(tg); explode(G.x, groundH(G.x, G.z), G.z, t + tg, { size: o.size ?? 1.8 }); if (o.horde) killNear(o.horde, G, t + tg, o.r ?? 4);
+  return { t: t + tg, at: G };
+}
+function killNear(h, P, t, r) { for (let i = 0; i < 600; i++) { const k = h.near(P, t, { max: r }); if (k < 0) break; h.hit(k, t + hash(k) * 0.12, { from: P, push: 1.2 }); } }
+function flares(V, t, o = {}) { const n = o.n ?? 8; for (let i = 0; i < n; i++) { const tt = t + i * 0.09, P = carrierPoint(V, tt, v3((i % 2 ? 1 : -1) * 0.8, -0.6, -3.5)), vel = carrierVel(V, tt).multiplyScalar(0.55);
+    cbBurst('flare', P, tt, { n: 1, vel: [vel.x, vel.y - 2, vel.z], dir: [(i % 2 ? 1 : -1), -0.4, 0], speed: 7, cone: 0.3, life: 1.8 }); cbBurst('smoke', tt2 => { const u = tt2 - tt; return [P.x + (vel.x + (i % 2 ? 7 : -7)) * u * 0.6, P.y + (vel.y - 2) * u - 1.2 * u * u, P.z + vel.z * u * 0.6]; }, tt, { rate: 20, n: 30, size: 0.3, speed: 0.1, life: 1.6, opacity: 0.6 });
+    if (i % 2 === 0) sfx(tt, 'pop', 0.8); cbFlash([P, _AY], tt, { size: 0.01, dur: 0.3, light: 25, lightDur: 0.6, color: '#FFFFFF' }); } }
+// strafe(V, t0, t1, { at, rate, gun: [x,y,z] local, spread, horde, r }) — guns of a jet, heli or tank: tracers, impacts walk across the ground toward `at`
+function strafe(V, t0, t1, o = {}) {
+  cbInit(); const T = cbTarget(o.at ?? [0, 0]), rate = o.rate ?? (V.kind === 'fighter' ? 26 : 16), n = Math.max(1, Math.round((t1 - t0) * rate)), isTank = V.kind === 'tank';
+  const loc = toV(o.gun ?? (V.kind === 'fighter' ? V.gun.toArray() : V.rotor ? [0, -1.3, 1.6] : [0, 0, 0]));
+  const at = tb => { if (isTank) { const [m, d] = V.muzzleAt(tb); return [m.addScaledVector(d, -2.2), d]; } return [carrierPoint(V, tb, loc), _AZ.clone().applyQuaternion(flyPose(V, tb).q)]; };
+  const live = tt => { if (isTank) return at(tt); const nd = V.B ?? V.g ?? V; nd.updateWorldMatrix(true, false); return [loc.clone().applyMatrix4(nd.matrixWorld), _AZ.clone().transformDirection(nd.matrixWorld)]; };
+  const fwd = carrierVel(V, (t0 + t1) / 2); fwd.y = 0; const fast = fwd.length() > 8; if (fwd.lengthSq() < 1e-6) fwd.copy(at(t0)[1]).setY(0); fwd.normalize();
+  for (let i = 0; i < n; i++) { const tb = t0 + i / rate, M = at(tb)[0], P = T.pos(tb), u = i / Math.max(1, n - 1);
+    const Pg = fast ? P.clone().addScaledVector(fwd, lerp(-16, 6, u)) : P.clone().add(v3((hash(i * 1.3) - 0.5) * 3 * (1 - u), 0, (hash(i * 2.7) - 0.5) * 3 * (1 - u)));
+    Pg.x += (hash(i * 5.1) - 0.5) * (o.spread ?? 1.6); Pg.z += (hash(i * 6.3) - 0.5) * (o.spread ?? 1.6); if (T.point || fast) Pg.y = groundH(Pg.x, Pg.z);
+    const vel = 260, th = tb + M.distanceTo(Pg) / vel;
+    if (i % 2 === 0) cbTracer(M, Pg, tb, { vel, len: 3, w: 0.06 });
+    cbFlash(live, tb, { size: 0.45, dur: 0.045, light: i % 3 ? 0 : 30 });
+    hitFx(T.point || fast ? null : T, Pg, th, { from: M, quiet: i % 3 !== 0 }); if (o.horde) killNear(o.horde, Pg, th, o.r ?? 1.1);
+    if (!T.point && !fast && i % 4 === 0) hitReact(T, th, { from: M }); }
+  sfx(t0, isTank ? 'mg' : 'minigun', 1); AUDIO.hits[AUDIO.hits.length - 1].dur = t1 - t0;
+}
+
+// --- per-frame (after every pose and path): faces, falls, matrices, bows, trails, grenades, arrows, vehicles, pools ---
+function cbLate(t) {
+  for (const f of CB.rigs) if (f._faceOn && !f._rag && !(f._falls?.some(F => t >= F.t))) f.root.rotation.y = f._yawAt(t);
+  for (const F of CB.falls) fallLate(F, t);
+  const upd = new Set([...CB.rigs, ...CB.falls.map(F => F.f), ...CB.arrows.filter(A => A.stickRig).map(A => A.stickRig)]); for (const f of upd) f.root.updateWorldMatrix(true, true);
+  for (const f of CB.rigs) for (const W of f._cb.W) {
+    if (W.cls === 'bow') bowLate(W, t);
+    if (W.trail) trailLate(W, t);
+  }
+  for (const G of CB.gren) { const { f, g, a, P, boom } = G; g.visible = t >= a.tp && t < boom; if (!g.visible) continue; if (t < a.t) { handAt(f, 'R', g.position); g.rotation.set(0, 0, 0); } else { P.at(t, g.position); g.rotation.x = P.rot(t); } }
+  for (const A of CB.arrows) {
+    const m = A.mesh; if (t < A.t) { m.visible = false; continue; } m.visible = !(A.vanish && t >= A.th);
+    if (t < A.th) { const u = t - A.t; m.position.set(A.P0.x + A.v.x * u, A.P0.y + A.v.y * u - 0.5 * A.g * u * u, A.P0.z + A.v.z * u); qLook(_k1.set(A.v.x, A.v.y - A.g * u, A.v.z), _AY, m.quaternion); m.position.addScaledVector(_k1.normalize(), -0.84); }
+    else if (A.stickRig) { const ch = A.stickRig.chest; ch.updateWorldMatrix(true, false); const d = A.ldir, head = A.local.clone(); m.position.copy(head.addScaledVector(d, -0.62)).applyMatrix4(ch.matrixWorld); qLook(d.clone().transformDirection(ch.matrixWorld), _AY, m.quaternion); }
+    else { const u = A.th - A.t, d = _k1.set(A.v.x, A.v.y - A.g * u, A.v.z).normalize(); m.position.copy(A.P1).addScaledVector(d, -0.62); qLook(d, _AY, m.quaternion); }
+  }
+  for (const R of CB.rain) { let c = 0; for (const e of R.L) { if (t < e.tl) continue; const u = Math.min(t - e.tl, e.Tf), d = _k1.set(e.v.x, e.v.y - R.g * u, e.v.z).normalize();
+      _o3.position.set(e.P0.x + e.v.x * u, e.P0.y + e.v.y * u - 0.5 * R.g * u * u, e.P0.z + e.v.z * u).addScaledVector(d, t - e.tl >= e.Tf ? -0.6 : -0.84); qLook(d, _AY, _o3.quaternion); _o3.scale.setScalar(1.2); _o3.updateMatrix(); R.im.setMatrixAt(c++, _o3.matrix); }
+    R.im.count = c; R.im.instanceMatrix.needsUpdate = true; }
+  for (const T of CB.tanks) tankLate(T, t);
+  for (const J of CB.jets) jetLate(J, t);
+  for (const D of CB.downs) if (t >= D.t) { const q = D.path(t), n = D.node; n.position.copy(q.p); n.rotation.order = 'YXZ'; n.rotation.set(q.rx, q.ry, q.rz); n.visible = t < D.t + D.tg + 0.05; }
+  for (const M of CB.mis) misLate(M, t);
+  for (const B of CB.bombs) { const on = t >= B.t && t < B.t + B.tg; B.m.visible = on; if (on) { const u = t - B.t, p = B.pos(u); B.m.position.copy(p); qLook(B.pos(u + 0.03).sub(p), _AY, B.m.quaternion); } }
+  // muzzle flashes + the two combat lights
+  let c = 0; const lit = [];
+  for (const e of CB.fl) { const a = t - e.t; if (a < 0 || a > Math.max(e.dur, e.ld)) continue; const sv = liveSrc(e.src, t); if (!sv) continue; const [p, d] = sv;
+    if (e.I) lit.push([e.I * (1 - a / e.ld), p, e]); if (a > e.dur || e.size < 0.02) continue; const k = a / e.dur, sz = e.size * (1 - 0.4 * k) * (0.8 + 0.4 * hash(e.id));
+    qLook(d, Math.abs(d.y) > 0.9 ? _AX : _AY, _o3.quaternion).multiply(_kq1.setFromAxisAngle(_AZ, hash(e.id * 3) * TAU)); _o3.position.copy(p); _o3.scale.set(sz, sz, sz * 1.3); _o3.updateMatrix();
+    if (c < 48) { CB.flashIm.setMatrixAt(c, _o3.matrix); CB.flashIm.setColorAt(c, _pc2.copy(e.col).multiplyScalar(3 * (1 - 0.5 * k))); c++; } }
+  CB.flashIm.count = c; if (c) { CB.flashIm.instanceMatrix.needsUpdate = true; CB.flashIm.instanceColor.needsUpdate = true; }
+  lit.sort((a, b) => b[0] - a[0]); CB.lights.forEach((L, i) => { const e = lit[i]; if (!e || e[0] <= 0) { L.intensity = 0; return; } L.position.copy(e[1]); L.intensity = e[0]; L.distance = e[2].dist; L.color.copy(e[2].col); });
+  // tracers
+  c = 0; for (const e of CB.tr) { const a = t - e.t0; if (a < 0) continue; const from = liveSrc(e.src, t); if (!from) continue; const D = from.distanceTo(e.to), dd = e.vel * a; if (dd > D + e.len) continue;
+    const head = Math.min(dd, D), tail = Math.min(D, Math.max(0, dd - e.len)); if (head - tail < 0.02 || c >= 120) continue; const dir = _k1.subVectors(e.to, from).normalize();
+    _o3.position.copy(from).addScaledVector(dir, (head + tail) / 2); qLook(dir, _AY, _o3.quaternion); _o3.scale.set(e.w, e.w, head - tail); _o3.updateMatrix(); CB.tracerIm.setMatrixAt(c, _o3.matrix); CB.tracerIm.setColorAt(c, e.col); c++; }
+  CB.tracerIm.count = c; if (c) { CB.tracerIm.instanceMatrix.needsUpdate = true; CB.tracerIm.instanceColor.needsUpdate = true; }
+  // daze stars
+  c = 0; for (const s of CB.stars) { if (t < s.t0 || t > s.t1) continue; const hp = s.f.head.getWorldPosition(_k2), pop = Math.min(sm01((t - s.t0) / 0.25), sm01((s.t1 - t) / 0.3));
+    for (let i = 0; i < 3 && c < 60; i++) { const a = t * 4.2 + i * TAU / 3; _o3.position.set(hp.x + Math.cos(a) * 0.32, hp.y + 0.3 + 0.05 * Math.sin(a * 2), hp.z + Math.sin(a) * 0.32); _o3.rotation.set(0, -a, t * 3); _o3.scale.setScalar(1.3 * pop); _o3.updateMatrix();
+      CB.starIm.setMatrixAt(c, _o3.matrix); CB.starIm.setColorAt(c, _pc2.set('#FFE04A').multiplyScalar(2)); c++; } }
+  CB.starIm.count = c; if (c) { CB.starIm.instanceMatrix.needsUpdate = true; CB.starIm.instanceColor.needsUpdate = true; }
+  for (const k in BP) bpoolUpdate(BP[k], t);
+}
+function bowLate(W, t) {
+  const d = W._draw ?? 0, tipY = 0.13 + 0.15 * d, tipZ = 0.62 - 0.07 * d, midY = 0.035 + 0.06 * d, midZ = 0.37 - 0.03 * d, L = W.limb;
+  segBox(L[0], _k1.set(0, 0, 0.08), _k2.set(0, midY, midZ), 0.05, 0.036); segBox(L[1], _k1.set(0, midY, midZ), _k2.set(0, tipY, tipZ), 0.042, 0.03);
+  segBox(L[2], _k1.set(0, 0, -0.08), _k2.set(0, midY, -midZ), 0.05, 0.036); segBox(L[3], _k1.set(0, midY, -midZ), _k2.set(0, tipY, -tipZ), 0.042, 0.03);
+  const nk = v3(0, tipY, 0); let last = -1e9; for (const r of W.rel) if (r <= t) last = r;
+  if (W._drawn) { handAt(W.f, 'R', _k3); W.g.children[0].worldToLocal(nk.copy(_k3)); nk.x *= 0.3; nk.y = Math.max(nk.y, tipY); }
+  else if (t - last < 0.4) nk.y += 0.06 * Math.sin((t - last) * 70) * Math.exp(-(t - last) * 12);
+  segBox(W.str[0], _k1.set(0, tipY, tipZ), nk, 0.009, 0.009); segBox(W.str[1], nk, _k2.set(0, tipY, -tipZ), 0.009, 0.009);
+  W.nock.visible = !!W._nock && W.g.visible; if (W.nock.visible) { W.nock.position.copy(nk); qLook(_k1.set(0, -0.02, 0.0).sub(nk), _AZ, W.nock.quaternion); }
+}
+function trailLate(W, t) {
+  const tr = W.trail; let a = null; for (const s of W.f._cb.A) if (s.type === 'swing' && s.W === W && t > s.t - 0.2 && t < s.t + 0.24) a = s;
+  if (!a || !W.g.visible) { tr.visible = false; return; }
+  const ch = W.f.chest; ch.updateWorldMatrix(true, false); const Mw = ch.matrixWorld, N = tr.N, pos = tr.geometry.attributes.position, col = tr.geometry.attributes.color, Lt = W.tipZ * W.sc;
+  for (let i = 0; i < N; i++) { const tau = t - (i / (N - 1)) * 0.075, k = swingAt(a, tau), str = env3(tau, a.t - 0.14, a.t + 0.12, 0.05, 0.08) * Math.pow(1 - i / (N - 1), 1.6);
+    const tip = k.hand.clone().addScaledVector(k.blade, Lt).applyMatrix4(Mw), base = k.hand.clone().addScaledVector(k.blade, Lt * (W.kind === 'spear' ? 0.8 : 0.55)).applyMatrix4(Mw);
+    pos.setXYZ(2 * i, base.x, base.y, base.z); pos.setXYZ(2 * i + 1, tip.x, tip.y, tip.z); col.setXYZ(2 * i, 0, 0, 0); col.setXYZ(2 * i + 1, tr.c.r * str, tr.c.g * str, tr.c.b * str); }
+  pos.needsUpdate = true; col.needsUpdate = true; tr.visible = true;
+}
+
+/* ====================================================================== */
 /* SCENE — written per video between the markers (wrapped in a block: names are free) */
 /* ====================================================================== */
 /* @SCENE-BEGIN */
@@ -4221,6 +5079,38 @@ const SND = (() => {
       SFX[k] = (t, v = 1, d, p) => { const s = ctx.createBufferSource(), gg = ctx.createGain(); s.buffer = buf; s.playbackRate.value = p ?? 1; gg.gain.value = g * v; s.connect(gg); gg.connect(fx);
         s.start(Math.max(0, atEnd && d ? t + d - buf.duration : t)); if (syn) synth(t, v * syn, d, p); else if (['boom', 'impact', 'explosion', 'thunder', 'drop'].includes(k)) ducks.push(t); }; }
 
+    Object.assign(SFX, {   // combat (v2.8): guns, blades, bows, war machines — all synthesized
+      shot: (t, v) => { nz(t, 0.001, 0.004, 0.09, 0.95 * v, fx, 'highpass', 1600); nz(t, 0.001, 0.01, 0.22, 0.75 * v, fx, 'lowpass', 2600, 300); tone('sine', 170, t, 0.001, 0.01, 0.14, 0.7 * v, fx, { to: 50, glide: 0.1 }); nz(t + 0.04, 0.02, 0.05, 0.6, 0.08 * v, fx, 'lowpass', 900, 160); ducks.push(t); },
+      smg: (t, v) => { nz(t, 0.001, 0.003, 0.06, 0.7 * v, fx, 'highpass', 2000); nz(t, 0.001, 0.008, 0.12, 0.55 * v, fx, 'lowpass', 2400, 400); tone('sine', 150, t, 0.001, 0.005, 0.08, 0.5 * v, fx, { to: 55, glide: 0.07 }); },
+      rifle: (t, v) => { nz(t, 0.001, 0.005, 0.07, 1.0 * v, fx, 'highpass', 2400); nz(t, 0.001, 0.02, 0.32, 0.8 * v, fx, 'lowpass', 3000, 260); tone('sine', 140, t, 0.001, 0.01, 0.2, 0.75 * v, fx, { to: 42, glide: 0.15 }); nz(t + 0.06, 0.04, 0.1, 0.9, 0.1 * v, fx, 'lowpass', 700, 140); ducks.push(t); },
+      sniper: (t, v) => { SFX.rifle(t, 1.2 * v); nz(t + 0.12, 0.08, 0.3, 1.8, 0.12 * v, fx, 'lowpass', 600, 90); tone('sine', 60, t, 0.005, 0.1, 0.9, 0.4 * v, fx, { to: 30, glide: 0.8 }); },
+      shotgun: (t, v) => { nz(t, 0.001, 0.01, 0.12, 1.0 * v, fx, 'highpass', 1200); nz(t, 0.002, 0.04, 0.5, 0.95 * v, fx, 'lowpass', 1800, 150); tone('sine', 110, t, 0.001, 0.03, 0.35, 0.9 * v, fx, { to: 35, glide: 0.3 }); ducks.push(t); },
+      pump: (t, v) => { for (const [dt, f] of [[0, 1400], [0.16, 1900]]) { nz(t + dt, 0.001, 0.01, 0.05, 0.4 * v, fx, 'bandpass', f, 0, 3); tone('square', 320, t + dt, 0.001, 0.005, 0.03, 0.06 * v, fx, { lp: 1500 }); } },
+      mg: (t, v, d = 1.5) => { for (let k = 0; k < d * 12; k++) SFX.smg(t + k / 12 + ar() * 0.006, (0.75 + ar() * 0.25) * v); },
+      minigun: (t, v, d = 2) => { tone('sawtooth', 70, t, 0.25, Math.max(0, d - 0.3), 0.5, 0.06 * v, fx, { to: 160, glide: 0.4, lp: 900 }); for (let k = 0; k < d * 32; k++) nz(t + 0.2 + k / 32, 0.001, 0.004, 0.035, 0.32 * v, fx, 'bandpass', 1800 + ar() * 900, 0, 1.2); ducks.push(t); },
+      cannon: (t, v) => { nz(t, 0.001, 0.02, 0.2, 1.1 * v, fx, 'highpass', 1500); tone('sine', 85, t, 0.002, 0.08, 1.3, 1.1 * v, fx, { to: 26, glide: 0.9 }); nz(t, 0.003, 0.15, 2.6, 0.75 * v, fx, 'lowpass', 900, 70); nz(t + 0.25, 0.2, 0.4, 2.2, 0.12 * v, fx, 'lowpass', 400, 80); ducks.push(t); },
+      launch: (t, v) => { nz(t, 0.002, 0.03, 0.25, 0.7 * v, fx, 'lowpass', 1600, 300); const f = nz(t + 0.02, 0.05, 0.4, 0.5, 0.45 * v, fx, 'bandpass', 600, 0, 1.2); f.frequency.exponentialRampToValueAtTime(3200, t + 0.5); tone('sine', 120, t, 0.002, 0.04, 0.4, 0.6 * v, fx, { to: 45, glide: 0.3 }); ducks.push(t); },
+      missile: (t, v, d = 1.5) => { nz(t, 0.08, Math.max(0, d - 0.3), 0.25, 0.22 * v, fx, 'bandpass', 2400, 1100, 0.7); nz(t, 0.08, Math.max(0, d - 0.3), 0.25, 0.12 * v, fx, 'lowpass', 500); },
+      jet: (t, v, d = 3) => { const a = d * 0.45, r = d * 0.55, lp = nz(t, a, 0.05, r, 0.5 * v, fx, 'lowpass', 500); lp.frequency.exponentialRampToValueAtTime(3200, t + a); lp.frequency.exponentialRampToValueAtTime(420, t + d);
+        const f = nz(t, a, 0.05, r, 0.22 * v, fx, 'bandpass', 2600, 0, 1.4); f.frequency.exponentialRampToValueAtTime(5200, t + a); f.frequency.exponentialRampToValueAtTime(900, t + d); tone('sawtooth', 260, t, a, 0.05, r, 0.05 * v, fx, { to: 120, glide: d, lp: 1500 }); ducks.push(t + a); },
+      whistle: (t, v, d = 1.6) => tone('sine', 1500, t, 0.08, Math.max(0, d - 0.15), 0.06, 0.07 * v, fx, { to: 520, glide: d }),
+      twang: (t, v) => { tone('triangle', 220, t, 0.001, 0.01, 0.32, 0.32 * v, fx, { to: 165, glide: 0.25 }); tone('sine', 110, t, 0.001, 0.01, 0.18, 0.4 * v, fx, { to: 80, glide: 0.15 }); nz(t, 0.001, 0.005, 0.05, 0.3 * v, fx, 'bandpass', 1300, 0, 2); },
+      arrow: (t, v) => { const f = nz(t, 0.03, 0.06, 0.16, 0.22 * v, fx, 'bandpass', 2600, 0, 4); f.frequency.exponentialRampToValueAtTime(4800, t + 0.08); f.frequency.exponentialRampToValueAtTime(1800, t + 0.25); },
+      thunk: (t, v) => { tone('sine', 240, t, 0.001, 0.01, 0.12, 0.55 * v, fx, { to: 90, glide: 0.1 }); nz(t, 0.001, 0.008, 0.07, 0.35 * v, fx, 'bandpass', 900, 0, 1.5); tone('triangle', 330, t + 0.01, 0.002, 0, 0.25, 0.06 * v, fx, { to: 300, glide: 0.25 }); },
+      swing: (t, v) => { const f = nz(t, 0.07, 0.02, 0.1, 0.42 * v, fx, 'bandpass', 700, 0, 1.6); f.frequency.exponentialRampToValueAtTime(3400, t + 0.1); f.frequency.exponentialRampToValueAtTime(900, t + 0.2); },
+      clang: (t, v) => { for (const [f, d, a] of [[523, 0.9, 0.12], [1418, 0.7, 0.09], [2211, 0.55, 0.07], [3120, 0.4, 0.05], [4280, 0.3, 0.04]]) tone('sine', f * (0.97 + ar() * 0.06), t, 0.001, 0, d, a * v, fx); nz(t, 0.001, 0.004, 0.04, 0.5 * v, fx, 'highpass', 3000); ducks.push(t); },
+      slash: (t, v) => { nz(t, 0.002, 0.01, 0.1, 0.45 * v, fx, 'highpass', 2600); nz(t, 0.002, 0.02, 0.12, 0.35 * v, fx, 'bandpass', 1200, 0, 1); tone('sine', 150, t, 0.001, 0.01, 0.12, 0.45 * v, fx, { to: 60, glide: 0.1 }); },
+      punch: (t, v) => { tone('sine', 130, t, 0.001, 0.01, 0.13, 0.75 * v, fx, { to: 55, glide: 0.1 }); nz(t, 0.001, 0.006, 0.08, 0.45 * v, fx, 'lowpass', 2200, 400); ducks.push(t); },
+      splat: (t, v) => { nz(t, 0.002, 0.02, 0.2, 0.45 * v, fx, 'lowpass', 1200, 220); tone('sine', 180, t, 0.001, 0.01, 0.12, 0.35 * v, fx, { to: 70, glide: 0.1 }); for (let k = 0; k < 3; k++) nz(t + 0.05 + ar() * 0.15, 0.001, 0, 0.03, 0.12 * v, fx, 'bandpass', 900 + ar() * 600, 0, 3); },
+      ricochet: (t, v) => { tone('sine', 2800 + ar() * 800, t, 0.002, 0.03, 0.4, 0.08 * v, fx, { to: 1100, glide: 0.4 }); nz(t, 0.001, 0.004, 0.03, 0.25 * v, fx, 'highpass', 3500); },
+      shell: (t, v) => { [0, 0.07, 0.15].forEach((dt, k) => tone('sine', 4100 + k * 600 + ar() * 300, t + dt, 0.001, 0, 0.09, 0.05 * v * (1 - k * 0.25), fx)); },
+      reload: (t, v) => { [0, 0.28, 0.5].forEach((dt, k) => { nz(t + dt, 0.001, 0.006, 0.04, 0.4 * v, fx, 'bandpass', 1500 + k * 500, 0, 3); tone('square', 600 - k * 80, t + dt, 0.001, 0, 0.02, 0.05 * v, fx, { lp: 2000 }); }); },
+      draw: (t, v) => { const f = nz(t, 0.02, 0.15, 0.2, 0.25 * v, fx, 'bandpass', 3000, 0, 5); f.frequency.exponentialRampToValueAtTime(6500, t + 0.3); tone('sine', 2600, t + 0.15, 0.002, 0, 0.5, 0.03 * v, fx); },
+      pin: (t, v) => { tone('square', 2600, t, 0.001, 0, 0.02, 0.06 * v, fx); tone('sine', 3800, t + 0.04, 0.001, 0, 0.25, 0.05 * v, fx); },
+      servo: (t, v, d = 1) => tone('sawtooth', 95, t, 0.06, Math.max(0, d - 0.16), 0.1, 0.05 * v, fx, { to: 130, glide: d, lp: 700 }),
+      tread: (t, v, d = 3) => { for (let k = 0; k < d * 9; k++) nz(t + k / 9 + ar() * 0.02, 0.001, 0.01, 0.05, 0.12 * v, fx, 'bandpass', 700 + ar() * 500, 0, 2); SFX.engine(t, v * 0.8, d); },
+      daze: (t, v) => { for (let k = 0; k < 4; k++) tone('sine', 2200 + 400 * (k % 2), t + k * 0.13, 0.005, 0.02, 0.08, 0.05 * v, fx, { to: 2900 - 300 * (k % 2), glide: 0.08 }); }
+    });
     // ambience beds: AUDIO.amb = [[t0, t1, kind, vol], …] — background sound of the place, fades in/out 0.35 s (cuts between places)
     const amb = ctx.createGain(); amb.gain.value = A.ambVol ?? 0.7; const aduck = ctx.createGain(); amb.connect(aduck); aduck.connect(master);
     const bed = (t0, t1, peak, type, f0, q = 0.7, f1) => nz(t0, 0.35, Math.max(0, t1 - t0 - 0.7), 0.35, peak, amb, type, f0, f1, q);
