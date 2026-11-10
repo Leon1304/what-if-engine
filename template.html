@@ -23,12 +23,12 @@
   .badge { background: var(--accent); color: #111; }
   #phase { background: rgba(8, 10, 14, .66); font-weight: 800; font-variant-numeric: tabular-nums; }
   #phase:empty { display: none; }
-  #stats { margin-top: 2.2cqw; display: flex; flex-direction: column; gap: 1.3cqw; align-items: flex-start; }
-  .stat { display: flex; align-items: baseline; gap: 1.8cqw; background: rgba(8, 10, 14, .66); padding: 1.3cqw 2.3cqw 1.2cqw 2cqw; border-radius: 1.4cqw; border-left: .8cqw solid var(--accent); transform-origin: 0 50%; opacity: 0; }
+  #stats { margin-top: 1.8cqw; display: flex; flex-direction: column; gap: 1.0cqw; align-items: flex-start; }
+  .stat { display: flex; align-items: baseline; gap: 1.5cqw; background: rgba(8, 10, 14, .62); padding: 1.0cqw 1.9cqw .9cqw 1.6cqw; border-radius: 1.1cqw; border-left: .6cqw solid var(--accent); transform-origin: 0 50%; opacity: 0; }
   .stat.bad { border-left-color: var(--bad); }
-  .stat .l { font: 800 2.4cqw/1 var(--ui); letter-spacing: .12em; text-transform: uppercase; color: rgba(255, 255, 255, .82); white-space: nowrap; }
-  .stat .v { font: 400 5cqw/1 var(--cap); letter-spacing: .01em; font-variant-numeric: tabular-nums; white-space: nowrap; }
-  .stat .d { font: 900 2.9cqw/1 var(--ui); font-variant-numeric: tabular-nums; white-space: nowrap; opacity: 0; }   /* change pop-up: +120 / −30% */
+  .stat .l { font: 800 2.0cqw/1 var(--ui); letter-spacing: .12em; text-transform: uppercase; color: rgba(255, 255, 255, .82); white-space: nowrap; }
+  .stat .v { font: 400 3.9cqw/1 var(--cap); letter-spacing: .01em; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .stat .d { font: 900 2.4cqw/1 var(--ui); font-variant-numeric: tabular-nums; white-space: nowrap; opacity: 0; }   /* change pop-up: +120 / −30% */
   /* caption + end card: 7cqw here + the HUD's 6cqw = 13cqw on both sides, so the text is centred on the full frame */
   #cap { position: absolute; left: 7cqw; right: 0; bottom: 0; text-align: center; }
   #cap.mid { bottom: auto; top: 39.5cqh; transform: translateY(-50%); }   /* 39.5 + the HUD's 10.5 = 50 % of the frame */
@@ -45,9 +45,21 @@
   #end .opts { margin-top: 4.2cqw; display: flex; flex-direction: column; gap: 2cqw; align-items: center; }
   #end .o { font: 800 3.9cqw/1 var(--ui); background: rgba(255, 255, 255, .96); color: #111; padding: 2cqw 3.4cqw; border-radius: 2.2cqw; width: 64%; text-align: left; display: flex; gap: 2.6cqw; align-items: center; box-shadow: 0 1.4cqw 3cqw rgba(0, 0, 0, .35); }
   #end .o b { flex: none; display: grid; place-items: center; width: 6cqw; height: 6cqw; border-radius: 50%; background: var(--accent); color: #111; font-weight: 900; }
+  /* series intro: last episode's end card with the chosen option (CFG.series.prev) */
+  #prev { position: absolute; left: 7cqw; right: 0; top: 39.5cqh; transform: translateY(-50%); text-align: center; opacity: 0; }
+  #prev .k { display: inline-block; font: 900 2.9cqw/1 var(--ui); letter-spacing: .14em; text-transform: uppercase; background: var(--accent); color: #111; padding: 1.3cqw 2.1cqw 1.2cqw; border-radius: 1.3cqw; }
+  #prev .q { margin-top: 3cqw; font: 400 7.2cqw/1.05 var(--cap); text-transform: uppercase; color: #fff; text-shadow: 0 .5cqw 2cqw rgba(0, 0, 0, .6); }
+  #prev .q em { font-style: normal; color: var(--accent); }
+  #prev .opts { margin-top: 3.6cqw; display: flex; flex-direction: column; gap: 2cqw; align-items: center; }
+  #prev .o { font: 800 3.9cqw/1 var(--ui); background: rgba(255, 255, 255, .96); color: #111; padding: 2cqw 3.4cqw; border-radius: 2.2cqw; width: 64%; text-align: left; display: flex; gap: 2.6cqw; align-items: center; box-shadow: 0 1.4cqw 3cqw rgba(0, 0, 0, .35); }
+  #prev .o b { flex: none; display: grid; place-items: center; width: 6cqw; height: 6cqw; border-radius: 50%; background: var(--accent); color: #111; font-weight: 900; }
+  #prev .o i { margin-left: auto; font-style: normal; font-weight: 900; color: #1E9E45; opacity: 0; }
+  #prev .o.pick { background: var(--accent); }
+  #prev .o.pick b { background: #111; color: var(--accent); }
+  #prev .st { margin-top: 3.6cqw; font: 400 7.6cqw/1 var(--cap); text-transform: uppercase; color: var(--accent); text-shadow: 0 .5cqw 2cqw rgba(0, 0, 0, .7); opacity: 0; }
   #end .follow { margin-top: 3cqw; font: 800 3.2cqw/1.25 var(--ui); color: #fff; text-shadow: 0 .3cqw 1cqw #000; }
   #end .follow b { color: var(--accent); }
-  #chan { margin-left: auto; font: 800 2.7cqw/1 var(--ui); letter-spacing: .03em; color: rgba(255, 255, 255, .88); text-shadow: 0 .3cqw 1cqw #000; white-space: nowrap; }
+  #chan { display: block; margin: 0 0 1.5cqw; font: 800 2.6cqw/1 var(--ui); letter-spacing: .03em; color: rgba(255, 255, 255, .9); text-shadow: 0 .3cqw 1cqw #000; white-space: nowrap; }   /* channel handle: top-left, first line of the HUD */
   #chan:empty { display: none; }
   #end .cta, #rev .cta { margin-top: 4.2cqw; font: 900 3.1cqw/1.25 var(--ui); letter-spacing: .08em; text-transform: uppercase; color: var(--accent); text-shadow: 0 .3cqw 1cqw #000; }
   /* Dr. Steve & co: lower-third name card above the caption */
@@ -86,10 +98,12 @@
   <canvas id="gl"></canvas>
   <div id="dim"></div>
   <div id="hud">
-    <div class="top" id="top"><span class="badge" id="badge"></span><span id="phase"></span><span id="chan"></span></div>
+    <div id="chan"></div>
+    <div class="top" id="top"><span class="badge" id="badge"></span><span id="phase"></span></div>
     <div id="stats"></div>
     <div id="cap"></div>
     <div id="end"></div>
+    <div id="prev"></div>
     <div id="rev"></div>
   </div>
   <div id="flash"></div>
@@ -143,9 +157,10 @@ const CFG = {
   capPos: 'mid',           // captions: mid = exact centre of the frame | low = lower third (per beat: pos)
   karaoke: true,           // words appear as if spoken, the current word gets a coloured box
   wordRate: 0.085,         // fastest seconds per word
-  voice: 'deep',           // voice-over: deep | deep-uk | narrator | false — or { name, speed: 1.08, pitch: -1.5, gain: 1 }
-  series: null,            // { name: 'What If Lab', handle: '@whatiflab', ep: 1, next: 'part 2' } → series intro + outro
+  voice: 'deep',           // voice-over: deep | deep-uk | narrator | false — or { name, speed: 0.98, gap: 0.38 (pause between sentences), pitch: -1.5, gain: 1 }
+  series: null,            // { name: 'What If Lab', handle: '@whatiflab', ep: 1, next: 'part 2', prev: { q, opts, pick, dur: 3.2 } } → series intro + outro; prev (ep 2+) = last end card with the chosen option, from frame 0
   cast: {},                // extra name cards for BEATS[].who, e.g. { mayor: { name: 'The Mayor', role: 'Has a plan' } } (steve is built in)
+  statStagger: 0.45,       // stats appear one after another (s between them); countUp: 0.7 = numbers count up when they appear
   transition: 'auto'       // cuts: auto (whip, whip, zoom …) | whip | zoom | dip | blur | cut — per key: tr, td, dir
 };
 const LIVE = {};           // scene → story bridge (e.g. LIVE.zombies = t => …)
@@ -1090,6 +1105,8 @@ const statNodes = STATS.map(s => { const d = document.createElement('div'); d.cl
 const evT = k => { if (typeof k !== 'string') return k; const m = /^(b(\d+)|end)\s*([+-][\d.]+)?$/.exec(k.trim()); if (!m) return 0; return (m[2] != null ? BEATS[+m[2]].t : END ? END.t : DUR) + (m[3] ? +m[3] : 0); };
 STATS.forEach(s => s.keys?.forEach(k => { k[0] = evT(k[0]); }));
 ['show', 'hide'].forEach(f => STATS.forEach(s => { if (s[f] != null) s[f] = evT(s[f]); }));
+// stats appear one after another, never all at once: show times closer than CFG.statStagger (0.45 s) are spread out in list order
+{ let prev = -Infinity; STATS.map((s, i) => [s.show ?? 0, i]).sort((a, b) => a[0] - b[0] || a[1] - b[1]).forEach(([sh, i]) => { const e = Math.max(sh, prev + (CFG.statStagger ?? 0.45)); STATS[i].show = e; prev = e; }); }
 const fmtNum = (n, f) => typeof f === 'function' ? f(n) : f === 'pct' ? Math.round(n) + '%' : f === 'dec' ? n.toLocaleString(CFG.locale, { maximumFractionDigits: 1 }) : Math.round(n).toLocaleString(CFG.locale);
 function statVal(s, t) {
   if (s.value) return s.value(ST(t));   // value functions get scene time (like LIVE)
@@ -1101,6 +1118,16 @@ if (END) {
   endEl.innerHTML = `<div class="m q">${markup(END.q)}</div>` + (END.opts?.length ? `<div class="opts">${END.opts.map((o, i) => `<div class="o"><b>${'ABCD'[i]}</b><span>${esc(o)}</span></div>`).join('')}</div>` : '') + (END.cta ? `<div class="cta">${esc(END.cta)}</div>` : '')
     + (SERIES ? `<div class="follow">Follow ${SERIES.handle ?? SERIES.name ? `<b>${esc(SERIES.handle ?? SERIES.name)}</b> ` : ''}for ${esc(SERIES.next ?? 'part ' + ((SERIES.ep ?? 1) + 1))}</div>` : '');
 }
+// series intro (episode 2+): last end card, the chosen option lights up — CFG.series.prev = { q, opts, pick, dur, label }
+const PREV = SERIES?.prev ?? null, prevEl = $('prev');
+if (PREV) {
+  PREV.dur = PREV.dur ?? 3.2;
+  prevEl.innerHTML = `<div class="k">${esc(PREV.label ?? ('Part ' + (SERIES.ep ?? 2) + ' · Last time'))}</div><div class="q">${esc(PREV.q).replace(/\*([^*]+)\*/g, '<em>$1</em>')}</div>`
+    + `<div class="opts">${PREV.opts.map((o, i) => `<div class="o${i === PREV.pick ? ' pick' : ''}"><b>${'ABCD'[i]}</b><span>${esc(o)}</span>${i === PREV.pick ? '<i>✓</i>' : ''}</div>`).join('')}</div>`
+    + `<div class="st">You chose: ${esc(PREV.opts[PREV.pick] ?? '')}</div>`;
+}
+const prevOpts = PREV ? [...prevEl.querySelectorAll('.o')] : [], prevSt = PREV ? prevEl.querySelector('.st') : null, prevOk = PREV ? prevEl.querySelector('.o i') : null;
+let prevDim = 0;
 const endOpts = [...endEl.querySelectorAll('.o')], endWords = [...endEl.querySelectorAll('.w')], endCta = endEl.querySelector('.cta'), endFollow = endEl.querySelector('.follow');
 const REV = END?.review ?? null, revEl = $('rev');
 if (REV) {
@@ -1122,7 +1149,8 @@ function updateHud(t) {
   // stats
   STATS.forEach((s, i) => {
     const nd = statNodes[i], show = span(t, s.show ?? 0, 0.35, 'out') * (1 - span(t, s.hide ?? endT - 0.05, 0.3));
-    const v = statVal(s, t), moving = Math.abs(v - statVal(s, t - 0.12)) > 1e-6, txt = fmtNum(v, s.fmt);
+    const v = statVal(s, t), moving = Math.abs(v - statVal(s, t - 0.12)) > 1e-6;
+    const k0 = clamp((t - (s.show ?? 0)) / (CFG.countUp ?? 0.7)), txt = fmtNum(k0 < 1 ? v * EASE.out(k0) : v, s.fmt);   // counts up when it appears
     nd.d.style.opacity = show.toFixed(3);
     nd.d.style.transform = `translateX(${((1 - show) * -8).toFixed(2)}cqw) scale(${moving ? 1.06 : 1})`;
     if (nd.last !== txt) { nd.v.textContent = txt; nd.last = txt; }
@@ -1139,7 +1167,19 @@ function updateHud(t) {
     } else nd.dl.style.opacity = '0';
   });
   // caption
+  // series intro card (frame 0 = the hook): options → others dim → chosen one pops + ✓ → 'You chose: …' → fades out
+  prevDim = 0;
+  if (PREV) {
+    const out = 1 - span(t, PREV.dur - 0.3, 0.3), dimK = span(t, 0.45, 0.35), pk = span(t, 0.55, 0.35, 'back');
+    prevEl.style.opacity = (t < PREV.dur ? out : 0).toFixed(3);
+    prevEl.style.transform = `translateY(-50%) scale(${(1 + 0.04 * (1 - out)).toFixed(4)})`;
+    prevOpts.forEach((o, i) => { const me = i === PREV.pick; o.style.opacity = me ? '1' : (1 - 0.6 * dimK).toFixed(3); o.style.transform = me ? `scale(${(1 + 0.08 * pk).toFixed(4)})` : ''; });
+    if (prevOk) prevOk.style.opacity = clamp(pk * 1.5).toFixed(3);
+    if (prevSt) { const k = span(t, 0.9, 0.35, 'back'); prevSt.style.opacity = clamp(k * 1.5).toFixed(3); prevSt.style.transform = `scale(${(0.6 + 0.4 * k).toFixed(3)})`; }
+    prevDim = t < PREV.dur ? 0.5 * out : 0;
+  }
   let idx = -1; BEATS.forEach((b, i) => { if (t >= b.t && t < b.t + b.dur && t < endT) idx = i; });
+  if (PREV && t < PREV.dur) idx = -1;   // the intro card speaks for itself (the beat underneath is still voiced)
   if (idx !== capIdx) {
     capIdx = idx;
     if (idx < 0) { capEl.innerHTML = ''; capWords = []; capKick = null; capWho = null; }
@@ -1163,7 +1203,7 @@ function updateHud(t) {
   // end card
   if (END) {
     const revK = REV ? span(t, REV.t, 0.45, 'back') : 0, revOut = REV ? span(t, REV.t - 0.3, 0.3) : 0;
-    endEl.style.opacity = (endK * (1 - revOut)).toFixed(3); dimEl.style.opacity = (0.55 * endK + 0.15 * revOut).toFixed(3);
+    endEl.style.opacity = (endK * (1 - revOut)).toFixed(3); dimEl.style.opacity = Math.max(0.55 * endK + 0.15 * revOut, prevDim).toFixed(3);
     if (REV) {
       revEl.style.opacity = clamp(revK * 1.4).toFixed(3); revEl.style.transform = `translateY(-50%) scale(${(0.86 + 0.14 * revK).toFixed(4)})`;
       revStars.forEach((s, i) => { const k = span(t, REV.t + 0.45 + i * 0.14, 0.26, 'back'); s.style.opacity = clamp(k * 2).toFixed(3); s.style.transform = `scale(${(0.3 + 0.7 * k).toFixed(3)})`; });

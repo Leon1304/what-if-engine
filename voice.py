@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # voice.py — offline voice-over (Kokoro TTS) for a video: one spoken line per caption beat + the end-card question
-#   python3 voice.py <slug> [--voice deep|deep-uk|narrator|<kokoro voice>] [--speed 1.08] [--pitch -1.5]
+#   python3 voice.py <slug> [--voice deep|deep-uk|narrator|<kokoro voice>] [--speed 0.98] [--pitch -1.5]   CFG.voice: { gap: 0.38 } = pause between sentences
 #   reads <slug>.story.js (CFG.voice, BEATS[].say, END.say), writes <slug>.voice.mp3 + <slug>.voice.json (word timings)
 #   assemble.py runs this automatically and embeds the result; the music ducks under the voice.
 import hashlib, json, os, re, subprocess, sys, tempfile
@@ -40,7 +40,8 @@ if vc in (None, False, 'none', 'off'):
 if isinstance(vc, str): vc = {'name': vc}
 name = opt('voice', vc.get('name', 'deep'))
 P = PRESETS.get(name, {'mix': {name: 1.0}, 'lang': 'en-gb' if name.startswith('b') else 'en-us', 'pitch': 0})
-speed = float(opt('speed', vc.get('speed', 1.08)))
+speed = float(opt('speed', vc.get('speed', 0.98)))   # slower, calmer narrator (was 1.08)
+GAP = float(vc.get('gap', 0.38))                       # silence between sentences in one line (s)
 pitch = float(opt('pitch', vc.get('pitch', P['pitch'])))
 gain = float(vc.get('gain', 1.0))
 
@@ -92,14 +93,25 @@ def synth(text, sp, v=None):
     a, sr = K.create(text, voice=style, speed=sp, lang=P['lang'], trim=True)
     np.save(f, a.astype(np.float32)); return a.astype(np.float32)
 
+def speak(say, sp, vo, gap):   # sentence by sentence, with a real pause between sentences
+    parts = [p for p in re.split(r'(?<=[.!?:])\s+', say) if p.strip()]
+    out = []
+    for k, p in enumerate(parts):
+        if k: out.append(np.zeros(int(gap * SR), np.float32))
+        out.append(synth(p, sp, vo))
+    return np.concatenate(out) if out else np.zeros(1, np.float32)
+
 track = np.zeros(int(SR * DUR) + SR, np.float32)
 report, timing, segs = [], {}, []
 for key, t0, win, say, cap, pre, vo in lines:
-    sp = speed; a = synth(say, sp, vo); d = len(a) / SR
-    if d > win and win > 0.4:   # too long for its beat → speak faster (max 1.35×)
-        sp = min(1.35, speed * d / win * 1.03); a = synth(say, sp, vo); d = len(a) / SR
+    sp, gap = speed, GAP; a = speak(say, sp, vo, gap); d = len(a) / SR
+    if d > win and win > 0.4:   # too long: first shorter pauses, then speak faster (max 1.3×)
+        gap = 0.15; a = speak(say, sp, vo, gap); d = len(a) / SR
+        if d > win:
+            sp = min(1.3, speed * d / win * 1.03); a = speak(say, sp, vo, gap); d = len(a) / SR
     ok = d <= win + 0.05
-    report.append(f"  {str(key):>3}  {d:4.2f}s / {win:4.2f}s  ×{sp:.2f}  {('ok' if sp < 1.25 else 'ok, rushed – shorten text or lengthen beat') if ok else 'TOO LONG – shorten text or lengthen beat'}  “{say}”")
+    note = 'ok' if gap == GAP and sp <= speed * 1.06 else 'ok, rushed (short pauses) – shorten text or lengthen beat'
+    report.append(f"  {str(key):>3}  {d:4.2f}s / {win:4.2f}s  ×{sp:.2f}  {note if ok else 'TOO LONG – shorten text or lengthen beat'}  “{say}”")
     i0 = int(t0 * SR); n = min(len(a), len(track) - i0); track[i0:i0 + n] += a[:n]
     segs.append([round(t0, 3), round(t0 + d, 3)])
     if cap:   # word onsets: spread token weights over the voiced frames only (pauses are skipped)
