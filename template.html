@@ -16,37 +16,37 @@
   #dim, #flash { position: absolute; inset: 0; pointer-events: none; opacity: 0; }
   #dim { background: #000; }
   #flash { background: #fff; }
-  /* HUD lives inside the TikTok/Reels/Shorts safe zone: top 10.5 %, bottom 22 %, left 6 %, right 13 % */
-  #hud { position: absolute; left: 6cqw; right: 13cqw; top: 10.5cqh; bottom: 22cqh; pointer-events: none; }
+  /* HUD: top 7 % (just under the app's top bar, covers as little video as possible), bottom 22 %, left 6 %, right 13 % */
+  #hud { position: absolute; left: 6cqw; right: 13cqw; top: 7cqh; bottom: 22cqh; pointer-events: none; }
   .top { display: flex; align-items: center; gap: 1.8cqw; flex-wrap: wrap; }
-  .badge, #phase { font: 900 2.9cqw/1 var(--ui); letter-spacing: .14em; text-transform: uppercase; padding: 1.3cqw 2.1cqw 1.2cqw; border-radius: 1.3cqw; white-space: nowrap; }
+  .badge, #phase { font: 900 2.4cqw/1 var(--ui); letter-spacing: .14em; text-transform: uppercase; padding: 1.0cqw 1.7cqw .9cqw; border-radius: 1.1cqw; white-space: nowrap; }
   .badge { background: var(--accent); color: #111; }
   #phase { background: rgba(8, 10, 14, .66); font-weight: 800; font-variant-numeric: tabular-nums; }
   #phase:empty { display: none; }
-  #stats { margin-top: 1.8cqw; display: flex; flex-direction: column; gap: 1.0cqw; align-items: flex-start; }
-  .stat { display: flex; align-items: baseline; gap: 1.5cqw; background: rgba(8, 10, 14, .62); padding: 1.0cqw 1.9cqw .9cqw 1.6cqw; border-radius: 1.1cqw; border-left: .6cqw solid var(--accent); transform-origin: 0 50%; opacity: 0; }
+  #stats { margin-top: 1.3cqw; display: flex; flex-direction: column; gap: .7cqw; align-items: flex-start; }
+  .stat { display: flex; align-items: baseline; gap: 1.5cqw; background: rgba(8, 10, 14, .62); padding: .75cqw 1.5cqw .65cqw 1.3cqw; border-radius: .9cqw; border-left: .5cqw solid var(--accent); transform-origin: 0 50%; opacity: 0; }
   .stat.bad { border-left-color: var(--bad); }
-  .stat .l { font: 800 2.0cqw/1 var(--ui); letter-spacing: .12em; text-transform: uppercase; color: rgba(255, 255, 255, .82); white-space: nowrap; }
-  .stat .v { font: 400 3.9cqw/1 var(--cap); letter-spacing: .01em; font-variant-numeric: tabular-nums; white-space: nowrap; }
-  .stat .d { font: 900 2.4cqw/1 var(--ui); font-variant-numeric: tabular-nums; white-space: nowrap; opacity: 0; }   /* change pop-up: +120 / −30% */
+  .stat .l { font: 800 1.7cqw/1 var(--ui); letter-spacing: .12em; text-transform: uppercase; color: rgba(255, 255, 255, .82); white-space: nowrap; }
+  .stat .v { font: 400 3.2cqw/1 var(--cap); letter-spacing: .01em; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .stat .d { font: 900 2.0cqw/1 var(--ui); font-variant-numeric: tabular-nums; white-space: nowrap; opacity: 0; }   /* change pop-up: +120 / −30% */
   /* caption + end card: 7cqw here + the HUD's 6cqw = 13cqw on both sides, so the text is centred on the full frame */
   #cap { position: absolute; left: 7cqw; right: 0; bottom: 0; text-align: center; }
-  #cap.mid { bottom: auto; top: 39.5cqh; transform: translateY(-50%); }   /* 39.5 + the HUD's 10.5 = 50 % of the frame */
-  #cap .k { display: inline-block; font: 900 3cqw/1 var(--ui); letter-spacing: .16em; text-transform: uppercase; background: var(--accent); color: #111; padding: 1.2cqw 2cqw 1.1cqw; border-radius: 1.2cqw; margin-bottom: 2.2cqw; }
-  .m, #end .q { font: 400 8.6cqw/1.05 var(--cap); text-transform: uppercase; letter-spacing: .005em; color: #fff;
+  #cap.mid { bottom: auto; top: 43cqh; transform: translateY(-50%); }   /* 43 + the HUD's 7 = 50 % of the frame */
+  #cap .k { display: inline-block; font: 900 2.6cqw/1 var(--ui); letter-spacing: .16em; text-transform: uppercase; background: var(--accent); color: #111; padding: 1.2cqw 2cqw 1.1cqw; border-radius: 1.2cqw; margin-bottom: 2.2cqw; }
+  .m, #end .q { font: 400 7.0cqw/1.06 var(--cap); text-transform: uppercase; letter-spacing: .005em; color: #fff;
     text-shadow: .45cqw 0 0 #000, -.45cqw 0 0 #000, 0 .45cqw 0 #000, 0 -.45cqw 0 #000, .32cqw .32cqw 0 #000, -.32cqw .32cqw 0 #000, .32cqw -.32cqw 0 #000, -.32cqw -.32cqw 0 #000, 0 1.2cqw 2.6cqw rgba(0, 0, 0, .6); }
-  #cap.big .m { font-size: 10.6cqw; }
+  #cap.big .m { font-size: 8.8cqw; }
   .w { display: inline-block; white-space: pre; will-change: transform, opacity; }
   .hl { color: var(--accent); } .bd { color: var(--bad); }
   .w.on { background: var(--accent); color: #111; text-shadow: none; border-radius: 1.4cqw; padding: 0 1.2cqw; margin: 0 -1.2cqw; box-shadow: 0 .8cqw 2cqw rgba(0, 0, 0, .45); }   /* karaoke: the word being said */
   .w.bd.on { background: var(--bad); color: #fff; }
-  #end { position: absolute; left: 7cqw; right: 0; top: 39.5cqh; transform: translateY(-50%); text-align: center; opacity: 0; }
-  #end .q { font-size: 9cqw; }
+  #end { position: absolute; left: 7cqw; right: 0; top: 43cqh; transform: translateY(-50%); text-align: center; opacity: 0; }
+  #end .q { font-size: 7.6cqw; }
   #end .opts { margin-top: 4.2cqw; display: flex; flex-direction: column; gap: 2cqw; align-items: center; }
   #end .o { font: 800 3.9cqw/1 var(--ui); background: rgba(255, 255, 255, .96); color: #111; padding: 2cqw 3.4cqw; border-radius: 2.2cqw; width: 64%; text-align: left; display: flex; gap: 2.6cqw; align-items: center; box-shadow: 0 1.4cqw 3cqw rgba(0, 0, 0, .35); }
   #end .o b { flex: none; display: grid; place-items: center; width: 6cqw; height: 6cqw; border-radius: 50%; background: var(--accent); color: #111; font-weight: 900; }
   /* series intro: last episode's end card with the chosen option (CFG.series.prev) */
-  #prev { position: absolute; left: 7cqw; right: 0; top: 39.5cqh; transform: translateY(-50%); text-align: center; opacity: 0; }
+  #prev { position: absolute; left: 7cqw; right: 0; top: 43cqh; transform: translateY(-50%); text-align: center; opacity: 0; }
   #prev .k { display: inline-block; font: 900 2.9cqw/1 var(--ui); letter-spacing: .14em; text-transform: uppercase; background: var(--accent); color: #111; padding: 1.3cqw 2.1cqw 1.2cqw; border-radius: 1.3cqw; }
   #prev .q { margin-top: 3cqw; font: 400 7.2cqw/1.05 var(--cap); text-transform: uppercase; color: #fff; text-shadow: 0 .5cqw 2cqw rgba(0, 0, 0, .6); }
   #prev .q em { font-style: normal; color: var(--accent); }
@@ -63,7 +63,7 @@
   #end .en { margin-top: 3.4cqw; display: inline-block; font: 900 3.2cqw/1 var(--ui); letter-spacing: .12em; text-transform: uppercase; background: var(--accent); color: #111; padding: 1.4cqw 2.4cqw 1.3cqw; border-radius: 1.3cqw; }
   #end .follow { margin-top: 3cqw; font: 800 3.2cqw/1.25 var(--ui); color: #fff; text-shadow: 0 .3cqw 1cqw #000; }
   #end .follow b { color: var(--accent); }
-  #chan { display: block; margin: 0 0 1.5cqw; font: 800 2.6cqw/1 var(--ui); letter-spacing: .03em; color: rgba(255, 255, 255, .9); text-shadow: 0 .3cqw 1cqw #000; white-space: nowrap; }   /* channel handle: top-left, first line of the HUD */
+  #chan { display: block; margin: 0 0 1.1cqw; font: 800 2.3cqw/1 var(--ui); letter-spacing: .03em; color: rgba(255, 255, 255, .9); text-shadow: 0 .3cqw 1cqw #000; white-space: nowrap; }   /* channel handle: top-left, first line of the HUD */
   #chan:empty { display: none; }
   #end .cta, #rev .cta { margin-top: 4.2cqw; font: 900 3.1cqw/1.25 var(--ui); letter-spacing: .08em; text-transform: uppercase; color: var(--accent); text-shadow: 0 .3cqw 1cqw #000; }
   /* Dr. Steve & co: lower-third name card above the caption */
@@ -71,7 +71,7 @@
   #cap .who b { font: 900 3.8cqw/1 var(--ui); letter-spacing: .02em; text-transform: uppercase; }
   #cap .who span { font: 700 2.6cqw/1 var(--ui); color: #5A5A5A; }
   /* review card: the last card of every video */
-  #rev { position: absolute; left: 7cqw; right: 0; top: 39.5cqh; transform: translateY(-50%); text-align: center; opacity: 0; }
+  #rev { position: absolute; left: 7cqw; right: 0; top: 43cqh; transform: translateY(-50%); text-align: center; opacity: 0; }
   #rev .card { display: inline-block; width: 82%; text-align: left; background: #fff; color: #111; border-radius: 3cqw; padding: 4cqw 4.4cqw 3.4cqw; box-shadow: 0 2cqw 5cqw rgba(0, 0, 0, .5); }
   #rev .hd { display: flex; align-items: center; gap: 2.4cqw; }
   #rev .hd > b { flex: none; display: grid; place-items: center; width: 8.4cqw; height: 8.4cqw; border-radius: 50%; background: var(--accent); font: 900 4cqw/1 var(--ui); }
