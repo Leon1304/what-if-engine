@@ -1,7 +1,7 @@
 // render.mjs — headless renderer for /what-if pages (frame-exact, deterministic)
 //   node render.mjs page.html --shots 0.5,3,8,12 [--out shots] [--w 540]   → PNGs + <out>/sheet.jpg (contact sheet)
-//   node render.mjs page.html --video out.mp4 [--w 1440 (2K, default)|1080|2160] [--fps 30] [--workers 2] [--draft] [--redo 10.2-14.2] [--clean] [--no-ig] [--shard i/N --frames-only]
-//     → out.mp4 (master, YouTube: CRF 18) + out-ig.mp4 (Instagram: 1080x1920, ~12 Mbps) when --w > 1080
+//   node render.mjs page.html --video out.mp4 [--w 1440 (2K, default)|1080|2160] [--fps 30] [--workers 2] [--draft] [--redo 10.2-14.2] [--clean] [--ig] [--shard i/N --frames-only]
+//     → out.mp4 (master, YouTube: CRF 18); with --ig also out-ig.mp4 (Instagram: 1080x1920, ~12 Mbps)
 //   node render.mjs page.html --cover cover.jpg [--t 1.2]
 //   node render.mjs page.html --audio out.wav
 // Needs in this folder: npm i three@0.170.0 playwright ; ffmpeg on PATH.
@@ -141,7 +141,7 @@ if (opt('video')) {
     '-af', AF, '-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart', '-shortest', tmpMp4]);
   renameSync(tmpMp4, video);
   // Instagram copy: 1080x1920 from the same frames (one encode only), ~12 Mbps VBR
-  if (W > 1080 && !draft && !flag('no-ig')) {
+  if (W > 1080 && !draft && flag('ig')) {   // Instagram copy only on request (--ig); default output is the YouTube master only
     const ig = igPath(video), tmpIg = ig.replace(/\.mp4$/, '') + '.part.mp4';
     ff(['-framerate', String(fps), '-i', path.join(dir, 'f%05d.jpg'), '-i', wav, '-map', '0:v', '-map', '1:a',
       '-vf', 'scale=1080:1920:flags=lanczos', '-c:v', 'libx264', '-preset', 'medium', '-profile:v', 'high',

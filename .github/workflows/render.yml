@@ -1,5 +1,5 @@
 # Renders /whatif videos in parallel: every page in renders/<slug>.html is split into SHARDS frame blocks,
-# rendered on parallel runners, then encoded (YouTube master + Instagram copy + cover) and attached to the
+# rendered on parallel runners, then encoded (YouTube master + cover) and attached to the
 # release "render-<slug>". Trigger: push of renders/*.html, or manually with a page path.
 name: render
 
@@ -118,5 +118,6 @@ jobs:
         run: |
           S=${{ steps.s.outputs.slug }}; TAG=render-$S
           gh release view $TAG >/dev/null 2>&1 || gh release create $TAG --title "$S" --notes "Rendered by GitHub Actions (${{ github.sha }})"
-          gh release upload $TAG out/$S.mp4 out/$S-ig.mp4 out/$S-cover.jpg --clobber
+          gh release upload $TAG out/$S.mp4 out/$S-cover.jpg --clobber
+          gh release delete-asset $TAG $S-ig.mp4 -y >/dev/null 2>&1 || true
           echo "done: https://github.com/${{ github.repository }}/releases/tag/$TAG"

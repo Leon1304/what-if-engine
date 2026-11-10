@@ -1185,8 +1185,11 @@ function updateHud(t) {
   const ph = typeof PHASES === 'function' ? PHASES(t) : (PHASES.filter(p => p[0] <= t).pop() ?? [0, ''])[1];
   if (phaseEl.textContent !== ph) phaseEl.textContent = ph;
   // stats
+  const statGap = parseFloat(getComputedStyle(statsEl).rowGap) || 0;
   STATS.forEach((s, i) => {
     const nd = statNodes[i], show = span(t, s.show ?? 0, 0.35, 'out') * (1 - span(t, s.hide ?? endT - 0.05, 0.3));
+    // hidden stats collapse: visible data always stacks directly under the badge row, no empty slots
+    nd.d.style.marginBottom = show < 0.999 ? `${(-(1 - show) * (nd.d.offsetHeight + statGap)).toFixed(2)}px` : '0px';
     const v = statVal(s, t), moving = Math.abs(v - statVal(s, t - 0.12)) > 1e-6;
     const k0 = clamp((t - (s.show ?? 0)) / (CFG.countUp ?? 0.7)), txt = fmtNum(k0 < 1 ? v * EASE.out(k0) : v, s.fmt);   // counts up when it appears
     nd.d.style.opacity = show.toFixed(3);

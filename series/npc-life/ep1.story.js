@@ -62,12 +62,12 @@ const FLASHES = [{ t: 4.0, dur: 0.2, a: 0.3 }, { t: 12.7, dur: 0.3, a: 0.5, colo
 const SKY = [[0, 'golden'], [30, 'golden'], [40, 'dusk'], [45, 'night']];
 const PHASES = t => 'Vice City · ' + clockText(t, 0, CFG.dur, '18:40', '21:15');
 const STATS = [
-  { label: 'Gerald streak', keys: [[0, 6], [52.2, 6], [52.6, 7]], show: 'b1', up: 'good' },
   { label: 'Nice days said', keys: [[0, 4790], ['b2', 4790], ['b2+3.8', 4812]], show: 'b2', hide: 'b4', pop: false },
   { label: 'Cars stolen', keys: [[0, 0], [17.9, 0], [18.5, 1]], show: 'b4', hide: 'b8', up: 'bad' },
   { label: 'Hospital bill', keys: [[0, 0], ['b7+0.6', 0], ['b7+2.0', 5000]], fmt: n => '$' + Math.round(n).toLocaleString('en-US'), show: 'b7', hide: 'b9', bad: true, up: 'bad' },
   { label: 'Ragdolled', keys: [[0, 1], ['b8+0.6', 1], ['b8+4.0', 17]], show: 'b8', hide: 'b10', up: 'bad', pop: false },
-  { label: 'Wanted', keys: [[0, 0], ['b9+2.2', 0], ['b9+4.0', 5]], fmt: n => '★'.repeat(Math.round(n)) + '☆'.repeat(5 - Math.round(n)), show: 'b9', bad: true, pop: false }
+  { label: 'Wanted', keys: [[0, 0], ['b9+2.2', 0], ['b9+4.0', 5]], fmt: n => '★'.repeat(Math.round(n)) + '☆'.repeat(5 - Math.round(n)), show: 'b9', bad: true, pop: false },
+  { label: 'Gerald streak', keys: [[0, 6], [52.2, 6], [52.6, 7]], show: 'b1', up: 'good' }
 ];
 const END = {
   t: 54.1, q: 'How do *you* escape the player?', opts: ['Hide in the mall', 'Leave Vice City', 'Be the main character'], cta: 'Most votes decides part 2',

@@ -25,7 +25,7 @@ box(world, 240, 0.04, 14, '#F0DDAE', 5, 0, 19.8, { cast: false });
 box(world, 240, 0.1, 5.4, '#DCD3C4', 5, 0, -3.3, { cast: false });
 
 // art-deco hotels with neon trims
-function deco(x, w, h, wall, neon) {
+function deco(x, w, h, wall, neon) {   // neon only as a roof line: no thin vertical strips (they read as a line through the frame)
   const d = 10, g = stat(grp(world, x, 0, -11)), nm = mat(neon, { em: neon, ei: 2.4 });
   const win = mat('#2A3550', { rough: 0.3 }), lit = mat('#2A3550', { em: '#FFD9A0', ei: 1.0 });
   box(g, w, h, d, wall); box(g, w * 0.55, 1.6, d * 0.7, wall, 0, h, 0); box(g, w * 0.25, 1.2, d * 0.4, wall, 0, h + 1.6, 0);
@@ -33,7 +33,6 @@ function deco(x, w, h, wall, neon) {
     box(g, w + 0.3, 0.18, 0.5, '#FFFFFF', 0, y + 1.6, d / 2 + 0.1, { cast: false });
     for (let k = 0; k < Math.floor(w / 2.2); k++) { const xx = -w / 2 + 1.3 + k * 2.2; if (Math.abs(xx) < 0.8) continue; box(g, 1.2, 1.2, 0.08, '', xx, y, d / 2 + 0.03, { mat: rnd() < 0.45 ? lit : win, cast: false }); }
   }
-  box(g, 0.35, h + 1.4, 0.3, '', 0, 0.4, d / 2 + 0.2, { mat: nm, cast: false });
   box(g, w + 0.1, 0.22, 0.3, '', 0, h - 0.25, d / 2 + 0.2, { mat: nm, cast: false });
   box(g, 3.2, 2.6, 0.2, '#2B2B33', w / 4, 0, d / 2 + 0.05, { cast: false });
   return g;
@@ -69,8 +68,8 @@ const scrB = TEX(1280, 720, (g, w, h) => {
   g.fillStyle = '#FFFFFF'; g.font = FONT(84); g.fillText('HOT DOG MAN', 480, 300); g.fillStyle = '#FF3B4A'; g.fillText('WANTED', 480, 410);
   g.fillStyle = '#FFD23F'; g.font = FONT(110); g.fillText('★★★★★', 470, 560);
 });
-box(world, 9.6, 5.7, 0.3, '#15161A', 15, 6.65, -5.95, { cast: false, stat: true });
-const screen = plane(world, 9, 5.1, scrA, 15, 9.5, -5.75);
+box(world, 9.6, 5.7, 0.3, '#15161A', 15, 6.65, -5.4, { cast: false, stat: true });   // screen stands 0.3 m in front of ledges and windows
+const screen = plane(world, 9, 5.1, scrA, 15, 9.5, -5.22);
 tick(t => { const m = t >= 39.6 ? scrB : scrA; if (screen.material.map !== m) { screen.material.map = m; screen.material.needsUpdate = true; } });
 
 // palms, lamps, beach umbrellas, lifeguard tower, boats, skyline
