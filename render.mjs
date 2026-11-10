@@ -45,7 +45,7 @@ async function openPage() {
   await page.goto('http://whatif.local/');
   try { await page.waitForFunction(() => window.whatif, null, { timeout: 120000 }); }
   catch { console.log('PAGE DID NOT START\n' + errors.join('\n')); await browser.close(); process.exit(1); }
-  await page.evaluate(async w => { await document.fonts.ready; window.whatif.setRenderWidth(w); window.whatif.seek(0); }, W);
+  await page.evaluate(async ([w, F]) => { await document.fonts.ready; window.whatif.setRenderWidth(w); window.whatif.fps?.(F); window.whatif.seek(0); }, [W, fps]);
   return { browser, page, errors };
 }
 const report = errors => { if (errors.length) console.log('PAGE ERRORS:\n' + [...new Set(errors)].slice(0, 12).join('\n')); };

@@ -27,6 +27,16 @@ if m:
         f = os.path.join(d, 'cast.json')
         if os.path.exists(f):
             t = t.replace('/* @CAST */{}', '/* @CAST */' + json.dumps(json.load(open(f, encoding='utf-8')), separators=(',', ':')), 1); print('cast:', f); break
+# motion-capture models: model('name') in story/scene or "model": "name" in cast.json → models/<name>.glb embedded (base64)
+names = set(re.findall(r"model\(\s*'([^']+)'", story + scene)) | set(re.findall(r'"model"\s*:\s*"([^"]+)"', t))
+if names:
+    here = os.path.dirname(os.path.abspath(__file__)); found = {}
+    for nm in sorted(names):
+        for d in (os.path.join(here, 'models'), os.path.join(here, '.engine', 'models')):
+            f = os.path.join(d, nm + '.glb')
+            if os.path.exists(f): found[nm] = base64.b64encode(open(f, 'rb').read()).decode(); print('model:', f); break
+        else: print('model missing:', nm + '.glb')
+    t = t.replace('/* @MODELS */{}', '/* @MODELS */' + json.dumps(found, separators=(',', ':')), 1)
 # voice-over: voice.py (cached) → embed mp3 + word timings; CFG.voice: false = no voice
 if os.path.exists(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'tts', 'voices-v1.0.bin')) and '--no-voice' not in args:
     v = subprocess.run([sys.executable, os.path.join(os.path.dirname(os.path.abspath(__file__)), 'voice.py'), slug], capture_output=True, text=True)
