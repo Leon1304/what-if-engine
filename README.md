@@ -15,6 +15,11 @@ Push an assembled page to `renders/<slug>.html` (output of `assemble.py`, voice 
 `https://github.com/Leon1304/what-if-engine/releases/download/render-<slug>/<slug>.mp4`
 Manual run: Actions → render → Run workflow (page path, width 1440 / 2160 / 1080).
 
+## Engine v2.34 (Nov 2026): detailed surroundings and buildings
+- Every outdoor scene: drifting clouds per sky preset, per-pixel ground texture (grass speckle, sand ripples, snow sparkle), hazy mountains / mesas / islands / skyline behind the terrain (`backdrop()`), butterflies, birds, fireflies and falling leaves (`ambientLife()`), denser grass near the camera. `biome()` and `city()` add all of it; city windows light up when the sky turns dark
+- Buildings: wall and roof surfaces drawn per pixel (`{ surf: 'brick' | 'stone' | 'plank' | 'siding' | 'tile' | 'plaster' | 'concrete' | 'metal' }`), `roofKit()` / `facadeKit()`, stepped stone pyramid, lighthouse with gallery, castle masonry, hospital helipad
+- Switches: `CFG.clouds`, `CFG.groundDetail`, `CFG.backdrop`, `CFG.life`, `CFG.surfaces` (about 10 % more render time with everything on)
+
 ## Engine v2.31 (Nov 2026): smooth motion, checked against the published videos
 - Scene ticks that switch poses or look targets are cross-faded (`CFG.poseFade`), every frame starts from the built scene (same picture in every worker / CI block), chained `walk()`s hand over and turn, even cornering for walkers, animals and traffic, gait by speed, layered combat combos, smooth hand-overs (`board`, `carry`, ragdolls), 5 motion-blur samples for fast actions
 - Hitboxes reworked: walkers only sidestep what their authored path actually runs into (stable in tight rooms), smooth weights instead of switches

@@ -683,3 +683,41 @@ Test: `tests/long.*` (Kapitelkarten, Bauchbinde, Untertitel-Umbruch, Zeitleiste,
 - Neu: `the camera turns / jumps … without a cut` (Kamerasprung ohne Schnitt → `tr: 'cut'` oder echte Fahrt), `object … turns N° in one frame` (Objekt dreht in einem Bild um, z. B. Fahrzeug, dessen Richtung aus einer winzigen Bewegung berechnet wird → `drive()`/`walk()` nutzen oder Richtung beim Stillstand festhalten).
 - `PRESNAP.push([t, fn])` (für Engine-Funktionen): wertet die Szene einmal vor dem ersten Bild bei t aus und merkt sich, was eine Aktion von dort braucht – statt „beim ersten gerenderten Bild“.
 - Test: `tests/smooth.story.js` + `.scene.js`.
+
+# Neu in v2.34 (detailreiche Umgebung und Gebäude)
+
+Alles hier läuft von selbst, sobald die Szene `biome()` oder `city()` nutzt. Nichts davon von Hand nachbauen (keine eigenen Wolken, Bergketten, Vögel).
+
+## Himmel
+- **Wolken** ziehen in jedem `SKY`-Preset mit eigener Menge und Farbe (Tag hell, Dämmerung von unten angeleuchtet, Nacht dunkel, Sturm dicht). `CFG.clouds: false` = wolkenlos, Zahl = mehr/weniger Bedeckung (1 = Preset, 1.5 = bewölkt, 0.5 = fast klar).
+- `NIGHTK` (0 Tag … 1 Nacht) folgt `SKY`. Fenster von `tower()`/`city()` gehen damit von selbst an, sobald ein Nacht- oder Dämmerungs-Preset in `SKY` steht (`lit: 0` = aus, `lit: 0..2` = Anteil wie bisher).
+
+## Boden
+- `ground()` zeichnet pro Pixel feine Struktur aus der Bodenfarbe: Gras gesprenkelt, Sand mit Windrippeln, Schnee mit Glitzern und bläulichen Mulden. Blendet mit der Entfernung aus (kein Flimmern in Totalen). `ground({ detail: false })` oder Zahl (0.5 dezent, 1.5 kräftig), global `CFG.groundDetail: false`.
+- `biome()` setzt zusätzlich mehr Grasbüschel in Kameranähe (`biome(kind, { lush: false })` = wie früher).
+
+## Hintergrund: `backdrop(kind, { coast, seed, r0 })`
+- Zwei dunstige Ringe hinter dem Gelände, die die Farbe des Himmels annehmen (passen zu jeder Tageszeit). Arten: `hills` (grüne Hügel, blaue Kämme) · `alps` (Fels mit Schneekappen) · `snow` · `mesa` (Tafelberge) · `islands` (zur Seeseite) · `skyline` (ferne Hochhäuser).
+- `biome()` wählt selbst: farm → hills, forest → alps, snow → snow, desert → mesa, beach → islands; `city()` → skyline. Anders: `biome('farm', { backdrop: 'alps' })`, aus: `{ backdrop: false }` oder `CFG.backdrop: false`. Mond und Riff haben keinen.
+- Der Hintergrund hat keine Hitbox und steht nicht im Cover-Check. Eigene Szene ohne Biom: `backdrop('hills')` einmal aufrufen.
+
+## Kleines Leben: `ambientLife(kind, { area })`
+- Schmetterlinge und kreisende Vögel am Tag (Strand: Möwen, Sumpf: Libellen), Glühwürmchen bei Nacht, fallende Blätter im Wald. Instanziert, jede Position reine Funktion von `t` (gleich in jedem Render-Worker).
+- Kommt mit `biome()`; aus: `biome(kind, { life: false })` oder `CFG.life: false`.
+
+## Oberflächen: `{ surf }` an `mat()`, `box()`, `cyl()`, `prism()`, `cone()`
+- Arten: `brick` · `stone` (große Quader) · `plank` (senkrechte Bretter) · `siding` (Stülpschalung) · `tile` (Dachziegel) · `plaster` · `concrete` (Platten) · `metal` (Wellblech). Beispiel: `box(g, 5, 3, 4, '#D8CBB4', 0, 0, 0, { surf: 'plaster' })`.
+- Keine Extra-Geometrie, blendet ab 35 m aus, Muster hängt am Bauteil (wandert mit, wenn das Gebäude bewegt oder weggeschleudert wird). `CFG.surfaces: false` = glatte Flächen.
+- **Regel:** Eigene Wände, Mauern und Dächer ab 2 m Kantenlänge bekommen ein `surf`. Kleine Props, Figuren, Fahrzeuge nicht.
+- Eingebaute Gebäude tragen sie schon: `house` (Sockel Stein, Wand `siding`, Dach `tile`, Schornstein Ziegel; `house(…, { surf: 'brick' })` ändert die Wand), `barn`, `silo`, `tower` (brick/deco), `castle`, `bank`, `hospital`, `supermarket`, `airport`, `prison`, `lighthouse`, `pyramid`.
+
+## Dach und Fassade
+- `roofKit(g, w, d, y, seed, { parapet, tank, helipad, stair })`: was auf einem Flachdach steht: Attika, Klimageräte mit Lüftern, Abluftrohre, Oberlicht, Treppenhaus, Antenne, manchmal Wassertank; `helipad: true` malt den Landeplatz.
+- `facadeKit(g, w, h, d, { color, lamps: [x…] })`: dunkler Sockel, Fallrohre an den hinteren Ecken, Lampen neben dem Eingang (Front = +z).
+- Krankenhaus (mit Landeplatz, Fensterbänken, Sprossen), Supermarkt und Flughafen haben beides eingebaut.
+
+## Gebäude
+- `pyramid()` ist jetzt gestuft (Steinlagen, Eingang an der +z-Seite, heller Schlussstein), Spitze weiter bei 0,65 × `size`. `{ smooth: true }` = glatte Form wie früher, `{ door: false }` = ohne Eingang.
+- `lighthouse()`: Steinsockel, Tür, Fenster den Turm hinauf, Galerie mit Geländer, Laternenhaus mit Sprossen.
+- `castle()`: Quadermauerwerk an Mauern, Türmen und Bergfried, Ziegeldächer.
+- Test/Vorschau: `tests/environment.*` (Tag → Dämmerung → Nacht, alle Oberflächen, Dach-Kit).
