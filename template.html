@@ -3633,7 +3633,7 @@ const liveSrc = (s, t) => typeof s === 'function' ? s(t) : s;
 
 // --- weapon models: ranged — origin at the grip (one-handed) or the butt (long guns), barrel along +z · melee — origin at the grip, blade along +z, edge toward +y ---
 const WK = {
-  sword: { cls: 'melee', tipZ: 1.15 }, axe: { cls: 'melee', tipZ: 0.68, heavy: true }, spear: { cls: 'melee', tipZ: 1.62, both: true, reach: 0.42, thrust: true }, bat: { cls: 'melee', tipZ: 0.78, blunt: true },
+  sword: { cls: 'melee', tipZ: 1.15 }, axe: { cls: 'melee', tipZ: 0.68, heavy: true }, spear: { cls: 'melee', tipZ: 1.62, both: true, reach: 0.42, thrust: true, pole: true }, dory: { cls: 'melee', tipZ: 1.58, both: true, reach: 0.42, thrust: true, pole: true }, xiphos: { cls: 'melee', tipZ: 0.7 }, bat: { cls: 'melee', tipZ: 0.78, blunt: true },
   knife: { cls: 'melee', tipZ: 0.32 }, hammer: { cls: 'melee', tipZ: 0.9, both: true, heavy: true, blunt: true }, saber: { cls: 'melee', tipZ: 1.2, glow: true },
   katana: { cls: 'melee', tipZ: 1.08 }, cutlass: { cls: 'melee', tipZ: 0.86 }, club: { cls: 'melee', tipZ: 0.78, blunt: true, heavy: true }, mace: { cls: 'melee', tipZ: 0.74, blunt: true }, pan: { cls: 'melee', tipZ: 0.62, blunt: true, hitSnd: 'clang' },
   shield: { cls: 'shield' }, bow: { cls: 'bow' },
@@ -3679,6 +3679,23 @@ function buildWeapon(kind, o = {}) {
       rod(g, 0.021, 0.021, 2.0, wood, 0, 0, 0.3); const hd = rod(g, 0, 0.07, 0.32, '', 0, 0, 1.46, { mat: steel, seg: 4 }); hd.rotation.z = Math.PI / 4; hd.scale.x = 0.32;
       rod(g, 0.027, 0.027, 0.09, leather, 0, 0, 1.27, NC); break;
     }
+    case 'dory': {   // v2.28 hoplite spear, ~2.6 m: ash shaft, leather grip at the balance point, iron leaf blade with midrib and socket, bronze sauroter
+      const iron = mat('#A3ABB3', { metal: 0.72, rough: 0.32, flat: false }), brz = bronzeMat(o.metal);
+      rod(g, 0.0175, 0.019, 2.1, '#B08A5A', 0, 0, 0.13, { seg: 9, flat: false }); rod(g, 0.0215, 0.0215, 0.2, '#4A2E1C', 0, 0, 0.02, { seg: 9, ...NC });
+      for (const z of [-0.08, 0.12]) rod(g, 0.023, 0.023, 0.012, '#2E1C12', 0, 0, z, { seg: 9, ...NC });
+      rod(g, 0.016, 0.024, 0.13, '', 0, 0, 1.235, { mat: iron, seg: 10 });
+      const bl = new THREE.Mesh(G('doryLeaf', () => { const pts = []; for (let i = 0; i <= 16; i++) { const k = i / 16; pts.push(new THREE.Vector2(Math.max(0.0006, 0.05 * Math.pow(Math.sin(Math.PI * Math.pow(k, 0.72)), 0.9) * (1 - 0.18 * k)), k * 0.29)); }
+        const lg = new THREE.LatheGeometry(pts, 10); lg.rotateX(Math.PI / 2); lg.scale(0.24, 1, 1); lg.computeVertexNormals(); return lg; }), iron); bl.position.z = 1.29; bl.castShadow = true; g.add(bl);
+      rod(g, 0.0075, 0.003, 0.23, '', 0, 0, 1.4, { mat: iron, seg: 6, ...NC });
+      rod(g, 0.026, 0.026, 0.035, '', 0, 0, -0.935, { mat: brz, seg: 10, ...NC }); rod(g, 0.021, 0.004, 0.25, '', 0, 0, -1.075, { mat: brz, seg: 4 }); break;
+    }
+    case 'xiphos': {   // v2.28 leaf-shaped hoplite short sword: pommel disc, wrapped grip, bar crossguard, broad leaf blade with ridge
+      const iron = mat('#B4BCC4', { metal: 0.72, rough: 0.28, flat: false }), brz = bronzeMat(o.metal);
+      rod(g, 0.034, 0.034, 0.022, '', 0, 0, -0.07, { mat: brz, seg: 12 }); rod(g, 0.019, 0.022, 0.12, '#3A2618', 0, 0, -0.005, { seg: 8 });
+      box(g, 0.036, 0.16, 0.034, '', 0, -0.08, 0.07, { mat: brz });
+      const bl = new THREE.Mesh(G('xiphosLeaf', () => { const pts = []; for (let i = 0; i <= 18; i++) { const k = i / 18; pts.push(new THREE.Vector2(Math.max(0.0006, 0.026 * (0.82 + 0.55 * Math.sin(Math.PI * Math.pow(k, 1.5))) * Math.pow(1 - Math.pow(k, 5), 0.6)), k * 0.6)); }
+        const lg = new THREE.LatheGeometry(pts, 10); lg.rotateX(Math.PI / 2); lg.scale(0.2, 1, 1); lg.computeVertexNormals(); return lg; }), iron); bl.position.z = 0.087; bl.castShadow = true; g.add(bl); break;
+    }
     case 'katana': {
       rod(g, 0.022, 0.022, 0.3, '#1E1E24', 0, 0, 0.02); for (let i = 0; i < 6; i++) box(g, 0.047, 0.02, 0.02, '#E8E0C8', 0, 0, -0.1 + i * 0.045, { rx: 0.7, ...NC }); rod(g, 0.065, 0.065, 0.015, '#C9A64A', 0, 0, 0.18, { seg: 12 });
       for (let i = 0; i < 4; i++) { const z0 = 0.2 + i * 0.22, dy = -0.012 * i * i; box(g, 0.012, 0.055, 0.225, '', 0, dy - 0.0275, z0 + 0.11, { mat: steel, rx: 0.03 * i }); box(g, 0.013, 0.01, 0.225, '#F4F8FC', 0, dy + 0.022, z0 + 0.11, { rx: 0.03 * i, ...NC }); }
@@ -3698,8 +3715,7 @@ function buildWeapon(kind, o = {}) {
           box(sg, 0.07, 0.75, 0.01, acc, 0, -0.42, 0.045, NC); box(sg, 0.5, 0.07, 0.01, acc, 0, 0.12, 0.045, NC); }
         else if (st === 'scutum') { const cm = new THREE.Mesh(new THREE.CylinderGeometry(0.7, 0.7, 1.1, 16, 1, true, -0.5, 1.0), mat(o.color ?? '#A8281E', { own: true })); cm.material.side = THREE.DoubleSide; cm.position.z = -0.66; cm.castShadow = true; sg.add(cm);
           for (const y of [-0.53, 0.53]) box(sg, 0.68, 0.04, 0.06, '#C9A64A', 0, y - 0.02, 0.02, NC); ball(sg, 0.1, '#C9A64A', 0, 0, 0.05, { detail: 1, metal: 0.6 }).scale.z = 0.5; for (const sx of [-1, 1]) for (const sy of [-1, 1]) box(sg, 0.04, 0.3, 0.01, '#E8C02A', sx * 0.17, sy * 0.3 - 0.15, 0.045, { rz: sx * sy * 0.5, ...NC }); }
-        else if (st === 'aspis') { cyl(sg, 0.52, 0.52, 0.06, '', 0, 0, 0, { rx: Math.PI / 2, seg: 22, mat: mat('#C9963A', { metal: 0.7, rough: 0.3 }) }); cyl(sg, 0.56, 0.56, 0.04, '', 0, 0, -0.02, { rx: Math.PI / 2, seg: 22, mat: mat('#A8782A', { metal: 0.6, rough: 0.35 }), ...NC });
-          for (const sx of [-1, 1]) box(sg, 0.07, 0.62, 0.01, o.accent ?? '#B8302A', sx * 0.13, -0.3, 0.065, { rz: sx * 0.42, ...NC }); }
+        else if (st === 'aspis') buildAspis(sg, o);   // v2.28: bronze-faced bowl with offset rim, painted device, wooden back with porpax + antilabe
         else if (st === 'riot') { box(sg, 0.62, 1.15, 0.03, '', 0, -0.6, 0, { mat: mat('#AFC8DA', { opacity: 0.45, rough: 0.1 }), cast: false }); for (const sx of [-1, 1]) box(sg, 0.04, 1.17, 0.04, '#1A1A1A', sx * 0.31, -0.61, 0); box(sg, 0.62, 0.04, 0.04, '#1A1A1A', 0, 0.53, 0); box(sg, 0.62, 0.04, 0.04, '#1A1A1A', 0, -0.62, 0); box(sg, 0.4, 0.1, 0.005, '#E8E8E8', 0, -0.2, 0.02, NC); }
         break; }
       const s = grp(g); cyl(s, 0.4, 0.4, 0.045, o.color ?? '#9A6A3E', 0, 0, 0, { rx: Math.PI / 2, seg: 18 }); cyl(s, 0.425, 0.425, 0.03, dark, 0, 0, -0.008, { rx: Math.PI / 2, seg: 18, metal: 0.4 });
@@ -3883,7 +3899,7 @@ function cbPose(f, t, S) {
     if (sw && sw.a.W === W) { const k = swingAt(sw.a, t), ws = sw.w; K = { hand: K.hand.lerp(k.hand, ws), blade: nlerp(K.blade, k.blade, ws), edge: nlerp(K.edge, k.edge, ws) };
       S.cry += k.cry * ws; S.crx += k.crx * ws; S.hry += k.hry * ws; S.H -= k.dip * ws; w = Math.max(w, ws); }
     if (bl && bl.a.W === W) { const wb = bl.w; K.hand.lerp(MBLOCK.h, wb); nlerp(K.blade, MBLOCK.b, wb, K.blade); nlerp(K.edge, MBLOCK.e, wb, K.edge); w = Math.max(w, wb); S.crx -= 0.06 * wb; S.nrx += 0.05 * wb; }
-    if (w > 0) { setArm(S, 'R', armIK('R', K.hand), w); if (W.both) setArm(S, 'L', armIK('L', K.hand.clone().addScaledVector(K.blade, W.kind === 'spear' ? 0.42 : -0.15)), w);
+    if (w > 0) { setArm(S, 'R', armIK('R', K.hand), w); if (W.both) setArm(S, 'L', armIK('L', K.hand.clone().addScaledVector(K.blade, W.pole ? 0.42 : -0.15)), w);
       W._want = { d: K.blade, up: K.edge, w }; }
     const tg = (sw ?? bl)?.a.T; if (tg && w > 0) { const d = toC(tg.pos(t)).sub(v3(0, 0.72, 0)).normalize(); look(d, w * 0.8); }
   }
@@ -4338,7 +4354,7 @@ function trailLate(W, t) {
   if (!a || !W.g.visible) { tr.visible = false; return; }
   const ch = W.f.chest; ch.updateWorldMatrix(true, false); const Mw = ch.matrixWorld, N = tr.N, pos = tr.geometry.attributes.position, col = tr.geometry.attributes.color, Lt = W.tipZ * W.sc;
   for (let i = 0; i < N; i++) { const tau = t - (i / (N - 1)) * 0.075, k = swingAt(a, tau), str = env3(tau, a.t - 0.14, a.t + 0.12, 0.05, 0.08) * Math.pow(1 - i / (N - 1), 1.6);
-    const tip = k.hand.clone().addScaledVector(k.blade, Lt).applyMatrix4(Mw), base = k.hand.clone().addScaledVector(k.blade, Lt * (W.kind === 'spear' ? 0.8 : 0.55)).applyMatrix4(Mw);
+    const tip = k.hand.clone().addScaledVector(k.blade, Lt).applyMatrix4(Mw), base = k.hand.clone().addScaledVector(k.blade, Lt * (W.pole ? 0.8 : 0.55)).applyMatrix4(Mw);
     pos.setXYZ(2 * i, base.x, base.y, base.z); pos.setXYZ(2 * i + 1, tip.x, tip.y, tip.z); col.setXYZ(2 * i, 0, 0, 0); col.setXYZ(2 * i + 1, tr.c.r * str, tr.c.g * str, tr.c.b * str); }
   pos.needsUpdate = true; col.needsUpdate = true; tr.visible = true;
 }
@@ -4970,25 +4986,25 @@ function warrior(kind, o = {}) {
     pirate:  [P(3, ['#F2EEE6', '#E8E0C8', '#C9C2B0']), P(4, ['#3A3A44', '#5A4632', '#2E3A5C'])], cowboy: [P(3, ['#C96A4A', '#E8E0C8', '#5A7AB8', '#8A5A3A']), P(4, ['#3A4A6A', '#5A4632'])],
     bandit:  [P(3, ['#3A3A3A', '#4A3A2A', '#2A3A2A', '#5A4A3A']), P(4, ['#2A2A2A', '#3A3026'])], swat: ['#1E2024', '#1E2024'], caveman: [skin, skin]
   }[kind] ?? ['#3D7BD9', '#2E3A5C'];
-  const f = figure({ shirt: o.shirt ?? base[0], pants: o.pants ?? base[1], skin, hair, hairStyle: o.hairStyle ?? P(5, kind === 'caveman' ? ['curly', 'long', 'spiky'] : kind === 'viking' ? ['long', 'bun', 'short'] : ['short', 'buzz', 'short', 'spiky']),
+  const f = figure({ shirt: o.shirt ?? base[0], pants: o.pants ?? base[1], skin, hair, hairStyle: o.hairStyle ?? (kind === 'spartan' ? (o.kit === 'boy' ? 'buzz' : 'long') : P(5, kind === 'caveman' ? ['curly', 'long', 'spiky'] : kind === 'viking' ? ['long', 'bun', 'short'] : ['short', 'buzz', 'short', 'spiky'])),
     shoes: o.shoes ?? (kind === 'spartan' || kind === 'roman' || kind === 'caveman' ? '#8A5A34' : '#2B2622'), expr: o.expr ?? (V(6) < 0.5 ? 'angry' : 'calm'), look: o.look });
   if (o.add !== false) world.add(f.root);
   gear(f, kind, { ...o, seed: sd });
-  if (o.weapon !== false) arm(f, kind, sd, o.weapon);
+  if (o.weapon !== false && !(kind === 'spartan' && (o.kit === 'boy' || o.kit === 'citizen') && !o.weapon)) arm(f, kind, sd, o.weapon, o);
   if (o.at) { f.root.position.set(o.at[0], groundH(o.at[0], o.at[1]), o.at[1]); } if (o.ry != null) f.root.rotation.y = o.ry;
   f.faction = kind; return f;
 }
-function arm(f, kind, sd, pickW) {   // weapon loadout per kind, varied per member
+function arm(f, kind, sd, pickW, wo = {}) {   // weapon loadout per kind, varied per member
   const V = k => hash(sd * 5.31 + k * 2.71), P = (k, arr) => arr[Math.floor(V(k) * arr.length) % arr.length], W = (k, o) => weapon(f, k, o);
-  const sh = (style, color, accent) => W('shield', { style, color, accent, emblem: true });
+  const sh = (style, color, accent) => W('shield', { style, color, accent, emblem: true, ...(style === 'aspis' ? { device: wo.device ?? P(5, HDEV), deviceColor: wo.deviceColor, face: wo.shieldFace, metal: wo.shieldMetal ?? f.hoplite?.metal } : {}) });
   const pick = pickW ?? {
     soldier: P(1, ['rifle', 'rifle', 'rifle', 'smg', 'rifle', 'sniper', 'shotgun', 'launcher', 'minigun']), knight: P(1, ['sword+kite', 'sword+heater', 'mace+heater', 'hammer', 'spear+kite']),
-    viking: P(1, ['axe+round', 'sword+round', 'spear+round', 'axe', 'axe+round']), spartan: P(1, ['spear+aspis', 'spear+aspis', 'sword+aspis']), roman: P(1, ['sword+scutum', 'sword+scutum', 'spear+scutum']),
+    viking: P(1, ['axe+round', 'sword+round', 'spear+round', 'axe', 'axe+round']), spartan: P(1, ['dory+aspis', 'dory+aspis', 'dory+aspis', 'xiphos+aspis']), roman: P(1, ['sword+scutum', 'sword+scutum', 'spear+scutum']),
     samurai: P(1, ['katana', 'katana', 'spear', 'bow']), ninja: P(1, ['katana', 'knife', 'katana']), pirate: P(1, ['cutlass', 'cutlass', 'revolver', 'cutlass']), cowboy: P(1, ['revolver', 'revolver', 'rifle', 'shotgun']),
     bandit: P(1, ['knife', 'axe', 'club', 'bow', 'revolver', 'mace']), swat: P(1, ['smg', 'rifle', 'shotgun', 'pistol+riot']), caveman: P(1, ['club', 'club', 'spear'])
   }[kind] ?? 'sword';
   const [wk, sk] = pick.split('+'), shieldCol = { knight: P(2, ['#B8302A', '#2E5AA8', '#E8C02A', '#2E7A3A', '#F2F2F2']), viking: P(2, ['#B8302A', '#E8C02A', '#2E5AA8', '#F2F2F2', '#2E7A3A']), spartan: '#C9A04A', roman: '#A8281E' }[kind] ?? '#9A6A3E';
-  const w = wk === 'mace' || wk === 'club' || wk === 'katana' || wk === 'cutlass' ? W(wk, { guard: V(3) < 0.3 }) : W(wk, { guard: V(3) < 0.3 && ['sword', 'axe', 'spear', 'hammer', 'knife'].includes(wk) });
+  const w = wk === 'mace' || wk === 'club' || wk === 'katana' || wk === 'cutlass' ? W(wk, { guard: V(3) < 0.3 }) : W(wk, { metal: f.hoplite?.metal, guard: V(3) < 0.3 && ['sword', 'axe', 'spear', 'dory', 'xiphos', 'hammer', 'knife'].includes(wk) });
   if (sk) sh(sk, sk === 'riot' ? undefined : shieldCol, P(4, ['#F2F2F2', '#E8C02A', '#1E1E1E', '#B8302A']));
   return w;
 }
@@ -5042,15 +5058,7 @@ function gear(f, kind, o = {}) {
       if (V(15) < 0.4) cape(P(16, ['#5A1E1E', '#2A3A5A', '#3A3A2A']), 1.0);
       break;
     }
-    case 'spartan': {
-      hideHair(); const h = grp(H, 0, 0, 0); box(h, 0.46, 0.5, 0.46, '', 0, -0.07, 0, { mat: bronze }); box(h, 0.26, 0.05, 0.02, '#0A0A0A', 0, 0.18, 0.232, NC); box(h, 0.07, 0.22, 0.02, '#0A0A0A', 0, -0.04, 0.232, NC); box(h, 0.05, 0.16, 0.03, '', 0, 0.06, 0.24, { mat: bronze, ...NC });
-      const crest = grp(H, 0, 0.45, 0), trans = V(10) < 0.2, cc = P(11, ['#B8302A', '#B8302A', '#1E1E1E', '#E8E0C8']); for (let i = 0; i < 9; i++) { const a = (i / 8 - 0.5) * 2.6; box(crest, trans ? 0.1 : 0.06, 0.22, trans ? 0.06 : 0.1, cc, trans ? Math.sin(a) * 0.3 : 0, Math.cos(a) * 0.2 - 0.12, trans ? 0 : Math.sin(a) * 0.3, { rx: trans ? 0 : a, rz: trans ? -a : 0, ...NC }); }
-      rbox(C, 0.58, 0.62, 0.38, '', 0, -0.02, 0, { mat: bronze }); for (const sx of [-1, 1]) rbox(C, 0.18, 0.14, 0.02, '', sx * 0.11, 0.38, 0.19, { mat: M('#B8853A', { metal: 0.7, rough: 0.35 }), ...NC }); for (let i = 0; i < 3; i++) box(C, 0.3, 0.012, 0.02, '#8A6A2A', 0, 0.08 + i * 0.08, 0.19, NC);
-      for (let i = 0; i < 9; i++) { const a = (i / 9) * TAU; box(Hp, 0.09, 0.3, 0.02, i % 2 ? '#E8D8B8' : '#B8302A', Math.sin(a) * 0.23, -0.34, Math.cos(a) * 0.16, { ry: a, ...NC }); }
-      both((ua, s, fa, th, sh) => { rbox(sh, 0.19, 0.34, 0.2, '', 0, -0.36, 0.01, { mat: bronze }); });
-      cape('#A8281E', 1.25); if (V(12) < 0.4) beard(hairC);
-      break;
-    }
+    case 'spartan': hopliteGear(f, { ...o, seed: sd }); break;   // v2.28 hoplite kit (see HOPLITES)
     case 'roman': {
       hideHair(); const h = grp(H, 0, 0.19, 0); ball(h, 0.245, '', 0, 0.06, 0, { mat: steel, detail: 2 }).scale.set(1, 0.85, 1.02); box(h, 0.46, 0.06, 0.12, '', 0, -0.02, -0.22, { mat: steel, rx: 0.4 }); for (const sx of [-1, 1]) box(h, 0.03, 0.22, 0.16, '', sx * 0.21, -0.2, 0.08, { mat: steel });
       const cr = grp(h, 0, 0.27, 0); for (let i = 0; i < 7; i++) { const a = (i / 6 - 0.5) * 2.2; box(cr, 0.06, 0.12, 0.08, V(10) < 0.25 ? '#E8E0C8' : '#B8302A', V(11) < 0.3 ? Math.sin(a) * 0.2 : 0, Math.cos(a) * 0.08, V(11) < 0.3 ? 0 : Math.sin(a) * 0.2, NC); }
@@ -5125,9 +5133,282 @@ function squad(kind, n, o = {}) {
   const [cx, cz] = o.at ?? [0, 0], ry = o.ry ?? 0, cols = o.cols ?? Math.ceil(Math.sqrt(n * 1.6)), gap = o.gap ?? 1.4, jit = o.jitter ?? 0.25, sd = o.seed ?? 1, out = [];
   for (let i = 0; i < n; i++) { const r = Math.floor(i / cols), c = i % cols, lx = (c - (Math.min(cols, n - r * cols) - 1) / 2) * gap + (hash(i * 3.3 + sd) - 0.5) * jit, lz = -r * gap + (hash(i * 7.7 + sd) - 0.5) * jit;
     const x = cx + Math.cos(ry) * lx + Math.sin(ry) * lz, z = cz - Math.sin(ry) * lx + Math.cos(ry) * lz, k = o.mix ? o.mix[i % o.mix.length] : kind;
-    out.push(warrior(k, { ...o, at: [x, z], ry: ry + (hash(i * 9.1 + sd) - 0.5) * 0.25, seed: sd * 101 + i * 17.3, mix: undefined })); }
+    out.push(warrior(k, { ...o, detail: o.detail ?? (n > 16 ? 'low' : undefined), at: [x, z], ry: ry + (hash(i * 9.1 + sd) - 0.5) * 0.25, seed: sd * 101 + i * 17.3, mix: undefined })); }
   return out;
 }
+
+/* ====================================================================== */
+/* HOPLITES (v2.28) — Greek / Spartan hoplites, c. 500–450 BC (Thermopylae 480 BC). Every part is real geometry, not boxes:                 */
+/*   corinthHelmet(head, o)  Corinthian helmet: one bronze shell with T-shaped face opening, almond eyes, nasal guard, brow ridges, raised    */
+/*                           rims, flared nape guard; crest 'fan' (front to back) | 'transverse' (ear to ear, officers) | 'none'; horsehair    */
+/*                           with strands, frayed edge and a swinging tail                                                                    */
+/*   helmetUp(rig, [[t, 1 | 0], …])  push the helmet up onto the head (face free, hair shows) or pull it down — smooth, from the scene         */
+/*   weapon(rig, 'dory')     2.6 m ash spear: leaf blade with midrib, socket, leather grip, bronze butt spike (sauroter)                       */
+/*   weapon(rig, 'xiphos')   leaf-shaped short sword with crossguard and pommel disc                                                         */
+/*   weapon(rig, 'shield', { style: 'aspis', device, deviceColor, face, rim, metal })  ~1 m bronze-faced bowl shield with offset rim, painted */
+/*                           device (episema) and rim band; wooden back with porpax arm band, antilabe grip and carrying cords               */
+/*   hopliteGear(rig, { kit, armor, metal, crest, crestColor, helmet, helmetUp, greaves, cloak, beard, seed, detail })                         */
+/*                           kit 'warrior' (default) | 'parade' (helmet up) | 'boy' (agoge: shaved head, barefoot, one rough cloak) |        */
+/*                           'citizen' (no armour, red cloak) · armor 'muscle' (bronze muscle cuirass) | 'linen' (linothorax with shoulder    */
+/*                           flaps and painted borders) | 'none' · metal 'bright' | 'aged' | 'dark' · greaves with knee caps (open at the back) */
+/*                           · crimson cloak pinned at the shoulders · pteruges · short chiton · sandals · beard without moustache (Spartan law) */
+/*   hoplite(o)              = warrior('spartan', o); squad('spartan', n, …) and every warrior('spartan') use this kit, varied per seed         */
+/* Devices: scorpion · snake · club (Herakles, for Leonidas' men) · bull · eyes · trident · gorgon · star · lambda (only from c. 420 BC) · none */
+/* ====================================================================== */
+const sstep = (a, b, x) => { const k = clamp((x - a) / (b - a)); return k * k * (3 - 2 * k); };
+const HDEV = ['scorpion', 'snake', 'club', 'bull', 'eyes', 'trident', 'gorgon', 'star'];
+const HBRONZE = { bright: ['#D2A24A', 0.6, 0.3], aged: ['#A8844A', 0.5, 0.42], dark: ['#7E6640', 0.45, 0.52] };
+const bronzeMat = (k = 'bright') => { const [c, m, r] = HBRONZE[k] ?? HBRONZE.bright; return mat(c, { metal: m, rough: r, flat: false }); };
+
+// carved shell: a thick surface over a (u, v) grid that wraps around in u; metal where sdf(u, v) > 0. Cells cut by the contour are clipped
+// (marching squares) so openings get smooth edges, and walls close the cut — pos(u, v, off) gives the point, off < 0 = inner layer
+function carveGeo(key, o) {
+  return G('shell|' + key, () => {
+    const Nu = o.nu, Nv = o.nv, T = o.thick ?? 0.006, P = [], C = [], I = [], vm = new Map(), col = o.color, tmp = new THREE.Color();
+    const D = []; for (let i = 0; i < Nu; i++) { D[i] = []; for (let j = 0; j <= Nv; j++) D[i][j] = o.sdf(i / Nu, j / Nv); }
+    const vert = (key, u, v, layer) => { const k = key + (layer ? 'i' : 'o'); let id = vm.get(k); if (id != null) return id;
+      const p = o.pos(u, v, layer ? -T : 0); id = P.length / 3; P.push(p[0], p[1], p[2]);
+      if (col) { tmp.set(col(u, v, o.sdf(u, v), layer) ?? '#FFFFFF'); C.push(tmp.r, tmp.g, tmp.b); } if (key[0] !== 'w') vm.set(k, id); return id; };
+    let wn = 0;
+    for (let i = 0; i < Nu; i++) for (let j = 0; j < Nv; j++) {
+      const cs = [[i, j], [i + 1, j], [i + 1, j + 1], [i, j + 1]].map(([a, b]) => ({ u: a / Nu, v: b / Nv, d: D[a % Nu][b], key: 'c' + (a % Nu) + ',' + b }));
+      if (cs.every(c => c.d < 0)) continue;
+      const poly = [];
+      for (let k = 0; k < 4; k++) { const A = cs[k], B = cs[(k + 1) % 4];
+        if (A.d >= 0) poly.push(A);
+        if ((A.d >= 0) !== (B.d >= 0)) { const s = A.d / (A.d - B.d); poly.push({ u: A.u + (B.u - A.u) * s, v: A.v + (B.v - A.v) * s, key: 'e' + [A.key, B.key].sort().join('|'), cut: true }); } }
+      if (poly.length < 3) continue;
+      const io = poly.map(p => vert(p.key, p.u, p.v, 0)), ii = poly.map(p => vert(p.key, p.u, p.v, 1));
+      for (let k = 1; k < poly.length - 1; k++) { I.push(io[0], io[k], io[k + 1]); I.push(ii[0], ii[k + 1], ii[k]); }
+      for (let k = 0; k < poly.length; k++) { const a = poly[k], b = poly[(k + 1) % poly.length]; if (!a.cut || !b.cut) continue;   // contour segment → wall
+        const w = 'w' + (wn++), ao = vert(w + 'a', a.u, a.v, 0), ai = vert(w + 'a', a.u, a.v, 1), bo = vert(w + 'b', b.u, b.v, 0), bi = vert(w + 'b', b.u, b.v, 1);
+        I.push(ao, ai, bi, ao, bi, bo); }
+    }
+    const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(P, 3)); if (col) g.setAttribute('color', new THREE.Float32BufferAttribute(C, 3));
+    g.setIndex(I); g.computeVertexNormals(); g.computeBoundingSphere(); return g;
+  });
+}
+const gauss = (x, w) => Math.exp(-(x * x) / (w * w));
+
+// --- Corinthian helmet (head-local: head cube y 0 … 0.38, face toward +z) ---
+const HELM = { R: 0.255, yc: 0.215, top: 0.485, y0: -0.17, sz: 1.1, zo: 0.012 };
+const helmY = v => HELM.y0 + v * (HELM.top - HELM.y0);
+const helmBottom = fa => -0.075 + 0.085 * Math.sin(Math.PI * sstep(0.30, 0.78, fa)) - 0.06 * sstep(0.62, 0.9, fa);   // long cheek pieces, notch behind the jaw, flared nape
+function helmOpen(s, y) {   // s = arc length from the front midline (m); < 0 inside the T-shaped face opening
+  const t = (s - 0.02) / 0.15, hE = t > 0 && t < 1 ? 0.056 * Math.pow(Math.sin(Math.PI * Math.pow(t, 0.8)), 0.55) : -0.03, yE = 0.214 + 0.012 * t;
+  const dEye = Math.abs(y - yE) - hE, sS = 0.05 + 0.13 * clamp(0.17 - y, 0, 0.3), dSlot = Math.max(s - sS, y - 0.205), dNasal = Math.max(s - 0.021, 0.13 - y);
+  return Math.min(dEye, Math.max(dSlot, -dNasal));
+}
+function helmSdf(u, v) { const a = (u - 0.5) * TAU, y = helmY(v); return Math.min(y - helmBottom(Math.abs(a) / Math.PI), helmOpen(Math.abs(a) * HELM.R, y)); }
+function helmPos(u, v, off) {
+  const a = (u - 0.5) * TAU, fa = Math.abs(a) / Math.PI, y = helmY(v), s = Math.abs(a) * HELM.R, R = HELM.R;
+  let r = y > HELM.yc ? R * Math.sqrt(Math.max(0, 1 - ((y - HELM.yc) / (HELM.top - HELM.yc)) ** 2)) : R;
+  r -= 0.034 * sstep(0.13, -0.08, y) * Math.pow(Math.max(0, Math.cos(a)), 1.4);   // cheek pieces follow the jaw
+  r += 0.32 * Math.max(0, 0.035 - y) * sstep(0.6, 0.9, fa);                       // nape guard flares out
+  const t = (s - 0.02) / 0.15; if (t > -0.1 && t < 1.15) r += 0.0075 * gauss(y - (0.214 + 0.012 * t + 0.056 * Math.pow(Math.max(0, Math.sin(Math.PI * clamp(t))), 0.55) + 0.024), 0.011) * (1 - sstep(0.85, 1.15, t));   // brow ridges
+  r += 0.005 * gauss(Math.sin(a) * r, 0.016) * sstep(0.3, 0.38, y);              // keel along the top
+  const d = helmSdf(u, v); r += 0.0045 * (1 - sstep(0.002, 0.013, d));          // rolled rim along every edge
+  r += off; return [Math.sin(a) * r, y, Math.cos(a) * r * HELM.sz + HELM.zo];
+}
+function crestTex(c) {
+  return canvasTex(512, 512, (x, w) => {
+    const cx = w / 2, cy = w / 2, px = w / 1.0;   // uv ±0.5 m ↔ canvas
+    x.fillStyle = c; x.fillRect(0, 0, w, w);
+    for (let i = 0; i < 900; i++) { const a = hash(i * 1.37) * TAU, r0 = 0.25 * px, r1 = (0.36 + 0.1 * hash(i * 2.11)) * px, l = (hash(i * 3.7) - 0.5) * 0.36;
+      x.strokeStyle = shade(c, l * (c === '#E4DCC8' ? 0.5 : 1)); x.lineWidth = 1.2 + hash(i * 5.3) * 2.2; x.beginPath(); x.moveTo(cx + Math.cos(a) * r0, cy + Math.sin(a) * r0);
+      x.lineTo(cx + Math.cos(a + (hash(i) - 0.5) * 0.02) * r1, cy + Math.sin(a + (hash(i) - 0.5) * 0.02) * r1); x.stroke(); }
+  });
+}
+function crestMat(c) { const k = 'crest' + c; if (_mats.has(k)) return _mats.get(k);
+  const tx = crestTex(c); tx.offset.set(0.5, 0.5); const m = new THREE.MeshStandardMaterial({ map: tx, color: '#FFFFFF', roughness: 0.82, metalness: 0, side: THREE.DoubleSide }); _mats.set(k, m); return m; }
+function crestGeo(kind) {
+  return G('crest|' + kind, () => {
+    const a0 = kind === 'transverse' ? 12 : 22, a1 = kind === 'transverse' ? 168 : 176, sh = new THREE.Shape(), N = 40, r1 = 0.255;
+    const r2 = d => r1 + (kind === 'transverse' ? 0.15 : 0.19) * sstep(a0, a0 + 22, d) * (1 - (kind === 'transverse' ? sstep(a1 - 22, a1, d) : 0.38 * sstep(120, a1, d)));
+    for (let i = 0; i <= N; i++) { const d = a0 + (a1 - a0) * i / N, rr = r2(d) + 0.004 * (hash(i * 7.1) - 0.5) * (i % 3 ? 1 : 2), q = d * Math.PI / 180; i ? sh.lineTo(Math.cos(q) * rr, Math.sin(q) * rr) : sh.moveTo(Math.cos(q) * rr, Math.sin(q) * rr); }
+    for (let i = N; i >= 0; i--) { const q = (a0 + (a1 - a0) * i / N) * Math.PI / 180; sh.lineTo(Math.cos(q) * r1, Math.sin(q) * r1); }
+    const g = new THREE.ExtrudeGeometry(sh, { depth: 0.05, bevelEnabled: true, bevelThickness: 0.012, bevelSize: 0.006, bevelSegments: 2, curveSegments: 4 });
+    g.translate(0, 0, -0.025); g.rotateY(-Math.PI / 2); return g;   // shape x → +z (front), y → up, extrusion across x
+  });
+}
+// corinthHelmet(head, { crest: 'fan' | 'transverse' | 'none', crestColor, metal, detail: 'high' | 'low', up }) → group (rig.helm)
+function corinthHelmet(p, o = {}) {
+  const lo = o.detail === 'low', g = grp(p), NC = { cast: false };
+  const shell = new THREE.Mesh(carveGeo('helm' + (lo ? 'L' : 'H'), { nu: lo ? 76 : 132, nv: lo ? 38 : 66, thick: 0.007, sdf: helmSdf, pos: helmPos }), bronzeMat(o.metal));
+  shell.castShadow = true; shell.receiveShadow = true; g.add(shell);
+  const cr = o.crest ?? 'fan';
+  if (cr !== 'none') {
+    const cc = o.crestColor ?? '#9E1B1B', c = grp(g, 0, HELM.yc, HELM.zo); if (cr === 'transverse') c.rotation.y = Math.PI / 2;
+    const m = new THREE.Mesh(crestGeo(cr), crestMat(cc)); m.castShadow = true; c.add(m);
+    for (let i = 0; i < 7; i++) { const q = (30 + i * 22) * Math.PI / 180; box(c, 0.03, 0.02, 0.05, '', 0, Math.sin(q) * 0.25 - 0.01, Math.cos(q) * 0.25 * HELM.sz, { mat: bronzeMat(o.metal), rx: -q + Math.PI / 2, ...NC }); }   // crest holder clips
+    if (cr === 'fan') { const tl = dyn(grp(g, 0, 0.245, -0.285)); tl.rotation.x = 0.18;
+      tl.add(Object.assign(new THREE.Mesh(new THREE.PlaneGeometry(0.075, 0.36, 2, 8).translate(0, -0.18, 0), clothMat(shade(cc, -0.04), { pin: 'top', len: 0.36, amp: 0.7, speed: 1.2 })), { castShadow: true })); g.tail = tl; }
+  }
+  return g;
+}
+const HELM_UP = { p: new THREE.Vector3(0, 0.33, -0.025), rx: -0.22 };   // pushed up: cheek pieces rest on the forehead, face free
+function helmetUp(f, keys) {
+  const H = f.helm; if (!H) return console.warn('helmetUp: rig has no hoplite helmet');
+  const s0 = H.userData.up ? 1 : 0, ks = [...keys].sort((a, b) => a[0] - b[0]);
+  for (const [t] of ks) sfx(t + 0.25, 'clang', 0.18);
+  tick(t => { let s = s0; for (const [tk, v] of ks) { if (t <= tk) break; s += ((v ? 1 : 0) - s) * sm01((t - tk) / 0.55); } helmApply(f, s); });
+}
+function helmApply(f, s) { const H = f.helm; H.position.set(0, HELM_UP.p.y * s + 0.04 * Math.sin(Math.PI * s), HELM_UP.p.z * s); H.rotation.x = HELM_UP.rx * s; if (f.hair) f.hair.visible = s > 0.5 && !f.hoplite?.shaved; }
+
+// --- aspis (shield-local: centre at origin, front toward +z) ---
+const ASPIS = { R: 0.515, rb: 0.435 };
+const aspisH = r => r <= ASPIS.rb ? 0.03 + 0.088 * Math.pow(Math.max(0, 1 - (r / ASPIS.rb) ** 2), 0.75) : r < 0.5 ? 0.03 - 0.012 * (r - ASPIS.rb) / 0.065 : 0.018 - 0.026 * (r - 0.5) / 0.015;
+function aspisGeo(off, planar) {
+  return G('aspis' + off + (planar ? 'p' : ''), () => {
+    const pts = []; for (let i = 0; i <= 26; i++) { const r = i <= 22 ? ASPIS.rb * Math.pow(i / 22, 0.85) : ASPIS.rb + (ASPIS.R - ASPIS.rb) * (i - 22) / 4; pts.push(new THREE.Vector2(Math.max(r, 0.0001), aspisH(r) + off)); }
+    const g = new THREE.LatheGeometry(pts.reverse(), 56); g.rotateX(Math.PI / 2);
+    if (planar) { const P = g.attributes.position, U = g.attributes.uv; for (let i = 0; i < P.count; i++) U.setXY(i, P.getX(i) / (2 * ASPIS.R) + 0.5, P.getY(i) / (2 * ASPIS.R) + 0.5); U.needsUpdate = true; }
+    g.computeVertexNormals(); return g;
+  });
+}
+// device drawings on a 100 × 100 field, centred at 50, 50 (up = +y on the shield)
+const HDRAW = {
+  scorpion(x) { x.lineCap = 'round'; x.lineJoin = 'round';
+    x.beginPath(); x.ellipse(50, 60, 8.5, 13, 0, 0, TAU); x.fill(); x.beginPath(); x.ellipse(50, 76.5, 6.5, 5, 0, 0, TAU); x.fill();
+    const B = k => { const u = 1 - k; return [u * u * u * 50 + 3 * u * u * k * 50 + 3 * u * k * k * 74 + k * k * k * 64, u * u * u * 48 + 3 * u * u * k * 22 + 3 * u * k * k * 14 + k * k * k * 32]; };
+    for (let i = 0; i <= 14; i++) { const k = i / 14, [px, py] = B(k); x.beginPath(); x.arc(px, py, 5.4 - 2.6 * k, 0, TAU); x.fill(); }   // segmented tail curling over the back
+    x.beginPath(); x.moveTo(61, 30); x.quadraticCurveTo(54, 36, 52, 43); x.quadraticCurveTo(58, 40, 64, 35); x.closePath(); x.fill();   // sting
+    x.lineWidth = 2.6; for (const s of [-1, 1]) { for (let k = 0; k < 4; k++) { x.beginPath(); x.moveTo(50 + s * 6, 54 + k * 5); x.lineTo(50 + s * 17, 50 + k * 6); x.lineTo(50 + s * 22, 58 + k * 7); x.stroke(); }
+      x.lineWidth = 3.6; x.beginPath(); x.moveTo(50 + s * 4, 79); x.quadraticCurveTo(50 + s * 15, 83, 50 + s * 16, 90); x.stroke(); x.lineWidth = 2.6;
+      x.beginPath(); x.ellipse(50 + s * 17, 93, 5, 3.4, s * 0.5, 0, TAU); x.fill(); x.lineWidth = 2.8; x.beginPath(); x.moveTo(50 + s * 20, 91); x.lineTo(50 + s * 25, 97); x.moveTo(50 + s * 14, 95); x.lineTo(50 + s * 17, 99.5); x.stroke(); x.lineWidth = 2.6; } },
+  snake(x) { x.lineCap = 'round'; x.lineWidth = 9; x.beginPath(); x.moveTo(38, 88); x.bezierCurveTo(78, 78, 22, 52, 56, 40); x.bezierCurveTo(70, 35, 66, 22, 54, 20); x.stroke();
+    x.beginPath(); x.ellipse(50, 18, 8, 5.5, -0.4, 0, TAU); x.fill(); x.lineWidth = 1.6; x.beginPath(); x.moveTo(43, 21); x.lineTo(35, 24); x.lineTo(31, 22); x.moveTo(35, 24); x.lineTo(32, 27); x.stroke(); },
+  club(x) { x.save(); x.translate(50, 50); x.rotate(-0.6); x.beginPath(); x.moveTo(-3.5, 40); x.lineTo(3.5, 40); x.lineTo(9, -34); x.quadraticCurveTo(0, -46, -9, -34); x.closePath(); x.fill();
+    for (let i = 0; i < 7; i++) { const yy = -30 + i * 9, w = 8.5 - i * 0.9; x.beginPath(); x.arc(i % 2 ? w : -w, yy, 3.4, 0, TAU); x.fill(); } x.restore(); },
+  bull(x) { x.beginPath(); x.moveTo(36, 34); x.quadraticCurveTo(50, 28, 64, 34); x.quadraticCurveTo(66, 58, 58, 74); x.quadraticCurveTo(50, 84, 42, 74); x.quadraticCurveTo(34, 58, 36, 34); x.fill();
+    for (const s of [-1, 1]) { x.beginPath(); x.moveTo(50 + s * 12, 34); x.quadraticCurveTo(50 + s * 34, 30, 50 + s * 30, 10); x.quadraticCurveTo(50 + s * 26, 24, 50 + s * 9, 38); x.fill();
+      x.beginPath(); x.ellipse(50 + s * 19, 42, 7, 3.5, s * -0.5, 0, TAU); x.fill(); }
+    x.globalCompositeOperation = 'destination-out'; for (const s of [-1, 1]) { x.beginPath(); x.arc(50 + s * 7, 47, 2.6, 0, TAU); x.fill(); x.beginPath(); x.ellipse(50 + s * 4.5, 74, 2, 2.6, 0, 0, TAU); x.fill(); } x.globalCompositeOperation = 'source-over'; },
+  eyes(x) { for (const s of [-1, 1]) { const cx = 50 + s * 21; x.beginPath(); x.moveTo(cx - 19, 50); x.quadraticCurveTo(cx, 24, cx + 19, 50); x.quadraticCurveTo(cx, 76, cx - 19, 50); x.fill();
+      x.globalCompositeOperation = 'destination-out'; x.beginPath(); x.arc(cx, 50, 8, 0, TAU); x.fill(); x.globalCompositeOperation = 'source-over'; x.beginPath(); x.arc(cx, 50, 5, 0, TAU); x.fill(); } },
+  trident(x) { x.lineCap = 'butt'; x.lineWidth = 5.5; x.beginPath(); x.moveTo(50, 94); x.lineTo(50, 14); x.moveTo(30, 44); x.quadraticCurveTo(30, 58, 50, 58); x.quadraticCurveTo(70, 58, 70, 44); x.lineTo(70, 22); x.moveTo(30, 44); x.lineTo(30, 22); x.stroke();
+    for (const [cx, cy] of [[50, 6], [30, 15], [70, 15]]) { x.beginPath(); x.moveTo(cx, cy - 3); x.lineTo(cx + 6, cy + 9); x.lineTo(cx - 6, cy + 9); x.closePath(); x.fill(); } },
+  gorgon(x) { x.lineCap = 'round'; x.lineWidth = 3.6; for (let i = 0; i < 12; i++) { const a = i / 12 * TAU, r0 = 25, r1 = 38; x.beginPath(); x.moveTo(50 + Math.cos(a) * r0, 50 + Math.sin(a) * r0);
+      x.quadraticCurveTo(50 + Math.cos(a + 0.25) * (r0 + 7), 50 + Math.sin(a + 0.25) * (r0 + 7), 50 + Math.cos(a - 0.08) * r1, 50 + Math.sin(a - 0.08) * r1); x.stroke(); x.beginPath(); x.arc(50 + Math.cos(a - 0.08) * r1, 50 + Math.sin(a - 0.08) * r1, 2.4, 0, TAU); x.fill(); }
+    x.beginPath(); x.arc(50, 50, 25, 0, TAU); x.fill(); x.globalCompositeOperation = 'destination-out'; for (const s of [-1, 1]) { x.beginPath(); x.arc(50 + s * 9.5, 43, 5.5, 0, TAU); x.fill(); }
+    x.beginPath(); x.moveTo(36, 56); x.quadraticCurveTo(50, 70, 64, 56); x.quadraticCurveTo(50, 63, 36, 56); x.fill(); x.globalCompositeOperation = 'source-over';
+    for (const s of [-1, 1]) { x.beginPath(); x.arc(50 + s * 9.5, 43, 2.4, 0, TAU); x.fill(); } x.beginPath(); x.moveTo(46, 60); x.lineTo(54, 60); x.lineTo(50, 70); x.closePath(); x.fill(); },
+  star(x) { x.beginPath(); for (let i = 0; i < 16; i++) { const a = i / 16 * TAU - Math.PI / 2, r = i % 2 ? 15 : 40; i ? x.lineTo(50 + Math.cos(a) * r, 50 + Math.sin(a) * r) : x.moveTo(50 + Math.cos(a) * r, 50 + Math.sin(a) * r); } x.closePath(); x.fill(); },
+  lambda(x) { x.lineWidth = 13; x.lineJoin = 'miter'; x.beginPath(); x.moveTo(20, 88); x.lineTo(50, 12); x.lineTo(80, 88); x.stroke(); }
+};
+function aspisTex(o) {
+  return canvasTex(1024, 1024, (x, S) => {
+    const k = S / (2 * ASPIS.R), cx = S / 2, R0 = ASPIS.rb * k, dc = o.deviceColor ?? (o.face ? '#1A1614' : '#1A1614');
+    if (o.face) { x.fillStyle = o.face; x.beginPath(); x.arc(cx, cx, R0 + 2, 0, TAU); x.fill(); }
+    if (o.rim !== false) { const rc = o.rimColor ?? dc, a = (ASPIS.rb + 0.012) * k, b = (ASPIS.R - 0.018) * k, m = (a + b) / 2;   // rim band: running cable between two lines
+      x.strokeStyle = rc; x.fillStyle = rc; x.lineWidth = 0.006 * k; for (const r of [a, b]) { x.beginPath(); x.arc(cx, cx, r, 0, TAU); x.stroke(); }
+      const n = 44; for (let i = 0; i < n; i++) { const q = i / n * TAU; x.save(); x.translate(cx + Math.cos(q) * m, cx + Math.sin(q) * m); x.rotate(q + Math.PI / 2); x.beginPath(); x.ellipse(0, 0, (b - a) * 0.36, (b - a) * 0.2, 0.5, 0, TAU); x.fill(); x.restore(); } }
+    const dv = o.device ?? 'none', fn = HDRAW[dv];
+    if (fn) { x.save(); x.fillStyle = dc; x.strokeStyle = dc; const sc = R0 * 1.36 / 100; x.translate(cx - 50 * sc, cx - 50 * sc); x.scale(sc, sc); fn(x); x.restore(); }
+  });
+}
+function buildAspis(g, o = {}) {
+  const NC = { cast: false }, s = grp(g, 0, 0, o.offset ?? 0.13), br = bronzeMat(o.metal);
+  const front = new THREE.Mesh(aspisGeo(0), br); front.castShadow = true; front.receiveShadow = true; s.add(front);
+  const back = new THREE.Mesh(aspisGeo(-0.016), mat('#7A5634', { rough: 0.85, flat: false, side: THREE.DoubleSide })); back.castShadow = true; s.add(back);
+  const rimT = new THREE.Mesh(G('aspisRim', () => new THREE.TorusGeometry(ASPIS.R - 0.004, 0.011, 6, 56)), br); rimT.position.z = -0.006; s.add(rimT);
+  if ((o.device && o.device !== 'none') || o.face || o.rim !== false) {
+    const key = 'aspisDecal' + JSON.stringify([o.device, o.deviceColor, o.face, o.rim, o.rimColor]); let m = _mats.get(key);
+    if (!m) { m = new THREE.MeshStandardMaterial({ map: aspisTex(o), transparent: true, roughness: 0.62, metalness: 0.05, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }); _mats.set(key, m); }
+    const dcl = new THREE.Mesh(aspisGeo(0.0025, true), m); dcl.renderOrder = 2; s.add(dcl);
+  }
+  // back: porpax (bronze arm band across the centre), antilabe (leather grip near the rim), carrying cords
+  box(s, 0.075, 0.04, 0.035, '', 0, -0.02, -0.03, { mat: br }); for (const sx of [-1, 1]) box(s, 0.03, 0.05, 0.03, '', sx * 0.06, -0.025, -0.03, { mat: br, ...NC });
+  rod(s, 0.012, 0.012, 0.13, '#4A2E1C', -0.4, 0, -0.05, { seg: 6, ...NC }).rotation.set(0, Math.PI / 2, 0);
+  for (let i = 0; i < 6; i++) { const q = (0.62 + i * 0.12) * Math.PI; cyl(s, 0.006, 0.006, 0.12, '#C9B58A', Math.cos(q) * 0.38, Math.sin(q) * 0.38 - 0.06, -0.04, { seg: 4, ...NC }); }
+  return s;
+}
+
+// --- torso shell (chest-local: chest box x ±0.26, y −0.02 … 0.60, z ±0.15) ---
+const CUIR = { yb: -0.12, ys: 0.585, yn: 0.655, X: 0.283, Z: 0.182 };
+const cuirY = v => v < 0.84 ? CUIR.yb + (CUIR.ys - CUIR.yb) * v / 0.84 : CUIR.ys + (CUIR.yn - CUIR.ys) * Math.sin((v - 0.84) / 0.16 * Math.PI / 2);
+const cuirBottom = a => -0.03 - 0.075 * Math.pow(Math.max(0, Math.cos(a)), 1.6) - 0.035 * Math.pow(Math.max(0, -Math.cos(a)), 1.6);
+function cuirSdf(kind) { return (u, v) => { const a = (u - 0.5) * TAU, y = cuirY(v), da = Math.abs(Math.abs(a) - Math.PI / 2);
+  const arm = Math.hypot(da / 0.6, (y - 0.45) / 0.155) - 1; return Math.min(y - cuirBottom(a), arm * 0.12, (0.985 - v) * 0.3); }; }
+function cuirPos(kind) { const sdf = cuirSdf(kind); return (u, v, off) => {
+  const a = (u - 0.5) * TAU, y = cuirY(v), t = v < 0.84 ? 0 : sm01((v - 0.84) / 0.16), n = 3.4, ca = Math.cos(a), sa = Math.sin(a);
+  let X = CUIR.X * (1 - 0.05 * gauss(y - 0.12, 0.16)) * lerp(1, 0.42, t), Z = (ca > 0 ? CUIR.Z : CUIR.Z * 0.96) * lerp(1, 0.62, t);
+  X += 0.022 * sstep(0.02, -0.12, y); Z += 0.022 * sstep(0.02, -0.12, y);                           // flared lower edge
+  let x = Math.sign(sa) * X * Math.pow(Math.abs(sa), 2 / n), z = Math.sign(ca) * Z * Math.pow(Math.abs(ca), 2 / n), bump = 0;
+  if (kind === 'muscle') {
+    if (ca > 0) { for (const s of [-1, 1]) { const dy = y - 0.4, w = dy < 0 ? 0.045 : 0.085; bump += 0.032 * gauss(x - s * 0.11, 0.085) * gauss(dy, w) + 0.003 * gauss(x - s * 0.12, 0.012) * gauss(y - 0.37, 0.012);
+        for (const yy of [0.05, 0.14, 0.23]) bump += 0.013 * gauss(x - s * 0.052, 0.034) * gauss(y - yy, 0.033); bump += 0.012 * gauss(Math.abs(x) - 0.17 + (0.14 - y) * 0.2, 0.025) * sstep(-0.05, 0.05, y) * (1 - sstep(0.22, 0.3, y)); }
+      bump -= 0.006 * gauss(x, 0.011) * sstep(-0.05, 0.02, y) * (1 - sstep(0.3, 0.36, y)) + 0.006 * gauss(x, 0.012) * gauss(y + 0.005, 0.012); }
+    else { for (const s of [-1, 1]) bump += 0.016 * gauss(x - s * 0.11, 0.07) * gauss(y - 0.42, 0.07); bump -= 0.006 * gauss(x, 0.014) * sstep(0.0, 0.1, y); }
+  } else bump += 0.004 * gauss(y - 0.08, 0.03);                                                       // linothorax girdle
+  const d = sdf(u, v); bump += 0.004 * (1 - sstep(0.002, 0.012, d)) * (1 - t);
+  const nx = Math.sign(sa) * Math.pow(Math.abs(sa), 1 - 2 / n) / X, nz = Math.sign(ca) * Math.pow(Math.abs(ca), 1 - 2 / n) / Z, nl = Math.hypot(nx, nz) || 1, k = (bump + off) * (1 - t * 0.6);
+  return [x + nx / nl * k, y + off * t, z + nz / nl * k]; }; }
+function cuirass(f, kind, o = {}) {
+  const lo = o.detail === 'low', C = f.chest, NC = { cast: false }, g = grp(C), linen = kind === 'linen';
+  const bc = o.border ?? '#8A1E1E', lc = o.linen ?? '#E6DCC2';
+  const geo = carveGeo('cuir' + kind + (lo ? 'L' : 'H') + (linen ? bc + lc : ''), { nu: lo ? 56 : 96, nv: lo ? 28 : 48, thick: 0.008, sdf: cuirSdf(kind), pos: cuirPos(kind),
+    color: linen ? (u, v, d) => { const y = cuirY(v); return d < 0.035 && d > -1 ? (d < 0.012 ? '#1E1A16' : bc) : Math.abs(y - 0.08) < 0.03 ? shade(lc, -0.12) : lc; } : null });
+  const m = new THREE.Mesh(geo, linen ? new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9, metalness: 0 }) : bronzeMat(o.metal)); m.castShadow = true; m.receiveShadow = true; g.add(m);
+  if (linen) {   // shoulder flaps of the linothorax, tied down at the chest; bronze scales over the flank
+    for (const sx of [-1, 1]) { const fl = grp(g, sx * 0.135, 0.655, 0.0); fl.rotation.z = sx * -0.14;
+      rbox(fl, 0.17, 0.03, 0.42, lc, 0, 0, -0.005, { rf: 0.3 }); box(fl, 0.175, 0.034, 0.02, bc, 0, -0.002, 0.2, NC); rbox(fl, 0.15, 0.2, 0.03, lc, 0, -0.2, 0.2, { rf: 0.3 }); box(fl, 0.155, 0.03, 0.034, bc, 0, -0.205, 0.199, NC);
+      ball(fl, 0.016, '', 0, -0.15, 0.218, { mat: bronzeMat(o.metal), detail: 1, ...NC }); }
+    for (let r = 0; r < 4; r++) for (let c = 0; c < 4; c++) { const sx = 1, xx = sx * 0.27, zz = -0.06 + c * 0.04; box(g, 0.012, 0.035, 0.036, '', xx + 0.005 * (r % 2), 0.12 + r * 0.03, zz + (r % 2) * 0.02, { mat: bronzeMat(o.metal), ...NC }); }
+  } else { for (const sx of [-1, 1]) { rod(g, 0.008, 0.008, 0.05, '', sx * 0.285, 0.12, 0, { mat: bronzeMat(o.metal), ...NC }); ball(g, 0.012, '', sx * 0.2, 0.6, 0.11, { mat: bronzeMat(o.metal), detail: 1, ...NC }); } }   // side hinge pins, shoulder rings
+  return g;
+}
+function pteruges(f, o = {}) {
+  const Hp = f.hips, c1 = o.c1 ?? '#E6DCC2', c2 = o.c2 ?? '#6A4A30', NC = { cast: false };
+  for (let row = 0; row < 2; row++) { const n = 16; for (let i = 0; i < n; i++) { const a = (i + row * 0.5) / n * TAU, rx = 0.25 + row * 0.008, rz = 0.165 + row * 0.008, s = grp(Hp, Math.sin(a) * rx, 0.02 - row * 0.1, Math.cos(a) * rz, a);
+    s.rotation.order = 'YXZ'; s.rotation.x = -(0.12 + row * 0.06); rbox(s, 0.062, 0.15, 0.012, row ? c1 : c2, 0, -0.15, 0, { rf: 0.3, ...NC }); if (!row) box(s, 0.018, 0.018, 0.006, '', 0, -0.1, 0.008, { mat: bronzeMat(o.metal), ...NC }); } }
+}
+function greaves(f, o = {}) {
+  const lo = o.detail === 'low', geo = carveGeo('greave' + (lo ? 'L' : 'H'), { nu: lo ? 36 : 60, nv: lo ? 20 : 34, thick: 0.006,
+    sdf: (u, v) => { const a = (u - 0.5) * TAU, y = -0.36 + v * 0.42; return Math.min((2.5 - Math.abs(a)) * 0.06, y + 0.34, 0.012 + 0.03 * gauss(a, 0.7) - y); },
+    pos: (u, v, off) => { const a = (u - 0.5) * TAU, y = -0.36 + v * 0.42, ca = Math.cos(a), sa = Math.sin(a);
+      let r = 0.114 * (1 - 0.12 * sstep(-0.1, -0.33, y)) + 0.016 * gauss(y + 0.12, 0.11) * gauss(Math.abs(a) - 2.0, 0.6) + 0.02 * gauss(y - 0.0, 0.045) * gauss(a, 0.55) + 0.004 * gauss(a, 0.06) * sstep(0.0, -0.05, y);
+      r += off; return [sa * r, y, ca * r * 1.05 + 0.006]; } });
+  for (const sh of [f.shinL, f.shinR]) { const m = new THREE.Mesh(geo, bronzeMat(o.metal)); m.castShadow = true; m.receiveShadow = true; sh.add(m); }
+}
+function hopCloak(f, o = {}) {
+  const C = f.chest, c = o.color ?? '#962020', NC = { cast: false }, len = o.len ?? 1.3, w = o.w ?? 0.78, boy = o.style === 'tribon';
+  if (f.cape) { f.cape.parent?.remove(f.cape); f.cape = null; }
+  const cp = grp(C, 0, 0.6, -0.215); const me = new THREE.Mesh(new THREE.PlaneGeometry(w, len, 8, 14).translate(0, -len / 2, 0), clothMat(c, { pin: 'top', len, amp: 0.55, speed: 1.3 }));
+  me.castShadow = true; cp.add(me); f.cape = cp;
+  const col = grp(C, 0, 0.6, -0.02); for (let i = 0; i < 9; i++) { const a = (-0.5 + i / 8) * 2.9 + Math.PI, s = grp(col, Math.sin(a) * 0.25, 0.0, Math.cos(a) * 0.17, a);   // folds over the shoulders
+    rbox(s, 0.13, 0.09, 0.05, shade(c, (i % 2 ? -0.03 : 0.02)), 0, -0.035, 0, { rf: 0.4 }); }
+  if (boy) { const sa = grp(C, 0, 0.3, 0.0); sa.rotation.z = 0.75; rbox(sa, 0.16, 0.95, 0.36, c, 0, -0.47, 0, { rf: 0.3 }); }   // rough tribon wrapped over one shoulder
+  else for (const sx of [-1, 1]) cyl(C, 0.028, 0.028, 0.012, '', sx * 0.2, 0.58, 0.16, { mat: bronzeMat(o.metal), rx: Math.PI / 2, seg: 10, ...NC });   // brooches
+  return cp;
+}
+const _skinOf = f => '#' + (f.head.children.find(c => c.isMesh)?.material?.color?.getHexString?.() ?? 'D9A47E');
+function hopliteGear(f, o = {}) {
+  const sd = o.seed ?? 1, V = k => hash(sd * 9.13 + k * 4.71), P = (k, arr) => arr[Math.floor(V(k) * arr.length) % arr.length], NC = { cast: false };
+  const kit = o.kit ?? 'warrior', boy = kit === 'boy', civ = kit === 'citizen' || boy, skin = _skinOf(f);
+  const metal = o.metal ?? P(1, ['bright', 'bright', 'aged', 'dark']), armor = o.armor ?? (civ ? 'none' : P(2, ['muscle', 'muscle', 'linen'])), detail = o.detail;
+  const hairC = f.hair?.children?.[0]?.material?.color ? '#' + f.hair.children[0].material.color.getHexString() : '#3A2A1E';
+  // body: bare arms and legs, short red chiton, sandals (boys go barefoot)
+  for (const part of [f.legL, f.legR, f.shinL, f.shinR, f.armL, f.armR, f.foreL, f.foreR]) for (const c of part.children) if (c.isMesh && !c.userData.hand) c.material = mat(skin, { flat: false });
+  for (const c of f.chest.children) if (c.isMesh) c.material = mat(o.chiton ?? '#A8281E', { flat: false });
+  for (const c of f.hips.children) if (c.isMesh) c.material = mat(o.chiton ?? '#A8281E', { flat: false });
+  for (const ua of [f.armL, f.armR]) rbox(ua, 0.172, 0.12, 0.172, o.chiton ?? '#A8281E', 0, -0.11, 0, { rf: 0.3 });   // short chiton sleeves
+  for (const ft of [f.footL, f.footR]) { for (const c of ft.children) if (c.isMesh) c.material = mat(skin, { flat: false });
+    if (!boy) { box(ft, 0.18, 0.03, 0.3, '#5A3A22', 0, -ANK - 0.05, 0.05, NC); for (const zz of [-0.02, 0.06, 0.13]) box(ft, 0.18, 0.012, 0.022, '#4A2E1C', 0, -ANK + 0.005, zz, NC); box(ft, 0.17, 0.08, 0.02, '#4A2E1C', 0, -ANK - 0.01, -0.09, NC); } }
+  const hk = grp(f.hips, 0, -0.08, 0); cyl(hk, 0.25, 0.27, 0.16, o.chiton ?? '#A8281E', 0, -0.16, 0, { seg: 16, flat: false }).scale.z = 0.7;   // chiton hem
+  if (boy) { if (f.hair) f.hair.visible = true; f.hoplite = { shaved: true }; }
+  // beard without moustache (Spartan law), long hair falling from under the helmet
+  if (!boy && (o.beard ?? V(3) < 0.85)) { rbox(f.head, 0.39, 0.075, 0.1, hairC, 0, -0.03, 0.15, { rf: 0.4 }); for (const sx of [-1, 1]) rbox(f.head, 0.06, 0.17, 0.12, hairC, sx * 0.17, -0.01, 0.1, { rf: 0.4 }); rbox(f.head, 0.24, 0.15, 0.1, hairC, 0, -0.17, 0.165, { rf: 0.45 }); }
+  if (!boy) { const lk = grp(f.head, 0, -0.04, -0.17); for (let i = 0; i < 5; i++) rbox(lk, 0.07, 0.28 + hash(i + sd) * 0.06, 0.06, hairC, -0.14 + i * 0.07, -0.26, -0.02 + Math.abs(i - 2) * 0.012, { rf: 0.45 }); }
+  if (armor !== 'none') { cuirass(f, armor, { metal, detail, border: o.border ?? P(4, ['#8A1E1E', '#8A1E1E', '#1E1A16']) }); pteruges(f, { metal, c1: armor === 'linen' ? '#E6DCC2' : '#D9CCAA', c2: armor === 'linen' ? '#E6DCC2' : '#6A4A30' }); }
+  if (!civ && o.greaves !== false) greaves(f, { metal, detail });
+  if (!civ && o.helmet !== false && f.hair?.children?.[0]) f.hair.children[0].visible = false;   // crown of the hair stays under the helmet, locks and sides show when it is pushed up
+  if (!civ && o.helmet !== false) { f.helm = corinthHelmet(f.head, { crest: o.crest ?? P(5, ['fan', 'fan', 'fan', 'fan', 'none']), crestColor: o.crestColor ?? P(6, ['#9E1B1B', '#9E1B1B', '#9E1B1B', '#1E1A18', '#E4DCC8']), metal, detail });
+    f.helm.userData.up = o.helmetUp ?? kit === 'parade'; helmApply(f, f.helm.userData.up ? 1 : 0); }
+  if (o.cloak !== false && (boy || kit !== 'warrior' || o.cloak || V(7) < 0.7)) hopCloak(f, { color: typeof o.cloak === 'string' ? o.cloak : boy ? '#7A3A2A' : '#962020', style: boy ? 'tribon' : 'back', len: boy ? 0.95 : 1.3, metal });
+  f.hoplite = { kit, armor, metal }; return f;
+}
+function hoplite(o = {}) { return warrior('spartan', o); }
 
 /* ====================================================================== */
 /* ANIMALS (v2.14) — beast(): 34 detailed quadrupeds with real gaits (walk · trot · pace · gallop · hop, chosen by speed),

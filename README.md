@@ -14,6 +14,11 @@ Push an assembled page to `renders/<slug>.html` (output of `assemble.py`, voice 
 `https://github.com/Leon1304/what-if-engine/releases/download/render-<slug>/<slug>.mp4`
 Manual run: Actions → render → Run workflow (page path, width 1440 / 2160 / 1080).
 
+## Engine v2.28 (Nov 2026): hoplite kit (Sparta, Thermopylae)
+- `corinthHelmet()`: one carved bronze shell (new `carveGeo()`: thick surface with smooth marching-squares openings) — T-shaped face opening with almond eyes and nasal guard, brow ridges, rolled rims, flared nape; horsehair crest `fan` / `transverse` with strands and a swinging tail. `helmetUp(rig, keys)` pushes it up onto the head and back down.
+- `weapon(rig, 'dory')` (leaf blade, socket, grip, sauroter), `weapon(rig, 'xiphos')`, shield style `aspis` rebuilt: bronze-faced bowl with offset rim, painted device (scorpion, snake, club, bull, eyes, trident, gorgon, star, lambda) and rim band, wooden back with porpax and antilabe.
+- `hopliteGear(rig, o)`: bronze muscle cuirass or linothorax, pteruges, chiton, greaves with knee caps, crimson cloak with brooches, sandals, beard without moustache, long hair; kits warrior / parade / boy / citizen. `warrior('spartan')`, `squad('spartan')` and `hoplite()` use it.
+
 ## Engine v2.24 (Nov 2026): thumbnails with a wow effect
 - `THUMB.focus` + `dof` (sharp subject, melted background), `rays` (light burst with a clear hole for the subject), `glow`, `q` (big question mark), `hide` (blurred payoff box).
 
