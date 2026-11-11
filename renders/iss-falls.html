@@ -334,7 +334,7 @@ const AUDIO = {
   score: [[0, 'none'], [9.1, 'science'], [15.2, 'tense'], [21.6, 'science'], [30.0, 'none']], music: 0.42, sfx: 0.95,
   sections: [[0, 0], [9.1, 1], [15.2, 2], [21.6, 1], [30.0, 0]],
   amb: [[0, 9.1, 'city', 0.8], [0, 9.1, 'people', 0.6], [9.1, 15.2, 'space', 1], [15.2, 21.6, 'wind', 1], [21.6, 30.0, 'space', 1], [30.0, 40.8, 'city', 0.8], [30.0, 40.8, 'people', 0.5]],
-  hits: [{ t: 0.02, k: 'thunder', v: 0.6 }, { t: 15.0, k: 'riser', dur: 1.4 }, { t: 31.2, k: 'coin', v: 0.6 }]
+  hits: [{ t: 0.02, k: 'thunder', v: 0.6 }, { t: 3.5, k: 'crack', v: 0.5 }, { t: 15.0, k: 'riser', dur: 1.4 }, { t: 31.2, k: 'coin', v: 0.6 }]
 };
 const THUMB = [
   { t: 18.2, text: 'The ISS is *falling*', cam: { p: [-3950, 222, 45], l: [-3990, 214, 3], fov: 50 }, glow: true },
@@ -1600,7 +1600,7 @@ function anim(r, list, o = {}) {   // model rig: [[t, clip, { once, speed }], �
 // --- interactions: people and objects — everything a pure function of t (frame-exact export) ---
 // carry/throw/drop, toss + bounce, push, knock, shatter, wobble · doors, gates, windows, sit, enter/exit vehicles · flashlight, headlights, phone, lightning · footprints, drive() with tyre tracks and brake dust, splash
 const LATE = [], late = f => (LATE.push(f), f), POSTCAM = [];   // POSTCAM: hooks after the camera moved (level of detail)   // runs after all ticks and crowds (hands are posed) — attachments, seats
-const sfx = (t, k, v = 1) => { (AUDIO.hits ??= []).push({ t: VT(t), k, v }); };
+const sfx = (t, k, v = 1) => { const tv = VT(t); if (!(tv >= 0)) return; (AUDIO.hits ??= []).push({ t: tv, k, v }); };   // v2.33.2: sounds before t = 0 (pre-roll in the hook) are dropped
 const _ia = new THREE.Vector3(), _ib = new THREE.Vector3(), _iq = new THREE.Quaternion(), _ie = new THREE.Euler();
 const handAt = (f, side, out) => { const fa = side === 'L' ? f.foreL : f.foreR; fa.updateWorldMatrix(true, false); return out.set(0, -0.36, 0.05).applyMatrix4(fa.matrixWorld); };
 const rigPos = (f, t, out = new THREE.Vector3()) => f._posAt ? out.copy(f._posAt(t)) : out.copy((f.root ?? f).position);

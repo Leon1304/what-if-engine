@@ -1661,7 +1661,7 @@ function anim(r, list, o = {}) {   // model rig: [[t, clip, { once, speed }], �
 // --- interactions: people and objects — everything a pure function of t (frame-exact export) ---
 // carry/throw/drop, toss + bounce, push, knock, shatter, wobble · doors, gates, windows, sit, enter/exit vehicles · flashlight, headlights, phone, lightning · footprints, drive() with tyre tracks and brake dust, splash
 const LATE = [], late = f => (LATE.push(f), f), POSTCAM = [];   // POSTCAM: hooks after the camera moved (level of detail)   // runs after all ticks and crowds (hands are posed) — attachments, seats
-const sfx = (t, k, v = 1) => { (AUDIO.hits ??= []).push({ t: VT(t), k, v }); };
+const sfx = (t, k, v = 1) => { const tv = VT(t); if (!(tv >= 0)) return; (AUDIO.hits ??= []).push({ t: tv, k, v }); };   // v2.33.2: sounds before t = 0 (pre-roll in the hook) are dropped
 const _ia = new THREE.Vector3(), _ib = new THREE.Vector3(), _iq = new THREE.Quaternion(), _ie = new THREE.Euler();
 const handAt = (f, side, out) => { const fa = side === 'L' ? f.foreL : f.foreR; fa.updateWorldMatrix(true, false); return out.set(0, -0.36, 0.05).applyMatrix4(fa.matrixWorld); };
 const rigPos = (f, t, out = new THREE.Vector3()) => f._posAt ? out.copy(f._posAt(t)) : out.copy((f.root ?? f).position);
