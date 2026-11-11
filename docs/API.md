@@ -537,3 +537,16 @@ Schildzeichen (`device`): scorpion · snake · club (Herakles-Keule, passt zu Le
 Animation: `helmetUp(rig, [[t, 1], [t2, 0]])` schiebt den Helm weich hoch (Gesicht frei, Haare an den Seiten sichtbar) oder zieht ihn herunter, mit leisem Klirren. Der Helmbusch-Schweif und der Umhang schwingen im Wind und beim Laufen.
 Test/Vorschau: `tests/hoplites.*` (Aufstellung, Helme auf Ständern, alle Schildzeichen, Waffenständer, Nahaufnahmen, Phalanx aus 24 Mann).
 
+
+# Neu in v2.32 (Meer: Unterwasser-Explosion, Kuppel, Querschnitt)
+
+## Explosion in der Tiefsee
+- `uwBlast(p, x, y, z, { t, r: 8, pulses: 3, period: 3.2, decay: 0.55, color, light: 1, rings: true, bubbles: true, sound: true, fx: true })`: Explosion tief unter Wasser (Atombombe im Marianengraben, Wasserbombe): Blitz und glühender Kern, dann eine Dampfblase mit silbrigem Rand, die auf `r` wächst, vom Wasserdruck zerdrückt wird und zurückfedert (`pulses`, jedes Mal kleiner und kürzer); jeder Kollaps schickt einen Druckring und Blasen, am Ende steigt eine Blasenwolke auf. Liefert `{ g, radius(t), at, collapses }`; `radius(ST(t))` für Zähler, `at` als Anker für `callout`. In `SKY: 'deepsea'` (Sichtweite ca. 34 m) mit `r` 4–5 und Kamera 17–22 m, `fov: 60`.
+- `bombCase(p, x, y, z, { size, color, stripe, ry, glow })`: Cartoon-Bombenhülle (Zylinder, Nase, Leitwerk, gelbe Warnstreifen, keine Kennzeichen), liegt entlang +z.
+
+## Kuppel an der Oberfläche
+- `seaDome(x, z, t, { r: 60, h: 4, rise, hold, fall, color, spray, steam, hot: [t0, t1], sound })`: Das Meer wölbt sich zu einer flachen, schäumenden Kuppel und sinkt zurück (kein Tsunami), mit Gischt, etwas Dampf und einem Schaumring; `hot` färbt den Fleck rot-orange (warmes, radioaktives Wasser, Wärmebild-Look). `D.heightAt(x, z, t)` auf Boote addieren, die dort schwimmen: `tick(t => { S.g.position.y += D.heightAt(0, 0, t); })` nach `bob`.
+
+## Ozean im Querschnitt
+- `oceanSection(p, x, z, { w: 44, h: 36, d: 6, y, bed: 0.3, trench: { w, floor }, water: [oben, unten], rock, opacity, labels: { t, every, dur, u, zones: [[v, 'Name'], …] } })`: Museums-Querschnitt bis zum Tiefseegraben: dunkler Fels mit V-förmigem Graben, durchsichtige Wassersäule, die mit der Tiefe dunkler wird, weiße Oberflächenlinie. `O.at(u, v)` = Anker auf der Vorderseite (u −1 … 1 quer, v 0 Oberfläche … 1 Grabengrund), `O.top`, `O.floorY`. Dazu `RULER` mit `fmt: 'depth'`, `invert: true` und ein Mini-Schiff `ship(…, { len: 2.6 })` auf `O.top`.
+- Test: `tests/ocean-blast.story.js`.

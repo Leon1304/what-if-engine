@@ -3232,6 +3232,115 @@ function strata(p, x, z, o = {}) {
   return { g, top, layerY: i => ys[i], at };
 }
 
+// --- v2.32 ocean blasts: deep underwater explosion, surface dome, ocean cross-section, cartoon bomb casing --------------------------------------------
+// uwBlast(p, x, y, z, { t, r: 8, pulses: 3, period: 3.2, decay: 0.55, color, light: 1, rings: true, bubbles: true, sound: true, fx: true })
+//   deep underwater explosion as in the deep-ocean nuke explainers: white-yellow flash and glowing core, then a vapour bubble that grows to r,
+//   is crushed by the water pressure and rebounds (`pulses` times, each smaller and shorter); every collapse sends a pressure ring and a burst
+//   of bubbles. After the last pulse the bubble breaks into a rising bubble cloud. Pure function of t (scene time).
+//   → { g, radius(t), at: () => [x, y, z], t, collapses: [t…] }
+function uwBlast(p, x, y, z, o = {}) {
+  const t0 = o.t ?? 0, R = o.r ?? 8, n = Math.max(1, o.pulses ?? 3), P = o.period ?? 3.2, dk = o.decay ?? 0.55, col = o.color ?? '#FFE08A', NC = { cast: false };
+  const g = dyn(grp(p ?? world, x, y, z)), puls = []; let tt = t0;
+  for (let k = 0; k < n; k++) { const Rk = R * dk ** k, Pk = P * Rk / R; puls.push([tt, Pk, Rk]); tt += Pk; }
+  const tEnd = tt, radius = t => { if (t < t0 || t >= tEnd + 0.6) return 0; for (const [a, d, Rk] of puls) if (t < a + d) { const u = (t - a) / d; return Math.max(R * 0.05, Rk * Math.sin(Math.PI * u) ** 0.55); } return R * 0.05 * (1 - span(t, tEnd, 0.6)); };
+  const bm = mat('#BFE9FF', { own: true, rough: 0.06, metal: 0.45, opacity: 0.16, em: col, ei: 0.3 }); bm.depthWrite = false;
+  const shell = ball(g, 1, '', 0, 0, 0, { detail: 3, mat: bm, ...NC }); shell.renderOrder = 3;
+  const rimU = { c: { value: new THREE.Color('#D8F4FF') }, k: { value: 1 } }, rimM = new THREE.ShaderMaterial({ uniforms: rimU, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,   // bright silvery rim (fresnel), reads in murky deep water
+    vertexShader: 'varying vec3 vN; varying vec3 vV; void main(){ vec4 mv = modelViewMatrix * vec4(position, 1.0); vN = normalize(normalMatrix * normal); vV = normalize(-mv.xyz); gl_Position = projectionMatrix * mv; }',
+    fragmentShader: 'uniform vec3 c; uniform float k; varying vec3 vN; varying vec3 vV; void main(){ float f = pow(1.0 - abs(dot(normalize(vN), normalize(vV))), 2.2); gl_FragColor = vec4(c * f * k, f * k); }' });
+  const rim = mesh(g, G('uwRim', () => new THREE.IcosahedronGeometry(1, 4)), rimM, 0, 0, 0, NC); rim.renderOrder = 5;
+  const im = mat('#FFFFFF', { own: true, basic: true, opacity: 0.6 }); im.depthWrite = false; im.blending = THREE.AdditiveBlending;
+  const inner = ball(g, 1, '', 0, 0, 0, { detail: 2, mat: im, ...NC }); inner.renderOrder = 4;
+  const cm = mat(col, { own: true, basic: true }), core = ball(g, 1, '', 0, 0, 0, { detail: 2, mat: cm, ...NC });
+  const ringT = [t0, ...puls.slice(1).map(q => q[0])], rings = o.rings === false ? [] : ringT.map((tr, i) => { const m = mat('#E8FBFF', { own: true, basic: true, opacity: 0.4 }); m.depthWrite = false; m.side = THREE.DoubleSide; const s = ball(g, 1, '', 0, 0, 0, { detail: 2, mat: m, ...NC }); s.renderOrder = 2; return [s, m, tr, i]; });
+  tick(t => {
+    const r = radius(t), hot = Math.exp(-Math.max(0, t - t0) * 1.6), wob = 1 + 0.04 * Math.sin(t * 23 + x) * (r > 0 ? 1 : 0);
+    shell.visible = r > 0.001; inner.visible = shell.visible; rim.visible = shell.visible; shell.scale.set(r * wob, r / wob, r * (2 - wob)); rim.scale.copy(shell.scale).multiplyScalar(1.01);
+    rimU.k.value = 0.9 + 0.8 * hot; rimU.c.value.set('#D8F4FF').lerp(new THREE.Color(col), hot * 0.7);
+    inner.scale.setScalar(Math.max(0.001, r * 0.86)); im.opacity = 0.05 + 0.5 * hot; im.color.set(col).lerp(new THREE.Color('#FFFFFF'), hot * 0.6);
+    bm.emissiveIntensity = 0.15 + 1.2 * hot; bm.opacity = 0.12 + 0.18 * hot;
+    const ck = t < t0 ? 0 : 1 - span(t, t0 + 0.05, 0.5); core.visible = ck > 0.01; core.scale.setScalar(Math.max(0.001, R * (0.12 + 0.5 * span(t, t0, 0.08)) * ck));
+    for (const [s, m, tr, i] of rings) { const u = t - tr, L = 1.4; s.visible = u > 0 && u < L; if (s.visible) { s.scale.setScalar(R * (i ? 0.3 : 0.6) + u * R * (i ? 2.2 : 3.2)); m.opacity = (i ? 0.22 : 0.35) * (1 - u / L) ** 1.5; } }
+  });
+  if (o.light !== false) glow(x, y, z, { t0, t1: t0 + 1.4, intensity: 260 * (o.light ?? 1) * Math.max(1, R / 6), dist: R * 7, rampIn: 0.03, color: '#FFE6A8', flicker: 0.25 });
+  if (o.bubbles !== false) {
+    puls.slice(1).forEach(([a, , Rk]) => emit('bubble', { at: [x, y, z], t0: a, burst: 50, size: Math.max(0.07, Rk * 0.05), speed: Rk * 0.8, spread: 1.5, jitter: Rk * 0.5, life: 3, g: Math.max(0.4, Rk * 0.25) }));
+    emit('bubble', { at: [x, y, z], t0: tEnd, t1: tEnd + 5, rate: 40, size: Math.max(0.08, R * 0.04), speed: R * 0.4, spread: 0.5, jitter: R * 0.35, life: 4, g: Math.max(0.5, R * 0.3) });
+  }
+  if (o.sound !== false) { sfx(t0, 'explosion', 0.9); sfx(t0 + 0.02, 'boom', 1); puls.slice(1).forEach(([a], i) => sfx(a, 'boom', 0.55 * dk ** i)); }
+  if (o.fx !== false) { const tv = VT(t0); SHAKES.push({ t: tv, amp: 0.45, dur: 1.1 }); FLASHES.push({ t: tv, dur: 0.4, a: 0.75, color: '#FFF4C8' }); }
+  return { g, radius, t: t0, collapses: puls.slice(1).map(q => q[0]), at: () => [x, y, z] };
+}
+// seaDome(x, z, t, { r: 60, h: 4, rise: 1.4, hold: 0.8, fall: 3, color, spray: true, steam: true, hot: [t0, t1] | false, sound: true })
+//   what a deep blast does at the surface: the sea bulges into a low dome that churns white and bubbles, then sinks back (no tsunami);
+//   spray and steam above it, a foam ring that runs outwards; `hot` tints the patch orange-red (warm, radioactive water, thermal-camera look).
+//   → { heightAt(x, z, t) } — add it to boats floating there (bob) so they ride the dome
+function seaDome(x, z, t0, o = {}) {
+  const r = o.r ?? 60, H = o.h ?? 4, ri = o.rise ?? 1.4, hd = o.hold ?? 0.8, fa = o.fall ?? 3, seg = 44, NC = { cast: false };
+  const amp = t => t < t0 ? 0 : t < t0 + ri ? H * EASE.out(span(t, t0, ri)) : t < t0 + ri + hd ? H : H * (1 - EASE.inOut(span(t, t0 + ri + hd, fa)));
+  const prof = d => d >= 1 ? 0 : (1 - d * d) ** 2;
+  const heightAt = (px, pz, t) => amp(t) * prof(Math.hypot(px - x, pz - z) / r);
+  const geo = new THREE.PlaneGeometry(2.2 * r, 2.2 * r, seg, seg); geo.rotateX(-Math.PI / 2);
+  const pos = geo.attributes.position, base = Float32Array.from(pos.array), N = pos.count, cols = new Float32Array(N * 3); geo.setAttribute('color', new THREE.BufferAttribute(cols, 3));
+  const m = mat('#FFFFFF', { own: true, rough: 0.25, metal: 0.05, opacity: 0.94 }); m.vertexColors = true; m.flatShading = true;
+  const me = dyn(mesh(world, geo, m, x, 0, z, NC)), deep = new THREE.Color(o.color ?? '#2F6FA8'), foam = new THREE.Color('#F4FBFF'), hotC = new THREE.Color('#FF6A3A'), c = new THREE.Color();
+  const hk = t => o.hot ? span(t, o.hot[0], 1.2) * (1 - span(t, o.hot[1] ?? 1e9, 1.2)) : 0;
+  tick(t => { const a = amp(t), k = hk(t); me.visible = a > 0.02 || k > 0.01;
+    if (!me.visible) return;
+    for (let i = 0; i < N; i++) { const bx = base[i * 3], bz = base[i * 3 + 2], d = Math.hypot(bx, bz) / r, px = bx + x, pz = bz + z, w = waterH(px, pz, t), pr = prof(d);
+      const churn = pr > 0 ? 0.25 * a / Math.max(1, H) * Math.sin(bx * 0.9 + t * 7) * Math.cos(bz * 0.8 - t * 6) * pr : 0;
+      pos.setY(i, d >= 1 ? w - 0.6 : w + 0.05 + a * pr + churn);
+      const wh = clamp(pr * 0.55 * (a / Math.max(0.01, H)) + 0.18 * (0.5 + 0.5 * Math.sin(bx * 1.7 + bz * 1.3 + t * 9)) * pr);
+      c.copy(deep).lerp(foam, wh); if (k > 0) c.lerp(hotC, k * clamp(1.15 - d) * 0.75); cols[i * 3] = c.r; cols[i * 3 + 1] = c.g; cols[i * 3 + 2] = c.b; }
+    pos.needsUpdate = true; geo.attributes.color.needsUpdate = true; geo.computeVertexNormals(); });
+  const rm = mat('#F4FBFF', { own: true, basic: true, opacity: 0.6 }), ring = dyn(mesh(world, G('domeRing', () => new THREE.RingGeometry(0.9, 1, 48).rotateX(-Math.PI / 2)), rm, x, 0.3, z, NC));
+  tick(t => { const u = t - t0 - ri * 0.6, L = 4; ring.visible = u > 0 && u < L; if (ring.visible) { ring.scale.setScalar(r * (0.8 + u * 0.55)); ring.position.y = waterH(x, z, t) + 0.15; rm.opacity = 0.6 * (1 - u / L); } });
+  if (o.spray !== false) { emit('debris', { at: [x, H * 0.9, z], t0: t0 + ri * 0.7, t1: t0 + ri + hd + 1.2, rate: 90, colors: ['#F4FBFF', '#D8EEF8'], size: Math.max(0.2, r * 0.012), speed: 3 + H * 0.8, spread: 0.9, jitter: r * 0.45, basic: true, life: 1.6 });
+    emit('bubble', { at: [x, 0.2, z], t0: t0 + ri, t1: t0 + ri + hd + fa + 6, rate: 70, size: Math.max(0.25, r * 0.01), speed: 0.6, spread: 1.2, jitter: r * 0.55, life: 1.4, g: 0.5 }); }
+  if (o.steam !== false) emit('smoke', { at: [x, H * 0.6, z], t0: t0 + ri, t1: t0 + ri + hd + fa, rate: 4, colors: ['#F4F8FA', '#DCE6EA'], size: Math.max(1.5, r * 0.05), jitter: r * 0.3, speed: 1.0, life: 4, opacity: 0.55 });
+  if (o.sound !== false) { sfx(t0, 'thunder', 0.35); sfx(t0 + ri * 0.7, 'splash', 0.8); }
+  return { heightAt, amp };
+}
+// oceanSection(p, x, z, { w: 44, h: 36, d: 6, bed: 0.3, trench: { w: 0.32, floor: 0.04 }, y, ry, water: ['#4FB6E0', '#06182C'], rock: '#3A3430', labels })
+//   museum-style cut-away of the ocean down to a deep trench: dark rock seabed with a V-shaped trench in the middle, a translucent water column that
+//   darkens with depth, a white surface line on top. Front = +z. Pair it with RULER for the depth and put a small ship(…, { len: 3 }) on top.
+//   labels: { t, every, dur, side, zones: [[v, 'Sunlight zone'], …] } (v = depth fraction 0 = surface … 1 = trench floor)
+//   → { g, top, floorY, at(u, v) } — at() = anchor t => [x,y,z] on the front face: u = −1 … 1 across, v = 0 surface … 1 trench floor
+function oceanSection(p, x, z, o = {}) {
+  const w = o.w ?? 44, h = o.h ?? 36, d = o.d ?? 6, bedY = h * (o.bed ?? 0.3), T = o.trench ?? {}, tw = w * (T.w ?? 0.32) / 2, fy = h * (T.floor ?? 0.04);
+  const g = stat(grp(p ?? world, x, o.y ?? 0, z, o.ry ?? 0));
+  const s = new THREE.Shape(), pts = [[-w / 2, 0], [-w / 2, bedY], [-tw * 1.6, bedY * 0.98], [-tw, bedY * 0.82], [-tw * 0.45, fy * 2.2], [-tw * 0.12, fy], [tw * 0.15, fy], [tw * 0.5, fy * 2.6], [tw, bedY * 0.86], [tw * 1.7, bedY], [w / 2, bedY * 1.02], [w / 2, 0]];
+  pts.forEach(([a, b], i) => i ? s.lineTo(a, b) : s.moveTo(a, b)); s.closePath();
+  const rg = new THREE.ExtrudeGeometry(s, { depth: d, bevelEnabled: false, curveSegments: 1 }).toNonIndexed(); rg.translate(0, 0, -d / 2);
+  const rp = rg.attributes.position, rc = [], rb = new THREE.Color(o.rock ?? '#3A3430'), cc = new THREE.Color();
+  for (let v = 0; v < rp.count; v += 3) { const n = hash(Math.floor(rp.getX(v) * 1.3) * 7.1 + Math.floor(rp.getY(v) * 1.1) * 3.7) - 0.5; cc.copy(rb).offsetHSL(0, 0, n * 0.08); for (let q = 0; q < 3; q++) rc.push(cc.r, cc.g, cc.b); }
+  rg.setAttribute('color', new THREE.Float32BufferAttribute(rc, 3));
+  const rm = new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.95, emissive: o.rock ?? '#3A3430', emissiveIntensity: 0.35 });
+  const rme = new THREE.Mesh(rg, rm); rme.castShadow = true; rme.receiveShadow = true; rme.userData.dofSolid = true; g.add(rme);
+  const [wt, wb] = o.water ?? ['#4FB6E0', '#06182C'], wg = new THREE.BoxGeometry(w * 0.998, h - fy, d * 0.97, 1, 12, 1); wg.translate(0, fy + (h - fy) / 2, 0);
+  const wp = wg.attributes.position, wc = [], ct = new THREE.Color(wt), cbt = new THREE.Color(wb);
+  for (let i = 0; i < wp.count; i++) { const k = clamp((h - wp.getY(i)) / (h - fy)); cc.copy(ct).lerp(cbt, k ** 0.7); wc.push(cc.r, cc.g, cc.b); }
+  wg.setAttribute('color', new THREE.Float32BufferAttribute(wc, 3));
+  const wm = new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, opacity: o.opacity ?? 0.62, depthWrite: false }), wme = new THREE.Mesh(wg, wm); wme.renderOrder = 2; g.add(wme);
+  box(g, w, 0.12, d * 0.99, '#EAF8FF', 0, h - 0.06, 0, { cast: false, mat: mat('#EAF8FF', { basic: true }) });
+  box(g, w + 0.6, 0.5, d + 0.6, '#2A2622', 0, -0.5, 0);
+  const at = (u, v) => { const yy = h - clamp(v) * (h - fy), vv = new THREE.Vector3(u * w / 2, yy, d / 2 + 0.02); return () => g.localToWorld(vv.clone()).toArray(); };
+  if (o.labels) { const lb = o.labels, zs = lb.zones ?? [[0.03, 'Sunlight zone'], [0.12, 'Twilight zone'], [0.3, 'Midnight zone'], [0.55, 'The abyss'], [0.85, 'The trench']];
+    zs.forEach(([v, name], i) => callout(at(lb.u ?? -0.55, v), lb.t ?? 0, { delay: i * (lb.every ?? 0.45), dur: lb.dur ?? 3, text: name, side: lb.side ?? 'left' })); }
+  return { g, top: h + (o.y ?? 0), floorY: fy + (o.y ?? 0), at };
+}
+// bombCase(p, x, y, z, { size: 1, color: '#5E6A70', stripe: '#F2C230', ry, glow: false }) — cartoon bomb casing (fat cylinder, nose cone, tail fins,
+//   yellow warning stripes, no markings) lying on its side along +z; generic for explainers about big bombs and depth charges. → group (vanish() it at the blast)
+function bombCase(p, x, y, z, o = {}) {
+  const s = o.size ?? 1, c = o.color ?? '#5E6A70', st = o.stripe ?? '#F2C230', g = dyn(grp(p ?? world, x, y, z, o.ry ?? 0)), b = grp(g, 0, 0.75 * s, 0); b.rotation.x = Math.PI / 2;
+  cyl(b, 0.75 * s, 0.75 * s, 3 * s, c, 0, -1.5 * s, 0, { seg: 16 }); ball(b, 0.75 * s, c, 0, 1.5 * s, 0, { detail: 2 }).scale.set(1, 1.1, 1);
+  cone(b, 0.75 * s, 1.1 * s, shade(c, -0.15), 0, -1.5 * s, 0, { rx: Math.PI, seg: 16 });
+  for (const yy of [0.6, -0.9]) cyl(b, 0.77 * s, 0.77 * s, 0.22 * s, st, 0, yy * s, 0, { seg: 16, cast: false });
+  for (let i = 0; i < 4; i++) { const f = grp(b, 0, -2.4 * s, 0); f.rotation.y = i * Math.PI / 2; box(f, 0.06 * s, 0.9 * s, 1.0 * s, shade(c, -0.1), 0, 0, 0.75 * s); }
+  if (o.glow) glow(x, y + 1.2 * s, z, { intensity: 6, dist: 6 * s, color: '#9FE8FF', flicker: 0.1 });
+  return g;
+}
+
 // --- v2.21 landmines and warnings -------------------------------------------------------------------------------------------------------------------
 // boundingMine(p, x, z, { scale: 1, t, launch, h: 1, burst: true, size: 0.7, rust, buried: true, xray: [t0, t1], ry })
 //   bounding ("jumping") anti-personnel mine as in history explainers: steel canister in a launch tube, only the three prongs show above the ground.

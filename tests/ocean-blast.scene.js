@@ -1,0 +1,11 @@
+ground({ color: '#6A6458', flat: 6000, hills: 0, coast: -2000, depth: 60, dirt: false });
+water({ level: 0, waves: 0.4, size: 500 });
+const C = [-3000, groundH(-3000, 0)];
+bombCase(world, C[0], C[1], 0, { size: 0.8, ry: 0.6 });
+uwBlast(world, C[0], C[1] + 3, 0, { t: 0.4, r: 7, pulses: 3, period: 2.2 });
+const S = ship('fishing', 0, 0, { paint: { top: '#F2F2F2', bot: '#2E4A6E' } }); bob(S.g, { size: S.len * 0.5 });
+const D = seaDome(0, -10, 3.3, { r: 50, h: 3, hot: [5, 20] });
+tick(t => { S.g.position.y += D.heightAt(0, 0, t); });
+const O = oceanSection(world, 3000, 0, { y: groundH(3000, 0), labels: { t: 6.2, every: 0.3, dur: 2.5 } });
+ship(world, 'fishing', 3000, 0.5, { len: 2.4 }).g.position.y = O.top;
+uwBlast(world, 3000, O.floorY + 1, 0, { t: 7, r: 1.6, pulses: 2, period: 1.2, light: 0.2, fx: false });
