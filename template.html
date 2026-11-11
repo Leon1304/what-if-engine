@@ -6294,7 +6294,67 @@ function _marks(p, E, list, c, o = {}) {   // blobs lying on an ellipsoid E [cx,
     const m = ball(p, 0.5, c, cx + x, cy + y, cz + z, { detail: 1, cast: false, ...o }); M.makeBasis(X, Y, Z); m.quaternion.setFromRotationMatrix(M); m.rotateZ(tl); m.scale.set(w, h, th);
   }
 }
-const _fuseDyn = root => { const L = []; root.traverse(o => { if (o.isGroup && (o.userData.dyn || o === root)) L.push(o); }); L.forEach(g => fuse(g)); };
+// --- v2.40 animal skin: lofted low-poly surfaces with one colour per face — markings are painted on (no z-fighting), shapes follow real profiles ---
+const _n2 = (x, y) => { const xi = Math.floor(x), yi = Math.floor(y), fx = x - xi, fy = y - yi, u = fx * fx * (3 - 2 * fx), v = fy * fy * (3 - 2 * fy), h = (a, b) => hash(a * 12.7 + b * 78.3 + 0.37); return lerp(lerp(h(xi, yi), h(xi + 1, yi), u), lerp(h(xi, yi + 1), h(xi + 1, yi + 1), u), v); };
+function _prof(P, u) {   // smooth curve through stations [[u, v1, v2, …], …] (cubic Hermite) → [u, v1, v2, …]
+  const n = P.length; if (u <= P[0][0]) return P[0]; if (u >= P[n - 1][0]) return P[n - 1]; let i = 1; while (P[i][0] < u) i++;
+  const a = P[i - 1], b = P[i], h = b[0] - a[0], t = (u - a[0]) / h, p0 = P[Math.max(0, i - 2)], p3 = P[Math.min(n - 1, i + 1)], out = [u], t2 = t * t, t3 = t2 * t;
+  for (let j = 1; j < a.length; j++) { const m0 = i > 1 ? (b[j] - p0[j]) / (b[0] - p0[0]) : (b[j] - a[j]) / h, m1 = i < n - 1 ? (p3[j] - a[j]) / (p3[0] - a[0]) : (b[j] - a[j]) / h;
+    out.push((2 * t3 - 3 * t2 + 1) * a[j] + (t3 - 2 * t2 + t) * h * m0 + (-2 * t3 + 3 * t2) * b[j] + (t3 - t2) * h * m1); }
+  return out;
+}
+const _skinM = (rough = 0.88) => { const mk = `true|${rough}|0|0`; let m = _fuseM.get(mk); if (!m) { m = new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: rough, metalness: 0, side: THREE.FrontSide }); _fuseM.set(mk, m); } return m; };
+const _skinRGB = new Map(), _skinC = new THREE.Color(), _rgb = hex => { let q = _skinRGB.get(hex); if (!q) { _skinC.set(hex); q = [_skinC.r, _skinC.g, _skinC.b]; _skinRGB.set(hex, q); } return q; };
+function _skinMesh(p, pos, col, o = {}) { const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3)); g.computeVertexNormals();
+  const m = new THREE.Mesh(g, _skinM(o.rough)); m.userData.skin = true; m.castShadow = o.cast ?? true; m.receiveShadow = true; p.add(m); return m; }
+// _loft(parent, rings, { n, ax, col, cap0, cap1 }): skin through rings [{ c: [x, y, z], r: [side, up, down], e (2 = ellipse, > 2 boxier), sk (slant) }].
+// Rings stand in x–y planes and follow z (ax: 'y' → in x–z planes, following y; then "up" = +z). Angle a: 0 = up, π/2 = +x, π = down. e2 = e of the lower half (flat underside).
+// col(i, k, a, s) → hex or [outer, inner, inset 0…1] (a cell with a smaller patch inside: spots, giraffe net); i = ring segment, k = cell around, a = 0 … π from the top, s = side (±1)
+function _loft(p, R, o = {}) {
+  const n = o.n ?? 12, yAx = o.ax === 'y', pos = [], col = [], a0 = o.a0 ?? 0;
+  const pt = (g, k) => { const a = (k % n) / n * TAU + a0, s = Math.sin(a), c = Math.cos(a), e = c >= -1e-9 ? g.e ?? 2 : g.e2 ?? g.e ?? 2, q = e === 2 ? 1 : Math.pow(Math.pow(Math.abs(s), e) + Math.pow(Math.abs(c), e), -1 / e), dx = s * g.r[0] * q, dv = c * (c >= 0 ? g.r[1] : g.r[2] ?? g.r[1]) * q, sk = (g.sk ?? 0) * dv;
+    return yAx ? [g.c[0] + dx, g.c[1] + sk, g.c[2] + dv] : [g.c[0] + dx, g.c[1] + dv, g.c[2] + sk]; };
+  const P = R.map(g => { const q = []; for (let k = 0; k < n; k++) q.push(pt(g, k)); return q; });
+  // winding: outward — test one cell in the middle against the direction away from the ring centre
+  const im = Math.max(0, Math.min(R.length - 2, (R.length - 1) >> 1)), A0 = P[im][1], B0 = P[im + 1][1], D0 = P[im][2], ux = B0[0] - A0[0], uy = B0[1] - A0[1], uz = B0[2] - A0[2], vx = D0[0] - A0[0], vy = D0[1] - A0[1], vz = D0[2] - A0[2];
+  const nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx, flip = nx * (A0[0] - R[im].c[0]) + ny * (A0[1] - R[im].c[1]) + nz * (A0[2] - R[im].c[2]) < 0;
+  const tri = (A, B, C, q) => { if (flip) pos.push(A[0], A[1], A[2], C[0], C[1], C[2], B[0], B[1], B[2]); else pos.push(A[0], A[1], A[2], B[0], B[1], B[2], C[0], C[1], C[2]); col.push(q[0], q[1], q[2], q[0], q[1], q[2], q[0], q[1], q[2]); };
+  const quad = (A, B, C, D, q) => { tri(A, B, C, q); tri(A, C, D, q); }, mix = (G, A, s) => [G[0] + (A[0] - G[0]) * s, G[1] + (A[1] - G[1]) * s, G[2] + (A[2] - G[2]) * s], mid = (A, B) => [(A[0] + B[0]) / 2, (A[1] + B[1]) / 2, (A[2] + B[2]) / 2];
+  const ang = k => { let am = ((k + 0.5) / n * TAU + a0) % TAU; const sd = am > Math.PI ? -1 : 1; if (am > Math.PI) am = TAU - am; return [am, sd]; }, cf = o.col ?? (() => o.c ?? '#888888');
+  for (let i = 0; i < R.length - 1; i++) for (let k = 0; k < n; k++) { const A = P[i][k], B = P[i + 1][k], C = P[i + 1][(k + 1) % n], D = P[i][(k + 1) % n], [am, sd] = ang(k);
+    if (o.split) { const c1 = cf(i, k, am, sd, 1), c2 = cf(i, k, am, sd, -1); tri(A, B, C, _rgb(typeof c1 === 'string' ? c1 : c1[0])); tri(A, C, D, _rgb(typeof c2 === 'string' ? c2 : c2[0])); continue; }
+    const c = cf(i, k, am, sd, 0);
+    if (typeof c === 'string') quad(A, B, C, D, _rgb(c));
+    else { const G = [(A[0] + B[0] + C[0] + D[0]) / 4, (A[1] + B[1] + C[1] + D[1]) / 4, (A[2] + B[2] + C[2] + D[2]) / 4], s = c[2] ?? 0.6, qo = _rgb(c[0]), qi = _rgb(c[1]);
+      if (c[3] === 'd') { const M1 = mix(G, mid(A, B), s), M2 = mix(G, mid(B, C), s), M3 = mix(G, mid(C, D), s), M4 = mix(G, mid(D, A), s);   // diamond (rosettes, dots)
+        quad(M1, M2, M3, M4, qi); tri(A, B, M1, qo); tri(B, M2, M1, qo); tri(B, C, M2, qo); tri(C, M3, M2, qo); tri(C, D, M3, qo); tri(D, M4, M3, qo); tri(D, A, M4, qo); tri(A, M1, M4, qo); }
+      else { const A2 = mix(G, A, s), B2 = mix(G, B, s), C2 = mix(G, C, s), D2 = mix(G, D, s); quad(A2, B2, C2, D2, qi); quad(A, B, B2, A2, qo); quad(B, C, C2, B2, qo); quad(C, D, D2, C2, qo); quad(D, A, A2, D2, qo); } } }
+  const cap = (i, X, back) => { const g = R[i], apex = Array.isArray(X) ? X : g.c, i2 = Math.min(Math.max(i - (back ? 1 : 0), 0), R.length - 2); for (let k = 0; k < n; k++) { const [am, sd] = ang(k); let c = cf(i2, k, am, sd, 0); if (typeof c !== 'string') c = c[0];
+      if (back) tri(P[i][k], apex, P[i][(k + 1) % n], _rgb(c)); else tri(P[i][k], P[i][(k + 1) % n], apex, _rgb(c)); } };
+  if (o.cap0) cap(0, o.cap0, false); if (o.cap1) cap(R.length - 1, o.cap1, true);
+  return _skinMesh(p, pos, col, o);
+}
+function _fuseA(root) {   // fuse() for animals: also takes the painted skin meshes (they keep their face colours)
+  root.updateMatrixWorld(true);
+  const inv = root.matrixWorld.clone().invert(), M4 = new THREE.Matrix4(), B = new Map(), done = [];
+  root.traverse(o => {
+    if (!o.isMesh || o.isInstancedMesh || o === root) return;
+    for (let q = o; q && q !== root; q = q.parent) if (q.userData.dyn || q.userData.keep) return;
+    const mt = o.material, skin = !!o.userData.skin; if (!skin && !(mt.isMeshStandardMaterial && !mt.vertexColors && !mt.transparent && !mt.map && !mt.userData.own && mt.emissive.getHex() === 0)) return;
+    const g = o.geometry.index ? o.geometry.toNonIndexed() : o.geometry.clone();
+    for (const k of Object.keys(g.attributes)) if (k !== 'position' && k !== 'normal' && !(skin && k === 'color')) g.deleteAttribute(k);
+    if (!g.attributes.normal) g.computeVertexNormals();
+    g.applyMatrix4(M4.multiplyMatrices(inv, o.matrixWorld));
+    if (!skin) { const n = g.attributes.position.count, ca = new Float32Array(n * 3), cc = mt.color; for (let i = 0; i < n; i++) { ca[3 * i] = cc.r; ca[3 * i + 1] = cc.g; ca[3 * i + 2] = cc.b; } g.setAttribute('color', new THREE.BufferAttribute(ca, 3)); }
+    const vk = [mt.flatShading, mt.roughness, mt.metalness, mt.side, o.castShadow].join('|');
+    if (!B.has(vk)) B.set(vk, { mt, cast: o.castShadow, gs: [] }); B.get(vk).gs.push(g); done.push(o);
+  });
+  for (const o of done) o.removeFromParent();
+  for (const [vk, b] of B) { const mk = vk.split('|').slice(0, 4).join('|'); let m = _fuseM.get(mk); if (!m) { m = new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: b.mt.flatShading, roughness: b.mt.roughness, metalness: b.mt.metalness, side: b.mt.side }); _fuseM.set(mk, m); }
+    const me = new THREE.Mesh(mergeGeometries(b.gs), m); me.castShadow = b.cast; me.receiveShadow = true; root.add(me); }
+  return root;
+}
+const _fuseDyn = root => { const L = []; root.traverse(o => { if (o.isGroup && (o.userData.dyn || o === root)) L.push(o); }); L.forEach(g => _fuseA(g)); };
 
 // ---------------- quadrupeds ----------------
 const BZ = {   // leg rest angles (from vertical, + = backwards) and segment ratios: front (f, fr), hind (h, hr)
@@ -6305,13 +6365,22 @@ const BZ = {   // leg rest angles (from vertical, + = backwards) and segment rat
   sprawl:{ f: [0, 0, 0], fr: [0.45, 0.45, 0.1], h: [0, 0, 0], hr: [0.45, 0.45, 0.1] },
   dino:  { f: [0.2, 0, -0.1], fr: [0.45, 0.4, 0.15], h: [-0.45, 0.8, -0.38], hr: [0.38, 0.38, 0.24] }
 };
+const _TORSO = {   // torso profiles along the body (u: 0 chest front … 1 rump): [u, half width × bw/2, top × bh/2, bottom × bh/2]
+  cat:    [[0, 0.36, 0.42, 0.5], [0.05, 0.72, 0.82, 0.84], [0.14, 0.95, 1.02, 1.0], [0.26, 1.0, 1.06, 1.06], [0.42, 0.94, 0.98, 0.95], [0.58, 0.84, 0.94, 0.74], [0.7, 0.84, 0.95, 0.7], [0.82, 0.93, 0.98, 0.82], [0.92, 0.78, 0.86, 0.72], [1, 0.4, 0.5, 0.45]],
+  hoof:   [[0, 0.4, 0.45, 0.55], [0.05, 0.74, 0.84, 0.86], [0.14, 0.94, 1.02, 1.0], [0.28, 1.0, 1.04, 1.04], [0.48, 1.02, 0.97, 1.05], [0.66, 0.96, 0.96, 0.9], [0.8, 0.97, 1.0, 0.88], [0.92, 0.82, 0.9, 0.78], [1, 0.42, 0.52, 0.5]],
+  barrel: [[0, 0.45, 0.48, 0.58], [0.05, 0.78, 0.84, 0.88], [0.14, 0.96, 1.0, 1.02], [0.3, 1.02, 1.02, 1.08], [0.5, 1.05, 0.98, 1.1], [0.68, 1.02, 0.97, 1.02], [0.82, 0.99, 1.0, 0.92], [0.93, 0.84, 0.9, 0.8], [1, 0.45, 0.52, 0.5]],
+  plant:  [[0, 0.5, 0.5, 0.6], [0.06, 0.82, 0.86, 0.88], [0.18, 1.0, 1.04, 1.0], [0.35, 1.03, 1.02, 1.04], [0.6, 1.03, 1.0, 1.03], [0.82, 0.98, 0.98, 0.94], [0.94, 0.8, 0.86, 0.78], [1, 0.45, 0.5, 0.5]],
+  dino:   [[0, 0.42, 0.45, 0.5], [0.07, 0.76, 0.82, 0.82], [0.2, 0.96, 1.0, 1.0], [0.4, 1.0, 1.02, 1.02], [0.62, 0.95, 0.98, 0.9], [0.82, 0.84, 0.92, 0.74], [1, 0.62, 0.72, 0.56]],
+  sprawl: [[0, 0.5, 0.6, 0.6], [0.1, 0.85, 0.9, 0.9], [0.3, 1.0, 1.0, 1.0], [0.6, 1.0, 1.0, 1.0], [0.85, 0.86, 0.9, 0.9], [1, 0.55, 0.7, 0.6]],
+  hop:    [[0, 0.5, 0.5, 0.55], [0.1, 0.8, 0.84, 0.86], [0.3, 0.92, 0.94, 0.95], [0.6, 1.02, 1.05, 1.0], [0.82, 1.0, 1.02, 0.95], [0.95, 0.75, 0.8, 0.75], [1, 0.4, 0.45, 0.45]]
+};
 const BEASTS = {
   lion:     { L: 1.45, lh: 0.62, bh: 0.6, bw: 0.5, c: '#C99A55', b: '#E8CFA0', k: '#3E2614', nk: [0.24, 0.45, 0.19], hd: [0.32, 0.3, 0.3], sn: [0.2, 0.17, 0.19], ear: 'round', tail: [0.85, 0.03, 'tuft'], leg: [0.1, 0.062], ft: 'paw', z: 'cat', flex: 0.22, gal: 'rot', fang: 1, eye: 'cat', iris: '#C8902A', voice: 'roar', mane: '#7A4626', lmane: 1, cs: [1.08, 1.06] },
   lioness:  { base: 'lion', mane: null, lmane: 0, s: 0.88 },
   tiger:    { base: 'lion', c: '#E3782A', b: '#F5F0E6', mane: null, lmane: 0, stripes: '#1C1816', cheek: '#F5F0E6', s: 1.05, iris: '#D8A030', tailC: null },
   leopard:  { base: 'lion', L: 1.15, lh: 0.48, bh: 0.44, bw: 0.36, c: '#D9A85A', b: '#F2E6CC', mane: null, lmane: 0, spots: 'rosette', voice: 'growl', tail: [0.8, 0.035, 'thin'], nk: [0.24, 0.42, 0.13], hd: [0.26, 0.24, 0.24], sn: [0.15, 0.13, 0.15], leg: [0.08, 0.05] },
   cheetah:  { base: 'leopard', lh: 0.6, bh: 0.38, bw: 0.3, c: '#DCB064', spots: 'dot', tear: 1, flex: 0.34, hd: [0.22, 0.2, 0.21], sn: [0.12, 0.12, 0.13], duty: 0.26, leg: [0.065, 0.04] },
-  wolf:     { L: 0.95, lh: 0.5, bh: 0.36, bw: 0.3, c: '#878789', b: '#DCD9D2', k: '#3A3A3C', nk: [0.26, 0.45, 0.13], hd: [0.24, 0.21, 0.21], sn: [0.22, 0.11, 0.11], ear: 'point', tail: [0.48, 0.065, 'bushy'], leg: [0.065, 0.04], ft: 'paw', z: 'cat', flex: 0.18, gal: 'rot', fang: 1, eye: 'front', iris: '#D8B030', voice: 'howl', nose: '#1A1A1A', saddle: '#5E5E62' },
+  wolf:     { L: 0.95, lh: 0.5, bh: 0.36, bw: 0.3, c: '#878789', b: '#DCD9D2', k: '#3A3A3C', nk: [0.26, 0.45, 0.13], hd: [0.24, 0.21, 0.21], sn: [0.22, 0.11, 0.11], ear: 'point', tail: [0.48, 0.065, 'bushy'], leg: [0.065, 0.04], ft: 'paw', z: 'cat', flex: 0.18, gal: 'rot', fang: 1, pant: 1, eye: 'front', iris: '#D8B030', voice: 'howl', nose: '#1A1A1A', saddle: '#5E5E62' },
   fox:      { base: 'wolf', L: 0.55, lh: 0.25, bh: 0.2, bw: 0.17, c: '#D9682A', b: '#F5EFE6', nk: [0.15, 0.45, 0.075], hd: [0.14, 0.12, 0.13], sn: [0.13, 0.06, 0.06], ear: 'pointBig', tail: [0.4, 0.06, 'bushy'], tip: '#F5EFE6', socks: '#2A211D', leg: [0.035, 0.02], voice: 'bark', saddle: null },
   dog:      { base: 'wolf', L: 0.7, lh: 0.38, bh: 0.3, bw: 0.25, c: '#B8803E', b: '#E6D2AE', nk: [0.2, 0.55, 0.1], hd: [0.2, 0.18, 0.18], sn: [0.14, 0.1, 0.11], ear: 'flop', tail: [0.32, 0.03, 'up'], leg: [0.05, 0.032], voice: 'bark', fang: 0, saddle: null, iris: '#6A4020' },
   cat:      { base: 'lion', L: 0.4, lh: 0.2, bh: 0.16, bw: 0.13, c: '#8E9298', b: '#D8D8D6', mane: null, lmane: 0, stripes: '#5A5E66', nk: [0.08, 0.6, 0.055], hd: [0.11, 0.1, 0.11], sn: [0.05, 0.05, 0.06], ear: 'point', tail: [0.3, 0.018, 'up'], leg: [0.028, 0.017], voice: 'meow', iris: '#9AC040', fang: 0 },
@@ -6325,7 +6394,7 @@ const BEASTS = {
   horse:    { L: 1.45, lh: 0.9, bh: 0.7, bw: 0.5, c: '#8A5530', b: '#8A5530', k: '#2A1A12', nk: [0.62, 0.78, 0.15, 1.6], hd: [0.38, 0.24, 0.2], sn: [0.32, 0.18, 0.16], hp: 0.5, ear: 'pointSmall', tail: [0.75, 0.06, 'horse'], leg: [0.085, 0.045], ft: 'hoof', z: 'hoof', flex: 0.06, gal: 'tra', eye: 'side', voice: 'neigh', herb: 1, mane: '#2A1A12', hmane: 1, blaze: '#F4F0E8', nose: '#3A2A22', nkK: 1.05 },
   zebra:    { base: 'horse', L: 1.25, lh: 0.78, bh: 0.62, nk: [0.55, 0.8, 0.14, 1.35], c: '#F4F2EE', b: '#F4F2EE', stripes: '#1A1A1C', mane: '#1A1A1C', hmane: 'up', tail: [0.5, 0.03, 'tuft'], blaze: null },
   donkey:   { base: 'horse', voice: 'bray', L: 1.1, lh: 0.66, bh: 0.55, nk: [0.5, 0.8, 0.13, 1.35], c: '#8E8478', b: '#DAD4CA', ear: 'long', hmane: 'up', mane: '#4A443C', tail: [0.45, 0.03, 'tuft'], blaze: null, snoutC: '#DAD4CA' },
-  cow:      { L: 1.55, lh: 0.7, bh: 0.78, bw: 0.68, c: '#F2F0EA', b: '#F2F0EA', k: '#2A2A2A', nk: [0.32, 0.3, 0.27, 1.3], hd: [0.38, 0.32, 0.3], sn: [0.16, 0.22, 0.28], hp: 0.35, ear: 'side', tail: [0.75, 0.025, 'tuft'], leg: [0.095, 0.055], ft: 'hoof', z: 'hoof', flex: 0.06, gal: 'tra', eye: 'side', voice: 'moo', herb: 1, patches: '#2A2A2A', horns: 'cow', udder: 1, snoutC: '#EAB8AA' },
+  cow:      { L: 1.55, lh: 0.7, bh: 0.78, bw: 0.68, c: '#F2F0EA', b: '#F2F0EA', k: '#2A2A2A', nk: [0.32, 0.3, 0.27, 1.3], nkK: 1.08, hd: [0.38, 0.32, 0.3], sn: [0.16, 0.22, 0.28], hp: 0.35, ear: 'side', tail: [0.75, 0.025, 'tuft'], leg: [0.095, 0.055], ft: 'hoof', z: 'hoof', flex: 0.06, gal: 'tra', eye: 'side', voice: 'moo', herb: 1, patches: '#2A2A2A', horns: 'cow', udder: 1, snoutC: '#EAB8AA' },
   bull:     { base: 'cow', c: '#3A2A22', b: '#3A2A22', patches: null, horns: 'bull', udder: 0, ring: 1, cs: [1.12, 1.12], hump: 1, snoutC: '#5A4238', s: 1.08 },
   pig:      { L: 0.95, lh: 0.32, bh: 0.52, bw: 0.48, c: '#F2B5AE', b: '#F2B5AE', k: '#9A5A58', nk: [0.12, 0.2, 0.24], hd: [0.3, 0.28, 0.28], sn: [0.12, 0.13, 0.15], ear: 'flop', tail: [0.12, 0.015, 'curl'], leg: [0.06, 0.04], ft: 'hoof', z: 'hoof', flex: 0.05, gal: 'tra', maxG: 'trot', eye: 'side', voice: 'oink', herb: 1, disc: '#E89A94' },
   boar:     { base: 'pig', c: '#4E3E32', b: '#4E3E32', bristle: '#2E241E', tusk: 'boar', disc: '#3A2E28', ear: 'point', maxG: 'gallop' },
@@ -6336,7 +6405,7 @@ const BEASTS = {
   giraffe:  { L: 1.45, lh: 1.7, bh: 0.85, bw: 0.58, c: '#E4B45E', b: '#F2DDB0', k: '#4A2E1A', nk: [1.9, 1.0, 0.13, 1.35], hd: [0.32, 0.2, 0.18], sn: [0.26, 0.15, 0.13], hp: 0.45, ear: 'side', tail: [0.85, 0.025, 'tuft'], leg: [0.075, 0.04], ft: 'hoof', z: 'hoof', flex: 0.05, gal: 'tra', pace: 1, eye: 'side', voice: null, herb: 1, spots: 'patch', patchC: '#8A5530', ossicone: 1, fl: 1.18, mane: '#8A5530', hmane: 'up' },
   rhino:    { L: 2.3, lh: 0.7, bh: 0.98, bw: 0.98, c: '#8E8A86', b: '#8E8A86', k: '#3A3836', nk: [0.25, 0.15, 0.42], hd: [0.62, 0.42, 0.4], sn: [0.32, 0.3, 0.32], hp: 0.35, ear: 'point', tail: [0.35, 0.03, 'tuft'], leg: [0.17, 0.14], ft: 'pad', z: 'plant', flex: 0.05, gal: 'tra', eye: 'side', voice: 'snort', herb: 1, horn: 'rhino', folds: 1 },
   hippo:    { L: 2.5, lh: 0.45, bh: 1.05, bw: 1.2, c: '#8A7482', b: '#D8A6A8', k: '#3A2E36', nk: [0.2, 0.15, 0.5], hd: [0.55, 0.5, 0.6], sn: [0.45, 0.45, 0.7], ear: 'tiny', tail: [0.3, 0.06, 'stub'], leg: [0.19, 0.16], ft: 'pad', z: 'plant', flex: 0.03, gal: 'tra', maxG: 'trot', eye: 'top', voice: 'grunt', herb: 1, tusk: 'hippo', snoutC: '#9A8290' },
-  croc:     { L: 1.5, lh: 0.2, bh: 0.32, bw: 0.62, c: '#4E5E34', b: '#C8C294', k: '#2A3420', nk: [0.15, 0.05, 0.24], hd: [0.32, 0.18, 0.32], sn: [0.65, 0.12, 0.2], ear: 'none', tail: [2.0, 0.15, 'croc'], leg: [0.07, 0.05], ft: 'claw', z: 'sprawl', flex: 0, gal: 'tra', maxG: 'walk', eye: 'top', iris: '#C8B040', voice: 'hiss', fang: 2, scutes: 1, sprawl: 1, nt: 'nostrils' },
+  croc:     { L: 1.5, lh: 0.2, bh: 0.32, bw: 0.62, c: '#4E5E34', b: '#C8C294', k: '#2A3420', nk: [0.15, 0.05, 0.24, 0.55], hd: [0.32, 0.18, 0.32], sn: [0.65, 0.12, 0.2], ear: 'none', tail: [2.0, 0.15, 'croc'], leg: [0.07, 0.05], ft: 'claw', z: 'sprawl', flex: 0, gal: 'tra', maxG: 'walk', eye: 'top', iris: '#C8B040', voice: 'hiss', fang: 2, scutes: 1, sprawl: 1, nt: 'nostrils' },
   mammoth:  { base: 'elephant', c: '#5A3E2A', b: '#5A3E2A', s: 1.12, tusk: 'mammoth', hump: 1, shag: '#4A3220', ear: 'roundSmall', trunk: 2.1 },
   trex:     { L: 4.2, lh: 2.5, bh: 2.2, bw: 1.7, c: '#5E6E3A', b: '#B8B48A', k: '#2E3A1E', nk: [0.9, 0.55, 0.5, 1.2], hd: [1.4, 1.0, 0.85], sn: [1.0, 0.65, 0.7], hk: 1, nkK: 1, ear: 'none', tail: [6.2, 0.75, 'dino'], leg: [0.45, 0.2], ft: 'claw', z: 'dino', flex: 0.04, gal: 'rot', maxG: 'gallop', fang: 3, eye: 'side', iris: '#D8A020', voice: 'trex', biped: 1, arms: 0.55, saddle: '#4A5A2E', nt: 'nostrils', var: 0.05 },
   raptor:   { L: 1.15, lh: 0.95, bh: 0.55, bw: 0.4, c: '#8A6A42', b: '#D8C8A8', k: '#3A2A1A', nk: [0.45, 0.7, 0.13, 1.1], hd: [0.42, 0.26, 0.24], sn: [0.32, 0.15, 0.14], hk: 1, nkK: 1, ear: 'none', tail: [1.9, 0.16, 'dino'], leg: [0.12, 0.05], ft: 'claw', z: 'dino', flex: 0.05, gal: 'rot', fang: 3, eye: 'side', iris: '#E8C030', voice: 'raptor', biped: 1, arms: 1.1, stripes: '#4A3A26', nt: 'nostrils', quills: '#C0392B' },
@@ -6357,23 +6426,32 @@ function beast(o = {}) {   // kind: see BEASTS — real proportions in metres; w
   const root = dyn(grp(o.parent ?? world, o.x ?? 0, 0, o.z ?? 0, o.ry ?? 0)); root.scale.setScalar(sc);
   const body = dyn(grp(root, 0, by0, 0)), fr = dyn(grp(body)), rr = dyn(grp(body)); body.rotation.x = slope;
   // --- torso: chest, hips, belly, markings
+  // --- torso (v2.40): two lofted halves (chest in fr, hips in rr; the spine flexes between them) — belly, saddle, stripes, spots, patches are painted per face
   const cs = D.cs ?? [1, 1], EC = [0, bh * 0.04, L * 0.2, bw * 0.5 * cs[0], bh * 0.5 * cs[1], L * 0.36], EH = [0, 0, -L * 0.22, bw * 0.47, bh * 0.47, L * 0.33];
-  _ell(fr, C, ...EC, { detail: 2 }); _ell(rr, C, ...EH, { detail: 2 }); _ell(body, C, 0, bh * 0.02, -L * 0.01, bw * 0.47 * Math.min(cs[0], 1.04), bh * 0.47, L * 0.36, { detail: 2 });
-  if (B !== C) { _ell(fr, B, 0, -bh * 0.17, L * 0.16, bw * 0.36, bh * 0.32, L * 0.3, { detail: 2 }); _ell(rr, B, 0, -bh * 0.17, -L * 0.14, bw * 0.34, bh * 0.3, L * 0.3, { detail: 2 }); }
-  const rnd = i => hash(sd * 131 + i * 7.77);
-  if (D.stripes) for (const [g, E, n] of [[fr, EC, 7], [rr, EH, 7]]) { const Ls = []; for (let i = 0; i < n; i++) { const u = -0.82 + 1.64 * (i + 0.5) / n + (rnd(i) - 0.5) * 0.08, w = E[5] * (kind === 'zebra' ? 0.09 : 0.065);
-      const p1 = kind === 'zebra' ? 2.6 : 1.9 + 0.3 * rnd(i + 3), sk = (rnd(i + 9) - 0.5) * 0.12; for (const s of [-1, 1]) for (let ph = kind === 'zebra' ? 0 : 0.15; ph < p1; ph += 0.24) Ls.push([u + sk * ph, s * ph, w * (1 - 0.35 * ph / p1), Math.min(E[3], E[4]) * 0.32, 0, Math.min(E[3], E[4]) * 0.08]); }
-    _marks(g, E, Ls, D.stripes, { th: 0.01 }); }
-  if (D.spots) for (const [g, E] of [[fr, EC], [rr, EH]]) { const Ls = [], n = D.spots === 'patch' ? 26 : 40;
-    for (let i = 0; i < n; i++) { const u = -0.88 + 1.76 * rnd(i * 3 + 1), ph = (rnd(i * 3 + 2) - 0.5) * 4.4, sz = D.spots === 'patch' ? E[5] * 0.2 : E[5] * (D.spots === 'dot' ? 0.075 : 0.1);
-      if (D.spots === 'rosette') for (let r = 0; r < 4; r++) { const a = r * 1.7 + i; Ls.push([u + Math.cos(a) * 0.05, ph + Math.sin(a) * 0.09, sz * 0.55, sz * 0.4, 0, Math.min(E[3], E[4]) * 0.08]); } else Ls.push([u, ph, sz, sz * (D.spots === 'patch' ? 1.4 : 1), 0, Math.min(E[3], E[4]) * 0.08]); }
-    _marks(g, E, Ls, D.patchC ?? K); }
-  if (D.patches) { _marks(fr, EC, [[0.1, 1.1, EC[5] * 0.6, EC[4] * 0.9, 0.4], [-0.3, -0.9, EC[5] * 0.5, EC[4] * 0.8, -0.3], [0.2, 0.2, EC[5] * 0.4, EC[3] * 0.6]], D.patches); _marks(rr, EH, [[-0.2, -1.2, EH[5] * 0.7, EH[4] * 1.0, 0.2], [0.3, 1.3, EH[5] * 0.5, EH[4] * 0.7], [-0.5, 0.3, EH[5] * 0.5, EH[3] * 0.7]], D.patches); }
-  if (D.saddle) { _ell(fr, D.saddle, EC[0], EC[1] + EC[4] * 0.14, EC[2] - EC[5] * 0.05, EC[3] * 0.94, EC[4] * 0.9, EC[5] * 0.9, { detail: 2 }); _ell(rr, D.saddle, EH[0], EH[1] + EH[4] * 0.14, EH[2] + EH[5] * 0.05, EH[3] * 0.94, EH[4] * 0.9, EH[5] * 0.88, { detail: 2 }); }
-  if (D.panda) _ell(fr, D.panda, EC[0], EC[1], EC[2] - EC[5] * 0.2, EC[3] * 1.03, EC[4] * 1.03, EC[5] * 0.34, { detail: 2 });
-  if (D.rump) _ell(rr, D.rump, 0, bh * 0.06, EH[2] - EH[5] * 0.9, bw * 0.3, bh * 0.3, EH[5] * 0.14, NC);
+  const rnd = i => hash(sd * 131 + i * 7.77), fam = D.tf ?? (D.biped ? 'dino' : D.z === 'hoof' ? (bw / bh > 0.85 ? 'barrel' : 'hoof') : D.z === 'dino' ? 'cat' : D.z ?? 'cat'), TPf = _TORSO[fam] ?? _TORSO.cat;
+  const te = D.te ?? ({ barrel: 2.3, plant: 2.35, sprawl: 2.8 }[fam] ?? 2.2), tz = u => L * (0.56 - 1.11 * u), scaly = D.scaly ?? (D.z === 'dino' || D.z === 'sprawl' || !!D.spines || !!D.plates || !!D.frill || kind === 'brachio'), bellyA = D.bellyA ?? (scaly ? 2.3 : 2.2);
+  const tring = (u, k = 1) => { const q = _prof(TPf, u), f = 1 - sm01((u - 0.4) / 0.25), hm = D.hump ? 0.3 * Math.exp(-(((u - 0.2) / 0.11) ** 2)) : 0; return { c: [0, bh * 0.02, tz(u)], r: [bw * 0.5 * q[1] * lerp(1, cs[0], f) * k, bh * 0.5 * (q[2] * lerp(1, cs[1], f) + hm) * k, bh * 0.5 * q[3] * lerp(1, cs[1], f) * k], e: te }; };
+  let US = []; { const nU = D.patches ? 30 : 20; for (let i = 0; i <= nU; i++) US.push(i / nU); }
+  const STR = [];   // bands across the back: [u0, u1, reach down left, right, colour]
+  if (D.stripes) { const zb = kind === 'zebra', ns = zb ? 11 : kind === 'cat' ? 8 : D.biped ? 7 : 9, sw0 = zb ? 0.034 : 0.021; for (let i = 0; i < ns; i++) { const u0 = 0.09 + 0.85 * (i + 0.5) / ns + (rnd(i) - 0.5) * 0.03, rc = j => zb ? 2.8 : D.biped ? 1.15 + 0.35 * rnd(i + j) : 1.45 + 0.8 * rnd(i + j); STR.push([u0, u0 + sw0 * (0.8 + 0.5 * rnd(i + 20)), rc(3), rc(5), D.stripes]); } }
+  if (D.folds) for (const u0 of [0.27, 0.7]) STR.push([u0, u0 + 0.016, 2.75, 2.75, shade(C, -0.16)]);
+  for (const s of STR) { US = US.filter(u => u < s[0] - 0.014 || u > s[1] + 0.014); US.push(s[0], s[1]); }
+  US.push(0.5); US = [...new Set(US.map(u => +u.toFixed(4)))].sort((a, b) => a - b);
+  const spotC = D.patchC ?? shade(K, -0.02), netC = shade(C, 0.1);
+  const tcol = UU => (i, k, a, s, h) => { const u = (UU[i] + UU[i + 1]) / 2; let c = a > bellyA && B !== C ? (scaly && i % 2 ? shade(B, -0.06) : B) : C;
+    if (D.saddle && a < 1.2 && u > 0.08) c = D.saddle;
+    if (D.rump && u > 0.9 && a < 2.3) c = D.rump;
+    if (D.panda && u > 0.1 && u < 0.33) c = D.panda;
+    if (D.patches && _n2((u + h * 0.012) * 4.2 + sd * 50, (a + h * 0.05) * s * 1.35 + sd * 20 + 9) > 0.56) c = D.patches;
+    for (const st of STR) if (u > st[0] && u < st[1] && a < (s < 0 ? st[2] : st[3])) c = st[4];
+    if (D.spots === 'patch') return a < 2.55 ? [netC, shade(spotC, (hash(i * 5.3 + k * 9.1 + sd) - 0.5) * 0.1), 0.8] : c;
+    if (D.spots && a < 2.15 && hash(i * 7.3 + k * 3.17 + s * 1.3 + sd * 13) > (D.spots === 'dot' ? 0.42 : 0.52)) return [c, spotC, D.spots === 'dot' ? 0.5 : 0.72, 'd'];
+    return c; };
+  { const tuck = 0.045 + 0.2 * (D.flex ?? 0.1), nA = D.patches ? 22 : D.spots || D.stripes ? 18 : 14, a0 = 0, sp = !!D.patches;
+    const UF = US.filter(u => u <= 0.5).concat([0.5 + tuck]), UR = [0.5 - tuck].concat(US.filter(u => u >= 0.5));
+    _loft(fr, UF.map((u, i) => tring(u, i === UF.length - 1 ? 0.94 : 1)), { n: nA, a0, col: tcol(UF), split: sp, cap0: [0, bh * 0.0, tz(0) + L * 0.02], cap1: true });
+    _loft(rr, UR.map((u, i) => tring(u, i === 0 ? 0.94 : 1)), { n: nA, a0, col: tcol(UR), split: sp, cap0: true, cap1: [0, bh * 0.05, tz(1) - L * 0.02] }); }
   if (D.ruff) _ell(fr, D.ruff, 0, -bh * 0.02, L * 0.5, bw * 0.38, bh * 0.42, L * 0.12);
-  if (D.hump) _ell(fr, C, 0, bh * 0.38, L * 0.24, bw * 0.3, bh * 0.22, L * 0.2);
   if (D.humps) for (const z of D.humps === 2 ? [0.22, -0.18] : [0]) _ell(body, C, 0, bh * 0.42, L * z, bw * 0.34, bh * (D.humps === 2 ? 0.34 : 0.45), L * (D.humps === 2 ? 0.16 : 0.27), { detail: 2 });
   if (D.udder) { _ell(rr, '#F0B8B0', 0, -bh * 0.42, -L * 0.06, bw * 0.17, bh * 0.12, L * 0.1); for (const [x, z] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) cyl(rr, 0.012, 0.016, 0.06, '#E8A8A0', x * 0.045, -bh * 0.52 - 0.04, -L * 0.06 + z * 0.045, NC); }
   if (D.wool) for (const [g, E] of [[fr, EC], [rr, EH]]) for (let i = 0; i < 18; i++) { const u = -0.85 + 1.7 * rnd(i * 5 + 3), ph = (rnd(i * 5 + 4) - 0.5) * 4.2, rr0 = Math.sqrt(1 - u * u);
@@ -6383,30 +6461,48 @@ function beast(o = {}) {   // kind: see BEASTS — real proportions in metres; w
   if (D.spines) for (let i = 0; i < 10; i++) { const u = i / 9; cone(u < 0.5 ? fr : rr, bh * 0.05, bh * 0.16, D.spines, 0, bh * 0.44 + Math.sin(Math.PI * u) * bh * 0.04, L * (0.5 - u), { rx: -0.5 }); }
   if (D.shag) for (const [g2, E] of [[fr, EC], [rr, EH]]) for (let i = 0; i < 11; i++) for (const sx of [-1, 1]) for (const row of [0, 1]) { const u = -0.85 + i * 0.17 + row * 0.08, rr0 = Math.sqrt(1 - u * u), ph = row ? 0.95 : 0.7; cone(g2, E[3] * 0.16, E[4] * (0.75 - row * 0.2), shade(D.shag, (hash(i * 3 + sx + row * 7) - 0.5) * 0.12), E[0] + sx * E[3] * rr0 * Math.sin(ph) * 0.97, E[1] - E[4] * rr0 * Math.cos(ph) * 0.55, E[2] + u * E[5], { rx: Math.PI, rz: -sx * 0.12 }); }
   if (D.scutes) for (let i = 0; i < 12; i++) for (const x of [-1, 0, 1]) box(i < 6 ? fr : rr, 0.06, 0.04, 0.09, K, x * bw * 0.16, bh * 0.44, L * (0.5 - i * 0.09), NC);
-  if (D.folds) { _marks(fr, EC, [-1.4, -0.7, 0, 0.7, 1.4].map(ph => [-0.62, ph, 0.03, EC[4] * 0.55, 0, 0.03]), K); _marks(rr, EH, [-1.4, -0.7, 0, 0.7, 1.4].map(ph => [0.55, ph, 0.03, EH[4] * 0.55, 0, 0.03]), K); }
   // --- neck & head
   const [nl, ne, nr0, nd = 1] = D.nk, nr = nr0 * (D.nkK ?? 1.3), nRest = Math.PI / 2 - ne;
   const neck = dyn(grp(fr, 0, bh * 0.22, L * 0.42)); neck.rotation.order = 'YXZ'; neck.rotation.x = nRest;
-  cyl(neck, nr * 0.72, nr * 0.9, nl + nr * 0.6, C, 0, -nr * 0.6, 0, { seg: 10 }).scale.z = nd * 0.9; { const nn = Math.max(3, Math.min(14, Math.round(nl / (nr * 1.1)))); const lng = nl / nr > 5; for (let i = 0; i <= nn; i++) { const k = i / nn, r = lng ? lerp(nr * 0.92, nr * 0.74, k) : lerp(nr, nr * 0.8, k); _ell(neck, C, 0, nl * k, 0, r, Math.max(r, nl / nn * (lng ? 1.0 : 0.75)), r * nd, { detail: 2 }); } }
+  // neck (v2.40): one lofted skin from inside the chest to the skull — lighter throat, stripes and net painted
+  const lng = nl / nr > 5, nb = (D.nb ?? (D.hmane ? 0.06 : 0)) * nl, nzo = k => -nb * Math.sin(Math.PI * clamp(k)), ndk = k => lerp(nd, 1 + (nd - 1) * 0.5, clamp(k));
+  const nrad = k => (lng ? lerp(nr * 0.95, nr * 0.74, clamp(k)) : lerp(nr * 1.02, nr * 0.8, clamp(k))) * (1 + 0.24 * sm01((0.1 - k) / 0.32));
+  { const nn = Math.max(4, Math.min(12, Math.round(nl / (nr * 0.9)))), k0 = -0.7 * nr / nl, k1 = 1 + 0.12 * nr / nl; let NK = [k0, k0 / 2]; for (let i = 0; i <= nn; i++) NK.push(i / nn); NK.push(k1, k1 + 0.28 * nr / nl); NK.push(k1 + 0.3 * nr / nl);
+    const NS = []; if (D.stripes) { const ns = kind === 'zebra' ? 6 : lng ? 5 : 3; for (let i = 0; i < ns; i++) { const q = 0.1 + 0.85 * (i + 0.3) / ns; NS.push([q, q + (kind === 'zebra' ? 0.07 : 0.05) * Math.min(1, 3 / ns)]); } }
+    for (const s of NS) { NK = NK.filter(u => u < s[0] - 0.02 || u > s[1] + 0.02); NK.push(s[0], s[1]); } NK = [...new Set(NK.map(u => +u.toFixed(4)))].sort((a, b) => a - b);
+    const ncol = (i, k, a, s) => { const u = (NK[i] + NK[i + 1]) / 2; let c = a < (scaly ? 0.95 : 0.7) && B !== C && !D.herb ? (scaly && i % 2 ? shade(B, -0.06) : B) : C; if (D.herb && B !== C && a < 0.7 && u > 0.62) c = B; if (D.saddle && a > 2.0) c = D.saddle;
+      for (const st of NS) if (u > st[0] && u < st[1] && (kind === 'zebra' || a > 1.0)) c = D.stripes;
+      if (D.spots === 'patch') return [netC, shade(spotC, (hash(i * 5.3 + k * 9.1 + sd + 3) - 0.5) * 0.1), 0.78];
+      if (D.spots && a > 1.0 && hash(i * 7.3 + k * 3.17 + s * 1.3 + sd * 17) > (D.spots === 'dot' ? 0.42 : 0.55)) return [c, spotC, D.spots === 'dot' ? 0.5 : 0.72, 'd'];
+      return c; };
+    const crMax = Math.max(0.3 * nr, (0.5 * cs[1] * 0.97 - 0.22) * bh / Math.max(0.35, Math.cos(ne))), hcap = 0.46 * Math.min(D.hd[1], D.hd[2]) * (D.hk ?? 1.2), tipK = k => (k > 0.72 ? sm01((k - 0.72) / 0.28) : 0), tip = (r, k) => Math.min(r, lerp(r, hcap, tipK(k))) * (k > 1.05 ? 0.62 : 1);   // the tip tucks into the skull
+    _loft(neck, NK.map(k => { const r = tip(Math.min(nrad(k), k < 0.25 ? bw * 0.5 * cs[0] * 0.96 : 1e9), k), rv = tip(Math.min(nrad(k) * ndk(k), k < 0.25 ? bh * 0.5 * cs[1] * 0.98 : 1e9), k); const rc = lerp(Math.min(rv, crMax), rv, sm01((k * nl / nr - 0.6) / 1.2)); return { c: [0, k * nl, nzo(k)], r: [r, rv, rc] }; }), { ax: 'y', n: D.spots || D.stripes ? 12 : 10, col: ncol, cap1: [0, nl + nr * 0.5, 0] }); }
   if (D.lmane) { for (let i = 0; i < 4; i++) for (let j = 0; j < 7; j++) { const a = j / 7 * TAU + i * 0.45; ball(neck, nr * (0.95 - i * 0.08), D.mane, Math.sin(a) * nr * 0.85, nl * (i / 3) * 0.95 - nr * 0.2, Math.cos(a) * nr * 0.85 - nr * 0.2, { detail: 1 }); } for (let i = 0; i < 6; i++) ball(fr, bh * 0.17, D.mane, (rnd(i + 40) - 0.5) * bw * 0.5, bh * (0.12 - i * 0.06), L * 0.5 - i * 0.015, { detail: 1 }); }
-  if (D.hmane) { const up = D.hmane === 'up', n = 8; for (let i = 0; i < n; i++) box(neck, up ? nr * 0.22 : nr * 0.35, nl / n * 1.25, nr * (up ? 0.35 : 0.42), D.stripes && i % 2 ? '#F4F2EE' : D.mane, 0, nl * i / n, -nr * nd * 0.82 - (up ? nr * 0.1 : 0), { rx: up ? 0 : 0.3 }); }
-  if (D.stripes && kind === 'zebra') for (let i = 0; i < 6; i++) cyl(neck, nr * 0.84 + 0.004, nr * 0.86 + 0.004, nl * 0.06, D.stripes, 0, nl * (0.08 + i * 0.15), 0, { seg: 8, ...NC }).scale.z = nd;
-  if (D.spots === 'patch') for (let i = 0; i < 9; i++) for (let j = 0; j < 4; j++) { const a = j * 1.57 + (i % 2) * 0.78, y = nl * (0.05 + i * 0.105), rr0 = lerp(nr, nr * 0.78, y / nl); const m = _ell(neck, D.patchC, Math.sin(a) * rr0, y, Math.cos(a) * rr0 * nd, nr * 0.38, nl * 0.04, 0.012, NC); m.rotation.y = a; }
+  if (D.hmane) { const up = D.hmane === 'up', n = 9; for (let i = 0; i < n; i++) { const k = (i + 0.3) / n, r = nrad(k); box(neck, up ? nr * 0.22 : nr * 0.36, nl / n * 1.3, r * (up ? 0.5 : 0.55), D.stripes && i % 2 ? '#F4F2EE' : D.mane, 0, nl * i / n, nzo(k) - r * ndk(k) * 0.92 - (up ? r * 0.12 : 0), { rx: up ? 0 : 0.3 }); } }
   const HK = D.hk ?? 1.2, [hl, hh, hw] = D.hd.map(v => v * HK), [sl, sh, sw] = D.sn.map(v => v * HK);
   const head = dyn(grp(neck, 0, nl, 0)); head.rotation.order = 'YXZ';
   const skY = hh * 0.12, skZ = hl * 0.22, zS = skZ + hl * 0.38 + sl * 0.3, yS = skY - hh / 2 + sh / 2 + hh * 0.04, zN = zS + sl / 2;
-  _ell(head, HC, 0, skY, skZ, hw / 2, hh / 2, hl / 2); _ell(head, SC, 0, yS, zS, sw / 2, sh / 2, sl / 2);
+  { // skull + muzzle as one skin (v2.40): the two ellipsoids wrapped smoothly, underside of the muzzle left to the lower jaw; muzzle colour, blaze and face stripes painted
+    const he = D.he ?? (D.herb || D.biped ? 2.25 : 2), hst = z => { const z1 = (z - skZ) / (hl / 2), z2 = (z - zS) / (sl / 2), s1 = Math.abs(z1) < 1 ? Math.sqrt(1 - z1 * z1) : 0, s2 = Math.abs(z2) < 1 ? Math.sqrt(1 - z2 * z2) : 0;
+      const w = Math.max(hw / 2 * s1, sw / 2 * s2, 1e-4), tp = Math.max(s1 > 0 ? skY + hh / 2 * s1 : -1e9, s2 > 0 ? yS + sh / 2 * s2 : -1e9), bt = Math.min(s1 > 0 ? skY - hh / 2 * s1 : 1e9, s2 > 0 ? yS - sh * 0.27 * Math.min(1, s2 * 1.6) : 1e9);
+      return { c: [0, (tp + bt) / 2, z], r: [w, Math.max(1e-4, (tp - bt) / 2)], e: he, e2: lerp(he, 4.5, sm01((z - skZ - hl * 0.3) / (hl * 0.15 + 1e-6))), z }; };
+    const fst = D.stripes && kind !== 'zebra' ? [[-0.62, -0.5], [-0.22, -0.1], [0.18, 0.3]] : [], hq = [-0.97, -0.8, -0.45, 0, 0.35, 0.62].filter(q => !fst.some(([q0, q1]) => q > q0 - 0.1 && q < q1 + 0.1)).concat(fst.flat()).sort((x, y) => x - y);
+    let HZ = hq.map(q => skZ + q * hl / 2).concat([-0.35, 0.1, 0.55, 0.85, 0.97].map(q => zS + q * sl / 2)); HZ = HZ.filter((z, i) => i < hq.length || z > skZ + 0.34 * hl);
+    const zeb = kind === 'zebra', hcol = (i, k, a, s) => { const z = (HZ[i] + HZ[i + 1]) / 2; let c = z > zS - sl * 0.3 ? SC : HC;
+      if (D.blaze && a < 0.45 && z > skZ - hl * 0.15) c = D.blaze;
+      if (D.cheek && a > 1.75 && z > skZ - hl * 0.2) c = D.cheek;
+      if (fst.some(([q0, q1]) => z > skZ + q0 * hl / 2 && z < skZ + q1 * hl / 2) && a < 1.3) c = D.stripes;
+      if (zeb && (i % 2 === 1 ? a < 2.5 : false)) c = D.stripes; if (zeb && z > zS + sl * 0.12) c = '#2E2826';
+      return c; };
+    _loft(head, HZ.map(hst), { n: D.stripes || D.blaze ? 12 : 10, col: hcol, cap0: [0, skY, skZ - hl / 2], cap1: [0, yS + sh * 0.08, zN] }); }
   if (D.quills) for (let i = 0; i < 9; i++) box(head, 0.02, 0.14 - i * 0.008, 0.04, D.quills, 0, skY + hh * 0.42, skZ + hl * 0.2 - i * hl * 0.09, { rx: -0.6, ...NC });
   if (kind === 'lion') { for (let i = 0; i < 16; i++) { const a = i / 16 * TAU, R = hh * 0.66; ball(head, hh * 0.3, D.mane, Math.sin(a) * R * 1.1, skY + Math.cos(a) * R - hh * 0.06, skZ - hl * 0.18, { detail: 1 }); } }
-  if (D.cheek) for (const s of [-1, 1]) _ell(head, D.cheek, s * hw * 0.28, skY - hh * 0.18, skZ + hl * 0.12, hw * 0.16, hh * 0.18, hl * 0.2);
-  if (D.blaze) { _ell(head, D.blaze, 0, skY + hh * 0.38, skZ + hl * 0.3, hw * 0.12, hh * 0.12, hl * 0.22, NC); _ell(head, D.blaze, 0, yS + sh * 0.42, zS, sw * 0.12, sh * 0.1, sl * 0.4, NC); }
   if (D.panda) for (const s of [-1, 1]) _ell(head, D.panda, s * hw * 0.22, skY + hh * 0.08, skZ + hl * 0.42, hw * 0.13, hh * 0.15, hl * 0.08, { ...NC, rz: s * 0.5 });
-  if (D.stripes && kind !== 'zebra') _marks(head, [0, skY, skZ, hw / 2, hh / 2, hl / 2], [[0.45, 0, hl * 0.04, hw * 0.25], [0.2, 0, hl * 0.04, hw * 0.3], [0.3, 1.3, hl * 0.05, hh * 0.3, 0.3], [0.3, -1.3, hl * 0.05, hh * 0.3, -0.3]], D.stripes);
-  if (D.stripes && kind === 'zebra') { _marks(head, [0, skY, skZ, hw / 2, hh / 2, hl / 2], [-0.4, -0.1, 0.2, 0.5].flatMap(u => [[u, 1.2, hl * 0.05, hh * 0.6], [u, -1.2, hl * 0.05, hh * 0.6]]), D.stripes); _marks(head, [0, yS, zS, sw / 2, sh / 2, sl / 2], [-0.5, 0, 0.5].flatMap(u => [[u, 0, sl * 0.06, sw * 0.6], [u, 1.3, sl * 0.06, sh * 0.5], [u, -1.3, sl * 0.06, sh * 0.5]]), D.stripes); }
   if (D.tear) for (const s of [-1, 1]) _marks(head, [0, skY, skZ, hw / 2, hh / 2, hl / 2], [[0.55, s * 0.9, 0.012, hh * 0.45, s * 0.4]], '#1A1410');
   // mouth: jaw (opens), inside, tongue, teeth, nose
   const jz = skZ + hl * 0.1, jaw = dyn(grp(head, 0, yS - sh * 0.28, jz)), jl = zN - jz;
-  _ell(jaw, SC, 0, -sh * 0.06, jl * 0.52, sw * 0.4, sh * 0.2, jl * 0.5);
+  { const ub = q => { const z2 = (jz + jl * q - zS) / (sl / 2), s2 = Math.abs(z2) < 1 ? Math.sqrt(1 - z2 * z2) : 0; return [sh * (0.28 - 0.27 * Math.min(1, s2 * 1.6)) - sh * 0.012, sw * 0.5 * Math.max(s2, 0.2) * 0.93]; };
+    _loft(jaw, [[0, 0.8, 0.6], [0.2, 0.95, 0.85], [0.55, 1, 1], [0.8, 0.9, 0.85], [0.93, 0.6, 0.6]].map(([q, w, d]) => { const [ty, mw] = ub(q); return { c: [0, ty - sh * 0.13 * d, jl * q], r: [Math.min(sw * 0.46 * w, q > 0.5 ? mw : 1e9), sh * 0.13 * d], e: 4.5, e2: 2.2 }; }), { n: 8, c: D.jawC ?? SC, cap0: true, cap1: [0, ub(0.97)[0] - sh * 0.05, jl * 0.975] }); }
   _ell(head, '#5A1E1E', 0, yS - sh * 0.3, zS - sl * 0.05, sw * 0.34, sh * 0.14, sl * 0.42, NC);
   _ell(jaw, '#C86A6A', 0, sh * 0.04, jl * 0.5, sw * 0.24, sh * 0.06, jl * 0.36, NC);
   if (D.fang === 1) for (const s of [-1, 1]) { cone(head, sw * 0.055, sh * 0.34, '#F4F0E6', s * sw * 0.2, yS - sh * 0.32 - sh * 0.34, zN - sl * 0.16, { rx: Math.PI, ...NC }); cone(jaw, sw * 0.045, sh * 0.24, '#F4F0E6', s * sw * 0.18, -sh * 0.0, jl * 0.86, NC); }
@@ -6418,7 +6514,7 @@ function beast(o = {}) {   // kind: see BEASTS — real proportions in metres; w
   else if (nt === 'disc') { cyl(head, sw * 0.44, sw * 0.44, sl * 0.12, D.disc, 0, yS - sl * 0.06, zN - sl * 0.02, { rx: Math.PI / 2, seg: 10 }); for (const s of [-1, 1]) _ell(head, '#5A2E2E', s * sw * 0.15, yS, zN + sl * 0.04, sw * 0.06, sw * 0.09, 0.01, NC); }
   if (D.ring) mesh(head, G('nring' + sw, () => new THREE.TorusGeometry(sw * 0.16, sw * 0.03, 6, 12)), mat('#C8A040', { metal: 0.6, rough: 0.3 }), 0, yS - sh * 0.32, zN + sl * 0.02, NC);
   // eyes (iris, pupil, glint)
-  const et = D.eye ?? 'side', es = hw * (et === 'top' ? 0.11 : 0.12), glintM = mat('#FFFFFF', { basic: true });
+  const et = D.eye ?? 'side', es = hw * (et === 'top' ? 0.11 : 0.12), glintM = mat('#FFFFFF', { basic: true }), lidP = []; let lidY = 0;
   for (const s of [-1, 1]) {
     let ex, ey, ez, nx, nz;
     if (et === 'cat' || et === 'front') { ex = s * hw * 0.27; ey = skY + hh * 0.18; ez = skZ + hl * 0.38; nx = s * 0.45; nz = 0.9; }
@@ -6427,8 +6523,11 @@ function beast(o = {}) {   // kind: see BEASTS — real proportions in metres; w
     ball(head, es, D.iris ?? '#2A1A10', ex, ey, ez, { detail: 1, ...NC });
     const pu = ball(head, es * 0.62, '#0E0C0B', ex + nx * es * 0.55, ey, ez + nz * es * 0.55, { detail: 1, ...NC });
     if (et === 'cat') pu.scale.set(0.42, 1.15, 0.6); if (et === 'goat') pu.scale.set(1, 0.42, 1.25);
-    ball(head, es * 0.22, '', ex + nx * es * 0.82, ey + es * 0.38, ez + nz * es * 0.82, { mat: glintM, detail: 0, ...NC });
+    ball(head, es * 0.22, '', ex + nx * es * 0.82, ey + es * 0.38, ez + nz * es * 0.82, { mat: glintM, detail: 0, ...NC }); lidP.push([ex, ez, nx, nz]); lidY = ey;
   }
+  // eyelids (v2.40): a half shell over each eyeball — rests on top as the upper lid, rolls forward to blink, sleep or squint
+  const lidG = G('lid', () => new THREE.SphereGeometry(1, 8, 3, 0, TAU, 0, Math.PI * 0.5)), lids = [], lid0 = D.herb ? -0.95 : -0.72;
+  for (const [x, z, nx, nz] of lidP) { const lg = dyn(grp(head, x, lidY, z)); lg.rotation.order = 'YXZ'; lg.rotation.y = Math.atan2(nx, nz); mesh(lg, lidG, mat(D.panda ?? shade(HC, -0.08)), 0, 0, 0, NC).scale.setScalar(es * 1.22); lg.rotation.x = lid0; lids.push(lg); }
   // ears
   const ears = [], ek = D.ear ?? 'round', ec = D.panda ?? HC, ei = shade(ec, kind === 'fox' ? 0.25 : -0.15);
   if (ek !== 'none') for (const s of [-1, 1]) {
@@ -6470,7 +6569,7 @@ function beast(o = {}) {   // kind: see BEASTS — real proportions in metres; w
   // --- legs: 3 segments + foot, solved by IK every frame (feet stay planted)
   const LG = [], ft = D.ft ?? 'paw', lc = D.panda ?? D.legC ?? C;
   for (let i = 0; i < 4; i++) {
-    if (D.biped && i < 2) { const s = i % 2 ? 1 : -1, ag = dyn(grp(fr, s * bw * 0.36, -bh * 0.08, L * 0.42)), al = D.arms * bh * 0.6, ar2 = D.leg[1] * 0.9; _seg(ag, [0, 0, 0], [0, -al * 0.55, al * 0.2], ar2 * 1.2, ar2, C); _seg(ag, [0, -al * 0.55, al * 0.2], [0, -al * 0.7, al * 0.75], ar2, ar2 * 0.8, C); for (const c of [-1, 1]) cone(ag, ar2 * 0.35, ar2 * 1.6, '#E8DCC0', c * ar2 * 0.4, -al * 0.72, al * 0.78, { rx: 2.2, ...NC }); ag.rotation.x = 0.25; LG.push(null); continue; }
+    if (D.biped && i < 2) { const s = i % 2 ? 1 : -1, ag = dyn(grp(fr, s * bw * 0.36, -bh * 0.08, L * 0.42)), al = D.arms * bh * 0.6, ar2 = D.leg[1] * 0.9; _seg(ag, [0, 0, 0], [0, -al * 0.55, al * 0.2], ar2 * 1.2, ar2, C); _seg(ag, [0, -al * 0.55, al * 0.2], [0, -al * 0.7, al * 0.75], ar2, ar2 * 0.8, C); for (const c of [-1, 1]) cone(ag, ar2 * 0.35, ar2 * 1.6, '#E8DCC0', c * ar2 * 0.4, -al * 0.72, al * 0.78, { rx: 2.2 }); ag.rotation.x = 0.25; LG.push(null); continue; }
     const s = i % 2 ? 1 : -1, front = i < 2, par = front ? fr : rr, A = front ? Z.f : Z.h, R = front ? Z.fr : Z.hr;
     const rT = D.leg[0] * (front ? 1 : 1.08), rB = D.leg[1], hf = rB * ({ hoof: 1.5, paw: 1.0, bear: 1.0, pad: 0.5, claw: 0.8 }[ft] ?? 1);
     const hx = s * bw * (spr ? 0.44 : D.lx ?? (D.biped ? 0.34 : 0.3)), hy = front ? -bh * 0.12 : -bh * 0.05, hz = front ? L * 0.32 : D.biped ? -L * 0.12 : -L * 0.33;
@@ -6480,15 +6579,32 @@ function beast(o = {}) {   // kind: see BEASTS — real proportions in metres; w
     else { const k = Hv / (R[0] * Math.cos(A[0]) + R[1] * Math.cos(A[1]) + R[2] * Math.cos(A[2])); l1 = k * R[0]; l2 = k * R[1]; l3 = k * R[2]; zN0 = zr - (l1 * Math.sin(A[0]) + l2 * Math.sin(A[1]) + l3 * Math.sin(A[2])); }
     const u = dyn(grp(par, hx, hy, hz)), m = dyn(grp(u, 0, -l1, 0)), n = dyn(grp(m, 0, -l2, 0)), f = dyn(grp(n, 0, -l3, 0));
     const lo = D.socks ?? lc;
-    cyl(u, rT, rT * 0.72, l1 * 1.04, lc, 0, -l1 * 1.04, 0, { seg: 7 }); _ell(u, D.panda ?? C, 0, -l1 * 0.18, front ? 0 : rT * 0.25, rT * (front ? 1.08 : 1.18), l1 * 0.42, rT * (front ? 1.35 : 1.6));
-    ball(m, rT * 0.72, lc, 0, 0, 0, { detail: 1 }); cyl(m, rT * 0.72, rB * 1.1, l2 * 1.04, D.socks && !front ? lc : lc, 0, -l2 * 1.04, 0, { seg: 7 });
-    ball(n, rB * 1.1, lo, 0, 0, 0, { detail: 1 }); cyl(n, rB * 1.05, rB, l3 * 1.04, lo, 0, -l3 * 1.04, 0, { seg: 6 });
-    if (D.stripes && kind === 'zebra') for (const [g, l, r] of [[m, l2, rT * 0.8], [n, l3, rB * 1.05]]) for (let j = 0; j < 3; j++) cyl(g, r + 0.004, r + 0.004, l * 0.1, D.stripes, 0, -l * (0.2 + j * 0.28), 0, { seg: 7, ...NC });
-    if (ft === 'hoof') cyl(f, rB * 1.0, rB * 1.22, hf, D.hoofC ?? '#2A2420', 0, -hf, 0, { seg: 7 });
-    else if (ft === 'paw') _ell(f, lo, 0, -hf * 0.45, rB * 0.55, rB * 1.25, hf * 0.55, rB * 1.75);
-    else if (ft === 'bear') { _ell(f, lo, 0, -hf * 0.45, rB * 0.7, rB * 1.35, hf * 0.55, rB * 1.9); for (let c = -1.5; c <= 1.5; c++) cone(f, rB * 0.12, rB * 0.55, '#E8DCC0', c * rB * 0.42, -hf * 0.7, rB * 2.3, { rx: Math.PI / 2, ...NC }); }
-    else if (ft === 'pad') { cyl(f, rB * 1.08, rB * 1.22, hf, lo, 0, -hf, 0, { seg: 9 }); if (D.nails !== false) for (let c = -1; c <= 1; c++) _ell(f, '#E6DCC8', c * rB * 0.55, -hf * 0.5, rB * 1.08, rB * 0.22, hf * 0.42, rB * 0.15, NC); }
-    else { _ell(f, lo, 0, -hf * 0.5, rB * 0.5, rB * 1.6, hf * 0.5, rB * 1.8); for (let c = -1.5; c <= 1.5; c++) cone(f, rB * 0.15, rB * 0.9, K, c * rB * 0.6, -hf * 0.8, rB * 2.2, { rx: Math.PI / 2, ...NC }); }
+    // v2.40: lofted leg segments (muscled shoulder / thigh, knobby joints) — bands, spots and socks painted; cloven hooves, toes, claws
+    const lq = (g, S, colF, o2 = {}) => _loft(g, S.map(([y, rx, rf, rb = rf, z = 0, x = 0]) => ({ c: [x, y, z], r: [rx, rf, rb] })), { ax: 'y', n: o2.n ?? 8, ...(typeof colF === 'function' ? { col: colF } : { c: colF }), cap0: true, cap1: true, ...o2 });
+    const cut = (S, ys) => { const T = S.map(q => q.slice()); for (const y of ys) { let j = 1; while (j < T.length && T[j][0] > y) j++; if (j >= T.length || j < 1) continue; const a = T[j - 1], b = T[j], k = (y - a[0]) / (b[0] - a[0]); if (k < 0.04 || k > 0.96) continue; T.splice(j, 0, a.map((v, q) => q ? lerp(v, b[q] ?? v, k) : y)); } return T; };
+    const zeb = kind === 'zebra', lbands = (len, nb, y0 = 0.2, y1 = 0.92) => { const O = []; for (let j = 0; j < nb; j++) { const q = lerp(y0, y1, (j + 0.2) / nb); O.push([-len * q, -len * (q + (y1 - y0) / nb * 0.4)]); } return O; };
+    const inB = (Bd, ya, yb) => { const y = (ya + yb) / 2; return Bd.some(([t0, t1]) => y < t0 && y > t1); }, pil = D.z === 'plant';
+    { const UC = D.panda ?? C, tk = front ? 1 : 1.25, zb0 = front ? 0 : rT * 0.3;
+      let S = [[l1 * 0.3, rT * 0.8, rT * 1.0 * (pil ? 1 : 1), rT * 1.05 * tk, zb0 * 0.6], [0, rT * (pil ? 1.08 : 1.14), rT * (pil ? 1.15 : 1.4), rT * (pil ? 1.2 : 1.45) * tk, zb0 * 0.4], [-l1 * 0.36, rT * 1.0, rT * (pil ? 1.05 : 1.18), rT * (pil ? 1.08 : 1.22) * tk, zb0 * 0.15], [-l1 * 0.76, rT * (pil ? 0.9 : 0.8), rT * (pil ? 0.92 : 0.84), rT * (pil ? 0.92 : 0.86)], [-l1 * 1.03, rT * (pil ? 0.86 : 0.74), rT * (pil ? 0.88 : 0.76), rT * (pil ? 0.88 : 0.78)]];
+      const Bd = D.stripes && !D.biped ? lbands(l1, zeb ? 3 : 2, 0.3, 0.98) : []; S = cut(S, Bd.flat());
+      lq(u, S, (i2, k2, a2) => { let c = S[i2][0] + S[i2 + 1][0] > -l1 * 0.95 ? UC : lc; if (D.legC && S[i2][0] + S[i2 + 1][0] < -l1 * 1.1) c = lc; if (inB(Bd, S[i2][0], S[i2 + 1][0])) c = D.stripes;
+        if (D.spots === 'patch') return [netC, shade(spotC, (hash(i2 * 3.3 + k2 * 7.7 + i) - 0.5) * 0.1), 0.76];
+        if (D.spots && hash(i2 * 5.1 + k2 * 2.3 + i * 9 + sd * 7) > 0.5) return [c, spotC, D.spots === 'dot' ? 0.42 : 0.6, 'd'];
+        return c; }); }
+    { const rj = rT * (D.z === 'hoof' ? 0.82 : 0.76); let S = [[rj * 0.62, rj * 0.5, rj * 0.5], [rj * 0.2, rj * 0.96, rj * 0.98], [-l2 * 0.14, rj * 0.92, rj * 0.94], [-l2 * 0.6, lerp(rj, rB * 1.1, 0.62), lerp(rj, rB * 1.1, 0.62)], [-l2 * 1.03, rB * 1.08, rB * 1.1]];
+      const Bd = D.stripes && !D.biped ? lbands(l2, zeb ? 3 : 2) : []; S = cut(S, Bd.flat());
+      lq(m, S, (i2, k2) => inB(Bd, S[i2][0], S[i2 + 1][0]) ? D.stripes : D.spots === 'patch' ? netC : D.spots && D.spots !== 'patch' && hash(i2 * 4.1 + k2 * 6.3 + i * 5 + sd * 3) > 0.62 ? [lc, spotC, 0.5, 'd'] : lc); }
+    { const rj = rB * 1.16; let S = [[rj * 0.6, rj * 0.5, rj * 0.5], [rj * 0.15, rj * 0.96, rj * 0.98], [-l3 * 0.3, rB * 1.03, rB * 1.04], [-l3 * 1.03, rB, rB * 1.02]];
+      const Bd = zeb ? lbands(l3, 3, 0.1, 0.95) : []; S = cut(S, Bd.flat());
+      lq(n, S, (i2) => inB(Bd, S[i2][0], S[i2 + 1][0]) ? D.stripes : D.spots === 'patch' ? B : lo, { n: 7 }); }
+    const hoofC = D.hoofC ?? '#2A2420', cloven = ft === 'hoof' && !['neigh', 'bray'].includes(D.voice), clawC = D.clawC ?? '#E8DCC0';
+    if (ft === 'hoof') { if (cloven) for (const cx of [-1, 1]) lq(f, [[0.03, rB * 0.5, rB * 0.95, rB * 0.9, 0, cx * rB * 0.5], [-hf * 0.55, rB * 0.56, rB * 1.2, rB * 1.0, 0, cx * rB * 0.55], [-hf, rB * 0.62, rB * 1.5, rB * 1.08, 0, cx * rB * 0.6]], hoofC, { n: 6 });
+      else lq(f, [[0.03, rB * 1.02, rB * 1.06, rB * 1.0], [-hf * 0.5, rB * 1.14, rB * 1.28, rB * 1.06], [-hf, rB * 1.28, rB * 1.55, rB * 1.14]], hoofC, { n: 8 }); }
+    else if (ft === 'paw') { const lf = kind === 'rabbit' && !front ? 1.7 : 1; _ell(f, lo, 0, -hf * 0.45, rB * 0.4 * lf, rB * 1.2, hf * 0.55, rB * 1.5 * lf); for (let c = -1.5; c <= 1.5; c++) { _ell(f, lo, c * rB * 0.52, -hf * 0.6, rB * (1.7 * lf - 0.2 * Math.abs(c)), rB * 0.3, hf * 0.4, rB * 0.5); if (D.eye === 'front') cone(f, rB * 0.09, rB * 0.32, '#2A2420', c * rB * 0.52, -hf * 0.82, rB * (2.3 - 0.2 * Math.abs(c)), { rx: Math.PI / 2 }); } }
+    else if (ft === 'bear') { _ell(f, lo, 0, -hf * 0.45, rB * 0.7, rB * 1.35, hf * 0.55, rB * 1.9); for (let c = -1.5; c <= 1.5; c++) { _ell(f, lo, c * rB * 0.5, -hf * 0.55, rB * 2.25, rB * 0.3, hf * 0.42, rB * 0.45); cone(f, rB * 0.12, rB * 0.55, clawC, c * rB * 0.5, -hf * 0.75, rB * 2.8, { rx: Math.PI / 2 }); } }
+    else if (ft === 'pad') { lq(f, [[0.03, rB * 1.05, rB * 1.06], [-hf * 0.5, rB * 1.16, rB * 1.2, rB * 1.12], [-hf, rB * 1.22, rB * 1.28, rB * 1.18]], lo, { n: 10 }); if (D.nails !== false) for (let c = -1; c <= 1; c++) _ell(f, '#E6DCC8', c * rB * 0.6, -hf * 0.55, rB * (1.2 - 0.12 * Math.abs(c)), rB * 0.24, hf * 0.42, rB * 0.16); }
+    else if (D.biped) { _ell(f, lo, 0, -hf * 0.45, 0, rB * 1.2, hf * 0.55, rB * 1.3); for (let c = -1; c <= 1; c++) { const tx = c * rB * 1.1, tz2 = rB * (2.9 - 0.5 * Math.abs(c)); _seg(f, [c * rB * 0.4, -hf * 0.5, rB * 0.4], [tx, -hf * 0.68, tz2], rB * 0.55, rB * 0.36, lo); cone(f, rB * 0.3, rB * 1.0, K, tx, -hf * 0.95, tz2 + rB * 0.5, { rx: Math.PI / 2 + 0.25 }); } cone(f, rB * 0.22, rB * 0.7, K, -s * rB * 0.7, -hf * 0.6, -rB * 0.9, { rx: -Math.PI / 2 - 0.3 }); }
+    else { _ell(f, lo, 0, -hf * 0.5, rB * 0.5, rB * 1.6, hf * 0.5, rB * 1.8); for (let c = -1.5; c <= 1.5; c++) cone(f, rB * 0.15, rB * 0.9, K, c * rB * 0.6, -hf * 0.8, rB * 2.2, { rx: Math.PI / 2 }); }
     LG.push({ u, m, n, f, s, front, hx, hy, hz, l1, l2, l3, A, zN: zN0, hf });
   }
   // --- tail
@@ -6499,15 +6615,17 @@ function beast(o = {}) {   // kind: see BEASTS — real proportions in metres; w
   let tp = tail;
   for (let i = 0; i < TN; i++) {
     const g = dyn(grp(tp, 0, i ? -tsl : 0, 0)), ra = lerp(tr, tr * (ts === 'croc' ? 0.12 : 0.6), i / TN), rb = lerp(tr, tr * (ts === 'croc' ? 0.12 : 0.6), (i + 1) / TN), tc = i === TN - 1 && D.tip ? D.tip : D.tailC ?? C;
+    const tlq = (S, colF, nA) => _loft(g, S.map(([y, rx, rz]) => ({ c: [0, y, 0], r: [rx, rz ?? rx] })), { ax: 'y', n: nA, ...(typeof colF === 'function' ? { col: colF } : { c: colF }), cap0: true, cap1: true });   // local +z = underside of the tail
     if (ts === 'bushy') _ell(g, tc, 0, -tsl * 0.55, 0, ra * 1.12, tsl * 1.05, ra * 1.12, { detail: 2 });
-    else if (ts === 'dino') { const rr2 = lerp(tr, tr * 0.08, i / TN), rb2 = lerp(tr, tr * 0.08, (i + 1) / TN); cyl(g, rr2, rb2, tsl * 1.06, tc, 0, -tsl * 1.03, 0, { seg: 9 }).scale.z = 1.15; ball(g, rr2 * 1.0, tc, 0, 0, 0, { detail: 1 }).scale.z = 1.15; if (D.spines) cone(g, rr2 * 0.4, rr2 * 0.9, D.spines, 0, -tsl * 0.5, -rr2 * 1.05, { rx: -Math.PI / 2 - 0.4 }); if (D.thag && i === TN - 1) for (const sx of [-1, 1]) for (const zz2 of [0.2, 0.6]) cone(g, rr2 * 0.35, tsl * 0.7, '#E8DCC0', sx * rr2 * 0.6, -tsl * zz2, -rr2 * 0.3, { rz: sx * 1.2, rx: 0.3 }); if (D.wings && i === TN - 1) finPlate(g, [[0, -tsl], [rr2 * 4, -tsl * 1.4], [0, -tsl * 1.9], [-rr2 * 4, -tsl * 1.4]].map(([z, y]) => [z, y]), 0.05, D.spines ?? K); }
-    else if (ts === 'horse') box(g, ra * 1.5, tsl * 1.12, ra * 1.1, D.mane ?? K, 0, -tsl * 1.06, 0);
+    else if (ts === 'dino') { const rr2 = lerp(tr, tr * 0.08, i / TN), rb2 = lerp(tr, tr * 0.08, (i + 1) / TN); tlq([[rr2 * 0.45, rr2 * 0.6, rr2 * 0.7], [rr2 * 0.1, rr2, rr2 * 1.15], [-tsl * 0.52, (rr2 + rb2) / 2, (rr2 + rb2) / 2 * 1.15], [-tsl * 1.04, rb2, rb2 * 1.15]], (i2, k2, a2) => a2 < 0.95 && B !== C ? (i2 % 2 ? shade(B, -0.06) : B) : D.stripes && i % 2 && a2 > 1.9 ? D.stripes : tc, 10);
+      if (D.spines) cone(g, rr2 * 0.4, rr2 * 0.9, D.spines, 0, -tsl * 0.5, -rr2 * 1.05, { rx: -Math.PI / 2 - 0.4 }); if (D.thag && i === TN - 1) for (const sx of [-1, 1]) for (const zz2 of [0.2, 0.6]) cone(g, rr2 * 0.35, tsl * 0.7, '#E8DCC0', sx * rr2 * 0.6, -tsl * zz2, -rr2 * 0.3, { rz: sx * 1.2, rx: 0.3 }); if (D.wings && i === TN - 1) finPlate(g, [[0, -tsl], [rr2 * 4, -tsl * 1.4], [0, -tsl * 1.9], [-rr2 * 4, -tsl * 1.4]].map(([z, y]) => [z, y]), 0.05, D.spines ?? K); }
+    else if (ts === 'horse') { const hr = q => tr * [0.75, 1.35, 1.5, 1.25, 0.35][q]; tlq([[hr(i) * 0.3, hr(i) * 0.5], [0, hr(i)], [-tsl * 0.55, (hr(i) + hr(i + 1)) / 2 * 1.04], [-tsl * 1.06, hr(i + 1)]], D.mane ?? K, 7); }
     else if (ts === 'stub' || ts === 'upStub') _ell(g, tc, 0, -tl * 0.4, 0, tr, tl * 0.55, tr * 0.9);
     else if (ts === 'puff') ball(g, tr, B, 0, -tr * 0.2, 0, { detail: 1 });
-    else if (ts === 'flag') { _ell(g, tc, 0, -tl * 0.45, 0, tr * 1.6, tl * 0.55, tr * 0.8); _ell(g, '#F4F0EA', 0, -tl * 0.45, -tr * 0.45, tr * 1.3, tl * 0.48, tr * 0.5, NC); }
-    else { const cm = cyl(g, ra, rb, tsl * 1.05, tc, 0, -tsl * 1.03, 0, { seg: ts === 'croc' ? 7 : 5 }); if (ts === 'croc') { cm.scale.x = 0.62; cm.scale.z = 1.25; for (const x of [-1, 1]) box(g, 0.04, 0.05, tsl * 0.5, K, x * ra * 0.35, -tsl * 0.5, -ra * 1.15, { rx: Math.PI / 2, ...NC }); } }
+    else if (ts === 'flag') { _ell(g, tc, 0, -tl * 0.45, 0, tr * 1.6, tl * 0.55, tr * 0.8); _ell(g, '#F4F0EA', 0, -tl * 0.45, -tr * 0.45, tr * 1.3, tl * 0.48, tr * 0.5); }
+    else if (ts === 'croc') { tlq([[ra * 0.3, ra * 0.4, ra * 0.8], [0, ra * 0.62, ra * 1.25], [-tsl * 1.04, rb * 0.62, rb * 1.25]], (i2, k2, a2) => a2 < 0.85 ? B : tc, 8); for (const x of [-1, 1]) box(g, 0.04, 0.05, tsl * 0.5, K, x * ra * 0.35, -tsl * 0.5, -ra * 1.15, { rx: Math.PI / 2 }); }
+    else { const st = D.stripes && ['tuft', 'thin', 'up'].includes(ts); tlq([[ra * 0.5, ra * 0.55], [0, ra], ...(st ? [[-tsl * 0.5, lerp(ra, rb, 0.48)], [-tsl * 0.72, lerp(ra, rb, 0.7)]] : []), [-tsl * 1.05, rb]], st ? i2 => i2 === 2 ? D.stripes : tc : tc, 6); }
     if (ts === 'tuft' && i === TN - 1) _ell(g, D.tuftC ?? K, 0, -tsl * 1.05, 0, tr * 2.6, tsl * 0.35, tr * 2.6);
-    if (D.stripes && ['tuft', 'thin', 'up'].includes(ts)) cyl(g, ra * 1.12, ra * 1.12, tsl * 0.14, D.stripes, 0, -tsl * 0.6, 0, { seg: 6, ...NC });
     TS.push(g); tp = g;
   }
   tail.rotation.x = tR;
@@ -6522,8 +6640,8 @@ function beast(o = {}) {   // kind: see BEASTS — real proportions in metres; w
   // grazing reach: neck pitch that brings the mouth near the ground
   const nbY = by0 + bh * 0.22, reach = nl + hl * 0.5 + sl;
   const grazeNp = clamp(ne - Math.asin(clamp((hh * 0.4 - nbY) / reach, -1, 1)), 0, 2.4);
-  const a = { root, body, fr, rr, neck, head, jaw, ears, tail, TS, trunk, LG, legs: LG.filter(Boolean).map(l => l.u), kind, D, quad: true, beast: true, sd, sc, lh, bh, bw, L, by0, slope, nRest, ne, grazeNp, tR, tCurl,
-    head0: head.position.clone(), fx: [], acts: [], eye: [skY + hh * 0.18, skZ + hl * 0.45], nose: [yS, zN], wings, mouth: [yS, zN, nl, hh] };
+  const a = { root, body, fr, rr, neck, head, jaw, lids, ears, tail, TS, trunk, LG, legs: LG.filter(Boolean).map(l => l.u), kind, D, quad: true, beast: true, sd, sc, lh, bh, bw, L, by0, slope, nRest, ne, grazeNp, tR, tCurl,
+    head0: head.position.clone(), lid0, fx: [], acts: [], eye: [skY + hh * 0.18, skZ + hl * 0.45], nose: [yS, zN], wings, mouth: [yS, zN, nl, hh] };
   a.poseFn = (t, w, s, graze) => beastPose(a, t, w, s, graze);
   a.do = (k, t, oo) => beastDo(a, k, t, oo);
   _fuseDyn(root);
@@ -6543,11 +6661,14 @@ function beastPose(a, t, w = 0, s = 0, graze = 0) {
   const D = a.D, lh = a.lh, lhW = lh * a.sc, sd = a.sd, mx = D.maxG ?? 'gallop';
   let v = 0, vc = 0.6;
   if (a._posAt && w > 0) { const p0 = a._posAt(t - 0.05), p1 = a._posAt(t + 0.05); v = Math.hypot(p1.x - p0.x, p1.z - p0.z) / 0.1; const wk = a.root._walks; if (wk) { let e = wk[0]; for (const x of wk) if (x.t0 <= t) e = x; vc = e.v ?? v; } }
-  const Fr = v * v / (9.81 * lhW), Frc = Math.max(0.02, vc * vc / (9.81 * lhW)), Sw = Math.max(0.55 * lhW, lhW * 2.3 * Math.pow(Frc, 0.3)), S = Sw / a.sc, U = s / Sw;
+  const Fr = v * v / (9.81 * lhW), Frc = Math.max(0.02, vc * vc / (9.81 * lhW)), Sw = Math.max(0.55 * lhW, lhW * 2.3 * Math.pow(Frc, 0.3), vc / 3.2), S = Sw / a.sc, U = s / Sw;   // v2.40: at most 3.2 strides/s (longer bounds instead of flickering legs)
+  let yr = 0, vPast = 0; if (a._yawAt && w > 0) { const d = a._yawAt(t + 0.12) - a._yawAt(t - 0.12); yr = Math.atan2(Math.sin(d), Math.cos(d)) / 0.24; }
+  if (a._posAt && D.pant) { const p0 = a._posAt(t - 1.3), p1 = a._posAt(t - 1.2); vPast = Math.hypot(p1.x - p0.x, p1.z - p0.z) / 0.1; }
+  const bend = clamp(yr * 0.2, -0.4, 0.4) * w, cad = vc / Sw, flick = clamp(30 * 0.6 / Math.max(cad, 0.1) / 9, 0.35, 1);   // paw flick shrinks when a swing lasts only a few frames
   let ww = 1, wt = 0, wg = 0;
   if (mx === 'hop') { ww = 0; wg = 1; } else if (mx !== 'walk') { const k1 = sm01((Fr - 0.3) / 0.3), k2 = mx === 'gallop' ? sm01((Fr - 1.9) / 1.0) : 0; ww = 1 - k1; wt = k1 * (1 - k2); wg = k1 * k2; }
   const GW = D.pace ? _GAITS.pace : _GAITS.walk, GT = D.pace ? _GAITS.pace : _GAITS.trot, GG = mx === 'hop' ? _GAITS.hop : D.biped ? _GAITS.brun : D.gal === 'tra' ? _GAITS.tra : _GAITS.rot;
-  let by = 0, bz = 0, bp = 0, br = 0, fx = 0, np = 0, ny = 0, hp = 0, hy = 0, hr = 0, jaw = 0, tl = 0, tsA = 0.08, tsF = 2.2, ear = 0, earB = 0, trk = 0, lat = 0, rig = 0, rest = 0;
+  let by = 0, bz = 0, bp = 0, br = 0, fx = 0, np = 0, ny = 0, hp = 0, hy = 0, hr = 0, jaw = 0, jawY = 0, tl = 0, tsA = 0.08, tsF = 2.2, ear = 0, earB = 0, trk = 0, lat = 0, rig = 0, rest = 0, lid = 0, swy = 0;
   const T = a._T ?? (a._T = [[0, 0, 0], [0, 0, 0], [0, 0, 0], [0, 0, 0]]), A3 = a._A3 ?? (a._A3 = [0, 0, 0, 0]);
   for (let i = 0; i < 4; i++) { let z = 0, y = 0, lk = 0; if (!a.LG[i]) { T[i][0] = T[i][1] = T[i][2] = 0; continue; }
     if (w > 0) { for (let gi = 0; gi < 3; gi++) { const G = gi === 0 ? GW : gi === 1 ? GT : GG, gw = gi === 0 ? ww : gi === 1 ? wt : wg; if (gw < 1e-3) continue;
@@ -6564,6 +6685,8 @@ function beastPose(a, t, w = 0, s = 0, graze = 0) {
     tl += w * (wt * 0.25 + wg * 0.65) * (D.tLift ?? 1); tsA = lerp(tsA, 0.1, w);
     if (mx === 'hop') { by += w * 0.45 * lh * Math.max(0, Math.sin(c1 - 0.6)); bp += w * 0.22 * Math.sin(c1 - 1.2); }
     if (D.sprawl) { fx = 0; }
+    swy = w * (ww * (D.z === 'cat' ? 0.07 : D.z === 'plant' ? 0.035 : 0.045) + wt * 0.02) * Math.sin(c1 + 0.4) * (D.biped || D.sprawl ? 0 : 1);
+    br -= clamp(yr * v * 0.014, -0.28, 0.28) * w * (wt + wg); ny += bend * 0.7; hy += bend * 0.5; earB += 0.45 * wg * w;
   }
   const iw = 1 - w;
   if (iw > 0) {
@@ -6571,18 +6694,21 @@ function beastPose(a, t, w = 0, s = 0, graze = 0) {
     const gz = graze * iw * (D.herb ? sm01((noise1(t * 0.12 + sd * 23) + 0.2) / 0.4) : 0);
     np += gz * a.grazeNp; hp += gz * 0.3; jaw += gz * 0.06 * (1 + Math.sin(t * 9)); hy *= 1 - gz * 0.7;
     tsA += iw * (D.herb ? 0.32 : 0.12) * (0.4 + 0.6 * Math.max(0, noise1(t * 0.3 + sd * 3))); tsF = D.herb ? 2.6 : 1.4;
+    if (D.herb && !D.trunk) { const ch = iw * (1 - gz) * sm01((noise1(t * 0.11 + sd * 31) - 0.05) / 0.3); jaw += ch * 0.045 * (1 + Math.sin(t * 7.6 + sd)); jawY += ch * 0.13 * Math.sin(t * 3.8 + sd); }
+    if (D.pant) { const pk = iw * clamp(vPast / 4); jaw = Math.max(jaw, pk * (0.2 + 0.06 * Math.sin(t * 15 + sd * 4))); }
   }
+  { const bq = t / 3.4 + sd * 11.3, bi = Math.floor(bq); lid = bump((bq - bi) * 3.4, 0.3 + 2.6 * hash(bi * 3.7 + sd * 5), 0.17); }   // blink
   // actions
   const pivot = (i, th) => { const g = a.LG[i] ?? a.LG[2], [y0, z0] = _rotYZ(g.hy, g.hz, a.slope), [y1, z1] = _rotYZ(g.hy, g.hz, a.slope + th); return [y0 - y1, z0 - z1]; };   // keep leg i's hip in place while pitching th
   for (const Ac of a.acts) { const q = _aw(t, Ac.t0, Ac.t1, Ac.ri, Ac.ro); if (q <= 0) continue; const k = Ac.k, u = clamp((t - Ac.t0) / Math.max(1e-3, Ac.t1 - Ac.t0));
-    if (k === 'roar' || k === 'trumpet') { jaw = _LQ(jaw, D.trunk ? 0.35 : D.roarJaw ?? 0.75, q); np = _LQ(np, -0.15, q); hp = _LQ(hp, -0.3, q); hy *= 1 - q; hr += q * 0.05 * Math.sin(t * 31); earB = _LQ(earB, 1, q); trk = _LQ(trk, 1, q); }
+    if (k === 'roar' || k === 'trumpet') { jaw = _LQ(jaw, D.trunk ? 0.35 : D.roarJaw ?? 0.75, q); lid = Math.max(lid, 0.35 * q); np = _LQ(np, -0.15, q); hp = _LQ(hp, -0.3, q); hy *= 1 - q; hr += q * 0.05 * Math.sin(t * 31); earB = _LQ(earB, 1, q); trk = _LQ(trk, 1, q); }
     else if (k === 'call') { jaw = _LQ(jaw, 0.25 + 0.12 * Math.sin(t * 14), q); np -= 0.12 * q; hp -= 0.2 * q; }
     else if (k === 'snap') { const j = u < 0.75 ? sm01(u / 0.25) : 1 - sm01((u - 0.75) / 0.06); jaw = _LQ(jaw, 0.95 * j, q); hp -= 0.25 * j * q; }
-    else if (k === 'yawn') { jaw = _LQ(jaw, 0.85 * Math.sin(Math.PI * u), q); hp -= 0.3 * q * Math.sin(Math.PI * u); }
+    else if (k === 'yawn') { lid = Math.max(lid, q * Math.sin(Math.PI * u)); jaw = _LQ(jaw, 0.85 * Math.sin(Math.PI * u), q); hp -= 0.3 * q * Math.sin(Math.PI * u); }
     else if (k === 'graze' || k === 'eat' || k === 'drink') { np = _LQ(np, a.grazeNp, q); hp = _LQ(hp, 0.3, q); hy *= 1 - q; jaw += q * 0.06 * (1 + Math.sin(t * 9)); if (k === 'drink' && kind_ok(a, 'giraffe')) { lat = q * 0.35; bp += q * 0.12; } }
     else if (k === 'shake') { br += q * 0.35 * Math.sin(t * 26); hy += q * 0.4 * Math.sin(t * 26 + 1); earB += q * 0.5; }
-    else if (k === 'stalk') { by -= q * 0.25 * lh; np = _LQ(np, 0.35, q); hp -= 0.35 * q; tl -= 0.15 * q; earB -= 0.3 * q; }
-    else if (k === 'charge') { np = _LQ(np, 0.45, q); hp = _LQ(hp, 0.3, q); earB = _LQ(earB, 1, q); }
+    else if (k === 'stalk') { lid = Math.max(lid, 0.3 * q); by -= q * 0.25 * lh; np = _LQ(np, 0.35, q); hp -= 0.35 * q; tl -= 0.15 * q; earB -= 0.3 * q; }
+    else if (k === 'charge') { lid = Math.max(lid, 0.3 * q); np = _LQ(np, 0.45, q); hp = _LQ(hp, 0.3, q); earB = _LQ(earB, 1, q); }
     else if (k === 'wag') { tsA = _LQ(tsA, 0.55, q); tsF = _LQ(tsF, 16, q); tl += 0.5 * q; }
     else if (k === 'look' && Ac.at) { const p = a._posAt ? a._posAt(t) : a.root.position, yw = a._yawAt ? a._yawAt(t) : a.root.rotation.y; let dy = Math.atan2(Ac.at[0] - p.x, Ac.at[2] - p.z) - yw; dy = Math.atan2(Math.sin(dy), Math.cos(dy)); ny += q * clamp(dy * 0.5, -0.7, 0.7); hy = _LQ(hy, clamp(dy * 0.5, -0.8, 0.8), q); }
     else if (k === 'breath' || k === 'fire') { jaw = _LQ(jaw, 0.7, q); np = _LQ(np, Ac.down ?? 0.15, q); hp = _LQ(hp, 0.1, q); hy *= 1 - q; earB = _LQ(earB, 1, q); by -= 0.05 * lh * q; }
@@ -6592,7 +6718,7 @@ function beastPose(a, t, w = 0, s = 0, graze = 0) {
       if (k === 'howl') { np = _LQ(np, -0.45, q); hp = _LQ(hp, -0.9, q); jaw = _LQ(jaw, 0.4 + 0.08 * Math.sin(t * 5), q * sm01((u - 0.1) / 0.15)); hy *= 1 - q; } }
     else if (k === 'lie' || k === 'sleep') { const drop = a.by0 - a.bh * 0.5; by = _LQ(by, -drop, q); bp = _LQ(bp, 0, q);
       for (let i = 0; i < 4; i++) { const fr0 = i < 2, cat = !D.herb; T[i][0] = _LQ(T[i][0], a.LG[i].zN + (fr0 ? (cat ? lh * 0.55 : -lh * 0.1) : lh * 0.35), q); T[i][1] *= 1 - q; A3[i] = _LQ(A3[i], fr0 ? (cat ? -1.2 : 1.9) : -1.3, q); }
-      if (k === 'sleep') { np = _LQ(np, a.grazeNp * 0.55, q); hp = _LQ(hp, 0.35, q); hy *= 1 - q; earB -= 0.3 * q; tsA *= 1 - q; } }
+      if (k === 'sleep') { lid = Math.max(lid, q); np = _LQ(np, a.grazeNp * 0.55, q); hp = _LQ(hp, 0.35, q); hy *= 1 - q; earB -= 0.3 * q; tsA *= 1 - q; } }
     else if (k === 'rear' || k === 'stand') { const th = k === 'rear' ? -0.85 : -1.25, [dy0, dz0] = pivot(2, th * q); bp += th * q; by += dy0; bz += dz0;
       for (const i of [0, 1]) { const ph2 = k === 'rear' ? Math.sin(t * 11 + i * 1.3) * 0.15 : 0; T[i][0] = _LQ(T[i][0], a.LG[i].zN + lh * (0.35 + ph2), q); T[i][1] = _LQ(T[i][1], lh * (1.1 + ph2), q); A3[i] = _LQ(A3[i], k === 'rear' ? 1.4 : 0.4, q); }
       np = _LQ(np, k === 'rear' ? -0.2 : 0.3, q); jaw = Math.max(jaw, q * (k === 'stand' ? 0.3 : 0.15)); tl += 0.4 * q; }
@@ -6601,36 +6727,37 @@ function beastPose(a, t, w = 0, s = 0, graze = 0) {
     else if (k === 'pounce' || k === 'leap') { const h = Ac.h ?? lh * 0.9, arc = Math.sin(Math.PI * u), cr = u < 0.15 ? Math.sin(Math.PI * u / 0.15) : 0; by += q * (h * arc - cr * lh * 0.15); bp += q * (-0.3 * Math.cos(Math.PI * u) * arc - 0.1 * cr);
       for (let i = 0; i < 4; i++) { const fr0 = i < 2; T[i][0] = _LQ(T[i][0], a.LG[i].zN + (fr0 ? lh * 0.55 : -lh * 0.5), q * arc); T[i][1] = _LQ(T[i][1], h * arc * 0.9 + lh * 0.1, q * arc); } tl += 0.5 * q; earB += 0.6 * q; jaw = Math.max(jaw, 0.5 * q * arc * (D.fang ? 1 : 0)); }
     else if (k === 'swipe') { const sw2 = Math.sin(Math.PI * u), [dy0, dz0] = pivot(2, -0.25 * sw2 * q); bp -= 0.25 * sw2 * q; by += dy0; bz += dz0; T[0][0] = _LQ(T[0][0], a.LG[0].zN + lh * (0.2 + 0.5 * Math.sin(Math.PI * u * 1.3)), q * sw2); T[0][1] = _LQ(T[0][1], lh * 0.6, q * sw2); A3[0] = _LQ(A3[0], -0.6, q * sw2); jaw = Math.max(jaw, 0.5 * q * sw2); earB += q; }
-    else if (k === 'down') { rig = Math.max(rig, q); br = _LQ(br, D.sprawl ? 3.0 : 1.45, q); by = _LQ(by, a.bw * 0.48 - a.by0, q); tsA *= 1 - q; hp = _LQ(hp, 0.2, q); jaw = _LQ(jaw, 0.15, q); hy *= 1 - q; }
+    else if (k === 'down') { lid = Math.max(lid, q); rig = Math.max(rig, q); br = _LQ(br, D.sprawl ? 3.0 : 1.45, q); by = _LQ(by, a.bw * 0.48 - a.by0, q); tsA *= 1 - q; hp = _LQ(hp, 0.2, q); jaw = _LQ(jaw, 0.15, q); hy *= 1 - q; }
   }
   // apply: body, spine, neck, head
   const brth = Math.sin(TAU * t / (1.6 + a.L) + sd * 20), bpT = a.slope + bp;
   a.body.position.set(0, a.by0 + by, bz); a.body.rotation.set(bpT, 0, br); a.body.scale.set(1, 1 + 0.015 * brth, 1 + 0.01 * brth);
-  a.fr.rotation.x = fx; a.rr.rotation.x = -fx;
-  if (D.sprawl && w > 0) { const sw3 = 0.12 * w * Math.sin(TAU * U + 0.5); a.fr.rotation.y = sw3; a.rr.rotation.y = -sw3; }
+  a.fr.rotation.x = fx; a.rr.rotation.x = -fx; a.fr.rotation.y = swy + bend * 0.45; a.rr.rotation.y = -swy - bend * 0.45;
+  if (D.sprawl && w > 0) { const sw3 = 0.12 * w * Math.sin(TAU * U + 0.5); a.fr.rotation.y += sw3; a.rr.rotation.y -= sw3; }
   a.neck.rotation.set(a.nRest + np, ny, 0);
   a.head.rotation.set(-(a.nRest + np) - (bpT + fx) * 0.85 + (D.hp ?? 0) + hp, hy, hr);
-  a.jaw.rotation.x = jaw;
+  a.jaw.rotation.x = jaw; a.jaw.rotation.y = jawY; if (a.lids) for (const l of a.lids) l.rotation.x = lerp(a.lid0, 1.35, clamp(lid));
   // legs: IK to the foot targets
   for (let i = 0; i < 4; i++) { const g = a.LG[i]; if (!g) continue; const th = bpT + (g.front ? fx : -fx), lk = T[i][2];
     if (D.sprawl) { g.u.rotation.set(0, g.s * (T[i][0] - g.zN) / (g.l1 + 0.2) * -1.2, g.s * (1.32 + 0.6 * lk)); g.m.rotation.set(0, 0, -g.s * (1.45 + 0.3 * lk)); g.n.rotation.set(0, 0, 0); g.f.rotation.set(0, 0, 0); continue; }
     let [y1, z1] = _rotYZ(g.hy, g.hz, g.front ? fx : -fx); [y1, z1] = _rotYZ(y1, z1, bpT); y1 += a.by0 + by; z1 += bz;
-    const a3 = g.A[2] + (g.front ? 1.3 : -0.45) * lk * (D.z === 'plant' ? 0.4 : 1) + A3[i], ty = T[i][1] + g.hf, tz = T[i][0];
+    const a3 = g.A[2] + (g.front ? 1.3 : -0.45) * lk * (D.z === 'plant' ? 0.4 : 1) * flick + A3[i], ty = T[i][1] + g.hf, tz = T[i][0];
     const [a1, a2] = _ik2(y1, z1, ty + g.l3 * Math.cos(a3), tz + g.l3 * Math.sin(a3), g.l1, g.l2, g.front);
-    let r1 = a1 - th, r2 = a2 - a1, r3 = a3 - a2, r4 = -a3 + (g.front ? 0.7 : 0.3) * lk;
+    let r1 = a1 - th, r2 = a2 - a1, r3 = a3 - a2, r4 = -a3 + (g.front ? 0.7 : 0.3) * lk * flick;
     if (rig > 0) { r1 = _LQ(r1, g.A[0] - a.slope + 0.15 * Math.sin(t * 3 + i), rig); r2 = _LQ(r2, g.A[1] - g.A[0], rig); r3 = _LQ(r3, g.A[2] - g.A[1], rig); r4 = _LQ(r4, -g.A[2], rig); }
     g.u.rotation.set(r1, 0, lat * (g.front ? g.s : 0)); g.m.rotation.x = r2; g.n.rotation.x = r3; g.f.rotation.x = r4;
   }
   // ears, tail, trunk
-  a.ears.forEach((e, i) => { const r = e.userData.r0, s2 = i ? 1 : -1, fl = 0.35 * bump((t * 0.23 + sd * 5 + i * 0.37) % 1.7, 0, 0.12) * iw;
+  a.ears.forEach((e, i) => { const r = e.userData.r0, s2 = i ? 1 : -1, fl = 0.35 * bump((t * 0.23 + sd * 5 + i * 0.37) % 1.7, 0, 0.12) * (0.35 + 0.65 * iw);
     if (e.userData.big) e.rotation.set(r[0], r[1] - s2 * (0.2 * Math.sin(t * 1.3 + i) * (1 - earB) + 0.75 * clamp(earB)), r[2]); else e.rotation.set(r[0] - 0.55 * earB + fl, r[1], r[2] + s2 * fl * 0.5); });
-  a.tail.rotation.set(a.tR + tl, 0, tsA * Math.sin(t * tsF + sd * 9));
+  a.tail.rotation.set(a.tR + tl, 0, tsA * Math.sin(t * tsF + sd * 9) - bend * 0.5);
   a.TS.forEach((g, i) => { if (!i) return; const dino = D.tail[2] === 'dino'; g.rotation.x = (a.tCurl[i] ?? 0) * (1 - 0.6 * clamp(tl)) - (D.sprawl || dino ? 0 : tl * 0.12) + (dino ? 0.03 * Math.sin(TAU * U * 2 - i * 0.6) * w : 0); g.rotation.z = tsA * (dino ? 0.25 : 0.7) * Math.sin(t * tsF + sd * 9 - i * 0.8) + (D.sprawl || dino ? (dino ? 0.06 : 0.18) * w * Math.sin(TAU * U - i * 0.9) : 0); });
   if (a.wings) { const fl = a.root._fly ? sm01((_spd(a.root, t) - 2) / 4) : 0, ph = TAU * 0.9 * t + sd * 5, fw = 1 - fl, sp2 = 0.55 * fl;
-    a.wings.forEach(W => { const { sh, hn, s } = W; sh.rotation.set(0, 0, s * (0.15 + 0.55 * Math.sin(ph))); if (fw > 0) sh.quaternion.slerp(W.qF, fw); sh.position.x = s * a.bw * (0.32 + 0.22 * fw); sh.scale.set(1 - 0.4 * fw, 1, 1 - 0.55 * fw);
-      hn.rotation.set(0, s * 0.3 * Math.max(0, Math.cos(ph)), s * 0.35 * Math.sin(ph - 0.7)); if (fw > 0) hn.quaternion.slerp(W.qH, fw); hn.scale.x = 1 - 0.45 * fw; });
-    if (fl > 0) a.LG.forEach(g => { if (!g) return; g.u.rotation.x = _LQ(g.u.rotation.x, g.front ? -0.9 : 1.1, fl); g.m.rotation.x = _LQ(g.m.rotation.x, g.front ? 1.6 : -0.6, fl); g.n.rotation.x = _LQ(g.n.rotation.x, 0.8, fl); });
-    if (fl > 0) { a.body.position.y = _LQ(a.body.position.y, 0, fl); } }
+    a.wings.forEach(W => { const { sh, hn, s } = W, eF = W.eF ?? (W.eF = new THREE.Euler().setFromQuaternion(W.qF, 'ZYX')), zf = s * (0.15 + 0.55 * Math.sin(ph)); sh.rotation.set(eF.x * fw, eF.y * fw, lerp(zf, eF.z, fw)); sh.position.x = s * a.bw * (0.32 + 0.22 * fw); sh.scale.set(1 - 0.4 * fw, 1, 1 - 0.55 * fw);
+      hn.rotation.set(0, s * 0.3 * Math.max(0, Math.cos(ph)) * fl, lerp(s * 0.35 * Math.sin(ph - 0.7), s * (Math.PI - 0.25), fw)); hn.scale.x = 1 - 0.45 * fw; });
+    const fh = fl > 0 ? (() => { const P = _flyPose(a.root, t).p; return fl * sm01((P.y - groundH(P.x, P.z)) / (2.5 * a.by0 * a.sc)); })() : 0;   // v2.40: by height above ground (was: by speed → the body dipped into the ground at take-off and landing)
+    if (fh > 0) a.LG.forEach(g => { if (!g) return; g.u.rotation.x = _LQ(g.u.rotation.x, g.front ? -0.9 : 1.1, fh); g.m.rotation.x = _LQ(g.m.rotation.x, g.front ? 1.6 : -0.6, fh); g.n.rotation.x = _LQ(g.n.rotation.x, 0.8, fh); });
+    if (fh > 0) { a.body.position.y = _LQ(a.body.position.y, 0, fh); } }
   if (a.trunk) a.trunk.forEach((g, i) => { const k = i / a.trunk.length; g.rotation.x = (i ? (-0.03 - 0.16 * k * k) * (1 - trk) - trk * 0.42 : -0.25 * trk) + 0.05 * Math.sin(t * 1.1 + i * 0.5 + sd * 4) * (1 - trk); g.rotation.z = 0.07 * Math.sin(t * 0.8 - i * 0.4 + sd * 6) * (1 - 0.5 * trk); });
   for (const f of a.fx) f(t, a);
 }
@@ -7351,8 +7478,10 @@ function ride(f, m, o = {}) {   // figure sits astride a beast (horse, camel, el
   f.fx.push((t, S) => { const e = env(t); if (e <= 0) return; const A = rigState('sit', 0, t, { sd: f.sd, seatH: 0.42 }); A.lz = -0.45; A.rz = 0.45; A.lt = -0.55; A.rt = -0.55; A.lk = 0.9; A.rk = 0.9; A.crx = 0.08;
     if (!f._cb) { A.las = A.ras = -0.95; A.lae = A.rae = -0.55; A.laz = -0.12; A.raz = 0.12; }
     for (const k in A) if (S[k] != null && !(f._cb && /^[lr]a[sez]$/.test(k))) S[k] = lerp(S[k], A[k], e); });
-  late(t => { const e = env(t); if (e <= 0) return; m.root.updateWorldMatrix(true, true); const r = f.root, P = v3(0, -0.5 / m.sc, 0).applyMatrix4(seat.matrixWorld), Q = seat.getWorldQuaternion(new THREE.Quaternion());
-    if (e < 1) { const p0 = rigPos(f, t < t0 ? t0 - 0.6 : t1 + 0.6); P.lerpVectors(p0, P, e); P.y += Math.sin(Math.PI * e) * 0.6; }
+  // v2.40: a rider without a path of their own lands beside the animal and stays there (was: flew back to where they had mounted — metres per frame if the animal had moved on)
+  let _land = null; const land = () => _land ??= (() => { const ps = _flyPose(m.root._fly ? m.root : m._posAt ? m : m.root, t1 + 0.6), sd2 = Math.max(0.7, m.bw * m.sc * 0.5 + 0.55), p = ps.p.clone().add(v3(sd2 * Math.cos(ps.e.y), 0, -sd2 * Math.sin(ps.e.y))); p.y = groundH(p.x, p.z); return [p, ps.e.y]; })();
+  late(t => { const e = env(t), free = t1 < 1e8 && !f._posAt; if (e <= 0) { if (free && t > t1) { const [lp, ly] = land(); f.root.position.copy(lp); f.root.rotation.set(0, ly, 0); } return; } m.root.updateWorldMatrix(true, true); const r = f.root, P = v3(0, -0.5 / m.sc, 0).applyMatrix4(seat.matrixWorld), Q = seat.getWorldQuaternion(new THREE.Quaternion());
+    if (e < 1) { const off = t >= t1 && free, p0 = off ? land()[0] : rigPos(f, t < t0 ? t0 - 0.6 : t1 + 0.6); if (off) r.rotation.set(0, land()[1], 0); P.lerpVectors(p0, P, e); P.y += Math.sin(Math.PI * e) * 0.6; }
     r.position.copy(P); r.quaternion.slerp(Q, e); });
   (m.riders ??= []).push(f); return f;
 }
