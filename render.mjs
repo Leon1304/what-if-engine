@@ -5,6 +5,7 @@
 //   node render.mjs page.html --cover cover.jpg [--t 1.2]   (THUMB = [A, B] → also cover-b.jpg: A/B test thumbnails)
 //   node render.mjs page.html --audio out.wav
 //   node render.mjs page.html --srt out.srt   (v2.30: subtitles for YouTube, same pages + timing as the captions)
+//   node render.mjs page.html --audit   → MOTION: / HITBOX: / GORE: lines (pops, snapping joints, jitter, state left over between frames, figures inside props); --shots runs it too (--no-audit = off)
 // Landscape pages (CFG.aspect: '16:9') render 16:9 with the same --w (short side): 1440 → 2560x1440.
 // Needs in this folder: npm i three@0.170.0 playwright ; ffmpeg on PATH.
 // Frames stay in <out>.frames/: a stopped run resumes, and --redo a-b re-renders only that time range (after a scene/caption
@@ -62,6 +63,18 @@ if (opt('srt')) {   // v2.30: subtitles for YouTube (same pages + timing as the 
   const s = await page.evaluate(() => window.whatif.srt ? window.whatif.srt() : '');
   writeFileSync(opt('srt'), s); console.log('wrote', opt('srt'), s.split('\n\n').filter(Boolean).length, 'cues'); report(errors); await browser.close(); process.exit(0);
 }
+if (opt('probe')) {   // v2.29 debugging: evaluate code inside the engine (after the scene is built), print the result as JSON
+  const { browser, page, errors } = await openPage();
+  try { console.log(JSON.stringify(await page.evaluate(s => window.whatif.probe(s), opt('probe')), null, 1)); } catch (e) { console.log('PROBE ERROR', e.message); }
+  report(errors); await browser.close(); process.exit(0);
+}
+if (flag('audit') && !opt('shots')) {   // v2.29: node render.mjs page.html --audit → motion + gore check of the whole video, no images
+  const { browser, page, errors } = await openPage(), t0 = Date.now();
+  const A = await page.evaluate(() => window.whatif.audit());
+  for (const m of A.motion) console.log('MOTION: ' + m); for (const m of A.hit ?? []) console.log('HITBOX: ' + m); for (const g of A.gore) console.log('GORE: ' + g);
+  if (!A.motion.length) console.log('motion: ok (no pops, jitter or left-over state)');
+  console.log(`audit ${((Date.now() - t0) / 1000).toFixed(0)} s`); report(errors); await browser.close(); process.exit(0);
+}
 if (opt('shots')) {
   const out = opt('out', 'shots'); mkdirSync(out, { recursive: true });
   const { browser, page, errors } = await openPage();
@@ -73,8 +86,13 @@ if (opt('shots')) {
     await page.screenshot({ path: f }); files.push(f);
     console.log(f, `${Date.now() - t0} ms`);
   }
-  const info = await page.evaluate(() => window.whatif.info());
-  console.log('scene:', JSON.stringify(info));
+  const info = await page.evaluate(() => window.whatif.info()), { gore: G0, ...rest } = info;
+  console.log('scene:', JSON.stringify(rest));
+  const A = flag('no-audit') ? { motion: [], gore: G0 ?? [] } : await page.evaluate(() => window.whatif.audit?.() ?? { motion: [], gore: [] });   // v2.29 motion + gore audit
+  for (const m of A.motion) console.log('MOTION: ' + m);
+  for (const m of A.hit ?? []) console.log('HITBOX: ' + m);
+  for (const g of A.gore) console.log('GORE: ' + g);
+  if (!A.motion.length) console.log('motion: ok (no pops, jitter or left-over state)');
   report(errors); await browser.close();
   const cols = Math.min(LAND ? 3 : 4, files.length), rows = Math.ceil(files.length / cols), TW = LAND ? 480 : 360, TH = LAND ? 270 : 640;
   const fc = files.length === 1 ? `[0:v]scale=${TW}:-1` :

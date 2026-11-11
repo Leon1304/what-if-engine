@@ -155,7 +155,7 @@ Als letzte Zeile der Szene `biome(kind, {density, trees, keep: [[x, z, r]], area
 - Waffen: `weapon(rig, kind, {style, color, scale, quiver})` mit sword · axe · spear · bat · knife · hammer · saber · katana · cutlass · club · mace · shield (`style`: round · kite · heater · scutum · aspis · riot) · bow · pistol · revolver · blaster · smg · rifle · sniper · shotgun · minigun · launcher.
 - Nahkampf: `swing(rig, t, {kind: 'slash'|'back'|'chop'|'thrust'|'rise', at, hit, kill, power})` (t = Treffer), `block(rig, t, {parry})`, `duel(a, b, {t0, n, every, finish: 'a'|'b'})` (n Schlagwechsel mit Klirren, dann der letzte Schlag), `punch(rig, t, {at})`, `kick(rig, t, {at})`.
 - Fernkampf: `bow(rig, t, {at, draw, kill, miss})`, `arrowRain({from, to, r, n, t0, t1})`, `shoot(rig, t, {at, n, rate, spread, acc, kill})` (`at` = Rig, Punkt, `horde` oder Liste; Mündungsfeuer, Hülsen, Leuchtspur, Einschläge), `reload(rig, t)`, `grenade(rig, t, {to, fuse, size})`.
-- Treffer: `fall(rig, t, {dir, getUp, dazed})` (`dazed` = Sternchen); Massen: `h.hit(i, t, {from, push})`, `h.near(p, t, {max})`, `killNear(h, P, t, r)`.
+- Treffer: `fall(rig, t, {dir, getUp, dazed})` (`dazed` = Sternchen), Sturz aus der Höhe `fallDown(rig, t, {from, to, land})` (v2.29), `ouch(person, t)`, `dismember(zombie, part, t)` und `{ sever }` (v2.23, Abschnitt „Blut und Körperteile“); Massen: `h.hit(i, t, {from, push})`, `h.near(p, t, {max})`, `killNear(h, P, t, r)`.
 - Fahrzeuge: `tank(p,x,z,{color, ry, turret, camo, crew})` + `drive`, `aimTurret(T, t, at)`, `cannon(T, t, {at, size})`; `jet(p,{missiles, bombs})` + `fly`, `missile({from, at, t0})` (lenkt nach, trifft auch Flugzeuge → `shotDown`), `bomb(V, t, {horde})`, `flares(V, t)`, `strafe(V, t0, t1, {at, horde})`, `shotDown(J, t)`.
 - Die Sounds kommen automatisch. Pro Kampfszene eine Zeitlupe auf den entscheidenden Treffer.
 
@@ -598,3 +598,65 @@ const BEATS = []; { let t = 0.2; LINES.forEach(([text, say, x], i) => { const d 
 Bestehende Seiten mit neuer Engine neu bauen (Story, Szene, Stimme bleiben): `python3 reengine.py renders/<slug>.html template.html renders/<slug>.html`.
 
 Test: `tests/long.*` (Kapitelkarten, Bauchbinde, Untertitel-Umbruch, Zeitleiste, Nacht, Gischt, Nasssand, 2D-Karte).
+# Neu in v2.29 (Blut und abtrennbare Körperteile, Stürze, YouTube-Tags, saubere Bewegungen, Hitboxen)
+
+## Blut und Körperteile (`CFG.gore`)
+- **Modus:** `CFG.gore` = `'goo'` (Standard: grüner Zombie-Schleim, wie bisher) · `'blood'` (dunkles Cartoon-Blut, Menschen nur wenige hellrote Tropfen) · `'off'` (keine Flüssigkeit, nichts wird abgetrennt, nur ein Treffer). Gilt auch für alle Kampftreffer auf Zombies (`hitFx`). Serien legen den Modus einmal fest und behalten ihn.
+- `dismember(zombie | { h, i }, part, t, { from, dir, power: 3.2, up: 2.6, spin, blood: 1, linger: 2.5, then: 'fall', twitch, fluid, sfx })`: Körperteil fliegt mit Squelch ab (echte Physik: fliegt, prallt ab, rollt), zuckt am Boden und verpufft nach `linger` s (0,8–4) mit Puff und Plopp. Am Körper bleibt ein kurzer Stumpf mit dunkler Kappe. `part` = armL · armR (ganzer Arm) · foreL · foreR (Unterarm) · handL · handR · legL · legR (Bein: der Zombie fällt). `from` = Punkt des Angreifers (Teil fliegt davon weg), sonst zur Seite. `then: 'fall'` lässt auch bei Armen umfallen. Ohne `from`/`dir` fliegt es nach außen. Gibt `{ limb, stub, end }` zurück (`track('arm', D.limb)` für die Kamera).
+- Massen: `h.lose(i, 'armL' | 'armR' | 'legL' | 'legR', t, o)` bzw. `dismember({ h, i }, …)`: Unterarm bzw. Unterschenkel fliegt, Oberarm/Oberschenkel behält eine Kappe; bei Beinen fällt das Mitglied.
+- Kampf: `swing`, `bow` und `shoot` nehmen `sever: 'armR'` (Teil des Treffers; bei `shoot` nur der letzte Schuss). Beispiel: `swing(you, 31.2, { at: z, sever: 'foreR' })`.
+- `bleed(at, t, { n ≤ 30, dur, dir, speed, cone, size, who, fluid })`: Tropfen (Stoß oder mit `dur` kurzer Strahl), die als kleine Flecken landen und nach ca. 2 s weg sind. `at` = Punkt, `t => [x,y,z]` oder Rig (Brust). Menschen: nur im Modus `'blood'`, höchstens 8 Tropfen.
+- `ouch(person, t, { blood, n, stars, dazed: 2.2, plaster, fall, from })`: Cartoon-Verletzung für Menschen: ein paar Tropfen (nur `'blood'`), Sternchen, Pflaster auf der Wange (ploppt nach 0,45 s auf), Treffer-Reaktion; `fall: true` = umfallen.
+- `fluid`: `'goo'` · `'blood'` · `'oil'` (schwarz, für Roboter-Optik) · `'#hex'` überschreibt die Farbe für einen Aufruf.
+
+**Automatische Schutzregeln (YouTube und Instagram, immer an):**
+- Nur Zombies verlieren Körperteile (`o.undead` für eigene Untote). Menschen und Tiere bekommen stattdessen `ouch` (Warnung).
+- Köpfe bleiben dran (YouTube beschränkt Enthauptung auf 18+) – `part: 'head'` wird zum rechten Arm (Warnung).
+- Kleine Mengen: höchstens ca. 20 Tropfen pro Teil, keine Pfützen, Flecken verschwinden nach ca. 2 s, abgetrennte Teile verpuffen.
+- Thumbnail (`render.mjs --cover`): kein Blut, alle Körperteile dran.
+- Warnungen in `info().gore` (erscheinen bei `--shots` in der Zeile `scene:`): Gore vor 15 s (YouTube: grafische Gewalt in den ersten 7 s = keine Werbung, 8–15 s = eingeschränkt), Gore in einer Zeitlupe (`SLOWMO`), Gore in einer Nahaufnahme (Bildhöhe am Ort unter 3 m). Jede Warnung beheben, bevor gerendert wird.
+- Test: `tests/gore.story.js` + `.scene.js`.
+
+**Feinschliff:**
+- Teile: `'arm' | 'fore' | 'hand' | 'leg'` nimmt die Seite, die zum Angreifer (`from`) zeigt; `'random'` (oder `sever: true`) ein Arm-Teil. Gilt auch für `h.lose` und `{ sever }`.
+- Bein ab: Ein laufender Zombie fällt auf die Hände und **kriecht weiter** zu seinem Ziel (`then: 'crawl'`, `to: [x, z]`, `speed: 0.4`), ein stehender kippt um (`then: 'fall'`).
+- Arm ab: Der Zombie schaut kurz auf den Stumpf und macht weiter (`look: false` = nicht); aus dem Stumpf tropft es kurz (`drip: false` = nicht).
+- Massen: `killNear(h, P, t, r, { sever: 2 })` und `grenade(rig, t, { horde, sever: 2 })`: die n Nächsten verlieren ein Teil.
+- Flüssigkeit pro Aufruf (`fluid`): `'oil'` (schwarz mit Funken, Roboter-Optik), `'alien'` (leuchtend cyan), `'#hex'`.
+- Look: Blut glänzt und reagiert auf Licht, Tropfen ziehen sich im Flug lang, Flecken haben verschiedene Formen und Drehungen (auch der grüne Schleim). Abgetrennte Teile stoßen nicht mit Ragdolls zusammen (`phys(…, { group: 'debris' })`).
+- Prüfung: `info().gore` prüft die ganze Zeit um jedes Ereignis (Nahaufnahme, unabhängig von den `--shots`-Zeiten), Gore im `TEASE`-Vorgriff und mehr als 3 abgetrennte Teile. `assemble.py` warnt bei Gore-Wörtern in Captions, Stimme, Titel und Thumbnail und bei mehr als 3 Abtrenn-Aufrufen.
+
+## Stürze aus der Höhe (`fallDown`)
+- `fallDown(rig, t, { from, to, depth, dist: 0.6, dir, up: 0.8, land: 'auto', getUp, until, dazed, hide, shake, sfx })` → `{ land, at }`: Figur fällt von Dach, Leiter, Mauer, Baum, Brücke, Klippe oder durch eine Falltür. Flug: kleiner Absprung (`up` m/s), Arme rudern, Beine strampeln, ängstliches Gesicht, Fallwind. Landung: Staub, dumpfer Aufprall, Schütteln je nach Höhe.
+  - `land: 'auto'`: bis 1,2 m fangen die Knie ab und sie bleibt stehen, darüber kippt sie nach hinten (`'front'` = aufs Gesicht) und bleibt liegen (Menschen mit Sternchen). `'feet'` erzwingt Stehenbleiben, `'back'` das Hinfallen.
+  - `from` = Startpunkt mit Höhe (Standard: wo die Figur bei t steht, z. B. `root.position.y = 3` auf einem Dach). Ziel: `to: [x, z]` (Boden dort) oder `[x, y, z]`, sonst `depth` m tiefer bzw. der Boden `dist` m voraus.
+  - `getUp: t2` steht wieder auf, `until: t3` gibt die Figur frei (danach `walk()` ab `at`), `hide: tt => bool` blendet sie aus (außer Sicht, z. B. tiefe Grube).
+  - Regel: Figuren nie per `holdRig`/Pfad einfach nach unten schieben – jeder Sturz läuft über `fallDown`.
+- Fallen nutzen das selbst: `trap('trapdoor' | 'pit', …, { victim, keep: true })` → Opfer fällt, landet und bleibt unten liegen (bei `spikes` nie sichtbar unten). `trapVictim(V, t, 'drop', { depth, keep })` genauso.
+- Massen: `h.pit({ at: [x, z], r | w, d, ry, t0, t1, depth: 2.9 })`: Wer ab `t0` in die Fläche läuft, fällt hinein, landet, kippt um und bleibt liegen; die Gefallenen stapeln sich. Ersetzt den `lift`-Trick bei `trapFloor` (Fläche = Bodenöffnung). `h.hit(i, t, { drop: true, keep: true, depth })` für einzelne.
+- Festgehaltene Figuren (`holdRig`, Fallen, Stürze) stehen vor dem Festhalten wieder an ihrem Platz, auch nach Vor- und Zurückspulen und wenn die Physik vorab spätere Zeiten berechnet hat (vorher standen sie z. B. schon unten in der Grube).
+- Test: `tests/falls.story.js` + `.scene.js`.
+
+## YouTube-Tags (`tags.py`)
+- `python3 tags.py "tag1, tag2, …"` gibt die Liste bereinigt zurück (doppelte raus, `#` und Anführungszeichen weg) und zählt wie YouTube: jedes Zeichen, jedes Komma, +2 für Tags mit Leerzeichen; höchstens 500. Was nicht mehr passt, fällt hinten weg, kürzere Tags weiter hinten füllen Lücken.
+- `python3 tags.py --file renders/<slug>.post.json` prüft und kürzt `youtube.tags` im Posting-Plan; `upload.py` kürzt beim Hochladen ebenfalls, damit die API den Upload nicht ablehnt.
+
+## Saubere Bewegungen (Bewegungs-Prüfung, keine Sprünge)
+- **Prüfung:** `node render.mjs page.html --audit` (läuft auch bei `--shots` mit, `--no-audit` = aus) spielt das ganze Video mit 30 fps durch und meldet:
+  - `MOTION: … jumps X m in one frame` (Figur/Objekt springt), `… snaps N° in one frame` (Gelenk klappt in einem Bild um), `… jitters back and forth` (zwei Systeme kämpfen gegeneinander),
+  - `… off/differs … after jumping back / when frames are skipped` (Zustand aus anderen Bildern übrig: flackert zwischen Render-Workern),
+  - `HITBOX: … stands … m inside an object` (Figur steht in einem Gegenstand, siehe unten), `GORE: …` (wie bisher).
+  Jede `MOTION:`-Zeile vor dem Rendern beheben: Sprung → Zeit/Pfad anpassen oder `ramp`, Gelenk-Schnappen → Pose mit `env3`/`_thru` einblenden, Zittern → nur ein System darf die Sache bewegen, „left over“ → eigener `tick` muss für jedes t (auch vor dem Start) den Zustand setzen. Gewollte Zuckungen (Stromschlag) dürfen bleiben. Positionen stehen in der Meldung `(x, z)`.
+  Schnelle Aktionen (Schwünge, Schläge, Tritte, Würfe, Abtrennen, harte Landungen, Schlingen) bekommen automatisch Bewegungsunschärfe (`MBAUTO`) und werden nur bei sehr großen Sprüngen gemeldet.
+- **Debuggen:** `node render.mjs page.html --probe "<js>"` führt Code in der Engine aus (nach dem Szenenaufbau) und gibt das Ergebnis als JSON aus, z. B. `--probe "(() => { stepScene(4.2); return RIGS[3].root.position; })()"`.
+- **Reinheit:** Jedes Bild ist eine reine Funktion der Zeit. Figuren starten jedes Bild in ihrer gebauten Pose (Position, Drehung, Sichtbarkeit), Gegenstände in Händen, Bananenschalen usw. ebenso.
+- **Was die Engine jetzt selbst glättet:** Wurf-, Stoß- und Schussbewegungen schwingen über ~3 Bilder durch (`_thru`), Schwertschwünge laufen in Gelenkwinkeln (kein Umklappen des Arms nahe der Schulter), überlappende Bogenschüsse und Granatwürfe blenden ineinander, Tanzschritte (`robot`, `disco`) und `chat`-Gesten blenden, `tread` im Wasser sinkt ein statt 1 m zu springen, Treppen werden gleichmäßig hochgelaufen (Füße finden trotzdem jede Stufe), `hang` am Rettungshaken blendet ein und lässt am Ende fallen, `fly()` hat an Start und Ende keine 52°-Schräglage mehr, schnelle Flugzeuge (`speed ≥ 15`, nicht Hubschrauber/Vögel) fliegen vor `t0` schon ein (`cruise: false` = alt), Hubschrauber beschleunigen ab `t0 > 0` in 1,2 s, der Hund bei `fetch` stoppt, senkt den Kopf und nimmt den Stock ins Maul.
+- **Greifen und Ablegen:** `holdItem` und Essen/Trinken (`eat`, `drink`) greifen jetzt nach dem Gegenstand: die Hand geht zu seinem Platz (beugt sich vor, geht für Tiefes in die Hocke), nimmt ihn genau dort und legt ihn bei `after: 'rest'` dort wieder ab. `reach: false` schaltet das ab. Gegenstände, die nur für die Aktion erzeugt werden (am Ursprung oder unter dem Boden geparkt), sind vorher unsichtbar. Nach `after: 'free'` verlässt der Gegenstand die Hand weich (`release` s, Standard 0,15).
+
+## Hitboxen (niemand steht in Gegenständen)
+- Jede stehende oder gehende Figur ist ein Zylinder (Radius 0,21 m × Größe). Fest sind: alle statischen Gegenstände zwischen Knie- und Kopfhöhe der Figur (Möbel, Wände, Kisten, Zäune, Bäume, geparkte Autos …), andere Figuren und Tiere. Stufen, Bordsteine, Teppiche (unter Kniehöhe) werden übergangen; Dächer, Lampen darüber stören nicht. Gras, Getreide, Menschenmassen (instanziert) sind durchlässig.
+- Jedes Bild (vor allen Anhängern): **1)** Gehende weichen statischen Hindernissen, stehenden Figuren und ruhenden Tieren seitlich aus (sanft über 0,9 m vor und nach dem Hindernis, Personen mit etwas Abstand); entgegenkommende Gehende weichen immer zur selben Seite aus. **2)** Was noch überlappt, wird herausgeschoben (Figur in den Tisch gestellt → steht an der Kante). **3)** Figuren werden auseinandergeschoben (halb/halb), Tiere und Sitzende schieben, werden aber nicht bewegt.
+- Nur flache Überlappungen: wer mehr als ~0,45–0,9 m tief in etwas steht (Haus aus einem Block, Zelt), bleibt stehen und wird als `HITBOX:` gemeldet – Figur oder Pfad verschieben oder `noHit()`.
+- Ausgenommen (automatisch): Sitzende, Hockende, Liegende, Fallende, Ragdolls, festgehaltene (`holdRig`), Reiter, Figuren in Fahrzeugen (anderes Elternobjekt), Figuren hoch über dem Boden (Leiter, Dach). Berührende Paare automatisch: `hug`, `highFive`, `handshake`, `chat` (alle `_pair`), `piggyback`, `pull`, `shove`, `carry` (Figur tragen), Mensch und Tier bei `pet`, `feed`, `fetch`, `lead`.
+- `noHit(figur | objekt)` = nie schieben / nie blockieren (z. B. Badewanne, in der jemand steht), `noHit(a, b, t0, t1)` = die zwei dürfen sich in dem Fenster berühren. `CFG.hitboxes = false` schaltet alles ab. Das alte „Abstand halten“ (1,1 m Schieben) ist ersetzt.
+- Test: `tests/hitbox.story.js` + `.scene.js`.

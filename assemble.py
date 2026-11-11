@@ -48,6 +48,14 @@ for m_ in sorted(set(re.findall(r"mood:\s*'(\w+)'", _au)) | set(re.findall(r"\[\
 _am = re.search(r"amb:\s*(\[\[.*?\]\])", _au, re.S)
 for k_ in sorted(set(re.findall(r"\[\s*[^\[\],]+,\s*[^\[\],]+,\s*'(\w+)'", _am.group(1)) if _am else [])):
     if _ambs and k_ not in _ambs: print(f"WARNING: ambience '{k_}' does not exist yet — build it in AMB (template.html, sound section) and commit it to the engine, so later videos can reuse it")
+# v2.29 gore (YouTube / Instagram): gore stays a short punchline — no gore words on screen or in the thumbnail, at most 3 cuts, only after 15 s (checked at render: info().gore)
+_cuts = len(re.findall(r"\bdismember\s*\(|\.lose\s*\(|\bsever\s*:", scene))
+if _cuts or re.search(r"\b(bleed|ouch)\s*\(", scene):
+    _txt = ' '.join(m_[1] for m_ in re.findall(r"\b(?:text|say|q|kick|label|sub|loop|cta)\s*:\s*(['\"`])(.*?)\1", story)) + ' ' + (opt('title') or '')
+    _bad = sorted(set(w_.lower() for w_ in re.findall(r"\b(gore|gory|blood\w*|bleed\w*|bled|brutal\w*|dismember\w*|sever(?:ed|s)?|decapitat\w*|behead\w*|mutilat\w*|guts|dead body|corpse\w*)\b", _txt, re.I)))
+    if _bad: print(f"WARNING: gore words in captions / voice / title / thumbnail ({', '.join(_bad)}) — say it dryly without them (\"He didn't need that arm anyway.\"), YouTube and Instagram read the words too")
+    if _cuts > 3: print(f"WARNING: {_cuts} severed parts — keep it to 1–3 moments per video (gore as a punchline, not the topic)")
+    if not re.search(r"gore:\s*'", story): print("NOTE: CFG.gore not set — zombie fluid is green goo ('goo'); set gore: 'blood' for dark cartoon blood or 'off'")
 def put(t, tag, body):
     a, b = f'/* @{tag}-BEGIN */', f'/* @{tag}-END */'
     i, j = t.index(a) + len(a), t.index(b)

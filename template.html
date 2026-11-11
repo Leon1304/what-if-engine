@@ -426,6 +426,10 @@ const AUDIO = {
 // THUMB extras (v2.8): stamp: 'False' | { text, color, x, y }, meter: 0–100 (+ meterLabel, meterX, meterY), big: '30,000 °C' (+ bigX, bigY).
 // focusShot(anchor, t, dur, { dist, az, el, center, fov, push, tr }) in the scene adds a push-in on any anchor to CAM (board item, globe pin with center: the planet's position, layer, lineup item).
 // Scene: conspiracyBoard(p, x, z, { items, links: [[i, j, snapT]], cross: [[i, t]], fall }) · globeMark(planet, lat, lon, o) · globeArc(planet, [lat, lon], [lat, lon], o) · globeArea(planet, [[lat, lon]…], o) · lineup(p, x, z, items, o) (+ .shot(t, dur) for CAM)
+// CFG.gore (v2.29): 'goo' (default, green zombie goo) · 'blood' (dark cartoon blood) · 'off'. Scene: dismember(zombie | { h, i }, 'armL'|'armR'|'foreL'|'handR'|'legL' …, t, { from })
+//   · h.lose(i, part, t) · bleed(at, t) · ouch(person, t) (stars + plaster) · swing/bow/shoot { sever: 'armR' }. Gore after 15 s, never in slow motion, close-ups or the thumbnail.
+//   part 'arm' | 'leg' = the side toward the attacker · legless zombies crawl on · killNear/grenade { sever: n } · fluid 'oil' | 'alien'.
+// Falls (v2.29): fallDown(rig, t, { from, to, depth, land, getUp }) — off a roof/ledge/ladder: windmill, land, go down (≤ 1.2 m: knees give). Crowds: h.pit({ at, w, d, t0, depth }).
 /* @STORY-END */
 
 /* ====================================================================== */
@@ -1133,12 +1137,14 @@ function heli(p, o = {}) {   // helicopter: cabin, tail boom, skids, spinning ma
 function fly(obj, pts, o = {}) {
   const node = dyn(obj.g ?? obj.root ?? obj), P = o.loop ? [...pts, pts[0]] : pts, L = [0];
   for (let i = 1; i < P.length; i++) L.push(L[i - 1] + Math.hypot(P[i][0] - P[i - 1][0], P[i][1] - P[i - 1][1], P[i][2] - P[i - 1][2]));
-  const len = L[L.length - 1], at = s => { s = o.loop ? ((s % len) + len) % len : clamp(s, 0, len); let i = 1; while (i < L.length - 1 && L[i] < s) i++; const k = (s - L[i - 1]) / (L[i] - L[i - 1] || 1); return [0, 1, 2].map(j => lerp(P[i - 1][j], P[i][j], k)); };
-  const yaw = s => { const a = at(s - 2), b = at(s + 2); return Math.atan2(b[0] - a[0], b[2] - a[2]); };
+  const cruise = o.cruise ?? (!o.loop && o.ramp == null && !(obj.bird || obj.wings) && !obj.rotor && (o.speed ?? 30) >= 15 && (o.t0 ?? 0) > 0);   // v2.29: a fast plane starting later is already flying in along the first leg (was: hung still in the air until t0)
+  const len = L[L.length - 1], at = s => { s = o.loop ? ((s % len) + len) % len : cruise ? Math.min(s, len) : clamp(s, 0, len); let i = 1; while (i < L.length - 1 && L[i] < s) i++; const k = (s - L[i - 1]) / (L[i] - L[i - 1] || 1); return [0, 1, 2].map(j => lerp(P[i - 1][j], P[i][j], k)); };
+  const yaw = s => { const a = at(s - 2), b = at(s + 2); if (Math.hypot(b[0] - a[0], b[2] - a[2]) > 0.3) return Math.atan2(b[0] - a[0], b[2] - a[2]);   // v2.29: beyond the ends → heading of the end leg (was: 0 → banked 52° for the first and last metres, then snapped level)
+    const e = s < len / 2 ? [P[0], P[1]] : [P[P.length - 2], P[P.length - 1]]; return Math.atan2(e[1][0] - e[0][0], e[1][2] - e[0][2]); };
   node.rotation.order = 'YXZ';
-  const V = o.speed ?? 30, wf = !!(obj.bird || obj.wings), RA = o.ramp ?? (wf && !o.loop ? 0.7 : 0), ST = o.loop ? 0 : o.stop ?? (wf ? 0.9 : 0), V0 = Math.min(o.v0 ?? 0, V), dR = RA ? (V0 + V) / 2 * RA : 0, dS = ST ? V / 2 * ST : 0, tC = RA + Math.max(0, len - dR - dS) / V;   // ramp: accelerate from v0 over RA s · stop: brake to 0 at the end over ST s (birds and dragons: soft take-off and landing by default)
+  const V = o.speed ?? 30, wf = !!(obj.bird || obj.wings), RA = o.ramp ?? (wf && !o.loop ? 0.7 : obj.rotor && !o.loop && (o.t0 ?? 0) > 0 ? 1.2 : 0), ST = o.loop ? 0 : o.stop ?? (wf ? 0.9 : 0), V0 = Math.min(o.v0 ?? 0, V), dR = RA ? (V0 + V) / 2 * RA : 0, dS = ST ? V / 2 * ST : 0, tC = RA + Math.max(0, len - dR - dS) / V;   // ramp: accelerate from v0 over RA s · stop: brake to 0 at the end over ST s (birds and dragons: soft take-off and landing by default)
   const dist = u => { if (u <= 0) return 0; if (RA && u < RA) return V0 * u + (V - V0) / (2 * RA) * u * u; if (!ST || u < tC) return dR + V * (u - RA); const w = Math.min(u - tC, ST); return Math.min(len, dR + V * (tC - RA) + V * w - V / (2 * ST) * w * w); };
-  const poseAt = t => { const s = (RA || ST) ? dist(t - (o.t0 ?? 0)) : V * Math.max(0, t - (o.t0 ?? 0)), p = at(s), a = at(s - 2), b = at(s + 2);
+  const poseAt = t => { const s = (RA || ST) ? dist(t - (o.t0 ?? 0)) : V * (cruise ? t - (o.t0 ?? 0) : Math.max(0, t - (o.t0 ?? 0))), p = at(s), a = at(s - 2), b = at(s + 2);
     let dy = yaw(s + 6) - yaw(s - 6); dy = Math.atan2(Math.sin(dy), Math.cos(dy));
     return [p, -Math.atan2(b[1] - a[1], Math.hypot(b[0] - a[0], b[2] - a[2])), yaw(s), clamp(-dy * (o.bank ?? 2.2), -0.9, 0.9)]; };
   node._fly = poseAt;   // pure pose at any time (engine trails, follow cams)
@@ -1620,7 +1626,8 @@ function walk(obj, pts, o = {}) {
   const yawAt = s => { const a = path.dir(s - 0.35), b = path.dir(s + 0.35), x = a.x + b.x, z = a.z + b.z; return Math.hypot(x, z) > 1e-5 ? Math.atan2(x, z) : null; };
   const sc = (obj.root ?? obj).scale.x, Cl = obj.legL ? cycleLen(mode, v) * sc : 0, stride = o.stride ?? (obj.kind === 'chicken' ? 16 : 4), bl = Math.max(ra, 0.22);
   let y0 = yawAt(0) ?? 0;
-  const rt = obj.root ?? obj; (rt._walks ??= []).push({ t0, v, pos: t => { const P = path.at(dist(t - t0)); return new THREE.Vector3(P.x, groundH(P.x, P.z) + (o.y ?? 0), P.z); }, yaw: t => o.face ?? (yawAt(dist(t - t0)) ?? y0) });
+  const gW = (s, P) => { if (!rig || !STAIRS.length) return groundH(P.x, P.z); let h = 0; for (let k = -2; k <= 2; k++) { const Q = path.at(s + k * 0.075); h += groundH(Q.x, Q.z); } return h / 5; };   // v2.29: on stairs the body rises smoothly (was: 18 cm jump per step); the feet still find the steps (foot IK)
+  const rt = obj.root ?? obj; (rt._walks ??= []).push({ t0, v, pos: t => { const s = dist(t - t0), P = path.at(s); return new THREE.Vector3(P.x, gW(s, P) + (o.y ?? 0), P.z); }, yaw: t => o.face ?? (yawAt(dist(t - t0)) ?? y0) });
   const pick = t => { let w = rt._walks[0]; for (const x of rt._walks) if (x.t0 <= t) w = x; return w; };
   obj._posAt = t => pick(t).pos(t); obj._yawAt = t => pick(t).yaw(t);
   if (o.prints && obj.legL) {   // footprints (snow, sand, mud): o.prints = true | hex colour; o.printLife (s)
@@ -1634,7 +1641,7 @@ function walk(obj, pts, o = {}) {
   }
   return tick(t => {
     const tau = t - t0, s = dist(tau), moving = tau > 0 && tau < Te;
-    const P = path.at(s); node.position.set(P.x, groundH(P.x, P.z) + (o.y ?? 0), P.z);
+    const P = path.at(s); node.position.set(P.x, gW(s, P) + (o.y ?? 0), P.z);
     const yw = yawAt(s) ?? y0; node.rotation.y = o.face ?? yw;
     const w = moving ? clamp(Math.min(tau, Te - tau) / bl) : 0, vn = moving ? (dist(tau + 0.02) - dist(tau - 0.02)) / 0.04 : 0;
     const from = tau < Te / 2 ? (o.startMode ?? 'idle') : (o.endMode ?? 'idle');
@@ -1713,6 +1720,11 @@ const _ia = new THREE.Vector3(), _ib = new THREE.Vector3(), _iq = new THREE.Quat
 const handAt = (f, side, out) => { const fa = side === 'L' ? f.foreL : f.foreR; fa.updateWorldMatrix(true, false); return out.set(0, -0.36, 0.05).applyMatrix4(fa.matrixWorld); };
 const rigPos = (f, t, out = new THREE.Vector3()) => f._posAt ? out.copy(f._posAt(t)) : out.copy((f.root ?? f).position);
 const rigYaw = (f, t) => f._yawAt ? f._yawAt(t) : (f.root ?? f).rotation.y;
+const HITPAIR = [];   // v2.29 hitboxes: [a, b, t0, t1] — two figures that may touch then (hug, piggyback, pull …); see HITBOXES
+// noHit(figure | object) — never pushed / never blocks · noHit(a, b, t0, t1) — these two may overlap in that window
+function noHit(a, b, t0 = -1e9, t1 = 1e9) { if (b && (b.legL || b.root)) { HITPAIR.push([a, b, t0, t1]); return a; } if (a?.legL) a.hit = false; else (a?.g ?? a?.root ?? a).userData.noHit = true; return a; }
+const MBAUTO = [];   // v2.29: [t0, t1] windows of fast actions (swings, punches, kicks, throws, cuts, hard landings) — rendered with motion blur in 'auto' mode
+const _thru = (k, w = 0.1) => sm01((k + w / 2) / w);   // v2.29: a swing that passes the hit/release moment (k = 0) in ~3 frames instead of switching poses in one
 const env3 = (t, a, b, fi = 0.25, fo = 0.25) => t < a || t > b ? 0 : Math.min(sm01((t - a) / fi), 1 - sm01((t - b + fo) / fo));
 
 // ballistic flight with bounces: from [x,y,z] → to [x,z] (or [x,y,z]); o: h (apex above the higher end), bounces (3), bounce (0.42 restitution), spin (rad/s), r (resting height), float
@@ -1738,13 +1750,14 @@ function tossPath(from, to, t0, o = {}) {
 function toss(obj, t0, o = {}) {
   const node = dyn(obj.g ?? obj.root ?? obj), p0 = node.position.clone(), r0 = node.rotation.clone();
   const P = tossPath(o.from ?? [p0.x, p0.y, p0.z], o.to ?? [p0.x + 4, p0.z], t0, o), ax = o.axis ?? 'x';
-  tick(t => { if (t < t0) return; P.at(t, node.position); node.rotation[ax] = r0[ax] + P.rot(t); });
+  const free = !(obj._posAt || node._posAt || WALKS.some(w => w.obj === obj || (w.obj.g ?? w.obj.root ?? w.obj) === node));
+  tick(t => { if (t < t0) { if (free) { node.position.copy(p0); node.rotation.copy(r0); } return; } P.at(t, node.position); node.rotation[ax] = r0[ax] + P.rot(t); });   // v2.29: on its spot before the throw (also after seeking)
   return P;
 }
 // carry(rig, obj, { pick, drop, throw: { t, to: [x,z], h, spin }, both, hand }) — bend down and pick it up, carry it (one hand or both), then put it down or throw it
 function carry(f, obj, o = {}) {   // o.heavy: true | kg — leans back, knees soft, arms strained (walk it slower, speed ~0.8)
   const node = dyn(obj.g ?? obj.root ?? obj), p0 = node.position.clone(), r0 = node.rotation.clone(), both = o.both ?? false, side = o.hand ?? 'R';
-  const tp = o.pick ?? 0, ta = tp + 0.35, th = o.throw?.t, td = o.drop, tEnd = th ?? td ?? 1e9;
+  const tp = o.pick ?? 0, ta = tp + 0.35, th = o.throw?.t, td = o.drop, tEnd = th ?? td ?? 1e9; if (obj.legL) HITPAIR.push([f, obj, tp - 0.5, tEnd + 0.8]);
   const off = new THREE.Vector3(...(o.offset ?? (both ? [0, -0.05, 0.28] : [0, -0.1, 0.05])));
   let P = null, dropAt = null;
   (f.fx ??= []).push((t, S) => {   // body: bend + reach, hold, wind-up and follow-through
@@ -1842,7 +1855,7 @@ function enter(f, v, t0, o = {}) {
   const kind = v.kind ?? 'car', seat = new THREE.Vector3(...(o.seat ?? SEATS[kind] ?? SEATS.car)), dur = o.dur ?? 1.1, standing = kind === 'tractor';
   if (v.doors?.length) openDoor(v, t0, { i: o.door ?? 0, close: t0 + dur + 0.15 });
   if (!standing) sit(f, t0 + 0.25, { t1: o.out ?? 1e9, h: o.h ?? 0.38 });
-  f.fx.push((t, S) => { if (t > t0 + 0.4 && t < (o.out ?? 1e9) + 0.6) S.crx -= 0.12; });   // leaning back in the seat
+  f.fx.push((t, S) => { S.crx -= 0.12 * env3(t, t0 + 0.4, (o.out ?? 1e9) + 0.6, 0.3, 0.3); });   // leaning back in the seat
   const outside = new THREE.Vector3(seat.x + Math.sign(seat.x || 1) * 1.1, 0, seat.z);
   late(t => { if (t < t0 || t > (o.out ?? 1e9) + dur) return;
     const k = t > (o.out ?? 1e9) ? 1 - sm01((t - o.out) / dur) : sm01((t - t0) / dur), g = v.g ?? v.root ?? v; g.updateWorldMatrix(true, false);
@@ -2023,8 +2036,15 @@ function horde(o = {}) {
       for (let i = 0; i < n; i++) { const q = M[i]; if (t < q.b + (rise ? 0.9 : 0) || (q.down && !o2.any)) continue; const [x, z] = state(q, t), d = Math.hypot(x - px, z - pz); if (d < bd && d >= (o2.min ?? 0)) { bd = d; best = i; } } return best; },
     hit(i, t, o2 = {}) { const q = M[i]; if (!q || (q.down && q.down.t <= t)) return api; const s0 = state(q, t), fr = o2.from ? [o2.from.x ?? o2.from[0], o2.from.z ?? o2.from[o2.from.length === 2 ? 1 : 2]] : [s0[0] - Math.sin(s0[3]), s0[1] - Math.cos(s0[3])];
       const L = Math.hypot(s0[0] - fr[0], s0[1] - fr[1]) || 1, dx = (s0[0] - fr[0]) / L, dz = (s0[1] - fr[1]) / L, back = Math.sin(s0[3]) * dx + Math.cos(s0[3]) * dz < 0 ? 1 : -1;   // hit from the front → falls on its back
-      q.down = { t, dx, dz, push: o2.drop || o2.squash ? 0 : o2.push ?? 0.35, dir: o2.dir ?? back, sink: o2.sink ?? !human, drop: o2.drop, squash: o2.squash }; return api; },
+      q.down = { t, dx, dz, push: o2.drop || o2.squash ? 0 : o2.push ?? 0.35, dir: o2.dir ?? back, sink: o2.sink ?? (!human && !(o2.drop && o2.keep)), drop: o2.drop, squash: o2.squash, keep: o2.keep, depth: o2.depth, pile: o2.pile }; return api; },   // drop + keep (v2.29): falls depth m, lands, topples, stays
     alive: (i, t) => !(M[i].down && t >= M[i].down.t),
+    lose: (i, part, t, o2 = {}) => goreHordeLose(api, { M, farm, shin, foot }, i, part, t, o2),   // v2.29: forearm / lower leg flies off (zombies only)
+    pit(o2 = {}) {   // v2.29: members walking into the area after t0 fall in (depth m), land, topple and pile up — at: [x,z], r | w, d (+ ry), t0, t1, depth
+      const [px, pz] = o2.at ?? [0, 0], c = Math.cos(o2.ry ?? 0), s2 = Math.sin(o2.ry ?? 0), D = o2.depth ?? 2.9, list = [];
+      const inside = (x, z) => { const lx = (x - px) * c - (z - pz) * s2, lz = (x - px) * s2 + (z - pz) * c; return o2.r != null ? Math.hypot(lx, lz) < o2.r : Math.abs(lx) < (o2.w ?? 3) / 2 && Math.abs(lz) < (o2.d ?? 3) / 2; };
+      for (let i = 0; i < n; i++) { const q = M[i]; for (let tt = Math.max(q.b, o2.t0 ?? 0); tt <= Math.min(o2.t1 ?? DUR, DUR); tt += 0.04) { if (q.down && q.down.t <= tt) break; const [x, z] = state(q, tt); if (inside(x, z)) { list.push([tt, i]); break; } } }
+      list.sort((a, b) => a[0] - b[0]).forEach(([tt, i], k) => api.hit(i, tt, { drop: true, keep: true, depth: D, pile: Math.min(D - 0.4, 0.26 * Math.floor(k / 3)) }));
+      if (list.length && o2.sfx !== false) sfx(list[0][0] + Math.sqrt(D / 4.9), 'impact', 0.5); return list.length; },
     update(t) {
       if (fz != null) {
         const k = clamp((t - fz) / 1.2) * 0.75;
@@ -2032,16 +2052,19 @@ function horde(o = {}) {
         if (t > fz) t = fz;
       }
       for (let i = 0; i < n; i++) {
-        const q = M[i];
+        const q = M[i]; if (q.lose) for (const kk in q.lose) q.lose[kk].vis = false;
         if (t < q.b) { for (const im of [torso, head, eyes, mouths]) im.setMatrixAt(i, Z); for (const im of [uarm, farm, thigh, shin, foot]) { im.setMatrixAt(2 * i, Z); im.setMatrixAt(2 * i + 1, Z); } continue; }
         const dn = q.down && t >= q.down.t ? q.down : null;   // knocked down by h.hit(): stays where it was hit, topples, lies (zombies sink back into the ground)
-        if (dn && ((dn.sink && t - dn.t > 5.4) || (dn.drop && t - dn.t > 0.9))) { for (const im of [torso, head, eyes, mouths]) im.setMatrixAt(i, Z); for (const im of [uarm, farm, thigh, shin, foot]) { im.setMatrixAt(2 * i, Z); im.setMatrixAt(2 * i + 1, Z); } continue; }
+        if (dn && ((dn.sink && t - dn.t > 5.4) || (dn.drop && !dn.keep && t - dn.t > 0.9))) { for (const im of [torso, head, eyes, mouths]) im.setMatrixAt(i, Z); for (const im of [uarm, farm, thigh, shin, foot]) { im.setMatrixAt(2 * i, Z); im.setMatrixAt(2 * i + 1, Z); } continue; }
         let [x, z, moving, yaw0, walked] = state(q, dn ? dn.t : t); const u = q.ph / TAU + walked / q.cl; if (dn) moving = false;
         const yaw = moving ? yaw0 + Math.sin(Math.PI * u) * (human ? 0.04 : 0.1) : yaw0;
         const em = rise ? EASE.out(clamp((t - q.b) / 0.8)) : 1; let y = groundH(x, z) + (q.fixed ? q.cy ?? q.y : 0) - (1 - em) * 1.9 + (o.lift ? o.lift(t, i) : 0), fa = 0;
         if (dn) { const a = t - dn.t, k = clamp(a / 0.5); fa = (Math.PI / 2 - 0.05) * EASE.in(k) - (a > 0.5 ? 0.1 * Math.exp(-(a - 0.5) * 7) * Math.abs(Math.sin((a - 0.5) * 16)) : 0);
           x += dn.dx * dn.push * EASE.out(k); z += dn.dz * dn.push * EASE.out(k); y += 0.16 * sm01(k) * q.sc - (dn.sink && a > 2.4 ? Math.min(2.6, (a - 2.4) * 0.9) : 0); }
-        if (dn?.drop) { fa = 0; y = groundH(x, z) - Math.min(3.2, 4.9 * (t - dn.t) ** 2); } if (dn?.squash) fa = 0;
+        if (dn?.drop) { if (dn.keep) { const yl = -(dn.depth ?? 2.9) + (dn.pile ?? 0), tl = Math.sqrt(Math.max(0.01, -yl) / 4.9), a = t - dn.t, al = a - tl;   // v2.29: lands at the bottom, topples, stays
+            y = groundH(x, z) + Math.max(yl, -4.9 * a * a) + (al > 0 ? 0.16 * sm01(clamp(al / 0.5)) * q.sc : 0);
+            fa = al <= 0 ? 0 : (Math.PI / 2 - 0.05) * EASE.in(clamp(al / 0.42)) - (al > 0.42 ? 0.1 * Math.exp(-(al - 0.42) * 7) * Math.abs(Math.sin((al - 0.42) * 16)) : 0); }
+          else { fa = 0; y = groundH(x, z) - Math.min(3.2, 4.9 * (t - dn.t) ** 2); } } if (dn?.squash) fa = 0;
         base.compose(V.set(x, y, z), Q.setFromEuler(E.set(-fa * (dn?.dir ?? 1), yaw, 0, 'YXZ')), dn?.squash ? SC.set(q.sc * 1.35, q.sc * Math.max(0.12, 1 - 14 * (t - dn.t)), q.sc * 1.35) : SC.setScalar(q.sc));
         const S = rigState(moving ? mode : 'idle', u, t, q.o), gk = GZ && !dn ? sm01((t - gT(q)) / (GZ.turn ?? 0.7)) : 0, up = !dn && ((o.armsUp ? o.armsUp(t, i) : false) || (GZ?.arms === 'up' && gk > 0.5));
         if (dn) { const a = t - dn.t, k = clamp(a / 0.45), tw = human ? 0 : 0.12 * Math.sin(t * 9 + q.ph) * Math.exp(-a * 0.8);
@@ -2066,6 +2089,9 @@ function horde(o = {}) {
           j(Mf, Mk, 0, -LEG2, 0, fp - th - kn, 0, 0); put(foot, idx, Mf, 0, -ANK + 0.045, 0.05);
           j(Ma, Mc, s * 0.34, 0.54, 0, as, 0, az); put(uarm, idx, Ma, 0, -0.15, 0);
           j(Me, Ma, 0, -0.29, 0, ae, 0, 0); put(farm, idx, Me, 0, -0.21, 0);
+          if (q.lose) { const R = q.lose[k ? 'armR' : 'armL'], G2 = q.lose[k ? 'legR' : 'legL'], gth = goreThumb();   // v2.29 h.lose(): joint pose for the loose part, part hidden
+            if (R) { R.M.copy(Me); R.vis = true; if (t >= R.t && !gth) farm.setMatrixAt(idx, Z); }
+            if (G2) { G2.M.copy(Mk); G2.vis = true; if (t >= G2.t && !gth) { shin.setMatrixAt(idx, Z); foot.setMatrixAt(idx, Z); } } }
         }
       }
       for (const im of [...PARTS, eyes, mouths]) im.instanceMatrix.needsUpdate = true;
@@ -2998,7 +3024,7 @@ async function physicsBake() {
   if (!PHYS.bodies.length && !PHYS.rags.length) return;
   let RA; try { RA = (await import('rapier')).default; await RA.init(); } catch (e) { console.warn('physics engine could not be loaded – objects keep their animation'); return; }
   const HZ = 120, REC = 2, tA = Math.max(0, PHYS.t0), tB = DUR + 0.5, W = new RA.World({ x: 0, y: -9.81, z: 0 }); W.timestep = 1 / HZ;
-  const GW = (0x0001 << 16) | 0xffff, GR = (0x0002 << 16) | 0x0001;   // world/objects collide with everything; ragdoll parts not with each other
+  const GW = (0x0001 << 16) | 0xffff, GR = (0x0002 << 16) | 0x0001, GD = (0x0004 << 16) | 0x0005;   // GD (v2.29, phys group 'debris'): severed limbs — hit the world, not ragdolls   // world/objects collide with everything; ragdoll parts not with each other
   const Q = q => ({ x: q.x, y: q.y, z: q.z, w: q.w });
   // ground: triangle mesh of groundH around the action (a slab if flat)
   const R = 80, st = 2, n = R / st * 2 + 1; let flat = true; const vs = new Float32Array(n * n * 3), ix = [];
@@ -3026,7 +3052,7 @@ async function physicsBake() {
     const b = W.createRigidBody(RA.RigidBodyDesc.dynamic().setTranslation(S.p.x, S.p.y, S.p.z).setRotation(Q(S.q)).setLinvel(v0[0] + kv.x, v0[1] + kv.y, v0[2] + kv.z).setAngvel({ x: w0[0], y: w0[1], z: w0[2] })
       .setLinearDamping(0.05).setAngularDamping(0.15).setCanSleep(true).setCcdEnabled(Math.min(h.x, h.y, h.z) < 0.2));
     const cd = o.shape === 'sphere' ? RA.ColliderDesc.ball(Math.max(h.x, h.y, h.z)) : RA.ColliderDesc.cuboid(Math.max(0.02, h.x), Math.max(0.02, h.y), Math.max(0.02, h.z));
-    W.createCollider(cd.setTranslation(c.x, c.y, c.z).setMass(mass).setFriction(o.friction ?? 0.6).setRestitution(o.bounce ?? 0.2).setCollisionGroups(GW), b);
+    W.createCollider(cd.setTranslation(c.x, c.y, c.z).setMass(mass).setFriction(o.friction ?? 0.6).setRestitution(o.bounce ?? 0.2).setCollisionGroups(o.group === 'debris' ? GD : GW), b);
     live.push({ kind: 'b', B, b, f0: Math.ceil(k0 / REC), data: [] }); };
   const mkRag = (f, k0) => { const R0 = f._rag, s = f.root.scale.x, bodies = {}, o = R0.o;
     RAGSEG.forEach(([nm, part, par, size, c, m, jt], i) => { const [p, q] = R0.a[i], [pp] = R0.b[i], cl = new THREE.Vector3(...c).multiplyScalar(s), cw = cl.clone().applyQuaternion(q).add(p), v = p.clone().sub(pp).multiplyScalar(60);
@@ -3093,17 +3119,10 @@ function springResp(fn, t, w = 8, z = 0.32, T = 1.1, n = 18) {   // damped-sprin
   return s;
 }
 const legFK = (lt, lk) => [-LEG1 * Math.sin(lt) - LEG2 * Math.sin(lt + lk), -LEG1 * Math.cos(lt) - LEG2 * Math.cos(lt + lk)];   // ankle (z, y) relative to the hip joint
-const _mv = new THREE.Vector3(), _mv2 = new THREE.Vector3();
+const _mv = new THREE.Vector3(), _mv2 = new THREE.Vector3(), _FP = [new THREE.Vector3(), new THREE.Vector3()];
 late(ts => {
   const active = RIGS.filter(f => f.legL && f.root.parent && !(f._rag && ts >= f._rag.t) && !f.isModel && !f.diver && !f._seated);
-  // 1) keep distance (walkers give way; standing figures are fixed obstacles)
-  for (let i = 0; i < active.length; i++) for (let j = i + 1; j < active.length; j++) {
-    const A = active[i], B = active[j], ma = !!A._posAt, mb = !!B._posAt; if (!ma && !mb) continue;
-    const pa = A.root.position, pb = B.root.position, dx = pb.x - pa.x, dz = pb.z - pa.z, d = Math.hypot(dx, dz), min = 0.55 * (A.root.scale.x + B.root.scale.x);
-    if (d >= min || d < 1e-4 || Math.abs(pa.y - groundH(pa.x, pa.z)) > 0.1 || Math.abs(pb.y - groundH(pb.x, pb.z)) > 0.1) continue;   // only figures on the ground (not seated in cars, on roofs …)
-    const push = (min - d) * (ma && mb ? 0.5 : 1), ux = dx / d, uz = dz / d;
-    if (ma) { pa.x -= ux * push; pa.z -= uz * push; } if (mb) { pb.x += ux * push; pb.z += uz * push; }
-  }
+  // 1) keep distance: done by the hitboxes (v2.29, hitResolve runs first — walkers sidestep smoothly instead of being pushed back)
   for (const f of active) {
     // 2) inertia from the walk path: forward/sideways acceleration through a damped spring
     if (f._posAt && f._yawAt && CFG.inertia !== false) {
@@ -3120,10 +3139,13 @@ late(ts => {
     }
     // 3) feet on slopes: drop the hips on the low side, bend the knee on the high side, tilt the feet with the ground
     if (CFG.footIK === false) continue;
-    const r = f.root.position, gy = groundH(r.x, r.z); if (Math.abs(r.y - gy) > 0.06) continue;
+    const r = f.root.position; let gy = groundH(r.x, r.z); if (STAIRS.length && Math.abs(r.y - gy) < 0.2) gy = r.y; if (Math.abs(r.y - gy) > 0.06) continue;   // on stairs the body rides a smooth ramp (walk) → feet measured from the body
     const s = f.root.scale.x, legs = [[f.legL, f.shinL, f.footL], [f.legR, f.shinR, f.footR]], d = [];
     f.root.updateWorldMatrix(true, true);
-    for (const [, , ft] of legs) { ft.getWorldPosition(_mv); d.push(groundH(_mv.x, _mv.z) - gy); }
+    legs.forEach(([, , ft], i) => ft.getWorldPosition(_FP[i])); const ymin = Math.min(_FP[0].y, _FP[1].y), cx = Math.sin(f.root.rotation.y), cz = Math.cos(f.root.rotation.y);
+    for (const P of _FP) {   // v2.29 stairs: a lifted foot sees the steps blurred by its height → it rises over the edge smoothly and lands exactly on the step (was: the knee snapped 18 cm)
+      const W = STAIRS.length ? 0.15 * clamp((P.y - ymin) / 0.08) : 0; let h = 0;
+      if (W > 0.005) { for (let k = -4; k <= 4; k++) h += groundH(P.x + cx * W * k / 4, P.z + cz * W * k / 4); h /= 9; } else h = groundH(P.x, P.z); d.push(h - gy); }
     if (Math.max(Math.abs(d[0]), Math.abs(d[1])) < 0.015) continue;
     const low = Math.min(0, d[0], d[1]), hrx = f.hips.rotation.x, yw = f.root.rotation.y; f.hips.position.y += low / s;
     legs.forEach(([th, sh, ft], i) => { const lt = th.rotation.x + hrx, lk = sh.rotation.x, [z, y] = legFK(lt, lk), [nt, nk] = legIK(z, y + (d[i] - low) / s);
@@ -3760,7 +3782,7 @@ function conspiracyBoard(p, x, z, o = {}) {
 }
 
 /* ====================================================================== */
-/* COMBAT (v2.8) — weapons, fights and war machines. Cartoon action, never gory: no blood (zombies spill goo), knocked-down people see stars */
+/* COMBAT (v2.8) — weapons, fights and war machines. Cartoon action: zombies spill goo (CFG.gore 'blood' = dark cartoon blood, { sever } cuts off a limb, see GORE), knocked-down people see stars */
 /* ====================================================================== */
 // weapon(rig, kind, { from, to, guard, color, scale }) → W — kinds: sword · axe · spear · bat · knife · hammer · saber (glowing blade) · shield | bow |
 //   pistol · revolver · blaster · smg · rifle · sniper · shotgun · minigun · launcher. One-handed things sit in the right hand, shield and bow in the left, long guns in both.
@@ -3787,19 +3809,29 @@ function segBox(m, a, b, w, h) { m.position.addVectors(a, b).multiplyScalar(0.5)
 
 // --- rig math: two-bone arm IK / FK in the chest frame (shoulders at ±0.34, 0.54) ---
 const UA = 0.29, FA = 0.36;
-function armIK(side, T) {   // chest-frame hand target → [shoulder pitch, shoulder roll, elbow]
+function armIK(side, T) {   // v2.29: near the sideways singularity the pitch blends to a stable solution (no 180° elbow flip mid-swing)
+  const r = armIK0(side, T), g = sm01((Math.abs(r[1]) - 1.0) / 0.4); if (g <= 0) return r;
+  const r2 = armIK0(side, { x: T.x, y: T.y, z: T.z + 0.32 }), d = Math.atan2(Math.sin(r2[0] - r[0]), Math.cos(r2[0] - r[0])); r[0] += d * g; return r;
+}
+function armIK0(side, T) {   // chest-frame hand target → [shoulder pitch, shoulder roll, elbow]
   const dx = T.x - (side === 'L' ? -0.34 : 0.34), dy = T.y - 0.54, dz = T.z, D = Math.hypot(dx, dy, dz) || 1e-3, Dc = clamp(D, 0.16, (UA + FA) * 0.995);
   const e = -Math.acos(clamp((Dc * Dc - UA * UA - FA * FA) / (2 * UA * FA), -1, 1));
   const hy = -UA - FA * Math.cos(e) - 0.05 * Math.sin(e), hz = -FA * Math.sin(e) + 0.05 * Math.cos(e), k = Math.hypot(hy, hz) / D;
-  const az = Math.asin(clamp(-dx * k / hy, -1, 1)); let as = Math.atan2(dz * k, dy * k) - Math.atan2(hz, hy * Math.cos(az));
+  const az = Math.asin(clamp(-dx * k / Math.min(hy, -0.06), -1, 1)); let as = Math.atan2(dz * k, dy * k) - Math.atan2(hz, hy * Math.cos(az));   // v2.29: hand close to the shoulder (elbow folded, hy → 0) keeps the sign → no 180° sideways flip of the upper arm
   while (as > 0.6 * Math.PI) as -= TAU; while (as < -1.6 * Math.PI) as += TAU;
   return [as, az, e];
 }
 function armQ(as, az, ae, out) { _ke.set(as, 0, az, 'XYZ'); out.setFromEuler(_ke); return out.multiply(_kq3.setFromAxisAngle(_AX, ae)); }   // forearm orientation (chest frame)
+function armFK(side, r, out = new THREE.Vector3()) {   // inverse of armIK: [pitch, roll, elbow] → hand position (chest frame)
+  const [as, az, e] = r, hy = -UA - FA * Math.cos(e) - 0.05 * Math.sin(e), hz = -FA * Math.sin(e) + 0.05 * Math.cos(e), y1 = hy * Math.cos(az);
+  return out.set((side === 'L' ? -0.34 : 0.34) - hy * Math.sin(az), 0.54 + y1 * Math.cos(as) - hz * Math.sin(as), y1 * Math.sin(as) + hz * Math.cos(as));
+}
+const angLerp = (A, B, w) => [A[0] + Math.atan2(Math.sin(B[0] - A[0]), Math.cos(B[0] - A[0])) * w, lerp(A[1], B[1], w), lerp(A[2], B[2], w)];
 function setArm(S, side, ik, w) {
   if (!(w > 0)) return;
-  if (side === 'L') { S.las = lerp(S.las, ik[0], w); S.laz = lerp(S.laz, ik[1], w); S.lae = lerp(S.lae, ik[2], w); }
-  else { S.ras = lerp(S.ras, ik[0], w); S.raz = lerp(S.raz, ik[1], w); S.rae = lerp(S.rae, ik[2], w); }
+  const s0 = side === 'L' ? S.las : S.ras, p = s0 + Math.atan2(Math.sin(ik[0] - s0), Math.cos(ik[0] - s0));   // v2.29: short way round (no 180° flip mid-blend)
+  if (side === 'L') { S.las = lerp(S.las, p, w); S.laz = lerp(S.laz, ik[1], w); S.lae = lerp(S.lae, ik[2], w); }
+  else { S.ras = lerp(S.ras, p, w); S.raz = lerp(S.raz, ik[1], w); S.rae = lerp(S.rae, ik[2], w); }
 }
 function chestM(S, out) {   // rig-frame matrix of the chest for joint state S
   _ke.set(S.hrx, S.hry, S.hrz); _km1.compose(_k1.set(S.hx, S.H + S.by, 0), _kq1.setFromEuler(_ke), _ONE);
@@ -3810,6 +3842,7 @@ function rigF(f, t) { return { p: rigPos(f, t, new THREE.Vector3()), y: rigYaw(f
 const toRig = (F, w, out = new THREE.Vector3()) => out.copy(w).sub(F.p).applyAxisAngle(_AY, -F.y).divideScalar(F.s);
 const fromRig = (F, l, out = new THREE.Vector3()) => out.copy(l).multiplyScalar(F.s).applyAxisAngle(_AY, F.y).add(F.p);
 const CH0 = 0.86;   // chest origin height above the feet (standing)
+const relPt = (f, t, to, o = {}) => { const F = rigF(f, t), T = toV(to); F.y = Math.atan2(T.x - F.p.x, T.z - F.p.z); return fromRig(F, v3(o.side ?? 0.14, o.y ?? CH0 + 0.95, o.fwd ?? 0.5)).toArray(); };   // v2.29: where a throw leaves the hand (in front, at head height, toward the target)
 const rigStill = (f, t) => !(f._posAt) || rigPos(f, t - 0.06, _k1).distanceTo(rigPos(f, t + 0.06, _k2)) < 0.05;
 
 // --- targets: rig · animal · horde member { h, i } · horde (shoot picks members) · [x,y,z] · [x,z] · t => [x,y,z] · track name · object/vehicle ---
@@ -3835,6 +3868,7 @@ const BKIND = {
   spark: { cap: 1600, geo: 'box', basic: true, hot: 2.6, g: -9.8, drag: 1.4, life: 0.42, size: 0.022, speed: 7, cone: 0.9, colors: ['#FFF6C8', '#FFB443'], streak: true },
   chip:  { cap: 900, geo: 'box', g: -9.8, life: 1.9, size: 0.065, speed: 4, cone: 0.7, colors: ['#6E5C46', '#8C7A62', '#55483A'], floor: true, spin: 14, bounce: 0.3 },
   goo:   { cap: 900, geo: 'ico', basic: true, hot: 1.25, g: -9.8, life: 1.5, size: 0.1, speed: 3.6, cone: 0.85, colors: ['#8CFF5A', '#4FD02F', '#B6FF7A'], floor: true, flat: true, bounce: 0 },
+  blood: { cap: 1200, geo: 'ico', rough: 0.3, hot: 1, g: -9.8, life: 1.7, size: 0.075, speed: 3.2, cone: 0.75, colors: ['#8A2228', '#6A181D', '#A3302F'], floor: true, flat: true, bounce: 0, stretch: 2.2 },   // v2.29 cartoon blood (v2.29: glossy, lit, drops stretch in flight): lands as small splats, gone after ~2 s
   brass: { cap: 320, geo: 'shell', metal: true, g: -9.8, life: 3.2, size: 1, speed: 2.4, cone: 0.25, colors: ['#E0B54C'], floor: true, spin: 24, bounce: 0.35 },
   puff:  { cap: 600, soft: 'dust', g: 0.25, drag: 3.2, life: 1.1, size: 0.4, grow: 1.6, speed: 2.2, cone: 0.9, colors: ['#A89C84', '#8E836E'], opacity: 0.55 },
   smoke: { cap: 700, soft: 'smoke', g: 0.6, drag: 1.6, life: 2.8, size: 0.55, grow: 2.4, speed: 1.2, cone: 0.6, colors: ['#9A9590', '#C2BDB6'], opacity: 0.5 },
@@ -3847,7 +3881,7 @@ function bpool(kind) {
   if (K.soft) { const geo = softGeo(K.cap); im = new THREE.InstancedMesh(geo, softMaterial({}, K.soft === 'fire' ? 'fire' : 'smoke'), K.cap); im.renderOrder = 2; im.fade = geo.attributes.aFade; }
   else {
     const geo = K.geo === 'box' ? boxG(1, 1, 1) : K.geo === 'shell' ? G('cbShell', () => new THREE.CylinderGeometry(0.014, 0.014, 0.05, 6).rotateX(Math.PI / 2)) : G('ico0', () => new THREE.IcosahedronGeometry(0.5, 0));
-    im = new THREE.InstancedMesh(geo, K.basic ? new THREE.MeshBasicMaterial({ color: '#ffffff' }) : new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: K.metal ? 0.35 : 0.95, metalness: K.metal ? 0.75 : 0, flatShading: true }), K.cap);
+    im = new THREE.InstancedMesh(geo, K.basic ? new THREE.MeshBasicMaterial({ color: '#ffffff' }) : new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: K.rough ?? (K.metal ? 0.35 : 0.95), metalness: K.metal ? 0.75 : 0, flatShading: true }), K.cap);
   }
   im.castShadow = false; im.frustumCulled = false; im.setColorAt(0, new THREE.Color()); im.count = 0; im.instanceMatrix.setUsage(THREE.DynamicDrawUsage); world.add(dyn(im));
   return (BP[kind] = { kind, K, im, cols: K.colors.map(c => new THREE.Color(c).multiplyScalar(K.hot ?? 1)), list: [] });
@@ -3871,6 +3905,7 @@ function cbBall(x0, y0, z0, vx, vy, vz, g, fy, age, eb) {   // ballistic with on
   return [bx + hx * t2, fy, bz + hz * t2, true];
 }
 function bpoolUpdate(P, t) {
+  if (P.kind === 'blood' && goreThumb()) { P.im.count = 0; return; }   // v2.29: never blood in the thumbnail
   const K = P.K, im = P.im; let c = 0;
   for (const e of P.list) {
     if (t < e.t0 || t > e.tEnd) continue;
@@ -3890,8 +3925,9 @@ function bpoolUpdate(P, t) {
       else s = e.size * (1 + e.grow * k) * (k > 0.78 ? (1 - k) / 0.22 : 1) * Math.min(1, age / 0.03);
       _o3.position.set(px, py, pz); _o3.scale.setScalar(s); _o3.rotation.set(0, 0, 0); _o3.quaternion.identity();
       if (K.streak) { const dk = Math.exp(-e.drag * age); qLook(_k1.set(vx * dk, vy * dk + e.g * age, vz * dk), _AY, _o3.quaternion); _o3.scale.set(s, s, s * 6); }
+      if (K.stretch && K.floor && !rest) { qLook(_k1.set(vx, vy + e.g * age, vz), _AY, _o3.quaternion); _o3.scale.set(s * 0.8, s * 0.8, s * K.stretch); }   // v2.29: liquid drops stretch along their flight
       else if (K.geo === 'shell') { if (rest) _o3.rotation.set(0, h1 * TAU, 0); else _o3.rotation.set(age * K.spin * (h1 - 0.3), age * K.spin * 0.5 * (h2 - 0.5), age * K.spin * (h3 - 0.5)); _o3.scale.setScalar(1); }
-      else if (K.flat && rest) _o3.scale.set(s * 1.7, s * 0.22, s * 1.7);
+      else if (K.flat && rest) { _o3.rotation.set(0, h1 * TAU, 0); _o3.scale.set(s * 1.7 * (0.75 + 0.5 * h3), s * 0.22, s * 1.7 * (0.75 + 0.5 * h2)); }   // v2.29: splats in different shapes and turns
       else if (K.spin && !rest) _o3.rotation.set(age * K.spin * (h1 - 0.5), age * K.spin * (h2 - 0.5), age * K.spin * (h3 - 0.5));
       else if (K.spin) _o3.rotation.set(h1 * 3, h2 * 3, 0);
       _o3.updateMatrix(); im.setMatrixAt(c, _o3.matrix);
@@ -4127,6 +4163,14 @@ const catmull = (p0, p1, p2, p3, u, out = new THREE.Vector3()) => { const u2 = u
   0.5 * (2 * p1.x + (-p0.x + p2.x) * u + (2 * p0.x - 5 * p1.x + 4 * p2.x - p3.x) * u2 + (-p0.x + 3 * p1.x - 3 * p2.x + p3.x) * u3),
   0.5 * (2 * p1.y + (-p0.y + p2.y) * u + (2 * p0.y - 5 * p1.y + 4 * p2.y - p3.y) * u2 + (-p0.y + 3 * p1.y - 3 * p2.y + p3.y) * u3),
   0.5 * (2 * p1.z + (-p0.z + p2.z) * u + (2 * p0.z - 5 * p1.z + 4 * p2.z - p3.z) * u2 + (-p0.z + 3 * p1.z - 3 * p2.z + p3.z) * u3)); };
+const _swIK = {}, _cm = (p0, p1, p2, p3, u) => { const u2 = u * u; return 0.5 * (2 * p1 + (p2 - p0) * u + (2 * p0 - 5 * p1 + 4 * p2 - p3) * u2 + (3 * p1 - p0 - 3 * p2 + p3) * u2 * u); };
+function swingArm(a, t) {   // v2.29: the sword arm moves between the key poses in joint space (natural arcs; was: hand path + IK, which flipped the arm when the path passed close to the shoulder)
+  const K = SWINGS[a.kind] ?? SWINGS.slash, T = [a.s0, a.t - 0.12, a.t, a.t + 0.13, a.s4];
+  const Q = _swIK[a.kind] ??= (() => { const L = [MGUARD, ...K.k, MGUARD].map(k => armIK('R', k.h)); for (let j = 1; j < L.length; j++) L[j][0] = L[j - 1][0] + Math.atan2(Math.sin(L[j][0] - L[j - 1][0]), Math.cos(L[j][0] - L[j - 1][0])); return L; })();
+  let i = 0; while (i < 3 && t > T[i + 1]) i++;
+  const u = clamp((t - T[i]) / (T[i + 1] - T[i])), e = i === 0 ? EASE.inOut(u) : i === 1 ? u * u : i === 2 ? EASE.out(u) : EASE.inOut(u), A = Q[Math.max(0, i - 1)], B = Q[i], C = Q[i + 1], D = Q[Math.min(4, i + 2)];
+  const r = [0, 1, 2].map(c => _cm(A[c], B[c], C[c], D[c], e)); r[1] = clamp(r[1], -Math.PI / 2, Math.PI / 2); r[2] = clamp(r[2], -Math.PI * 0.97, 0); return r;
+}
 function swingAt(a, t) {   // pure: key pose of swing action a at time t
   const K = SWINGS[a.kind] ?? SWINGS.slash, P = [MGUARD, ...K.k, MGUARD], T = [a.s0, a.t - 0.12, a.t, a.t + 0.13, a.s4];
   let i = 0; while (i < 3 && t > T[i + 1]) i++;
@@ -4175,7 +4219,7 @@ function cbPose(f, t, S) {
     else if (W.mag) W.mag.visible = true;
     if (W.war) W.war.visible = !W.shots.some(s => t >= s);
     if (W.spin) W.spin.rotation.z = W.shots.reduce((acc, s) => acc + clamp(t - s + 0.3, 0, 0.5) * 22, 0) + (aw > 0 ? (t % 100) * 6 * aw : 0);
-    if (!th) setArm(S, 'R', armIK('R', gp(W.grip)), 1); setArm(S, 'L', armIK('L', L), 1);
+    if (!th || th.w < 1) setArm(S, 'R', armIK('R', gp(W.grip)), 1); setArm(S, 'L', armIK('L', L), 1);   // v2.29: the throw blends out of the grip (was: the arm dropped to its rest pose for a frame)
     if (aw > 0) { look(dir, aw, 0.9); S.nrz = lerp(S.nrz, rpg ? -0.18 : -0.12, aw); S.crx -= 0.04 * r; }
   }
   // --- one-handed guns: raise and aim (two-handed grip unless oneHand)
@@ -4188,11 +4232,11 @@ function cbPose(f, t, S) {
   // --- melee: guard, swings, blocks
   if (mel) {
     const W = mel; let w = W.guard ? 1 : 0; for (const a of C.A) if ((a.type === 'swing' || a.type === 'block') && a.W === W) w = Math.max(w, env3(t, a.s0 - 0.2, a.s4 + 0.9, 0.3, 0.5));
-    let K = { hand: MGUARD.h.clone(), blade: MGUARD.b.clone(), edge: MGUARD.e.clone() };
-    if (sw && sw.a.W === W) { const k = swingAt(sw.a, t), ws = sw.w; K = { hand: K.hand.lerp(k.hand, ws), blade: nlerp(K.blade, k.blade, ws), edge: nlerp(K.edge, k.edge, ws) };
+    let K = { hand: MGUARD.h.clone(), blade: MGUARD.b.clone(), edge: MGUARD.e.clone() }, AR = (cbPose.g ??= armIK('R', MGUARD.h));
+    if (sw && sw.a.W === W) { const k = swingAt(sw.a, t), ws = sw.w; K = { hand: K.hand.lerp(k.hand, ws), blade: nlerp(K.blade, k.blade, ws), edge: nlerp(K.edge, k.edge, ws) }; AR = angLerp(AR, swingArm(sw.a, t), ws);
       S.cry += k.cry * ws; S.crx += k.crx * ws; S.hry += k.hry * ws; S.H -= k.dip * ws; w = Math.max(w, ws); }
-    if (bl && bl.a.W === W) { const wb = bl.w; K.hand.lerp(MBLOCK.h, wb); nlerp(K.blade, MBLOCK.b, wb, K.blade); nlerp(K.edge, MBLOCK.e, wb, K.edge); w = Math.max(w, wb); S.crx -= 0.06 * wb; S.nrx += 0.05 * wb; }
-    if (w > 0) { setArm(S, 'R', armIK('R', K.hand), w); if (W.both) setArm(S, 'L', armIK('L', K.hand.clone().addScaledVector(K.blade, W.pole ? 0.42 : -0.15)), w);
+    if (bl && bl.a.W === W) { const wb = bl.w; K.hand.lerp(MBLOCK.h, wb); nlerp(K.blade, MBLOCK.b, wb, K.blade); nlerp(K.edge, MBLOCK.e, wb, K.edge); AR = angLerp(AR, cbPose.b ??= armIK('R', MBLOCK.h), wb); w = Math.max(w, wb); S.crx -= 0.06 * wb; S.nrx += 0.05 * wb; }
+    if (w > 0) { setArm(S, 'R', AR, w); if (W.both) setArm(S, 'L', armIK('L', armFK('R', AR).addScaledVector(K.blade, W.pole ? 0.42 : -0.15)), w);
       W._want = { d: K.blade, up: K.edge, w }; }
     const tg = (sw ?? bl)?.a.T; if (tg && w > 0) { const d = toC(tg.pos(t)).sub(v3(0, 0.72, 0)).normalize(); look(d, w * 0.8); }
   }
@@ -4201,14 +4245,16 @@ function cbPose(f, t, S) {
     if (w > 0) { const H = v3(-0.12, 0.32, 0.36).lerp(v3(-0.04, 0.6, 0.44), wb); setArm(S, 'L', armIK('L', H), w); shield._want = { d: _AZ, up: _AY, w }; } }
   // --- bow: raise, nock, draw to the cheek, hold, release
   if (bowW) { const W = bowW; W._draw = 0; W._nock = false; W._drawn = false;
-    if (bw) { const a = bw.a, wR = bw.w, Cn = v3(0, 0.72, 0.12), d = toC(a.at(t)).sub(Cn).normalize(); if (d.z < 0.15) { d.z = 0.15; d.normalize(); }
+    for (const a of C.A.filter(x => x.type === 'bow' && x.wt(t) > 0).sort((x, y) => x.tr - y.tr)) {   // v2.29: overlapping shots blend into each other (was: switched in one frame)
+      const wR = a.wt(t), prevW = W._want, Cn = v3(0, 0.72, 0.12), d = toC(a.at(t)).sub(Cn).normalize(); if (d.z < 0.15) { d.z = 0.15; d.normalize(); }
       const LH = Cn.clone().addScaledVector(d, 0.7); if (t > a.td + a.draw && t < a.tr) LH.y += 0.005 * Math.sin(t * 41);
       const strP = LH.clone().addScaledVector(d, -0.13).add(v3(0.02, 0, 0)), anc = Cn.clone().addScaledVector(d, 0.03).add(v3(0.05, -0.05, 0)); let RH;
       if (t < a.td) RH = strP; else if (t < a.tr) { const k = EASE.out(clamp((t - a.td) / a.draw)); RH = strP.clone().lerp(anc, k); W._draw = k; W._drawn = true; }
       else { const k = EASE.out(clamp((t - a.tr) / 0.14)); RH = anc.clone().add(v3(0.1 * k, 0.04 * k, -0.12 * k)); }
       W._nock = t >= a.td - 0.3 && t < a.tr;
       setArm(S, 'L', armIK('L', LH), wR); setArm(S, 'R', armIK('R', RH), wR * (t < a.tr + 0.25 ? 1 : 1 - clamp((t - a.tr - 0.25) / 0.4)));
-      look(d, wR, 0.95); W._want = { d: v3(0, 1, 0).addScaledVector(d, -d.y).normalize(), up: d.clone().negate(), w: wR };
+      look(d, wR, 0.95); const wd = v3(0, 1, 0).addScaledVector(d, -d.y).normalize(), wu = d.clone().negate();
+      W._want = prevW ? { d: nlerp(prevW.d, wd, wR), up: nlerp(prevW.up, wu, wR), w: Math.max(prevW.w, wR) } : { d: wd, up: wu, w: wR };
     } }
   // --- throw (grenade): pull the pin, wind up, release over the shoulder
   if (th) { const a = th.a, w = th.w, keys = [[a.tp, v3(0.16, 0.36, 0.36)], [a.t - 0.36, v3(0.16, 0.42, 0.36)], [a.t - 0.05, v3(0.4, 0.98, -0.28)], [a.t + 0.1, v3(0.06, 0.82, 0.62)], [a.t + 0.5, v3(0.2, 0.15, 0.3)]];
@@ -4246,7 +4292,9 @@ const chestToWorld = (f, t, c) => fromRig(rigF(f, t), v3(c.x, c.y + CH0, c.z));
 // --- hit effects & reactions ---
 function hitFx(T, P, th, o = {}) {   // P: world point · T: target (or null = ground/object)
   const toward = o.from ? toV(o.from).sub(P).normalize() : v3(0, 1, 0), quiet = o.quiet;
-  if (T?.zombie) { cbBurst('goo', P, th, { n: o.n ?? 14, dir: toward.clone().add(v3(0, 0.6, 0)), speed: 3.4 }); if (!quiet) sfx(th, 'splat', 0.6); }
+  if (T?.zombie) { const F = goreFluid('zombie');   // v2.29: CFG.gore 'goo' (green) · 'blood' (dark cartoon blood) · 'off' (dust only)
+    if (F) { cbBurst(F.pool, P, th, { n: o.n ?? 14, dir: toward.clone().add(v3(0, 0.6, 0)), speed: 3.4, colors: F.colors }); if (!quiet) sfx(th, 'splat', 0.6); }
+    else { cbBurst('puff', P, th, { n: 5, size: 0.25, speed: 1.4, dir: toward }); if (!quiet) sfx(th, 'punch', 0.55); } }
   else if (T?.rig || T?.animal) { cbBurst('puff', P, th, { n: 5, size: 0.25, speed: 1.4, dir: toward }); cbBurst('spark', P, th, { n: 6, colors: ['#FFFFFF', '#FFE27A'], speed: 3, dir: toward }); if (!quiet) sfx(th, 'punch', 0.55); }
   else if (T?.metal) { cbBurst('spark', P, th, { n: 16, dir: toward, speed: 7 }); if (!quiet) sfx(th, hash(th * 7.3) < 0.5 ? 'ricochet' : 'tick', 0.7); }
   else { const gnd = Math.abs(P.y - groundH(P.x, P.z)) < 0.25; cbBurst('puff', P, th, { n: 6, size: 0.32, dir: gnd ? v3(0, 1, 0) : toward, speed: 2 }); cbBurst('chip', P, th, { n: 7, dir: gnd ? v3(0, 1, 0) : toward, speed: 3.5, colors: o.chips });
@@ -4254,6 +4302,7 @@ function hitFx(T, P, th, o = {}) {   // P: world point · T: target (or null = g
 }
 function hitReact(T, th, o = {}) {   // react / knock down / drop the horde member
   if (!T) return; if (o.from) o = { ...o, from: toV(o.from) };
+  if (o.sever) dismember(T, o.sever, th, { from: o.from, blood: 0.6 });   // v2.29: swing/bow/shoot { sever: 'armL' | 'handR' | 'legL' … } — zombies only (see GORE)
   if (T.h) { if (!T.done) T.h.hit(T.i, th, { from: o.from }); return; }
   if (T.rig) { if (o.kill) (o.ragdoll ? ragdoll(T.rig, th, { from: o.from ? [o.from.x, o.from.y, o.from.z] : undefined, power: o.power ?? 5 }) : fall(T.rig, th, { from: o.from, dazed: o.dazed })); else react(T.rig, th, 'hit', { amp: o.amp ?? 0.8 }); return; }
   if (T.animal) { jump(T.animal, th, { h: 0.35 }); return; }
@@ -4266,13 +4315,13 @@ const missPoint = (P0, P, k) => { const d = P.clone().sub(P0), L = d.length(), s
 // --- melee actions ---
 function swing(f, t, o = {}) {   // t = moment of impact; o: kind slash | back | chop | thrust | rise · at · hit (false = blocked/missed) · kill · power · wind
   const C = cbRig(f), W = [...C.W].reverse().find(w => w.cls === 'melee') ?? weapon(f, 'sword'), kind = o.kind ?? (W.thrust ? 'thrust' : 'slash'), wind = o.wind ?? (W.heavy ? 0.4 : 0.3);
-  const a = { type: 'swing', W, kind, t, s0: t - 0.12 - wind, s4: t + 0.55, T: cbTarget(o.at) }; a.wt = tt => env3(tt, a.s0, a.s4, 0.1, 0.22); C.A.push(a);
+  const a = { type: 'swing', W, kind, t, s0: t - 0.12 - wind, s4: t + 0.55, T: cbTarget(o.at) }; a.wt = tt => env3(tt, a.s0, a.s4, 0.1, 0.22); C.A.push(a); MBAUTO.push([t - 0.13, t + 0.12]);
   if (a.T) cbFace(f, a.s0 - 0.25, a.s4, a.T);
   W.swings = (W.swings ?? 0) + 1; sfx(t - 0.11, W.glow ? 'laser' : 'swing', W.glow ? 0.35 : 0.8);
   if (a.T && o.hit !== false) { const P = a.T.pos(t), from = rigPos(f, t, new THREE.Vector3()).add(v3(0, 1.3, 0));
     if (a.T.zombie) hitFx(a.T, P, t, { from, n: 18 }); else if (a.T.metal) hitFx(a.T, P, t, { from }); else { cbBurst('spark', P, t, { n: 8, colors: ['#FFFFFF', '#FFE27A'], speed: 3.5, dir: from.clone().sub(P) }); cbBurst('puff', P, t, { n: 4, size: 0.25, speed: 1.2 }); }
     sfx(t, W.hitSnd ?? (W.blunt ? 'punch' : W.glow ? 'laser' : 'slash'), 0.9); SHAKES.push({ t: VT(t), amp: 0.12, dur: 0.25 });
-    hitReact(a.T, t, { from, kill: o.kill, power: o.power, ragdoll: o.ragdoll, amp: 1 }); }
+    hitReact(a.T, t, { from, kill: o.kill, power: o.power, ragdoll: o.ragdoll, amp: 1, sever: o.sever }); }
   return a;
 }
 function block(f, t, o = {}) {   // raise the blade (and shield) — t = moment the blow lands; parry: sparks + clang
@@ -4292,7 +4341,7 @@ function duel(a, b, o = {}) {   // a and b trade blows: attacks alternate, the o
 }
 function punch(f, t, o = {}) { return strike(f, t, { ...o, kind: 'punch' }); }
 function kick(f, t, o = {}) { return strike(f, t, { ...o, kind: 'kick' }); }
-function strike(f, t, o) { const C = cbRig(f), a = { type: 'strike', kind: o.kind, side: o.side ?? 'R', t, T: cbTarget(o.at) }; a.wt = tt => env3(tt, t - 0.35, t + 0.45, 0.12, 0.2); C.A.push(a);
+function strike(f, t, o) { const C = cbRig(f), a = { type: 'strike', kind: o.kind, side: o.side ?? 'R', t, T: cbTarget(o.at) }; a.wt = tt => env3(tt, t - 0.35, t + 0.45, 0.12, 0.2); C.A.push(a); MBAUTO.push([t - 0.12, t + 0.08]);
   if (a.T) cbFace(f, t - 0.6, t + 0.45, a.T); sfx(t - 0.06, 'swing', 0.5);
   if (a.T && o.hit !== false) { const P = a.T.pos(t), from = rigPos(f, t, new THREE.Vector3()).add(v3(0, 1.3, 0)); cbBurst('spark', P, t, { n: 7, colors: ['#FFFFFF', '#FFE27A'], speed: 3 }); sfx(t, 'punch', 1); SHAKES.push({ t: VT(t), amp: 0.14, dur: 0.25 }); hitReact(a.T, t, { from, kill: o.kill, ragdoll: o.ragdoll, power: o.power }); }
   return a; }
@@ -4312,9 +4361,9 @@ function bow(f, t, o = {}) {   // t = release · o: at, draw (s), hold (s), spee
   const Tf = Math.max(0.05, P0.distanceTo(P1) / sp), th = t + Tf, v = P1.clone().sub(P0).multiplyScalar(1 / Tf); v.y += 0.5 * g * Tf;
   const A = { t, th, P0, v, g, mesh: arrowMesh(world, o), T: o.miss ? null : T, fire: o.fire, P1 }; dyn(A.mesh); A.mesh.visible = false; CB.arrows.push(A);
   if (o.fire) { cbBurst('flame', tt => { const u = clamp(tt - t, 0, Tf); return [P0.x + v.x * u, P0.y + v.y * u - 0.5 * g * u * u, P0.z + v.z * u]; }, t, { rate: 60, n: Math.ceil(Tf * 60), size: 0.22, speed: 0.4, life: 0.25 }); }
-  if (A.T?.h) { A.vanish = true; hitFx(A.T, P1, th, { from: P0, n: 12 }); hitReact(A.T, th, { from: P0 }); }
+  if (A.T?.h) { A.vanish = true; hitFx(A.T, P1, th, { from: P0, n: 12 }); hitReact(A.T, th, { from: P0, sever: o.sever }); }
   else if (A.T?.rig) { A.stickRig = A.T.rig; const tf = rigF(A.T.rig, th), l = toRig(tf, P0).sub(v3(0, CH0 + 0.35, 0)).normalize(); A.local = v3(l.x * 0.22, 0.34 + (hash(t) - 0.5) * 0.2, l.z * 0.17); A.ldir = l.clone().negate().add(v3(0, -0.15, 0)).normalize();
-    hitFx(A.T, P1, th, { from: P0 }); sfx(th, A.T.zombie ? 'splat' : 'thunk', 0.8); hitReact(A.T, th, { from: P0, kill: o.kill ?? A.T.zombie, dazed: o.dazed }); }
+    hitFx(A.T, P1, th, { from: P0 }); sfx(th, A.T.zombie ? 'splat' : 'thunk', 0.8); hitReact(A.T, th, { from: P0, kill: o.kill ?? A.T.zombie, dazed: o.dazed, sever: o.sever }); }
   else { sfx(th, 'thunk', 0.8); cbBurst('puff', P1, th, { n: 4, size: 0.22, speed: 1 }); if (A.T && !A.T.point) hitReact(A.T, th, { from: P0 }); if (o.fire) cbBurst('flame', P1, th + 0.05, { rate: 22, n: 60, size: 0.3, speed: 0.8, life: 0.45 }); }
   return A;
 }
@@ -4372,7 +4421,7 @@ function shoot(f, t, o = {}) {   // t = first shot · o: at (rig | point | horde
       if (W.bolt) cbTracer(() => wMuzzle(W)[0], Ph, ts, { vel, len: 1.1, w: 0.07, color: W.bolt, hot: 3.2 });
       else if ((o.tracer ?? W.tracer ?? 1) >= hash(key + 7)) cbTracer(() => wMuzzle(W)[0], Ph, ts, { vel, len: W.kind === 'sniper' ? 4 : 1.5, w: W.kind === 'sniper' ? 0.03 : 0.035 });
       if (p === 0 || hash(key + 8) < 0.4) hitFx(hitIt ? T : null, Ph, th, { from: M0, quiet: p > 0 || (W.auto && i % 2 === 1) });
-      if (hitIt && p === 0) { const kill = T.autoKill || o.kill === true && i === shots.length - 1 || o.kill === i; hitReact(T, th, { from: M0, kill, ragdoll: o.ragdoll, power: (o.power ?? 0) + (W.pellets ? 4 : 0), amp: W.pellets ? 1.3 : 0.7, dazed: o.dazed }); }
+      if (hitIt && p === 0) { const kill = T.autoKill || o.kill === true && i === shots.length - 1 || o.kill === i; hitReact(T, th, { from: M0, kill, sever: i === shots.length - 1 ? o.sever : undefined, ragdoll: o.ragdoll, power: (o.power ?? 0) + (W.pellets ? 4 : 0), amp: W.pellets ? 1.3 : 0.7, dazed: o.dazed }); }
     }
   });
   return a;
@@ -4387,7 +4436,7 @@ function reload(f, t, o = {}) {
 }
 function grenade(f, t, o = {}) {   // t = release · o: to [x,z] (or target), h, fuse (s after it settles), boom (absolute time), size
   const C = cbRig(f), Ttg = cbTarget(o.to ?? [rigPos(f, t).x, rigPos(f, t).z + 12]), P1 = Ttg.pos(t);
-  const a = { type: 'throw', tp: t - 0.85, tpin: t - 0.55, t, t1: t + 0.5 }; a.wt = tt => env3(tt, a.tp - 0.1, a.t1, 0.2, 0.25); C.A.push(a); cbFace(f, a.tp - 0.2, a.t1, Ttg);
+  const a = { type: 'throw', tp: t - 0.85, tpin: t - 0.55, t, t1: t + 0.5 }; a.wt = tt => env3(tt, a.tp - 0.1, a.t1, 0.2, 0.25); C.A.push(a); cbFace(f, a.tp - 0.2, a.t1, Ttg); MBAUTO.push([t - 0.2, t + 0.12]);
   const g = dyn(grp(world)), body = grp(g); ball(body, 0.065, '#4A5A2A', 0, 0, 0, { detail: 1 }).scale.set(1, 1.25, 1); box(body, 0.03, 0.06, 0.03, '#2A2D33', 0, 0.07, 0); box(body, 0.015, 0.11, 0.02, '#8A8F96', 0.03, -0.02, 0, { cast: false });
   body.scale.setScalar(o.scale ?? 1.6);
   const F = rigF(f, t); F.y = Math.atan2(P1.x - F.p.x, P1.z - F.p.z); const H = fromRig(F, v3(0.08, CH0 + 0.82 + 0.1, 0.55)), P = tossPath([H.x, H.y, H.z], [P1.x, P1.z], t, { h: o.h ?? 2.4, bounces: 2, spin: 9, r: 0.1 });
@@ -4400,7 +4449,8 @@ function grenade(f, t, o = {}) {   // t = release · o: to [x,z] (or target), h,
 // --- knocked down: fall over (comic), lie, optional get up; humans see stars, zombies can sink back into the ground ---
 function fall(f, t, o = {}) {
   if (!f?.legL) return f; cbInit(); const dur = o.dur ?? 0.6, F = { f, t, dur, up: o.getUp, sink: o.sink, freeze: o.freeze !== false, dazed: o.dazed ?? f.kind !== 'zombie' };
-  F.geo = () => F._g ?? (F._g = (() => { const p = rigPos(f, t, new THREE.Vector3()), y = rigYaw(f, t); let d;   // evaluated at render time (after all paths and face turns exist)
+  F.geo = () => F._g ?? (F._g = (() => { const p = o.at ? toV(typeof o.at === 'function' ? o.at(t) : o.at) : f._posAt ? rigPos(f, t, new THREE.Vector3()) : (f._rest0?.p ?? f.root.position).clone(), y = f._yawAt ? rigYaw(f, t) : new THREE.Euler().setFromQuaternion(f._rest0?.q ?? f.root.quaternion, 'YXZ').y;   // v2.29: pure (rest pose for standing figures)   // o.at (v2.29): where it lies (held rigs, fallDown)
+    let d;   // evaluated at render time (after all paths and face turns exist)
     if (Array.isArray(o.dir) && o.dir.length === 2) d = v3(o.dir[0], 0, o.dir[1]); else if (o.from) { d = p.clone().sub(toV(o.from)); d.y = 0; }
     else d = ({ back: v3(0, 0, -1), front: v3(0, 0, 1), left: v3(-1, 0, 0), right: v3(1, 0, 0) }[o.dir ?? 'back'] ?? v3(0, 0, -1)).clone().applyAxisAngle(_AY, y);
     if (d.lengthSq() < 1e-6) d.set(0, 0, -1).applyAxisAngle(_AY, y); d.normalize(); const dl = d.clone().applyAxisAngle(_AY, -y);
@@ -4420,7 +4470,7 @@ function fall(f, t, o = {}) {
 function fallLate(F, t) {
   if (t < F.t) return; const f = F.f, G = F.geo(), a = t - F.t, k = clamp(a / F.dur), up = F.up != null ? EASE.inOut(clamp((t - F.up) / 0.9)) : 0;
   let ang = (Math.PI / 2 - 0.04) * EASE.in(k); if (a > F.dur) ang -= 0.09 * Math.exp(-(a - F.dur) * 7) * Math.abs(Math.sin((a - F.dur) * 15)); ang *= 1 - up;
-  if (F.freeze && up < 1) { f.root.position.copy(G.p); f.root.rotation.y = G.y; }
+  if (F.freeze && f._posAt) { if (up < 1) { f.root.position.copy(G.p); f.root.rotation.y = G.y; } else { const ue = F.up + 0.9, q = f._posAt(t), q0 = f._posAt(ue); f.root.position.set(G.p.x + q.x - q0.x, f.root.position.y, G.p.z + q.z - q0.z); } }   // v2.29: walkers stay where they fell and walk on from there after getUp (no teleport)
   f.body.quaternion.setFromAxisAngle(G.axis, ang); f.body.position.y += 0.17 * sm01(k) * (1 - up) - (F.sink && a > 2.4 ? Math.min(2.4, (a - 2.4) * 0.8) : 0);
 }
 
@@ -4561,10 +4611,10 @@ function bomb(V, t, o = {}) {   // release from the belly; falls with the carrie
   const m = dyn(grp(world)); rod(m, 0.17, 0.17, 1.6, '#4A5236', 0, 0, 0, { seg: 10 }); rod(m, 0, 0.17, 0.35, '#4A5236', 0, 0, 0.97, { seg: 10 }); for (let k = 0; k < 4; k++) { const q = grp(m, 0, 0, -0.85); q.rotation.z = k * Math.PI / 2; box(q, 0.01, 0.24, 0.3, '#3A4228', 0, 0.06, 0, { cast: false }); }
   m.scale.setScalar(V.s ?? 1); m.visible = false; const pos = u => v3(P0.x + V0.x * u, P0.y + V0.y * u - 0.5 * g * u * u, P0.z + V0.z * u);
   CB.bombs.push({ m, t, tg, pos }); sfx(t + 0.1, 'whistle', 0.9); AUDIO.hits[AUDIO.hits.length - 1].dur = Math.max(0.3, tg - 0.1);
-  const G = pos(tg); explode(G.x, groundH(G.x, G.z), G.z, t + tg, { size: o.size ?? 1.8 }); if (o.horde) killNear(o.horde, G, t + tg, o.r ?? 4);
+  const G = pos(tg); explode(G.x, groundH(G.x, G.z), G.z, t + tg, { size: o.size ?? 1.8 }); if (o.horde) killNear(o.horde, G, t + tg, o.r ?? 4, { sever: o.sever });
   return { t: t + tg, at: G };
 }
-function killNear(h, P, t, r) { for (let i = 0; i < 600; i++) { const k = h.near(P, t, { max: r }); if (k < 0) break; h.hit(k, t + hash(k) * 0.12, { from: P, push: 1.2 }); } }
+function killNear(h, P, t, r, o = {}) { let sv = o.sever === true ? 1 : o.sever ?? 0; for (let i = 0; i < 600; i++) { const k = h.near(P, t, { max: r }); if (k < 0) break; const tk = t + hash(k) * 0.12; if (sv-- > 0 && !h.human) h.lose(k, ['arm', 'arm', 'leg'][i % 3], tk, { from: P }); h.hit(k, tk, { from: P, push: 1.2 }); } }   // o.sever (v2.29): the n nearest lose a limb
 function flares(V, t, o = {}) { const n = o.n ?? 8; for (let i = 0; i < n; i++) { const tt = t + i * 0.09, P = carrierPoint(V, tt, v3((i % 2 ? 1 : -1) * 0.8, -0.6, -3.5)), vel = carrierVel(V, tt).multiplyScalar(0.55);
     cbBurst('flare', P, tt, { n: 1, vel: [vel.x, vel.y - 2, vel.z], dir: [(i % 2 ? 1 : -1), -0.4, 0], speed: 7, cone: 0.3, life: 1.8 }); cbBurst('smoke', tt2 => { const u = tt2 - tt; return [P.x + (vel.x + (i % 2 ? 7 : -7)) * u * 0.6, P.y + (vel.y - 2) * u - 1.2 * u * u, P.z + vel.z * u * 0.6]; }, tt, { rate: 20, n: 30, size: 0.3, speed: 0.1, life: 1.6, opacity: 0.6 });
     if (i % 2 === 0) sfx(tt, 'pop', 0.8); cbFlash([P, _AY], tt, { size: 0.01, dur: 0.3, light: 25, lightDur: 0.6, color: '#FFFFFF' }); } }
@@ -4886,24 +4936,34 @@ function interior(p, x, z, o = {}) {
 CB.pre ??= []; CB.post ??= [];
 const HOLDS = [], SQUASH = [];
 // hold a figure: position/rotation from t on (pure functions of t); pose via fx
-function holdRig(f, t0, pos, o = {}) { cbInit(); HOLDS.push({ f, t0, t1: o.t1 ?? 1e9, pos, rot: o.rot, hide: o.hide }); if (o.pose) (f.fx ??= []).push((t, S) => { if (t >= t0 && t < (o.t1 ?? 1e9)) o.pose(t, S); }); return f; }
+function holdRig(f, t0, pos, o = {}) { cbInit(); const R0 = f.root ?? f; f._rest ??= { p: R0.position.clone(), r: R0.rotation.clone() }; HOLDS.push({ f, t0, t1: o.t1 ?? 1e9, pos, rot: o.rot, hide: o.hide });
+  if (o.pose) { const t1 = o.t1 ?? 1e9, bi = o.blendIn ?? 0.16, bo = o.blendOut ?? 0.25; (f.fx ??= []).push((t, S) => { if (t < t0 || t >= t1 + bo) return;   // v2.29: the held pose blends in and out (no joints snapping in one frame)
+    const w = Math.min(sm01((t - t0) / bi), t1 < 1e8 ? 1 - sm01((t - t1) / bo) : 1); if (w >= 0.999) { o.pose(t, S); return; }
+    const S2 = { ...S }; o.pose(Math.min(t, t1 - 1e-4), S2); for (const k in S2) if (typeof S2[k] === 'number' && typeof S[k] === 'number') S[k] = lerp(S[k], S2[k], w); }); }
+  return f; }
 function squash(obj, t, o = {}) { cbInit(); const node = obj.root ?? obj.g ?? obj; dyn(node); SQUASH.push({ node, t, dur: o.dur ?? 1.4, s0: node.scale.clone(), flat: o.flat ?? 0.14 }); sfx(t, 'boing', 0.8); return obj; }
 CB.pre.push(t => {
-  for (const H of HOLDS) { if (t < H.t0 || t >= H.t1) continue; const r = H.f.root ?? H.f, p = H.pos(t); r.position.set(p[0], p[1], p[2]); if (H.rot) { const q = H.rot(t); r.rotation.set(q[0], q[1], q[2], q[3] ?? 'YXZ'); } if (H.hide) r.visible = !H.hide(t); }
+  // v2.29: a hold's hide only applies inside its window (seeking back shows the rig again)
+  for (const H of HOLDS) { if (t < H.t0 || t >= H.t1) { const r = H.f.root ?? H.f; if (H.hide) r.visible = true;
+      if (!H.f._posAt && H.f._rest && !HOLDS.some(K => K.f === H.f && t >= K.t0 && t < K.t1)) {   // static rig outside every hold: on its spot (or where the last hold left it), even after seeking
+        const last = HOLDS.filter(K => K.f === H.f && K.t1 <= t).sort((a, b) => b.t1 - a.t1)[0];
+        if (last) { const q = last.pos(last.t1 - 1e-4); r.position.set(q[0], q[1], q[2]); } else { r.position.copy(H.f._rest.p); r.rotation.copy(H.f._rest.r); } }
+      continue; } const r = H.f.root ?? H.f, p = H.pos(t); r.position.set(p[0], p[1], p[2]); if (H.rot) { const q = H.rot(t); r.rotation.set(q[0], q[1], q[2], q[3] ?? 'YXZ'); } if (H.hide) r.visible = !H.hide(t); }
   for (const Q of SQUASH) { const a = t - Q.t; if (a < 0) { continue; } const flat = a < Q.dur ? Math.max(Q.flat, 1 - a / 0.06) : 1 + 0.35 * Math.exp(-(a - Q.dur) * 6) * Math.sin((a - Q.dur) * 20), w = a < Q.dur ? 1 + (1 - flat) * 0.45 : 1 / Math.sqrt(Math.max(0.3, flat));
     Q.node.scale.set(Q.s0.x * w, Q.s0.y * flat, Q.s0.z * w); }
 });
 // victim helper: what a trap does to whoever triggers it
 function trapVictim(V, t, how, o = {}) {
   if (!V) return null; const T = cbTarget(V);
-  if (T.horde) { const k = T.horde.near(o.at ?? [0, 0], t, { max: o.r ?? 3 }); if (k < 0) return null; T.horde.hit(k, t, { from: o.from, drop: how === 'drop', squash: how === 'squash', push: how === 'launch' ? 1.4 : 0.35 }); return { h: T.horde, i: k }; }
-  if (T.h) { T.h.hit(T.i, t, { from: o.from, drop: how === 'drop', squash: how === 'squash', push: how === 'launch' ? 1.4 : 0.35 }); return T; }
+  if (T.horde) { const k = T.horde.near(o.at ?? [0, 0], t, { max: o.r ?? 3 }); if (k < 0) return null; T.horde.hit(k, t, { from: o.from, drop: how === 'drop', keep: o.keep, depth: o.depth, squash: how === 'squash', push: how === 'launch' ? 1.4 : 0.35 }); return { h: T.horde, i: k }; }
+  if (T.h) { T.h.hit(T.i, t, { from: o.from, drop: how === 'drop', keep: o.keep, depth: o.depth, squash: how === 'squash', push: how === 'launch' ? 1.4 : 0.35 }); return T; }
   if (!T.rig) { if (T.obj) { if (how === 'squash') squash(T.obj, t); else if (how === 'launch') knockAway(T.obj, t, { power: 6 }); else wobble(T.obj, t); } return T; }
   const f = T.rig, zb = f.kind === 'zombie';
   if (how === 'kill') { hitFx(T, T.pos(t), t, { from: o.from }); fall(f, t, { from: o.from, dazed: !zb }); }
   else if (how === 'launch') { hitFx(T, T.pos(t), t, { from: o.from }); ragdoll(f, t, { from: o.from ? [o.from.x ?? o.from[0], o.from.y ?? 0.2, o.from.z ?? o.from[2]] : undefined, power: o.power ?? 7 }); }
   else if (how === 'squash') { squash(f, t, { dur: o.dur ?? 1.6 }); }
   else if (how === 'hit') { react(f, t, 'hit', { amp: 1.2 }); }
+  else if (how === 'drop') { fallDown(f, t, { depth: o.depth ?? 3, up: 0, dist: 0, land: 'back', hide: o.keep ? undefined : tt => tt - t > 0.95 }); }   // v2.29
   return T;
 }
 const shoutFace = (f, t0, t1, ex = 'shout') => { const e0 = f.expr; f.expr = tt => tt >= t0 && tt < t1 ? ex : typeof e0 === 'function' ? e0(tt) : e0; };
@@ -4944,7 +5004,7 @@ function marbles(p, x, y, z, o = {}) {
 function slip(f, t, o = {}) {
   if (!f?.legL) return f;
   fall(f, t + 0.12, { dir: o.dir ?? 'back', dur: 0.4, getUp: o.getUp, dazed: o.dazed ?? true });
-  (f.fx ??= []).push((tt, S) => { const e = env3(tt, t, t + 0.95, 0.07, 0.45); if (!e) return; const fl = Math.sin(tt * 31);
+  (f.fx ??= []).push((tt, S) => { const e = env3(tt, t, t + 0.95, 0.12, 0.45); if (!e) return; const fl = Math.sin(tt * 31);
     S.lt = lerp(S.lt, -1.55, e); S.rt = lerp(S.rt, -1.15, e); S.lk = lerp(S.lk, 0.15, e); S.rk = lerp(S.rk, 0.45, e);
     S.las = lerp(S.las, -2.7 + 0.45 * fl, e); S.ras = lerp(S.ras, -2.5 - 0.45 * fl, e); S.laz = lerp(S.laz, -0.8, e); S.raz = lerp(S.raz, 0.8, e);
     S.H += 0.16 * Math.sin(Math.PI * clamp((tt - t) / 0.32)) * e; });
@@ -5025,8 +5085,8 @@ function trap(p, kind, x, z, o = {}) {
       const cov = dyn(grp(g)); for (let i = 0; i < 9; i++) { const a = i / 9 * Math.PI; box(cov, 0.06, 0.05, r * 2.1, '#6A4A2A', 0, 0.02, 0, { ry: a, ...NC }); } for (let i = 0; i < 40; i++) { const a = hash(i) * TAU, rr2 = Math.sqrt(hash(i * 2.3)) * r; box(cov, 0.16, 0.012, 0.1, _fc(i, 3, 1, ['#6A8A3A', '#8A7A3A', '#A8703A', '#5A7A2A']), Math.cos(a) * rr2, 0.05, Math.sin(a) * rr2, { ry: hash(i * 5) * 3, ...NC }); }
       tick2(tt => { const k = clamp((tt - t) / 0.5); cov.position.y = -3.5 * k * k; cov.rotation.z = 0.4 * k; cov.visible = k < 1; });
       sfx(t, 'crack', 0.7); sfx(t + 0.05, 'whoosh', 0.6); sfx(t + 0.7, 'impact', 0.6); cbBurst('puff', [x, here.y + 0.2, z], t + 0.6, { n: 16, size: 0.5, speed: 1.6, cone: 0.4 });
-      if (V) { if (vf) { holdRig(vf, t, tt => { const a = tt - t; return [x, here.y - Math.min(2.6, 0.5 * 9.8 * Math.max(0, a - 0.08) ** 2), z]; }, { pose: (tt, S) => { S.las = -2.8; S.ras = -2.7; S.laz = -0.3; S.raz = 0.3; S.lk = 0.4; S.rk = 0.2; }, hide: tt => tt - t > 0.9 }); shoutFace(vf, t, t + 2, 'scared'); }
-        else trapVictim(V, t, 'drop', { at: [x, z], from }); }
+      if (V) { const keep = o.keep && !o.spikes; if (vf) fallDown(vf, t + 0.08, { from: [x, here.y, z], depth: o.depth ?? 2.3, up: 0, dist: 0, land: 'back', hide: keep ? undefined : tt => tt - t > 0.9, shake: keep });   // v2.29 keep: lies at the bottom (not with spikes)
+        else trapVictim(V, t, 'drop', { at: [x, z], from, keep, depth: o.depth ?? 2.3 }); }
       break;
     }
     case 'spikes': {   // floor plate: spikes shoot up, hold, retract
@@ -5073,7 +5133,7 @@ function trap(p, kind, x, z, o = {}) {
       const anchor = v3(1.2 - 1.55, H + 0.75, -0.4), foot = tt => { const a = tt - t, k = EASE.out(clamp(a / 0.35)), sw = a > 0 ? 0.35 * Math.sin(a * 2.6) * Math.exp(-a * 0.35) : 0; return v3(anchor.x * k + sw, lerp(0.05, H - 0.4, k) - 0.1 * Math.sin(a * 5.2) * Math.exp(-a * 0.6) * (a > 0.35 ? 1 : 0), anchor.z * k); };
       const L2W = v => v.clone().applyAxisAngle(_AY, o.ry ?? 0).add(here);
       tick2(tt => { const f = foot(tt); loop.position.copy(f); loop.visible = true; segBox(rope, f, anchor, 0.025, 0.025); br.rotation.z = tt < t ? -0.6 : -0.6 + 0.6 * EASE.out(clamp((tt - t) / 0.3)); });
-      sfx(t, 'whoosh', 1); sfx(t + 0.35, 'boing', 0.9);
+      sfx(t, 'whoosh', 1); sfx(t + 0.35, 'boing', 0.9); MBAUTO.push([t, t + 0.2]);
       if (V) { if (vf) { const ry0 = (vf.root ?? vf).rotation.y; holdRig(vf, t, tt => { const f = L2W(foot(tt)); return [f.x, f.y - 0.05, f.z]; }, { rot: tt => [Math.PI * EASE.out(clamp((tt - t) / 0.35)), ry0, 0.25 * Math.sin((tt - t) * 2.6) * Math.exp(-(tt - t) * 0.35), 'YXZ'],
           pose: (tt, S) => { S.las = -2.95 + 0.15 * Math.sin(tt * 3); S.ras = -2.9 - 0.15 * Math.sin(tt * 3 + 1); S.laz = -0.25; S.raz = 0.25; S.lt = -0.05; S.rt = 0.6; S.rk = 1.1; S.nrx = -0.4; } }); shoutFace(vf, t, 1e9, 'surprised'); }
         else trapVictim(V, t, 'kill', { at: [x, z] }); }
@@ -5136,7 +5196,8 @@ function trap(p, kind, x, z, o = {}) {
       const halves = [-1, 1].map(sx => { const pv = dyn(grp(g, sx * s / 2, 0.02, 0)); box(pv, s / 2, 0.04, s, o.color ?? '#8A6A48', -sx * s / 4, 0, 0); for (let i = 0; i < 3; i++) box(pv, s / 2, 0.005, 0.02, '#5A4632', -sx * s / 4, 0.04, -s / 3 + i * s / 3, NC); return pv; });
       tick2(tt => { const a = tt - t, k = a < 0 ? 0 : Math.min(1.75, a * a * 18) - (a > 0.32 ? 0.15 * Math.exp(-(a - 0.32) * 6) * Math.abs(Math.sin((a - 0.32) * 14)) : 0); halves.forEach((h, i) => { h.rotation.z = (i ? -1 : 1) * -k; }); });
       sfx(t, 'door', 0.8); sfx(t + 0.6, 'impact', 0.4);
-      if (V) { if (vf) { holdRig(vf, t + 0.05, tt => [x, here.y - Math.min(o.depth ?? 3, 4.9 * (tt - t - 0.05) ** 2), z], { pose: (tt, S) => { S.las = -2.8; S.ras = -2.7; S.laz = -0.3; S.raz = 0.3; }, hide: o.keep ? undefined : tt => tt - t > 0.95 }); shoutFace(vf, t, t + 2, 'scared'); } else trapVictim(V, t + 0.05, 'drop', { at: [x, z] }); }
+      if (V) { if (vf) fallDown(vf, t + 0.05, { from: [x, here.y, z], depth: o.depth ?? 3, up: 0, dist: 0, land: 'back', hide: o.keep ? undefined : tt => tt - t > 0.95, shake: !!o.keep });   // v2.29: lands and lies (keep)
+        else trapVictim(V, t + 0.05, 'drop', { at: [x, z], keep: o.keep, depth: o.depth }); }
       break;
     }
     case 'laser': {   // laser fence between two posts: beams glow, the victim gets zapped
@@ -5160,8 +5221,8 @@ function trap(p, kind, x, z, o = {}) {
     }
     case 'banana': {   // the classic: step on it, feet fly up, land on the back
       const pe = grp(g); for (let i = 0; i < 4; i++) { const q = grp(pe, 0, 0.02, 0, i * Math.PI / 2 + 0.3); box(q, 0.06, 0.02, 0.2, i % 2 ? '#F2D23A' : '#E8C02A', 0, 0, 0.1, { rx: -0.15 }); } ball(pe, 0.04, '#7A5A2A', 0, 0.03, 0, { detail: 0 });
-      tick2(tt => { if (tt > t) { const a = tt - t; pe.position.set(a < 0.4 ? a * 1.5 : 0.6, a < 0.4 ? Math.sin(a / 0.4 * Math.PI) * 0.5 : 0, 0); pe.rotation.y = a * 9; } });
-      if (vf) { fall(vf, t + 0.05, { dir: 'back', dur: 0.42, getUp: o.getUp, dazed: true }); jump(vf, t, { h: 0.45, dur: 0.25, pre: 0.01 }); (vf.fx ??= []).push((tt, S) => { const a = tt - t; if (a > 0 && a < 0.5) { S.lt = -1.5; S.rt = -1.2; S.lk = 0.1; S.rk = 0.2; S.las = -2.6; S.ras = -2.6; } }); shoutFace(vf, t, t + 0.6, 'surprised'); sfx(t, 'swing', 0.6); }
+      tick2(tt => { const a = Math.max(0, tt - t); pe.position.set(a < 0.4 ? a * 1.5 : 0.6, a < 0.4 ? Math.sin(a / 0.4 * Math.PI) * 0.5 : 0, 0); pe.rotation.y = a * 9; });   // v2.29: pure (also before the slip)
+      if (vf) { fall(vf, t + 0.05, { dir: 'back', dur: 0.42, getUp: o.getUp, dazed: true }); jump(vf, t, { h: 0.45, dur: 0.25, pre: 0.01 }); MBAUTO.push([t, t + 0.16]); (vf.fx ??= []).push((tt, S) => { const e = env3(tt, t, t + 0.6, 0.14, 0.2); if (!e) return; S.lt = lerp(S.lt, -1.5, e); S.rt = lerp(S.rt, -1.2, e); S.lk = lerp(S.lk, 0.1, e); S.rk = lerp(S.rk, 0.2, e); S.las = lerp(S.las, -2.6, e); S.ras = lerp(S.ras, -2.6, e); }); shoutFace(vf, t, t + 0.6, 'surprised'); sfx(t, 'swing', 0.6); }   // v2.29: feet fly up over 3 frames (was: one)
       else if (V) trapVictim(V, t, 'kill', { at: [x, z] });
       break;
     }
@@ -6872,9 +6933,12 @@ function heli2(p, o = {}) {
   return H;
 }
 function hang(f, H, t0, t1, o = {}) {   // figure hangs on the rescue winch hook (arms up) between t0 and t1
-  if (!f.root.parent) world.add(f.root); dyn(f.root);
-  f.fx.push((t, S) => { if (t < t0 || t > t1) return; S.las = S.ras = -2.9; S.laz = -0.15; S.raz = 0.15; S.lae = S.rae = -0.1; S.lt = 0.3; S.rt = -0.1; S.lk = 0.4; S.rk = 0.2; });
-  late(t => { if (t < t0 || t > t1) return; const P = H.hookAt(t); f.root.position.set(P.x, P.y - 2.15, P.z); f.root.rotation.set(0, t * 0.4, 0.05 * Math.sin(t * 2)); }); return f;
+  const added = !f.root.parent; if (added) world.add(f.root); dyn(f.root);   // v2.29: a figure made just for the hook only exists while it hangs
+  const he = t => Math.min(sm01((t - t0) / 0.3), t1 < 1e8 ? 1 - sm01((t - t1) / 0.3) : 1);   // v2.29: blends in and out
+  f.fx.push((t, S) => { const e = he(t); if (e <= 0) return; for (const [k, v] of [['las', -2.9], ['ras', -2.9], ['laz', -0.15], ['raz', 0.15], ['lae', -0.1], ['rae', -0.1], ['lt', 0.3], ['rt', -0.1], ['lk', 0.4], ['rk', 0.2]]) S[k] = lerp(S[k], v, e); });
+  late(t => { if (added && (t < t0 || t > t1)) { f.root.visible = false; return; } if (t < t0) return;
+    if (t > t1) { const P = H.hookAt(t1), a = t - t1, g = groundH(P.x, P.z); f.root.position.set(P.x, Math.max(g, P.y - 2.15 - 4.9 * a * a), P.z); f.root.rotation.set(0, t1 * 0.4, 0); return; }   // let go: drops to the ground
+    const P = H.hookAt(t), r = f.root.position, e = added ? 1 : sm01((t - t0) / 0.3); r.set(lerp(r.x, P.x, e), lerp(r.y, P.y - 2.15, e), lerp(r.z, P.z, e)); f.root.rotation.set(0, lerp(f.root.rotation.y, t * 0.4, e), 0.05 * Math.sin(t * 2) * e); }); return f;
 }
 function heliSound(H, t0, t1, v = 0.8) { sfx(t0, 'heli', v); AUDIO.hits[AUDIO.hits.length - 1].dur = t1 - t0; return H; }
 // --- kraken: giant tentacles rise from the sea around a point (or a ship), wave, then grab and drag it down ---
@@ -7007,8 +7071,9 @@ function paddle(f, pts, o = {}) {
 function tread(f, t0 = 0, t1 = 1e9, o = {}) {
   const r = dyn(f.root), lv = o.level;
   if (o.at) r.position.set(o.at[0], 0, o.at[1]);
-  (f.fx ??= []).push((t, S) => { const e = env3(t, t0, t1, 0.3, 0.3); if (!e) return; const A = MOVES.tread(0, t, { sd: f.sd }); for (const k in A) if (S[k] != null) S[k] = lerp(S[k], A[k], e); });
-  late(t => { if (t < t0 || t > t1) return; const p = r.position; r.rotation.x = 0; r.rotation.z = 0; p.y = (lv ?? (typeof waterH === 'function' ? waterH(p.x, p.z, t) : 0)) - 1.42 + 0.05 * Math.sin(t * 1.8); });
+  const ew = (t, d) => t < t0 || t > t1 ? 0 : Math.min(t0 > 0 ? sm01((t - t0) / d) : 1, t1 < 1e8 ? 1 - sm01((t - t1 + d) / d) : 1);   // v2.29: starting later → sinks in and blends into the pose (was: dropped 1 m in one frame)
+  (f.fx ??= []).push((t, S) => { const e = ew(t, 0.3); if (!e) return; const A = MOVES.tread(0, t, { sd: f.sd }); for (const k in A) if (S[k] != null) S[k] = lerp(S[k], A[k], e); });
+  late(t => { const e = ew(t, 0.4); if (!e) return; const p = r.position; r.rotation.x = lerp(r.rotation.x, 0, e); r.rotation.z = lerp(r.rotation.z, 0, e); p.y = lerp(p.y, (lv ?? (typeof waterH === 'function' ? waterH(p.x, p.z, t) : 0)) - 1.42 + 0.05 * Math.sin(t * 1.8), e); });
   return f;
 }
 // climb(rig, { at: [x, z], ry, y0, y1, t0, speed, ladder: true }) — hand over hand up a ladder (or a wall with ladder: false); stays on top at y1 → end time
@@ -7058,10 +7123,11 @@ function dance(f, t0, t1, o = {}) {
     const bob = 0.5 - 0.5 * Math.cos(TAU * b);
     if (st === 'bounce' || st === 'hype') { _crouch(S, 0.07 * bob * e); S.nrx += 0.12 * bob * e; L('las', -1.1 - 0.5 * s); L('ras', -1.1 + 0.5 * s); L('lae', -1.6); L('rae', -1.6); L('laz', -0.2); L('raz', 0.2); _hset(S, 'L', HANDP.fist, e); _hset(S, 'R', HANDP.fist, e);
       if (st === 'hype') { L('ras', -2.6 - 0.3 * Math.abs(s)); L('rae', -0.4); _hset(S, 'R', HANDP.point, e); S.cry += 0.2 * s * e; } }
-    else if (st === 'disco') { const up = n % 2 === 0, k = sm01(Math.min(1, ph / 0.25)); L('ras', up ? lerp(-0.7, -2.7, k) : lerp(-2.7, -0.7, k)); L('raz', up ? 0.55 : -0.55); L('rae', -0.1); _hset(S, 'R', HANDP.point, e);
+    else if (st === 'disco') { const up = n % 2 === 0, k = sm01(Math.min(1, ph / 0.25)); L('ras', up ? lerp(-0.7, -2.7, k) : lerp(-2.7, -0.7, k)); L('raz', n < 1 ? 0.55 : lerp(up ? -0.55 : 0.55, up ? 0.55 : -0.55, k)); L('rae', -0.1); _hset(S, 'R', HANDP.point, e);
       L('las', 0.25); L('laz', -0.7); L('lae', -1.7); S.hx += 0.05 * Math.sin(Math.PI * b) * e; S.hrz += 0.08 * Math.sin(Math.PI * b) * e; _crouch(S, 0.05 * bob * e); S.nry += 0.25 * Math.sin(Math.PI * b) * e; }
-    else if (st === 'robot') { const P = [[-1.57, 0, -1.57, 0], [-1.57, 0, 0, -1.57], [0, -1.57, -1.57, 0], [-1.57, -1.57, -1.57, -1.57]][n % 4], k = sm01(Math.min(1, ph / 0.12));
-      L('las', lerp(S.las, P[0], k)); L('ras', lerp(S.ras, P[1], k)); L('lae', P[2] * 0.9); L('rae', P[3] * 0.9); S.nry += (n % 2 ? 0.45 : -0.45) * sm01(Math.min(1, ph / 0.1)) * e; S.cry += (n % 3 - 1) * 0.15 * e; _hset(S, 'L', HANDP.open, e); _hset(S, 'R', HANDP.open, e); }
+    else if (st === 'robot') {   // v2.29: each pose snaps in from the previous one over ~3 frames (was: from the rest pose in one frame)
+      const RP = [[-1.57, 0, -1.57, 0], [-1.57, 0, 0, -1.57], [0, -1.57, -1.57, 0], [-1.57, -1.57, -1.57, -1.57]], P = RP[n % 4], Q = n > 0 ? RP[(n + 3) % 4] : [S.las, S.ras, S.lae / 0.9, S.rae / 0.9], k = sm01(Math.min(1, ph / 0.22)), hd = m => m < 0 ? 0 : m % 2 ? 0.45 : -0.45;
+      L('las', lerp(Q[0], P[0], k)); L('ras', lerp(Q[1], P[1], k)); L('lae', lerp(Q[2], P[2], k) * 0.9); L('rae', lerp(Q[3], P[3], k) * 0.9); S.nry += lerp(hd(n - 1), hd(n), sm01(Math.min(1, ph / 0.18))) * e; S.cry += lerp(n > 0 ? ((n - 1) % 3 - 1) * 0.15 : 0, (n % 3 - 1) * 0.15, k) * e; _hset(S, 'L', HANDP.open, e); _hset(S, 'R', HANDP.open, e); }
     else if (st === 'floss') { const w = Math.sin(Math.PI * b), f2 = Math.sin(TAU * b); S.hx -= 0.07 * w * e; S.hrz -= 0.1 * w * e; L('laz', -0.25 + 0.55 * w); L('raz', 0.25 + 0.55 * w); L('las', 0.45 * f2); L('ras', -0.45 * f2); L('lae', -0.05); L('rae', -0.05); _hset(S, 'L', HANDP.fist, e); _hset(S, 'R', HANDP.fist, e); }
     else if (st === 'twist') { _crouch(S, 0.12 * e); const w = Math.sin(TAU * b / 2); S.hry += 0.55 * w * e; S.cry -= 0.45 * w * e; L('las', -0.6 + 0.3 * w); L('ras', -0.6 - 0.3 * w); L('lae', -1.6); L('rae', -1.6); L('laz', -0.5); L('raz', 0.5); _hset(S, 'L', HANDP.loose, e); _hset(S, 'R', HANDP.loose, e); }
     else if (st === 'wave') { const w = (b * 0.5) % 1, a = k => Math.sin(TAU * (w - k)); L('laz', -1.45 + 0.25 * a(0)); L('raz', 1.45 + 0.25 * a(0.3)); L('lae', -0.5 * a(0.1)); L('rae', 0.5 * a(0.4) - 0.3); S.crz += 0.12 * a(0.2) * e; S.nrz += 0.15 * a(0.2) * e; _hset(S, 'L', HANDP.open, e); _hset(S, 'R', HANDP.open, e); }
@@ -7070,7 +7136,7 @@ function dance(f, t0, t1, o = {}) {
 }
 // ---- people together ----
 const _pair = (a, b, t0, t1, d, o = {}) => {   // turn both toward each other and close the gap to d metres (eases in/out)
-  _cap(a); _cap(b);
+  _cap(a); _cap(b); HITPAIR.push([a, b, t0 - 0.2, t1 + 0.4]);
   for (const [p, q] of [[a, b], [b, a]]) { const r = dyn(p.root);
     late(t => { const e = env3(t, t0, t1, o.fade ?? 0.35, o.fade ?? 0.35); if (!e) return; const P = _bp(p, t), Q = _bp(q, t), dx = Q.x - P.x, dz = Q.z - P.z, L = Math.hypot(dx, dz) || 1, y0 = _byaw(p, t);
       let dy = Math.atan2(dx, dz) - y0; dy = Math.atan2(Math.sin(dy), Math.cos(dy)); r.rotation.y = y0 + dy * e; const m = (L - d) / 2 * e; r.position.x = P.x + dx / L * m; r.position.z = P.z + dz / L * m; }); }
@@ -7096,7 +7162,7 @@ function handshake(a, b, t0, t1 = t0 + 1.8, o = {}) {
 }
 // piggyback(carrier, rider, t0, t1) — rider jumps on the carrier's back and rides along (walk the carrier)
 function piggyback(c, r, t0, t1 = 1e9, o = {}) {
-  _cap(r); const rr = dyn(r.root), env = t => Math.min(sm01((t - t0 + 0.5) / 0.5), 1 - sm01((t - t1) / 0.5));
+  _cap(r); HITPAIR.push([c, r, t0 - 0.8, t1 + 0.8]); const rr = dyn(r.root), env = t => Math.min(sm01((t - t0 + 0.5) / 0.5), 1 - sm01((t - t1) / 0.5));
   (c.fx ??= []).push((t, S) => { const e = env(t); if (e <= 0) return; S.crx += 0.35 * e; S.las = lerp(S.las, 0.55, e); S.ras = lerp(S.ras, 0.55, e); S.lae = lerp(S.lae, -1.45, e); S.rae = lerp(S.rae, -1.45, e); S.laz = lerp(S.laz, -0.3, e); S.raz = lerp(S.raz, 0.3, e); _hset(S, 'L', HANDP.grip, e); _hset(S, 'R', HANDP.grip, e); S.H -= 0.03 * e; });
   (r.fx ??= []).push((t, S) => { const e = env(t); if (e <= 0) return; S.lt = lerp(S.lt, -1.35, e); S.rt = lerp(S.rt, -1.35, e); S.lk = lerp(S.lk, 1.5, e); S.rk = lerp(S.rk, 1.5, e); S.lz = lerp(S.lz, -0.35, e); S.rz = lerp(S.rz, 0.35, e);
     S.las = lerp(S.las, -1.85, e); S.ras = lerp(S.ras, -1.85, e); S.laz = lerp(S.laz, 0.45, e); S.raz = lerp(S.raz, -0.45, e); S.lae = lerp(S.lae, -1.15, e); S.rae = lerp(S.rae, -1.15, e); S.crx += 0.35 * e; });
@@ -7106,38 +7172,40 @@ function piggyback(c, r, t0, t1 = 1e9, o = {}) {
 }
 // pull(a, b, t0, t1): a drags b by the hand (walk both, b a little behind); shove(a, b, t, { power }): a shoves b, who stumbles back (falls at power ≥ 1.5)
 function pull(a, b, t0, t1, o = {}) {
+  HITPAIR.push([a, b, t0 - 0.3, t1 + 0.5]);
   (a.fx ??= []).push((t, S) => { const e = env3(t, t0, t1, 0.3, 0.3); if (!e) return; S.ras = lerp(S.ras, 0.5, e); S.rae = lerp(S.rae, -0.15, e); S.raz = lerp(S.raz, 0.15, e); S.crx += 0.28 * e; _hset(S, 'R', HANDP.grip, e); });
   (b.fx ??= []).push((t, S) => { const e = env3(t, t0, t1, 0.3, 0.3); if (!e) return; S.ras = lerp(S.ras, -1.35, e); S.rae = lerp(S.rae, -0.05, e); S.crx -= 0.15 * e; _hset(S, 'R', HANDP.grip, e); });
   return [a, b];
 }
-function shove(a, b, t, o = {}) {
+function shove(a, b, t, o = {}) { MBAUTO.push([t - 0.07, t + 0.07]); HITPAIR.push([a, b, t - 0.6, t + 0.5]);
   const pw = o.power ?? 1, rb = dyn(b.root); _cap(a); _cap(b);
-  (a.fx ??= []).push((tt, S) => { const k = tt - t; if (k < -0.45 || k > 0.7) return; const e = k < 0 ? sm01((k + 0.45) / 0.45) : 1 - sm01(k / 0.7), push = k < 0 ? -0.25 * sm01((k + 0.45) / 0.45) : 0.15;
-    S.las = lerp(S.las, -1.45, e); S.ras = lerp(S.ras, -1.45, e); S.lae = lerp(S.lae, k < 0 ? -1.6 : -0.2, e); S.rae = S.lae; S.laz = lerp(S.laz, 0.2, e); S.raz = lerp(S.raz, -0.2, e); S.crx += (0.3 + push) * e; _hset(S, 'L', HANDP.open, e); _hset(S, 'R', HANDP.open, e); });
+  (a.fx ??= []).push((tt, S) => { const k = tt - t; if (k < -0.45 || k > 0.7) return; const e = k < 0 ? sm01((k + 0.45) / 0.45) : 1 - sm01(k / 0.7), sw = _thru(k, 0.12), push = lerp(-0.25 * sm01((Math.min(k, 0) + 0.45) / 0.45), 0.15, sw);
+    S.las = lerp(S.las, -1.45, e); S.ras = lerp(S.ras, -1.45, e); S.lae = lerp(S.lae, lerp(-1.6, -0.2, sw), e); S.rae = S.lae; S.laz = lerp(S.laz, 0.2, e); S.raz = lerp(S.raz, -0.2, e); S.crx += (0.3 + push) * e; _hset(S, 'L', HANDP.open, e); _hset(S, 'R', HANDP.open, e); });
   late(tt => { const k = tt - t; if (k < 0) return; const P = _bp(a, t), Q = _bp(b, t), B = _bp(b, tt), dx = Q.x - P.x, dz = Q.z - P.z, L = Math.hypot(dx, dz) || 1, d = pw * 0.9 * (1 - Math.exp(-k * 4)); rb.position.x = B.x + dx / L * d; rb.position.z = B.z + dz / L * d; });
   if (pw >= 1.5) fall(b, t + 0.25, { from: rigPos(a, t), getUp: o.getUp }); else stumble(b, t, {});
   sfx(t, 'punch', 0.35); return [a, b];
 }
 // chat(a, b, t0, t1, { turns: [[t0, t1, 'a'|'b'], …] }) — face each other, the speaker talks with hands, the listener nods
 function chat(a, b, t0, t1, o = {}) {
-  const T = o.turns ?? (() => { const L = []; let w = 0; for (let t = t0; t < t1 - 0.4; t += 1.8, w ^= 1) L.push([t, Math.min(t1, t + 1.7), w ? 'b' : 'a']); return L; })(), who = (f, t) => T.some(([x, y, s]) => t >= x && t < y && (s === 'a' ? f === a : f === b));
+  const T = o.turns ?? (() => { const L = []; let w = 0; for (let t = t0; t < t1 - 0.4; t += 1.8, w ^= 1) L.push([t, Math.min(t1, t + 1.7), w ? 'b' : 'a']); return L; })(), who = (f, t) => T.some(([x, y, s]) => t >= x && t < y && (s === 'a' ? f === a : f === b)), tw = (f, t) => Math.max(0, ...T.map(([x, y, s]) => (s === 'a' ? f === a : f === b) ? env3(t, x - 0.12, y + 0.12, 0.25, 0.25) : 0));   // v2.29: hands blend between talking and listening
   _pair(a, b, t0, t1, o.dist ?? 1.1, { fade: 0.5 });
   for (const f of [a, b]) { const prev = f.talk; f.talk = t => who(f, t) || (typeof prev === 'function' ? prev(t) : false);
-    (f.fx ??= []).push((t, S) => { const e = env3(t, t0, t1, 0.4, 0.4); if (!e) return; if (who(f, t)) { const g = Math.sin(TAU * 0.9 * t + f.sd * 9), g2 = Math.sin(TAU * 1.3 * t + f.sd * 4);
-        S.ras = lerp(S.ras, -0.65 + 0.25 * g, e); S.rae = lerp(S.rae, -1.25 + 0.3 * g2, e); S.raz = lerp(S.raz, 0.15, e); S.las = lerp(S.las, -0.35 + 0.15 * g2, e); S.lae = lerp(S.lae, -0.9, e); S.nry += 0.12 * g * e; _hset(S, 'R', HANDP.open, e * 0.8); _hset(S, 'L', HANDP.open, e * 0.6); }
-      else { const nod = Math.max(0, Math.sin(TAU * 0.55 * t + f.sd * 7)) ** 8; S.nrx += 0.22 * nod * e; S.las = lerp(S.las, -0.3, e * 0.5); S.lae = lerp(S.lae, -1.4, e * 0.5); } }); }
+    (f.fx ??= []).push((t, S) => { const e0 = env3(t, t0, t1, 0.4, 0.4); if (!e0) return; const w = tw(f, t);
+      if (w < 1) { const e = e0 * (1 - w), nod = Math.max(0, Math.sin(TAU * 0.55 * t + f.sd * 7)) ** 8; S.nrx += 0.22 * nod * e; S.las = lerp(S.las, -0.3, e * 0.5); S.lae = lerp(S.lae, -1.4, e * 0.5); }
+      if (w > 0) { const e = e0 * w, g = Math.sin(TAU * 0.9 * t + f.sd * 9), g2 = Math.sin(TAU * 1.3 * t + f.sd * 4);
+        S.ras = lerp(S.ras, -0.65 + 0.25 * g, e); S.rae = lerp(S.rae, -1.25 + 0.3 * g2, e); S.raz = lerp(S.raz, 0.15, e); S.las = lerp(S.las, -0.35 + 0.15 * g2, e); S.lae = lerp(S.lae, -0.9, e); S.nry += 0.12 * g * e; _hset(S, 'R', HANDP.open, e * 0.8); _hset(S, 'L', HANDP.open, e * 0.6); } }); }
   return [a, b];
 }
 // ---- people and animals ----
 const _apos = (A, t) => (A._posAt ? A._posAt(t) : (A.root ?? A.g).position.clone());
-function pet(f, A, t0, t1 = t0 + 2.5, o = {}) {   // crouch down and stroke the animal's back; dogs wag, others look up
+function pet(f, A, t0, t1 = t0 + 2.5, o = {}) { HITPAIR.push([f, A, t0 - 1, t1 + 1]);   // crouch down and stroke the animal's back; dogs wag, others look up
   const low = (A.lh ?? 1) * (A.sc ?? 1) < 0.75; faceTo(f, { root: A.root, legL: 1, _posAt: t => _apos(A, t) }, t0 - 0.3, t1 + 0.2);
   (f.fx ??= []).push((t, S) => { const e = env3(t, t0, t1, 0.45, 0.4); if (!e) return; if (low) _crouch(S, 0.42 * e); S.crx += (low ? 0.5 : 0.2) * e; const st = Math.sin(TAU * 0.9 * (t - t0));
     S.ras = lerp(S.ras, -1.15 + 0.2 * st, e); S.rae = lerp(S.rae, -0.35, e); S.raz = lerp(S.raz, 0.05, e); _hset(S, 'R', HANDP.open, e); });
   if (A.do) A.do(['dog', 'wolf', 'fox'].includes(A.kind) ? 'wag' : 'look', t0 + 0.3, { dur: t1 - t0, at: rigPos(f, t0).toArray() });
   return f;
 }
-function feed(f, A, t0, o = {}) {   // hold out food; the animal eats it (food: apple · carrot · bone · fish · any food() kind)
+function feed(f, A, t0, o = {}) { HITPAIR.push([f, A, t0 - 1.5, t0 + 4]);   // hold out food; the animal eats it (food: apple · carrot · bone · fish · any food() kind)
   const it = food(world, o.item ?? (['dog', 'wolf', 'lion', 'tiger', 'bear', 'cat'].includes(A.kind) ? 'bone' : 'carrot'), 0, 0, 0, { scale: o.scale ?? 1 }), dur = o.dur ?? 2.2, te = t0 + dur * 0.6;
   holdItem(f, it, t0 - 0.6, te, { after: 'hide' }); faceTo(f, { root: A.root, legL: 1, _posAt: t => _apos(A, t) }, t0 - 0.6, t0 + dur);
   const low = (A.lh ?? 1) * (A.sc ?? 1) < 0.9;
@@ -7146,19 +7214,24 @@ function feed(f, A, t0, o = {}) {   // hold out food; the animal eats it (food: 
   sfx(te, 'crunch', 0.7); emit('crumbs', { at: rigPos(f, te).add(v3(0, low ? 0.5 : 1.1, 0)).toArray(), t0: te, t1: te + 0.1, burst: 12 });
   return it;
 }
-function fetch(f, dog, t, o = {}) {   // throw a stick at t, the dog runs after it and brings it back → time it is back
+function fetch(f, dog, t, o = {}) { HITPAIR.push([f, dog, -1e9, 1e9]); MBAUTO.push([t - 0.07, t + 0.07]);   // throw a stick at t, the dog runs after it and brings it back → time it is back
   const stick = dyn(grp(world)); cyl(stick, 0.025, 0.03, 0.75, '#7A5A3A', 0, -0.375, 0, { rx: Math.PI / 2 });
-  const P0 = rigPos(f, t), to = o.to ?? [P0.x + 9, P0.z], v = o.speed ?? 8, d0 = dog._posAt ? dog._posAt(t) : dog.root.position.clone(), dist = Math.hypot(to[0] - d0.x, to[1] - d0.z), ta = t + 0.25 + dist / v + 0.6;
-  const home = [P0.x + 0.9 * Math.sign(d0.x - P0.x || 1), P0.z + 0.6], tb = ta + 0.3 + Math.hypot(home[0] - to[0], home[1] - to[1]) / (v * 0.75) + 0.6;
-  holdItem(f, { g: stick }, -1e9, t, { after: 'free' }); toss(stick, t, { from: [P0.x, P0.y + 1.7, P0.z], to, h: o.h ?? 3, spin: 6 });
-  (f.fx ??= []).push((tt, S) => { const k = tt - t; if (k < -0.6 || k > 0.5) return; const e = k < 0 ? sm01((k + 0.6) / 0.4) : 1 - sm01(k / 0.5), back = k < 0 ? sm01((k + 0.6) / 0.6) : 0;
-    S.ras = lerp(S.ras, k < 0 ? -2.6 * back + 0.4 : -1.6, e); S.rae = lerp(S.rae, k < 0 ? -1.4 * back : -0.1, e); S.crx += (k < 0 ? -0.15 : 0.25) * e; });
-  walk(dog, [[d0.x, d0.z], to, home], { t0: t + 0.25, speed: v, t1: 1e9 });
-  late(tt => { if (tt < ta - 0.05) return; dog.root.updateWorldMatrix(true, true); const m = dog.head ?? dog.root, z = (dog.D?.hd?.[0] ?? 0.2) * 0.9; stick.position.copy(m.localToWorld(v3(0, -0.02, z))); stick.quaternion.copy(m.getWorldQuaternion(new THREE.Quaternion())); stick.rotateY(Math.PI / 2); });
+  const P0 = rigPos(f, t), to = o.to ?? [P0.x + 9, P0.z], v = o.speed ?? 8, d0 = dog._posAt ? dog._posAt(t) : dog.root.position.clone(), dist = Math.hypot(to[0] - d0.x, to[1] - d0.z);
+  // v2.29: the dog stops with its mouth over the stick, lowers its head, picks it up (stick blends into the mouth) and only then runs back
+  const mh = dog.head ?? dog.root, hz = (dog.D?.hd?.[0] ?? 0.2) * 0.9; dog.root.updateWorldMatrix(true, true); const mw = mh.localToWorld(v3(0, -0.02, hz)), hoff = Math.min(dist * 0.8, Math.hypot(mw.x - dog.root.position.x, mw.z - dog.root.position.z));
+  const ux = (to[0] - d0.x) / (dist || 1), uz = (to[1] - d0.z) / (dist || 1), stop = [to[0] - ux * hoff, to[1] - uz * hoff], wT = (len, sp) => { const ra = clamp(0.16 + 0.07 * sp, 0.2, 0.55); return len < sp * ra ? 2 * Math.sqrt(len * ra / sp) : len / sp + ra; };
+  const ta = t + 0.25 + wT(Math.max(0.01, dist - hoff), v) + 0.2, home = [P0.x + 0.9 * Math.sign(d0.x - P0.x || 1), P0.z + 0.6], tb = ta + 0.35 + wT(Math.hypot(home[0] - stop[0], home[1] - stop[1]), v * 0.75);
+  holdItem(f, { g: stick }, -1e9, t, { after: 'free' }); toss(stick, t, { from: relPt(f, t, to), to, h: o.h ?? 3, spin: 6 });
+  (f.fx ??= []).push((tt, S) => { const k = tt - t; if (k < -0.6 || k > 0.5) return; const e = k < 0 ? sm01((k + 0.6) / 0.4) : 1 - sm01(k / 0.5), back = sm01((Math.min(k, 0) + 0.6) / 0.6), sw = _thru(k);
+    S.ras = lerp(S.ras, lerp(-2.6 * back + 0.4, -1.6, sw), e); S.rae = lerp(S.rae, lerp(-1.4 * back, -0.1, sw), e); S.crx += lerp(-0.15, 0.25, sw) * e; });
+  walk(dog, [[d0.x, d0.z], stop], { t0: t + 0.25, speed: v }); walk(dog, [stop, home], { t0: ta + 0.35, speed: v * 0.75 }); if (dog.do) dog.do('eat', ta - 0.3, { dur: 0.6 });
+  const _sp = v3(), _sq = new THREE.Quaternion();
+  late(tt => { if (tt < ta - 0.12) return; const w = sm01((tt - ta + 0.12) / 0.2); _sp.copy(stick.position); _sq.copy(stick.quaternion); dog.root.updateWorldMatrix(true, true);
+    stick.position.copy(mh.localToWorld(v3(0, -0.02, hz))); stick.quaternion.copy(mh.getWorldQuaternion(new THREE.Quaternion())); stick.rotateY(Math.PI / 2); if (w < 1) { stick.position.lerpVectors(_sp, stick.position, w); stick.quaternion.slerpQuaternions(_sq, stick.quaternion, w); } });
   if (dog.do) dog.do('wag', tb, { dur: 2.5 });
   return tb;
 }
-function lead(f, A, pts, o = {}) {   // lead an animal by the rein: the figure walks pts, the animal follows gap m behind
+function lead(f, A, pts, o = {}) { HITPAIR.push([f, A, -1e9, 1e9]);   // lead an animal by the rein: the figure walks pts, the animal follows gap m behind
   const t0 = o.t0 ?? 0, v = o.speed ?? 1.3, gap = o.gap ?? 1.9; walk(f, pts, { t0, speed: v, mode: o.mode ?? 'walk' });
   let tot = 0; for (let i = 1; i < pts.length; i++) tot += Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]);
   const cut = (P, len) => { const out = [P[0]]; let acc = 0; for (let i = 1; i < P.length; i++) { const d = Math.hypot(P[i][0] - P[i - 1][0], P[i][1] - P[i - 1][1]); if (acc + d >= len) { const k = (len - acc) / d; out.push([lerp(P[i - 1][0], P[i][0], k), lerp(P[i - 1][1], P[i][1], k)]); return out; } acc += d; out.push(P[i]); } return out; };
@@ -7254,13 +7327,31 @@ function idleMix(f, t0, t1, o = {}) {   // random small idle actions every few s
   while (t < t1 - 1.5) { const d = 1.8 + 1.4 * hash(f.sd * 3 + i), k = K[Math.floor(hash(f.sd * 11 + i * 1.7) * K.length) % K.length]; idle(f, t, Math.min(t1, t + d), k); t += d + (o.every ?? 2.5) * (0.6 + 0.8 * hash(f.sd * 5 + i)); i++; }
   return f;
 }
+// v2.29: reach — the arm goes to world point getP() so the hand is exactly there at the grab (tg) and put-back (tr) moments; leans and crouches for low items
+const _parked = p => !p || p.lengthSq() < 1e-6 || p.y < -20, _rT = v3();
+function _reach(f, side, getP, tg, tr, o = {}) {
+  const pre = o.pre ?? 0.4, post = o.post ?? 0.35, K = [tg, tr].filter(k => k != null && Math.abs(k) < 1e8); if (!K.length) return;
+  (f.fx ??= []).push((t, S) => {
+    let w = 0; for (const tk of K) { const k = t - tk; if (k > -pre && k < post) w = Math.max(w, k < 0 ? sm01((k + pre) / pre) : 1 - sm01(k / post)); }
+    if (w <= 0) return; const P = getP(); if (_parked(P)) return;
+    const F = rigF(f, t), sh = v3(side === 'L' ? -0.34 : 0.34, 0.54, 0), Tc = () => toRig(F, P, _rT).applyMatrix4(_kmi.copy(chestM(S, _km3)).invert());
+    let d = Tc().distanceTo(sh); if (d > 1.6) return;   // far away: no reach (the item just blends into the hand)
+    if (d > 0.6) { const c0 = S.cry, tw = Math.min(0.6, (d - 0.6) * 1.6) * w; S.cry = c0 + tw; const d1 = Tc().distanceTo(sh); S.cry = c0 - tw; const d2 = Tc().distanceTo(sh); S.cry = d1 < d2 ? c0 + tw : c0 - tw; d = Math.min(d1, d2); }   // turn the shoulder toward it
+    for (let k = 0; k < 2 && d > 0.6; k++) { Tc(); const low = Math.max(0, -0.3 - _rT.y); S.crx += Math.min(0.45, (d - 0.58) * 1.4) * w; if (low > 0) _crouch(S, Math.min(0.3, low * 0.6) * w); d = Tc().distanceTo(sh); }   // lean in, crouch for low things
+    Tc(); setArm(S, side, armIK(side, _rT), w * clamp(1 - (d - 0.72) / 0.3));
+  });
+}
 // hold any object in a hand between t0 and t1 (follows the hand exactly); o.side 'L' | 'R', o.off [x,y,z] in hand space
+//   v2.29: an item that rests somewhere (table, floor) is reached for and picked up at t0 (and put back at t1 with after: 'rest'); o.reach: false turns that off
 function holdItem(f, it, t0, t1 = 1e9, o = {}) {   // o.after: 'rest' (back where it was) · 'hide' · 'free' (another animation takes over)
   const n = dyn(it.g ?? it.root ?? it), fa = o.side === 'L' ? f.foreL : f.foreR, off = v3(...(o.off ?? [0, -0.4, 0.07])), qo = new THREE.Quaternion().setFromEuler(new THREE.Euler(...(o.rot ?? [0, 0, 0]))), after = o.after ?? 'rest';
   let p0 = null, q0 = null; DEFER.push(() => { p0 = n.position.clone(); q0 = n.quaternion.clone(); });
   hands(f, o.pose ?? 'grip', t0, t1, { side: o.side ?? 'R', fade: 0.1 });
-  late(t => { if (t >= t0 && t <= t1) { n.visible = true; f.root.updateWorldMatrix(true, true); n.position.copy(fa.localToWorld(off.clone())); n.quaternion.copy(fa.getWorldQuaternion(new THREE.Quaternion())).multiply(qo); return; }
-    if (t > t1 && after === 'free') return; if (t > t1 && after === 'hide') { n.visible = false; return; } if (p0) { n.position.copy(p0); n.quaternion.copy(q0); n.visible = true; } });
+  const rch = o.reach !== false && t0 > -1e8, tPut = after === 'rest' && t1 < 1e8 ? t1 : null; if (rch) _reach(f, o.side ?? 'R', () => p0, t0, tPut);
+  const rel = o.release ?? (after === 'free' && t1 < 1e8 ? 0.15 : 0), _hp = v3(), _hq = new THREE.Quaternion();   // v2.29 'free': leaves the hand smoothly over rel s (was: jumped to where the throw starts)
+  late(t => { if (t >= t0 && t <= t1) { n.visible = true; f.root.updateWorldMatrix(true, true); n.position.copy(fa.localToWorld(off.clone())); n.quaternion.copy(fa.getWorldQuaternion(new THREE.Quaternion())).multiply(qo);
+      const w = rch && !_parked(p0) ? Math.min(sm01((t - t0) / 0.12), tPut != null ? sm01((t1 - t) / 0.12) : 1) : 1; if (w < 1) { n.position.lerpVectors(p0, n.position, w); n.quaternion.slerpQuaternions(q0, n.quaternion, w); } return; }
+    if (t > t1 && after === 'free') { if (t < t1 + rel) { const w = sm01((t - t1) / rel); f.root.updateWorldMatrix(true, true); _hp.copy(fa.localToWorld(off.clone())); _hq.copy(fa.getWorldQuaternion(new THREE.Quaternion())).multiply(qo); n.position.lerpVectors(_hp, n.position, w); n.quaternion.slerpQuaternions(_hq, n.quaternion, w); } return; } if (t > t1 && after === 'hide') { n.visible = false; return; } if (p0) { n.position.copy(p0); n.quaternion.copy(q0); n.visible = !(t < t0 && (o.before === 'hide' || (o.before !== 'show' && _parked(p0)))); } });   // v2.29: an item made for the action (at the origin) is hidden until picked up
   return it;
 }
 
@@ -7411,20 +7502,21 @@ function drink(f, F, t0, o = {}) {   // sips: cup to the lips, tilts, head back,
 const _fdE = new THREE.Euler();
 function _hold2(f, F, t0, t1, o) {
   const n = F.g, fa = o.side === 'L' ? f.foreL : f.foreR; let p0 = null, q0 = null; DEFER.push(() => { p0 = n.position.clone(); q0 = n.quaternion.clone(); });
-  hands(f, 'grip', t0, t1, { side: o.side ?? 'R', fade: 0.12 }); const tq = new THREE.Quaternion();
+  hands(f, 'grip', t0, t1, { side: o.side ?? 'R', fade: 0.12 }); const tq = new THREE.Quaternion(), tPut = o.after === 'rest' ? t1 : null; _reach(f, o.side ?? 'R', () => p0, t0, tPut);   // v2.29: reach for it, put it back
   late(t => { if (t >= t0 && t <= t1) { f.root.updateWorldMatrix(true, true); const H = fa.localToWorld(v3(0, -0.42, 0.05)), m = o.mouth ? o.mouth(t) : 0;
       _fdE.setFromQuaternion(f.root.getWorldQuaternion(tq), 'YXZ'); n.quaternion.setFromAxisAngle(_AY, _fdE.y); const top = F.top ? F.top() : 0.05, rr = (F.r ?? 0.05) * F.sc;
       const M = f.head.localToWorld(v3(0, 0.06, 0.2)), mouthAt = v3(); if (o.tilt) { const a = -1.1 * m; mouthAt.copy(M).sub(v3(0, top * Math.cos(a), top * Math.sin(a)).applyQuaternion(n.quaternion)).add(v3(0, 0, 0.03).applyQuaternion(n.quaternion)); n.rotateX(a); }
       else mouthAt.copy(M).add(v3(0, -top * 0.5, rr + 0.02).applyQuaternion(n.quaternion));
-      n.position.lerpVectors(H.add(v3(0, -top * 0.45, 0)), mouthAt, m); n.visible = true; return; }
-    if (t > t1 && o.after === 'hide') { n.visible = false; return; } if (p0) { n.position.copy(p0); n.quaternion.copy(q0); n.visible = true; } });
+      n.position.lerpVectors(H.add(v3(0, -top * 0.45, 0)), mouthAt, m); n.visible = true;
+      const w = _parked(p0) ? 1 : Math.min(sm01((t - t0) / 0.12), tPut != null ? sm01((t1 - t) / 0.12) : 1); if (w < 1) { n.position.lerpVectors(p0, n.position, w); n.quaternion.slerpQuaternions(q0, n.quaternion, w); } return; }
+    if (t > t1 && o.after === 'hide') { n.visible = false; return; } if (p0) { n.position.copy(p0); n.quaternion.copy(q0); n.visible = !(t < t0 && _parked(p0)); } });
 }
 // foodFight(from, to, t, { kind, h }) — throws food (rig or point) at a rig or point; on impact: splat on the face / body / ground, goo, sound
-function foodFight(from, to, t, o = {}) {
+function foodFight(from, to, t, o = {}) { MBAUTO.push([t - 0.07, t + 0.07]);
   const kind = o.kind ?? 'pie', F = food(world, kind, 0, -50, 0, { scale: o.scale ?? 1 }), isR = !!from?.legL, isT = !!to?.legL;
-  const P0 = isR ? _bp(from, t).add(v3(0.3, 1.7, 0)) : toV(from), Tq = isT ? _bp(to, t + 0.8).add(v3(0, 1.55, 0)) : toV(to);
+  const Tq = isT ? _bp(to, t + 0.8).add(v3(0, 1.55, 0)) : toV(to), P0 = isR ? v3(...relPt(from, t, Tq)) : toV(from);
   const P = tossPath(P0.toArray(), Tq.toArray(), t, { h: o.h ?? 1.2, bounces: 0, r: 0 }), land = P.land, node = F.g;
-  if (isR) { holdItem(from, F, t - 0.9, t, { after: 'free' }); (from.fx ??= []).push((tt, S) => { const k = tt - t; if (k < -0.6 || k > 0.45) return; const e = k < 0 ? sm01((k + 0.6) / 0.4) : 1 - sm01(k / 0.45); S.ras = lerp(S.ras, k < 0 ? -2.7 : -1.5, e); S.rae = lerp(S.rae, k < 0 ? -1.6 : -0.1, e); S.crx += (k < 0 ? -0.2 : 0.3) * e; }); }
+  if (isR) { holdItem(from, F, t - 0.9, t, { after: 'free' }); (from.fx ??= []).push((tt, S) => { const k = tt - t; if (k < -0.6 || k > 0.45) return; const e = k < 0 ? sm01((k + 0.6) / 0.4) : 1 - sm01(k / 0.45), sw = _thru(k); S.ras = lerp(S.ras, lerp(-2.7, -1.5, sw), e); S.rae = lerp(S.rae, lerp(-1.6, -0.1, sw), e); S.crx += lerp(-0.2, 0.3, sw) * e; }); }
   tick(tt => { if (tt < t) { if (!isR) node.position.set(0, -50, 0); return; } if (tt > land) { node.visible = false; return; } node.visible = true; P.at(tt, node.position); node.rotation.x = (tt - t) * 7; });
   const col = F.I.splat ?? F.inner ?? '#D83A2A';
   emit('splat', { at: Tq.toArray(), t0: land, t1: land + 0.05, burst: 26, colors: [col, shade(col, -0.15)] }); sfx(land, 'splat', 1);
@@ -8066,12 +8158,12 @@ function goal(p, x, z, o = {}) {
     mesh(g, G('rim', () => new THREE.TorusGeometry(0.23, 0.015, 6, 18)), mat('#E8702A', { metal: 0.5 }), 0, 3.05, 0.28, { rx: Math.PI / 2 }); for (let i = 0; i < 10; i++) { const a = i / 10 * TAU; _seg(g, [Math.cos(a) * 0.23, 3.05, 0.28 + Math.sin(a) * 0.23], [Math.cos(a) * 0.15, 2.65, 0.28 + Math.sin(a) * 0.15], 0.006, 0.006, '#FFFFFF', NC); } }
   return g;
 }
-function kickBall(f, B, t, o = {}) {   // wind-up and kick at t; the ball flies to o.to (bounces) → landing time
-  const P = B.g.position, to = o.to ?? [P.x, P.z + 10]; (f.fx ??= []).push((tt, S) => { const k = tt - t; if (k < -0.5 || k > 0.5) return; const e = k < 0 ? sm01((k + 0.5) / 0.4) : 1 - sm01(k / 0.5); S.rt = lerp(S.rt, k < 0 ? 0.8 * sm01((k + 0.5) / 0.5) : -1.1, e); S.rk = lerp(S.rk, k < 0 ? 1.1 : 0.1, e); S.crx -= 0.15 * e; S.las = lerp(S.las, -0.6, e); S.laz = lerp(S.laz, -0.5, e); });
+function kickBall(f, B, t, o = {}) { MBAUTO.push([t - 0.07, t + 0.07]);   // wind-up and kick at t; the ball flies to o.to (bounces) → landing time
+  const P = B.g.position, to = o.to ?? [P.x, P.z + 10]; (f.fx ??= []).push((tt, S) => { const k = tt - t; if (k < -0.5 || k > 0.5) return; const e = k < 0 ? sm01((k + 0.5) / 0.4) : 1 - sm01(k / 0.5); const sw = sm01((k + 0.06) / 0.12); S.rt = lerp(S.rt, lerp(0.8 * sm01((k + 0.5) / 0.5), -1.1, sw), e); S.rk = lerp(S.rk, lerp(1.1, 0.1, sw), e); S.crx -= 0.15 * e; S.las = lerp(S.las, -0.6, e); S.laz = lerp(S.laz, -0.5, e); });   // v2.29: the leg swings through over ~4 frames
   const T = toss(B, t, { from: [P.x, P.y, P.z], to, h: o.h ?? 1.5, spin: 12 }); sfx(t, 'punch', 0.6); return T.land;
 }
-function throwBall(f, B, t, o = {}) { const P0 = rigPos(f, t); holdItem(f, B, -1e9, t, { after: 'free', off: [0, -0.45, 0.12] }); (f.fx ??= []).push((tt, S) => { const k = tt - t; if (k < -0.6 || k > 0.4) return; const e = k < 0 ? sm01((k + 0.6) / 0.4) : 1 - sm01(k / 0.4); S.ras = lerp(S.ras, k < 0 ? -2.8 : -1.6, e); S.rae = lerp(S.rae, k < 0 ? -1.5 : -0.2, e); S.crx += (k < 0 ? -0.2 : 0.25) * e; });
-  const T = toss(B, t, { from: [P0.x, P0.y + 2.1, P0.z], to: o.to ?? [P0.x, P0.z + 8], h: o.h ?? 2, spin: 6 }); return T.land; }
+function throwBall(f, B, t, o = {}) { MBAUTO.push([t - 0.07, t + 0.07]); const P0 = rigPos(f, t); holdItem(f, B, -1e9, t, { after: 'free', off: [0, -0.45, 0.12] }); (f.fx ??= []).push((tt, S) => { const k = tt - t; if (k < -0.6 || k > 0.4) return; const e = k < 0 ? sm01((k + 0.6) / 0.4) : 1 - sm01(k / 0.4), sw = _thru(k); S.ras = lerp(S.ras, lerp(-2.8, -1.6, sw), e); S.rae = lerp(S.rae, lerp(-1.5, -0.2, sw), e); S.crx += lerp(-0.2, 0.25, sw) * e; });
+  const to = o.to ?? [P0.x, P0.z + 8], T = toss(B, t, { from: relPt(f, t, to, { y: CH0 + 1.05 }), to, h: o.h ?? 2, spin: 6 }); return T.land; }
 // party: balloons(p, x, y, z, { n, colors, release: t }), discoBall(p, x, y, z, { t0 }), djDesk(p, x, z, { ry, dj, t0 })
 function balloons(p, x, y, z, o = {}) {
   const n = o.n ?? 5, g = dyn(grp(p ?? world, x, y, z)), cols = o.colors ?? ['#D8342A', '#2E86AB', '#F7C531', '#3E8E3A', '#E85AA8', '#B87AFF'], B = [];
@@ -8676,6 +8768,235 @@ function cemetery(p, x, z, o = {}) {
 }
 
 /* ====================================================================== */
+/* GORE (v2.29) — cartoon blood and severable limbs that stay YouTube/Instagram-safe on their own                       */
+/*   CFG.gore: 'goo' (default: green zombie goo) · 'blood' (dark cartoon blood; people: a few bright drops) · 'off'               */
+/*   fluid presets per call: 'goo' · 'blood' · 'oil' (black + sparks, robots) · 'alien' (glowing cyan) · '#hex'                   */
+/*   dismember(rig | { h, i }, part, t, o) · h.lose(i, part, t, o) · killNear(h, P, t, r, { sever: n }) · bleed(at, t, o) · ouch(rig, t, o) */
+/*   swing / bow / shoot / grenade { sever }. part: armL armR foreL foreR handL handR legL legR · 'arm' 'fore' 'hand' 'leg' (the side   */
+/*   facing the attacker) · 'random' (an arm part). Guards (always on): only zombies lose limbs (people and animals get ouch), heads    */
+/*   stay on, small amounts, splats fade in ~2 s, limbs poof away, nothing of it in the thumbnail; info().gore lists warnings          */
+/*   (before 15 s, slow motion, close-up, inside a TEASE flash-forward, more than 3 per video)                                        */
+/* ====================================================================== */
+const GORE = { ev: [], warn: new Set(), done: new Set(), n: 0, audited: false }, _gm = new THREE.Matrix4(), _gv = new THREE.Vector3();
+const goreThumb = () => { try { return THUMB_ON; } catch (e) { return false; } };
+function goreWarn(msg) { if (GORE.warn.has(msg)) return; GORE.warn.add(msg); console.warn('[gore] ' + msg); }
+// fluid for who ('zombie' | 'human') in the current mode → { pool, colors, cap, sparks } or null (no fluid)
+function goreFluid(who = 'zombie', over) {
+  const m = over ?? CFG.gore ?? 'goo';
+  if (m === 'off' || m === false) return null;
+  if (m === 'oil') return { pool: 'blood', colors: ['#1C1A18', '#2E2924', '#11100E'], cap: '#1C1A18', sparks: true };
+  if (m === 'alien') return { pool: 'goo', colors: ['#5CF2FF', '#2BB8E0', '#8A6CFF'], cap: '#1E4A6A' };
+  if (typeof m === 'string' && m[0] === '#') return { pool: 'blood', colors: [m, shade(m, -0.15)], cap: shade(m, -0.3) };
+  if (m === 'blood') return who === 'human' ? { pool: 'blood', colors: ['#D8343A', '#B92A32'], cap: '#7A1E24' } : { pool: 'blood', colors: ['#7A1E24', '#5E1519', '#93292C'], cap: '#4A1014' };
+  return who === 'human' ? null : { pool: 'goo', colors: undefined, cap: '#3E8A2A' };   // 'goo'
+}
+// platform checks: t = scene time. Timing and slow motion at build time; close-ups and TEASE in goreAudit() (info(), i.e. every --shots run)
+function goreEvent(t, pos, what, sever = true) {
+  const v = VT(t); GORE.ev.push({ v, pos, what });
+  if (sever && ++GORE.n === 4) goreWarn('more than 3 severed parts in one video – keep it to 1–3 moments (gore as a punchline, not the topic)');
+  if (v < 15) goreWarn(`${what} at ${v.toFixed(1)} s – keep gore after 15 s (YouTube: graphic violence in the first 7 s = no ads, 8–15 s = limited ads)`);
+  const SM = typeof SLOWMO === 'undefined' ? [] : SLOWMO;
+  if (SM.some(s => v >= s.t - 0.2 && v <= s.t + (s.dur ?? 1) + 0.2)) goreWarn(`${what} at ${v.toFixed(1)} s is in slow motion – no slow motion on gore, put SLOWMO on another moment`);
+}
+POSTCAM.push(t => {
+  if (!GORE.ev.length || goreThumb()) return;
+  for (const e of GORE.ev) { if (t < e.v || t > e.v + 1.2) continue; const P = e.pos(); if (!P) continue;
+    const d = camera.position.distanceTo(P), h = 2 * d * Math.tan(camera.fov * Math.PI / 360);
+    if (h < 3) goreWarn(`close-up on ${e.what} at ${e.v.toFixed(1)} s (frame ${h.toFixed(1)} m high) – show gore in mid or wide shots`); }
+});
+// whole-video check (runs once from info()): every camera moment around each gore event + every TEASE flash-forward
+function goreAudit() {
+  if (GORE.audited || !GORE.ev.length) return; GORE.audited = true;
+  for (const e of GORE.ev) for (let tt = e.v; tt <= Math.min(DUR, e.v + 1.2); tt += 0.1) stepScene(tt);   // POSTCAM above sees each camera
+  if (typeof teaseV === 'function') for (let tt = 0; tt < DUR; tt += 0.05) { const tv = teaseV(tt); if (Math.abs(tv - tt) < 0.01) continue;
+    for (const e of GORE.ev) if (tv >= e.v - 0.1 && tv <= e.v + 1.5) goreWarn(`the TEASE flash-forward at ${tt.toFixed(1)} s shows ${e.what} – tease another moment (no gore in teasers)`); }
+}
+const goreCol = n => { let c = null; n.traverse(m => { if (!c && m.isMesh && m.material?.color) c = '#' + m.material.color.getHexString(); }); return c; };
+// parts: node · cut end (top) · stub length/width · cap radius · chest-frame point of the wound · mass
+const GPART = {
+  armL: { node: f => f.armL, sx: -1, top: 0.02, stub: 0.1, w: 0.16, r: 0.07, chest: [-0.34, 0.46, 0], mass: 3 },
+  armR: { node: f => f.armR, sx: 1, top: 0.02, stub: 0.1, w: 0.16, r: 0.07, chest: [0.34, 0.46, 0], mass: 3 },
+  foreL: { node: f => f.foreL, sx: -1, top: 0.03, stub: 0.06, w: 0.145, r: 0.065, chest: [-0.36, 0.2, 0.05], mass: 2 },
+  foreR: { node: f => f.foreR, sx: 1, top: 0.03, stub: 0.06, w: 0.145, r: 0.065, chest: [0.36, 0.2, 0.05], mass: 2 },
+  handL: { node: f => f.hands?.find(h => h.sx === -1)?.hd, sx: -1, top: 0, stub: 0, w: 0.1, r: 0.055, chest: [-0.37, -0.05, 0.1], mass: 0.6 },
+  handR: { node: f => f.hands?.find(h => h.sx === 1)?.hd, sx: 1, top: 0, stub: 0, w: 0.1, r: 0.055, chest: [0.37, -0.05, 0.1], mass: 0.6 },
+  legL: { node: f => f.legL, sx: -1, top: 0.03, stub: 0.08, w: 0.19, r: 0.085, chest: [-0.12, -0.04, 0], mass: 6, leg: true },
+  legR: { node: f => f.legR, sx: 1, top: 0.03, stub: 0.08, w: 0.19, r: 0.085, chest: [0.12, -0.04, 0], mass: 6, leg: true }
+};
+// part aliases: 'arm' | 'fore' | 'hand' | 'leg' → the side facing the attacker (o.from), 'random' / true → an arm part
+function gorePart(part, t, o, F, seed) {
+  if (part === true || part == null) part = 'arm';
+  if (part === 'random') part = ['arm', 'fore', 'hand', 'arm'][Math.floor(hash(seed * 7.7 + t * 3.1) * 4) % 4];
+  if (/^(arm|fore|hand|leg)$/.test(part)) part += o.from && F ? (toRig(F, toV(o.from)).x < 0 ? 'L' : 'R') : hash(seed * 1.3 + t) < 0.5 ? 'L' : 'R';
+  return part;
+}
+// dismember(rig | { h, i } | horde target, part, t, { from, dir, power, up, spin, blood, linger, then: 'keep' | 'fall' | 'crawl', to, look, drip, twitch, fluid, sfx })
+//   → { limb, stub, end }. The part pops off with a squelch, flies (real physics), lands, twitches and poofs away after `linger` s (0.8–4,
+//   default 2.5); the body keeps a short stub with a dark cap, a few drops drip from it for a moment and the zombie glances at it (look: false = no).
+//   Legs: a walking zombie drops onto its hands and crawls on toward its goal (then: 'crawl', to: [x,z]), a standing one falls over (then: 'fall').
+//   Only zombies (and o.undead) — people get ouch(), heads stay on (→ arm), CFG.gore 'off' = just a hit.
+function dismember(T, part = 'arm', t = 0, o = {}) {
+  if (T?._cbT) T = T.rig ?? (T.h ? { h: T.h, i: T.i } : null);
+  if (T?.h && T.i != null) return T.h.lose ? T.h.lose(T.i, part, t, o) : null;
+  const f = T; if (!f?.legL) return null; MBAUTO.push([t - 0.04, t + 0.14]);
+  if (f.kind !== 'zombie' && !o.undead) { goreWarn(`only zombies lose limbs – ${f.kind === 'human' ? 'people' : f.kind} get a cartoon hit (ouch) instead`); return ouch(f, t, o); }
+  if (part === 'head') { goreWarn('heads stay on (YouTube age-restricts decapitation) – an arm comes off instead'); part = 'arm'; }
+  const RF = rigF(f, t); part = gorePart(part, t, o, RF, f.id);
+  const P = GPART[part], src = P?.node(f); if (!src) { goreWarn(`dismember: unknown part '${part}' (armL armR foreL foreR handL handR legL legR, arm fore hand leg random)`); return null; }
+  const key = f.id + ':' + part; if (GORE.done.has(key)) return null; GORE.done.add(key);
+  const F = goreFluid('zombie', o.fluid); if (!F) { react(f, t, 'hit', { amp: 0.8 }); if (o.sfx !== false) sfx(t, 'punch', 0.6); return null; }
+  const host = src.parent, col = goreCol(src) ?? '#5A6170', capC = o.cap ?? F.cap, tEnd = t + clamp(o.linger ?? 2.5, 0.8, 4), sd = hash(f.id * 3.7 + part.length * 1.3);
+  // stub on the body (follows the joint) and the loose part (a copy of it, cut end capped)
+  const stub = dyn(grp(host)); stub.visible = false;
+  if (P.stub) rbox(stub, P.w, P.stub, P.w, col, 0, P.top - P.stub, 0);
+  cyl(stub, P.r, P.r, 0.03, capC, 0, P.top - P.stub - 0.02, 0, { seg: 10, cast: false });
+  const L = dyn(grp(world)), C = src.clone(true); C.traverse(n => { n.userData = {}; }); C.position.set(0, 0, 0); C.quaternion.identity(); C.scale.set(1, 1, 1); L.add(C); L.visible = false;
+  cyl(C, P.r, P.r, 0.03, capC, 0, P.top - 0.012, 0, { seg: 10, cast: false });
+  // flight: away from the hit (o.from) or out to the side, plus lift and tumble; limbs don't collide with ragdolls (group 'debris')
+  const W0 = chestToWorld(f, t, v3(...P.chest)), out = o.dir ? toV(o.dir) : o.from ? W0.clone().sub(toV(o.from)) : W0.clone().sub(rigPos(f, t, v3()));
+  out.y = 0; if (out.lengthSq() < 1e-4) { const y = RF.y + P.sx * Math.PI / 2; out.set(Math.sin(y), 0, Math.cos(y)); } out.normalize();
+  const pw = o.power ?? 3.2, vel = [out.x * pw, o.up ?? 2.6, out.z * pw], sp = o.spin ?? 12, spin = [(hash(sd * 3) - 0.5) * sp, (hash(sd * 5) - 0.5) * sp * 0.6, (hash(sd * 7) - 0.5) * sp];
+  phys(L, { t0: t, vel, spin, bounce: 0.25, friction: 0.85, mass: P.mass, group: 'debris' });
+  late(st => {
+    const on = st >= t && !goreThumb(), live = on && st < tEnd + 0.05;
+    src.visible = !on; stub.visible = on;
+    if (on) { stub.position.copy(src.position); stub.quaternion.copy(src.quaternion); }
+    if (st <= t + 1e-6) { src.updateWorldMatrix(true, false); _gm.copy(world.matrixWorld).invert().multiply(src.matrixWorld).decompose(L.position, L.quaternion, L.scale); }
+    else if (!PHYS.ready) { const a = st - t, [x, y, z] = cbBall(W0.x, W0.y, W0.z, vel[0], vel[1], vel[2], -9.8, groundH(W0.x, W0.z) + 0.08, a, 0.25), k = Math.min(a, 0.9);   // no physics engine: simple arc
+      L.position.set(x, y, z); L.rotation.set(spin[0] * k, RF.y + spin[1] * k, Math.PI / 2 * sm01(a / 0.9)); }
+    L.visible = live;
+    if (live) { const a = st - t, k = 1 - EASE.in(clamp((st - (tEnd - 0.22)) / 0.22)); C.scale.setScalar(Math.max(0.001, k));
+      C.rotation.x = o.twitch === false || a < 0.7 ? 0 : 0.22 * Math.sin(a * 15 + sd * 6) * Math.exp(-(a - 0.7) * 1.4); }
+  });
+  const amt = clamp(o.blood ?? 1, 0, 1.5), Pc = v3(...P.chest), dB = out.clone().add(v3(0, 0.8, 0));
+  if (amt > 0) { cbBurst(F.pool, W0, t, { n: Math.round(10 * amt), dir: dB, speed: 2.6, cone: 0.7, colors: F.colors });
+    cbBurst(F.pool, b => chestToWorld(f, b, Pc), t + 0.05, { n: Math.round(6 * amt), rate: 18, dir: dB, speed: 2, cone: 0.45, size: 0.06, colors: F.colors });
+    if (o.drip !== false) cbBurst(F.pool, b => chestToWorld(f, b, Pc), t + 0.45, { n: Math.round(6 * amt), rate: 3.5, dir: [0, -1, 0], speed: 0.4, cone: 0.25, size: 0.045, colors: F.colors }); }   // drips from the stub for ~1.7 s
+  if (F.sparks) cbBurst('spark', W0, t, { n: 14, dir: dB, speed: 5 });
+  cbBurst('puff', b => L.getWorldPosition(v3()), tEnd - 0.12, { n: 7, size: 0.3, speed: 1.1 });
+  if (o.sfx !== false) { sfx(t, 'squelch', 0.9); sfx(t + 0.55, 'splat', 0.35); sfx(tEnd - 0.1, 'pop', 0.45); if (F.sparks) sfx(t, 'buzz', 0.4); }
+  const then = o.then ?? (o.kill ? 'fall' : P.leg ? (rigStill(f, t) && !o.to ? 'fall' : 'crawl') : 'keep');
+  if (then === 'fall') fall(f, t + 0.05, { from: o.from ? toV(o.from) : undefined, dazed: false });
+  else if (then === 'crawl') goreCrawl(f, t + 0.05, o);
+  else react(f, t + 0.02, 'hit', { amp: 0.7 });
+  if (!P.leg && o.look !== false && then === 'keep') (f.fx ??= []).push((tt, S) => {   // glances down at the stub, then carries on
+    const u = tt - t - 0.25; if (u < 0 || u > 1.2) return; const w = sm01(u / 0.25) * (1 - sm01((u - 0.85) / 0.3));
+    S.nry = lerp(S.nry, P.sx * 0.95, w); S.nrx = lerp(S.nrx, 0.38, w); });
+  goreEvent(t, () => (L.visible ? L : stub).getWorldPosition(_gv), `severed ${part}`);
+  return { limb: L, stub, t, end: tEnd };
+}
+// legless zombie: drops onto its hands and crawls on (o.speed 0.4 m/s) toward o.to | the end of its walk | 2.5 m ahead
+function goreCrawl(f, t0, o = {}) {
+  const P0 = rigPos(f, t0, v3()), y0 = rigYaw(f, t0), sc = f.root.scale.x, v = o.speed ?? 0.4, tc = t0 + 0.5;
+  let G = o.to ? toV(o.to) : f._posAt ? toV(f._posAt(DUR + 60)) : null;
+  if (!G || Math.hypot(G.x - P0.x, G.z - P0.z) < 0.3) G = P0.clone().add(v3(Math.sin(y0) * 2.5, 0, Math.cos(y0) * 2.5));
+  const dx = G.x - P0.x, dz = G.z - P0.z, Ln = Math.hypot(dx, dz) || 1, ux = dx / Ln, uz = dz / Ln, yaw = Math.atan2(ux, uz), da = Math.atan2(Math.sin(yaw - y0), Math.cos(yaw - y0)), Cl = cycleLen('crawl', v) * sc;
+  const sAt = tt => clamp((tt - tc) * v, 0, Ln), at = tt => { const s = sAt(tt), x = P0.x + ux * s, z = P0.z + uz * s; return v3(x, groundH(x, z), z); }, yawAt = tt => y0 + da * sm01((tt - t0) / 0.6);
+  const pA = f._posAt, yA = f._yawAt, r0 = f.root.position.clone(), ry0 = f.root.rotation.y;
+  f._posAt = tt => tt >= t0 ? at(tt) : pA ? pA(tt) : r0.clone(); f._yawAt = tt => tt >= t0 ? yawAt(tt) : yA ? yA(tt) : ry0;
+  tick(tt => { if (tt < t0 || goreThumb()) { if (!pA) { f.root.position.copy(r0); f.root.rotation.y = ry0; } return; } f.root.position.copy(at(tt)); f.root.rotation.y = yawAt(tt);
+    pose(f, 'crawl', TAU * sAt(tt) / Cl, tt, { v, w: clamp((tt - t0) / 0.5), from: 'idle' }); });
+  return f;
+}
+// crowds: h.lose(i, 'armL' | 'armR' | 'legL' | 'legR' | 'arm' | 'leg' | 'random', t, o) — the forearm (or lower leg) flies, the upper arm (thigh)
+//   keeps a dark cap; legs: the member falls
+function goreHordeLose(H, I, i, part, t, o = {}) {
+  const q = I.M[i]; if (!q) return null;
+  if (H.human) { goreWarn('only zombies lose limbs – people in crowds get a normal hit'); H.hit(i, t, { from: o.from }); return null; }
+  if (part === 'head') { goreWarn('heads stay on (YouTube age-restricts decapitation) – an arm comes off instead'); part = 'arm'; }
+  part = gorePart(part, t, {}, null, i * 3.1 + hordes.indexOf(H));
+  const side = /L$/.test(part) ? 'L' : 'R', leg = /^(leg|shin|foot)/.test(part), key = (leg ? 'leg' : 'arm') + side, uid = 'h' + hordes.indexOf(H) + ':' + i + key;
+  if (GORE.done.has(uid)) return null; GORE.done.add(uid);
+  const F = goreFluid('zombie', o.fluid); if (!F) { H.hit(i, t, { from: o.from }); return null; }
+  const k = side === 'L' ? 0 : 1, idx = 2 * i + k, c1 = new THREE.Color(), c2 = new THREE.Color(), R = (q.lose ??= {})[key] = { t, M: new THREE.Matrix4(), vis: false };
+  const tEnd = t + clamp(o.linger ?? 2.2, 0.8, 4), sd = hash(i * 5.3 + k + 1.7), r = leg ? 0.08 : 0.065;
+  const L = dyn(grp(world)), C = grp(L); L.visible = false;
+  if (leg) { I.shin.getColorAt(idx, c1); I.foot.getColorAt(idx, c2); rbox(C, 0.17, LEG2 + 0.05, 0.18, '#' + c1.getHexString(), 0, -LEG2 - 0.02, 0); rbox(C, 0.17, 0.09, 0.28, '#' + c2.getHexString(), 0, -LEG2 - ANK, 0.05); }
+  else { I.farm.getColorAt(idx, c1); rbox(C, 0.145, 0.44, 0.145, '#' + c1.getHexString(), 0, -0.43, 0); }
+  cyl(C, r, r, 0.03, F.cap, 0, -0.012, 0, { seg: 10, cast: false });
+  const cap = dyn(grp(world)); cyl(cap, r, r, 0.03, F.cap, 0, -0.035, 0, { seg: 10, cast: false }); cap.visible = false;
+  const W0 = H.pos(i, t).add(v3(0, (leg ? -0.7 : 0) * q.sc, 0)), out = o.dir ? toV(o.dir) : o.from ? W0.clone().sub(toV(o.from)) : v3(Math.cos(sd * TAU), 0, Math.sin(sd * TAU));
+  out.y = 0; if (out.lengthSq() < 1e-4) out.set(1, 0, 0); out.normalize();
+  const pw = o.power ?? 3, vel = [out.x * pw, o.up ?? 2.4, out.z * pw], sp = o.spin ?? 12, spin = [(hash(sd * 3) - 0.5) * sp, (hash(sd * 5) - 0.5) * sp * 0.6, (hash(sd * 7) - 0.5) * sp];
+  phys(L, { t0: t, vel, spin, bounce: 0.25, friction: 0.85, mass: leg ? 4 : 1.5, group: 'debris' });
+  late(st => {
+    const on = st >= t && !goreThumb(), live = on && st < tEnd + 0.05;
+    if (st <= t + 1e-6) { if (R.vis) R.M.decompose(L.position, L.quaternion, L.scale); else L.position.copy(W0); }   // joint pose captured by h.update this frame (member not on screen yet: from its spot)
+    else if (!PHYS.ready) { const a = st - t, [x, y, z] = cbBall(W0.x, W0.y, W0.z, vel[0], vel[1], vel[2], -9.8, groundH(W0.x, W0.z) + 0.08, a, 0.25), kk = Math.min(a, 0.9); L.position.set(x, y, z); L.rotation.set(spin[0] * kk, spin[1] * kk, Math.PI / 2 * sm01(a / 0.9)); }
+    L.visible = live; cap.visible = on && R.vis; if (cap.visible) R.M.decompose(cap.position, cap.quaternion, cap.scale);
+    if (live) { const a = st - t, kk = 1 - EASE.in(clamp((st - (tEnd - 0.22)) / 0.22)); C.scale.setScalar(Math.max(0.001, kk)); C.rotation.x = o.twitch === false || a < 0.7 ? 0 : 0.22 * Math.sin(a * 15 + sd * 6) * Math.exp(-(a - 0.7) * 1.4); }
+  });
+  const amt = clamp(o.blood ?? 1, 0, 1.5), dB = out.clone().add(v3(0, 0.8, 0));
+  if (amt > 0) { cbBurst(F.pool, W0, t, { n: Math.round(9 * amt), dir: dB, speed: 2.5, cone: 0.7, colors: F.colors });
+    cbBurst(F.pool, b => H.pos(i, b).add(v3(0, (leg ? -0.7 : -0.2) * q.sc, 0)), t + 0.05, { n: Math.round(5 * amt), rate: 16, dir: dB, speed: 1.8, cone: 0.45, size: 0.06, colors: F.colors }); }
+  if (F.sparks) cbBurst('spark', W0, t, { n: 12, dir: dB, speed: 5 });
+  cbBurst('puff', b => L.getWorldPosition(v3()), tEnd - 0.12, { n: 6, size: 0.28, speed: 1 });
+  if (o.sfx !== false) { sfx(t, 'squelch', 0.8); sfx(t + 0.5, 'splat', 0.3); sfx(tEnd - 0.1, 'pop', 0.35); }
+  if (leg || o.then === 'fall' || o.kill) H.hit(i, t + 0.05, { from: o.from });
+  goreEvent(t, () => (L.visible ? L : cap).getWorldPosition(_gv), `severed crowd ${key}`);
+  return { limb: L, cap, t, end: tEnd };
+}
+// bleed(at, t, { n ≤ 30, dur, dir, speed, cone, size, who, fluid, sfx }) — a burst (or with dur a short stream) of drops that land as small splats and fade
+//   at: [x,y,z] | Vector3 | t => [x,y,z] | rig (chest); people bleed only in 'blood' mode and at most 8 drops
+function bleed(at, t, o = {}) {
+  const human = at?.legL ? at.kind !== 'zombie' : o.who === 'human', F = goreFluid(human ? 'human' : 'zombie', o.fluid); if (!F) return null;
+  const src = at?.legL ? (b => chestToWorld(at, b, v3(0, 0.3, 0.12))) : at, n = clamp(Math.round(o.n ?? (human ? 5 : 12)), 1, human ? 8 : 30);
+  const e = cbBurst(F.pool, src, t, { n, rate: o.dur ? n / o.dur : 0, dir: o.dir ?? [0, 1, 0], speed: o.speed ?? (human ? 1.7 : 2.6), cone: o.cone ?? 0.8, size: o.size ?? (human ? 0.045 : undefined), colors: F.colors });
+  if (o.sfx !== false) sfx(t, 'splat', human ? 0.3 : 0.5);
+  if (!human) goreEvent(t, () => toV(typeof src === 'function' ? src(t) : src), 'blood', false);
+  return e;
+}
+// ouch(rig, t, { blood, n, stars, dazed, plaster, fall, from, amp }) — cartoon injury for people: a few drops ('blood' mode only), stars, a plaster on the cheek
+function ouch(f, t, o = {}) {
+  if (!f?.head) return null; cbInit();
+  const F = goreFluid('human', o.fluid);
+  if (F && o.blood !== false) cbBurst(F.pool, chestToWorld(f, t, v3(0.05, 0.84, 0.2)), t, { n: clamp(Math.round(o.n ?? 5), 1, 8), size: 0.045, speed: 1.7, cone: 0.9, life: 1.3, colors: F.colors });
+  react(f, t, 'hit', { amp: o.amp ?? 0.9 }); if (o.sfx !== false) sfx(t, 'punch', 0.7);
+  if (o.stars !== false) { CB.stars.push({ f, t0: t + 0.1, t1: t + (o.dazed ?? 2.2) }); sfx(t + 0.15, 'daze', 0.6); }
+  let pl = null;
+  if (o.plaster !== false) { pl = dyn(grp(f.head, 0.12, 0.125, 0.197)); for (const rz of [0.62, -0.62]) box(pl, 0.1, 0.03, 0.012, '#EBC79E', 0, -0.015, 0, { rz, cast: false }); box(pl, 0.03, 0.03, 0.014, '#F6E2C6', 0, -0.015, 0.002, { cast: false });   // on the cheek
+    const tp = t + 0.45; pl.visible = false; tick(st => { const k = clamp((st - tp) / 0.25); pl.visible = k > 0; pl.scale.setScalar(Math.max(0.001, EASE.back(k))); }); sfx(tp, 'pop', 0.35); }
+  if (o.fall) fall(f, t + 0.02, { from: o.from ? toV(o.from) : undefined, dazed: false });
+  return { plaster: pl };
+}
+
+/* ====================================================================== */
+/* FALLS (v2.29) — fallDown(): falling from a height (roof, ladder, ledge, tree, trapdoor, pit) ends on the ground, not on the feet  */
+/* ====================================================================== */
+// fallDown(rig, t, { from: [x,y,z], to: [x,y,z] | [x,z], depth, dist: 0.6, dir: [x,z], up: 0.8, land: 'auto' | 'back' | 'front' | 'feet',
+//   getUp, until, dazed, hide, shake, sfx }) → { land, at }
+//   from: where the fall starts (default: where the figure is at t; for a roof edge give the edge point with its height)
+//   to: landing point ([x,z] = on the ground there); else depth m below (dist m forward), or the ground in front
+//   flight: a small hop (up m/s), arms windmill, legs kick, scared face, falling whoosh; landing: dust, thud, shake by height.
+//   land 'auto': up to 1.2 m the knees give and it stays on its feet, higher it goes down on its back (front: face down) and lies there
+//   (stars for people); getUp: t2 stands up on the spot; until: t3 releases the figure (then walk() on from `at`); hide: tt => bool (out of sight)
+function fallDown(f, t, o = {}) {
+  if (!f?.legL) return null; cbInit();
+  const P0 = o.from ? toV(o.from) : rigPos(f, t, v3()), yaw0 = rigYaw(f, t), vup = o.up ?? 0.8;
+  let L;
+  if (o.to) { L = toV(o.to); if (o.to.length === 2) L.y = groundH(L.x, L.z); }
+  else { const fw = o.dir ? v3(o.dir[0], 0, o.dir[o.dir.length - 1]).normalize() : v3(Math.sin(yaw0), 0, Math.cos(yaw0)); L = P0.clone().addScaledVector(fw, o.dist ?? 0.6); L.y = o.depth != null ? P0.y - o.depth : groundH(L.x, L.z); }
+  const H = Math.max(0, P0.y - L.y), g = 9.8, Tf = Math.max(0.15, (vup + Math.sqrt(vup * vup + 2 * g * H)) / g), tl = t + Tf, dk = Math.min(1, H / 3.5); if (H > 0.6) MBAUTO.push([tl - 0.12, tl + 0.06]);
+  const at = tt => { const a = clamp(tt - t, 0, Tf), k = a / Tf; return [lerp(P0.x, L.x, k), Math.max(L.y, P0.y + vup * a - 0.5 * g * a * a), lerp(P0.z, L.z, k)]; };
+  const land = o.land ?? 'auto', down = land === 'back' || land === 'front' || (land === 'auto' && H > 1.2), zb = f.kind === 'zombie';
+  holdRig(f, t, at, { t1: o.until, hide: o.hide, rot: () => [0, yaw0, 0], pose: (tt, S) => {
+    if (tt < tl + 0.3) { const w = clamp((tt - t) / 0.15) * (1 - sm01((tt - tl) / 0.3)), s1 = Math.sin(tt * 15), s2 = Math.sin(tt * 15 + 2.1), s3 = Math.sin(tt * 11);   // windmill arms, kicking legs (fade out after touchdown)
+      S.las = lerp(S.las, -1.9 + 1.2 * s1, w); S.ras = lerp(S.ras, -1.9 + 1.2 * s2, w); S.laz = lerp(S.laz, -0.55, w); S.raz = lerp(S.raz, 0.55, w); S.lae = lerp(S.lae, -0.5, w); S.rae = lerp(S.rae, -0.5, w);
+      S.lt = lerp(S.lt, -0.35 + 0.45 * s3, w); S.rt = lerp(S.rt, -0.35 - 0.45 * s3, w); S.lk = lerp(S.lk, 0.75, w); S.rk = lerp(S.rk, 0.75, w); S.crx = lerp(S.crx, -0.14, w); S.nrx = lerp(S.nrx, -0.22, w); }
+    if (!down && tt >= tl) { const u = tt - tl, b = u < 0.55 ? Math.sin(Math.PI * clamp(u / 0.55)) * (0.55 + 0.45 * dk) : 0;   // on the feet: knees give and spring back
+      S.lk = lerp(S.lk, 1.55, b); S.rk = lerp(S.rk, 1.55, b); S.lt = lerp(S.lt, -0.95, b); S.rt = lerp(S.rt, -0.95, b); S.H -= 0.34 * b; S.crx += 0.4 * b; S.las = lerp(S.las, -0.7, b); S.ras = lerp(S.ras, -0.7, b); }
+  } });
+  if (f._posAt) { const pA = f._posAt, yA = f._yawAt, t1 = o.until ?? 1e9; f._posAt = tt => tt >= t && tt < t1 ? v3(...at(tt)) : pA(tt); f._yawAt = tt => tt >= t && tt < t1 ? yaw0 : yA(tt); }
+  if (!zb) shoutFace(f, t, tl + (down ? 0 : 0.6), 'scared');
+  if (down) fall(f, tl - 0.1, { dir: land === 'front' ? 'front' : 'back', dur: 0.45, getUp: o.getUp, dazed: o.dazed, freeze: false, at: L });   // starts tipping just before touchdown
+  else react(f, tl + 0.02, 'startle', { amp: 0.6 });
+  if (o.sfx !== false) { if (Tf > 0.45) sfx(t + 0.05, 'whoosh', 0.35 + 0.35 * dk); sfx(tl, 'impact', 0.45 + 0.55 * dk); }
+  cbBurst('puff', L, tl, { n: Math.round(7 + 10 * dk), size: 0.45, speed: 1.2 + dk, cone: 1.35 });
+  if (o.shake !== false && H > 0.8) SHAKES.push({ t: VT(tl), amp: 0.06 + 0.22 * dk, dur: 0.3 });
+  return { land: tl, at: L.toArray() };
+}
+
+/* ====================================================================== */
 /* SCENE — written per video between the markers (wrapped in a block: names are free) */
 /* ====================================================================== */
 /* @SCENE-BEGIN */
@@ -8747,11 +9068,110 @@ function cemetery(p, x, z, o = {}) {
 }
 /* @SCENE-END */
 
+/* ---------------------------------------------------------------------- */
+/* HITBOXES (v2.29) — nobody stands inside things: every standing / walking figure is a 0.21 m (× scale) cylinder; static props, walls, furniture,
+   trees, parked cars, other figures and animals are solid. Built once from the finished scene (before bake), then every frame (first late hook):
+   1) push figures out of props (circle vs box footprint, only parts between knee and head height — steps, curbs and low stuff are walked over)
+   2) push figures apart (half each), animals push figures away. Shallow overlaps only (fades out 0.45–0.9 m deep: something you are clearly *inside*
+   — a house you walk into, a tent — is left alone and reported by the audit).
+   Skipped automatically: sitting, crouching, lying, falling, ragdolls, held / carried / riding figures, figures inside vehicles (other parent).
+   noHit(figure | object) opts out, noHit(a, b, t0, t1) lets two figures touch (hug, piggyback, pull, shove, carry and _pair moments do this already).
+/* ---------------------------------------------------------------------- */
+const HITBOX = { boxes: [], grid: new Map(), cell: 2, rep: new Map() }, _hb = new THREE.Vector3(), _hbB = new THREE.Box3(), _hbM = new THREE.Matrix4();
+const _hbKey = (i, j) => i * 100003 + j;
+function hitBuild() {
+  const skip = new Set(); for (const f of RIGS) if (f.root) skip.add(f.root); for (const a of BEAST_ALL) skip.add(a.root ?? a.g);
+  const C = [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()];
+  const add = (M, bb, src) => {
+    const { min: a, max: b } = bb; let k = 0; for (const x of [a.x, b.x]) for (const y of [a.y, b.y]) for (const z of [a.z, b.z]) C[k++].set(x, y, z).applyMatrix4(M);
+    let y0 = 1e9, y1 = -1e9; for (const c of C) { y0 = Math.min(y0, c.y); y1 = Math.max(y1, c.y); }
+    const e = M.elements, ax = [e[0], e[2]], az = [e[8], e[10]], ly = Math.hypot(e[4], e[5], e[6]) || 1, up = Math.abs(e[5]) / ly > 0.9;
+    let B;
+    if (up && Math.hypot(...ax) > 1e-6 && Math.hypot(...az) > 1e-6) { const cx = (C[0].x + C[7].x) / 2, cz = (C[0].z + C[7].z) / 2, la = Math.hypot(...ax), lz = Math.hypot(...az);
+      B = { x: cx, z: cz, ux: ax[0] / la, uz: ax[1] / la, vx: az[0] / lz, vz: az[1] / lz, hx: (b.x - a.x) / 2 * la, hz: (b.z - a.z) / 2 * lz, y0, y1, src }; }
+    else { let x0 = 1e9, x1 = -1e9, z0 = 1e9, z1 = -1e9; for (const c of C) { x0 = Math.min(x0, c.x); x1 = Math.max(x1, c.x); z0 = Math.min(z0, c.z); z1 = Math.max(z1, c.z); }
+      B = { x: (x0 + x1) / 2, z: (z0 + z1) / 2, ux: 1, uz: 0, vx: 0, vz: 1, hx: (x1 - x0) / 2, hz: (z1 - z0) / 2, y0, y1, src }; }
+    if (B.hx * B.hz < 0.0008 || Math.max(B.hx, B.hz) > 30 || y1 - y0 < 0.05) return;   // specks, terrain, sky, flat decals
+    if (y1 < groundH(B.x, B.z) + 0.35) return;   // below the knee on the ground (steps, curbs, rugs) — heights are checked against each figure's feet every frame
+    HITBOX.boxes.push(B); const r = Math.hypot(B.hx, B.hz), s = HITBOX.cell;
+    for (let i = Math.floor((B.x - r) / s); i <= Math.floor((B.x + r) / s); i++) for (let j = Math.floor((B.z - r) / s); j <= Math.floor((B.z + r) / s); j++) { const kk = _hbKey(i, j); if (!HITBOX.grid.has(kk)) HITBOX.grid.set(kk, []); HITBOX.grid.get(kk).push(B); }
+  };
+  const walk = (o, src) => { if (skip.has(o) || o.userData.dyn || o.userData.noHit || o.userData.crowd || o.userData.cover || !o.visible) return;
+    const s2 = o.userData.kind ?? src;
+    if (o.isInstancedMesh) return;   // grass, crops, crowds, particles: walk-through or moving
+    if (o.isMesh && o.geometry?.attributes?.position) { const m = o.material; if (!(m?.transparent && (m.opacity ?? 1) < 0.5) && m?.depthWrite !== false) { o.geometry.boundingBox ?? o.geometry.computeBoundingBox(); add(o.matrixWorld, o.geometry.boundingBox, s2); } }
+    for (const c of o.children) walk(c, s2); };
+  world.updateMatrixWorld(true); for (const c of world.children) walk(c, null);
+}
+const _hbQ = (x, z, r) => { const s = HITBOX.cell, out = new Set(); for (let i = Math.floor((x - r) / s); i <= Math.floor((x + r) / s); i++) for (let j = Math.floor((z - r) / s); j <= Math.floor((z + r) / s); j++) for (const B of HITBOX.grid.get(_hbKey(i, j)) ?? []) out.add(B); return out; };
+function hitPush(x, z, r, y, out) {   // circle (x, z, r) at feet height y vs the props → push [dx, dz] (box by box, 3 rounds; fades out for deep overlaps) and the deepest overlap
+  let cx = x, cz = z, deep = -1, what = null; const L = [..._hbQ(x, z, r + 0.6)].filter(B => B.y1 >= y + 0.35 && B.y0 <= y + 1.6);
+  for (let it = 0; it < 3; it++) { let moved = false;
+    for (const B of L) { const dx = cx - B.x, dz = cz - B.z, lx = dx * B.ux + dz * B.uz, lz = dx * B.vx + dz * B.vz; let nx, nz, pen;
+      if (Math.abs(lx) < B.hx && Math.abs(lz) < B.hz) { const ex = B.hx - Math.abs(lx), ez = B.hz - Math.abs(lz); if (ex < ez) { nx = Math.sign(lx) || 1; nz = 0; pen = ex + r; } else { nx = 0; nz = Math.sign(lz) || 1; pen = ez + r; } }
+      else { const ox = lx - clamp(lx, -B.hx, B.hx), oz = lz - clamp(lz, -B.hz, B.hz), d = Math.hypot(ox, oz); if (d >= r) continue; nx = ox / d; nz = oz / d; pen = r - d; }
+      if (it === 0 && pen - r > deep) { deep = pen - r; what = B; }
+      const w = 1 - sm01((pen - r - 0.45) / 0.45); if (w <= 0 || pen < 1e-4) continue;
+      cx += (nx * B.ux + nz * B.vx) * pen * w; cz += (nx * B.uz + nz * B.vz) * pen * w; moved = true; }
+    if (!moved) break; }
+  out.deep = deep; out.what = what; return [cx - x, cz - z];
+}
+const _hbUp = new THREE.Vector3();
+function hitFree(f, t) {   // standing or walking on its own feet right now?
+  const r = f.root; if (!f.legL || f.hit === false || f._rag || !r || r.parent !== world || !r.visible) return false;
+  if (f.hips && f.hips.position.y < HIP * 0.72) return false;   // sitting, crouching, kneeling
+  if (_hbUp.set(0, 1, 0).applyQuaternion(r.quaternion).y < 0.94) return false;   // lying, tumbling, hanging upside down
+  if (f._falls?.some(F => t >= F.t - 0.15 && (F.up == null || t < F.up + 1.0))) return false;
+  if (HOLDS.some(h => h.f === f && t >= h.t0 - 0.1 && t <= h.t1 + 0.4)) return false;
+  return r.position.y - groundH(r.position.x, r.position.z) < 0.6;   // not up in the air (jumps, ladders)
+}
+const _hbPair = (a, b, t) => HITPAIR.some(([p, q, t0, t1]) => t >= t0 && t <= t1 && ((p === a && q === b) || (p === b && q === a)));
+const _hbBeast = a => { const n = a.root ?? a.g; if (!n?.visible || !a.L || a.hit === false) return null; const s = a.sc ?? 1, yw = n.rotation.y, c = Math.cos(yw), sn = Math.sin(yw), rr = (a.bw ?? 0.4) * s * 0.5;
+  return { x: n.position.x, z: n.position.z, ux: c, uz: -sn, vx: sn, vz: c, hx: rr, hz: a.L * s * 0.35 + rr, y0: n.position.y, y1: n.position.y + ((a.lh ?? 0.6) + (a.bh ?? 0.5)) * s, beast: a }; };
+function hitSteer(f, t, x, z, r, y, obs) {   // a walker sidesteps what is on (or next to) its line: lateral offset = missing clearance, eased in over the last 0.9 m before and out after
+  const yw = f._yawAt(t), hx = Math.sin(yw), hz = Math.cos(yw), sx = hz, sz = -hx; let ox = 0, oz = 0;
+  const one = (B, circ) => { if (B.y1 < y + 0.35 || B.y0 > y + 1.6) return; const rx = B.x - x, rz = B.z - z, lg = rx * hx + rz * hz, lt = rx * sx + rz * sz;
+    const hLat = circ ? B.hx : Math.abs(B.hx * (B.ux * sx + B.uz * sz)) + Math.abs(B.hz * (B.vx * sx + B.vz * sz)), hLong = circ ? B.hx : Math.abs(B.hx * (B.ux * hx + B.uz * hz)) + Math.abs(B.hz * (B.vx * hx + B.vz * hz));
+    const mv = B.mv, need = hLat + r + (circ || B.beast ? 0.2 : 0.04) - (mv ? lt : Math.abs(lt)); if (need <= 0) return; const w = (1 - sm01((Math.abs(lg) - hLong) / 0.9)) * (1 - sm01((need - 1.2) / 0.8)); if (w <= 0) return;   // people and animals: a little personal space
+    const sg = mv ? -1 : -(Math.sign(lt) || 1); ox += sx * sg * need * w; oz += sz * sg * need * w; };   // moving people: always pass keeping to the same side (no flip-flop)
+  for (const B of _hbQ(x, z, r + 3)) one(B, false);
+  for (const B of obs) if (B.f !== f && !B.amv && !_hbPair(f, B.f ?? B.beast, t) && !(B.beast?.riders?.includes(f)) && Math.abs(B.x - x) < 4 && Math.abs(B.z - z) < 4) one(B, !!B.f);
+  return [ox, oz];
+}
+function hitResolve(t) {
+  if (CFG.hitboxes === false) return;
+  const F = RIGS.filter(f => hitFree(f, t)); if (!F.length) return;
+  const R = F.map(f => 0.21 * f.root.scale.x), P0 = F.map(f => [f.root.position.x, f.root.position.z]), info = {};
+  const obs = [];   // people (where they are before this frame's corrections) and animals, as obstacles for walkers
+  for (const g of RIGS) { if (!g.legL || g.hit === false || !g.root?.visible || g.root.parent !== world || g._rag) continue; if (_hbUp.set(0, 1, 0).applyQuaternion(g.root.quaternion).y < 0.7) continue;
+    const i = F.indexOf(g), q = g.root.position, rg = 0.21 * g.root.scale.x, mv = !!g._posAt && g._posAt(t + 0.05).distanceTo(g._posAt(t - 0.05)) > 0.01;
+    obs.push({ f: g, mv, x: i >= 0 ? P0[i][0] : q.x, z: i >= 0 ? P0[i][1] : q.z, hx: rg, hz: rg, ux: 1, uz: 0, vx: 0, vz: 1, y0: q.y, y1: q.y + 1.7 * g.root.scale.x }); }
+  for (const a of BEAST_ALL) { const B = _hbBeast(a); if (!B) continue; const n = a.root ?? a.g; B.amv = !!(n._fly || a._posAt) && _flyPose(n._fly ? n : a, t + 0.05).p.distanceTo(_flyPose(n._fly ? n : a, t - 0.05).p) > 0.01; obs.push(B); }
+  // 1) walkers steer round props, people and animals (smooth sidestep, no pops)
+  F.forEach((f, i) => { if (!f._yawAt || !f._posAt) return; const p = f.root.position, [dx, dz] = hitSteer(f, t, P0[i][0], P0[i][1], R[i], p.y, obs); p.x += dx; p.z += dz; });
+  // 2) whatever still overlaps a prop is pushed out (figures placed inside things, corners)
+  const props = rep => F.forEach((f, i) => { const p = f.root.position, [dx, dz] = hitPush(p.x, p.z, R[i], p.y, info); p.x += dx; p.z += dz;
+    if (rep && info.deep > 0.12) { const k = f.root, prev = HITBOX.rep.get(k); if (!prev || info.deep > prev.d) HITBOX.rep.set(k, { f, d: info.deep, t, B: info.what }); } });
+  props(true);
+  // 3) people apart (half each; seated / busy people and animals push but are not moved)
+  const P = F.map(f => [f.root.position.x, f.root.position.z]), D = F.map(() => [0, 0]);
+  for (let i = 0; i < F.length; i++) for (let j = i + 1; j < F.length; j++) { const dx = P[j][0] - P[i][0], dz = P[j][1] - P[i][1], d = Math.hypot(dx, dz), m = R[i] + R[j];
+    if (d >= m || _hbPair(F[i], F[j], t) || Math.abs(F[i].root.position.y - F[j].root.position.y) > 1) continue; const nx = d > 1e-4 ? dx / d : 1, nz = d > 1e-4 ? dz / d : 0, k = (m - d) / 2 * (1 - sm01((m - d - 0.3) / 0.3));
+    D[i][0] -= nx * k; D[i][1] -= nz * k; D[j][0] += nx * k; D[j][1] += nz * k; }
+  for (const B of obs) { if (B.f && F.includes(B.f)) continue;
+    F.forEach((g, i) => { if (_hbPair(g, B.f ?? B.beast, t) || B.beast?.riders?.includes(g)) return; const gy = g.root.position.y; if (gy + 1.6 < B.y0 || gy > B.y1) return;
+      const dx = P[i][0] - B.x, dz = P[i][1] - B.z, u = B.f ? 0 : clamp(dx * B.vx + dz * B.vz, -(B.hz - B.hx), B.hz - B.hx), ox = dx - B.vx * u, oz = dz - B.vz * u, d = Math.hypot(ox, oz), m = R[i] + B.hx;
+      if (d >= m || d < 1e-4) return; const k = (m - d) * (1 - sm01((m - d - 0.35) / 0.35)); D[i][0] += ox / d * k; D[i][1] += oz / d * k; }); }
+  let any = false; F.forEach((f, i) => { if (D[i][0] || D[i][1]) { f.root.position.x += D[i][0]; f.root.position.z += D[i][1]; any = true; } });
+  if (any) props(false);   // pushed apart into a wall? out again
+}
+
 // --- bake: merge all static props (stat) into one mesh per material — far fewer draw calls, 2–3× faster frames ---
 const _vcm = new Map();
 function bake() {
   for (const f of DEFER.splice(0)) f();
   world.updateMatrixWorld(true);
+  hitBuild(); LATE.unshift(hitResolve);   // v2.29 hitboxes (needs the props before they are merged)
   const inv = world.matrixWorld.clone().invert(), M4 = new THREE.Matrix4(), buckets = new Map(), done = [];
   world.traverse(o => {
     if (!o.isMesh || o.isInstancedMesh || !o.visible) return;
@@ -9568,6 +9988,7 @@ function mbTimes(t) {   // CFG.motionBlur: 'auto' (fast frames only) | 'all' | f
 }
 function needsMB(t, lo, hi) {
   if (typeof MBLUR !== 'undefined' && MBLUR.some(([a, b]) => t >= a && t <= b)) return true;
+  if (MBAUTO.some(([a, b]) => t >= a && t <= b)) return true;
   if (SHAKES.some(s => t >= s.t && t <= s.t + (s.dur ?? 0.6))) return true;
   const cp = camera.position;
   for (const f of RIGS) if (f._fast === FRAME && f.root.getWorldPosition(_m1).distanceTo(cp) < 12) return true;   // somebody running close to the lens
@@ -9784,6 +10205,8 @@ const SND = (() => {
       slash: (t, v) => { nz(t, 0.002, 0.01, 0.1, 0.45 * v, fx, 'highpass', 2600); nz(t, 0.002, 0.02, 0.12, 0.35 * v, fx, 'bandpass', 1200, 0, 1); tone('sine', 150, t, 0.001, 0.01, 0.12, 0.45 * v, fx, { to: 60, glide: 0.1 }); },
       punch: (t, v) => { tone('sine', 130, t, 0.001, 0.01, 0.13, 0.75 * v, fx, { to: 55, glide: 0.1 }); nz(t, 0.001, 0.006, 0.08, 0.45 * v, fx, 'lowpass', 2200, 400); ducks.push(t); },
       splat: (t, v) => { nz(t, 0.002, 0.02, 0.2, 0.45 * v, fx, 'lowpass', 1200, 220); tone('sine', 180, t, 0.001, 0.01, 0.12, 0.35 * v, fx, { to: 70, glide: 0.1 }); for (let k = 0; k < 3; k++) nz(t + 0.05 + ar() * 0.15, 0.001, 0, 0.03, 0.12 * v, fx, 'bandpass', 900 + ar() * 600, 0, 3); },
+      squelch: (t, v) => { nz(t, 0.002, 0.03, 0.18, 0.5 * v, fx, 'lowpass', 900, 180); tone('sine', 260, t, 0.001, 0.02, 0.14, 0.4 * v, fx, { to: 90, glide: 0.12 }); nz(t + 0.03, 0.001, 0.01, 0.06, 0.3 * v, fx, 'bandpass', 1400, 0, 2.5);   // v2.29: wet cartoon pop (limb comes off)
+        tone('sine', 480, t + 0.09, 0.001, 0, 0.06, 0.16 * v, fx, { to: 980, glide: 0.05 }); for (let k = 0; k < 4; k++) nz(t + 0.14 + ar() * 0.25, 0.001, 0, 0.025, 0.1 * v, fx, 'bandpass', 700 + ar() * 700, 0, 3); },
       ricochet: (t, v) => { tone('sine', 2800 + ar() * 800, t, 0.002, 0.03, 0.4, 0.08 * v, fx, { to: 1100, glide: 0.4 }); nz(t, 0.001, 0.004, 0.03, 0.25 * v, fx, 'highpass', 3500); },
       shell: (t, v) => { [0, 0.07, 0.15].forEach((dt, k) => tone('sine', 4100 + k * 600 + ar() * 300, t + dt, 0.001, 0, 0.09, 0.05 * v * (1 - k * 0.25), fx)); },
       reload: (t, v) => { [0, 0.28, 0.5].forEach((dt, k) => { nz(t + dt, 0.001, 0.006, 0.04, 0.4 * v, fx, 'bandpass', 1500 + k * 500, 0, 3); tone('square', 600 - k * 80, t + dt, 0.001, 0, 0.02, 0.05 * v, fx, { lp: 2000 }); }); },
@@ -9948,6 +10371,9 @@ async function renderAudio(sr) {
 // --- frame update, sizing, playback, export API ---
 function stepScene(t) {   // everything in the 3D scene at time t (no HUD) — also used for motion-blur sub-frames
   const st = ST(t);
+  for (const f of RIGS) { const r = f.root; if (!r) continue;   // v2.29: every frame starts from the figure's built pose — nothing left over from other frames
+    const R = f._rest0 ??= { p: r.position.clone(), q: r.quaternion.clone(), s: r.scale.clone(), v: r.visible, bp: f.body?.position.clone(), bq: f.body?.quaternion.clone() };
+    r.position.copy(R.p); r.quaternion.copy(R.q); r.scale.copy(R.s); r.visible = R.v; if (f.body) { f.body.position.copy(R.bp); f.body.quaternion.copy(R.bq); } }
   applySky(t); WIND.t.value = st;
   for (const f of tickers) f(st);
   for (const h of hordes) h.update(st);
@@ -10063,6 +10489,54 @@ function thumbOn() {
 if (PENDING.length) await Promise.all(PENDING);
 await physicsBake();   // simulate once, then every frame plays it back
 document.querySelectorAll('.err').forEach(n => n.remove());
+// --- motion audit (v2.29) — render.mjs --shots (and --audit) runs it: whatif.audit() → list of warnings ---
+//   1) pops: every figure, animal and moving object at 30 fps — sudden jumps, joints that snap in one frame, jitter (back and forth every frame)
+//   2) purity: 12 moments evaluated again after jumping back from later times and after skipping frames, the way render workers and
+//      CI shards do; anything that differs shows up in the MP4 as flicker or objects jumping between frames
+const AUD_J = ['body', 'hips', 'chest', 'neck', 'head', 'armL', 'armR', 'foreL', 'foreR', 'legL', 'legR', 'shinL', 'shinR'], _av = new THREE.Vector3(), _aq = new THREE.Quaternion();
+function audItems() {
+  const L = [];
+  RIGS.forEach((f, i) => { if (f.root?.parent) L.push({ k: 'rig', n: f.root, f, name: `${f.who ? `'${f.who}'` : f.kind === 'zombie' ? 'zombie' : 'figure'} #${i}`, JN: AUD_J.filter(j => f[j]), J: AUD_J.map(j => f[j]).filter(Boolean) }); });
+  const seen = new Set(L.map(x => x.n)); let c = 0;
+  const fxOnly = n => { let all = true, any = false; n.traverse(m => { if (m.isMesh || m.isSprite) { any = true; if (!(m.isSprite || m.material?.isMeshBasicMaterial)) all = false; } }); return any && all; };   // tracers, flashes, beams: effects, not objects
+  world.traverse(n => { if (!n.userData.dyn || n.isInstancedMesh || n.isLight || n.isSprite || seen.has(n) || c > 600 || fxOnly(n)) return; for (let p = n.parent; p && p !== world; p = p.parent) if (seen.has(p) || p.userData.dyn) return; seen.add(n); c++;
+    L.push({ k: 'obj', n, name: n.name || (BEAST_ALL.some(b => (b.root ?? b.g) === n) ? 'animal' : 'object') + ' #' + c, J: [] }); });
+  world.traverse(m => { if (m.isInstancedMesh && m.userData.crowd && m.count > 0) L.push({ k: 'crowd', n: m, name: 'crowd', J: [] }); });
+  return L;
+}
+function audSnap(L) {
+  world.updateMatrixWorld(true);
+  return L.map(it => { const n = it.n; let vis = n.visible; for (let p = n.parent; vis && p; p = p.parent) vis = p.visible;
+    if (it.k === 'crowd') { const a = n.instanceMatrix.array; let s = 0; for (let i = 0; i < Math.min(n.count, 400); i++) s += a[i * 16 + 12] * 1.3 + a[i * 16 + 13] * 0.7 + a[i * 16 + 14]; return { vis, p: [s, 0, 0], q: [] }; }
+    n.getWorldPosition(_av); return { vis, p: [_av.x, _av.y, _av.z], q: it.J.map(j => j.quaternion.toArray()) }; });
+}
+const audAng = (a, b) => 2 * Math.acos(Math.min(1, Math.abs(a[0] * b[0] + a[1] * b[1] + a[2] * b[2] + a[3] * b[3])));
+function motionAudit(o = {}) {
+  const fps = o.fps ?? 30, dt = 1 / fps, N = Math.floor(DUR * fps), L = audItems(), W = new Map(), warn = (key, sev, msg) => { const w = W.get(key); if (!w || sev > w.sev) W.set(key, { sev, msg }); };
+  const at = (n, p) => `(${p[0].toFixed(1)}, ${p[2].toFixed(1)})`, K = 12, keyT = [...Array(K).keys()].map(k => Math.round((k + 0.5) / K * N)), ref = new Map();
+  let prev = null, prev2 = null; const flips = L.map(() => []);
+  for (let i = 0; i <= N; i++) {
+    const t = i * dt; stepScene(t); const S = audSnap(L), mbw = MBAUTO.some(([x, y]) => t >= x - 0.02 && t <= y + 0.02); if (keyT.includes(i)) ref.set(i, S);   // mbw: fast action with motion blur — only big flips count
+    if (prev) L.forEach((it, j) => { const a = S[j], b = prev[j], c = prev2?.[j]; if (!a.vis || !b.vis || it.k === 'crowd') return;
+      const d = [a.p[0] - b.p[0], a.p[1] - b.p[1], a.p[2] - b.p[2]], dl = Math.hypot(...d);
+      if (c?.vis) { const e = [b.p[0] - c.p[0], b.p[1] - c.p[1], b.p[2] - c.p[2]], el = Math.hypot(...e), jerk = Math.hypot(d[0] - e[0], d[1] - e[1], d[2] - e[2]);
+        if (jerk > (mbw ? 1.5 : 0.6) && dl > 0.12 && dl > 0.5 * el) warn(it.name + ':jump', jerk, `${it.name} jumps ${dl.toFixed(2)} m in one frame at ${t.toFixed(2)} s ${at(it.n, a.p)}`);
+        if (dl > 0.02 && el > 0.02 && d[0] * e[0] + d[1] * e[1] + d[2] * e[2] < -0.5 * dl * el) { const F = flips[j]; F.push(i); while (F.length && F[0] < i - 12) F.shift();
+          if (F.length >= 4) warn(it.name + ':jitter', F.length, `${it.name} jitters back and forth around ${t.toFixed(2)} s ${at(it.n, a.p)}`); } }
+      a.q.forEach((q, k) => { if (dl > 0.08 && /^(leg|shin)/.test(it.JN[k])) return;   // legs of a figure running > 2.4 m/s: gait at motion-blur speed, not a pose switch
+        const ang = audAng(q, b.q[k]), angPrev = c?.vis ? audAng(b.q[k], c.q[k]) : ang;
+        if (ang > (mbw ? 2.1 : 0.75) && ang > 3 * angPrev + 0.2) warn(it.name + ':snap:' + it.JN[k], ang, `${it.name}: ${it.JN[k]} snaps ${(ang * 57.3).toFixed(0)}° in one frame at ${t.toFixed(2)} s ${at(it.n, a.p)}`); }); });
+    prev2 = prev; prev = S;
+  }
+  // purity: back from the end (reverse order) and forward with skipped frames — must match the straight run exactly
+  const cmp = (i, S, how) => { const R = ref.get(i); L.forEach((it, j) => { const a = S[j], b = R[j]; if (!a.vis && !b.vis) return; const t = (i * dt).toFixed(2);
+      if (a.vis !== b.vis) return warn(it.name + ':pure', 9, `${it.name} is ${b.vis ? 'visible' : 'hidden'} at ${t} s in a straight run but ${a.vis ? 'visible' : 'hidden'} ${how} – state left over from other frames (flickers between render workers)`);
+      const dp = Math.hypot(a.p[0] - b.p[0], a.p[1] - b.p[1], a.p[2] - b.p[2]); if (dp > 0.003) return warn(it.name + ':pure', 5 + dp, `${it.name} is ${dp.toFixed(2)} m off at ${t} s ${how} ${at(it.n, b.p)} – state left over from other frames (jumps between render workers)`);
+      for (let k = 0; k < a.q.length; k++) if (audAng(a.q[k], b.q[k]) > 0.01) return warn(it.name + ':pure', 4, `${it.name}: ${it.JN[k]} differs at ${t} s ${how} – pose left over from other frames`); }); };
+  for (const i of [...keyT].reverse()) { stepScene(i * dt); cmp(i, audSnap(L), 'after jumping back'); }
+  for (const i of keyT) { stepScene(0); stepScene(i * dt); cmp(i, audSnap(L), 'when frames are skipped'); }
+  return [...W.values()].sort((a, b) => b.sev - a.sev).slice(0, o.max ?? 14).map(w => w.msg);
+}
 window.whatif = {
   dur: DUR, cover: CFG.coverT,
   seek(t) { playing = false; clock = t; draw(t); },
@@ -10081,7 +10555,12 @@ window.whatif = {
   thumbs() { return THV.length; },
   thumb(t, i = 0) { TH = THV[i] ?? THV[0]; thumbOn(); const tt = t ?? TH.t ?? CFG.coverT; playing = false; clock = tt; draw(tt); return tt; },
   async renderAudio(sr = 48000) { return b64(wavBytes(await renderAudio(sr))); },
-  info() { let meshes = 0, inst = 0, baked = BAKED; scene.traverse(o => { if (o.isInstancedMesh) inst += o.count; else if (o.isMesh) meshes++; }); return { meshes, instances: inst, baked, emitters: emitters.length, hordes: hordes.length, calls: renderer.info.render.calls, tris: renderer.info.render.triangles }; }
+  probe(src) { return eval(src); },   // debugging: node render.mjs page.html --probe "RIGS.length" (code runs inside the engine)
+  audit(o = {}) { HITBOX.rep.clear(); const m = motionAudit(o); goreAudit();
+    const hit = [...HITBOX.rep.values()].filter(r => r.d > 0.3).sort((a, b) => b.d - a.d).slice(0, 8).map(r => { const i = RIGS.indexOf(r.f), B = r.B, nm = r.f.who ? `'${r.f.who}' #${i}` : r.f.kind === 'zombie' ? `zombie #${i}` : `figure #${i}`;
+      return `${nm} stands ${r.d.toFixed(2)} m inside ${B?.src ? 'a ' + B.src : 'an object'} (${(2 * B.hx).toFixed(1)} × ${(2 * B.hz).toFixed(1)} m, ${B.y0.toFixed(1)}–${B.y1.toFixed(1)} m high, at ${B.x.toFixed(1)}, ${B.z.toFixed(1)}) around ${r.t.toFixed(2)} s – ${r.d > 0.45 ? 'too deep to push out: move the figure or its path, or noHit() if it is meant to be inside' : 'pushed out automatically; place it beside it'}`; });
+    return { motion: m, gore: [...GORE.warn], hit }; },
+  info() { goreAudit(); let meshes = 0, inst = 0, baked = BAKED; scene.traverse(o => { if (o.isInstancedMesh) inst += o.count; else if (o.isMesh) meshes++; }); return { meshes, instances: inst, baked, emitters: emitters.length, hordes: hordes.length, calls: renderer.info.render.calls, tris: renderer.info.render.triangles, ...(GORE.warn.size ? { gore: [...GORE.warn] } : {}) }; }
 };
 if (EXPORT) draw(0); else requestAnimationFrame(loop);
 </script>

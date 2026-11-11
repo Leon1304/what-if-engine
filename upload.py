@@ -10,6 +10,10 @@
 # Secrets (GitHub → Settings → Secrets → Actions): YT_CLIENT_ID, YT_CLIENT_SECRET, YT_REFRESH_TOKEN · IG_USER_ID, IG_TOKEN (long-lived)
 # YouTube: uploaded as private with publishAt (YouTube publishes it at that time). Instagram has no scheduling API → posted by the hourly run once publishAt has passed.
 import datetime as dt, glob, json, os, sys, time, urllib.parse, urllib.request
+try:
+    from tags import fit_tags   # trims the tag list to YouTube's 500-character limit (commas and quotes count)
+except ImportError:
+    fit_tags = lambda t: t
 
 REPO = os.environ.get('GITHUB_REPOSITORY', 'Leon1304/what-if-engine')
 args = sys.argv[1:]
@@ -53,7 +57,7 @@ def youtube(slug, P, publish_at):
     Y = P['youtube']; video = urllib.request.urlopen(asset(slug, f'{slug}.mp4'), timeout=600).read()
     status = {'privacyStatus': 'private' if publish_at else Y.get('privacy', 'public'), 'selfDeclaredMadeForKids': False}
     if publish_at: status['publishAt'] = publish_at.astimezone(dt.timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
-    meta = {'snippet': {'title': Y['title'][:100], 'description': Y.get('description', ''), 'tags': Y.get('tags', []), 'categoryId': str(Y.get('category', 24)), 'defaultLanguage': P.get('lang', 'en')}, 'status': status}
+    meta = {'snippet': {'title': Y['title'][:100], 'description': Y.get('description', ''), 'tags': fit_tags(Y.get('tags', [])), 'categoryId': str(Y.get('category', 24)), 'defaultLanguage': P.get('lang', 'en')}, 'status': status}
     r, _ = http('https://www.googleapis.com/upload/youtube/v3/videos?uploadType=resumable&part=snippet,status', meta,
                 {'Authorization': 'Bearer ' + tok, 'X-Upload-Content-Type': 'video/mp4', 'X-Upload-Content-Length': str(len(video))}, 'POST', raw=True)
     vid = http(r.headers['Location'], video, {'Authorization': 'Bearer ' + tok, 'Content-Type': 'video/mp4'}, 'PUT')['id']

@@ -6,6 +6,7 @@ Engine for the /what-if video skill (Claude): Three.js template, headless render
 - `render.mjs` – frame-exact renderer (shots, video, cover, audio, remux). Default 2K (1440×2560): `out.mp4` = YouTube master (CRF 18); `--ig` adds an Instagram copy (1080×1920), not used by default
 - `assemble.py` – builds `<slug>.html` from `<slug>.story.js` + `<slug>.scene.js`
 - `voice.py` – Kokoro TTS voice-over with word timings
+- `tags.py` – YouTube tags filled to the 500-character limit, counted the way YouTube counts (commas, +2 for tags with spaces); `upload.py` trims with it
 - `docs/API.md` – full scene API reference (the skill's SKILL.md keeps only the rules and a short overview)
 - `tests/` – smoke test: `bash tests/run.sh` builds the example story and every test scene and renders a few frames; runs on GitHub (workflow `test`) for every engine change
 
@@ -20,6 +21,11 @@ Manual run: Actions → render → Run workflow (page path, width 1440 / 2160 / 
 - Timeline stats: labels never overlap (two rows, kept inside the strip) — also in Shorts.
 - `render.mjs --srt out.srt`: subtitles file with the same pages and timing; the render workflow attaches `<slug>.srt` to the release.
 - `reengine.py old.html template.html out.html`: rebuild an assembled page with the current engine (story, scene, voice kept). `examples/long/`: D-Day as the starting point for long videos. Test: `tests/long.*`.
+## Engine v2.29 (Nov 2026): cartoon blood and limbs, falls, YouTube tags, clean motion, hitboxes
+- Falls (v2.29): `fallDown()` — off roofs, ledges, ladders, trapdoors: windmill, land, go down (≤ 1.2 m: knees give); crowds fall into `h.pit()` and pile up
+- Gore (v2.29): `CFG.gore` 'goo' · 'blood' · 'off', `dismember()` / `h.lose()` / `bleed()` / `ouch()` with built-in YouTube/Instagram guards (zombies only, no heads, small amounts, nothing in the thumbnail, timing/slow-mo/close-up warnings)
+- Motion audit (v2.29): `render.mjs --audit` / `--shots` report pops, snapping joints, jitter, left-over state and figures inside props (`MOTION:` / `HITBOX:`); `--probe "<js>"` for debugging. Fast actions get auto motion blur, items are reached for and put back
+- Hitboxes (v2.29): standing and walking figures never stand inside props, walls or each other — walkers sidestep smoothly, overlaps are pushed out, `noHit()` opts out
 
 ## Engine v2.28 (Nov 2026): hoplite kit (Sparta, Thermopylae)
 - `corinthHelmet()`: one carved bronze shell (new `carveGeo()`: thick surface with smooth marching-squares openings) — T-shaped face opening with almond eyes and nasal guard, brow ridges, rolled rims, flared nape; horsehair crest `fan` / `transverse` with strands and a swinging tail. `helmetUp(rig, keys)` pushes it up onto the head and back down.
