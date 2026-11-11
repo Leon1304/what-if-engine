@@ -625,6 +625,7 @@ function wetGround(t0 = -100, t1 = 1e9, k = 1, o = {}) { WETWIN.push([t0, t1, k,
 function snowCover(t0 = -100, t1 = 1e9, k = 1, o = {}) { SNOWWIN.push([t0, t1, k, o.rise ?? 16, o.melt ?? 60]); }
 const wxAt = (W, t) => W.reduce((a, [t0, t1, k, r, f]) => Math.max(a, k * clamp((Math.min(t, t1) - t0) / r) * (1 - clamp((t - t1) / f))), 0);
 function applyWeather(t) { const on = CFG.weather !== false; WX.t.value = t; WX.wet.value = on ? Math.max(CFG.wet ?? 0, wxAt(WETWIN, t)) : 0; WX.snow.value = on ? Math.max(CFG.snowCover ?? 0, wxAt(SNOWWIN, t)) : 0; }
+const _SPM = new WeakMap(), _DSM = new WeakMap();   // material variants: merged static geometry (pattern from the sp attribute) · double-sided (broken shells)
 const WX_GLSL = {   // shared by walls, roads and the ground
   head: 'uniform float uWet, uSnow; uniform vec3 uSkyT, uSkyB; float wxGloss = 0.0, wxPud = 0.0;\n',
   rough: '#include <roughnessmap_fragment>\n  roughnessFactor = mix(roughnessFactor, 0.16, clamp(wxGloss, 0.0, 1.0));',
@@ -3258,7 +3259,7 @@ function blast(x, y, z, t, o = {}) { PHYS.blasts.push({ p: [x, y, z], t, power: 
 // collider(obj, { moving }) — solid obstacle for simulated bodies (houses, barns, silos, towers and vehicles are solid automatically); moving: follows walk()/drive()/fly()
 function collider(obj, o = {}) { const node = obj.g ?? obj.root ?? obj; node.userData.solid = true; if (o.moving) PHYS.kin.push({ node, src: obj }); return obj; }
 // breakApart(obj, t, { n: [nx, ny, nz], power, from: [x,y,z], spin }) — obj shatters into chunks (its own colours) that fly apart and tumble to the ground
-function breakApart(obj, t, o = {}) {
+function breakApart0(obj, t, o = {}) {
   const node = dyn(obj.g ?? obj.root ?? obj), lb = localBox(node), [nx, ny, nz] = o.n ?? [3, 3, 2], sz = lb.getSize(new THREE.Vector3()), cs = [sz.x / nx, sz.y / ny, sz.z / nz];
   node.updateWorldMatrix(true, true); const cols = []; node.traverse(m => { if (m.isMesh && m.material?.color && !m.material.transparent) { const bb = new THREE.Box3().setFromObject(m); cols.push([bb.getCenter(new THREE.Vector3()), '#' + m.material.color.getHexString(), bb.getSize(new THREE.Vector3()).length()]); } });
   const g = dyn(grp(node.parent ?? world)), pieces = [];
@@ -3275,6 +3276,137 @@ function breakApart(obj, t, o = {}) {
   sfx(t, 'crack', 1); sfx(t, 'impact', 0.8);
   return { g, pieces };
 }
+/* v2.36 DESTRUCTION — things break the way they are built
+   breakApart(obj, t, { power, from, dir, up, spin, max, chunk })   the object's own parts fly: doors, shutters, posts and chimneys in one piece, walls and roofs in irregular
+                                                                    chunks that keep their surface (brick stays brick), glass bursts, dust and splinters in the object's colours
+   collapse(building, t, { style, dir: [dx, dz], dur })             pancake (tall: sinks into its own dust, a rubble mound grows) · topple (falls over like a tree and breaks on
+                                                                    impact) · crumble (low and wide: shudders, then falls apart on the spot) — picked from the shape if not given
+   wreck(vehicle, t, { side, level, parts, fire })                  crash damage: crumpled metal, squashed body, lights out, wheels come off and roll away, sparks, optional fire;
+                                                                    crash() adds it on its own
+   explode(x, y, z, t, { breaks: [obj, …] })                        the blast wrecks what is listed (vehicle → crash, tall building → collapse, anything else → breakApart)
+   CFG.destruction: false = the plain version of before (grid of blocks, cars stay whole) */
+const _dcols = node => { const L = []; node.traverse(m => { if (!m.isMesh || m.isInstancedMesh || !m.visible || !m.material?.color || m.material.transparent || m.material.isMeshBasicMaterial) return; m.geometry.boundingBox ?? m.geometry.computeBoundingBox(); const s = m.geometry.boundingBox.getSize(new THREE.Vector3()).multiply(m.getWorldScale(new THREE.Vector3())); L.push([m.material, s.x * s.y + s.y * s.z + s.x * s.z]); });
+  const by = new Map(); for (const [mt, a] of L) by.set(mt, (by.get(mt) ?? 0) + a); return [...by.entries()].sort((a, b) => b[1] - a[1]).slice(0, 6).map(([mt]) => mt); };
+const _solidBox = node => { const B = new THREE.Box3(), b = new THREE.Box3(); node.updateWorldMatrix(true, true); node.traverse(m => { if (!m.isMesh || m.isInstancedMesh || !m.visible || !m.material || m.material.transparent || m.material.blending === THREE.AdditiveBlending) return; m.geometry.boundingBox ?? m.geometry.computeBoundingBox(); B.union(b.copy(m.geometry.boundingBox).applyMatrix4(m.matrixWorld)); }); return B.isEmpty() ? B.setFromObject(node) : B; };   // what is really there (no light cones, no glass)
+const _dhex = mats => mats.length ? mats.map(m => '#' + m.color.getHexString()) : ['#8A6A48', '#6B4A2B'];
+function _dustPuff(x, y, z, t, s, o = {}) { emit('dust', { at: [x, y, z], t0: t, burst: Math.round(clamp(14 * s, 10, 70)), size: clamp(0.45 * s, 0.3, 4), speed: clamp(1.1 * s, 0.8, 7), life: o.life ?? 2.8, jitter: 0.5 * s, colors: o.colors ?? ['#A89E8A', '#8A806E', '#C4BBA8'] }); }
+const _dsMat = mt => { if (mt.side === THREE.DoubleSide) return mt; if (!_DSM.has(mt)) { const c = mt.clone(); c.side = THREE.DoubleSide; if (mt.userData.surf) surfFx(c, mt.userData.surf, { indoor: mt.userData.surfIn }); c.userData.own = true; _DSM.set(mt, c); } return _DSM.get(mt); };
+function _fragGeo(geo, M, cell, hs) {   // shell fragments of a mesh in world space: its triangles are cut down to the cell size and grouped by a wobbly grid (roofs, silos, cones break like sheets, not like blocks)
+  const g = geo.index ? geo.toNonIndexed() : geo, P = g.attributes.position, st = [], out = [], V = i => new THREE.Vector3().fromBufferAttribute(P, i).applyMatrix4(M), mid = (a, b) => a.clone().add(b).multiplyScalar(0.5);
+  for (let i = 0; i + 2 < P.count; i += 3) st.push([V(i), V(i + 1), V(i + 2)]);
+  while (st.length) { const [A, B, C] = st.pop(), ab = A.distanceTo(B), bc = B.distanceTo(C), ca = C.distanceTo(A), L = Math.max(ab, bc, ca); if (L <= cell * 1.1 || out.length + st.length > 1400) { out.push([A, B, C]); continue; }
+    if (L === ab) { const m = mid(A, B); st.push([A, m, C], [m, B, C]); } else if (L === bc) { const m = mid(B, C); st.push([A, B, m], [A, m, C]); } else { const m = mid(C, A); st.push([A, B, m], [m, B, C]); } }
+  const cells = new Map(), c = new THREE.Vector3();
+  for (const T of out) { c.copy(T[0]).add(T[1]).add(T[2]).multiplyScalar(1 / 3); const k = [Math.floor(c.x / cell + 0.33 * Math.sin(c.y * 2.3 / cell + c.z * 1.1 / cell + hs)), Math.floor(c.y / cell + 0.33 * Math.sin(c.z * 2.1 / cell + c.x * 1.3 / cell + hs * 2)), Math.floor(c.z / cell + 0.33 * Math.sin(c.x * 1.9 / cell + c.y * 1.7 / cell + hs * 3))].join('|'); (cells.get(k) ?? cells.set(k, []).get(k)).push(T); }
+  return [...cells.values()].map(L => { const ctr = new THREE.Vector3(); let area = 0; for (const T of L) { ctr.add(T[0]).add(T[1]).add(T[2]); area += c.copy(T[1]).sub(T[0]).cross(T[2].clone().sub(T[0])).length() / 2; } ctr.multiplyScalar(1 / (3 * L.length));
+    const pos = new Float32Array(L.length * 9); L.forEach((T, i) => T.forEach((v, j) => { pos[i * 9 + j * 3] = v.x - ctr.x; pos[i * 9 + j * 3 + 1] = v.y - ctr.y; pos[i * 9 + j * 3 + 2] = v.z - ctr.z; }));
+    const fg = new THREE.BufferGeometry(); fg.setAttribute('position', new THREE.BufferAttribute(pos, 3)); fg.computeVertexNormals(); return { geo: fg, c: ctr, area }; });
+}
+function breakApart(obj, t, o = {}) {
+  if (o.legacy || CFG.destruction === false) return breakApart0(obj, t, o);
+  const node = dyn(obj.g ?? obj.root ?? obj); node.userData.stat = false; node.userData.solid = false; node.updateWorldMatrix(true, true);
+  const wbb = _solidBox(node), wsz = wbb.getSize(new THREE.Vector3()), wc = wbb.getCenter(new THREE.Vector3()), R = wsz.length() / 2, maxP = o.max ?? (o.n ? clamp(o.n[0] * o.n[1] * o.n[2] * 2, 12, 64) : clamp(Math.round(18 + R * 7), 24, 64));
+  const g = dyn(grp(world)), pieces = [], big = [], small = [], glass = [], lim = o.chunk ?? clamp(Math.max(wsz.x, wsz.y, wsz.z) * 0.3, 0.45, 2.6), sc = new THREE.Vector3(), V = new THREE.Vector3(), Q = new THREE.Quaternion();
+  node.traverse(m => { if (!m.isMesh || m.isInstancedMesh || !m.material?.color) return; for (let q = m; q && q !== node.parent; q = q.parent) if (!q.visible) return;
+    const mt = m.material; if (mt.blending === THREE.AdditiveBlending) return; if (mt.transparent || (mt.opacity ?? 1) < 1) { glass.push(m); return; }
+    m.geometry.boundingBox ?? m.geometry.computeBoundingBox(); const gb = m.geometry.boundingBox, s = gb.getSize(new THREE.Vector3()).multiply(m.getWorldScale(sc)), mx = Math.max(s.x, s.y, s.z);
+    (mx <= lim ? small : big).push({ m, gb, s, mx, vol: Math.max(1e-5, s.x * s.y * s.z), area: s.x * s.y + s.y * s.z + s.x * s.z }); });
+  small.sort((a, b) => b.vol - a.vol); const keep = small.filter(S => S.mx > 0.09).slice(0, big.length ? Math.floor(maxP * 0.42) : maxP);
+  const from = o.from ? new THREE.Vector3(...o.from) : new THREE.Vector3(wc.x, wbb.min.y + wsz.y * 0.1, wc.z), dir = o.dir ? new THREE.Vector3(...o.dir).normalize() : null, pw0 = o.power ?? 5, sp = o.spin ?? 8, hs = node.id * 0.37;
+  const launch = (piece, wcn, h, vol) => { const d = wcn.clone().sub(from), L = d.length() || 1, pw = pw0 * (0.55 + 0.9 * h); d.multiplyScalar(pw / L); if (dir) d.multiplyScalar(0.35).addScaledVector(dir, pw * (0.6 + 0.6 * hash(h * 7)));
+    piece.visible = false; pieces.push(piece); phys(piece, { t0: t, vel: [d.x, d.y + (o.up ?? 1.8) * (0.4 + h), d.z], spin: [(hash(h * 3) - 0.5) * sp, (hash(h * 4) - 0.5) * sp, (hash(h * 6) - 0.5) * sp], mass: clamp(vol * 300, 0.4, 2500), friction: 0.8, bounce: 0.12 }); };
+  keep.forEach(({ m, gb, vol }, i) => { const piece = dyn(grp(g)); m.matrixWorld.decompose(piece.position, piece.quaternion, piece.scale); const c = new THREE.Mesh(m.geometry, m.material); c.castShadow = m.castShadow; c.receiveShadow = true; piece.add(c);   // small parts fly in one piece
+    launch(piece, gb.getCenter(new THREE.Vector3()).applyMatrix4(m.matrixWorld), hash(i * 5.1 + hs), vol); });
+  const budget = Math.max(big.length, maxP - keep.length), wsum = big.reduce((a, B) => a + B.area, 0), jc = (n, k) => { const c = [0]; for (let i = 1; i < n; i++) c.push((i + (hash(k * 3.1 + i * 1.7 + hs) - 0.5) * 0.55) / n); c.push(1); return c; };
+  const slab = (m, Qm, ws, gb, gs, bi, ua, va, na, nside, th, nb) => {   // one flat panel of a box (ua × va, normal na on side nside), cut into irregular pieces that tile it exactly: nothing pops when it breaks
+    const su = gs.getComponent(ua) * ws.getComponent(ua), sv = gs.getComponent(va) * ws.getComponent(va), n = [1, 1]; while (n[0] * n[1] < nb) { const a = su / n[0] > sv / n[1] ? 0 : 1; if ((a ? sv : su) / n[a] < 0.18) break; n[a]++; }
+    const cu = jc(n[0], bi * 7 + ua + nside), cv = jc(n[1], bi * 11 + va + nside * 2), gmin = gb.min, gc = gb.getCenter(new THREE.Vector3());
+    for (let i = 0; i < n[0]; i++) for (let j = 0; j < n[1]; j++) { const lc = new THREE.Vector3(); lc.setComponent(ua, gmin.getComponent(ua) + gs.getComponent(ua) * (cu[i] + cu[i + 1]) / 2); lc.setComponent(va, gmin.getComponent(va) + gs.getComponent(va) * (cv[j] + cv[j + 1]) / 2);
+      lc.setComponent(na, nside === 0 ? gc.getComponent(na) : gc.getComponent(na) + nside * (gs.getComponent(na) / 2 - th / 2 / ws.getComponent(na))); lc.applyMatrix4(m.matrixWorld);
+      const d3 = [0, 0, 0]; d3[ua] = su * (cu[i + 1] - cu[i]) * 0.97; d3[va] = sv * (cv[j + 1] - cv[j]) * 0.97; d3[na] = th; const h = hash(bi * 9.1 + i * 7.1 + j * 3.3 + nside * 1.9 + na + hs);
+      const piece = dyn(grp(g)); piece.position.copy(lc); piece.quaternion.copy(Qm); box(piece, d3[0], d3[1], d3[2], '', 0, -d3[1] / 2, 0, { mat: m.material, cast: m.castShadow }); launch(piece, lc, h, d3[0] * d3[1] * d3[2]); } };
+  big.forEach((B, bi) => { const { m, gb, s } = B, nb = Math.max(1, Math.round(budget * B.area / wsum)), ws = m.getWorldScale(new THREE.Vector3()), Qm = m.getWorldQuaternion(new THREE.Quaternion()), gs = gb.getSize(new THREE.Vector3()), mn = Math.min(s.x, s.y, s.z);
+    if (m.geometry.type !== 'BoxGeometry') {   // roofs, silos, cones, rocks: sheets of their own skin
+      let cell = Math.sqrt(B.area * 1.4 / nb), fr = _fragGeo(m.geometry, m.matrixWorld, cell, hs + bi); for (let k = 0; k < 5 && fr.length > nb * 1.5; k++) { cell *= 1.3; fr = _fragGeo(m.geometry, m.matrixWorld, cell, hs + bi); }
+      fr.forEach((F, i) => { const piece = dyn(grp(g)); piece.position.copy(F.c); const c = new THREE.Mesh(F.geo, _dsMat(m.material)); c.castShadow = m.castShadow; c.receiveShadow = true; piece.add(c); launch(piece, F.c, hash(bi * 9.1 + i * 3.7 + hs), F.area * 0.12); }); return; }
+    if (mn > 0.9) { const th = clamp(mn * 0.07, 0.12, 0.3), aX = s.y * s.z, aZ = s.x * s.y, aY = s.x * s.z, tot = 2 * aX + 2 * aZ + aY, share = a => Math.max(1, Math.round(nb * a / tot));   // a solid block that stands for a hollow building: its four walls and its top break, not a stack of cubes
+      for (const sd of [-1, 1]) { slab(m, Qm, ws, gb, gs, bi, 2, 1, 0, sd, th, share(aX)); slab(m, Qm, ws, gb, gs, bi, 0, 1, 2, sd, th, share(aZ)); } slab(m, Qm, ws, gb, gs, bi, 0, 2, 1, 1, th, share(aY)); return; }
+    const na = s.x <= s.y && s.x <= s.z ? 0 : s.y <= s.z ? 1 : 2, ua = na === 0 ? 2 : 0, va = na === 1 ? 2 : 1; slab(m, Qm, ws, gb, gs, bi, ua, va, na, 0, mn * 0.97, nb); });
+  if (o._T) tick(st => { o._T(Math.min(st, t)).decompose(g.position, g.quaternion, V); });   // carried along until it breaks (collapse: topple)
+  tick(st => { const on = st >= t; node.visible = !on; for (const p of pieces) p.visible = on; });
+  const cols = _dhex(_dcols(node)), at = o._at ?? [wc.x, wc.y, wc.z];
+  if (o.fx !== false) { if (glass.length) emit('debris', { at, t0: t, burst: Math.min(60, 12 * glass.length), colors: ['#DDEFF8', '#B8DCEC', '#FFFFFF'], size: 0.08, speed: pw0 * 0.8, spread: 1.3, basic: true, life: 1.8 });
+    emit('debris', { at, t0: t, burst: Math.round(clamp(10 * R, 12, 60)), colors: cols, size: clamp(0.06 * R, 0.07, 0.3), speed: pw0 * 0.9, life: 2.4 });
+    _dustPuff(at[0], Math.max(wbb.min.y + 0.3, at[1] - wsz.y * 0.3), at[2], t, clamp(R * 0.55, 0.6, 5));
+    sfx(t, 'crack', clamp(0.5 + R * 0.12, 0.5, 1)); sfx(t, 'impact', clamp(0.4 + R * 0.12, 0.4, 1)); if (R > 3) { sfx(t, 'rumble', 0.7); SHAKES.push({ t: VT(t), amp: clamp(R * 0.045, 0.12, 0.5), dur: 0.7 }); } }
+  return { g, pieces };
+}
+function collapse(obj, t, o = {}) {
+  const node = dyn(obj.g ?? obj.root ?? obj); node.userData.stat = false; node.updateWorldMatrix(true, true);
+  const bb = _solidBox(node), sz = bb.getSize(new THREE.Vector3()), c = bb.getCenter(new THREE.Vector3()), H = sz.y, Wd = Math.max(sz.x, sz.z), gy = bb.min.y, mats = _dcols(node), cols = _dhex(mats);
+  const style = CFG.destruction === false ? 'crumble' : o.style ?? (H > Wd * 1.25 ? 'pancake' : 'crumble'), sd = hash(c.x * 3.1 + c.z * 1.7 + 0.5), p0 = node.position.clone(), q0 = node.quaternion.clone(), big = clamp(Wd * 0.08 + H * 0.03, 0.25, 1);
+  const dust = (t0, t1, k = 1) => { emit('dust', { at: [c.x, gy + 0.6, c.z], t0, t1, rate: 26 * k, size: clamp(Wd * 0.3, 0.6, 5), jitter: Wd * 0.5, speed: 1.8, life: 3.2, colors: ['#A89E8A', '#8A806E', '#C4BBA8'] }); emit('smoke', { at: [c.x, gy + 1, c.z], t0: t1 - 0.2, t1: t1 + (o.linger ?? 6), rate: 4, size: clamp(Wd * 0.28, 0.6, 4), jitter: Wd * 0.35, colors: ['#8E8778', '#A8A090', '#C8C0B0'], opacity: 0.4 }); };
+  const mound = (t0, t1) => { if (o.rubble === false) return null; const rg = dyn(grp(world, c.x, gy, c.z)), n = clamp(Math.round(sz.x * sz.z / 2.4), 14, 44), hm = clamp(H * 0.13, 0.5, 4.5);   // what is left: a heap of chunks in the building's own materials, slabs and bent beams
+      for (let i = 0; i < n; i++) { const h1 = hash(i * 3.7 + sd), h2 = hash(i * 5.3 + sd * 2), h3 = hash(i * 7.9 + sd * 3), a = h1 * TAU, r = Math.sqrt(h2) * 0.62, px = Math.cos(a) * r * sz.x, pz = Math.sin(a) * r * sz.z, s = clamp(Wd * (0.09 + 0.16 * h3), 0.3, 2.6), slab = h3 > 0.72;
+        const r1 = v => Math.max(0.1, Math.round(v * 8) / 8), bw = r1(s * (slab ? 1.9 : 1)), bh = r1(s * (slab ? 0.22 : 0.55 + 0.4 * h2)), bd = r1(s * (slab ? 1.3 : 0.8 + 0.4 * h1));
+        box(rg, bw, bh, bd, cols[i % cols.length], px, Math.max(0, hm * (1 - r * r * 2.2)) * (0.25 + 0.75 * h1) - bh * 0.3, pz, { mat: mats[i % Math.max(1, mats.length)], rx: (h2 - 0.5) * (slab ? 0.7 : 2.4), ry: h1 * 7, rz: (h3 - 0.5) * (slab ? 0.6 : 2.2) }); }
+      for (let i = 0; i < 5; i++) { const h1 = hash(i * 9.1 + sd), h2 = hash(i * 4.3 + sd); box(rg, 0.12, 0.12, clamp(Wd * 0.5, 1.2, 5), '#3A3D44', (h1 - 0.5) * sz.x * 0.7, hm * 0.5 * h2 + 0.2, (h2 - 0.5) * sz.z * 0.7, { rx: (h1 - 0.5) * 1.1, ry: h2 * 6 }); }
+      tick(st => { const k = sm01((st - t0) / (t1 - t0)); rg.visible = st >= t0; rg.scale.set(0.55 + 0.45 * k, Math.max(0.02, k), 0.55 + 0.45 * k); }); return rg; };
+  if (o.fx !== false) { sfx(t, 'rumble', 1); sfx(t + 0.05, 'crack', 0.9); SHAKES.push({ t: VT(t), amp: 0.25 + 0.3 * big, dur: 1.2 }); }
+  if (style === 'pancake') {
+    const dur = o.dur ?? clamp(0.42 * Math.sqrt(H) + 0.7, 1.4, 4.4), te = t + dur, lean = (sd - 0.5) * 0.09, la = sd * TAU;
+    tick(st => { if (st < t) return; const k = clamp((st - t) / dur), e = Math.pow(clamp((k - 0.1) / 0.9), 1.9), sh = (1 - k) * Math.min(1, (st - t) * 6) * 0.05 * (0.5 + big);
+      node.position.set(p0.x + sh * Math.sin(st * 43) + Math.cos(la) * lean * e * H * 0.3, p0.y - (H + 0.6) * e, p0.z + sh * Math.sin(st * 37 + 1.3) + Math.sin(la) * lean * e * H * 0.3); node.quaternion.copy(q0); node.rotateZ(Math.cos(la) * lean * e); node.rotateX(Math.sin(la) * lean * e); node.visible = k < 1; });
+    mound(t + dur * 0.3, te + 0.15); dust(t + dur * 0.08, te + 0.5, 1.4);
+    for (let i = 0; i < 4; i++) { const a = i * Math.PI / 2 + sd * 3, tb = t + dur * (0.2 + 0.18 * i); emit('debris', { at: [c.x + Math.cos(a) * sz.x * 0.5, gy + 0.8, c.z + Math.sin(a) * sz.z * 0.5], t0: tb, burst: 22, colors: cols, size: clamp(Wd * 0.045, 0.14, 0.5), speed: 4 + 3 * big, life: 2.6 }); _dustPuff(c.x + Math.cos(a) * sz.x * 0.6, gy + 0.5, c.z + Math.sin(a) * sz.z * 0.6, tb, clamp(Wd * 0.35, 1, 5)); }
+    for (let i = 0; i < 6; i++) { const a = i * TAU / 6; _dustPuff(c.x + Math.cos(a) * Wd * 0.75, gy + 0.4, c.z + Math.sin(a) * Wd * 0.75, te - 0.1, clamp(Wd * 0.4, 1.2, 5.5), { life: 3.6 }); }
+    emit('debris', { at: [c.x, gy + 0.5, c.z], t0: te - 0.15, burst: 46, colors: ['#DDEFF8', '#B8DCEC', ...cols], size: 0.12, speed: 6, life: 2.2 });
+    if (o.fx !== false) { sfx(te - 0.2, 'impact', 1); sfx(te - 0.1, 'boom', 0.6); SHAKES.push({ t: VT(te - 0.2), amp: 0.3 + 0.4 * big, dur: 1.1 }); } blast(c.x, gy + 1, c.z, te - 0.1, { power: 3 + 4 * big, r: Wd * 1.6 });
+    return { t1: te, style };
+  }
+  node.userData.solid = false;
+  if (style === 'topple') {
+    let [dx, dz] = o.dir ?? [Math.cos(sd * TAU), Math.sin(sd * TAU)]; const L = Math.hypot(dx, dz) || 1; dx /= L; dz /= L;
+    const dur = o.dur ?? clamp(0.7 * Math.sqrt(H), 1.5, 4.6), te = t + dur, ex = (Math.abs(dx) * sz.x + Math.abs(dz) * sz.z) / 2, P = new THREE.Vector3(c.x + dx * ex, gy, c.z + dz * ex), ax = new THREE.Vector3(dz, 0, -dx), M = new THREE.Matrix4(), M2 = new THREE.Matrix4(), qa = new THREE.Quaternion();
+    const ang = st => (Math.PI / 2 - 0.05) * Math.pow(clamp((st - t) / dur), 2.5), T = st => M.makeTranslation(P.x, P.y, P.z).multiply(M2.makeRotationAxis(ax, ang(st))).multiply(M2.makeTranslation(-P.x, -P.y, -P.z));
+    tick(st => { if (st < t) return; const a = ang(Math.min(st, te)); qa.setFromAxisAngle(ax, a); node.position.copy(p0).sub(P).applyQuaternion(qa).add(P); node.quaternion.copy(qa).multiply(q0); });
+    breakApart(node, te, { _T: st => T(st).clone(), power: 1.2, up: 0.6, spin: 5, max: o.max ?? 52, fx: false, _at: [c.x + dx * H * 0.5, gy + 0.6, c.z + dz * H * 0.5] });
+    dust(t, t + 0.9, 0.6); for (let i = 0; i < 6; i++) { const u = (0.12 + i * 0.17) * H; _dustPuff(P.x + dx * u + dz * (hash(i + sd) - 0.5) * Wd, gy + 0.4, P.z + dz * u - dx * (hash(i + sd) - 0.5) * Wd, te - 0.02 + i * 0.015, clamp(Wd * 0.5, 1.2, 5), { life: 3.4 }); }
+    emit('debris', { at: [c.x + dx * H * 0.55, gy + 0.5, c.z + dz * H * 0.55], t0: te, burst: 56, colors: ['#DDEFF8', ...cols], size: clamp(Wd * 0.04, 0.12, 0.4), speed: 6, life: 2.4 });
+    emit('smoke', { at: [c.x + dx * H * 0.5, gy + 1, c.z + dz * H * 0.5], t0: te, t1: te + (o.linger ?? 6), rate: 4, size: clamp(Wd * 0.3, 0.6, 4), jitter: H * 0.3, colors: ['#8E8778', '#A8A090', '#C8C0B0'], opacity: 0.4 });
+    if (o.fx !== false) { sfx(t + dur * 0.5, 'groan', 0.7); sfx(te, 'impact', 1); sfx(te + 0.03, 'boom', 0.7); sfx(te + 0.05, 'crack', 1); SHAKES.push({ t: VT(te), amp: 0.35 + 0.4 * big, dur: 1.1 }); } blast(c.x + dx * H * 0.5, gy + 0.5, c.z + dz * H * 0.5, te + 0.02, { power: 3 + 3 * big, r: H * 0.8 });
+    return { t1: te, style };
+  }
+  const pre = o.dur ?? 0.45, te = t + pre;   // crumble: a shudder, then it falls apart on the spot
+  tick(st => { if (st < t || st >= te) return; const k = (st - t) / pre, sh = 0.035 * (0.4 + big) * k; node.position.set(p0.x + sh * Math.sin(st * 51), p0.y - 0.05 * k * k, p0.z + sh * Math.sin(st * 43 + 1)); });
+  const r = breakApart(node, te, { power: o.power ?? 2.2, up: o.up ?? 0.2, spin: 4, max: o.max ?? 56, fx: false });
+  dust(t, te + 1.6, 1); emit('debris', { at: [c.x, c.y, c.z], t0: te, burst: 50, colors: ['#DDEFF8', ...cols], size: clamp(Wd * 0.03, 0.09, 0.3), speed: 4.5, life: 2.4 });
+  for (let i = 0; i < 5; i++) { const a = i * TAU / 5 + sd; _dustPuff(c.x + Math.cos(a) * sz.x * 0.55, gy + 0.4, c.z + Math.sin(a) * sz.z * 0.55, te + 0.35, clamp(Wd * 0.4, 1, 4.5), { life: 3.4 }); }
+  if (o.fx !== false) { sfx(te, 'crack', 1); sfx(te + 0.3, 'impact', 1); SHAKES.push({ t: VT(te + 0.3), amp: 0.25 + 0.3 * big, dur: 0.9 }); }
+  return { t1: te + 1.2, style, ...r };
+}
+function wreck(v, t, o = {}) {
+  const g = dyn(v.g ?? v.root ?? v), lb = localBox(g), sz = lb.getSize(new THREE.Vector3()), lvl = clamp(o.level ?? 1, 0.3, 1.6), side = o.side ?? 'front', NC = { cast: false }, sd = hash(g.id * 0.71), s0 = g.scale.clone();
+  const cols = _dhex(_dcols(g)), body = cols[0] ?? '#3A7BD5', dm = grp(g), fz = side === 'rear' ? -1 : 1, lat = side === 'left' || side === 'right', sx = side === 'left' ? -1 : 1;
+  for (let i = 0; i < 7; i++) { const h1 = hash(i * 3.1 + sd), h2 = hash(i * 5.7 + sd), h3 = hash(i * 8.3 + sd), w = (lat ? sz.z : sz.x) * (0.22 + 0.3 * h1), hh = sz.y * (0.14 + 0.2 * h2), col = shade(body, -0.12 - 0.3 * h3);   // crumpled panels on the side that was hit
+    const u = (h2 - 0.5) * (lat ? sz.z : sz.x) * 0.7, y = lb.min.y + sz.y * (0.16 + 0.42 * h3);
+    if (lat) box(dm, 0.07, hh, w, col, sx * (sz.x / 2 + 0.01), y, lb.getCenter(new THREE.Vector3()).z + u, { ry: (h1 - 0.5) * 0.5, rz: (h2 - 0.5) * 0.5, ...NC });
+    else box(dm, w, hh, 0.07, col, u, y, (fz > 0 ? lb.max.z : lb.min.z) + fz * 0.01, { rx: (h1 - 0.5) * 0.7, ry: (h2 - 0.5) * 0.5, ...NC }); }
+  if (!lat && o.hood !== false && fz > 0) box(dm, sz.x * 0.72, 0.05, sz.z * 0.2, shade(body, -0.06), 0, lb.min.y + sz.y * 0.5, lb.max.z - sz.z * 0.14, { rx: -0.5 * lvl, ...NC });   // hood sprung open
+  tick(st => { const on = st >= t, k = sm01((st - t) / 0.07), e = 0.085 * lvl * k; dm.visible = on; if (on) g.scale.set(s0.x * (1 + (lat ? -e : e * 0.4)), s0.y * (1 - e * 0.6), s0.z * (1 + (lat ? e * 0.3 : -e)));
+    if (v.headMat) { const f = st - t; v.headMat.emissiveIntensity = on ? (f < 0.7 && Math.sin(f * 60) > 0.2 ? (v._ei0 ??= v.headMat.emissiveIntensity) * 0.6 : 0) : (v._ei0 ??= v.headMat.emissiveIntensity); } });
+  const wh = (v.wheels ?? []).filter(w => w.parent), np = Math.min(wh.length, o.parts ?? (o._crash ? 1 + (sd > 0.55 ? 1 : 0) : 0)), at = st => v._crashAt?.(st) ?? (() => { g.updateWorldMatrix(true, false); const p = new THREE.Vector3(0, sz.y * 0.5, fz * sz.z * 0.4).applyMatrix4(g.matrixWorld); return [p.x, p.y, p.z]; })();
+  for (let i = 0; i < np; i++) { const w = wh[Math.floor(hash(i * 4.7 + sd) * wh.length + i) % wh.length]; if (w.userData.off) continue; w.userData.off = true;   // a wheel comes off, bounces and rolls away
+    const pc = dyn(grp(world)), cl = w.clone(true); cl.position.set(0, 0, 0); cl.quaternion.identity(); cl.scale.set(1, 1, 1); pc.add(cl); const V = new THREE.Vector3(), out = Math.sign(w.position.x || 1);
+    late(st => { pc.visible = st >= t; w.visible = st < t; if (st > t + 1e-6) return; w.updateWorldMatrix(true, false); w.matrixWorld.decompose(pc.position, pc.quaternion, V); pc.scale.copy(V); });
+    g.updateWorldMatrix(true, false); const side3 = new THREE.Vector3(out, 0, 0).transformDirection(g.matrixWorld);
+    phys(pc, { t0: t, vel: [side3.x * (2.5 + 2 * sd), 3.2 + 1.5 * hash(i + sd), side3.z * (2.5 + 2 * sd)], spin: [6 * (sd - 0.5), 2, 9 * out], mass: 18, bounce: 0.45, friction: 0.5 }); }
+  if (o.fx !== false) { emit('spark', { at, t0: t, t1: t + 0.35, rate: 90, speed: 6, size: 0.07 }); emit('debris', { at, t0: t, burst: 16, colors: [body, shade(body, -0.3), '#2A2D33'], size: 0.09, speed: 4.5 });
+    if (!o._crash) { emit('debris', { at, t0: t, burst: 24, speed: 3.5, size: 0.07, colors: ['#BFE8FF', '#E8F8FF', '#9FCBE0'], basic: true }); emit('smoke', { at, t0: t + 0.4, t1: t + (o.smokeFor ?? 8), rate: 5, size: 0.6, jitter: 0.3, colors: ['#D8D8D8', '#B8B8B8', '#8A8A8A'], opacity: 0.45 }); sfx(t, 'impact', 1); sfx(t + 0.03, 'clang', 0.7); sfx(t + 0.05, 'crack', 0.7); }
+    else sfx(t + 0.03, 'clang', 0.7); }
+  if (o.fire != null && o.fire !== false) { const tf = t + (o.fire === true ? 1.5 : o.fire); emit('fire', { at, t0: tf, t1: tf + (o.fireFor ?? 12), rate: 55, size: 0.7, jitter: 0.4, speed: 1.4 }); emit('smoke', { at: st => { const p = at(st); return [p[0], p[1] + 0.9, p[2]]; }, t0: tf + 0.3, t1: tf + (o.fireFor ?? 12) + 3, rate: 7, size: 1.1 }); sfx(tf, 'fire', 0.7); }
+  return v;
+}
 // ragdoll(rig, t, { from: [x,y,z], power, dir: [x,y,z], getUp: t2 }) — the figure is thrown and goes limp (real physics: joints, gravity, ground, obstacles); getUp: stands up again on the spot
 function ragdoll(f, t, o = {}) { if (!f.legL) return f; dyn(f.root); f._rag = { t, o }; PHYS.rags.push(f); PHYS.t0 = Math.min(PHYS.t0, t); return f; }
 // crash(vehicle, t, { impulse: [x,y,z], spin: [x,y,z], smoke }) — the vehicle leaves its drive() path and tumbles with its momentum (+ impulse), glass bursts, smoke
@@ -3283,6 +3415,7 @@ function crash(v, t, o = {}) {
   emit('debris', { at: st => v._crashAt?.(st) ?? [0, -99, 0], t0: t, burst: 30, speed: 4, size: 0.08, colors: ['#BFE8FF', '#E8F8FF', '#9FCBE0'], basic: true });
   if (o.smoke !== false) emit('smoke', { at: st => v._crashAt?.(st) ?? [0, -99, 0], t0: t + 0.3, t1: t + 9, rate: 6, size: 0.9, jitter: 0.4 });
   sfx(t, 'impact', 1.2); sfx(t + 0.05, 'crack', 0.9);
+  if (CFG.destruction !== false && o.wreck !== false && (v.wheels || v.kind)) wreck(v, t, { level: o.level, side: o.side, parts: o.parts, fire: o.fire, _crash: true });   // v2.36: dents, lights out, a wheel comes off
   return v;
 }
 // solid by default: big buildings and vehicles (simulated debris bounces off them)
@@ -3291,7 +3424,10 @@ for (const nm of ['house', 'barn', 'silo', 'tower', 'vehicle', 'lander', 'windmi
   const W = (...a) => { const r = F(...a); const n = r?.g ?? r; if (n?.userData) n.userData.solid = true; return r; };
   ({ house: () => { house = W; }, barn: () => { barn = W; }, silo: () => { silo = W; }, tower: () => { tower = W; }, vehicle: () => { vehicle = W; }, lander: () => { lander = W; }, windmill: () => { windmill = W; } })[nm]();
 } catch (e) {}
-{ const E0 = explode; explode = (x, y, z, t0, o = {}) => { const r = E0(x, y, z, t0, o); blast(x, y, z, t0, { power: 9 * (o.size ?? 1), r: 9 * (o.size ?? 1) }); return r; }; }
+{ const E0 = explode; explode = (x, y, z, t0, o = {}) => { const r = E0(x, y, z, t0, o); blast(x, y, z, t0, { power: 9 * (o.size ?? 1), r: 9 * (o.size ?? 1) });
+  for (const b of o.breaks ?? []) { const nd = b.g ?? b.root ?? b; nd.updateWorldMatrix(true, true); const bb = new THREE.Box3().setFromObject(nd), c = bb.getCenter(new THREE.Vector3()), s = bb.getSize(new THREE.Vector3()), d = Math.hypot(c.x - x, c.z - z) || 1, td = t0 + Math.min(0.5, d / 60), k = clamp(1.4 - d / (14 * (o.size ?? 1)), 0.4, 1.2);   // v2.36: the blast wrecks what is listed
+    if (b.wheels) crash(b, td, { impulse: [(c.x - x) / d * 7 * k, 5 * k, (c.z - z) / d * 7 * k], spin: [1.5 * k, 0.8, 2.2 * k], fire: 1.2 }); else if (s.y > 7 && s.y > Math.max(s.x, s.z) * 1.25) collapse(b, td, { style: 'topple', dir: [c.x - x, c.z - z] }); else breakApart(b, td, { from: [x, y, z], power: 7 * k, up: 2.5 }); }
+  return r; }; }
 
 const RAGSEG = [   // name, rig part, parent, size [w,h,d], centre in the part's frame, mass, joint ('ball' | 'knee' | 'elbow')
   ['pelvis', 'hips', null, [0.44, 0.26, 0.28], [0, 0.01, 0], 11, null], ['chest', 'chest', 'pelvis', [0.5, 0.6, 0.3], [0, 0.29, 0], 20, 'ball'],
@@ -9546,8 +9682,8 @@ function bake() {
       const e = o.matrixWorld.elements, yaw = Math.atan2(e[8], e[10]), cs = Math.cos(yaw), sn = Math.sin(yaw), Pp = g.attributes.position, sp = new Float32Array(Pp.count * 3);
       for (let k = 0; k < Pp.count; k++) { const X = Pp.getX(k), Z = Pp.getZ(k); sp[3 * k] = X * cs - Z * sn; sp[3 * k + 1] = Pp.getY(k); sp[3 * k + 2] = X * sn + Z * cs; }
       g.setAttribute('sp', new THREE.BufferAttribute(sp, 3));
-      if (!mt.userData.spMat) { const c = mt.clone(); c.userData = { ...mt.userData, spMat: null }; mt.userData.spMat = surfFx(c, mt.userData.surf, { sp: true, indoor: mt.userData.surfIn }); if (mt.userData.nightEi) NIGHTMATS.push(c); }
-      bm = mt.userData.spMat; }   // plain colours become vertex colours: hundreds of props in a handful of draw calls
+      if (!_SPM.has(mt)) { const c = mt.clone(); _SPM.set(mt, surfFx(c, mt.userData.surf, { sp: true, indoor: mt.userData.surfIn })); if (mt.userData.nightEi) NIGHTMATS.push(c); }
+      bm = _SPM.get(mt); }   // plain colours become vertex colours: hundreds of props in a handful of draw calls
     if (plain) { const cc = mt.color, n = g.attributes.position.count, ca = new Float32Array(n * 3); for (let k = 0; k < n; k++) { ca[3 * k] = cc.r; ca[3 * k + 1] = cc.g; ca[3 * k + 2] = cc.b; } g.setAttribute('color', new THREE.BufferAttribute(ca, 3));
       const vk = [mt.flatShading, mt.roughness, mt.metalness, mt.side, mt.userData.wind ?? ''].join('|'); bm = _vcm.get(vk);
       if (!bm) { bm = new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: mt.flatShading, roughness: mt.roughness, metalness: mt.metalness, side: mt.side }); if (mt.userData.wind) windify(bm, mt.userData.wind); _vcm.set(vk, bm); } }

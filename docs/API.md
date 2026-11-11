@@ -754,3 +754,32 @@ Alles hier läuft von selbst, sobald die Szene `biome()` oder `city()` nutzt. Ni
 - `lab()`: Fliesenboden, Betonwände, Warnstreifen, Lüftungsrohr mit Lichtleisten, Warn- und Erste-Hilfe-Schild, Spüle, Hocker, Gasflaschen.
 - `prison()`: Ziegel-Trennwände, vergitterte Fenster, Zellennummern, Lampen, Regal, Kissen, Strichliste an der Wand, Dachaufbauten; Wachturm mit Umlauf, Geländer, Leiter und Streben.
 - Test/Vorschau: `tests/ground-weather.*` (Regen → Pfützen → Schnee), `tests/interiors.*`.
+
+# Neu in v2.36 (Zerstörung: Gebäude, Gegenstände, Fahrzeuge)
+
+Dinge zerbrechen so, wie sie gebaut sind. Alles ist echte Physik (einmal vorab simuliert) bzw. reine Funktion von `t`.
+
+## `breakApart(obj, t, { power, from, dir, up, spin, max, chunk })` (überarbeitet)
+- Kleine Teile fliegen am Stück (Türen, Fensterläden, Pfosten, Schornstein, Zaunlatten). Wände und Platten brechen in unregelmäßige Stücke, die ihre Oberfläche behalten (Ziegel bleibt Ziegel). Dächer, Silos und Kegel reißen in Blechen/Scherben ihrer eigenen Haut. Ein massiver Block, der für ein hohles Gebäude steht (Scheune, Turm), zerfällt in Wände und Decke statt in Würfel.
+- Glas platzt als Splitter, dazu Staub und Splitter in den Farben des Objekts, Krachen; ab ca. 3 m Größe Grollen und leichtes Wackeln.
+- `from: [x, y, z]` = Ausgangspunkt des Stoßes, `dir: [x, y, z]` = Richtung (Auto fährt durch die Mauer), `power` 2–8, `max` = Zahl der Stücke (Standard 24–64 nach Größe), `chunk` = ab welcher Größe ein Teil zerbricht. `n: [x, y, z]` aus alten Szenen gilt als Richtwert für die Stückzahl. `fx: false` = ohne Staub und Ton.
+- Zerstörte Objekte haben keine Hitbox und sind nach dem Bruch kein Hindernis für die Physik.
+
+## `collapse(gebäude, t, { style, dir: [dx, dz], dur, max, rubble, linger })` (neu)
+- `pancake` (hohe Gebäude, Standard wenn höher als breit): sackt in die eigene Staubwolke, Trümmer fliegen an der Bodenlinie weg, ein Schutthügel aus den Materialien des Gebäudes wächst und bleibt liegen.
+- `topple` (`dir` = wohin): kippt wie ein Baum, schlägt auf und zerbricht dort mit dem Schwung des Falls (Silo, Turm, Schornstein, Leuchtturm).
+- `crumble` (flach und breit, Standard für Häuser/Scheunen): kurzes Zittern, dann fällt es an Ort und Stelle auseinander.
+- Bringt Staub, Rauch danach (`linger` s), Ton, Kamerawackeln und einen Stoß für simulierte Dinge in der Nähe mit. Gibt `{ t1, style }` zurück (`t1` = Ende). **Regel:** Den Shot bis `t1 + 1` stehen lassen, Totale oder Halbtotale.
+
+## Fahrzeuge
+- `crash(vehicle, t, { impulse, spin, level, side, parts, fire })` bringt jetzt Schaden mit: zerknautschte Bleche, gestauchte Karosserie, aufgesprungene Haube, Licht flackert und geht aus, ein bis zwei Räder lösen sich und rollen weg, Funken. `fire: 1.5` = fängt nach 1,5 s Feuer. `wreck: false` = wie früher (Auto bleibt heil).
+- `wreck(vehicle, t, { side: 'front' | 'rear' | 'left' | 'right', level: 0.3–1.6, parts, fire })`: derselbe Schaden ohne Überschlag (Auffahrunfall, Baum fällt aufs Auto, Monster tritt dagegen), mit Glas, Dampf und Ton.
+
+## Explosionen
+- `explode(x, y, z, t, { breaks: [obj, …] })`: Die Druckwelle zerstört, was aufgelistet ist: Fahrzeug → `crash` mit Feuer, hohes Gebäude → `collapse` (kippt weg von der Explosion), alles andere → `breakApart` vom Explosionspunkt aus.
+
+## Regeln
+- Pro Video 1–3 Zerstörungen an den Höhepunkten. Jede braucht einen sichtbaren Auslöser im selben Shot (Explosion, Aufprall, Monster) und 1,5–2,5 s Standzeit danach.
+- Keine Handanimation für Brüche (`vanish` + Partikel) mehr, wenn das Objekt größer als eine Kiste ist.
+- `CFG.destruction: false` = Verhalten vor v2.36 (Blockraster, Autos bleiben heil).
+- Test/Vorschau: `tests/destruction.*`.

@@ -15,6 +15,11 @@ Push an assembled page to `renders/<slug>.html` (output of `assemble.py`, voice 
 `https://github.com/Leon1304/what-if-engine/releases/download/render-<slug>/<slug>.mp4`
 Manual run: Actions → render → Run workflow (page path, width 1440 / 2160 / 1080).
 
+## Engine v2.36 (Nov 2026): destruction
+- `breakApart()` breaks things the way they are built: small parts fly whole, walls in irregular chunks that keep their surface, roofs and silos in sheets, hollow blocks as wall panels, glass bursts, dust and splinters in the object's colours
+- `collapse(building, t, { style })`: pancake (sinks into its dust, rubble mound stays) · topple (falls like a tree, breaks on impact) · crumble (falls apart on the spot)
+- `crash()` adds vehicle damage (crumpled panels, squashed body, lights out, wheels come off, sparks, optional fire); `wreck()` the same without the tumble; `explode(…, { breaks })`
+
 ## Engine v2.35 (Nov 2026): weather on the ground, streets, rooms, shores
 - Rain wets ground, roads, walls and roofs and leaves puddles that mirror the sky; snow settles on everything that faces up (`emit('rain' | 'snow')` drive it, `wetGround()` / `snowCover()` by hand, `CFG.weather: false` = off)
 - Roads: asphalt with grain, cracks and patches, gravel shoulders, optional curbs with drains and manholes; city sidewalks as paving, drains, leaf litter
