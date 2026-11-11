@@ -6,7 +6,7 @@
 #   BEATS[].say may contain ' | ' = a deliberate pause (0.3 s) · BEATS[].tone: calm | tense | worried | excited | shout | whisper | sad | dramatic | deadpan | curious | relieved
 #   v2.38 emotion: without a tone the narrator reacts to the scene sentence by sentence (<slug>.events.json from assemble.py: loud hits, shakes, music mood,
 #   counters that jump) — tempo, loudness, pitch level and pitch range (PSOLA, formants stay), whisper / shout colour. In say: '[whisper] Too quiet.' sets the tone
-#   of one sentence, '[gasp]' '[sigh]' are sounds, '[whoa]' '[wow]' '[ugh]' '[hm]' '[oh]' '[ha]' '[noway]' '[great]' '[yikes]' '[seriously]' '[comeon]' short spoken reactions. CFG.voice: { auto: false, emotion: 0..1.5 }
+#   of one sentence, '[gasp]' '[sigh]' are sounds, '[whoa]' '[wow]' '[ugh]' '[oh]' '[ha]' '[noway]' '[great]' '[yikes]' '[seriously]' '[comeon]' short spoken reactions. CFG.voice: { auto: false, emotion: 0..1.5 }
 #   lines spoken by an on-screen character (who: 'steve' | 'you' | any char name) get a mouth track (open/shape per 1/30 s) → lip sync in the video
 #   --lang es|fr|it|pt|hi|ja|zh + <slug>.<lang>.json (translated texts) → language version (voice + captions in that language)
 import hashlib, json, os, re, subprocess, sys, tempfile
@@ -89,11 +89,11 @@ EMO = {'calm': (0.96, 0.92, -0.3, 0.9, None), 'tense': (0.94, 0.95, 0.4, 0.8, No
        'shout': (1.05, 1.22, 2.6, 1.4, 'shout'), 'whisper': (0.9, 0.8, 0.0, 0.7, 'whisper'), 'sad': (0.9, 0.9, -1.0, 0.7, None), 'dramatic': (0.92, 1.0, -0.6, 1.2, None),
        'deadpan': (0.97, 0.95, -0.6, 0.5, None), 'curious': (0.98, 1.0, 0.6, 1.35, None), 'relieved': (0.95, 0.95, -0.3, 1.05, None)}
 # reaction words: text, speed, melody [(position 0..1, semitones from the speaker's own pitch)], stretch, loudness. A reaction is acted, not read: the melody is drawn
-# onto the word (PSOLA) — "whoa" jumps up and falls, "hmm" sinks and rises in doubt, "ugh" sags, "great." stays flat and low — and the word is drawn out.
+# onto the word (PSOLA) — "whoa" jumps up and falls, "ugh" sags, "great." stays flat and low — and the word is drawn out.
 # Spoken slowly and never rushed (checked with a speech recogniser: at narrator speed "Whoa!" and "Wow!" turn into a mumbled "well…").
 REACTS = {'gasp': None, 'sigh': None,
           'whoa': ('Whoa—', 0.86, [(0, 4), (0.15, 8), (0.5, 3), (1, -4)], 1.4, 1.3), 'wow': ('Wow.', 0.86, [(0, 0), (0.35, 8), (0.7, 2), (1, -4)], 1.35, 1.25),
-          'ugh': ('Ugh.', 0.9, [(0, 2), (0.3, -1), (1, -6)], 1.5, 1.05), 'hm': ('Hmm.', 0.9, [(0, 0), (0.45, -4), (0.75, -2), (1, 4)], 1.6, 1.05),
+          'ugh': ('Ugh.', 0.9, [(0, 2), (0.3, -1), (1, -6)], 1.5, 1.05),
           'oh': ('Oh no.', 0.95, [(0, 6), (0.35, 4), (0.55, 1), (1, -5)], 1.25, 1.2), 'ha': ('Haha!', 1.0, [(0, 5), (0.3, 1), (0.5, 6), (0.8, 1), (1, -2)], 1.05, 1.2),
           'noway': ('No way.', 0.95, [(0, 1), (0.25, 0), (0.55, 7), (1, -4)], 1.25, 1.2), 'great': ('Great.', 0.95, [(0, -1), (0.5, -3), (1, -6)], 1.5, 0.95),
           'yikes': ('Yikes.', 0.95, [(0, 7), (0.5, 5), (1, -2)], 1.15, 1.2), 'seriously': ('Seriously?', 0.95, [(0, -2), (0.5, -1), (0.8, 3), (1, 8)], 1.2, 1.05),
