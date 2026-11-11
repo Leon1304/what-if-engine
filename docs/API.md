@@ -472,5 +472,47 @@ Zusätzliche Felder in `THUMB` (je Variante), sparsam 1–2 pro Thumbnail:
 - **Tipp:** Die letzte `CAM`-Einstellung schaut grob dorthin, wohin die Hook-Einstellung schaut (gleicher Ort, ähnliche Richtung), dann wirkt die Überblendung wie eine einzige Kamerafahrt.
 - Test: `tests/loop.story.js` (Shot bei 8 s liegt mitten in der Überblendung).
 
+# Neu in v2.25 (Querformat, Zweiter Weltkrieg / D-Day)
+
+## Querformat 16:9 (normale YouTube-Videos)
+- `CFG.aspect: '16:9'` rendert im Querformat. `--w` bleibt die kurze Seite: `--w 1440` (Standard, 2K) ergibt 2560 × 1440, `--w 2160` 4K. Der Workflow `render` erkennt das selbst und teilt lange Videos in bis zu 20 Blöcke (Dauer ÷ 15 s).
+- Das HUD rechnet in Bildhöhe: Badge und Zähler oben links, Captions mit `CFG.capPos: 'low'` als Untertitel unten (`CFG.capWords` 9–10 passt im Querformat). Endcard und Karten bleiben mittig.
+- Kamera: die vertikale `fov` wird mit `CFG.fovScale` multipliziert (Querformat-Standard 0.68), damit `shot()`-Presets wie im Hochformat sitzen. Callouts (`CALLOUTS`, `RULER`) sind bisher fürs Hochformat ausgelegt.
+- Thumbnail im Querformat: Text links (`THUMB.text`), Motiv rechts in die Bildhälfte legen. YouTube nimmt Thumbnails bis 2 MB: Cover vor dem Hochladen auf 1280 × 720 verkleinern.
+- Kontaktbogen: Kacheln 480 × 270, drei pro Reihe.
+
+## Gelände
+- `ground({ coast, beach: 45 })`: `beach` = Breite des Sandstreifens in m (Standard 5; Omaha bei Ebbe 40–60), der Sand bleibt flach.
+- `ridge({ x0, x1, foot, crest, back, end, h, kind: 'bluff' | 'cliff' | 'dune', taper, rough, grass, face, sand })`: erhöhter Streifen entlang x – Steilufer hinter einem Strand, Klippe (Pointe du Hoc), Düne. Steigt von `foot` (Seeseite, +z) bis `crest`, flach bis `back`, fällt bis `end`. Nach `ground()` aufrufen: `groundH` enthält ihn danach (Figuren, `biome`, Bunker stehen darauf). Felsige Klippe mit Geröll am Fuß bei `kind: 'cliff'`.
+- `hedgerow(p, [[x, z], …], { h: 2.3, bank, gap, trees: 0.12, colors, seed })`: normannische Bocage-Hecke auf Erdwall, ab und zu ein Baum.
+
+## Atlantikwall
+- `hedgehog(p, x, z, { s, ry })` (Tschechenigel) · `stake(p, x, z, { h, lean, mine })` (Holzpfahl mit Tellermine, zur See geneigt) · `ramp(p, x, z, { len, h, mine })` (Hemmbalken) · `beachGate(p, x, z, { w, h })` (Belgisches Tor).
+- `beachObstacles(p, { x0, x1, rows: [z, …], gap: 6, mix: { hedgehog, stake, ramp, gate }, keep: [[x, z, r]], seed })` stellt sie in Reihen parallel zum Ufer auf; `keep` hält Landestellen frei.
+- `bunker(p, x, z, { kind: 'casemate' | 'pillbox' | 'tobruk', ry, w, sink, y, camo })` → `B`: Front mit Scharte und Rohr zeigt nach +z. `B.fire(t, { at, size })` = Geschütz (Mündungsfeuer, Rauch, Knall, Einschlag bei `at`), `B.mg(t0, t1, { at: [[x, z], [x, z]] })` = MG-Feuer, `B.muzzle` = Mündung als Anker.
+- `wire(p, [[x, z], …], { r, pitch, posts })` (Stacheldraht-Rolle mit X-Pfählen) · `sandbags(p, x, z, { len, rows, ry, y })`.
+
+## Feuer und Luftabwehr (ohne Blut, nichts trifft Figuren)
+- `mgFire(from, { t0, t1, at: [[x, z], [x, z]] | [x, y, z], burst, pause, rate: 9, speed, spread, puffs, sound })`: Feuerstöße mit Leuchtspur, Mündungsfeuer, Sandfontänen am Einschlag und MG-Geräusch (`mg`).
+- `flak({ t0, t1, rate: 2, box: [[x0, x1], [y0, y1], [z0, z1]], tracers: { from: [[x, z], …], rate }, sound })`: Flak-Sprengwolken (Blitz + dunkle Wolke) am Himmel, auf Wunsch Leuchtspur von unten.
+- `searchlight(p, x, z, { t0, t1, az, el, len, r, opacity })`: Suchscheinwerfer mit weichem Lichtkegel, `az`/`el` in Grad oder `t => …`.
+- `muzzle(at, [t, …], { size })` und `tracerPool(shots, { color, len })` sind die Bausteine dafür.
+- `barrageBalloon(p, { at: [x, y, z] | t => […], h: 70, len: 13 })`: Sperrballon mit Seil (über Schiffen, Häfen).
+
+## Täuschung (Operation Fortitude)
+- `inflatable(p, x, z, { kind: 'tank' | 'truck' | 'gun', t0, dur: 2.6, deflate, pump, ry })` → `{ g, body }`: Gummi-Attrappe, liegt vor `t0` platt im Gras und bläst sich mit Wackeln auf (Gebläse-Geräusch `inflate`). Leicht genug für einen Mann: `push(rig, I.g, …)`.
+
+## Lagekarte und Kriegsraum
+- `warMap(p, x, z, { region: 'europe' | 'channel' | 'normandy' | [lon0, lat0, lon1, lat1], w: 4.2, table: true, wall, h, y, ry, title, labels, beaches, drops, occupied, text })` → `M`: Karte im Stil von 1944 (Papier, Küsten, Grenzen, Gradnetz, besetzte Gebiete schraffiert, Städte, bei `normandy` die fünf Strände farbig nach Nation, `drops: true` Absprunggebiete) auf einem Holztisch; Norden zeigt nach −z, `wall: true` hängt sie an die Wand.
+  - `M.arrow([[lon, lat], …], { t0, t1, color, w, layer, hide })` zeichnet einen Angriffspfeil, der sich aufbaut (liefert Anker der Spitze) · `M.pin(lon, lat, { t0, color })` · `M.piece(lon, lat, { kind: 'block' | 'ship' | 'plane' | 'flag', color, t0, to: [lon, lat], move: [t1, t2] })` schiebt Figuren über die Karte · `M.area([[lon, lat], …], { t0, color, opacity, pulse })` · `M.label(text, lon, lat, { t0, size, stand })` · `M.at(lon, lat)` / `M.world(lon, lat)` = Anker für `focusShot` und Kamera.
+- `warRoom(p, x, z, { w, d, h, lamp, wallMap: 'europe', clock })` → `{ g, wall, lamp }`: Hauptquartier der 1940er (Dielen, zweifarbige Wände, verdunkeltes Fenster, Hängelampe, Uhr, Wandkarte); offen nach +z. Die Tischkarte mit `warMap()` hineinstellen.
+
+## Erinnerung
+- `cemetery(p, x, z, { rows, cols, gap: [2.0, 2.8], ry, stars: 0.06, aisle, t0, t1 })`: Soldatenfriedhof mit weißen Marmorkreuzen und Davidsternen in Reihen auf gemähtem Rasen, Hecke, Mittelweg; ab `t0` sichtbar. Respektvoll einsetzen: ruhige Kamera, keine Effekte.
+
+## Geräusche
+- SFX: `mg` (MG-Feuerstoß, `dur`) · `flak` · `whistle` (anfliegende Granate, `dur`) · `morse` (Funk, `dur`) · `inflate` (Gebläse, `dur`) · `typewriter` (`dur`).
+- `AUDIO.amb`: `battle` (ferne Schlacht: Artillerie, Gewehr- und MG-Feuer) · `planes` (Dröhnen vieler Propellerflugzeuge) · `hq` (Kriegsraum: Raumklang, tickende Uhr, Schreibmaschine) · `surf` (Brandung, Wind, Möwe).
+
 # Tests
 `bash tests/run.sh [name …]` baut die Beispiel-Story aus `template.html` und alle Szenen in `tests/` und rendert je drei Bilder; Seitenfehler lassen den Test scheitern. Der Workflow `test` läuft bei jeder Engine-Änderung auf GitHub. Neue Funktionen bekommen eine kleine Testszene in `tests/<thema>.story.js` + `.scene.js`.

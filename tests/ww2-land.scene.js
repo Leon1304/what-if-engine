@@ -1,0 +1,22 @@
+// v2.25 WWII / D-Day kit smoke test
+ground({ coast: 60, beach: 45, flat: 90, color: '#5D7C3A' });
+water({ level: -0.3, size: 1000, seg: 160 });
+ridge({ x0: -150, x1: 150, foot: 14, crest: -12, back: -70, end: -110, h: 17 });
+ridge({ kind: 'cliff', x0: 160, x1: 260, foot: 20, h: 26 });
+beachObstacles(world, { x0: -50, x1: 50, rows: [34, 41, 48], gap: 7, keep: [[0, 44, 6]] });
+const B1 = bunker(world, -12, -6, { kind: 'casemate' }), B2 = bunker(world, 14, -3, { kind: 'pillbox' }), B3 = bunker(world, 30, 1, { kind: 'tobruk' });
+B1.fire(3, { at: [0, 0, 44] }); B3.mg(1, 12, { at: [[-20, 40], [20, 44]] });
+wire(world, [[-40, 12], [0, 13.5], [40, 12]]); sandbags(world, 5, -8, { len: 4, ry: 0.2, y: groundH(5, -8) });
+hedgerow(world, [[-60, -130], [-20, -125], [10, -150]]);
+const I = inflatable(world, 60, -120, { t0: 2, dur: 2.5, ry: 0.6 }); inflatable(world, 72, -112, { kind: 'truck', ry: 0.4 });
+const S = ship(world, 'landing', 0, 80, { ry: Math.PI }); bob(S.g, { size: 5, depth: 0 });
+barrageBalloon(world, { at: [6, 0, 110], h: 45 });
+searchlight(world, -30, -90, { t0: 15 }); searchlight(world, 25, -100, { t0: 15, az: t => -25 + 18 * Math.sin(t * 0.3) });
+flak({ t0: 15, t1: 24, box: [[-60, 60], [60, 120], [-60, 20]], tracers: { from: [[-20, -80], [25, -95]] } });
+cemetery(world, -60, -45, { rows: 6, cols: 12, y: groundH(-60, -45) });
+const R = warRoom(world, 2000, 0);
+const M = warMap(world, 2000, 0.5, { region: 'normandy', w: 3.4, y: 0, drops: true, title: 'OPERATION NEPTUNE · 6 JUNE 1944' });
+M.arrow([[-1.0, 49.78], [-0.92, 49.6], [-0.87, 49.42]], { t0: 18, t1: 20 }); M.pin(-0.87, 49.37, { t0: 19 }); M.piece(-0.3, 49.7, { kind: 'ship', to: [-0.45, 49.45], move: [18, 21] }); M.label('H-HOUR 06:30', -0.6, 49.55, { t0: 19.5 });
+const F = warMap(world, 2004.5, 0.5, { region: 'europe', w: 2.6, y: 0 }); F.arrow([[-1.2, 50.8], [-0.9, 49.4]], { t0: 18, t1: 19.5, color: '#2E5C9E' });
+track('tank', I.g, 1);
+biome('farm', { keep: [[0, 30, 60], [2000, 0, 30]] });

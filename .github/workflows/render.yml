@@ -31,6 +31,7 @@ jobs:
     outputs:
       pages: ${{ steps.p.outputs.pages }}
       shards: ${{ steps.p.outputs.shards }}
+      n: ${{ steps.p.outputs.N }}
     steps:
       - uses: actions/checkout@v4
         with: { fetch-depth: 2 }
@@ -42,7 +43,9 @@ jobs:
             P=$(git diff --name-only --diff-filter=AM HEAD~1 HEAD -- 'renders/*.html' | jq -R . | jq -sc 'map(select(length > 0))')
           fi
           echo "pages=$P" >> "$GITHUB_OUTPUT"
-          echo "shards=$(seq 0 $((SHARDS - 1)) | jq -sc .)" >> "$GITHUB_OUTPUT"
+          D=$(for f in $(echo "$P" | jq -r '.[]'); do grep -m1 -oE '\bdur: *[0-9.]+' "$f" | grep -oE '[0-9.]+'; done | sort -n | tail -1)
+          N=$SHARDS; if [ -n "$D" ]; then N=$(( ${D%.*} / 15 )); [ $N -lt $SHARDS ] && N=$SHARDS; [ $N -gt 20 ] && N=20; fi   # long videos (normal YouTube): up to 20 blocks
+          echo "shards=$(seq 0 $((N - 1)) | jq -sc .)" >> "$GITHUB_OUTPUT"; echo "SHARDS=$N" >> "$GITHUB_ENV"; echo "N=$N" >> "$GITHUB_OUTPUT"
           echo "pages: $P"
 
   frames:
@@ -69,7 +72,7 @@ jobs:
       - id: s
         run: echo "slug=$(basename '${{ matrix.page }}' .html)" >> "$GITHUB_OUTPUT"
       - name: render frames
-        run: node render.mjs "${{ matrix.page }}" --video "out/${{ steps.s.outputs.slug }}.mp4" --w $WIDTH --workers 3 --shard ${{ matrix.shard }}/$SHARDS --frames-only
+        run: node render.mjs "${{ matrix.page }}" --video "out/${{ steps.s.outputs.slug }}.mp4" --w $WIDTH --workers 3 --shard ${{ matrix.shard }}/${{ needs.plan.outputs.n }} --frames-only
       - uses: actions/upload-artifact@v4
         with:
           name: frames-${{ steps.s.outputs.slug }}--${{ matrix.shard }}

@@ -4,6 +4,7 @@
 //     → out.mp4 (master, YouTube: CRF 18); with --ig also out-ig.mp4 (Instagram: 1080x1920, ~12 Mbps)
 //   node render.mjs page.html --cover cover.jpg [--t 1.2]   (THUMB = [A, B] → also cover-b.jpg: A/B test thumbnails)
 //   node render.mjs page.html --audio out.wav
+// Landscape pages (CFG.aspect: '16:9') render 16:9 with the same --w (short side): 1440 → 2560x1440.
 // Needs in this folder: npm i three@0.170.0 playwright ; ffmpeg on PATH.
 // Frames stay in <out>.frames/: a stopped run resumes, and --redo a-b re-renders only that time range (after a scene/caption
 // change there) before re-encoding. --clean deletes frames + wav after a successful encode. New audio only: --remux.
@@ -20,6 +21,7 @@ const W = +opt('w', draft ? 540 : 1440), fps = +opt('fps', draft ? 15 : 30), wor
 const HERE = path.dirname(new URL(import.meta.url).pathname);
 const THREE_DIR = path.join(HERE, 'node_modules/three');
 const src = readFileSync(file, 'utf8');
+const LAND = /\baspect:\s*['"](16:9|landscape)['"]/.test(src);   // v2.25: 16:9 page → 1920x1080 viewport; --w is always the short side (1440 = 2K → 2560x1440)
 const html = /^\s*<!doctype/i.test(src) ? src : '<!doctype html><html><head><meta charset="utf-8"></head><body>' + src + '</body></html>';
 
 async function openPage() {
@@ -28,7 +30,7 @@ async function openPage() {
     args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'],
     proxy: process.env.HTTPS_PROXY ? { server: process.env.HTTPS_PROXY } : undefined
   });
-  const ctx = await browser.newContext({ viewport: { width: 1080, height: 1920 }, deviceScaleFactor: W / 1080, ignoreHTTPSErrors: true });
+  const ctx = await browser.newContext({ viewport: LAND ? { width: 1920, height: 1080 } : { width: 1080, height: 1920 }, deviceScaleFactor: W / 1080, ignoreHTTPSErrors: true });
   await ctx.addInitScript(() => { window.__EXPORT__ = true; });
   await ctx.route('**/*', route => {
     const url = route.request().url();
@@ -47,7 +49,7 @@ async function openPage() {
   await page.goto('http://whatif.local/');
   try { await page.waitForFunction(() => window.whatif, null, { timeout: 120000 }); }
   catch { console.log('PAGE DID NOT START\n' + errors.join('\n')); await browser.close(); process.exit(1); }
-  await page.evaluate(async ([w, F]) => { await document.fonts.ready; window.whatif.setRenderWidth(w); window.whatif.fps?.(F); window.whatif.seek(0); }, [W, fps]);
+  await page.evaluate(async ([w, F]) => { await document.fonts.ready; window.whatif.setRenderWidth(w); window.whatif.fps?.(F); window.whatif.seek(0); }, [LAND ? Math.round(W * 16 / 9) : W, fps]);
   return { browser, page, errors };
 }
 const report = errors => { if (errors.length) console.log('PAGE ERRORS:\n' + [...new Set(errors)].slice(0, 12).join('\n')); };
@@ -68,10 +70,10 @@ if (opt('shots')) {
   const info = await page.evaluate(() => window.whatif.info());
   console.log('scene:', JSON.stringify(info));
   report(errors); await browser.close();
-  const cols = Math.min(4, files.length), rows = Math.ceil(files.length / cols);
-  const fc = files.length === 1 ? '[0:v]scale=360:-1' :
-    files.map((_, i) => `[${i}:v]scale=360:-1[v${i}]`).join(';') + ';' + files.map((_, i) => `[v${i}]`).join('') +
-    `xstack=inputs=${files.length}:layout=${files.map((_, i) => `${(i % cols) * 360}_${Math.floor(i / cols) * 640}`).join('|')}:fill=black`;
+  const cols = Math.min(LAND ? 3 : 4, files.length), rows = Math.ceil(files.length / cols), TW = LAND ? 480 : 360, TH = LAND ? 270 : 640;
+  const fc = files.length === 1 ? `[0:v]scale=${TW}:-1` :
+    files.map((_, i) => `[${i}:v]scale=${TW}:-1[v${i}]`).join(';') + ';' + files.map((_, i) => `[v${i}]`).join('') +
+    `xstack=inputs=${files.length}:layout=${files.map((_, i) => `${(i % cols) * TW}_${Math.floor(i / cols) * TH}`).join('|')}:fill=black`;
   ff([...files.flatMap(f => ['-i', f]), '-filter_complex', fc, '-frames:v', '1', path.join(out, 'sheet.jpg')]);
   console.log('contact sheet:', path.join(out, 'sheet.jpg'), `(${cols}x${rows}, in order of --shots)`);
 }
