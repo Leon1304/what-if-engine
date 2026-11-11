@@ -344,7 +344,7 @@ const AUDIO = {
   score: [[0, 'none'], [9.0, 'tense'], [22.5, 'none']], music: 0.45, sfx: 0.95,
   sections: [[0, 0], [9.0, 1], [15.3, 2], [22.5, 0]],
   amb: [[0, 3.7, 'underwater', 1], [3.7, 9.0, 'ocean', 1], [9.0, 15.3, 'underwater', 0.5], [15.3, 22.5, 'underwater', 1], [22.5, 35.7, 'ocean', 1], [35.7, 41.4, 'underwater', 1]],
-  hits: [{ t: 15.1, k: 'riser', dur: 1.4 }, { t: 31.8, k: 'ticks', v: 0.5 }]
+  hits: [{ t: 0.02, k: 'boom', v: 1 }, { t: 0.03, k: 'explosion', v: 0.7 }, { t: 15.1, k: 'riser', dur: 1.4 }, { t: 31.8, k: 'ticks', v: 0.5 }]
 };
 const THUMB = [
   { t: 17.1, text: 'Biggest bomb. *Deepest* spot.', cam: { p: [-2992, -56, 12], l: [-3000, -57.3, 0], fov: 50 }, rays: true },
@@ -3216,7 +3216,7 @@ function uwBlast(p, x, y, z, o = {}) {
     puls.slice(1).forEach(([a, , Rk]) => emit('bubble', { at: [x, y, z], t0: a, burst: 50, size: Math.max(0.07, Rk * 0.05), speed: Rk * 0.8, spread: 1.5, jitter: Rk * 0.5, life: 3, g: Math.max(0.4, Rk * 0.25) }));
     emit('bubble', { at: [x, y, z], t0: tEnd, t1: tEnd + 5, rate: 40, size: Math.max(0.08, R * 0.04), speed: R * 0.4, spread: 0.5, jitter: R * 0.35, life: 4, g: Math.max(0.5, R * 0.3) });
   }
-  if (o.sound !== false) { sfx(t0, 'explosion', 0.9); sfx(t0 + 0.02, 'boom', 1); puls.slice(1).forEach(([a], i) => sfx(a, 'boom', 0.55 * dk ** i)); }
+  if (o.sound !== false && t0 >= 0) { sfx(t0, 'explosion', 0.9); sfx(t0 + 0.02, 'boom', 1); puls.slice(1).forEach(([a], i) => sfx(a, 'boom', 0.55 * dk ** i)); }
   if (o.fx !== false) { const tv = VT(t0); SHAKES.push({ t: tv, amp: 0.45, dur: 1.1 }); FLASHES.push({ t: tv, dur: 0.4, a: 0.75, color: '#FFF4C8' }); }
   return { g, radius, t: t0, collapses: puls.slice(1).map(q => q[0]), at: () => [x, y, z] };
 }
@@ -3247,7 +3247,7 @@ function seaDome(x, z, t0, o = {}) {
   if (o.spray !== false) { emit('debris', { at: [x, H * 0.9, z], t0: t0 + ri * 0.7, t1: t0 + ri + hd + 1.2, rate: 90, colors: ['#F4FBFF', '#D8EEF8'], size: Math.max(0.2, r * 0.012), speed: 3 + H * 0.8, spread: 0.9, jitter: r * 0.45, basic: true, life: 1.6 });
     emit('bubble', { at: [x, 0.2, z], t0: t0 + ri, t1: t0 + ri + hd + fa + 6, rate: 70, size: Math.max(0.25, r * 0.01), speed: 0.6, spread: 1.2, jitter: r * 0.55, life: 1.4, g: 0.5 }); }
   if (o.steam !== false) emit('smoke', { at: [x, H * 0.6, z], t0: t0 + ri, t1: t0 + ri + hd + fa, rate: 4, colors: ['#F4F8FA', '#DCE6EA'], size: Math.max(1.5, r * 0.05), jitter: r * 0.3, speed: 1.0, life: 4, opacity: 0.55 });
-  if (o.sound !== false) { sfx(t0, 'thunder', 0.35); sfx(t0 + ri * 0.7, 'splash', 0.8); }
+  if (o.sound !== false && t0 >= 0) { sfx(t0, 'thunder', 0.35); sfx(t0 + ri * 0.7, 'splash', 0.8); }
   return { heightAt, amp };
 }
 // oceanSection(p, x, z, { w: 44, h: 36, d: 6, bed: 0.3, trench: { w: 0.32, floor: 0.04 }, y, ry, water: ['#4FB6E0', '#06182C'], rock: '#3A3430', labels })
@@ -9312,6 +9312,12 @@ const SND = (() => {
       const fl = ctx.createBiquadFilter(); fl.type = type; fl.frequency.setValueAtTime(f0, t); if (f1) fl.frequency.exponentialRampToValueAtTime(f1, t + a + hold + r); fl.Q.value = q;
       const g = ctx.createGain(); env(g, t, a, hold, r, peak); src.connect(fl); fl.connect(g); g.connect(dest); src.start(t, ar() * 1.5); src.stop(t + a + hold + r + 0.05); return fl;
     };
+    const pulses = (ts, dec, peak, dest, type, f0, q = 1) => {   // v2.25: many short noise clicks on ONE source (gunfire, crackle) – a few nodes instead of one nz() per click (long videos render their sound far faster)
+      if (!ts.length) return; const t0 = Math.max(0, ts[0] - 0.01), t1 = ts[ts.length - 1] + dec + 0.03;
+      const src = ctx.createBufferSource(); src.buffer = noise; src.loop = true; const fl = ctx.createBiquadFilter(); fl.type = type; fl.frequency.value = f0; fl.Q.value = q;
+      const g = ctx.createGain(); g.gain.setValueAtTime(0, t0);
+      ts.forEach((tt, i) => { const nx = i + 1 < ts.length ? ts[i + 1] : tt + dec + 0.02, pk = typeof peak === 'function' ? peak(i) : peak; g.gain.setValueAtTime(0, tt); g.gain.linearRampToValueAtTime(pk, tt + 0.001); g.gain.linearRampToValueAtTime(0, Math.max(tt + 0.0015, Math.min(tt + dec, nx - 0.0005))); });
+      src.connect(fl); fl.connect(g); g.connect(dest); src.start(t0, ar() * 1.5); src.stop(t1); };
     // instruments
     const kick = (t, v = 1) => { tone('sine', 150, t, 0.002, 0.02, 0.36, 0.9 * v, music, { to: 42, glide: 0.12 }); nz(t, 0.001, 0, 0.02, 0.15 * v, music, 'highpass', 3000); };
     const snare = (t, v = 1) => { nz(t, 0.001, 0, 0.17, 0.45 * v, music, 'bandpass', 1800, 0, 0.7); tone('triangle', 190, t, 0.001, 0, 0.1, 0.25 * v, music); };
@@ -9499,7 +9505,7 @@ const SND = (() => {
       blast: (t, v, d = 1.6) => { const N = [392, 392, 523, 466]; for (let k = 0; k < Math.max(1, d * 2.5); k++) tone('sawtooth', N[k % 4], t + k * 0.4, 0.03, 0.25, 0.1, 0.08 * v, fx, { lp: 2600 }); },
       chirp: (t, v) => { for (let k = 0; k < 3; k++) tone('sine', 3200, t + k * 0.09, 0.005, 0.02, 0.03, 0.04 * v, fx, { to: 4200, glide: 0.04 }); },
       // v2.25 — Second World War
-      mg: (t, v, d = 1.2) => { const n = Math.max(3, Math.round(d * 19)); for (let k = 0; k < n; k++) { const tt = t + k / 19 + ar() * 0.004; nz(tt, 0.001, 0.003, 0.05, 0.5 * v, fx, 'highpass', 900); nz(tt, 0.001, 0.01, 0.08, 0.38 * v, fx, 'lowpass', 650); } },   // machine-gun burst (~1,150 rounds a minute)
+      mg: (t, v, d = 1.2) => { const n = Math.max(3, Math.round(d * 19)), ts = []; for (let k = 0; k < n; k++) ts.push(t + k / 19 + ar() * 0.004); pulses(ts, 0.05, 0.5 * v, fx, 'highpass', 900); pulses(ts, 0.08, 0.38 * v, fx, 'lowpass', 650); },   // machine-gun burst (~1,150 rounds a minute)
       flak: (t, v) => { nz(t, 0.001, 0.004, 0.12, 0.65 * v, fx, 'highpass', 1800); tone('sine', 82, t + 0.01, 0.003, 0.05, 0.75, 0.5 * v, fx, { to: 34, glide: 0.6 }); nz(t + 0.02, 0.01, 0.1, 0.9, 0.24 * v, fx, 'lowpass', 520, 120); },   // anti-aircraft shell bursting
       whistle: (t, v, d = 1.1) => { tone('sine', 1900, t, 0.08, Math.max(0, d - 0.2), 0.12, 0.08 * v, fx, { to: 480, glide: d }); nz(t, 0.1, Math.max(0, d - 0.25), 0.1, 0.04 * v, fx, 'bandpass', 1800, 600, 3); },   // incoming shell
       morse: (t, v, d = 2) => { const u = 0.075; for (let tt = t; tt < t + d;) { const dah = ar() < 0.4; tone('sine', 760, tt, 0.004, (dah ? 3 : 1) * u, 0.01, 0.06 * v, fx); tt += (dah ? 4 : 2) * u + (ar() < 0.25 ? 2 * u : 0); } },   // radio Morse code
@@ -9548,7 +9554,7 @@ const SND = (() => {
       // v2.25 — Second World War
       battle: (a, b, v) => { bed(a, b, 0.06 * v, 'lowpass', 180);   // distant battle: artillery thumps, rifle and machine-gun crackle
         every(a, b, 1.8, 2.6, t => { tone('sine', 60 + ar() * 25, t, 0.004, 0.06, 1.4, 0.2 * v, amb, { to: 28, glide: 1.0 }); nz(t, 0.01, 0.08, 1.2, 0.07 * v, amb, 'lowpass', 400, 90); });
-        every(a, b, 0.5, 0.9, t => { const n = ar() < 0.35 ? 6 + Math.floor(ar() * 10) : 1; for (let k = 0; k < n; k++) nz(t + k * 0.055, 0.001, 0.002, 0.04, (0.04 + ar() * 0.05) * v, amb, 'bandpass', 1300 + ar() * 900, 0, 1.5); }); },
+        every(a, b, 0.5, 0.9, t => { const n = ar() < 0.35 ? 6 + Math.floor(ar() * 10) : 1, ts = []; for (let k = 0; k < n; k++) ts.push(t + k * 0.055); pulses(ts, 0.04, () => (0.04 + ar() * 0.05) * v, amb, 'bandpass', 1300 + ar() * 900, 1.5); }); },
       planes: (a, b, v) => { const d = Math.max(0, b - a - 1.6); for (const [f, g] of [[82, 0.05], [86.5, 0.045], [123, 0.03], [164, 0.018]]) tone('sawtooth', f, a, 0.8, d, 0.8, g * v, amb, { lp: 520, q: 0.7 }); bed(a, b, 0.05 * v, 'lowpass', 300); },   // drone of many piston-engined aircraft
       hq: (a, b, v) => { AMB.indoor(a, b, 0.7 * v); every(a, b, 1, 0, t => tone('square', 1500, t, 0.001, 0.004, 0.02, 0.012 * v, amb, { lp: 3000 }));   // war room: room tone, ticking clock, distant typewriter
         every(a, b, 6, 6, t => { for (let tt = t, e = t + 1 + ar() * 1.5; tt < e; tt += 0.09 + ar() * 0.1) nz(tt, 0.001, 0.002, 0.025, 0.035 * v, amb, 'bandpass', 2400, 0, 2); }); },

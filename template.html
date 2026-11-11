@@ -3267,7 +3267,7 @@ function uwBlast(p, x, y, z, o = {}) {
     puls.slice(1).forEach(([a, , Rk]) => emit('bubble', { at: [x, y, z], t0: a, burst: 50, size: Math.max(0.07, Rk * 0.05), speed: Rk * 0.8, spread: 1.5, jitter: Rk * 0.5, life: 3, g: Math.max(0.4, Rk * 0.25) }));
     emit('bubble', { at: [x, y, z], t0: tEnd, t1: tEnd + 5, rate: 40, size: Math.max(0.08, R * 0.04), speed: R * 0.4, spread: 0.5, jitter: R * 0.35, life: 4, g: Math.max(0.5, R * 0.3) });
   }
-  if (o.sound !== false) { sfx(t0, 'explosion', 0.9); sfx(t0 + 0.02, 'boom', 1); puls.slice(1).forEach(([a], i) => sfx(a, 'boom', 0.55 * dk ** i)); }
+  if (o.sound !== false && t0 >= 0) { sfx(t0, 'explosion', 0.9); sfx(t0 + 0.02, 'boom', 1); puls.slice(1).forEach(([a], i) => sfx(a, 'boom', 0.55 * dk ** i)); }
   if (o.fx !== false) { const tv = VT(t0); SHAKES.push({ t: tv, amp: 0.45, dur: 1.1 }); FLASHES.push({ t: tv, dur: 0.4, a: 0.75, color: '#FFF4C8' }); }
   return { g, radius, t: t0, collapses: puls.slice(1).map(q => q[0]), at: () => [x, y, z] };
 }
@@ -3298,7 +3298,7 @@ function seaDome(x, z, t0, o = {}) {
   if (o.spray !== false) { emit('debris', { at: [x, H * 0.9, z], t0: t0 + ri * 0.7, t1: t0 + ri + hd + 1.2, rate: 90, colors: ['#F4FBFF', '#D8EEF8'], size: Math.max(0.2, r * 0.012), speed: 3 + H * 0.8, spread: 0.9, jitter: r * 0.45, basic: true, life: 1.6 });
     emit('bubble', { at: [x, 0.2, z], t0: t0 + ri, t1: t0 + ri + hd + fa + 6, rate: 70, size: Math.max(0.25, r * 0.01), speed: 0.6, spread: 1.2, jitter: r * 0.55, life: 1.4, g: 0.5 }); }
   if (o.steam !== false) emit('smoke', { at: [x, H * 0.6, z], t0: t0 + ri, t1: t0 + ri + hd + fa, rate: 4, colors: ['#F4F8FA', '#DCE6EA'], size: Math.max(1.5, r * 0.05), jitter: r * 0.3, speed: 1.0, life: 4, opacity: 0.55 });
-  if (o.sound !== false) { sfx(t0, 'thunder', 0.35); sfx(t0 + ri * 0.7, 'splash', 0.8); }
+  if (o.sound !== false && t0 >= 0) { sfx(t0, 'thunder', 0.35); sfx(t0 + ri * 0.7, 'splash', 0.8); }
   return { heightAt, amp };
 }
 // oceanSection(p, x, z, { w: 44, h: 36, d: 6, bed: 0.3, trench: { w: 0.32, floor: 0.04 }, y, ry, water: ['#4FB6E0', '#06182C'], rock: '#3A3430', labels })
