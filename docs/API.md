@@ -514,6 +514,7 @@ Zusätzliche Felder in `THUMB` (je Variante), sparsam 1–2 pro Thumbnail:
 - `cemetery(p, x, z, { rows, cols, gap: [2.0, 2.8], ry, stars: 0.06, aisle, t0, t1 })`: Soldatenfriedhof mit weißen Marmorkreuzen und Davidsternen in Reihen auf gemähtem Rasen, Hecke, Mittelweg; ab `t0` sichtbar. Respektvoll einsetzen: ruhige Kamera, keine Effekte.
 
 ## Geräusche
+- Ton für lange Videos: Schnellfeuer (`mg`) und das Knistern in `battle` laufen über eine einzige Rauschquelle pro Feuerstoß (`pulses`), statt eines Knotens pro Schuss. So rendert der Ton eines 5-Minuten-Videos in ca. 8 statt über 40 Minuten. Neue Geräusche mit vielen kurzen Klicks genauso bauen.
 - SFX: `mg` (MG-Feuerstoß, `dur`) · `flak` · `whistle` (anfliegende Granate, `dur`) · `morse` (Funk, `dur`) · `inflate` (Gebläse, `dur`) · `typewriter` (`dur`).
 - `AUDIO.amb`: `battle` (ferne Schlacht: Artillerie, Gewehr- und MG-Feuer) · `planes` (Dröhnen vieler Propellerflugzeuge) · `hq` (Kriegsraum: Raumklang, tickende Uhr, Schreibmaschine) · `surf` (Brandung, Wind, Möwe).
 
