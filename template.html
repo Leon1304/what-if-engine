@@ -99,6 +99,11 @@
   #thumb .tt .bd { color: var(--bad); }
   #thumb .sub { position: absolute; left: 50%; bottom: 13%; transform: translateX(-50%) rotate(-2deg); font: 900 6cqw/1 var(--ui); letter-spacing: .06em; text-transform: uppercase; background: var(--accent); color: var(--ink); padding: 2cqw 4cqw; border-radius: 2cqw; box-shadow: 0 1.2cqw 0 #000; white-space: nowrap; }
   #thumb .hd { position: absolute; left: 50%; bottom: 6%; transform: translateX(-50%); font: 700 3.4cqw/1 var(--ui); color: #fff; text-shadow: 0 .4cqw 1.2cqw #000; }
+  /* v2.24 wow effects: rays (light burst behind the subject), glow, big question mark, hidden payoff (blur box) */
+  #thumb .rays { position: absolute; inset: 0; mix-blend-mode: screen; opacity: .55; background: repeating-conic-gradient(from 0deg at var(--x) var(--y), rgba(255,255,255,0) 0deg 6deg, var(--rc) 6deg 9deg); -webkit-mask-image: radial-gradient(circle at var(--x) var(--y), transparent 0%, transparent var(--h), #000 calc(var(--h) + 6%), rgba(0,0,0,.45) 34%, transparent 64%); mask-image: radial-gradient(circle at var(--x) var(--y), transparent 0%, transparent var(--h), #000 calc(var(--h) + 6%), rgba(0,0,0,.45) 34%, transparent 64%); }
+  #thumb .glw { position: absolute; aspect-ratio: 1; transform: translate(-50%, -50%); border-radius: 50%; background: radial-gradient(circle, var(--gc) 0%, rgba(0,0,0,0) 66%); mix-blend-mode: screen; opacity: .85; }
+  #thumb .qm { position: absolute; transform: translate(-50%, -50%) rotate(10deg); font: 400 34cqw/1 var(--cap); color: var(--accent); -webkit-text-stroke: 1.5cqw #000; paint-order: stroke fill; text-shadow: 0 1.8cqw 0 #000, 0 3cqw 6cqw rgba(0,0,0,.6); }
+  #thumb .hide { position: absolute; transform: translate(-50%, -50%) rotate(-3deg); border-radius: 2.4cqw; -webkit-backdrop-filter: blur(3.2cqw) saturate(.5); backdrop-filter: blur(3.2cqw) saturate(.5); background: rgba(10,10,12,.28); border: 1cqw solid #fff; box-shadow: 0 1.2cqw 0 #000; display: grid; place-items: center; font: 400 14cqw/1 var(--cap); color: #fff; -webkit-text-stroke: .9cqw #000; paint-order: stroke fill; }
   #thumb .ring { position: absolute; aspect-ratio: 1; transform: translate(-50%, -50%); border: 1.6cqw solid #FF2B2B; border-radius: 50%; box-shadow: 0 0 0 .7cqw #000, inset 0 0 0 .7cqw #000; }
   #thumb .tst { position: absolute; transform: translate(-50%, -50%) rotate(-12deg); }
   #thumb .tst b { display: block; font: 400 17cqw/1 var(--cap); text-transform: uppercase; color: var(--sc); padding: 1.6cqw 4.4cqw 1cqw; border: 1.6cqw solid var(--sc); border-radius: 2.6cqw; background: rgba(10, 10, 12, .62); box-shadow: 0 1.4cqw 0 #000, 0 2.6cqw 5cqw rgba(0, 0, 0, .55); letter-spacing: .01em; }
@@ -8843,6 +8848,10 @@ function thumbCam() {
   if (!TH.cam) return;
   camera.position.fromArray(TH.cam.p); _l.fromArray(TH.cam.l); camera.lookAt(_l);
   if (TH.cam.fov && camera.fov !== TH.cam.fov) { camera.fov = TH.cam.fov; camera.updateProjectionMatrix(); }
+  if (TH.focus) {   // v2.24: THUMB.focus = [x,y,z] | 'trackName' → subject sharp, background melts away (THUMB.dof 0–1, default 0.9)
+    let F = null; if (Array.isArray(TH.focus)) F = new THREE.Vector3().fromArray(TH.focus); else if (TRACK[TH.focus]) { const T = TRACK[TH.focus]; T.obj.updateMatrixWorld(true); F = new THREE.Vector3().setFromMatrixPosition(T.obj.matrixWorld); F.y += T.dy; }
+    if (F) { camFx.focus = camera.position.distanceTo(F); camFx.dof = TH.dof ?? 0.9; }
+  }
 }
 function thumbOn() {
   THUMB_ON = true; stage.classList.add('thumbmode');
@@ -8851,7 +8860,12 @@ function thumbOn() {
   const html = esc(raw).replace(/\*([^*]+)\*/g, '<span class="hl">$1</span>').replace(/_([^_]+)_/g, '<span class="bd">$1</span>').replace(/~/g, ' ');
   const ring = TH.ring ? `<div class="ring" style="left:${TH.ring[0]}%;top:${TH.ring[1]}%;width:${TH.ring[2] ?? 28}%"></div>` : '';
   const arrow = TH.arrow ? `<svg class="arr" style="left:${TH.arrow[0]}%;top:${TH.arrow[1]}%;transform:translate(-50%,-50%) rotate(${TH.arrow[2] ?? 0}deg)" viewBox="-4 -4 108 68"><path d="M0 22h62V4l38 26-38 26V38H0z" fill="#FF2B2B" stroke="#000" stroke-width="5" stroke-linejoin="round"/></svg>` : '';
-  $('thumb').innerHTML = `<div class="tt" style="font-size:${size.toFixed(2)}cqw">${html}</div>` + (TH.sub ? `<div class="sub">${esc(TH.sub)}</div>` : '') + (CFG.series?.handle ? `<div class="hd">${esc(CFG.series.handle)}</div>` : '') + ring + arrow;
+  const pt = (v, dx, dy) => Array.isArray(v) ? v : [dx, dy], col = v => (typeof v === 'string' && v.startsWith('#')) ? v : 'var(--accent)';
+  const rays = TH.rays ? (r => `<div class="rays" style="--x:${r[0]}%;--y:${r[1]}%;--h:${r[2] ?? 12}%;--rc:${col(TH.raysColor ?? TH.rays)}"></div>`)(pt(TH.rays, 50, 55)) : '';   // THUMB.rays: true | [x%, y%, hole%] (+ raysColor) — the subject stays clear inside the hole
+  const glw = TH.glow ? (g => `<div class="glw" style="left:${g[0]}%;top:${g[1]}%;width:${g[2] ?? 60}%;--gc:${TH.glowColor ?? 'rgba(255,230,160,.9)'}"></div>`)(pt(TH.glow, 50, 55)) : '';   // THUMB.glow: [x%, y%, size%]
+  const qm = TH.q ? (q => `<div class="qm" style="left:${q[0]}%;top:${q[1]}%">?</div>`)(pt(TH.q, 80, 52)) : '';   // THUMB.q: true | [x%, y%] — big question mark
+  const hide = TH.hide ? `<div class="hide" style="left:${TH.hide[0]}%;top:${TH.hide[1]}%;width:${TH.hide[2] ?? 30}%;height:${TH.hide[3] ?? 18}%">${esc(tr(TH.hideText ?? '???'))}</div>` : '';   // THUMB.hide: [x%, y%, w%, h%] — the payoff, blurred
+  $('thumb').innerHTML = rays + glw + `<div class="tt" style="font-size:${size.toFixed(2)}cqw">${html}</div>` + (TH.sub ? `<div class="sub">${esc(TH.sub)}</div>` : '') + (CFG.series?.handle ? `<div class="hd">${esc(CFG.series.handle)}</div>` : '') + ring + arrow + hide + qm;
   const st = TH.stamp ? (typeof TH.stamp === 'string' ? { text: TH.stamp } : TH.stamp) : null;   // THUMB.stamp: 'False' | { text, color, x, y } · THUMB.meter: 0–100 (Believability needle) · THUMB.big: '30,000 °C' (big number chip)
   if (st) $('thumb').insertAdjacentHTML('beforeend', `<div class="tst" style="left:${st.x ?? 50}%;top:${st.y ?? 62}%;--sc:${st.color ?? '#FF2B3A'}"><b>${esc(tr(st.text))}</b></div>`);
   if (TH.meter != null) { const v = clamp(TH.meter, 0, 100), R = 42, P2 = q => [(-R * Math.cos(Math.PI * q / 100)).toFixed(2), (-R * Math.sin(Math.PI * q / 100)).toFixed(2)], arc = (a, b, c) => `<path d="M${P2(a)}A${R} ${R} 0 0 1 ${P2(b)}" stroke="${c}"/>`;

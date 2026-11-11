@@ -451,6 +451,16 @@ Story-Video über 58 s · Endcard + Loop über 6,5 s · `loop: false` · kein `T
 - Look von „you“ (`outfit`): `grey` · `silver` (Haarfarben), `scar` (Narbe über dem Auge), `workjacket` (olivgrüne Arbeitsjacke mit Kragen, Reißverschluss, Brusttaschen), `cardigan` (Strickjacke mit V-Ausschnitt und Knöpfen), `boots`, `readers` (dünne Lesebrille).
 - Querschnitt-Trick: `ground()` ist von unten unsichtbar. Eine Kamera knapp unter y = 0 zeigt Erdgeschoss und Keller zugleich (Puppenhaus-Schnitt); die Schnittkante davor mit Erd-Boxen gestalten.
 
+# Neu in v2.24 (Thumbnails mit Wow-Effekt)
+Zusätzliche Felder in `THUMB` (je Variante), sparsam 1–2 pro Thumbnail:
+- `focus: [x,y,z] | 'trackName'`, `dof: 0–1` (Standard 0.9): Motiv scharf, Hintergrund verschwimmt. Liegt das Motiv hinter einer durchsichtigen Schicht (z. B. `strata`), auf deren Vorderseite fokussieren.
+- `rays: true | [x%, y%, loch%]` (+ `raysColor`): Lichtstrahlen in der Akzentfarbe hinter dem Motiv; innerhalb von `loch` (Standard 12 %) bleibt das Motiv klar.
+- `glow: [x%, y%, größe%]` (+ `glowColor`): warmer Schein auf das Motiv.
+- `q: true | [x%, y%]`: großes Fragezeichen in der Akzentfarbe.
+- `hide: [x%, y%, breite%, höhe%]` (+ `hideText`, Standard „???“): verwischter Kasten über der Auflösung, damit die Frage offen bleibt.
+
+# Neu in v2.22 (Bewertungskarte weg, nahtloser Loop)
+
 # Neu in v2.23 (Bewertungskarte weg, nahtloser Loop)
 
 ## Keine Bewertungskarte mehr
