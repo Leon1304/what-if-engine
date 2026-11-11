@@ -477,11 +477,13 @@ Zusätzliche Felder in `THUMB` (je Variante), sparsam 1–2 pro Thumbnail:
 ## Querformat 16:9 (normale YouTube-Videos)
 - `CFG.aspect: '16:9'` rendert im Querformat. `--w` bleibt die kurze Seite: `--w 1440` (Standard, 2K) ergibt 2560 × 1440, `--w 2160` 4K. Der Workflow `render` erkennt das selbst und teilt lange Videos in bis zu 20 Blöcke (Dauer ÷ 15 s).
 - Das HUD rechnet in Bildhöhe: Badge und Zähler oben links, Captions mit `CFG.capPos: 'low'` als Untertitel unten (`CFG.capWords` 9–10 passt im Querformat). Endcard und Karten bleiben mittig.
+- `CFG.subtitles: true` (mit `karaoke: false`): jede Caption-Seite steht sofort komplett da, wie klassische Untertitel; gut für lange Erklärvideos.
 - Kamera: die vertikale `fov` wird mit `CFG.fovScale` multipliziert (Querformat-Standard 0.68), damit `shot()`-Presets wie im Hochformat sitzen. Callouts (`CALLOUTS`, `RULER`) sind bisher fürs Hochformat ausgelegt.
 - Thumbnail im Querformat: Text links (`THUMB.text`), Motiv rechts in die Bildhälfte legen. YouTube nimmt Thumbnails bis 2 MB: Cover vor dem Hochladen auf 1280 × 720 verkleinern.
 - Kontaktbogen: Kacheln 480 × 270, drei pro Reihe.
 
 ## Gelände
+- `water({ waves: t => … })`: Seegang darf eine Funktion der Zeit sein (Sturm zieht auf, legt sich).
 - `ground({ coast, beach: 45 })`: `beach` = Breite des Sandstreifens in m (Standard 5; Omaha bei Ebbe 40–60), der Sand bleibt flach.
 - `ridge({ x0, x1, foot, crest, back, end, h, kind: 'bluff' | 'cliff' | 'dune', taper, rough, grass, face, sand })`: erhöhter Streifen entlang x – Steilufer hinter einem Strand, Klippe (Pointe du Hoc), Düne. Steigt von `foot` (Seeseite, +z) bis `crest`, flach bis `back`, fällt bis `end`. Nach `ground()` aufrufen: `groundH` enthält ihn danach (Figuren, `biome`, Bunker stehen darauf). Felsige Klippe mit Geröll am Fuß bei `kind: 'cliff'`.
 - `hedgerow(p, [[x, z], …], { h: 2.3, bank, gap, trees: 0.12, colors, seed })`: normannische Bocage-Hecke auf Erdwall, ab und zu ein Baum.

@@ -2280,7 +2280,7 @@ function traffic(loops, o = {}) {   // cars driving around closed loops; until: 
 let waterH = () => -999;
 // --- sea: water (sky reflection by fresnel, sun glint, whitecaps, shore foam), underwater (caustics, light shafts, bubbles, plankton), reef (coral, seaweed, kelp), fish schools, shark, jellyfish, diver + swim(), submarine ---
 function water(o = {}) {   // animated low-poly sea; level: number or t => number (floods, tsunamis); reflects the sky at grazing angles, foam on crests and along the shore
-  const size = o.size ?? 600, seg = o.seg ?? 110, amp = o.waves ?? 0.35, ox = o.x ?? 0, oz = o.z ?? 0;
+  const size = o.size ?? 600, seg = o.seg ?? 110, ampF = typeof o.waves === 'function' ? o.waves : (w => () => w)(o.waves ?? 0.35), ox = o.x ?? 0, oz = o.z ?? 0;   // v2.25: waves may be t => height (storm builds up)
   const geo = new THREE.PlaneGeometry(size, size, seg, seg); geo.rotateX(-Math.PI / 2);
   const pos = geo.attributes.position, base = Float32Array.from(pos.array), lvl = typeof o.level === 'function' ? o.level : () => o.level ?? 0, n = pos.count;
   const col = new Float32Array(n * 3); geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
@@ -2292,11 +2292,11 @@ function water(o = {}) {   // animated low-poly sea; level: number or t => numbe
         outgoingLight = mix(outgoingLight, sk, clamp(fr * uRefl, 0.0, 0.6)); }
       #include <opaque_fragment>`); };
   const me = dyn(mesh(world, geo, m, ox, 0, oz, { cast: false }));
-  const H = (x, z, t) => amp * (0.6 * Math.sin(x * 0.18 + t * 1.3) + 0.4 * Math.sin(z * 0.23 - t * 1.1) + 0.5 * Math.sin((x + z) * 0.09 + t * 0.7));
+  const H = (x, z, t) => ampF(t) * (0.6 * Math.sin(x * 0.18 + t * 1.3) + 0.4 * Math.sin(z * 0.23 - t * 1.1) + 0.5 * Math.sin((x + z) * 0.09 + t * 0.7));
   waterH = (x, z, t) => lvl(t) + H(x, z, t);
   const deep = new THREE.Color(o.color ?? '#2F6FA8'), shal = new THREE.Color(o.shallow ?? '#3FB8C0'), foam = new THREE.Color('#F2FAFF'), c = new THREE.Color(), gH = new Float32Array(n);
   for (let i = 0; i < n; i++) gH[i] = groundH(base[i * 3] + ox, base[i * 3 + 2] + oz);
-  tick(t => { const L = lvl(t);
+  tick(t => { const L = lvl(t), amp = ampF(t);
     for (let i = 0; i < n; i++) { const x = base[i * 3] + ox, z = base[i * 3 + 2] + oz, h = H(x, z, t), d = L - gH[i]; pos.setY(i, d < 0.12 ? gH[i] - 0.4 : L + h);   // dry land: tuck the water under the ground
       const sh = clamp(1 - d / 3.5), cr = o.foam === false ? 0 : clamp((h / (amp * 1.5) - 0.78) * 4) * 0.65 * clamp((amp - 0.2) / 0.5), sf = o.foam === false || d < 0.12 ? 0 : clamp(1 - d / 0.6) * (0.45 + 0.4 * Math.sin(t * 2.2 - d * 6 + x * 0.3));
       c.copy(deep).lerp(shal, sh * 0.6).lerp(foam, clamp(Math.max(cr, sf))); col[i * 3] = c.r; col[i * 3 + 1] = c.g; col[i * 3 + 2] = c.b; }
@@ -7714,7 +7714,7 @@ function bunker(p, x, z, o = {}) {
     B.muzzle = wwPos(x, y, z, ry, 0, 1.02, 1.3);
   }
   B.fire = (t, f = {}) => { muzzle(B.muzzle, [t], { size: f.flash ?? (kind === 'casemate' ? 4.5 : 1.6), life: 0.09 }); emit('smoke', { at: B.muzzle, t0: t, burst: 10, size: 1.4, speed: 2.5, life: 3, opacity: 0.5 }); sfx(t, 'cannon', f.v ?? 0.7);
-    if (f.at) { const P = toV(f.at), d = P.distanceTo(v3(...B.muzzle)) / 320; explode(P.x, P.y, P.z, t + d, { size: f.size ?? 0.9 }); } };
+    if (f.at) { const P = toV(f.at), d = P.distanceTo(v3(...B.muzzle)) / 320; explode(P.x, P.y, P.z, t + d, { size: f.size ?? 0.9, fx: f.fx ?? false }); if (!f.fx) sfx(t + d, 'explosion', 0.45); } };
   B.mg = (t0, t1, f = {}) => mgFire(B.muzzle, { t0, t1, ...f });
   return B;
 }
@@ -7855,7 +7855,7 @@ function barrageBalloon(p, o = {}) {
   const top = t => { const A = atF(t); return [A[0] + 3 * Math.sin(t * 0.13 + sd), A[1] + h + 1.2 * Math.sin(t * 0.4 + sd), A[2] + 3 * Math.cos(t * 0.11 + sd)]; };
   tick(t => { const A = atF(t), T = top(t); g.position.set(...T); b.rotation.y = (o.ry ?? 0) + 0.3 * Math.sin(t * 0.07 + sd); b.rotation.z = 0.05 * Math.sin(t * 0.5 + sd);
     const pa = lg.attributes.position; pa.setXYZ(0, A[0], A[1], A[2]); pa.setXYZ(1, T[0], T[1] - L * 0.2, T[2]); pa.needsUpdate = true; });
-  return { g, top };
+  return { g, top, line };
 }
 
 // --- decoys: Operation Fortitude ------------------------------------------------------------------------------------
@@ -8483,7 +8483,7 @@ function updateHud(t) {
     const pg = b.instant ? 0 : capPageOf[cw] ?? 0;
     if (pg !== capPage) { capPage = pg; capWords.forEach((w, i) => { w.style.display = (b.instant || capPageOf[i] === pg) ? '' : 'none'; }); }
     capWords.forEach((w, i) => {
-      const k = b.instant ? 1 : clamp((lt - st(i)) / 0.16), on = !!CFG.karaoke && lt >= st(i) && (i === n - 1 || lt < st(i + 1));
+      const k = b.instant || (CFG.subtitles && capPageOf[i] === pg) ? 1 : clamp((lt - st(i)) / 0.16), on = !!CFG.karaoke && lt >= st(i) && (i === n - 1 || lt < st(i + 1));
       const s = (k <= 0 ? 0.6 : b.instant ? 1 : 1 + (EASE.back(k) - 1) * 0.6) * (on ? 1.06 : 1);
       if (w.classList.contains('on') !== on) w.classList.toggle('on', on);
       w.style.opacity = ((k > 0 ? 1 : 0) * out).toFixed(3);
