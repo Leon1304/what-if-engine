@@ -14,19 +14,23 @@ story = open(f'{slug}.story.js', encoding='utf-8').read().strip()
 scene = open(f'{slug}.scene.js', encoding='utf-8').read().strip()
 
 if re.search(r"kind:\s*'(explain|conspiracy|debunk)'", story) and re.search(r'would you have done', story, re.I):
-    print('WARNING: explainer / conspiracy videos end on a fitting question, not "What would you have done?" — change END.cta / say / review.say')
+    print('WARNING: explainer / conspiracy videos end on a fitting question, not "What would you have done?" — change END.cta / say / loop')
 _d = re.search(r"\bdur:\s*([\d.]+)", story)
 if re.search(r"kind:\s*'(explain|conspiracy|debunk)'", story) and _d and float(_d.group(1)) > 52:
-    print(f'WARNING: explainer / conspiracy video is {float(_d.group(1)):.0f} s — target 40–50 s (max 52): 1–2 sentences per beat, exactly 3 steps of 5–6 s, GUESS or MYTH (not both), one FACTS card, endcard + review ~7 s')
+    print(f'WARNING: explainer / conspiracy video is {float(_d.group(1)):.0f} s — target 40–50 s (max 52): 1–2 sentences per beat, exactly 3 steps of 5–6 s, GUESS or MYTH (not both), one FACTS card, end card + loop ≤ 6 s')
 # v2.20 retention + sound checks (story videos: 50–56 s, short outro, loop, flash-forward; every mood / ambience must exist in the engine)
 _story = not re.search(r"kind:\s*'(explain|conspiracy|debunk)'", story)
 _e = re.search(r"const END\s*=\s*\{\s*t:\s*([\d.]+)", story)
 if _story and _d and float(_d.group(1)) > 58:
-    print(f'WARNING: story video is {float(_d.group(1)):.0f} s — target 50–56 s (max 58): cut card and intro seconds (one intro beat, end card + review ≤ 6 s), not narration')
+    print(f'WARNING: story video is {float(_d.group(1)):.0f} s — target 50–56 s (max 58): cut card and intro seconds (one intro beat, end card + loop ≤ 6 s), not narration')
 if _d and _e and float(_d.group(1)) - float(_e.group(1)) > 6.5:
-    print(f'WARNING: end card + review take {float(_d.group(1)) - float(_e.group(1)):.1f} s — keep them ≤ 6 s and let the scene keep moving underneath (viewers swipe on static cards)')
+    print(f'WARNING: end card + loop take {float(_d.group(1)) - float(_e.group(1)):.1f} s — keep them ≤ 6 s and let the scene keep moving underneath (viewers swipe on static cards)')
+if re.search(r"\breview:\s*\{", story):
+    print('WARNING: END.review is gone since v2.22 (no review card) — delete it; the closing line goes in END.say, the loop line in END.loop')
+if not re.search(r"\bloop:\s*false", story) and not re.search(r"\bloop:\s*['\"`]", story):
+    print('NOTE: no END.loop — add the loop line (≤ 8 words) that ends at the seam and leads into the first spoken line, e.g. loop: "…which is exactly why nobody should ever ask:"')
 if re.search(r"\bloop:\s*false", story):
-    print('NOTE: CFG.loop is off — every video should loop back into its hook (last spoken line leads into the title question)')
+    print('NOTE: CFG.loop is off — every video should loop seamlessly back into its hook (dissolve + END.loop line)')
 if _story and _d and float(_d.group(1)) >= 40 and not re.search(r"\bconst TEASE\b", story):
     print('NOTE: no TEASE flash-forward — add one 0.5–0.7 s glimpse of the climax at the mid-video dip (~40–55 % of the runtime)')
 if re.search(r"prev:\s*\{[^}]*mode:\s*'card'", story):

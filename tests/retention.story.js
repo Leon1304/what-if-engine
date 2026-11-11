@@ -2,7 +2,7 @@ const CFG = {
   dur: 22,                 // seconds (15–60; with all running gags 45–50)
   seed: 7,                 // change for a different random layout
   locale: 'en-US',         // every on-screen text is English
-  kind: 'story',           // story | explain | conspiracy (badge 'Explaining' / 'Conspiracy', documentary voice, review foot 'Sources in the description')
+  kind: 'story',           // story | explain | conspiracy (badge 'Explaining' / 'Conspiracy', documentary voice, no #ep)
   badge: 'What if',        // explain: 'Explaining' by default
   accent: 'yellow',        // yellow | blue | red | green | orange | pink | purple | lime | cyan (or a hex) | auto (from the title) — one per series, varies between series/videos
   filter: 'film',          // none | film | crt
@@ -65,9 +65,9 @@ const STATS = [
   { label: 'Fence', keys: [[0, 100], [11.1, 100], [12.6, 0]], fmt: 'pct', show: 'b2', bad: true, up: 'good' },
   { label: 'Survival', keys: [[0, 64], ['b2-0.1', 64], ['b2+0.6', 41], [11.1, 41], [12.6, 12], ['b5+1.2', 12], ['b5+2.4', 81]], fmt: 'pct', show: 'b1', up: 'good' }
 ];
-// End card: question drives comments. review: { t, stars, title, text, by, foot, say } = closing review card (narrator reads it)
-// END.ending = { type: 'survived' | 'dead', n: 2, of: 4, title } → result card instead of a vote (q/opts not needed), then the review
-const END = { t: 18.3, q: 'Silo, cellar or tractor – where do *you* hide?', opts: ['Silo', 'Cellar', 'Tractor'], cta: 'Comment A, B or C' };
+// End card: question drives comments. say = closing line, loop = last spoken line that leads into the hook (v2.22, no review card)
+// END.ending = { type: 'survived' | 'dead', n: 2, of: 4, title } → result card instead of a vote (q/opts not needed), then the loop
+const END = { t: 18.3, q: 'Silo, cellar or tractor – where do *you* hide?', opts: ['Silo', 'Cellar', 'Tractor'], cta: 'Comment A, B or C', loop: 'Because sooner or later, someone asks —' };
 // Sound: mood horror | epic | action | funny | science | chill | tense | party | triumph | sad — or score: [[t, mood], …] (music follows the scene).
 // mood 'none' (or score: false) = no music, only ambience + SFX — use it when no mood fits the topic; score segments may be 'none' too ([[0, 'none'], [21, 'tense']]).
 // sections [t, level 0..3]. amb: [[t0, t1, kind, vol]] ambience beds: night farm wind blizzard rain storm fire indoor crowd (zombies) city ocean space engine
@@ -86,7 +86,7 @@ const AUDIO = {
     { t: 14.05, k: 'whoosh' }, { t: 15.6, k: 'ticks', dur: 1.2 }, { t: 16.8, k: 'ding' }, { t: 18.3, k: 'stinger' }
   ]
 };
-// ---- Explainer tools (v2.6) — optional, also usable in story videos. CFG.kind: 'explain' → badge 'Explaining', 'conspiracy' (conspiracy / myth checks) → badge 'Conspiracy'; both: no #ep, documentary voice, review foot 'Sources in the description' ----
+// ---- Explainer tools (v2.6) — optional, also usable in story videos. CFG.kind: 'explain' → badge 'Explaining', 'conspiracy' (conspiracy / myth checks) → badge 'Conspiracy'; both: no #ep, documentary voice ----
 // CALLOUTS = [{ t, dur: 2.8, at, kind, text, sub, side, off, dy, value, fmt, color, size, r, gap, sfx }] — pinned to a 3D point, video time ('b3+0.4'). at: track name | [x,y,z] | t => [x,y,z] | object / rig
 //   kind: label (dot + leader line) | arrow (big arrow pointing at it) | ring (circle around it: size in % of the width or r in metres) | tag (chip right above it)
 //   side: right | left | up | down | upright | upleft | downright | downleft — off: [dx, dy] in % of the width · live value: text: 'Falling at {v}', value: t => v, fmt: 'speed'
@@ -104,7 +104,7 @@ const AUDIO = {
 // ---- v2.7 ----
 // Stats: type 'meter' = needle gauge 0–100 (left / right labels, e.g. Believability: left: 'Nope', right: 'Totally real'), type 'timeline' = year strip (from, to, marks: [[1969, 'Moon landing']], fmt 'year').
 // SPLIT = [{ t, dur, a: 'main' | { p, l, fov, p2, l2 }, b: { … }, labels: ['Myth', 'Reality'], kinds: ['bad', 'good'] }] — two cameras top / bottom, wipes in; no callouts, AO or lens blur meanwhile.
-// CFG.loop (default true since v2.20) — the last 0.3 s whip out and the cards fade, so the restart lands on the hook; the last spoken line should lead into the title question. false = off.
+// CFG.loop (default true) — v2.22: the hook's pre-roll dissolves in over the last CFG.loopFade s (0.6), END.loop leads into the hook. false = off.
 // ---- v2.20 retention ----
 // TEASE = [{ t: 'b5', dur: 0.6, at: 'b11+0.4', label: 'Later tonight' }] — flash-forward: for dur s the frame shows scene + camera at video time `at` (the climax), HUD, voice and captions keep
 //   running; white flash + whoosh in and out. One per video at the mid-video dip (~40–55 % of the runtime).

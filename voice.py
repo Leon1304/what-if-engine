@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # voice.py — offline voice-over (Kokoro TTS) for a video: one spoken line per caption beat + the end-card question
 #   python3 voice.py <slug> [--voice deep|deep-uk|narrator|<kokoro voice>] [--speed 1.06] [--pitch -1.1]   CFG.voice: { gap: 0.22 } = pause after a sentence
-#   reads <slug>.story.js (CFG.voice, BEATS[].say, END.say), writes <slug>.voice.mp3 + <slug>.voice.json (word timings)
+#   reads <slug>.story.js (CFG.voice, BEATS[].say, END.say, END.loop), writes <slug>.voice.mp3 + <slug>.voice.json (word timings)
 #   assemble.py runs this automatically and embeds the result; the music ducks under the voice.
 #   BEATS[].say may contain ' | ' = a deliberate pause (0.3 s) · BEATS[].tone: calm | tense | excited | whisper | shout | sad (tempo + loudness)
 #   lines spoken by an on-screen character (who: 'steve' | 'you' | any char name) get a mouth track (open/shape per 1/30 s) → lip sync in the video
@@ -44,12 +44,11 @@ r = subprocess.run(['node', '-e', js, f'{slug}.story.js'], capture_output=True, 
 if r.returncode: sys.exit('could not read story: ' + r.stderr[-800:])
 S = json.loads(r.stdout)
 CFG, BEATS, END, DUR = S['CFG'], S['BEATS'], S.get('END'), S['DUR']
-if LANG != 'en':   # translated texts: { beats: [{ text, say }], end: { say }, review: { say, text } } — same order as BEATS
+if LANG != 'en':   # translated texts: { beats: [{ text, say }], end: { say, loop } } — same order as BEATS
     TR = json.load(open(f'{slug}.{LANG}.json', encoding='utf-8'))
     for b, tb in zip(BEATS, TR.get('beats', [])):
         if tb: b.update({k: v for k, v in tb.items() if k in ('text', 'say', 'kick')})
-    if END and TR.get('end'): END.update({k: v for k, v in TR['end'].items() if k in ('say', 'q', 'cta')})
-    if END and END.get('review') and TR.get('review'): END['review'].update({k: v for k, v in TR['review'].items() if k in ('say', 'text', 'title')})
+    if END and TR.get('end'): END.update({k: v for k, v in TR['end'].items() if k in ('say', 'q', 'cta', 'loop')})
 vc = CFG.get('voice', 'documentary' if CFG.get('kind') in ('explain', 'conspiracy', 'debunk') else 'deep')   # explainers + debunks: calm documentary narrator by default
 if vc in (None, False, 'none', 'off'):
     for f in (f'{OUT}.voice.json', f'{OUT}.voice.mp3'):
@@ -95,11 +94,14 @@ for i, b in enumerate(BEATS):
     pre = sum(weight(w) for w in kick.split()) if kick and not isinstance(b.get('say'), str) else 0
     who = b.get('who') if isinstance(b.get('who'), str) else None
     lines.append((i, b['t'] + (0.1 if b['t'] < 0.05 else 0.06), nxt - b['t'] - 0.16, say, cap, pre, b.get('voice') or CAST_VOICE.get(who), b.get('pace', 1) * TONES.get(b.get('tone'), (1, 1))[0], who, TONES.get(b.get('tone'), (1, 1))[1]))
-RV = (END or {}).get('review')
 # explainer / conspiracy videos: the closing line follows the question on the end card ("Did you believe it? A, B or C — drop your pick in the comments.")
-# instead of the story outro "What would you have done?"; a stray story outro in END.say / review.say is replaced
+# instead of the story outro "What would you have done?"; a stray story outro in END.say / END.loop is replaced
 EXPL = CFG.get('kind') in ('explain', 'conspiracy', 'debunk')
 WWYD = re.compile(r"\s*What would you have done\??(\s*Drop it in the comments\.?)?", re.I)
+LOOP_TAIL = 0.12   # v2.22: the loop line ends this long before the seam
+LOOP_SAY = clean(END['loop']) if END and CFG.get('loop', True) is not False and isinstance(END.get('loop'), str) and END['loop'].strip() else ''
+if EXPL and LOOP_SAY and WWYD.search(LOOP_SAY): LOOP_SAY = WWYD.sub(' ', LOOP_SAY).strip()
+LOOP_EST = (0.38 * len(LOOP_SAY.split()) + 0.25 * max(1, len(re.findall(r'[.!?…:—]', LOOP_SAY))) + 0.3) if LOOP_SAY else 0
 def outro():
     opts = (END or {}).get('opts') or []; q = clean((END or {}).get('q') or '')
     ab = ', '.join('ABCD'[:len(opts) - 1]) + ' or ' + 'ABCD'[len(opts) - 1] if len(opts) > 1 else ''
@@ -107,12 +109,9 @@ def outro():
 if END and END.get('say') is not False and (isinstance(END.get('say'), str) or END.get('q')):
     say = clean(END['say']) if isinstance(END.get('say'), str) else (outro() if EXPL and END.get('q') else clean(END['q']))
     if EXPL and WWYD.search(say): say = WWYD.sub(' ', say).strip() or outro()
-    lines.append(('end', END['t'] + 0.35, (RV['t'] - 0.35 if RV else DUR) - END['t'] - 0.6, say, [], 0, None, END.get('pace', 1), None, 1))
-if RV and RV.get('say') is not False and (LANG == 'en' or isinstance(RV.get('say'), str)):
-    n = int(RV.get('stars', 1)); words = ['Zero', 'One', 'Two', 'Three', 'Four', 'Five']
-    say = clean(RV['say']) if isinstance(RV.get('say'), str) else clean(f"{words[n] if 0 <= n <= 5 else n} star{'' if n == 1 else 's'}. {RV.get('text', '')}")
-    if EXPL and WWYD.search(say): say = WWYD.sub(' ', say).strip() or clean(f"{words[n] if 0 <= n <= 5 else n} star{'' if n == 1 else 's'}. {RV.get('text', '')}")
-    lines.append(('review', RV['t'] + 1.3, DUR - RV['t'] - 1.6, say, [], 0, None, RV.get('pace', 1), None, 1))
+    lines.append(('end', END['t'] + 0.35, DUR - LOOP_EST - LOOP_TAIL - 0.25 - END['t'] - 0.35, say, [], 0, None, END.get('pace', 1), None, 1))
+if LOOP_SAY:   # v2.22 loop line: right-aligned below, so it ends just before the seam and the restart (hook) completes it
+    lines.append(('loop', DUR - LOOP_EST - LOOP_TAIL, LOOP_EST + 0.5, LOOP_SAY, [], 0, None, (END or {}).get('pace', 1), None, 1))
 
 # --- synthesis (cached per line) ---
 from kokoro_onnx import Kokoro
@@ -173,12 +172,17 @@ def mouth_track(a):   # per 1/30 s: opening 0–9 (loudness) and mouth shape a (
         b1 = (fr > 200) & (fr < 950); f1 = fr[b1][np.argmax(sp_[b1])]; b2 = (fr > max(800, f1 + 250)) & (fr < 2900); f2 = fr[b2][np.argmax(sp_[b2])]   # rough formants
         sh.append('f' if hi > 0.8 * (lo + mid) or zc > 0.25 else 'w' if f2 > 1900 else 'r' if f1 < 430 and f2 < 1350 else 'a')
     return ''.join(str(min(9, int(v * 9.99))) for v in op), ''.join(sh)
+last_end = 0.0
+LOOP_D = len(speak(LOOP_SAY, speed * (END or {}).get('pace', 1), None, GAP)) / SR if LOOP_SAY else 0   # real length of the loop line (cached), so the closing line knows its room
 for key, t0, win, say, cap, pre, vo, pace, who, lgain in lines:
     sp, gap = speed * pace, GAP; a = speak(say, sp, vo, gap); d = len(a) / SR
+    if key == 'end' and LOOP_SAY: win = DUR - LOOP_TAIL - LOOP_D - 0.25 - t0
+    if key == 'loop': win = max(0.5, DUR - LOOP_TAIL - (last_end + 0.25))
     if d > win and win > 0.4:   # too long: first shorter pauses, then speak faster (max 1.3×)
         gap = 0.12; a = speak(say, sp, vo, gap); d = len(a) / SR
         if d > win:
             sp = min(1.3, speed * d / win * 1.03); a = speak(say, sp, vo, gap); d = len(a) / SR
+    if key == 'loop': t0 = max(last_end + 0.25, DUR - LOOP_TAIL - d)   # ends right at the seam
     ok = d <= win + 0.05
     note = 'ok' if gap == GAP and sp <= speed * pace * 1.06 else 'ok, rushed (short pauses) – shorten text or lengthen beat'
     report.append(f"  {str(key):>3}  {d:4.2f}s / {win:4.2f}s  ×{sp:.2f}  {note if ok else 'TOO LONG – shorten text or lengthen beat'}  “{say}”")
@@ -186,7 +190,7 @@ for key, t0, win, say, cap, pre, vo, pace, who, lgain in lines:
     if rms_ > 1e-4: a = a * float(np.clip(0.085 / rms_, 0.5, 2.5))   # same loudness for every line
     if who: o_, s_ = mouth_track(a); MOUTH.append({'who': who, 't0': round(t0, 3), 'o': o_, 's': s_})
     i0 = int(t0 * SR); n = min(len(a), len(track) - i0); track[i0:i0 + n] += a[:n] * lgain
-    segs.append([round(t0, 3), round(t0 + d, 3)])
+    segs.append([round(t0, 3), round(t0 + d, 3)]); last_end = max(last_end, t0 + d)
     if cap:   # word onsets: spread token weights over the voiced frames only (pauses are skipped)
         hop = int(0.01 * SR); rms = np.array([np.sqrt((a[j:j + hop] ** 2).mean()) for j in range(0, len(a) - hop, hop)])
         voiced = rms > max(0.012, 0.12 * np.percentile(rms, 90)); cum = np.cumsum(voiced) * 0.01

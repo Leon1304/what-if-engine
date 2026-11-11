@@ -264,7 +264,7 @@ Props sind statisch und werden beim Start zu wenigen Meshes verschmolzen (`bake`
 - Zeitleiste (v2.7): Zähler `type: 'timeline'`, `from`, `to`, `marks: [[1969, 'Apollo 11'], …]`, Wert = Jahr (`fmt: 'year'`, negativ = BC).
 - Kamera auf einen Anker (v2.8): `focusShot(anker, t, dauer, { dist, az, el, center, fov, push })` in der Szene fügt einen Schnitt mit langsamem Push-in in `CAM` ein, z. B. auf ein Pinnwand-Foto (`B.item(2)`, `dist: 1.6`), einen Globus-Pin (`center` = Planetenmitte, dann schaut die Kamera von außen drauf), eine Schicht oder ein Lineup-Objekt. Spart lange Kamera-Listen.
 - Planeten (v2.8): `planet()` ist jetzt glatt mit weichen Wolken und Atmosphärenrand (`smooth: false` = alter kantiger Look).
-- Loop-Ende (v2.7, Pflicht in Erklär- und Conspiracy-Videos): `CFG.loop: true`. Der letzte gesprochene Satz (meist in `review.say`) endet offen und führt in die Titelfrage, z. B. „… and that's exactly why people still ask:“ → Hook „What if the Moon landing was fake?“. Die Engine wischt in den letzten 0,3 s weg, damit der Neustart wie der nächste Schnitt wirkt.
+- Loop-Ende: seit v2.22 nahtlose Überblendung statt Wisch, siehe „Neu in v2.22“ unten.
 - Zähler mit Einheiten: `fmt: 'speed' | 'dist' | 'height' | 'depth' | 'temp' | 'mass'` (metrisch eingeben, zeigt z. B. „195 km/h · 121 mph“); `type: 'graph'` zeichnet die Kurve (z. B. Fallgeschwindigkeit bis zur Endgeschwindigkeit, `mark` = Grenzwert).
 
 # Neu in v2.16
@@ -419,8 +419,8 @@ Sie wirken zusätzlich zu `CAM`:
 `CFG.series.prev = { q, opts, pick }` zeigt ab v2.20 standardmäßig (`mode: 'chip'`) nur einen kleinen Chip „You chose: Cellar ✓“ neben der Badge (`dur` 3,5 s); Captions und Action laufen ab Frame 0 normal. `mode: 'card'` = alte Vollbild-Endcard der Vorfolge (assemble.py warnt).
 
 ## Ende über laufender Szene, Loop immer an
-- `CFG.endDim` (0,38, vorher fest 0,55): Abdunklung unter Endcard und Bewertung; Ende „dead“ mindestens 0,7. Die Kamera soll unter den Karten weiterfahren (kein Standbild).
-- `CFG.loop` ist jetzt standardmäßig an (alle Videos wischen in den letzten 0,3 s zurück in den Hook); `loop: false` schaltet es ab.
+- `CFG.endDim` (0,38, vorher fest 0,55): Abdunklung unter der Endcard; Ende „dead“ mindestens 0,7. Die Kamera soll unter den Karten weiterfahren (kein Standbild).
+- `CFG.loop` ist standardmäßig an; `loop: false` schaltet es ab. Seit v2.22 Überblendung statt Wisch (unten).
 
 ## Musik nur, wenn sie passt
 - `AUDIO.mood: 'none'` oder `AUDIO.score: false` = keine Musik, nur Hintergrundgeräusche und SFX (die Geräusche werden dann etwas lauter gemischt). Einzelne Abschnitte gehen auch: `score: [[0, 'none'], [21, 'tense']]`.
@@ -428,7 +428,7 @@ Sie wirken zusätzlich zu `CAM`:
 - Fehlt ein Geräusch: im Objekt `AMB` im Sound-Abschnitt von `template.html` als neue Art bauen (Bausteine `bed`, `every`, `tone`, `nz`) und mitcommitten. `assemble.py` warnt bei unbekannten Stimmungen und Geräuscharten.
 
 ## assemble.py-Hinweise (v2.20)
-Story-Video über 58 s · Endcard + Bewertung über 6,5 s · `loop: false` · kein `TEASE` ab 40 s · Rückblick als Vollbild-Karte · unbekannte Musikstimmung oder Geräuschart.
+Story-Video über 58 s · Endcard + Loop über 6,5 s · `loop: false` · kein `TEASE` ab 40 s · Rückblick als Vollbild-Karte · unbekannte Musikstimmung oder Geräuschart.
 
 # Neu in v2.21 (Minen und Warnschilder)
 
@@ -450,6 +450,19 @@ Story-Video über 58 s · Endcard + Bewertung über 6,5 s · `loop: false` · ke
 - Waffe `pan` (Bratpfanne): `weapon(rig, 'pan')` + `swing` → Treffer mit Klong (`clang`).
 - Look von „you“ (`outfit`): `grey` · `silver` (Haarfarben), `scar` (Narbe über dem Auge), `workjacket` (olivgrüne Arbeitsjacke mit Kragen, Reißverschluss, Brusttaschen), `cardigan` (Strickjacke mit V-Ausschnitt und Knöpfen), `boots`, `readers` (dünne Lesebrille).
 - Querschnitt-Trick: `ground()` ist von unten unsichtbar. Eine Kamera knapp unter y = 0 zeigt Erdgeschoss und Keller zugleich (Puppenhaus-Schnitt); die Schnittkante davor mit Erd-Boxen gestalten.
+
+# Neu in v2.22 (Bewertungskarte weg, nahtloser Loop)
+
+## Keine Bewertungskarte mehr
+`END.review` wird ignoriert (Karte, Sterne, Stimme und Sounds sind raus); `assemble.py` warnt, wenn es noch in einer Story steht. Die CTA steht wieder auf der Endcard. Endcard + Loop zusammen höchstens 6 s.
+
+## Nahtloser Loop (`CFG.loop`, Standard an)
+- **Bild:** In den letzten `CFG.loopFade` s (0,6; 0,2–1,5) rendert die Engine zusätzlich Szene und Kamera zur Zeit t − DUR, also die Momente kurz vor Frame 0, und blendet sie weich über die letzte Einstellung (Canvas `#loopv`). Das letzte Bild ist damit Frame 0, der Neustart ist unsichtbar. Alles bleibt eine Funktion von t, also bildgenau im Export und in der Vorschau.
+- **HUD:** Endcard, Abdunklung, Captions, Callouts und Karten blenden mit aus; die Uhr springt schon in der Überblendung auf die Hook-Zeit, die Serien-Kopfzeile fährt nicht mehr ein (steht ab Frame 0), und ist `BEATS[0]` ein `instant`-Hook, blendet seine Caption in den letzten ~0,24 s genau so ein, wie sie auf Frame 0 steht.
+- **Ton:** Musik und SFX blenden über die Überblendung aus, der Master nur noch in den letzten 0,1 s (kein Klick); der erste Hit des Hooks (`boom` bei t = 0) landet auf dem Neustart.
+- **Loop-Satz `END.loop`:** `END = { …, say: 'What would you have done?', loop: 'Which is why you should never ask —' }`. `voice.py` legt ihn rechtsbündig, er endet 0,12 s vor dem Schnitt und führt grammatisch in den ersten gesprochenen Satz (Hook). Höchstens ca. 8 Wörter; der Schlusssatz `END.say` bekommt automatisch den Platz davor (zu lang → TOO LONG in der Tabelle). In Sprachversionen: `end.loop` in `<slug>.<lang>.json`.
+- **Tipp:** Die letzte `CAM`-Einstellung schaut grob dorthin, wohin die Hook-Einstellung schaut (gleicher Ort, ähnliche Richtung), dann wirkt die Überblendung wie eine einzige Kamerafahrt.
+- Test: `tests/loop.story.js` (Shot bei 8 s liegt mitten in der Überblendung).
 
 # Tests
 `bash tests/run.sh [name …]` baut die Beispiel-Story aus `template.html` und alle Szenen in `tests/` und rendert je drei Bilder; Seitenfehler lassen den Test scheitern. Der Workflow `test` läuft bei jeder Engine-Änderung auf GitHub. Neue Funktionen bekommen eine kleine Testszene in `tests/<thema>.story.js` + `.scene.js`.

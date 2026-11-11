@@ -13,6 +13,7 @@
   body { margin: 0; background: #07080B; display: grid; place-items: center; overflow: hidden; font-family: var(--ui); -webkit-font-smoothing: antialiased; color: #fff; }
   #stage { position: relative; width: 540px; height: 960px; overflow: hidden; container-type: size; background: #000; cursor: pointer; -webkit-user-select: none; user-select: none; touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
   #gl { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+  #loopv { position: absolute; inset: 0; width: 100%; height: 100%; display: block; opacity: 0; pointer-events: none; }   /* v2.22 loop: the hook's first frames dissolve in over the last shot */
   #dim, #flash { position: absolute; inset: 0; pointer-events: none; opacity: 0; }
   #dim { background: #000; }
   #flash { background: #fff; }
@@ -72,7 +73,7 @@
   #end .follow b { color: var(--accent); }
   #chan { display: block; margin: 0 0 1.1cqw; font: 800 2.3cqw/1 var(--ui); letter-spacing: .03em; color: rgba(255, 255, 255, .9); text-shadow: 0 .3cqw 1cqw #000; white-space: nowrap; }   /* channel handle: top-left, first line of the HUD */
   #chan:empty { display: none; }
-  #end .cta, #rev .cta { margin-top: 4.2cqw; font: 900 3.1cqw/1.25 var(--ui); letter-spacing: .08em; text-transform: uppercase; color: var(--accent); text-shadow: 0 .3cqw 1cqw #000; }
+  #end .cta { margin-top: 4.2cqw; font: 900 3.1cqw/1.25 var(--ui); letter-spacing: .08em; text-transform: uppercase; color: var(--accent); text-shadow: 0 .3cqw 1cqw #000; }
   /* Dr. Steve & co: lower-third name card above the caption */
   #cap .who { display: inline-flex; flex-direction: column; align-items: flex-start; gap: 1cqw; background: #fff; color: #111; padding: 1.7cqw 2.8cqw 1.6cqw 2.4cqw; border-radius: 1.6cqw; border-left: 1.1cqw solid #3FA9F5; margin-bottom: 2.6cqw; text-align: left; box-shadow: 0 1cqw 2.6cqw rgba(0, 0, 0, .45); }
   #cap .who b { font: 900 3.8cqw/1 var(--ui); letter-spacing: .02em; text-transform: uppercase; }
@@ -81,21 +82,6 @@
   #stamp { position: absolute; left: 7cqw; right: 0; top: 24cqh; text-align: center; opacity: 0; pointer-events: none; }
   #stamp b { display: inline-block; font: 400 9cqw/1 var(--cap); text-transform: uppercase; letter-spacing: .02em; padding: 1.6cqw 3.4cqw 1.2cqw; border: 1.1cqw solid; border-radius: 2cqw; background: rgba(10, 10, 12, .55); transform: rotate(-8deg); text-shadow: 0 .4cqw 1.6cqw rgba(0, 0, 0, .6); }
   #stamp.wrong b { color: #FF3B4A; border-color: #FF3B4A; } #stamp.right b { color: #3EE07A; border-color: #3EE07A; }
-  /* review card: the last card of every video */
-  #rev { position: absolute; left: 7cqw; right: 0; top: 43cqh; transform: translateY(-50%); text-align: center; opacity: 0; }
-  #rev .card { display: inline-block; width: 82%; text-align: left; background: #fff; color: #111; border-radius: 3cqw; padding: 4cqw 4.4cqw 3.4cqw; box-shadow: 0 2cqw 5cqw rgba(0, 0, 0, .5); }
-  #rev .hd { display: flex; align-items: center; gap: 2.4cqw; }
-  #rev .hd > b { flex: none; display: grid; place-items: center; width: 8.4cqw; height: 8.4cqw; border-radius: 50%; background: var(--accent); color: var(--ink); font: 900 4cqw/1 var(--ui); }
-  #rev .hd span { display: flex; flex-direction: column; gap: .8cqw; }
-  #rev .hd i { font: 800 3.4cqw/1 var(--ui); font-style: normal; }
-  #rev .hd em { font: 700 2.4cqw/1 var(--ui); font-style: normal; color: #2E9E5B; letter-spacing: .04em; text-transform: uppercase; }
-  #rev .st { display: flex; gap: 1cqw; margin: 3cqw 0 2.2cqw; }
-  #rev .st span { width: 7.4cqw; height: 7.4cqw; color: #D8D8D8; }
-  #rev .st span.on { color: #FFB400; }
-  #rev .st svg { width: 100%; height: 100%; display: block; fill: currentColor; }
-  #rev .ti { font: 400 6.2cqw/1.05 var(--cap); text-transform: uppercase; }
-  #rev .tx { margin-top: 1.8cqw; font: 600 4cqw/1.3 var(--ui); color: #333; }
-  #rev .ft { margin-top: 2.8cqw; padding-top: 2.2cqw; border-top: .3cqw solid #EEE; font: 700 2.6cqw/1 var(--ui); color: #8A8A8A; }
   /* preview controls (never in the exported video) */
   #ui { position: absolute; left: 0; right: 0; bottom: 0; height: 12cqh; display: flex; flex-direction: column; justify-content: flex-end; pointer-events: none; }
   #pill { align-self: center; margin-bottom: 3cqw; display: inline-flex; gap: 1.6cqw; align-items: center; font: 800 3cqw/1 var(--ui); letter-spacing: .06em; background: rgba(255, 255, 255, .94); color: #111; padding: 2cqw 3.2cqw; border-radius: 99cqw; box-shadow: 0 1cqw 3cqw rgba(0, 0, 0, .4); transition: opacity .3s; }
@@ -135,8 +121,6 @@
   .stat.crit { border-left-color: var(--bad); background: rgba(110, 12, 12, .74); }
   .stat.big { padding: 1cqw 1.9cqw .9cqw 1.6cqw; }
   .stat.big .v { font-size: 4.6cqw; } .stat.big .l { font-size: 2cqw; } .stat.big .ic { width: 3.4cqw; height: 3.4cqw; } .stat.big .bar { width: 21cqw; height: 2cqw; }
-  #rev .rc { margin-top: 2.4cqw; display: grid; grid-template-columns: 1fr auto; gap: 1cqw 2.4cqw; font: 700 2.8cqw/1.15 var(--ui); color: #555; }
-  #rev .rc b { font: 400 3.6cqw/1 var(--cap); color: #111; text-align: right; }
 
   /* explainer layer (v2.6): callouts pinned to 3D points, freeze frame, gauge, cards, step chip, graph stat */
   #xl { position: absolute; inset: 0; pointer-events: none; }
@@ -227,6 +211,7 @@
 <body>
 <div id="stage" role="img" aria-label="Animated vertical video: What if zombies attacked your farm?">
   <canvas id="gl"></canvas>
+  <canvas id="loopv"></canvas>
   <div id="dim"></div>
   <div id="thumb"></div>
   <div id="xl"><svg id="xlsvg" viewBox="0 0 100 177.78" preserveAspectRatio="none"></svg></div>
@@ -243,7 +228,6 @@
     <div id="xcard"></div>
     <div id="end"></div>
     <div id="prev"></div>
-    <div id="rev"></div>
   </div>
   <div id="flash"></div>
   <div id="ui">
@@ -290,7 +274,7 @@ const CFG = {
   dur: 22,                 // seconds (15–60; with all running gags 45–50)
   seed: 7,                 // change for a different random layout
   locale: 'en-US',         // every on-screen text is English
-  kind: 'story',           // story | explain | conspiracy (badge 'Explaining' / 'Conspiracy', documentary voice, review foot 'Sources in the description')
+  kind: 'story',           // story | explain | conspiracy (badge 'Explaining' / 'Conspiracy', documentary voice)
   badge: 'What if',        // explain: 'Explaining' by default
   accent: 'yellow',        // yellow | blue | red | green | orange | pink | purple | lime | cyan (or a hex) | auto (from the title) — one per series, varies between series/videos
   filter: 'film',          // none | film | crt
@@ -353,9 +337,10 @@ const STATS = [
   { label: 'Fence', keys: [[0, 100], [11.1, 100], [12.6, 0]], fmt: 'pct', show: 'b2', bad: true, up: 'good' },
   { label: 'Survival', keys: [[0, 64], ['b2-0.1', 64], ['b2+0.6', 41], [11.1, 41], [12.6, 12], ['b5+1.2', 12], ['b5+2.4', 81]], fmt: 'pct', show: 'b1', up: 'good' }
 ];
-// End card: question drives comments. review: { t, stars, title, text, by, foot, say } = closing review card (narrator reads it)
-// END.ending = { type: 'survived' | 'dead', n: 2, of: 4, title } → result card instead of a vote (q/opts not needed), then the review
-const END = { t: 18.3, q: 'Silo, cellar or tractor – where do *you* hide?', opts: ['Silo', 'Cellar', 'Tractor'], cta: 'Comment A, B or C' };
+// End card: question drives comments. say = closing line under the card, loop = the very last spoken line (v2.22): it leads into the hook, so the restart
+//   completes the sentence ("… which is exactly why nobody should ever ask:" → hook). The review card is gone since v2.22 (END.review is ignored).
+// END.ending = { type: 'survived' | 'dead', n: 2, of: 4, title } → result card instead of a vote (q/opts not needed), then the loop
+const END = { t: 18.3, q: 'Silo, cellar or tractor – where do *you* hide?', opts: ['Silo', 'Cellar', 'Tractor'], cta: 'Comment A, B or C', loop: 'Because sooner or later, someone asks —' };
 // Sound: mood horror | epic | action | funny | science | chill | tense | party | triumph | sad — or score: [[t, mood], …] (music follows the scene).
 // mood 'none' (or score: false) = no music, only ambience + SFX — use it when no mood fits the topic; score segments may be 'none' too ([[0, 'none'], [21, 'tense']]).
 // sections [t, level 0..3]. amb: [[t0, t1, kind, vol]] ambience beds: night farm wind blizzard rain storm fire indoor crowd (zombies) city ocean space engine
@@ -371,7 +356,7 @@ const AUDIO = {
     { t: 14.05, k: 'whoosh' }, { t: 15.6, k: 'ticks', dur: 1.2 }, { t: 16.8, k: 'ding' }, { t: 18.3, k: 'stinger' }
   ]
 };
-// ---- Explainer tools (v2.6) — optional, also usable in story videos. CFG.kind: 'explain' → badge 'Explaining', 'conspiracy' (conspiracy / myth checks) → badge 'Conspiracy'; both: no #ep, documentary voice, review foot 'Sources in the description' ----
+// ---- Explainer tools (v2.6) — optional, also usable in story videos. CFG.kind: 'explain' → badge 'Explaining', 'conspiracy' (conspiracy / myth checks) → badge 'Conspiracy'; both: no #ep, documentary voice ----
 // CALLOUTS = [{ t, dur: 2.8, at, kind, text, sub, side, off, dy, value, fmt, color, size, r, gap, sfx }] — pinned to a 3D point, video time ('b3+0.4'). at: track name | [x,y,z] | t => [x,y,z] | object / rig
 //   kind: label (dot + leader line) | arrow (big arrow pointing at it) | ring (circle around it: size in % of the width or r in metres) | tag (chip right above it)
 //   side: right | left | up | down | upright | upleft | downright | downleft — off: [dx, dy] in % of the width · live value: text: 'Falling at {v}', value: t => v, fmt: 'speed'
@@ -389,7 +374,9 @@ const AUDIO = {
 // ---- v2.7 ----
 // Stats: type 'meter' = needle gauge 0–100 (left / right labels, e.g. Believability: left: 'Nope', right: 'Totally real'), type 'timeline' = year strip (from, to, marks: [[1969, 'Moon landing']], fmt 'year').
 // SPLIT = [{ t, dur, a: 'main' | { p, l, fov, p2, l2 }, b: { … }, labels: ['Myth', 'Reality'], kinds: ['bad', 'good'] }] — two cameras top / bottom, wipes in; no callouts, AO or lens blur meanwhile.
-// CFG.loop (default true since v2.20) — the last 0.3 s whip out and the cards fade, so the restart lands on the hook; the last spoken line should lead into the title question. false = off.
+// CFG.loop (default true) — v2.22 smooth loop: over the last CFG.loopFade s (0.6) the hook's first frames (scene + camera just before frame 0) dissolve in
+//   over the last shot while the cards and captions fade, so the last frame IS frame 0 and the restart is invisible. END.loop = the last spoken line, it ends
+//   right at the seam and leads into the first spoken line. Best: the last CAM shot looks roughly where the hook shot looks (same place, similar direction). false = off.
 // ---- v2.20 retention ----
 // TEASE = [{ t: 'b5', dur: 0.6, at: 'b11+0.4', label: 'Later tonight' }] — flash-forward: for dur s the frame shows scene + camera at video time `at` (the climax), HUD, voice and captions keep
 //   running; white flash + whoosh in and out. One per video at the mid-video dip (~40–55 % of the runtime).
@@ -406,12 +393,11 @@ const AUDIO = {
 const TAU = Math.PI * 2, DUR = CFG.dur, EXPORT = !!window.__EXPORT__;
 const VOICE = /* @VOICE */null;
 const SFXS = /* @SFX */{};   // real sound effects: kind → base64 mp3 (sfx/*.mp3, CC0)
-const TR = /* @TR */null;   // language version (assemble.py --lang xx + <slug>.<xx>.json): { beats: [{ text, say }], end: { q, cta }, review: { title, text, foot }, thumb: { text, sub }, strings: { 'Sunrise in': 'Amanecer en', … } }
+const TR = /* @TR */null;   // language version (assemble.py --lang xx + <slug>.<xx>.json): { beats: [{ text, say }], end: { q, cta, say, loop }, thumb: { text, sub }, strings: { 'Sunrise in': 'Amanecer en', … } }
 const tr = s => typeof s !== 'string' || !TR?.strings ? s : Object.entries(TR.strings).sort((a, b) => b[0].length - a[0].length).reduce((a, [k, v]) => a.split(k).join(v), s);
 if (TR) {
   TR.beats?.forEach((x, i) => { if (x && BEATS[i]) Object.assign(BEATS[i], x); });
   if (TR.end && typeof END !== 'undefined' && END) Object.assign(END, TR.end);
-  if (TR.review && END?.review) Object.assign(END.review, TR.review);
   if (TR.thumb && typeof THUMB !== 'undefined') [].concat(THUMB).forEach((x, i) => Object.assign(x, [].concat(TR.thumb)[i] ?? {}));
   STATS.forEach(s => { s.label = tr(s.label); s.why?.forEach(w => { w[1] = tr(w[1]); }); });
   if (END?.ending?.title) END.ending.title = tr(END.ending.title);
@@ -449,6 +435,7 @@ const TEASES = (typeof TEASE === 'undefined' || !TEASE ? [] : [].concat(TEASE)).
 const teaseV = t => { for (const x of TEASES) if (t >= x.t && t < x.t + x.dur) return x.at + (t - x.t) * (x.rate ?? 1); return t; };
 if (typeof FLASHES !== 'undefined') for (const x of TEASES) FLASHES.push({ t: x.t, dur: 0.2, a: 0.85 }, { t: x.t + x.dur, dur: 0.24, a: 0.7 });
 if (CFG.loop === undefined) CFG.loop = true;   // v2.20: every video loops back into its hook
+const LOOPX = CFG.loop ? clamp(CFG.loopFade ?? 0.6, 0.2, 1.5) : 0;   // v2.22: dissolve length into the hook's pre-roll
 const SLOW = [...(typeof SLOWMO === 'undefined' ? [] : SLOWMO), ...FREEZES.map(x => ({ t: x.t, dur: x.dur, rate: 0, ramp: x.ramp ?? 0.06, catch: 0 }))];
 const _sr = (s, t) => { const rp = Math.min(s.ramp ?? 0.18, s.dur / 2), k = clamp(Math.min((t - s.t) / rp, (s.t + s.dur - t) / rp)); return 1 + ((s.rate ?? 0.3) - 1) * k * k * (3 - 2 * k); };
 SLOW.forEach(s => { let lost = 0; for (let x = s.t; x < s.t + s.dur; x += 0.001) lost += (1 - _sr(s, x)) * 0.001; s._c = s.catch ?? 0.6; s._a = s._c > 0 ? 2 * lost / s._c : 0; });
@@ -7803,7 +7790,6 @@ function updateCamera(t) {
     else if (x.tr === 'dip') camFx.dip = pk ** 0.7;
     else if (x.tr === 'blur') camFx.def = pk ** 1.2 * 0.03;
   }
-  if (CFG.loop) { const u = clamp((t - (DUR - 0.32)) / 0.32); if (u > 0) { yaw += -0.6 * u ** 3; camFx.blur = Math.max(camFx.blur, u ** 1.4 * 0.13); camFx.dx = 1; } }   // loop: whip out of the last shot into the hook
   for (const r of POV_RIGS) r.head.visible = r !== povOn;   // first person: hide the own head (no clipping), hands and weapon stay in view
   const nr = a.pov ? 0.03 : 0.1; if (camera.near !== nr) { camera.near = nr; camera.updateProjectionMatrix(); }
   let fv = fov * fk; CAMROLL = 0; for (const f of CAMFX) { const r = f(t, _p, _l, fv); if (r != null) fv = r; }   // v2.19: vertigo, crashZoom, droneShot, shaky
@@ -7938,17 +7924,6 @@ if (END?.ending) {
 }
 const endIc = endEl.querySelector('.eic'), endEn = endEl.querySelector('.en');
 const endOpts = [...endEl.querySelectorAll('.o')], endWords = [...endEl.querySelectorAll('.w')], endCta = endEl.querySelector('.cta'), endFollow = endEl.querySelector('.follow');
-const REV = END?.review ?? null, revEl = $('rev');
-if (REV) {
-  const star = '<svg viewBox="0 0 24 24"><path d="M12 2.4l2.95 6.1 6.65.85-4.9 4.6 1.25 6.6L12 17.3l-5.95 3.25 1.25-6.6-4.9-4.6 6.65-.85z"/></svg>', by = REV.by ?? 'You';
-  revEl.innerHTML = `<div class="card"><div class="hd"><b>${esc(by.slice(0, 1).toUpperCase())}</b><span><i>${esc(by)}</i><em>✓ ${esc(tr(REV.badge ?? 'Verified survivor'))}</em></span></div>`
-    + `<div class="st">${[0, 1, 2, 3, 4].map(i => `<span class="${i < (REV.stars ?? 1) ? 'on' : ''}">${star}</span>`).join('')}</div>`
-    + `<div class="ti">${esc(REV.title ?? '')}</div>` + (REV.text ? `<div class="tx">“${esc(REV.text)}”</div>` : '')
-    + (() => { const rows = REV.stats === 'auto' ? STATS.filter(s => !['stars', 'timer'].includes(s.type ?? 'num')).map(s => [s.label, s.type === 'vs' ? `${fmtNum(s.a ?? 1, s.fmt)} vs ${fmtNum(statVal(s, END.t), s.fmt)}` : fmtNum(statVal(s, END.t), s.fmt)]) : REV.stats ?? [];
-      return rows.length ? `<div class="rc">${rows.map(([l, v]) => `<span>${esc(l)}</span><b>${esc(v)}</b>`).join('')}</div>` : ''; })() + `<div class="ft">${esc(tr(REV.foot ?? (EXPLAIN ? 'Sources in the description' : 'Gerald found this helpful')))}</div></div>`
-    + (END.cta ? `<div class="cta">${esc(END.cta)}</div>` : '');
-}
-const revStars = [...revEl.querySelectorAll('.st span')], revCta = revEl.querySelector('.cta');
 let capIdx = -2, capWords = [], capKick = null, capWho = null, capPageOf = [], capPage = -1;
 function capPaginate(ws) {   // → page per word: one sentence per page, long sentences split evenly (max CFG.capWords = 7 words), 1–2-word sentences join a neighbour
   const max = CFG.capWords ?? 7, sents = [], pages = []; let cur = [];
@@ -7963,12 +7938,13 @@ function capPaginate(ws) {   // → page per word: one sentence per page, long s
 function updateHud(t) {
   const endT = END ? END.t : 1e9, endK = END ? span(t, END.t, 0.45, 'out') : 0;
   // series intro: the top row slides in with the episode badge and channel
-  if (SERIES) { const k = span(t, 0, 0.55, 'back'); topEl.style.transform = `translateX(${((1 - k) * -110).toFixed(1)}%)`; topEl.style.opacity = clamp(k * 1.5).toFixed(3); }
+  if (SERIES) { const k = CFG.loop ? 1 : span(t, 0, 0.55, 'back'); topEl.style.transform = `translateX(${((1 - k) * -110).toFixed(1)}%)`; topEl.style.opacity = clamp(k * 1.5).toFixed(3); }
   // phase
   const si = XSTEPS.length && t < endT ? XSTEPS.findLastIndex(s => s[0] <= t) : -1;
   if (si >= 0) { if (phaseEl.dataset.k !== 's' + si) { phaseEl.dataset.k = 's' + si; phaseEl.className = 'step'; phaseEl.innerHTML = `<b>${si + 1}/${XSTEPS.length}</b>${esc(XSTEPS[si][1])}`; }
     phaseEl.style.transform = `scale(${(0.72 + 0.28 * span(t, XSTEPS[si][0], 0.4, 'back')).toFixed(3)})`; }
-  else { const ph = tr(typeof PHASES === 'undefined' ? '' : typeof PHASES === 'function' ? PHASES(t) : (PHASES.filter(p => p[0] <= t).pop() ?? [0, ''])[1]);
+  else { const pt = LOOPX && t >= DUR - LOOPX * 0.4 ? 0 : t;   // v2.22 loop: the clock already shows the hook's time when the restart comes
+    const ph = tr(typeof PHASES === 'undefined' ? '' : typeof PHASES === 'function' ? PHASES(pt) : (PHASES.filter(p => p[0] <= pt).pop() ?? [0, ''])[1]);
     if (phaseEl.dataset.k !== 'p' || phaseEl.textContent !== ph) { phaseEl.dataset.k = 'p'; phaseEl.className = ''; phaseEl.textContent = ph; phaseEl.style.transform = ''; } }
   // stats
   const statGap = parseFloat(getComputedStyle(statsEl).rowGap) || 0;
@@ -8041,7 +8017,9 @@ function updateHud(t) {
     if (st) { const html = `<b>${st.kind === 'right' ? '✓ ' + esc(st.text ?? 'Steve was… right?!') : '✗ ' + esc(st.text ?? 'Steve was wrong')}</b>`; if (stampEl.dataset.k !== st.t + '') { stampEl.innerHTML = html; stampEl.className = st.kind; stampEl.dataset.k = st.t + ''; }
       const k = span(t, st.t, 0.22, 'out'), out = span(t, st.t + 1.55, 0.35); stampEl.style.opacity = (k * (1 - out)).toFixed(3); stampEl.style.transform = `scale(${(1.8 - 0.8 * k).toFixed(3)})`; }
     else stampEl.style.opacity = '0'; }
-  let idx = -1; BEATS.forEach((b, i) => { if (t >= b.t && t < b.t + b.dur && t < endT) idx = i; });
+  // v2.22 loop: in the last moments the hook caption fades in exactly as it stands on frame 0, so the restart doesn't pop it in
+  const hookIn = LOOPX && BEATS[0]?.instant && BEATS[0].t <= 0.05 && !PCARD && t >= DUR - LOOPX * 0.4, ct = hookIn ? BEATS[0].t : t;
+  let idx = -1; BEATS.forEach((b, i) => { if (ct >= b.t && ct < b.t + b.dur && ct < endT) idx = i; });
   if (PCARD && t < PREV.dur) idx = -1;   // the intro card speaks for itself (the beat underneath is still voiced)
   if (idx !== capIdx) {
     capIdx = idx;
@@ -8050,7 +8028,7 @@ function updateHud(t) {
   }
   if (idx >= 0) { const b = BEATS[idx], want = (b.big ? 'big ' : '') + (!b.big && xBusy(t) ? 'low' : (b.pos ?? CFG.capPos ?? 'mid')); if (capEl.className !== want) capEl.className = want; }
   if (idx >= 0) {
-    const b = BEATS[idx], lt = t - b.t, n = capWords.length, out = 1 - span(t, b.t + b.dur - 0.16, 0.16, 'in');
+    const b = BEATS[idx], lt = ct - b.t, n = capWords.length, out = 1 - span(ct, b.t + b.dur - 0.16, 0.16, 'in');
     const rate = b.rate ?? (CFG.karaoke ? clamp((b.dur - 0.5) / Math.max(1, n), CFG.wordRate, 0.42) : CFG.wordRate);
     const m = capEl.querySelector('.m'); if (m) m.style.transform = b.instant ? `scale(${(1 + 0.06 * (1 - span(lt, 0, 0.7, 'out'))).toFixed(4)})` : '';
     const vt = VOICE?.beats?.[idx], st = i => vt ? vt[i] - 0.04 : i * rate;   // with voice-over: words pop exactly when spoken
@@ -8069,13 +8047,7 @@ function updateHud(t) {
   }
   // end card
   if (END) {
-    const revK = REV ? span(t, REV.t, 0.45, 'back') : 0, revOut = REV ? span(t, REV.t - 0.3, 0.3) : 0;
-    endEl.style.opacity = (endK * (1 - revOut)).toFixed(3); dimEl.style.opacity = Math.max((END.ending?.type === 'dead' ? Math.max(0.7, CFG.endDim ?? 0.38) : CFG.endDim ?? 0.38) * endK + 0.15 * revOut, prevDim).toFixed(3);   // v2.20: lighter dim, the scene keeps playing under the card
-    if (REV) {
-      revEl.style.opacity = clamp(revK * 1.4).toFixed(3); revEl.style.transform = `translateY(-50%) scale(${(0.86 + 0.14 * revK).toFixed(4)})`;
-      revStars.forEach((s, i) => { const k = span(t, REV.t + 0.45 + i * 0.14, 0.26, 'back'); s.style.opacity = clamp(k * 2).toFixed(3); s.style.transform = `scale(${(0.3 + 0.7 * k).toFixed(3)})`; });
-      if (revCta) { const k = span(t, REV.t + 1.5, 0.4, 'out'); revCta.style.opacity = (k * (0.75 + 0.25 * Math.sin(t * 6))).toFixed(3); }
-    }
+    endEl.style.opacity = endK.toFixed(3); dimEl.style.opacity = Math.max((END.ending?.type === 'dead' ? Math.max(0.7, CFG.endDim ?? 0.38) : CFG.endDim ?? 0.38) * endK, prevDim).toFixed(3);   // v2.20: lighter dim, the scene keeps playing under the card
     endWords.forEach((w, i) => { const k = clamp((t - END.t - i * 0.06) / 0.16); w.style.opacity = (k > 0 ? 1 : 0); w.style.transform = `scale(${(k <= 0 ? 0.6 : EASE.back(k)).toFixed(3)})`; });
     endOpts.forEach((o, i) => { const k = span(t, END.t + 0.55 + i * 0.16, 0.32, 'back'); o.style.opacity = clamp(k).toFixed(3); o.style.transform = `translateY(${((1 - clamp(k)) * 3).toFixed(2)}cqw) scale(${(0.9 + 0.1 * k).toFixed(3)})`; });
     if (endIc) { const k = span(t, END.t + 0.05, 0.4, 'back'); endIc.style.opacity = clamp(k * 1.5).toFixed(3); endIc.style.transform = `scale(${(0.3 + 0.7 * k).toFixed(3)})`; }
@@ -8289,8 +8261,7 @@ function updateSplit(t) {
   splitA.style.top = `calc(${y.toFixed(3)}% - 7.2cqw)`; splitB.style.top = `calc(${y.toFixed(3)}% + 2.4cqw)`;
   for (const e of [splitA, splitB]) { e.style.opacity = clamp(kl * 1.4).toFixed(3); e.style.transform = `scale(${(0.7 + 0.3 * kl).toFixed(3)})`; }
 }
-// loop ending (CFG.loop): the last 0.3 s whip away and the cards fade, so YouTube's restart lands on the hook like the next shot
-if (CFG.loop) XHITS.push({ t: DUR - 0.34, k: 'whoosh', v: 0.8 });
+// loop ending (CFG.loop, v2.22): cards, captions and callouts fade with the dissolve, so the last frame looks like frame 0 (badge + scene)
 for (const x of TEASES) XHITS.push({ t: Math.max(0, x.t - 0.08), k: 'whoosh', v: 0.75 }, { t: x.t + x.dur - 0.06, k: 'whoosh', v: 0.55 });   // flash-forward in / out
 const teaseEl = $('tease');
 function updateTease(t) {
@@ -8301,10 +8272,11 @@ function updateTease(t) {
   teaseEl.style.opacity = clamp(k * 1.3).toFixed(3); teaseEl.style.transform = `scale(${(0.8 + 0.2 * k).toFixed(3)})`;
 }
 function updateLoop(t) {
-  if (!CFG.loop) return;
-  const kk = 1 - span(t, DUR - 0.3, 0.28);
-  for (const e of [endEl, revEl, dimEl]) e.style.opacity = ((parseFloat(e.style.opacity) || 0) * kk).toFixed(3);
-  capEl.style.opacity = kk.toFixed(3);
+  if (!LOOPX) return;
+  const kk = 1 - sm01((t - (DUR - LOOPX)) / (LOOPX * 0.8));
+  for (const e of [endEl, dimEl]) e.style.opacity = ((parseFloat(e.style.opacity) || 0) * kk).toFixed(3);   // set every frame by updateHud
+  for (const e of [xlEl, xcardEl]) e.style.opacity = kk < 1 ? kk.toFixed(3) : '';   // callouts and cards: only touched here
+  capEl.style.opacity = (t >= DUR - LOOPX * 0.4 && capIdx === 0 ? sm01((t - (DUR - LOOPX * 0.4)) / (LOOPX * 0.34)) : kk).toFixed(3);   // hook caption fades in for the restart
 }
 
 // --- post FX: grade, vignette, grain, chromatic kick on impacts; optional CRT look ---
@@ -8495,13 +8467,14 @@ const SND = (() => {
     const noise = ctx.createBuffer(1, sr * 2, sr); { const d = noise.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = ar() * 2 - 1; }
     const ir = ctx.createBuffer(2, Math.floor(sr * 2.6), sr); for (let c = 0; c < 2; c++) { const d = ir.getChannelData(c); for (let i = 0; i < d.length; i++) d[i] = (ar() * 2 - 1) * (1 - i / d.length) ** 3.4; }
     const comp = ctx.createDynamicsCompressor(); comp.threshold.value = -16; comp.knee.value = 10; comp.ratio.value = 3.5; comp.attack.value = 0.005; comp.release.value = 0.2;
-    const master = ctx.createGain(); master.gain.setValueAtTime(0.9, 0); master.gain.setValueAtTime(0.9, Math.max(0, DUR - 0.5)); master.gain.linearRampToValueAtTime(0, DUR);
+    const master = ctx.createGain(), mfo = LOOPX ? 0.1 : 0.5; master.gain.setValueAtTime(0.9, 0); master.gain.setValueAtTime(0.9, Math.max(0, DUR - mfo)); master.gain.linearRampToValueAtTime(0, DUR);   // v2.22 loop: no long fade-out — the voice carries over the seam
+    const lfade = g => { if (!LOOPX) return g; const f = ctx.createGain(); f.gain.setValueAtTime(1, 0); f.gain.setValueAtTime(1, DUR - LOOPX); f.gain.linearRampToValueAtTime(0, DUR - 0.05); g.connect(f); f.connect(master); return f; };   // music + SFX fade with the dissolve, the restart's first hit lands on the seam
     master.connect(comp); comp.connect(ctx.destination);
     const verb = ctx.createConvolver(); verb.buffer = ir; const vOut = ctx.createGain(); vOut.gain.value = 0.3; verb.connect(vOut); vOut.connect(master);
     const music = ctx.createGain(), mBase = A.music ?? 0.55; music.gain.value = mBase;
-    const vduck = ctx.createGain(); music.connect(vduck); vduck.connect(master);   // music dips under the voice-over
+    const vduck = ctx.createGain(); music.connect(vduck); if (LOOPX) lfade(vduck); else vduck.connect(master);   // music dips under the voice-over
     const ms = ctx.createGain(); ms.gain.value = 0.35; music.connect(ms); ms.connect(verb);
-    const fx = ctx.createGain(); fx.gain.value = A.sfx ?? 0.9; fx.connect(master);
+    const fx = ctx.createGain(); fx.gain.value = A.sfx ?? 0.9; if (LOOPX) lfade(fx); else fx.connect(master);
     const fs = ctx.createGain(); fs.gain.value = 0.22; fx.connect(fs); fs.connect(verb);
     // helpers
     const env = (g, t, a, hold, r, peak) => { g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(peak, t + a); g.gain.setValueAtTime(peak, t + a + hold); g.gain.linearRampToValueAtTime(0, t + a + hold + r); };
@@ -8751,11 +8724,10 @@ const SND = (() => {
     for (const [t0, t1, k, v] of A.amb ?? []) (AMB[k] ?? (() => console.warn('amb: unknown kind ' + k)))(Math.max(0, t0), Math.min(DUR, t1), v ?? 1);
     function bellFx(t, f, v) { tone('sine', f, t, 0.002, 0, 1.8, 0.12 * v, fx); tone('sine', f * 2.76, t, 0.002, 0, 0.7, 0.05 * v, fx); }
     if (CFG.series) for (const t0 of [0.05, (END ? END.t : DUR - 3) + 1.6]) [0, 7, 12].forEach((iv, k) => bellFx(t0 + k * 0.11, mtof(Md.root + 36 + iv), 0.7));   // series jingle
-    const RV = END?.review, revHits = RV ? [{ t: RV.t - 0.15, k: 'whoosh' }, ...Array.from({ length: RV.stars ?? 1 }, (_, i) => ({ t: RV.t + 0.47 + i * 0.14, k: 'pop', v: 1.2 })), { t: RV.t + 0.55 + (RV.stars ?? 1) * 0.14, k: 'ding', v: 0.7 }] : [];
     const steveHits = [...BEATS.filter(b => b.who === 'steve').map(b => ({ t: Math.max(0, b.t - 0.05), k: 'jingle', v: 0.9 })),
       ...BEATS.filter(b => b.stamp).map(b => ({ t: b.t + (b.stampAt ?? 0.5), k: b.stamp === 'right' ? 'ding' : 'trombone', v: 1 })),
       ...BEATS.filter(b => b.sigh).map(b => ({ t: b.t - 0.05, k: 'sigh', v: 1 }))];   // automatic: Steve's jingle, verdict sound, narrator sigh (BEATS[].sigh)
-    for (const h of [...(A.hits ?? []), ...revHits, ...steveHits, ...XHITS]) (SFX[h.k] ?? (() => {}))(h.t, h.v ?? 1, h.dur, h.p);
+    for (const h of [...(A.hits ?? []), ...steveHits, ...XHITS]) (SFX[h.k] ?? (() => {}))(h.t, h.v ?? 1, h.dur, h.p);
     ducks.sort((a, b) => a - b).forEach(t => { music.gain.setTargetAtTime(mBase * 0.4, t, 0.015); music.gain.setTargetAtTime(mBase, t + 0.25, 0.4); });
     if (vbuf) {
       const vs = ctx.createBufferSource(), vg = ctx.createGain(); vs.buffer = vbuf; vg.gain.value = (VOICE.gain ?? 1) * 1.15; vs.connect(vg); vg.connect(master); vs.start(0);
@@ -8808,7 +8780,19 @@ function update(t) {
   scenePass.t0 = tv; scenePass.times = THUMB_ON || SPLIT_NOW ? null : mbTimes(tv);   // tv: motion-blur samples (and the camera reset in needsMB) stay in the teased moment
   if (THUMB_ON) { U.uBlur.value = U.uZoom.value = U.uDip.value = U.uDef.value = U.uAb.value = 0; }
 }
-const draw = t => { update(t); composer.render(); };
+// v2.22 smooth loop: in the last LOOPX s the scene + camera at t − DUR (the moments just before frame 0) render first and are kept on #loopv,
+// which dissolves in over the last shot → the final frame equals frame 0, the restart is seamless. Everything is a function of t, so this stays frame-exact.
+const loopV = $('loopv'), loopCtx = loopV.getContext('2d');
+const draw = t => {
+  const u = LOOPX && !THUMB_ON ? clamp((t - (DUR - LOOPX)) / LOOPX) : 0;
+  if (u > 0) {
+    update(t - DUR); composer.render();
+    const c = renderer.domElement; if (loopV.width !== c.width || loopV.height !== c.height) { loopV.width = c.width; loopV.height = c.height; }
+    loopCtx.drawImage(c, 0, 0);
+  }
+  loopV.style.opacity = u > 0 ? sm01(u).toFixed(4) : '0';
+  update(t); composer.render();
+};
 let maxW = EXPORT ? 1080 : 900, clock = 0, playing = true, dirty = true, last = performance.now();
 function fit() {
   const bw = document.body.clientWidth, bh = document.body.clientHeight;
