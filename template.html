@@ -222,18 +222,42 @@
   #stage.land #thumb .tt { left: 4%; right: 44%; top: 9%; text-align: left; }
   #stage.land #thumb .sub { left: 4%; bottom: 10%; transform: rotate(-2deg); }
   #stage.land #thumb .hd { left: 4%; bottom: 4%; transform: none; }
+  /* v2.30 long-video mode (every 16:9 video): calm HUD, chapter title cards, fact cards as lower thirds, two-line subtitles in sentence case, wider timeline, 2D map cards */
+  #stage.land .stat .tl { width: calc(62 * var(--u)); }
+  #stage.long #cap { padding: 0 17cqw; }
+  #stage.long #cap .m { font: 600 calc(4.5 * var(--u))/1.32 var(--ui); text-transform: none; letter-spacing: .003em; text-shadow: 0 0 calc(.45 * var(--u)) rgba(0, 0, 0, .95), 0 calc(.2 * var(--u)) calc(1 * var(--u)) rgba(0, 0, 0, .8); }
+  #stage.long #cap.big .m { font-size: calc(5.6 * var(--u)); }
+  #stage.nosubs #cap .m { display: none; }
+  #stage.long #cap .w.on { background: none; color: var(--accent); box-shadow: none; padding: 0; margin: 0; }
+  #stage.long #xcard .xk.fc { top: 34cqh; left: 0; right: auto; text-align: left; transform-origin: 0 100%; }
+  #stage.long .fc .cd { width: auto; min-width: 26cqw; max-width: 40cqw; text-align: left; padding: calc(2.2 * var(--u)) calc(3.2 * var(--u)) calc(2 * var(--u)) calc(2.6 * var(--u)); border-top: 0; border-left: calc(.8 * var(--u)) solid var(--accent); border-radius: calc(1.4 * var(--u)); background: rgba(10, 12, 16, .82); box-shadow: 0 calc(1 * var(--u)) calc(3 * var(--u)) rgba(0, 0, 0, .35); }
+  #stage.long .fc .fi { display: none; }
+  #stage.long .fc .fb { font-size: calc(7.4 * var(--u)); }
+  #stage.long .fc .ft { margin-top: calc(1 * var(--u)); font-size: calc(2.7 * var(--u)); }
+  #stage.long #xcard .fc .fs { margin-top: calc(1.3 * var(--u)); font-size: calc(1.5 * var(--u)); }
+  #chapdim { position: absolute; inset: 0; pointer-events: none; opacity: 0; background: linear-gradient(90deg, rgba(0, 0, 0, .62) 0%, rgba(0, 0, 0, .34) 40%, rgba(0, 0, 0, 0) 72%); }
+  .thumbmode #chapdim { display: none; }
+  #chap { position: absolute; left: 0; top: 40cqh; transform: translateY(-50%); opacity: 0; pointer-events: none; display: none; }
+  #stage.long #chap { display: block; }
+  #chap .cn { font: 800 calc(3.1 * var(--u))/1 var(--ui); letter-spacing: .24em; text-transform: uppercase; color: rgba(255, 255, 255, .8); text-shadow: 0 calc(.2 * var(--u)) calc(1 * var(--u)) rgba(0, 0, 0, .6); }
+  #chap .cn b { color: var(--accent); font-weight: 900; }
+  #chap .ct { margin-top: calc(1.8 * var(--u)); font: 900 calc(16 * var(--u))/1 var(--ui); letter-spacing: -.012em; color: #fff; text-shadow: 0 calc(.4 * var(--u)) calc(2.4 * var(--u)) rgba(0, 0, 0, .5); white-space: nowrap; }
+  #chap .cl { display: block; margin-top: calc(2.6 * var(--u)); height: calc(.9 * var(--u)); width: 0; background: var(--accent); border-radius: calc(.4 * var(--u)); }
+  #map2d { position: absolute; inset: 0; width: 100%; height: 100%; display: block; opacity: 0; pointer-events: none; }
 </style>
 </head>
 <body>
 <div id="stage" role="img" aria-label="Animated vertical video: What if zombies attacked your farm?">
   <canvas id="gl"></canvas>
   <canvas id="loopv"></canvas>
+  <canvas id="map2d"></canvas>
   <div id="dim"></div>
   <div id="thumb"></div>
   <div id="xl"><svg id="xlsvg" viewBox="0 0 100 177.78" preserveAspectRatio="none"></svg></div>
   <div id="frz"></div>
   <div id="gauge"></div>
   <div id="split"></div>
+  <div id="chapdim"></div>
   <div id="hud">
     <div id="chan"></div>
     <div class="top" id="top"><span class="badge" id="badge"></span><span id="phase"></span><span id="recap"></span></div>
@@ -242,6 +266,7 @@
     <div id="tease"></div>
     <div id="stamp"></div>
     <div id="xcard"></div>
+    <div id="chap"></div>
     <div id="end"></div>
     <div id="prev"></div>
   </div>
@@ -409,6 +434,12 @@ const AUDIO = {
 const TAU = Math.PI * 2, DUR = CFG.dur, EXPORT = !!window.__EXPORT__;
 const LAND = CFG.aspect === '16:9' || CFG.aspect === 'landscape', FOVK = CFG.fovScale ?? (LAND ? 0.68 : 1);   // v2.25: landscape 16:9 (normal YouTube video); vertical fov × FOVK keeps shots framed like 9:16
 if (LAND) { document.getElementById('stage').classList.add('land'); document.getElementById('xlsvg').setAttribute('viewBox', '0 0 100 56.25'); }
+// v2.30 long-video mode — every 16:9 video (CFG.long: false turns it off): 3D in full resolution + 4× MSAA (CFG.fast keeps the old speed), calm HUD (badge row only at the start,
+// at chapters, with data and on the end card), chapter title cards from STEPS, FACTS as lower thirds, two-line subtitles in sentence case (CFG.subWords 16), brighter nights
+// (CFG.nightLift), more aerial haze (CFG.haze), soft spray, wet sand along coasts, 2D map cards (MAP2D), subtitles as .srt (render.mjs --srt)
+const LONG = LAND && CFG.long !== false;
+if (LONG && CFG.burnSubs === false) document.getElementById('stage').classList.add('nosubs');   // subtitles only as .srt (YouTube CC), not in the picture
+if (LONG) { document.getElementById('stage').classList.add('long'); if (!CFG.fast) { CFG.renderScale = Math.max(CFG.renderScale ?? 1, 1); CFG.msaa = Math.max(CFG.msaa ?? 2, 4); } }
 const VOICE = /* @VOICE */null;
 const SFXS = /* @SFX */{};   // real sound effects: kind → base64 mp3 (sfx/*.mp3, CC0)
 const TR = /* @TR */null;   // language version (assemble.py --lang xx + <slug>.<xx>.json): { beats: [{ text, say }], end: { q, cta, say, loop }, thumb: { text, sub }, strings: { 'Sunrise in': 'Amanecer en', … } }
@@ -497,6 +528,7 @@ sun.shadow.camera.updateProjectionMatrix();
 sun.shadow.bias = -0.0006; sun.shadow.normalBias = 0.04;
 scene.add(hemi, sun, sun.target);
 if (CFG.env) { const pm = new THREE.PMREMGenerator(renderer); scene.environment = pm.fromScene(new RoomEnvironment(), 0.04).texture; pm.dispose(); }
+const NLIFT = { night: 1, storm: 0.7, dusk: 0.35, deepsea: 0.4, apocalypse: 0.3 };   // v2.30 long videos: how much darker skies get lifted
 const ENVI = { underwater: 0.2, deepsea: 0.08, day: 0.3, golden: 0.24, dusk: 0.14, night: 0.06, dawn: 0.17, storm: 0.26, apocalypse: 0.12, space: 0.04 }, WINDY = { storm: 2.6, apocalypse: 1.7, dusk: 1.1, underwater: 1.8, deepsea: 1.2 };
 scene.fog = new THREE.Fog('#000000', 40, 260);
 var FOGK = CFG.fogScale ?? 1;   // fog distance × FOGK (ship() / aircraft() raise it for huge vessels so they don't vanish in the haze)
@@ -556,6 +588,10 @@ function applySky(t) {
   const na = SKY[i][1], nb = (SKY[i + 1] ?? SKY[i])[1];
   scene.environmentIntensity = lerp(ENVI[na] ?? 0.2, ENVI[nb] ?? 0.2, k) * (typeof CFG.env === 'number' ? CFG.env : 1);
   WIND.a.value = (CFG.wind ?? 1) * lerp(WINDY[na] ?? 1, WINDY[nb] ?? 1, k);
+  if (LONG) { const lw = lerp(NLIFT[na] ?? 0, NLIFT[nb] ?? 0, k) * (CFG.nightLift ?? 1);   // v2.30: nights and storms stay readable over minutes; aerial haze in wide 16:9 shots
+    if (lw) { hemi.intensity *= 1 + 1.1 * lw; sun.intensity *= 1 + 0.6 * lw; renderer.toneMappingExposure *= 1 + 0.28 * lw;
+      skyU.bot.value.lerp(_cb.set('#4A5F8E'), 0.4 * lw); skyU.top.value.lerp(_cb.set('#16244A'), 0.35 * lw); scene.fog.color.lerp(_cb.set('#3A4A6E'), 0.4 * lw); }
+    scene.fog.near *= CFG.haze ?? 0.6; }
   for (const m of NIGHTGLOW) m.emissiveIntensity = 2.6 * skyU.stars.value;
   const lk = strikeK(t); if (lk) { hemi.intensity += 3 * lk; sun.intensity += 2 * lk; }
 }
@@ -595,6 +631,16 @@ function grp(p = world, x = 0, y = 0, z = 0, ry = 0) { const g = new THREE.Group
 // --- ground: flat play area, low-poly hills outside ---
 let groundH = () => 0;
 let GROUND = {};
+// v2.30 wetSand: darker, slightly glossy sand band towards the waterline (long videos; ground({ coast, wet: 6 | false }))
+function wetSand(H, cz, size, bw, o) {
+  const wet = Math.min(o.wet ?? 6, bw * 0.7 + 1.5), D = wet + 2, nx = Math.min(360, Math.round(size / 1.5)), geo = new THREE.PlaneGeometry(size, D, nx, 8); geo.rotateX(-Math.PI / 2);
+  const p = geo.attributes.position, cS = new THREE.Color(o.sand ?? '#D8C38E'), cW = cS.clone().multiplyScalar(0.6).lerp(new THREE.Color('#5E6A6C'), 0.18), c = new THREE.Color(), cols = [];
+  for (let i = 0; i < p.count; i++) { const x = p.getX(i), z = cz - wet + p.getZ(i) + D / 2, k = clamp((z - (cz - wet)) / wet), n = noise2(x * 0.07, z * 0.35);
+    p.setXYZ(i, x, H(x, z) + 0.12, z); c.copy(cS).lerp(cW, clamp(k * k * (3 - 2 * k) + 0.12 * n)); cols.push(c.r, c.g, c.b, clamp(k * 2.2 + 0.25 * n)); }
+  geo.setAttribute('color', new THREE.Float32BufferAttribute(cols, 4)); geo.computeVertexNormals();
+  const m = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ vertexColors: true, transparent: true, depthWrite: false, roughness: 0.42, metalness: 0, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4 }));
+  m.receiveShadow = true; m.renderOrder = 1; world.add(dyn(m)); return m;   // dyn: bake() must not merge it (vertex alpha)
+}
 function ground(o = {}) {   // colour varies in soft patches (CFG.groundDetail: false = flat colour); dirt: hex | false
   GROUND = o;
   const size = o.size ?? 520, flat = o.flat ?? 32, hills = o.hills ?? 7, cz = o.coast, dep = o.depth ?? 4;   // coast: z where land ends (sea towards +z, add water())
@@ -614,6 +660,7 @@ function ground(o = {}) {   // colour varies in soft patches (CFG.groundDetail: 
   const g2 = geo.toNonIndexed(), p2 = g2.attributes.position, cols = [], cL = new THREE.Color(o.color ?? '#5F7F3B'), cS = new THREE.Color(o.sand ?? '#D8C38E');   // sand beach along the coast
   for (let i = 0; i < p2.count; i += 3) { const z = (p2.getZ(i) + p2.getZ(i + 1) + p2.getZ(i + 2)) / 3, x = (p2.getX(i) + p2.getX(i + 1) + p2.getX(i + 2)) / 3, c = tint(z > cz - bw ? cS : cL, x, z); for (let k = 0; k < 3; k++) cols.push(c.r, c.g, c.b); }
   g2.setAttribute('color', new THREE.Float32BufferAttribute(cols, 3)); g2.computeVertexNormals();
+  if (LONG && o.wet !== false) wetSand(H, cz, size, bw, o);   // v2.30
   return mesh(world, g2, new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 1 }), 0, 0, 0, { cast: false, stat: true });
 }
 
@@ -1847,9 +1894,10 @@ const strikeK = t => { let k = 0; for (const s of STRIKES) { const u = t - s; if
 // traces: splash(x, z, t0, { size }) · drive(vehicle, pts, { t0, t1, speed, ramp, tracks, dust, loop }) — wheels turn, nose dips when braking, tyre tracks, brake dust
 function splash(x, z, t0, o = {}) {
   const s = o.size ?? 1, y = Math.max(waterH(x, z, t0), groundH(x, z));
-  emit('debris', { at: [x, y + 0.1, z], t0, burst: Math.round(36 * s), colors: ['#E8F6FF', '#BFE3F5', '#9FD0EA'], size: 0.09 * s, speed: 4.2 * Math.sqrt(s), spread: 0.55, basic: true, life: 1.2 });
-  const rings = [0, 0.18].map(dl => { const r = new THREE.Mesh(G('ripple', () => new THREE.RingGeometry(0.85, 1, 28).rotateX(-Math.PI / 2)), mat('#EAF6FF', { basic: true, opacity: 0.55, own: true })); r.position.set(x, y + 0.03, z); world.add(dyn(r)); return [r, dl]; });
-  tick(t => rings.forEach(([r, dl]) => { const u = t - t0 - dl; r.visible = u > 0 && u < 1.4; if (r.visible) { r.scale.setScalar(0.3 + u * 2.2 * s); r.material.opacity = 0.55 * (1 - u / 1.4); } }));
+  if (LONG) emit('debris', { at: [x, y + 0.1, z], t0, burst: Math.round(30 * s), colors: ['#F4FAFF', '#DDEFF8'], size: 0.3 * s, grow: 0.8, speed: 4.0 * Math.sqrt(s), spread: 0.55, basic: true, life: 1.1, soft: true });   // v2.30: soft spray
+  else emit('debris', { at: [x, y + 0.1, z], t0, burst: Math.round(36 * s), colors: ['#E8F6FF', '#BFE3F5', '#9FD0EA'], size: 0.09 * s, speed: 4.2 * Math.sqrt(s), spread: 0.55, basic: true, life: 1.2 });
+  const rings = [0, 0.18].map(dl => { const r = new THREE.Mesh(G('ripple', () => new THREE.RingGeometry(0.85, 1, 28).rotateX(-Math.PI / 2)), mat('#EAF6FF', { basic: true, opacity: LONG ? 0.28 : 0.55, own: true })); r.position.set(x, y + 0.03, z); world.add(dyn(r)); return [r, dl]; });
+  tick(t => rings.forEach(([r, dl]) => { const u = t - t0 - dl; r.visible = u > 0 && u < 1.4; if (r.visible) { r.scale.setScalar(0.3 + u * 2.2 * s); r.material.opacity = (LONG ? 0.28 : 0.55) * (1 - u / 1.4); } }));
   sfx(t0, 'splash', Math.min(1.2, 0.5 + 0.4 * s));
 }
 function drive(v, pts, o = {}) {   // o.jumps: [[t, h, airtime]] · o.bumpy: 0..2 (off-road) · see crash() for accidents
@@ -2084,6 +2132,7 @@ function emit(kind, o = {}) {   // o: at:[x,y,z] or t => [x,y,z], t0, t1, plus a
   const e = { ...PART[kind], ...o, id: _eid++ }; e.t0 = e.t0 ?? 0; e.t1 = e.t1 ?? DUR;
   if (typeof e.at === 'function') { e.atFn = e.at; e.at = null; }   // moving source: at(t) → [x,y,z] at birth time
   e.lifeMax = e.life * 1.3; e.n = e.burst ?? Math.min(e.max ?? 2500, Math.ceil(e.rate * e.lifeMax) + 1);
+  if (LONG && kind === 'spray' && o.soft == null && !o.geo) { e.soft = true; e.size = (o.size ?? e.size) * 2.6; }   // v2.30: soft mist instead of little boxes
   e.soft = e.soft ?? (CFG.softParticles !== false && (kind === 'smoke' || kind === 'dust' || kind === 'fire') && !e.geo);
   const geo = e.soft ? softGeo(e.n) : e.geo === 'box' ? boxG(1, 1, 1) : e.geo === 'flat' ? boxG(1, 0.12, 0.6) : e.geo === 'streak' ? boxG(0.03, 1, 0.03) : G('ico0', () => new THREE.IcosahedronGeometry(0.5, 0));
   const tr = e.opacity != null;
@@ -8481,7 +8530,7 @@ const BEACHES = [['UTAH', [-1.23, 49.48], [-1.17, 49.415], [-1.02, 49.47], 'us']
   ['JUNO', [-0.48, 49.34], [-0.34, 49.315], [-0.41, 49.385], 'ca'], ['SWORD', [-0.33, 49.312], [-0.22, 49.284], [-0.25, 49.35], 'uk']];
 const WM_COL = { us: '#2E5C9E', uk: '#A8322D', ca: '#B8701F', de: '#555B4E' };
 function drawWarMap(c, w, h, P, reg, o) {
-  const S = w / 4096, zoom = 23.1 / (reg[2] - reg[0]), LAND = o.land ?? '#E4D5AE', SEA = o.sea ?? '#93AEB8', INK = '#4A3B2A', SEAINK = '#3D5866', OCC = o.occupied !== false;
+  const S = w / 4096, TS = o.textScale ?? 1, zoom = 23.1 / (reg[2] - reg[0]), LAND = o.land ?? '#E4D5AE', SEA = o.sea ?? '#93AEB8', INK = '#4A3B2A', SEAINK = '#3D5866', OCC = o.occupied !== false;
   const poly = pts => { c.beginPath(); pts.forEach(([lo, la], i) => { const [X, Y] = P(lo, la); i ? c.lineTo(X, Y) : c.moveTo(X, Y); }); c.closePath(); };
   const tint = () => { c.save(); c.clip(); c.fillStyle = 'rgba(176, 82, 60, 0.17)'; c.fillRect(0, 0, w, h); c.strokeStyle = 'rgba(150, 62, 42, 0.2)'; c.lineWidth = 3 * S; for (let i = -h; i < w; i += 30 * S) { c.beginPath(); c.moveTo(i, 0); c.lineTo(i + h, h); c.stroke(); } c.restore(); };
   c.fillStyle = LAND; c.fillRect(0, 0, w, h); if (OCC) { c.beginPath(); c.rect(0, 0, w, h); tint(); }
@@ -8496,17 +8545,17 @@ function drawWarMap(c, w, h, P, reg, o) {
   c.setLineDash([14 * S, 9 * S]); c.lineWidth = 2.4 * S; c.strokeStyle = 'rgba(74, 59, 42, 0.75)';
   for (const L of GEO.borders) { c.beginPath(); L.forEach(([lo, la], i) => { const [X, Y] = P(lo, la); i ? c.lineTo(X, Y) : c.moveTo(X, Y); }); c.stroke(); } c.setLineDash([]);
   // graticule
-  const step = o.grid ?? (reg[2] - reg[0] > 8 ? 2 : reg[2] - reg[0] > 3 ? 1 : 0.25); c.strokeStyle = 'rgba(60, 70, 72, 0.18)'; c.lineWidth = 1.6 * S; c.font = `${Math.round(24 * S)}px Georgia, "Liberation Serif", "DejaVu Serif", serif`; c.fillStyle = 'rgba(60, 60, 55, 0.6)';
+  const step = o.grid ?? (reg[2] - reg[0] > 8 ? 2 : reg[2] - reg[0] > 3 ? 1 : 0.25); c.strokeStyle = 'rgba(60, 70, 72, 0.18)'; c.lineWidth = 1.6 * S; c.font = `${Math.round(24 * S * TS)}px Georgia, "Liberation Serif", "DejaVu Serif", serif`; c.fillStyle = 'rgba(60, 60, 55, 0.6)';
   for (let lo = Math.ceil(reg[0] / step) * step; lo <= reg[2]; lo += step) { const [X] = P(lo, reg[1]); c.beginPath(); c.moveTo(X, 0); c.lineTo(X, h); c.stroke(); c.fillText(`${Math.abs(+lo.toFixed(2))}°${lo < 0 ? 'W' : 'E'}`, X + 6 * S, h - 10 * S); }
   for (let la = Math.ceil(reg[1] / step) * step; la <= reg[3]; la += step) { const [, Y] = P(reg[0], la); c.beginPath(); c.moveTo(0, Y); c.lineTo(w, Y); c.stroke(); c.fillText(`${+la.toFixed(2)}°N`, 8 * S, Y - 6 * S); }
   // text
   const TXT = (t, lo, la, sz = 40, col = INK, rot = 0, sp = 0.18, wt = 'bold') => { const [X, Y] = P(lo, la); if (X < -200 * S || X > w + 200 * S || Y < -100 * S || Y > h + 100 * S) return; c.save(); c.translate(X, Y); c.rotate(rot);
-    c.font = `${wt} ${Math.round(sz * S)}px Georgia, "Liberation Serif", "DejaVu Serif", serif`; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillStyle = col; const ch = [...t], ls = sz * S * sp, tw = ch.reduce((s, q) => s + c.measureText(q).width + ls, -ls);
+    c.font = `${wt} ${Math.round(sz * S * TS)}px Georgia, "Liberation Serif", "DejaVu Serif", serif`; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillStyle = col; const ch = [...t], ls = sz * S * TS * sp, tw = ch.reduce((s, q) => s + c.measureText(q).width + ls, -ls);
     let xx = -tw / 2; for (const q of ch) { const ww = c.measureText(q).width; c.fillText(q, xx + ww / 2, 0); xx += ww + ls; } c.restore(); };
   const DOT = (t, lo, la, sz = 26, dx = 1) => { const [X, Y] = P(lo, la); if (X < 0 || X > w || Y < 0 || Y > h) return; c.fillStyle = INK; c.beginPath(); c.arc(X, Y, 7 * S, 0, TAU); c.fill(); c.fillStyle = LAND; c.beginPath(); c.arc(X, Y, 3 * S, 0, TAU); c.fill();
-    c.font = `italic ${Math.round(sz * S)}px Georgia, "Liberation Serif", "DejaVu Serif", serif`; c.fillStyle = INK; c.textAlign = dx > 0 ? 'left' : 'right'; c.textBaseline = 'middle'; c.fillText(t, X + dx * 13 * S, Y); };
+    c.font = `italic ${Math.round(sz * S * TS)}px Georgia, "Liberation Serif", "DejaVu Serif", serif`; c.fillStyle = INK; c.textAlign = dx > 0 ? 'left' : 'right'; c.textBaseline = 'middle'; c.fillText(t, X + dx * 13 * S, Y); };
   const name = o.region ?? 'europe';
-  if (o.labels !== false && name === 'europe') {
+  if (o.labels !== false && (name === 'europe' || name === 'channel' || name === 'custom')) {   // v2.30: channel / custom views (2D map cards) use the Europe lettering too
     for (const L of [['BRITAIN', -1.7, 52.7, 66], ['IRELAND', -7.4, 53.3, 34, '#6A5A45'], ['OCCUPIED FRANCE', 2.4, 47.1, 64], ['GERMANY', 10.4, 51.3, 74], ['BELGIUM', 4.75, 50.5, 26], ['NETHERLANDS', 5.75, 52.45, 26], ['DENMARK', 9.15, 55.85, 28],
       ['SPAIN', -4.2, 42.95, 44], ['neutral', -4.2, 42.68, 24, '#6A5A45', 0, 0.1, 'italic'], ['SWITZ.', 8.2, 46.78, 22], ['ITALY', 10.9, 45.05, 40], ['ENGLISH CHANNEL', -2.5, 49.95, 34, SEAINK, -0.1], ['NORTH SEA', 3.3, 54.6, 46, SEAINK], ['ATLANTIC OCEAN', -6.3, 47.1, 46, SEAINK],
       ['BAY OF BISCAY', -4.0, 45.4, 32, SEAINK], ['MEDITERRANEAN', 6.4, 42.75, 30, SEAINK]]) TXT(...L);
@@ -8947,20 +8996,66 @@ if (END?.ending) {
 const endIc = endEl.querySelector('.eic'), endEn = endEl.querySelector('.en');
 const endOpts = [...endEl.querySelectorAll('.o')], endWords = [...endEl.querySelectorAll('.w')], endCta = endEl.querySelector('.cta'), endFollow = endEl.querySelector('.follow');
 let capIdx = -2, capWords = [], capKick = null, capWho = null, capPageOf = [], capPage = -1;
+function capSplit(s, ws, max) {   // v2.30 subtitles: split a long sentence where it reads naturally — after , ; : – — or before and / but / which …, close to the middle
+  if (s.length <= max) return [s];
+  const k = Math.ceil(s.length / max), target = s.length / k; let best = -1, bs = -1e9;
+  for (let j = 2; j <= Math.min(max, s.length - 2); j++) {
+    if (s.length - j > max * (k - 1)) continue;
+    const prev = ws[s[j - 1]].textContent.trim(), cur = ws[s[j]].textContent.trim().toLowerCase().replace(/[^a-z']/g, '');
+    const sc = (/[,;:–—]['”")]*$/.test(prev) ? 3 : /^(and|but|or|which|who|while|because|when|then|so|until|before|after|where|as|with)$/.test(cur) ? 1.6 : 0) - Math.abs(j - target) / target * 3;
+    if (sc > bs) { bs = sc; best = j; } }
+  if (best < 0) best = Math.ceil(s.length / k);
+  return [s.slice(0, best), ...capSplit(s.slice(best), ws, max)];
+}
 function capPaginate(ws) {   // → page per word: one sentence per page, long sentences split evenly (max CFG.capWords = 7 words), 1–2-word sentences join a neighbour
-  const max = CFG.capWords ?? 7, sents = [], pages = []; let cur = [];
+  const max = LONG ? CFG.subWords ?? 16 : CFG.capWords ?? 7, sents = [], pages = []; let cur = [];
   ws.forEach((w, i) => { cur.push(i); if (/[.!?…]['”")]*$/.test(w.textContent) || i === ws.length - 1) { sents.push(cur); cur = []; } });
   for (const s of sents) {
     const last = pages[pages.length - 1];
     if (last && (last.length <= 2 || s.length <= 2) && last.length + s.length <= max) { last.push(...s); continue; }
+    if (LONG) { pages.push(...capSplit(s, ws, max)); continue; }
     const k = Math.ceil(s.length / max), sz = Math.ceil(s.length / k); for (let j = 0; j < s.length; j += sz) pages.push(s.slice(j, j + sz));
   }
   const pg = []; pages.forEach((p, k) => p.forEach(i => { pg[i] = k; })); return pg;
+}
+// v2.30 long videos: the badge row shows at the start, at each chapter, while data is on screen and on the end card; chapter title cards from STEPS
+const HUDON = !LONG ? null : [[-1, CFG.hudHold ?? 7], ...XSTEPS.map(s => [s[0] - 0.3, s[0] + (CFG.hudChapter ?? 5.5)]), ...STATS.map(s => [(s.show ?? 0) - 0.5, (s.hide ?? 1e9) + 0.3])];
+const hudVis = t => { if (!HUDON) return 1; let v = END && t >= END.t - 0.5 ? 1 : 0; for (const [a, b] of HUDON) if (t > a - 0.45 && t < b + 0.45) v = Math.max(v, span(t, a - 0.45, 0.45, 'out') * (1 - span(t, b, 0.45))); return v; };
+const CHAPS = LONG && CFG.chapters !== false ? XSTEPS.filter(s => s[0] >= 0.5) : [], chapEl = $('chap'), chapDim = $('chapdim'), CHD = CFG.chapterDur ?? 3;
+if (CHAPS.length) chapEl.innerHTML = '<div class="cn"></div><div class="ct"></div><i class="cl"></i>';
+const chapCn = chapEl.querySelector('.cn'), chapCt = chapEl.querySelector('.ct'), chapCl = chapEl.querySelector('.cl');
+function updateChapter(t) {
+  if (!CHAPS.length) return; const i = CHAPS.findLastIndex(s => s[0] <= t), c = i >= 0 && t < CHAPS[i][0] + CHD && !THUMB_ON ? CHAPS[i] : null;
+  if (!c) { chapEl.style.opacity = '0'; chapDim.style.opacity = '0'; return; }
+  const n = XSTEPS.indexOf(c), k = span(t, c[0], 0.55, 'out'), out = span(t, c[0] + CHD - 0.5, 0.5), v = k * (1 - out), p2 = x => String(x).padStart(2, '0');
+  if (chapEl.dataset.k !== String(n)) { chapEl.dataset.k = String(n); chapCn.innerHTML = `${esc(tr('Chapter'))} <b>${p2(n + 1)}</b> / ${p2(XSTEPS.length)}`; chapCt.textContent = c[1]; }
+  chapEl.style.opacity = v.toFixed(3); chapDim.style.opacity = (0.9 * v).toFixed(3);
+  chapCt.style.transform = `translateX(${((1 - k) * -3 + out * 1.5).toFixed(2)}cqw)`; chapCn.style.transform = `translateX(${((1 - span(t, c[0] + 0.08, 0.55, 'out')) * -3).toFixed(2)}cqw)`;
+  chapCl.style.width = `calc(${(32 * span(t, c[0] + 0.2, 0.7, 'out')).toFixed(2)} * var(--u))`;
+}
+function tlLayout(nd) {   // v2.30: timeline labels never overlap each other, the stat label or the strip ends — measured once (fonts loaded); two rows, clamped inside the strip
+  const W = nd.tl.offsetWidth, sw = stage.offsetWidth; if (!W || !sw || (document.fonts && document.fonts.status !== 'loaded')) return;
+  nd.tlOk = true;
+  const ems = nd.tm.map(b => b.querySelector('em')); if (!ems.length || ems.some(e => !e)) return;
+  const r0 = nd.tl.getBoundingClientRect(), lab = nd.d.querySelector('.l')?.getBoundingClientRect(), R = ems.map(e => e.getBoundingClientRect()), pad = W * 0.02, sc = r0.width / W || 1;
+  let bad = R.some(r => r.left < r0.left - 2 || r.right > r0.right + 2 || (lab && lab.width && r.left < lab.right + pad * sc && r.top < lab.bottom && r.bottom > lab.top));
+  for (let i = 0; i < R.length && !bad; i++) for (let j = i + 1; j < R.length; j++) if (R[i].left < R[j].right + pad * sc && R[j].left < R[i].right + pad * sc && R[i].top < R[j].bottom && R[j].top < R[i].bottom) bad = true;
+  if (!bad) return;
+  const xs = nd.tm.map(b => parseFloat(b.style.left) / 100 * W), bw = nd.tm[0].offsetWidth;
+  for (let f = 1; ; f -= 0.08) {
+    ems.forEach(e => { e.style.fontSize = f < 1 ? `calc(${(2.1 * f).toFixed(3)} * var(--u))` : ''; });
+    const ws = ems.map(e => e.offsetWidth), end = [-1e9, -1e9], pos = []; let ok = true;
+    xs.forEach((x, j) => { const w = ws[j], L = clamp(x - w / 2, 0, Math.max(0, W - w)); let r = L >= end[0] + pad ? 0 : L >= end[1] + pad ? 1 : -1, LL = L;
+      if (r < 0) { r = end[0] <= end[1] ? 0 : 1; LL = end[r] + pad; if (LL + w > W + 1) ok = false; } end[r] = LL + w; pos.push([r, LL]); });
+    if (ok || f < 0.7) { pos.forEach(([r, L], j) => { const b = nd.tm[j], e = ems[j]; b.classList.toggle('lo', r === 1); b.classList.remove('el', 'er'); e.style.left = ((L - xs[j] + bw / 2) / sw * 100).toFixed(3) + 'cqw'; e.style.right = 'auto'; e.style.transform = 'none'; }); return; }
+  }
 }
 function updateHud(t) {
   const endT = END ? END.t : 1e9, endK = END ? span(t, END.t, 0.45, 'out') : 0;
   // series intro: the top row slides in with the episode badge and channel
   if (SERIES) { const k = CFG.loop ? 1 : span(t, 0, 0.55, 'back'); topEl.style.transform = `translateX(${((1 - k) * -110).toFixed(1)}%)`; topEl.style.opacity = clamp(k * 1.5).toFixed(3); }
+  if (LONG && !SERIES) topEl.style.opacity = hudVis(t).toFixed(3);   // v2.30
+  updateChapter(t);
   // phase
   const si = XSTEPS.length && t < endT ? XSTEPS.findLastIndex(s => s[0] <= t) : -1;
   if (si >= 0) { if (phaseEl.dataset.k !== 's' + si) { phaseEl.dataset.k = 's' + si; phaseEl.className = 'step'; phaseEl.innerHTML = `<b>${si + 1}/${XSTEPS.length}</b>${esc(XSTEPS[si][1])}`; }
@@ -8983,7 +9078,7 @@ function updateHud(t) {
     if (nd.fill) { const f = ty === 'vs' ? a / Math.max(1e-6, a + v) : fr * (k0 < 1 ? EASE.out(k0) : 1); nd.fill.style.width = (f * 100).toFixed(1) + '%';
       nd.fill.style.background = ty === 'vs' ? 'var(--accent)' : s.color ?? (fr > 0.5 ? '#6BE36B' : fr > 0.25 ? '#FFC93C' : 'var(--bad)'); }
     if (nd.mt) nd.mt.setAttribute('transform', `rotate(${(-90 + 1.8 * clamp(vv, 0, 100) + (moving ? noise1(t * 22 + i * 3) * 5 : 0)).toFixed(2)})`);   // meter: the needle swings and trembles while it moves
-    if (nd.tl) { const a = s.from ?? 0, b = s.to ?? 100, fr2 = (clamp((v - a) / (b - a)) * 100).toFixed(2); nd.tf.style.width = fr2 + '%'; nd.tp.style.left = fr2 + '%'; nd.tm.forEach((e, j) => { const on = v >= s.marks[j][0] - 1e-6; if (e.classList.contains('on') !== on) e.classList.toggle('on', on); }); }
+    if (nd.tl) { const a = s.from ?? 0, b = s.to ?? 100, fr2 = (clamp((v - a) / (b - a)) * 100).toFixed(2); nd.tf.style.width = fr2 + '%'; nd.tp.style.left = fr2 + '%'; nd.tm.forEach((e, j) => { const on = v >= s.marks[j][0] - 1e-6; if (e.classList.contains('on') !== on) e.classList.toggle('on', on); }); if (!nd.tlOk && show > 0.01) tlLayout(nd); }
     if (nd.gr) {   // graph: the value's curve over the stat's lifetime, drawn up to now
       const a = s.show ?? 0, b = Math.max(a + 0.5, s.hide ?? endT), n = 40;
       if (s._gmax == null) { let mx = -Infinity, mn = Infinity; for (let i = 0; i <= 90; i++) { const v2 = val(a + (b - a) * i / 90); mx = Math.max(mx, v2); mn = Math.min(mn, v2); }
@@ -9228,7 +9323,7 @@ if (GS) {
   opts.forEach((_, i) => { XHITS.push({ t: t + 0.35 + i * 0.15, k: 'pop', v: 0.45 }, { t: rt + 0.25 + i * 0.12, k: 'pop', v: 0.4 }); });
   XHITS.push({ t: t + 0.9, k: 'ticks', v: 0.5, dur: Math.max(0.5, (GS.dur ?? 3) - 1.2) }, { t: rt + 0.9, k: 'ding', v: 0.8 });
 }
-XSTEPS.forEach(s => XHITS.push({ t: s[0], k: 'tick', v: 0.7 }));
+XSTEPS.forEach(s => XHITS.push(LONG && CFG.chapters !== false && s[0] >= 0.5 ? { t: s[0] - 0.12, k: 'whoosh', v: 0.5 } : { t: s[0], k: 'tick', v: 0.7 }));   // v2.30: chapter cards swoosh in
 const cardVis = (c, t) => span(t, c.t, 0.32, 'out') * (1 - span(t, c.t + c.dur - 0.28, 0.28));
 const cardsK = t => { let k = 0; for (const c of CARDS) if (t >= c.t && t <= c.t + c.dur) k = Math.max(k, cardVis(c, t)); return k; };   // callouts + gauge fade while a card is up
 const xBusy = t => (GA && GA.capLow !== false && t >= GA.show && t <= GA.hide) || CARDS.some(c => t >= c.t - 0.05 && t <= c.t + c.dur + 0.05)
@@ -9237,7 +9332,7 @@ const fmtLike = (num, x) => num.pre + (num.dec ? x.toFixed(num.dec) : Math.round
 function updateCards(t) {
   let dimK = 0;
   for (const c of CARDS) {
-    const k = THUMB_ON ? 0 : cardVis(c, t); dimK = Math.max(dimK, k);
+    const k = THUMB_ON ? 0 : cardVis(c, t); dimK = Math.max(dimK, LONG && c.kind === 'fact' ? 0 : k);   // v2.30: lower thirds don't dim the frame
     c.el.style.opacity = k.toFixed(3);
     if (k <= 0) continue;
     const kin = span(t, c.t, 0.4, 'back');
@@ -9252,11 +9347,59 @@ function updateCards(t) {
       if (c.bar) c.bar.style.width = ((1 - clamp((t - c.t - 0.9) / Math.max(0.3, c.dur - 1.2))) * 100).toFixed(1) + '%'; }
     if (c.kind === 'answer') { const kr = span(t, c.t + 0.9, 0.3, 'back'); c.opts.forEach((o, i) => { const kk = span(t, c.t + 0.25 + i * 0.12, 0.3, 'back'), me = i === c.ans; o.style.opacity = (clamp(kk) * (me ? 1 : 1 - 0.55 * kr)).toFixed(3);
       o.style.transform = `scale(${((0.9 + 0.1 * kk) * (me ? 1 + 0.07 * kr : 1)).toFixed(3)})`; o.classList.toggle('ok', me && kr > 0.02); }); }
-    c.el.style.transform = `translate(${sx.toFixed(2)}cqw, -50%) scale(${(0.86 + 0.14 * kin).toFixed(4)})`;
+    c.el.style.transform = LONG && c.kind === 'fact' ? `translate(${((1 - kin) * -3).toFixed(2)}cqw, -100%)` : `translate(${sx.toFixed(2)}cqw, -50%) scale(${(0.86 + 0.14 * kin).toFixed(4)})`;
   }
   if (dimK > 0) dimEl.style.opacity = Math.max(parseFloat(dimEl.style.opacity) || 0, 0.32 * dimK).toFixed(3);
 }
-function updateExplain(t) { updateSplit(t); updateCalls(t); updateFreeze(t); updateGauge(t); updateCards(t); updateLoop(t); }
+function updateExplain(t) { updateSplit(t); updateCalls(t); updateFreeze(t); updateGauge(t); updateCards(t); updateLoop(t); updateMap2d(t); }
+// v2.30 MAP2D: full-frame 1940s-style map, drawn crisp at output resolution every frame (drawWarMap), with a slow push / pan between two views,
+// arrows that draw themselves, pins, areas and labels. While a card fully covers the frame the 3D scene is not rendered (faster).
+//   MAP2D = [{ t, dur: 6, region: 'europe' | 'channel' | 'normandy' | [lon0, lat0, lon1, lat1], view: [[lon, lat, widthDeg], [lon, lat, widthDeg]], fade: 0.45, textScale: 1.5,
+//     labels, beaches, drops, occupied, text, arrows: [{ pts: [[lon, lat], …], t0, t1, color, w }], pins: [{ at: [lon, lat], t0, color, label }],
+//     areas: [{ pts: [[lon, lat], …], t0, color, opacity, pulse }], marks: [{ text, at: [lon, lat], t0, size, color }] }]
+const MAPS2D = (typeof MAP2D === 'undefined' || !MAP2D ? [] : [].concat(MAP2D)).map(m => ({ ...m, t: evT(m.t), dur: m.dur ?? 6 }));
+const map2dEl = $('map2d'), map2dCtx = map2dEl.getContext('2d');
+MAPS2D.forEach(m => { XHITS.push({ t: m.t - 0.1, k: 'whoosh', v: 0.4 }); for (const a of m.arrows ?? []) XHITS.push({ t: evT(a.t0 ?? m.t + 0.6), k: 'whoosh', v: 0.3 }); for (const p of m.pins ?? []) XHITS.push({ t: evT(p.t0 ?? m.t + 0.4), k: 'pop', v: 0.4 }); });
+const mapVis = (m, t) => { const f = m.fade ?? 0.45; return span(t, m.t, f) * (1 - span(t, m.t + m.dur - f, f)); };
+const map2dK = t => { let k = 0; for (const m of MAPS2D) if (t >= m.t && t <= m.t + m.dur) k = Math.max(k, mapVis(m, t)); return THUMB_ON ? 0 : k; };
+function crPath(pts, n = 16) {   // Catmull-Rom through screen points → dense polyline
+  if (pts.length < 3) { const o = []; for (let i = 0; i <= n; i++) { const u = i / n; o.push([lerp(pts[0][0], pts[pts.length - 1][0], u), lerp(pts[0][1], pts[pts.length - 1][1], u)]); } return o; }
+  const o = []; for (let i = 0; i < pts.length - 1; i++) { const p0 = pts[Math.max(0, i - 1)], p1 = pts[i], p2 = pts[i + 1], p3 = pts[Math.min(pts.length - 1, i + 2)];
+    for (let j = 0; j < n; j++) { const u = j / n, u2 = u * u, u3 = u2 * u; o.push([0, 1].map(a => 0.5 * (2 * p1[a] + (-p0[a] + p2[a]) * u + (2 * p0[a] - 5 * p1[a] + 4 * p2[a] - p3[a]) * u2 + (-p0[a] + 3 * p1[a] - 3 * p2[a] + p3[a]) * u3))); } }
+  o.push(pts[pts.length - 1]); return o;
+}
+function updateMap2d(t) {
+  const m = THUMB_ON ? null : MAPS2D.find(q => t >= q.t && t <= q.t + q.dur);
+  if (!m) { if (map2dEl.style.opacity !== '0') map2dEl.style.opacity = '0'; return; }
+  const sw = stage.clientWidth, sh = stage.clientHeight, W = Math.round(sw * Math.min(EXPORT ? 8 : (window.devicePixelRatio || 1), maxW / sw)), H = Math.round(W * sh / sw);
+  if (map2dEl.width !== W || map2dEl.height !== H) { map2dEl.width = W; map2dEl.height = H; }
+  const name = Array.isArray(m.region) ? 'custom' : m.region ?? 'europe', reg = Array.isArray(m.region) ? m.region : MAPREG[name] ?? MAPREG.europe, kx = Math.cos((reg[1] + reg[3]) / 2 * Math.PI / 180);
+  const V = m.view ?? [[(reg[0] + reg[2]) / 2, (reg[1] + reg[3]) / 2, reg[2] - reg[0]]], a = V[0], b = V[1] ?? V[0], e = EASE.inOut(clamp((t - m.t) / m.dur));
+  const cl = lerp(a[0], b[0], e), cb = lerp(a[1], b[1], e), vw = Math.exp(lerp(Math.log(a[2]), Math.log(b[2]), e)), vh = vw * H / W / kx, view = [cl - vw / 2, cb - vh / 2, cl + vw / 2, cb + vh / 2];
+  const P = (lon, lat) => [(lon - view[0]) / vw * W, (view[3] - lat) / vh * H], c = map2dCtx;
+  drawWarMap(c, W, H, P, view, { ...m, region: name, title: null, textScale: m.textScale ?? 1.6 });
+  const S = W / 1920, Q = P, INK = '#2A1E14', PAPER = 'rgba(236, 224, 192, 0.9)';
+  const txt = (s, X, Y, size, col = INK, align = 'center') => { c.font = `bold ${Math.round(size * S)}px Georgia, "Liberation Serif", "DejaVu Serif", serif`; c.textAlign = align; c.textBaseline = 'middle'; c.lineJoin = 'round'; c.lineWidth = 6 * S; c.strokeStyle = PAPER; c.strokeText(s, X, Y); c.fillStyle = col; c.fillText(s, X, Y); };
+  for (const ar of m.areas ?? []) { const k = span(t, evT(ar.t0 ?? m.t + 0.3), 0.6); if (k <= 0) continue; c.beginPath(); ar.pts.forEach((q, i) => { const [X, Y] = Q(...q); i ? c.lineTo(X, Y) : c.moveTo(X, Y); }); c.closePath();
+    c.globalAlpha = k * (ar.opacity ?? 0.32) * (ar.pulse ? 0.75 + 0.25 * Math.sin(t * 3) : 1); c.fillStyle = ar.color ?? '#B3261E'; c.fill(); c.globalAlpha = k * 0.8; c.lineWidth = 3 * S; c.strokeStyle = ar.color ?? '#B3261E'; c.setLineDash([10 * S, 7 * S]); c.stroke(); c.setLineDash([]); c.globalAlpha = 1; }
+  for (const ar of m.arrows ?? []) {
+    const t0 = evT(ar.t0 ?? m.t + 0.6), t1 = evT(ar.t1 ?? t0 + 1.6), k = EASE.inOut(clamp((t - t0) / Math.max(0.01, t1 - t0))); if (k <= 0) continue;
+    const pl = crPath(ar.pts.map(q => Q(...q))), seg = pl.slice(1).map((q, i) => Math.hypot(q[0] - pl[i][0], q[1] - pl[i][1])), tot = seg.reduce((s, x) => s + x, 0), goal = tot * k, wd = (ar.w ?? 13) * S, col = ar.color ?? '#B3261E';
+    const out = [pl[0]]; let acc = 0; for (let i = 0; i < seg.length; i++) { if (acc + seg[i] >= goal) { const u = (goal - acc) / (seg[i] || 1); out.push([lerp(pl[i][0], pl[i + 1][0], u), lerp(pl[i][1], pl[i + 1][1], u)]); break; } acc += seg[i]; out.push(pl[i + 1]); }
+    const tip = out[out.length - 1], pr = out[Math.max(0, out.length - 3)], ang = Math.atan2(tip[1] - pr[1], tip[0] - pr[0]), hl = wd * 2.6, base = [tip[0] - Math.cos(ang) * hl * 0.8, tip[1] - Math.sin(ang) * hl * 0.8];
+    c.lineCap = 'round'; c.lineJoin = 'round';
+    for (const [lw, cc] of [[wd + 5 * S, 'rgba(30, 20, 12, 0.55)'], [wd, col]]) { c.beginPath(); out.slice(0, -1).concat([base]).forEach(([X, Y], i) => i ? c.lineTo(X, Y) : c.moveTo(X, Y)); c.lineWidth = lw; c.strokeStyle = cc; c.stroke(); }
+    c.beginPath(); c.moveTo(tip[0] + Math.cos(ang) * hl * 0.25, tip[1] + Math.sin(ang) * hl * 0.25); c.lineTo(base[0] + Math.cos(ang + Math.PI / 2) * hl * 0.62, base[1] + Math.sin(ang + Math.PI / 2) * hl * 0.62);
+    c.lineTo(base[0] - Math.cos(ang + Math.PI / 2) * hl * 0.62, base[1] - Math.sin(ang + Math.PI / 2) * hl * 0.62); c.closePath(); c.fillStyle = col; c.fill(); c.lineWidth = 2.5 * S; c.strokeStyle = 'rgba(30, 20, 12, 0.6)'; c.stroke();
+    if (ar.label && k > 0.6) { c.globalAlpha = clamp((k - 0.6) / 0.3); txt(ar.label, tip[0], tip[1] - hl * 1.1, ar.size ?? 30, col); c.globalAlpha = 1; }
+  }
+  for (const p of m.pins ?? []) { const t0 = evT(p.t0 ?? m.t + 0.4), k = span(t, t0, 0.35, 'back'); if (k <= 0) continue; const [X, Y] = Q(...p.at), r = 11 * S * Math.max(0, k), col = p.color ?? '#B3261E', ph = ((t - t0) % 1.6) / 1.6;
+    c.globalAlpha = (1 - ph) * 0.7 * clamp(k); c.lineWidth = 3 * S; c.strokeStyle = col; c.beginPath(); c.arc(X, Y, r * (1 + ph * 2.6), 0, TAU); c.stroke(); c.globalAlpha = 1;
+    c.fillStyle = col; c.beginPath(); c.arc(X, Y, r, 0, TAU); c.fill(); c.lineWidth = 3.5 * S; c.strokeStyle = '#FFF8E6'; c.stroke();
+    if (p.label) { c.globalAlpha = clamp(k); txt(p.label, X + 20 * S, Y, p.size ?? 30, INK, 'left'); c.globalAlpha = 1; } }
+  for (const L of m.marks ?? []) { const k = span(t, evT(L.t0 ?? m.t + 0.3), 0.5); if (k <= 0) continue; const [X, Y] = Q(...L.at); c.globalAlpha = k; txt(L.text, X, Y, L.size ?? 40, L.color ?? INK); c.globalAlpha = 1; }
+  map2dEl.style.opacity = mapVis(m, t).toFixed(3);
+}
 
 // split screen (v2.7): SPLIT = [{ t, dur, a: 'main' | { p, l, fov, p2, l2, fov2 }, b: { … }, labels: ['Myth', 'Reality'], kinds: ['bad', 'good'] }] — two cameras at once, top / bottom, wipes in from below
 const SPLITS = (typeof SPLIT === 'undefined' || !SPLIT ? [] : [].concat(SPLIT)).map(s => ({ ...s, t: evT(s.t), dur: s.dur ?? 3 }));
@@ -9839,7 +9982,7 @@ const draw = t => {
     loopCtx.drawImage(c, 0, 0);
   }
   loopV.style.opacity = u > 0 ? sm01(u).toFixed(4) : '0';
-  update(t); composer.render();
+  update(t); if (map2dK(t) < 0.999) composer.render();   // v2.30: a full-frame map card hides the 3D scene → skip it
 };
 let maxW = EXPORT ? (LAND ? 1920 : 1080) : (LAND ? 1600 : 900), clock = 0, playing = true, dirty = true, last = performance.now();
 function fit() {
@@ -9925,6 +10068,16 @@ window.whatif = {
   seek(t) { playing = false; clock = t; draw(t); },
   setRenderWidth(px) { maxW = px; fit(); },
   fps(f) { FPS = f; },
+  srt() {   // v2.30: subtitles as .srt — same pages and timing as the burned-in captions (render.mjs --srt)
+    const ts = s => { const ms = Math.max(0, Math.round(s * 1000)), p = (x, n = 2) => String(x).padStart(n, '0'); return `${p(Math.floor(ms / 3600000))}:${p(Math.floor(ms / 60000) % 60)}:${p(Math.floor(ms / 1000) % 60)},${p(ms % 1000, 3)}`; };
+    const out = [], tmp = document.createElement('div'); let n = 0;
+    BEATS.forEach((b, i) => { if (!b.text || (END && b.t >= END.t)) return; tmp.innerHTML = markup(b.text); const ws = [...tmp.querySelectorAll('.w')]; if (!ws.length) return;
+      const pg = capPaginate(ws), vt = VOICE?.beats?.[i], st = j => b.t + (vt ? vt[j] : j * (CFG.wordRate ?? 0.085)), groups = [];
+      ws.forEach((w, j) => { (groups[pg[j]] ??= []).push(j); });
+      groups.filter(Boolean).forEach((g, k, G) => { const a0 = st(g[0]), z = k + 1 < G.length ? st(G[k + 1][0]) - 0.04 : b.t + b.dur;
+        const txt = g.map(j => ws[j].textContent).join(' ').replace(/\s+/g, ' ').replace(/\s([,.;:!?…])/g, '$1').trim(); if (txt) out.push(`${++n}\n${ts(a0)} --> ${ts(Math.max(a0 + 0.5, z))}\n${txt}\n`); }); });
+    return out.join('\n');
+  },
   thumbs() { return THV.length; },
   thumb(t, i = 0) { TH = THV[i] ?? THV[0]; thumbOn(); const tt = t ?? TH.t ?? CFG.coverT; playing = false; clock = tt; draw(tt); return tt; },
   async renderAudio(sr = 48000) { return b64(wavBytes(await renderAudio(sr))); },

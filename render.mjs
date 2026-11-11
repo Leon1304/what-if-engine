@@ -4,6 +4,7 @@
 //     → out.mp4 (master, YouTube: CRF 18); with --ig also out-ig.mp4 (Instagram: 1080x1920, ~12 Mbps)
 //   node render.mjs page.html --cover cover.jpg [--t 1.2]   (THUMB = [A, B] → also cover-b.jpg: A/B test thumbnails)
 //   node render.mjs page.html --audio out.wav
+//   node render.mjs page.html --srt out.srt   (v2.30: subtitles for YouTube, same pages + timing as the captions)
 // Landscape pages (CFG.aspect: '16:9') render 16:9 with the same --w (short side): 1440 → 2560x1440.
 // Needs in this folder: npm i three@0.170.0 playwright ; ffmpeg on PATH.
 // Frames stay in <out>.frames/: a stopped run resumes, and --redo a-b re-renders only that time range (after a scene/caption
@@ -56,6 +57,11 @@ const report = errors => { if (errors.length) console.log('PAGE ERRORS:\n' + [..
 const AF = 'loudnorm=I=-14:TP=-1.5:LRA=11,aresample=48000', igPath = v => v.replace(/\.mp4$/, '') + '-ig.mp4';
 const ff = args => { const r = spawnSync('ffmpeg', ['-y', '-loglevel', 'error', ...args], { stdio: 'inherit' }); if (r.status !== 0) { console.log('ffmpeg failed'); process.exit(1); } };
 
+if (opt('srt')) {   // v2.30: subtitles for YouTube (same pages + timing as the burned-in captions)
+  const { browser, page, errors } = await openPage();
+  const s = await page.evaluate(() => window.whatif.srt ? window.whatif.srt() : '');
+  writeFileSync(opt('srt'), s); console.log('wrote', opt('srt'), s.split('\n\n').filter(Boolean).length, 'cues'); report(errors); await browser.close(); process.exit(0);
+}
 if (opt('shots')) {
   const out = opt('out', 'shots'); mkdirSync(out, { recursive: true });
   const { browser, page, errors } = await openPage();

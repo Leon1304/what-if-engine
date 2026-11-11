@@ -114,6 +114,7 @@ jobs:
           ls out/$S.mp4.frames | wc -l
           node render.mjs "${{ matrix.page }}" --video out/$S.mp4 --w $WIDTH
           node render.mjs "${{ matrix.page }}" --cover out/$S-cover.jpg --w $WIDTH
+          node render.mjs "${{ matrix.page }}" --srt out/$S.srt || true
           ffprobe -v error -show_entries format=duration:stream=codec_type,width,height -of csv=p=0 out/$S.mp4
       - name: publish release
         env:
@@ -121,6 +122,6 @@ jobs:
         run: |
           S=${{ steps.s.outputs.slug }}; TAG=render-$S
           gh release view $TAG >/dev/null 2>&1 || gh release create $TAG --title "$S" --notes "Rendered by GitHub Actions (${{ github.sha }})"
-          gh release upload $TAG out/$S.mp4 out/$S-cover*.jpg --clobber
+          gh release upload $TAG out/$S.mp4 out/$S-cover*.jpg $( [ -s out/$S.srt ] && echo out/$S.srt ) --clobber
           gh release delete-asset $TAG $S-ig.mp4 -y >/dev/null 2>&1 || true
           echo "done: https://github.com/${{ github.repository }}/releases/tag/$TAG"

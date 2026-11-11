@@ -14,6 +14,13 @@ Push an assembled page to `renders/<slug>.html` (output of `assemble.py`, voice 
 `https://github.com/Leon1304/what-if-engine/releases/download/render-<slug>/<slug>.mp4`
 Manual run: Actions → render → Run workflow (page path, width 1440 / 2160 / 1080).
 
+## Engine v2.30 (Nov 2026): long-video mode (16:9, 3–10 min)
+- Automatic for every 16:9 page (`CFG.long: false` = off): 3D at full output resolution + 4× MSAA (`CFG.fast` = old speed), calm HUD (badge row only at the start, at chapters, with data, on the end card), chapter title cards from `STEPS`, `FACTS` as lower thirds, two-line sentence-case subtitles split at natural breaks (`CFG.subWords`), brighter nights (`CFG.nightLift`), more aerial haze (`CFG.haze`), soft spray, wet sand along coasts.
+- `MAP2D`: full-frame 1940s map card drawn crisp every frame (push/pan between two views, self-drawing arrows, pins, areas, labels); the 3D scene is skipped while it covers the frame.
+- Timeline stats: labels never overlap (two rows, kept inside the strip) — also in Shorts.
+- `render.mjs --srt out.srt`: subtitles file with the same pages and timing; the render workflow attaches `<slug>.srt` to the release.
+- `reengine.py old.html template.html out.html`: rebuild an assembled page with the current engine (story, scene, voice kept). `examples/long/`: D-Day as the starting point for long videos. Test: `tests/long.*`.
+
 ## Engine v2.28 (Nov 2026): hoplite kit (Sparta, Thermopylae)
 - `corinthHelmet()`: one carved bronze shell (new `carveGeo()`: thick surface with smooth marching-squares openings) — T-shaped face opening with almond eyes and nasal guard, brow ridges, rolled rims, flared nape; horsehair crest `fan` / `transverse` with strands and a swinging tail. `helmetUp(rig, keys)` pushes it up onto the head and back down.
 - `weapon(rig, 'dory')` (leaf blade, socket, grip, sauroter), `weapon(rig, 'xiphos')`, shield style `aspis` rebuilt: bronze-faced bowl with offset rim, painted device (scorpion, snake, club, bull, eyes, trident, gorgon, star, lambda) and rim band, wooden back with porpax and antilabe.

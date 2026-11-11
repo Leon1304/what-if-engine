@@ -556,3 +556,45 @@ Test/Vorschau: `tests/hoplites.*` (Aufstellung, Helme auf Ständern, alle Schild
 - `lensMask([[t0, t1], …], { r: 0.96, color, rim, vignette, sheen })`: runde Linse vor der Kamera in diesen Zeitfenstern, Rest des Bildes dunkel (Blick in den Spiegel, durch den Türspion, durchs Zielfernrohr). `r` = Radius relativ zur halben Bildbreite. Dazu im `CAM` eine weite Einstellung (fov 70–95) von der Spiegel- bzw. Spionposition.
 - `hideDuring(obj, [[t0, t1], …])`: blendet ein Objekt oder eine Figur in diesen Fenstern aus (z. B. „you“ fehlt im Spiegel).
 - SFX: `chime` (Ladentür-Gong) · `knock` (Klopfen an Holztür, `dur` = Länge, ein Schlag pro 0,2 s) · `static` (Funkgerät: Klick, Rauschen, Klick; `dur`) · `caralarm` (Autoalarm, `dur`) · `lift` (Förderkorb: Gitter knallt, Motor, Seil-Ticks; `dur`).
+
+# Neu in v2.30 (Langvideo-Modus, 16:9, 3–10 Min)
+
+Greift automatisch bei jedem `CFG.aspect: '16:9'` (`CFG.long: false` schaltet ihn ab). Alles bleibt eine reine Funktion von t.
+
+## Automatisch
+- **Volle Auflösung:** 3D in voller Ausgabegröße (`renderScale` ≥ 1) und 4× MSAA. Renderzeit ca. ×1,7. `CFG.fast: true` = alte Geschwindigkeit (Entwürfe).
+- **Ruhiges HUD:** Badge + Kapitel-Chip stehen nur am Anfang (`CFG.hudHold`, 7 s), zu jedem Kapitelstart (`CFG.hudChapter`, 5,5 s), solange ein Zähler/eine Zeitleiste sichtbar ist und auf der Endcard. Der @Kanalname bleibt immer stehen. Daten stehen weiter direkt unter der Badge.
+- **Kapitelkarten:** Aus `STEPS` wird zu jedem Kapitelstart (ab t ≥ 0,5) eine Titelkarte links („Chapter 02 / 07“, großer Titel, Akzentlinie, weicher Verlauf, Whoosh), `CFG.chapterDur` 3 s, `CFG.chapters: false` = aus. In den ersten ~3 s eines Kapitels keine Faktenkarte setzen.
+- **Faktenkarten (`FACTS`) als Bauchbinde** unten links über den Untertiteln, ohne das Bild abzudunkeln. MYTH- und GUESS-Karten bleiben mittig.
+- **Untertitel:** normale Groß-/Kleinschreibung, schlanke Schrift, bis zu zwei Zeilen (`CFG.subWords`, 16 Wörter); lange Sätze werden an Komma, Doppelpunkt, Gedankenstrich oder vor „and / but / which …“ geteilt, nahe der Mitte. `CFG.capWords` gilt nur noch für Shorts.
+- **Zeitleiste (`type: 'timeline'`, auch in Shorts):** Beschriftungen überlappen nie (zwei Reihen, im Streifen gehalten, notfalls etwas kleiner); im Querformat breiter.
+- **Licht:** Nacht, Sturm, Dämmerung werden aufgehellt (`CFG.nightLift`, 1; 0 = aus), mehr Luftperspektive in Totalen (`CFG.haze`, 0.6 = Dunst beginnt früher; 1 = wie Shorts).
+- **Wasser:** Gischt und Spritzer als weiche Nebel-Partikel statt kleiner Würfel, Wasserringe dezenter.
+- **Küste:** `ground({ coast })` bekommt einen dunkleren, leicht glänzenden Nasssand-Streifen zur Wasserlinie (`wet: 6` m, `false` = aus).
+
+## 2D-Kartenkarte `MAP2D`
+Ganzbild-Karte im Stil von 1944, jedes Bild gestochen scharf in Ausgabegröße gezeichnet (gleiche Karte wie `warMap()`), mit langsamer Fahrt zwischen zwei Ausschnitten. Solange sie das Bild ganz deckt, wird die 3D-Szene nicht gerechnet (spart Renderzeit). Ersetzt lange Einstellungen am Kartentisch.
+```js
+const MAP2D = [{ t: bt(3), dur: be(5) - bt(3), region: 'europe',            // 'europe' | 'channel' | 'normandy' | [lon0, lat0, lon1, lat1]
+  view: [[3.0, 49.4, 21], [5.5, 50.4, 13]],                                   // [Länge, Breite, Breite des Ausschnitts in Grad]: Start → Ende (Push/Pan)
+  areas: [{ pts: [[lon, lat], …], t0, color: '#8E2A1C', opacity: 0.22, pulse }],   // Fläche mit gestricheltem Rand
+  arrows: [{ pts: [[13.4, 52.5], [9.5, 51.0], [2.35, 48.86]], t0, t1, color, w: 13, label: 'May 1940' }],   // Pfeil baut sich auf (geglättet), Label an der Spitze
+  pins: [{ at: [-0.13, 51.5], t0, label: 'London', color: '#2F5D9E' }],      // Pin mit Puls-Ring
+  marks: [{ text: 'ATLANTIC WALL', at: [lon, lat], t0, size: 40, color }],    // zusätzliche Beschriftung
+  fade: 0.45, textScale: 1.6, labels, beaches, drops, occupied, text }];      // wie warMap()
+```
+Farben: Alliierte `#2F5D9E`, Deutschland/Achse `#8E2A1C` bzw. `#5A2A1E`, Sowjetunion `#B3261E`. Pins und Pfeile bekommen leise Sounds. Untertitel, Zähler und Kapitelkarten liegen darüber.
+
+## Untertitel als Datei
+`node render.mjs page.html --srt out/<slug>.srt` schreibt die Untertitel mit denselben Seiten und Zeiten wie im Bild. `CFG.burnSubs: false` blendet die Untertitel im Bild aus (dann kommen sie nur über die .srt als YouTube-Untertitel; sonst die .srt nicht hochladen, sonst stehen sie doppelt da). Der Workflow `render` legt `<slug>.srt` mit in den Release (YouTube Studio → Untertitel → Datei hochladen).
+
+## Gerüst für Langvideos
+Startpunkt: `examples/long/dday.story.js` + `dday.scene.js` (5:41, 7 Kapitel). Sprechzeilen als `LINES` mit Pausen:
+```js
+const LINES = [['Caption *mit* Akzent.', 'Gesprochener Text (optional).', { pause: 1.2, tone: 'sad' }], …];
+const BEATS = []; { let t = 0.2; LINES.forEach(([text, say, x], i) => { const d = DURS[i] ?? est(say ?? text); BEATS.push({ t: +t.toFixed(2), dur: +(d - 0.2).toFixed(2), text, ...(say ? { say } : {}), ...(x ?? {}) }); t += d + (x?.pause ?? 0); }); }
+```
+`pause` = Sekunden Stille nach der Zeile (nur Bild + Atmo), z. B. 1–1,5 s am Kapitelende und nach Opferzahlen.
+Bestehende Seiten mit neuer Engine neu bauen (Story, Szene, Stimme bleiben): `python3 reengine.py renders/<slug>.html template.html renders/<slug>.html`.
+
+Test: `tests/long.*` (Kapitelkarten, Bauchbinde, Untertitel-Umbruch, Zeitleiste, Nacht, Gischt, Nasssand, 2D-Karte).
