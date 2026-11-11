@@ -437,6 +437,19 @@ Story-Video über 58 s · Endcard + Bewertung über 6,5 s · `loop: false` · ke
   → `{ g, can, launch, apex, height(t), at: { prongs, can, charge, tube } }`; `at.*` sind Anker für `callout()`, `height(t)` speist ein `RULER` (`LIVE.h = t => …`).
 - `warnSign(p, x, z, { kind: 'mines' | 'danger' | 'keepout', text, ry, h: 1.1, size: 0.62, rust })`: rotes Dreiecksschild mit Totenkopf und Text auf einem Pfosten; mit `appear(S.g, t)` einblenden. → `{ g, at }`
 - `markerFlag(p, x, z, { color, t, h: 0.6 })`: kleines Markierungsfähnchen (Fundstelle), poppt bei `t` auf.
+# Neu in v2.22
+
+## Haus-Fallen und Heimverteidigung
+- `marbles(p, x, y, z, { w, d, n, r, colors, seed, spill: { t0, t1, from: [x,y,z], jar } })` → M: bunte Glasmurmeln auf einem Boden (instanziert). `spill` = aus einem gekippten Glas (`jar: false` ohne Glas) geschüttet, sie springen auf und rollen an ihren Platz (Klackern kommt automatisch). `M.kick(x, z, t, { r, power })` lässt Murmeln um einen Punkt wegrollen.
+- `slip(rig, t, { dir: 'back', getUp, dazed, on: M })`: Cartoon-Ausrutscher (Murmeln, Banane, Eis): Füße schießen nach vorn, Arme rudern, Landung auf dem Rücken mit Sternchen; `on: marbles` lässt die Murmeln unter den Füßen wegspritzen. Davor die Figur mit `walk` genau zum Ausrutschpunkt laufen lassen (`t1` = t).
+- `trapFloor(p, x, y, z, { w, d, ry, open: t, close: t2, split: 'x' | 'z' | false, color })`: ein ganzer Dielenboden, der wegklappt (zwei Hälften an den Außenkanten, Bombenschacht-Prinzip), `close` klappt ihn wieder hoch. Den Raum dazu mit `interior({ floor: false })` bauen, den restlichen Boden als `box` setzen und darunter einen Keller (`interior({ kind: 'cellar', y: -2.9 })`). Massen fallen mit `horde({ lift: (t, i) => t > T ? -Math.min(2.9, 4.9 * (t - T) ** 2) : 0 })` hinein.
+- `lever(p, x, y, z, { ry, t, color })` → `{ g, handle, at() }`: Wandhebel auf Stahlplatte (Vorderseite +z), schlägt bei t von oben nach unten um (Klonk). `at()` = Knauf-Position für `gesture(rig, t, 'point', { at })` oder Callouts.
+- `toolbox(p, x, y, z, { ry, color, open: t, close: t2, scale })` → `{ g, lid }`: roter Werkzeugkasten, Deckel klappt auf (Hammer, Schraubenschlüssel, Schraubenzieher, Zange, Maßband); `g` funktioniert mit `carry`, `holdItem`, `toss`.
+- `interior({ floor: false })`: Raum ohne Boden (für Fallböden und Löcher).
+- `trap(p, 'net', x, z, { ceiling: 2.7 })`: Netz für Innenräume, hängt an einem Deckenhaken statt an Pfahl und Ast. `trap(p, 'trapdoor', x, z, { size, depth, keep: true })`: Opfer fällt `depth` m tief und bleibt sichtbar (z. B. im Keller darunter).
+- Waffe `pan` (Bratpfanne): `weapon(rig, 'pan')` + `swing` → Treffer mit Klong (`clang`).
+- Look von „you“ (`outfit`): `grey` · `silver` (Haarfarben), `scar` (Narbe über dem Auge), `workjacket` (olivgrüne Arbeitsjacke mit Kragen, Reißverschluss, Brusttaschen), `cardigan` (Strickjacke mit V-Ausschnitt und Knöpfen), `boots`, `readers` (dünne Lesebrille).
+- Querschnitt-Trick: `ground()` ist von unten unsichtbar. Eine Kamera knapp unter y = 0 zeigt Erdgeschoss und Keller zugleich (Puppenhaus-Schnitt); die Schnittkante davor mit Erd-Boxen gestalten.
 
 # Tests
 `bash tests/run.sh [name …]` baut die Beispiel-Story aus `template.html` und alle Szenen in `tests/` und rendert je drei Bilder; Seitenfehler lassen den Test scheitern. Der Workflow `test` läuft bei jeder Engine-Änderung auf GitHub. Neue Funktionen bekommen eine kleine Testszene in `tests/<thema>.story.js` + `.scene.js`.

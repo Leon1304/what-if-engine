@@ -1,0 +1,15 @@
+ground({ flat: 60, hills: 0 });
+const R = interior(world, 0, 0, { kind: 'living', w: 9, d: 5, h: 2.7, items: false, floor: false, night: true, ceiling: true });
+box(world, 4.6, 0.06, 5, '#B5834E', -2.2, -0.06, 0);
+trapFloor(world, 2.25, 0, 0, { w: 4.3, d: 5, open: 3, close: 6.5 });
+const cel = interior(world, 2.25, 0, { kind: 'cellar', y: -2.9, w: 4.3, d: 5, h: 2.8, night: true });
+const M = marbles(world, -2.8, 0, 0, { w: 1.6, d: 1.8, n: 120, spill: { t0: 0.3, t1: 1.8, from: [-2.8, 0.9, 0.2] } });
+const z1 = figure({ kind: 'zombie', seed: 2 }); world.add(z1.root);
+walk(z1, [[-4.3, 0.2], [-2.8, 0.1]], { t0: 2.0, t1: 3.3 }); slip(z1, 3.35, { on: M });
+const you = char('you', { outfit: ['hair', 'buzz', 'grey', 'scar', 'workjacket', 'boots'], expr: 'smug' }); world.add(you.root); you.root.position.set(4.1, 0, 1.2); you.root.rotation.y = -Math.PI / 2; track('you', you);
+weapon(you, 'pan'); const L = lever(world, 4.42, 1.3, -0.6, { ry: -Math.PI / 2, t: 2.8 });
+toolbox(world, -0.6, 0, 1.6, { open: 1.0 });
+const z2 = figure({ kind: 'zombie', seed: 5 }); world.add(z2.root); z2.root.position.set(1.0, 0, 1.0);
+swing(you, 7.2, { kind: 'chop', at: z2 });
+const z3 = figure({ kind: 'zombie', seed: 7 }); world.add(z3.root); z3.root.position.set(-0.9, 0, -1.4); trap(world, 'net', -0.9, -1.4, { t: 4, victim: z3, ceiling: 2.7 });
+const fr = char('you', { outfit: ['hair', 'grey', 'readers', 'cardigan'] }); world.add(fr.root); fr.root.position.set(-3.8, 0, -1.6);
