@@ -2471,10 +2471,11 @@ function swim(f, pts, o = {}) {
   const P = pts.length > 1 ? pts : [pts[0], pts[0]], Ls = [0]; for (let i = 1; i < P.length; i++) Ls.push(Ls[i - 1] + Math.hypot(P[i][0] - P[i - 1][0], P[i][1] - P[i - 1][1], P[i][2] - P[i - 1][2]));
   const len = Ls[Ls.length - 1] || 1e-6, at = s => { s = clamp(s, 0, len); let i = 1; while (i < Ls.length - 1 && Ls[i] < s) i++; const k = (s - Ls[i - 1]) / (Ls[i] - Ls[i - 1] || 1); return [0, 1, 2].map(j => lerp(P[i - 1][j], P[i][j], k)); };
   const pose3 = t => { const s = sp * Math.max(0, t - t0), p = at(s), a = at(s - 0.6), b = at(s + 0.6); return [p, Math.atan2(b[0] - a[0], b[2] - a[2]), Math.atan2(b[1] - a[1], Math.hypot(b[0] - a[0], b[2] - a[2]))]; };
-  f.fx.push((t, S) => { const k = t * 4.2 + f.sd * 7; S.lt = -0.15 + 0.32 * Math.sin(k); S.rt = -0.15 - 0.32 * Math.sin(k); S.lk = 0.25 + 0.15 * Math.max(0, Math.sin(k + 1)); S.rk = 0.25 + 0.15 * Math.max(0, -Math.sin(k + 1)); S.lf = S.rf = 0.6; S.H = HIP;
+  const on = t => t >= (o.from ?? -1e9) && t <= (o.until ?? 1e9);   // v2.33: from/until = only swim in this window (e.g. tread → dive → tread)
+  f.fx.push((t, S) => { if (!on(t)) return; const k = t * 4.2 + f.sd * 7; S.lt = -0.15 + 0.32 * Math.sin(k); S.rt = -0.15 - 0.32 * Math.sin(k); S.lk = 0.25 + 0.15 * Math.max(0, Math.sin(k + 1)); S.rk = 0.25 + 0.15 * Math.max(0, -Math.sin(k + 1)); S.lf = S.rf = 0.6; S.H = HIP;
     S.las = S.ras = -0.15; S.laz = -0.12; S.raz = 0.12; S.lae = S.rae = -0.1; S.nrx = -0.9; S.nry *= 0.3; S.crx = 0; S.by = 0; });
-  late(t => { const [p, yaw, pitch] = pose3(t); r.position.set(p[0], p[1] + 0.05 * Math.sin(t * 2.1), p[2]); r.rotation.set(Math.PI / 2 - pitch * 0.8, yaw, 0.06 * Math.sin(t * 2.1)); });
-  if (o.bubbles !== false) emit('bubble', { at: t => { const [p, yaw] = pose3(t); return [p[0] + Math.sin(yaw) * 1.6, p[1] + 0.2, p[2] + Math.cos(yaw) * 1.6]; }, t0, rate: 5 });
+  late(t => { if (!on(t)) return; const [p, yaw, pitch] = pose3(t); r.position.set(p[0], p[1] + 0.05 * Math.sin(t * 2.1), p[2]); r.rotation.set(Math.PI / 2 - pitch * 0.8, yaw, 0.06 * Math.sin(t * 2.1)); });
+  if (o.bubbles !== false) emit('bubble', { at: t => { const [p, yaw] = pose3(t); return [p[0] + Math.sin(yaw) * 1.6, p[1] + 0.2, p[2] + Math.cos(yaw) * 1.6]; }, t0, t1: o.until ?? DUR, rate: 5 });
   f._swim = pose3; return f;
 }
 function submarine(p, o = {}) {   // submarine: hull with rounded ends, sail with dive planes, cross rudder, turning propeller, lit portholes, searchlight beam (light: true)
@@ -3339,6 +3340,117 @@ function bombCase(p, x, y, z, o = {}) {
   for (let i = 0; i < 4; i++) { const f = grp(b, 0, -2.4 * s, 0); f.rotation.y = i * Math.PI / 2; box(f, 0.06 * s, 0.9 * s, 1.0 * s, shade(c, -0.1), 0, 0, 0.75 * s); }
   if (o.glow) glow(x, y + 1.2 * s, z, { intensity: 6, dist: 6 * s, color: '#9FE8FF', flicker: 0.1 });
   return g;
+}
+
+// --- v2.33 spent fuel pool, lava lake, trash bags, re-entry ---------------------------------------------------------------------------------------
+// fuelPool(p, x, z, { w: 8, d: 6, depth: 12, free: 0.6, racks: true, cut: false, hall: true, glow: 1, ry })
+//   spent-fuel pool as in reactor halls: steel-lined tank (rim at floor level + depth, a walkway deck around it), fuel-rack grid at the bottom
+//   (~1/3 of the depth) with the blue Cherenkov glow, water that is brighter near the rods, railing, yellow crane bridge, warning stripes.
+//   cut: true = the front (+z) wall is glass, so a camera in front sees the water column and the racks (cross-section for explainers).
+//   → { g, surfaceY, bottomY, rackTop, at(u, v) } — at(): anchor on the front face, u −1 … 1 across, v 0 surface … 1 bottom
+function fuelPool(p, x, z, o = {}) {
+  const w = o.w ?? 8, d = o.d ?? 6, D = o.depth ?? 12, fr = o.free ?? 0.6, y0 = groundH(x, z), NC = { cast: false }, st = '#B9C0C6';
+  const g = dyn(grp(p ?? world, x, y0, z, o.ry ?? 0)), S = stat(grp(g)), top = D, sy = D - fr, rk = D * 0.36;
+  box(S, w + 0.4, 0.3, d + 0.4, '#8A9096', 0, -0.3, 0);   // bottom slab
+  for (const s of [-1, 1]) box(S, 0.2, D, d + 0.4, st, s * (w / 2 + 0.1), 0, 0);
+  box(S, w, D, 0.2, st, 0, 0, -d / 2 - 0.1);
+  if (o.cut) { const gm = mat('#BFE8FF', { own: true, opacity: 0.16, rough: 0.05, metal: 0.2 }); gm.depthWrite = false; box(g, w + 0.4, D, 0.06, '', 0, 0, d / 2 + 0.13, { mat: gm, ...NC }).renderOrder = 4; }
+  else box(S, w + 0.4, D, 0.2, st, 0, 0, d / 2 + 0.1);
+  for (let i = 0; i < 12; i++) box(S, w + 0.02, 0.02, 0.02, '#9AA2A8', 0, D * i / 12, -d / 2 + 0.005, NC);   // weld seams on the back wall
+  // water: brighter blue towards the rods, a slowly rippling surface
+  const wg = new THREE.BoxGeometry(w - 0.02, sy, d - 0.02, 1, 10, 1); wg.translate(0, sy / 2, 0);
+  const wp = wg.attributes.position, wc = [], cA = new THREE.Color('#2E86C8'), cB = new THREE.Color('#5FE0FF'), cc = new THREE.Color();
+  for (let i = 0; i < wp.count; i++) { const k = 1 - wp.getY(i) / sy; cc.copy(cA).lerp(cB, k ** 2.2); wc.push(cc.r, cc.g, cc.b); }
+  wg.setAttribute('color', new THREE.Float32BufferAttribute(wc, 3));
+  const wm = new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.42, depthWrite: false }), wme = new THREE.Mesh(wg, wm); wme.renderOrder = 3; g.add(wme);
+  const sg = new THREE.PlaneGeometry(w - 0.02, d - 0.02, 24, 18); sg.rotateX(-Math.PI / 2); const sp = sg.attributes.position, sb = Float32Array.from(sp.array);
+  const sm = mat('#7FD6FF', { own: true, opacity: 0.5, rough: 0.05, metal: 0.1, em: '#3FB8FF', ei: 0.35 }); sm.depthWrite = false;
+  const surf = dyn(mesh(g, sg, sm, 0, sy, 0, NC)); surf.renderOrder = 5;
+  tick(t => { for (let i = 0; i < sp.count; i++) { const a = sb[i * 3], b = sb[i * 3 + 2]; sp.setY(i, 0.03 * Math.sin(a * 2.1 + t * 1.7) + 0.025 * Math.sin(b * 2.7 - t * 1.3)); } sp.needsUpdate = true; sg.computeVertexNormals(); });
+  // fuel racks with assemblies, glowing tops
+  if (o.racks !== false) { const R = stat(grp(g, 0, 0, 0)), nx = Math.max(2, Math.round(w / 0.9)), nz = Math.max(2, Math.round(d / 0.9)), cm = mat('#9FF2FF', { basic: true, glow: 1.4 * (o.glow ?? 1) });
+    for (let i = 0; i < nx; i++) for (let j = 0; j < nz; j++) { const px = (i + 0.5) / nx * (w - 0.6) - (w - 0.6) / 2, pz = (j + 0.5) / nz * (d - 0.6) - (d - 0.6) / 2;
+      box(R, 0.62, rk, 0.62, '#7E868E', px, 0, pz); box(R, 0.5, 0.05, 0.5, '', px, rk + 0.01, pz, { mat: cm, ...NC }); }
+    glow(x, y0 + rk + 0.6, z, { intensity: 40 * (o.glow ?? 1), dist: Math.max(w, D) * 1.4, color: '#5FD8FF', flicker: 0.05 }); }
+  // deck, railing, stripes, crane bridge
+  if (o.hall !== false) { const H = stat(grp(g, 0, top, 0)), wd = 4;
+    for (const s of [-1, 1]) { box(H, wd, 0.3, d + 2 * wd, '#5E6670', s * (w / 2 + wd / 2 + 0.2), -0.3, 0); box(H, w + 0.4, 0.3, wd, '#5E6670', 0, -0.3, s * (d / 2 + wd / 2 + 0.2)); }
+    for (const s of [-1, 1]) { box(H, 0.25, 0.012, d + 0.4, '#F2C230', s * (w / 2 + 0.35), 0.005, 0, NC); box(H, w + 0.9, 0.012, 0.25, '#F2C230', 0, 0.005, s * (d / 2 + 0.35), NC); }
+    const rail = (ax, az, bx, bz) => { const L = Math.hypot(bx - ax, bz - az), n = Math.max(2, Math.round(L / 1.6)); for (let i = 0; i <= n; i++) cyl(H, 0.03, 0.03, 1.05, '#E8B830', lerp(ax, bx, i / n), 0, lerp(az, bz, i / n), { seg: 6 }); const r = box(H, L, 0.05, 0.05, '#E8B830', (ax + bx) / 2, 1.05, (az + bz) / 2); r.rotation.y = -Math.atan2(bz - az, bx - ax); };
+    const ex = w / 2 + 0.6, ez = d / 2 + 0.6; rail(-ex, -ez, ex, -ez); rail(-ex, -ez, -ex, ez); rail(ex, -ez, ex, ez * 0.2);
+    if (!o.cut) rail(-ex, ez, ex * 0.3, ez);
+    const C = grp(H, 0, 7, 0); box(C, w + 9, 0.7, 0.8, '#E8B830', 0, 0, -1.2); box(C, w + 9, 0.7, 0.8, '#E8B830', 0, 0, 1.2); box(C, 1.4, 0.9, 3.2, '#D9A520', 1.5, -0.1, 0);
+    cyl(C, 0.03, 0.03, 4.5, '#2A2A2A', 1.5, -4.6, 0, { seg: 4 }); box(C, 0.5, 0.4, 0.3, '#2A2A2A', 1.5, -4.9, 0);
+    box(H, w + 30, 14, 0.4, '#C9CDD0', 0, -0.3, -(d / 2 + wd + 6)); box(H, 0.4, 14, d + 30, '#C2C6CA', -(w / 2 + wd + 8), -0.3, 0); }
+  const at = (u, v) => { const vv = new THREE.Vector3(u * w / 2, sy - clamp(v) * sy, d / 2 + 0.2); return () => g.localToWorld(vv.clone()).toArray(); };
+  return { g, surfaceY: y0 + sy, bottomY: y0, rackTop: y0 + rk, deckY: y0 + top, at };
+}
+// lavaLake(p, x, z, { r: 14, rim: 4, color, crust }) — open lava lake in a crater: jagged dark rock rim, a surface of black crust plates with glowing
+//   cracks that drift and shift, bubbling glow spots, heat shimmer smoke, orange light. Things thrown in float, catch fire and burn away:
+//   L.burn(obj, t, { from: [x, y, z], to: [x, z], h, spin }) — flies in an arc, lands with a lava splash, floats, chars, flames, smoke, shrinks away.
+//   L.fountain(t, x, z, { size }) — a burst of lava (rockfall / cold object): spray, glow, boom.
+//   → { g, y, burn, fountain, at: () => [x, y, z] }
+function lavaLake(p, x, z, o = {}) {
+  const r = o.r ?? 14, y = groundH(x, z) + 0.15, g = stat(grp(p ?? world, x, y, z)), NC = { cast: false };
+  for (let i = 0; i < 40; i++) { const a = i / 40 * TAU, rr = r + 0.6 + hash(i * 3.3) * (o.rim ?? 4) * 0.5, h = 1.2 + hash(i * 7.1) * (o.rim ?? 4); const b = box(g, 2.6 + hash(i) * 2, h, 2.2 + hash(i * 2) * 1.6, shade('#2E2624', (hash(i * 5) - 0.5) * 0.1), Math.cos(a) * rr, -0.4, Math.sin(a) * rr, { ry: -a + 0.3 * hash(i * 9), rz: (hash(i * 4) - 0.5) * 0.4 }); }
+  const N = 64, geo = new THREE.CircleGeometry(r + 0.8, N, 0, TAU); geo.rotateX(-Math.PI / 2);
+  const gd = new THREE.PlaneGeometry(2 * r + 2, 2 * r + 2, 56, 56); gd.rotateX(-Math.PI / 2); const pos = gd.attributes.position, base = Float32Array.from(pos.array), n = pos.count, cols = new Float32Array(n * 3); gd.setAttribute('color', new THREE.BufferAttribute(cols, 3));
+  const m = new THREE.MeshBasicMaterial({ vertexColors: true }), me = dyn(mesh(world, gd, m, x, y, z, NC));
+  const crust = new THREE.Color(o.crust ?? '#1E1714'), hot = new THREE.Color(o.color ?? '#FF5A14').multiplyScalar(1.6), white = new THREE.Color('#FFD27A').multiplyScalar(1.8), c = new THREE.Color();
+  tick(t => { for (let i = 0; i < n; i++) { const a = base[i * 3], b = base[i * 3 + 2], d = Math.hypot(a, b) / r;
+      if (d > 1.04) { pos.setY(i, -0.6); continue; }
+      const u = a * 0.32 + t * 0.12, v = b * 0.32 - t * 0.07, cell = Math.abs(noise2(u, v) - noise2(u + 7.3, v - 3.1)), crack = clamp(1 - cell * 9), bub = clamp(noise2(a * 0.5 + t * 0.6, b * 0.5 - t * 0.4) * 1.6 - 0.75);
+      pos.setY(i, 0.12 * bub + 0.04 * Math.sin(a * 1.7 + t * 2));
+      c.copy(crust).lerp(hot, clamp(crack * 0.95 + bub)).lerp(white, clamp(bub * 0.6 + (d > 0.93 ? (d - 0.93) * 6 : 0))); cols[i * 3] = c.r; cols[i * 3 + 1] = c.g; cols[i * 3 + 2] = c.b; }
+    pos.needsUpdate = true; gd.attributes.color.needsUpdate = true; });
+  glow(x, y + 3, z, { intensity: 120 * Math.max(1, r / 10), dist: r * 4, color: '#FF7A2A', flicker: 0.3 });
+  emit('smoke', { at: [x, y + 0.5, z], area: [r * 1.4, r * 1.4], height: 0.5, t0: -5, rate: 10, size: r * 0.18, speed: 1.6, spread: 0.3, life: 7, opacity: 0.45, colors: ['#8A7A70', '#5A504A'] });
+  emit('spark', { at: [x, y + 0.2, z], area: [r * 1.5, r * 1.5], height: 0.2, t0: -5, rate: 14, size: 0.12, speed: 2.5, spread: 0.4, life: 1.2 });
+  const fountain = (t, fx, fz, f = {}) => { const s = f.size ?? 1; emit('fire', { at: [fx, y + 0.3, fz], t0: t, t1: t + 0.5 * s, rate: 120, size: 0.6 * s, speed: 9 * s, spread: 0.45, jitter: 0.6 * s });
+    emit('debris', { at: [fx, y + 0.3, fz], t0: t, burst: Math.round(40 * s), colors: ['#FFB43A', '#FF5A14', '#3A2A22'], size: 0.25 * s, speed: 10 * Math.sqrt(s), spread: 0.55, basic: true, life: 1.8, g: -9.8 });
+    glow(fx, y + 2, fz, { t0: t, t1: t + 0.9, intensity: 180 * s, dist: 18 * s, rampIn: 0.04, color: '#FFA040' }); sfx(t, 'boom', 0.7 * Math.min(1.5, s)); sfx(t + 0.05, 'splash', 0.4); };
+  const burn = (obj, t, b = {}) => { const ob = dyn(obj.root ?? obj), [ax, ay, az] = b.from ?? [x, y + 8, z + r + 4], [bx, bz] = b.to ?? [x + (hash(t) - 0.5) * r, z + (hash(t + 1) - 0.5) * r], H = b.h ?? 4, T = b.dur ?? 1.1, sp = b.spin ?? 3, s0 = ob.scale.x, ms = [];
+    ob.traverse(q => { if (q.isMesh) { q.material = q.material.clone(); ms.push([q.material, q.material.color.clone()]); } });
+    tick(tt => { if (tt < t) return; const u = clamp((tt - t) / T), k = tt - t - T;
+      if (u < 1) { ob.position.set(lerp(ax, bx, u), lerp(ay, y, u) + H * 4 * u * (1 - u), lerp(az, bz, u)); ob.rotation.set(sp * u, sp * 0.7 * u, 0); ob.scale.setScalar(s0); ob.visible = true; return; }
+      ob.position.set(bx + 0.15 * Math.sin(k * 0.8), y + 0.1 + 0.08 * Math.sin(k * 2.3) - Math.min(0.6, k * 0.05), bz); ob.rotation.set(sp, sp * 0.7, 0.1 * Math.sin(k));
+      const ch = clamp(k / 2.5); ms.forEach(([mm, c0]) => mm.color.copy(c0).lerp(_CHAR, ch)); ob.scale.setScalar(s0 * Math.max(0.001, 1 - clamp((k - 2.5) / 5))); ob.visible = k < 7.5; });
+    emit('splat', { at: [bx, y + 0.1, bz], t0: t + T, burst: 14, colors: ['#FFB43A', '#FF5A14'], size: 0.18, speed: 3, spread: 0.7, basic: true, life: 0.9 });
+    emit('fire', { at: [bx, y + 0.5, bz], t0: t + T + 0.15, t1: t + T + 7, rate: 26, size: 0.55, speed: 1.6, jitter: 0.4 });
+    emit('smoke', { at: [bx, y + 1.2, bz], t0: t + T + 0.4, t1: t + T + 8, rate: 6, size: 1.3, speed: 1.5, jitter: 0.5, colors: ['#2A2624', '#4A4440'] });
+    sfx(t + T, 'splash', 0.35); sfx(t + T + 0.2, 'fire', 0.4); return t + T; };
+  return { g, y, burn, fountain, at: () => [x, y, z] };
+}
+const _CHAR = new THREE.Color('#1A1614');
+// trashBag(p, x, y, z, { color: '#1E2226', size: 1, ry, kind: 'bag' | 'can' | 'box' | 'bottle' }) — plain trash for dumps, alleys, volcano explainers (no brands)
+function trashBag(p, x, y, z, o = {}) {
+  const s = o.size ?? 1, k = o.kind ?? 'bag', g = dyn(grp(p ?? world, x, y, z, o.ry ?? 0)), c = o.color ?? { bag: '#1E2226', can: '#9AA2A8', box: '#B08A5A', bottle: '#3FA06A' }[k];
+  if (k === 'bag') { const b = ball(g, 0.38 * s, c, 0, 0.36 * s, 0, { detail: 1 }); b.scale.set(1, 0.92, 0.85); cone(g, 0.12 * s, 0.22 * s, c, 0, 0.66 * s, 0, { seg: 6 }); box(g, 0.05 * s, 0.12 * s, 0.05 * s, '#F2C230', 0.04 * s, 0.84 * s, 0, { cast: false }); }
+  else if (k === 'can') cyl(g, 0.07 * s, 0.07 * s, 0.24 * s, c, 0, 0, 0, { seg: 10 });
+  else if (k === 'box') box(g, 0.5 * s, 0.35 * s, 0.4 * s, c, 0, 0, 0);
+  else { cyl(g, 0.06 * s, 0.06 * s, 0.24 * s, c, 0, 0, 0, { seg: 8 }); cyl(g, 0.025 * s, 0.05 * s, 0.1 * s, c, 0, 0.24 * s, 0, { seg: 8 }); }
+  return g;
+}
+// reentry(obj, pts, { t0, t1, breakAt, pieces: 6, size: 6, color, ease }) — a satellite / space station / capsule falls through the atmosphere along
+//   pts ([[x,y,z], …], scene units): orange plasma sheath around it, fire and smoke trail; at breakAt it breaks into burning pieces that drift apart
+//   and burn out before t1. Rumble at t0, crack at breakAt. → { pos(t) }
+function reentry(obj, pts, o = {}) {
+  const ob = dyn(obj.root ?? obj.g ?? obj), t0 = o.t0 ?? 0, t1 = o.t1 ?? t0 + 6, bk = o.breakAt ?? lerp(t0, t1, 0.55), s = o.size ?? 6, NC = { cast: false }, path = pts.map(q => new THREE.Vector3(...q)), curve = new THREE.CatmullRomCurve3(path);
+  const U = t => (o.ease === false ? clamp((t - t0) / (t1 - t0)) : EASE.in(clamp((t - t0) / (t1 - t0))) * 0.6 + clamp((t - t0) / (t1 - t0)) * 0.4);
+  const pos = t => curve.getPointAt(U(t)).toArray(), dir = t => curve.getTangentAt(Math.min(0.999, U(t)));
+  const pm = mat('#FF8A3A', { own: true, basic: true, opacity: 0.55 }); pm.blending = THREE.AdditiveBlending; pm.depthWrite = false;
+  const sheath = dyn(ball(world, 1, '', 0, 0, 0, { detail: 2, mat: pm, ...NC })); sheath.renderOrder = 4;
+  const P = [...Array(o.pieces ?? 6)].map((_, i) => { const q = dyn(grp(world)); box(q, s * (0.12 + 0.12 * hash(i * 3.7)), s * 0.08, s * (0.1 + 0.15 * hash(i * 5.3)), o.color ?? '#C8CCD2', 0, 0, 0); const off = new THREE.Vector3(hash(i) - 0.5, hash(i * 2.1) - 0.5, hash(i * 4.3) - 0.5).normalize().multiplyScalar(s * (0.8 + hash(i * 6.1))); return [q, off, i]; });
+  const pp = (q, i, off, t) => { const b = new THREE.Vector3(...pos(t)), k = clamp((t - bk) / (t1 - bk)); return b.addScaledVector(off, k * 3).toArray(); };
+  tick(t => { const on = t >= t0 && t < t1, pre = t < bk, [px, py, pz] = pos(t);
+    if (t >= t0) { ob.position.set(px, py, pz); const dv = dir(t); ob.lookAt(px + dv.x, py + dv.y, pz + dv.z); }
+    ob.visible = t < bk || t < t0; sheath.visible = on && pre; if (sheath.visible) { const k = span(t, t0, (bk - t0) * 0.5); sheath.position.set(px, py, pz); sheath.scale.set(s * (0.6 + 0.5 * k), s * (0.6 + 0.5 * k), s * (0.6 + 0.5 * k)); pm.opacity = 0.25 + 0.35 * k + 0.05 * Math.sin(t * 40); }
+    for (const [q, off, i] of P) { q.visible = t >= bk && t < t1; if (q.visible) { q.position.set(...pp(q, i, off, t)); q.rotation.set(t * (1 + i), t * 1.3, t * 0.7 * i); } } });
+  emit('fire', { at: pos, t0, t1: bk, rate: 80, size: s * 0.35, jitter: s * 0.3, speed: 1 });
+  emit('smoke', { at: pos, t0: t0 + 0.2, t1: bk, rate: 18, size: s * 0.4, jitter: s * 0.3, life: 5, colors: ['#E8DCD0', '#B8AEA6'] });
+  for (const [q, off, i] of P) emit('fire', { at: t => pp(q, i, off, t), t0: bk, t1: t1 - 0.2, rate: 22, size: s * 0.16, jitter: s * 0.05, speed: 0.6 });
+  sfx(t0, 'thunder', 0.6); sfx(bk, 'crack', 0.7); sfx(bk + 0.05, 'boom', 0.5);
+  return { pos };
 }
 
 // --- v2.21 landmines and warnings -------------------------------------------------------------------------------------------------------------------
@@ -6824,7 +6936,7 @@ function tread(f, t0 = 0, t1 = 1e9, o = {}) {
   const r = dyn(f.root), lv = o.level;
   if (o.at) r.position.set(o.at[0], 0, o.at[1]);
   (f.fx ??= []).push((t, S) => { const e = env3(t, t0, t1, 0.3, 0.3); if (!e) return; const A = MOVES.tread(0, t, { sd: f.sd }); for (const k in A) if (S[k] != null) S[k] = lerp(S[k], A[k], e); });
-  late(t => { if (t < t0 || t > t1) return; const p = r.position; p.y = (lv ?? (typeof waterH === 'function' ? waterH(p.x, p.z, t) : 0)) - 1.42 + 0.05 * Math.sin(t * 1.8); });
+  late(t => { if (t < t0 || t > t1) return; const p = r.position; r.rotation.x = 0; r.rotation.z = 0; p.y = (lv ?? (typeof waterH === 'function' ? waterH(p.x, p.z, t) : 0)) - 1.42 + 0.05 * Math.sin(t * 1.8); });
   return f;
 }
 // climb(rig, { at: [x, z], ry, y0, y1, t0, speed, ladder: true }) — hand over hand up a ladder (or a wall with ladder: false); stays on top at y1 → end time
