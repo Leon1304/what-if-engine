@@ -372,5 +372,43 @@ Zustände (`state`): fresh · steam · burnt (dunkel, raucht) · frozen (Eisbloc
 - Party: `balloons(p, x, y, z, { n, release: t })`, `discoBall(p, x, y, z)` (farbige Lichtkegel), `djDesk(p, x, z, { ry, dj: true })` (Plattenteller, Pegellichter, DJ).
 - Musik: `instrument(rig, kind, t0, t1)` mit guitar · drums (Set mit Hocker) · keyboard · trumpet · mic; mit passendem Klang.
 
+# Neu in v2.19
+
+## Publikum und Massen
+`audience(p, x, z, { rows, cols, gap, rise, ry, ola: { t0, t1, speed }, cheer: [[t0, t1], …], flee: { at: [x,z], t, speed, dir }, jostle, shirts, color, seat })` baut eine Tribüne voller Leute (eine instanzierte Masse), → `{ g, H, spots }`.
+- `ola`: La-Ola läuft durch die Reihen, mit Applaus.
+- `cheer`: Jubelfenster mit Hüpfen und Armen oben.
+- `flee`: Panik ab `t`. Alle rennen die Reihe entlang, weg von `at`, steigen am Tribünenende herunter und laufen weiter.
+
+`horde()` hat dafür neue Optionen:
+- `spots: [[x, z, yaw, y], …]`: feste Plätze (Schlange, Zuschauer, Wartende), `n` ergibt sich daraus.
+- `face: [x,z]`: alle schauen dorthin.
+- `ola: { t0, t1, speed, axis: 'x' | 'z', period }`.
+- `jostle`: leichtes Schunkeln und Drängeln, Stärke 0–1.
+- `flee: { at, t, speed, path(i, d, q) → [x, z, y, yaw] }`: mit Reaktionsverzögerung je Person.
+
+## Kamera-Moves
+Sie wirken zusätzlich zu `CAM`:
+- `vertigo(t0, t1, { amount })`: Dolly-Zoom (Hitchcock). Die Figur bleibt gleich groß, der Hintergrund zieht sich zusammen; `amount < 0` kehrt das um. Mit Riser.
+- `crashZoom(t, { dur, amount, hold })`: blitzschneller Zoom auf das Motiv, mit Whoosh.
+- `droneShot(t0, t1, [[x,y,z], …], { look: [x,y,z] | trackName | 'ahead', roll, tilt })`: weicher Drohnenflug durch Punkte, legt sich in Kurven.
+- `shaky(t0, t1, { amp })`: Handkamera-Action mit Wackeln und Rollen.
+
+## Flüssigkeiten
+- `pour(rig | [x,y,z], t0, t1, { to: [x,z], color, puddle })`: gießt aus der rechten Hand (Gefäß mit `holdItem`, `rot` kippt es) und bildet eine Pfütze.
+- `gush(at, dir, t0, t1, { speed, w })`: Wasser schießt durch eine Tür, ein Rohr oder ein Fenster.
+- `floodRoom({ x, z, w, d, ry }, t0, t1, { h })`: Wasser steigt in einem Raum, Wände baut die Szene; → `{ level(t) }`.
+
+## Seile und Schaukeln
+- `rope(a, b, { sag, len, segs, r, color })`: hängendes Seil zwischen Punkten, Figuren (rechte Hand), Objekten oder `t => [x,y,z]`, wird jedes Bild neu berechnet; → `{ mid(t) }`.
+- `swingSet(p, x, z, { h, t0, amp, rider, color })`: Schaukel mit Pendel, Reiter greift die Seile und schwingt die Beine.
+- `ropeBridge(p, [x,z], [x,z], { y, w, sag, walkers: [rig] })`: Hängebrücke aus Planken, die unter den Gängern nachgibt und federt. `walk()` darüber hält die Füße auf den Planken (der Start muss auf der Brücke liegen).
+
+## Wackelpudding, Feuer, Glas
+- `jello(p, x, y, z, { color, poke: [t, …], scale })`: Wackelpudding auf Teller; jeder Stups lässt ihn nachwabbeln.
+- `burn(obj | [x,y,z], t0, { size, dur, charTime, char: false })`: Flammen, Rauch, Glut und Knistern; das Objekt verkohlt.
+- `spreadFire([obj | [x,y,z], …], t0, { speed })`: Feuer springt von einem zum nächsten (Kisten, Vorhänge, Gras).
+- `crackGlass([x,y,z], t, { size, ry })`: Spinnennetz-Riss in einer Scheibe, mit Knack.
+
 # Tests
 `bash tests/run.sh [name …]` baut die Beispiel-Story aus `template.html` und alle Szenen in `tests/` und rendert je drei Bilder; Seitenfehler lassen den Test scheitern. Der Workflow `test` läuft bei jeder Engine-Änderung auf GitHub. Neue Funktionen bekommen eine kleine Testszene in `tests/<thema>.story.js` + `.scene.js`.
