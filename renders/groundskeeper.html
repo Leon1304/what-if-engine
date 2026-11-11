@@ -325,8 +325,8 @@ const CAM = [
   { t: 14.7, cut: true, tr: 'zoom', p: [X0 + 0.4, -0.45, 21], l: [X0, -0.2, 0], fov: 52 },
   { t: 16.3, p: [X0 + 0.4, -0.45, 19.8], l: [X0, -0.2, 0], fov: 52, e: 'lin' },
   // exterior: the open door, the crowd goes for it
-  { t: 16.3, cut: true, tr: 'whip', p: [-1.4, 4.6, 6.6], l: [0.2, 1.0, 3.2], fov: 46 },
-  { t: 18.5, p: [-1.2, 4.2, 6.0], l: [0.2, 1.0, 3.2], fov: 44, e: 'lin' },
+  { t: 16.3, cut: true, tr: 'whip', p: [X0 - 2.9, 1.55, 1.6], l: [X0 - 6.0, 1.15, 0.2], fov: 48 },
+  { t: 18.5, p: [X0 - 3.4, 1.45, 1.3], l: [X0 - 6.0, 1.15, 0.2], fov: 46, e: 'lin' },
   ...shot('wide', 18.5, 1.9, [0, 1, 5], { az: -28, dist: 22, h: 7, fov: 46, move: 'orbit', turn: 8 }),
   // the traps
   { t: 20.4, cut: true, tr: 'whip', p: [X0 - 3.9, 1.35, 6.2], l: [X0 - 4.5, 0.6, 0], fov: 48 },
@@ -7666,7 +7666,7 @@ box(world, 0.14, 2.8, 2.45, WC, X - 6.07, 0, -1.525); box(world, 0.14, 2.8, 1.85
 for (const zz of [-0.34, 0.94]) box(world, 0.2, 2.2, 0.08, TR, X - 6.0, 0, zz); box(world, 0.2, 0.08, 1.36, TR, X - 6.0, 2.15, 0.3);
 const fdoor = dyn(grp(world, X - 6.02, 0.02, -0.28)); fdoor.userData.angle = 1.55; fdoor.userData.sign = 1;
 box(fdoor, 0.06, 2.1, 1.15, '#5B3A24', 0, 0, 0.58); ball(fdoor, 0.04, '#D9B65C', 0.05, 1.0, 1.0, { detail: 0, cast: false });
-openDoor({ door: fdoor }, 18.4);
+openDoor({ door: fdoor }, 16.9);
 // back wall: left part with window + pictures, breach part, right part
 const bk1 = grp(world, X - 2.42, 0, -2.82); box(bk1, 7.44, 2.8, 0.14, WC, 0, 0, 0); box(bk1, 7.44, 0.12, 0.03, shade(WC, -0.25), 0, 0, 0.085, { cast: false });
 FURN.window(bk1, 1.6, 1.0, 0.08, 0, { w: 1.3, h: 1.2, night: true }); FURN.picture(bk1, -1.4, 1.45, 0.08, 0, { w: 0.9, h: 0.6 }); FURN.picture(bk1, -3.0, 1.55, 0.08, 0, { w: 0.5, h: 0.7 });
