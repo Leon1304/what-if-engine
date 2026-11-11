@@ -88,9 +88,16 @@ def weight(tok):   # rough spoken length of a caption token
 EMO = {'calm': (0.96, 0.92, -0.3, 0.9, None), 'tense': (0.94, 0.95, 0.4, 0.8, None), 'worried': (1.03, 1.0, 1.0, 1.2, None), 'excited': (1.07, 1.1, 1.6, 1.5, None),
        'shout': (1.05, 1.22, 2.6, 1.4, 'shout'), 'whisper': (0.9, 0.8, 0.0, 0.7, 'whisper'), 'sad': (0.9, 0.9, -1.0, 0.7, None), 'dramatic': (0.92, 1.0, -0.6, 1.2, None),
        'deadpan': (0.97, 0.95, -0.6, 0.5, None), 'curious': (0.98, 1.0, 0.6, 1.35, None), 'relieved': (0.95, 0.95, -0.3, 1.05, None)}
-# reaction words: (text, tone, speed). Spoken slowly and never rushed — checked with a speech recogniser: at normal narrator speed "Whoa!" and "Wow!" turn into a mumbled "well…"
-REACTS = {'gasp': None, 'sigh': None, 'whoa': ('Whoa—', 'excited', 0.86), 'wow': ('Wow.', 'curious', 0.86), 'ugh': ('Ugh.', 'deadpan', 0.9), 'hm': ('Hmm.', 'deadpan', 0.9), 'oh': ('Oh no.', 'worried', 0.95),
-          'ha': ('Ha ha.', 'excited', 0.95), 'noway': ('No way.', 'curious', 0.95), 'great': ('Great.', 'deadpan', 0.95), 'yikes': ('Yikes.', 'worried', 0.95), 'seriously': ('Seriously?', 'deadpan', 0.95), 'comeon': ('Oh, come on.', 'deadpan', 0.98)}
+# reaction words: text, speed, melody [(position 0..1, semitones from the speaker's own pitch)], stretch, loudness. A reaction is acted, not read: the melody is drawn
+# onto the word (PSOLA) — "whoa" jumps up and falls, "hmm" sinks and rises in doubt, "ugh" sags, "great." stays flat and low — and the word is drawn out.
+# Spoken slowly and never rushed (checked with a speech recogniser: at narrator speed "Whoa!" and "Wow!" turn into a mumbled "well…").
+REACTS = {'gasp': None, 'sigh': None,
+          'whoa': ('Whoa—', 0.86, [(0, 4), (0.15, 8), (0.5, 3), (1, -4)], 1.4, 1.3), 'wow': ('Wow.', 0.86, [(0, 0), (0.35, 8), (0.7, 2), (1, -4)], 1.35, 1.25),
+          'ugh': ('Ugh.', 0.9, [(0, 2), (0.3, -1), (1, -6)], 1.5, 1.05), 'hm': ('Hmm.', 0.9, [(0, 0), (0.45, -4), (0.75, -2), (1, 4)], 1.6, 1.05),
+          'oh': ('Oh no.', 0.95, [(0, 6), (0.35, 4), (0.55, 1), (1, -5)], 1.25, 1.2), 'ha': ('Haha!', 1.0, [(0, 5), (0.3, 1), (0.5, 6), (0.8, 1), (1, -2)], 1.05, 1.2),
+          'noway': ('No way.', 0.95, [(0, 1), (0.25, 0), (0.55, 7), (1, -4)], 1.25, 1.2), 'great': ('Great.', 0.95, [(0, -1), (0.5, -3), (1, -6)], 1.5, 0.95),
+          'yikes': ('Yikes.', 0.95, [(0, 7), (0.5, 5), (1, -2)], 1.15, 1.2), 'seriously': ('Seriously?', 0.95, [(0, -2), (0.5, -1), (0.8, 3), (1, 8)], 1.2, 1.05),
+          'comeon': ('Oh, come on.', 0.98, [(0, 3), (0.35, 2), (0.65, 6), (1, -4)], 1.2, 1.15)}
 VAUTO = vc.get('auto', True) is not False and '--no-auto' not in args; EMO_K = float(vc.get('emotion', 1.0))
 # what happens when: from the built page (assemble.py → <slug>.events.json), else from what the story file lists
 try: EV = json.load(open(f'{OUT}.events.json' if os.path.exists(f'{OUT}.events.json') else f'{slug}.events.json'))
@@ -204,6 +211,18 @@ def prosody(a, shift, rng):   # pitch level (semitones) and pitch range (× arou
         out = _praat(man, 'Get resynthesis (overlap-add)').values[0].astype(np.float32)
         return out if len(out) > 0.8 * len(a) and np.isfinite(out).all() else a
     except Exception: return a
+def act(a, pts, stretch, k=1.0):   # a reaction word gets its melody and its length: the pitch curve is replaced by the drawn one, the word is stretched
+    if parselmouth is None or len(a) < SR * 0.15: return a
+    try:
+        snd = parselmouth.Sound(a.astype(np.float64), SR); dur = snd.duration; man = _praat(snd, 'To Manipulation', 0.01, 60, 420); p0 = _praat(man, 'Extract pitch tier'); n = int(_praat(p0, 'Get number of points'))
+        if n < 2: return a
+        med = float(np.median([_praat(p0, 'Get value at index', i + 1) for i in range(n)])); t0, t1 = _praat(p0, 'Get time from index', 1), _praat(p0, 'Get time from index', n)
+        pt = _praat('Create PitchTier', 'r', 0, dur); xs, ys = [p[0] for p in pts], [p[1] * k for p in pts]
+        for u in np.linspace(0, 1, 14): _praat(pt, 'Add point', float(t0 + u * (t1 - t0)), float(med * 2 ** (np.interp(u, xs, ys) / 12)))
+        _praat([pt, man], 'Replace pitch tier'); dt = _praat(man, 'Extract duration tier'); _praat(dt, 'Add point', dur / 2, float(1 + (stretch - 1) * min(1.2, k))); _praat([dt, man], 'Replace duration tier')
+        out = _praat(man, 'Get resynthesis (overlap-add)').values[0].astype(np.float32)
+        return out if len(out) > 0.8 * len(a) and np.isfinite(out).all() else a
+    except Exception: return a
 def whisperize(a, k=0.72):   # breathy whisper: the spectral envelope stays, the voiced buzz is replaced by noise (random phases, harmonics smoothed away)
     n, hop = 512, 128; win = np.hanning(n).astype(np.float32); pad = np.concatenate([np.zeros(n, np.float32), a, np.zeros(n, np.float32)]); out = np.zeros(len(pad), np.float32); rg = np.random.default_rng(11); tilt = (1 + np.fft.rfftfreq(n, 1 / SR) / 1800) ** 0.8   # a whisper is brighter than a voiced sound
     for s in range(0, len(pad) - n, hop):
@@ -243,7 +262,7 @@ def speak(say, sp, vo, gap, ctx=None):   # sentence by sentence: own tempo and t
             if out: out.append(np.zeros(int((gap if k else 0.32) * SR), np.float32))
             for r_ in rc:
                 if REACTS[r_] is None: a_ = react_sound(r_)
-                else: tx, tn, rs = REACTS[r_]; e_ = EMO[tn]; a_ = level(prosody(synth(tx, rs, vo), e_[2] * 0.6, 1 + (e_[3] - 1) * 0.6), max(1.1, e_[1]))   # a little louder than the sentence, gentler pitch change: the word has to stay clear
+                else: tx, rs, pts, stz, lg = REACTS[r_]; a_ = level(act(synth(tx, rs, vo), pts, stz, max(0.4, EMO_K)), lg)
                 out += [a_, np.zeros(int(0.17 * SR), np.float32)]
                 if first and len(out) == 2: lead = (len(a_) + int(0.17 * SR)) / SR
                 notes.append(f'[{r_}]')
