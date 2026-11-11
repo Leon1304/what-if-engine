@@ -15,6 +15,11 @@ Push an assembled page to `renders/<slug>.html` (output of `assemble.py`, voice 
 `https://github.com/Leon1304/what-if-engine/releases/download/render-<slug>/<slug>.mp4`
 Manual run: Actions → render → Run workflow (page path, width 1440 / 2160 / 1080).
 
+## Engine v2.38 (Nov 2026): a narrator with feeling, voice first in the mix
+- The narrator reacts to the scene sentence by sentence (loud hits, shakes, music mood, counters that jump): tempo, loudness, pitch level and range (PSOLA), real whisper, pushed shout; `[whisper]` / `[gasp]` / `[sigh]` / `[whoa]` tags in `say`; `CFG.voice: { emotion, auto }`
+- Music, ambience and sound effects are mixed under the voice afterwards: speech stays `AUDIO.clarity` dB above everything else (look-ahead, speech band), effects duck too, the voice has its own chain; `render.mjs` reports the margin (`mix: …`)
+- v2.37: explainer / conspiracy videos show few numbers (`CFG.numbers`, stat `num: false`, number budget check in `assemble.py`)
+
 ## Engine v2.36 (Nov 2026): destruction
 - `breakApart()` breaks things the way they are built: small parts fly whole, walls in irregular chunks that keep their surface, roofs and silos in sheets, hollow blocks as wall panels, glass bursts, dust and splinters in the object's colours
 - `collapse(building, t, { style })`: pancake (sinks into its dust, rubble mound stays) · topple (falls like a tree, breaks on impact) · crumble (falls apart on the spot)

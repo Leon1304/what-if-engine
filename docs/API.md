@@ -787,5 +787,27 @@ Dinge zerbrechen so, wie sie gebaut sind. Alles ist echte Physik (einmal vorab s
 # Neu in v2.37 (Erklär- und Conspiracy-Videos: wenige Zahlen)
 
 - `CFG.numbers`: `'few'` ist Standard bei `kind: 'explain' | 'conspiracy'`: Die Believability-Nadel (`type: 'meter'`) zeigt keine Prozentzahl mehr (Nadel und Beschriftung reichen), Zähler zeigen keine „+120“/„−30 %“-Einblendungen. `'all'` = wie in Story-Videos.
-- Pro Zähler: `value: false` = nur Balken/Nadel ohne Zahl (geht in jedem Video), `value: true` bzw. `pop: true` holt Zahl bzw. Einblendung im `'few'`-Modus zurück.
+- Pro Zähler: `num: false` = nur Balken/Nadel ohne Zahl (geht in jedem Video), `num: true` bzw. `pop: true` holt Zahl bzw. Einblendung im `'few'`-Modus zurück.
 - `assemble.py` zählt bei Erklär- und Conspiracy-Videos, was der Zuschauer lesen müsste, und meldet `numbers on screen: 6 (captions 2 · callouts/ruler 3 · cards 1) + 4 counter(s)`. Mehr als 4 Zahlen im ganzen Video oder mehr als 1 Zähler gibt eine WARNING. `numbers: 'all'` in `CFG` schaltet die Prüfung ab.
+
+# Neu in v2.38 (Stimme mit Gefühl, Stimme vor Geräuschen und Musik)
+
+## Der Erzähler reagiert auf die Szene (automatisch)
+- `assemble.py` fragt die gebaute Seite, was wann passiert (`whatif.events()` → `<slug>.events.json`): laute Ereignisse (Explosion, Kanone, Donner, Brüllen, Aufprall), Kamerawackeln, Musikstimmung, Sprünge der Zähler (gut/schlecht), Dunkelheit, Zeitlupe.
+- `voice.py` wählt daraus pro **Satz** den Ton: Explosion oder starkes Wackeln kurz vor oder im Satz → `shout` (kurze Sätze, „!“) oder `excited`; ein Zähler stürzt → `worried`, erholt sich → `relieved`; „…“ → `dramatic`; kurze Pointe nach einem Satz → `deadpan`; Frage → `curious`; sonst nach der Musik (`horror`/`tense` → `tense`, `action`/`triumph`/`party` → `excited`, `epic` → `dramatic`, `sad` → `sad`, `science`/`chill` → `calm`). Die Endcard spricht er ruhig.
+- Der Erzähler reagiert auf das, was gerade passiert ist, er nimmt es nicht vorweg (Ereignis bis 0,7 s vor dem Satz oder in dessen erster Hälfte). Schnitt-Akzente (`boom`, `stinger`, `whoosh`) zählen nicht.
+- Die Zeilenübersicht von `assemble.py` zeigt die Wahl mit Grund: `tone: worried ← Survival drops at 6.2 s · shout ← explosion at 12.6 s`.
+
+## Was ein Ton hörbar ändert
+- Tempo, Lautstärke, Tonhöhe und Tonumfang (PSOLA: dieselbe Stimme, Formanten bleiben), dazu Klangfarbe: `whisper` ist echtes Flüstern (stimmlos, hauchig), `shout` hat Druck und Biss.
+- Töne: calm · tense · worried · excited · shout · whisper · sad · dramatic · deadpan · curious · relieved · plain (neutral).
+- Von Hand: `tone` am Beat gilt für alle seine Sätze. Pro Satz in `say`: `say: 'It was quiet. [whisper] Too quiet.'`.
+- Reaktionen in `say`: `[gasp]` (scharfes Einatmen) · `[sigh]` (Seufzer) als Laute, `[whoa]` `[ugh]` `[hm]` `[oh]` `[ha]` `[wow]` als kurze gesprochene Einwürfe. Automatisch setzt die Engine höchstens drei pro Video (Einatmen vor dem Schreck, Seufzer nach einem schweren Rückschlag), nur wenn die Zeile dafür Platz hat.
+- `CFG.voice: { name, emotion: 1 }` skaliert die Stärke (0 = aus, 1,5 = kräftig), `auto: false` schaltet die Automatik ab (nur noch `tone` und Tags). Stimmen im Bild (`who: 'steve' | 'you'`) bekommen keine Automatik.
+- Braucht `praat-parselmouth` (pip); fehlt es, bleiben Tempo, Lautstärke und Klangfarbe, die Tonhöhe ändert sich nicht.
+
+## Stimme zuerst: der Mix
+- Musik, Atmo und Effekte werden für sich gerendert und danach unter die Stimme gemischt: Während gesprochen wird, bleibt die Stimme `AUDIO.clarity` dB über allem anderen (Standard 12, Erklär-/Conspiracy- und Querformat-Videos 14). Gemessen wird im Sprachbereich mit 60 ms Vorlauf: Eine Explosion mitten im Satz wird leiser, bevor sie einsetzt. Zwischen den Sätzen kommt der Hintergrund zurück, bleibt aber `AUDIO.bedCap` dB (Standard 4) unter der Stimme.
+- Auch Effekte ducken jetzt unter der Stimme (`AUDIO.duckFx`, 0.7), Atmo stärker (`AUDIO.duckAmb`, 0.55). Die Stimme hat eine eigene Kette (Präsenz bei 3 kHz, `AUDIO.presence` dB, eigener Kompressor) und hängt nicht mehr am Kompressor der Effekte: Laute Szenen drücken sie nicht mehr weg.
+- `render.mjs` meldet nach dem Ton: `mix: voice 15 dB over the background while speaking (scene as written: 8.3 dB · tightest passage 2.7 dB at 8 s · target 12 dB)`. Liegt die Szene selbst unter 4 dB, kommt eine `MIX:`-Zeile mit der Stelle: dort Atmo/Effekte leiser setzen oder den lauten Moment zwischen zwei Sätze legen.
+- `AUDIO.clarity: false` = nur festes Ducking wie vor v2.38.

@@ -27,10 +27,10 @@ def _block(name):   # source text of `const NAME = [ … ];` in the story
 def _strs(src, key):   # values of key: '…' | "…" | `…`
     return [m.group(2) for m in re.finditer(key + r"""\s*:\s*(['"`])((?:\\.|(?!\1).)*)\1""", src, re.S)]
 _num = lambda s: len(re.findall(r'(?<![A-Za-z#])\d[\d.,]*', re.sub(r'\bb\d+\b', '', s)))
-if re.search(r"kind:\s*'(explain|conspiracy|debunk)'", story) and not re.search(r"numbers:\s*'all'", story):
+if re.search(r"kind:\s*'(explain|conspiracy|debunk)'", re.sub(r'//[^\n]*', '', story)) and not re.search(r"numbers:\s*'all'", story):
     # v2.37: explainer / conspiracy videos show few numbers — count what the viewer would have to read
     _cap = sum(_num(s) for s in _strs(_block('BEATS'), 'text'))
-    _st = _block('STATS'); _cnt = len(re.findall(r'\blabel\s*:', _st)) - len(re.findall(r"type:\s*'(?:meter|timeline|stars)'", _st)) - len(re.findall(r'\bvalue:\s*false', _st))
+    _st = _block('STATS'); _cnt = len(re.findall(r'\blabel\s*:', _st)) - len(re.findall(r"type:\s*'(?:meter|timeline|stars)'", _st)) - len(re.findall(r'\bnum:\s*false', _st))
     _co = len(re.findall(r'\bvalue\s*:', _block('CALLOUTS'))) + len(re.findall(r'callout\([^;]*\bvalue\s*:', scene)) + len(re.findall(r'\bconst\s+RULER\b', story))
     _co += sum(_num(s) for s in _strs(_block('CALLOUTS'), 'text') + _strs(_block('CALLOUTS'), 'sub')) + sum(_num(s) for ln in scene.split('\n') if 'callout(' in ln for s in _strs(ln, 'text'))
     _cards = len(_strs(_block('FACTS'), 'big')) + sum(_num(s) for s in _strs(_block('GUESS'), 'text') + _strs(_block('MYTH'), 'text') + _strs(_block('FACTS'), 'text'))
@@ -118,6 +118,21 @@ for d in (os.path.join(here_, 'sfx'), os.path.join(here_, '.engine', 'sfx')):
 if sfx: t = t.replace('/* @SFX */{}', '/* @SFX */' + json.dumps(sfx, separators=(',', ':')), 1)
 # voice-over: voice.py (cached) → embed mp3 + word timings; CFG.voice: false = no voice
 if os.path.exists(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'tts', 'voices-v1.0.bin')) and '--no-voice' not in args:
+    # v2.38: the narrator reacts to the scene — ask the built page what happens when (loud hits, shakes, music mood, counters that jump);
+    # cached per story + scene; if the page cannot be probed, voice.py falls back to what the story file itself lists
+    import hashlib
+    _hd = os.path.dirname(os.path.abspath(__file__)); _eh = hashlib.md5((story + scene).encode()).hexdigest()[:12]; _ef = f'{OUT}.events.json'
+    try: _have = json.load(open(_ef)).get('hash') == _eh
+    except Exception: _have = False
+    if not _have and '--no-probe' not in args and not re.search(r"voice:\s*(false|\{[^}]*auto:\s*false)", story):
+        _pf = f'{OUT}.probe.html'; open(_pf, 'w', encoding='utf-8').write(t)
+        try:
+            _r = subprocess.run(['node', os.path.join(_hd, 'render.mjs'), _pf, '--probe', 'whatif.events()'], capture_output=True, text=True, timeout=240)
+            _ev = json.loads(_r.stdout[_r.stdout.index('{'):_r.stdout.rindex('}') + 1]); _ev['hash'] = _eh; json.dump(_ev, open(_ef, 'w'))
+            print(f"scene events for the voice: {len(_ev.get('hits', []))} sounds · {len(_ev.get('shakes', []))} shakes · {len(_ev.get('stats', []))} counter jumps")
+        except Exception as e: print('NOTE: could not read the scene events (voice reacts to the story file only):', str(e)[:120])
+        finally:
+            if os.path.exists(_pf): os.remove(_pf)
     v = subprocess.run([sys.executable, os.path.join(os.path.dirname(os.path.abspath(__file__)), 'voice.py'), slug] + (['--lang', LANG] if LANG != 'en' else []), capture_output=True, text=True)
     print((v.stdout or '').rstrip() or ('voice failed: ' + v.stderr[-600:]))
 if os.path.exists(f'{OUT}.voice.json') and os.path.exists(f'{OUT}.voice.mp3'):

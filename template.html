@@ -9804,7 +9804,7 @@ document.documentElement.style.setProperty('--accent', ACC); document.documentEl
 if (CFG.accent === 'red' || /^#(f|e)[0-9a-f][0-4]/i.test(ACC)) document.documentElement.style.setProperty('--bad', '#FFB020');   // red accent → danger words turn amber
 const SERIES = CFG.series;
 const KIND = CFG.kind === 'debunk' ? 'conspiracy' : CFG.kind ?? 'story', EXPLAIN = KIND === 'explain' || KIND === 'conspiracy';   // explainer 'Explaining' / conspiracy check 'Conspiracy': badge without episode number
-const FEWNUM = (CFG.numbers ?? (EXPLAIN ? 'few' : 'all')) === 'few';   // v2.37: explainer / conspiracy videos show few numbers — the needle of a meter speaks for itself (value: true = show the figure), no +/− pop-ups (pop: true = show); any stat: value: false = bar or needle only
+const FEWNUM = (CFG.numbers ?? (EXPLAIN ? 'few' : 'all')) === 'few';   // v2.37: explainer / conspiracy videos show few numbers — the needle of a meter speaks for itself (num: true = show the figure), no +/− pop-ups (pop: true = show); any stat: num: false = bar or needle only
 if (EXPLAIN && (CFG.badge == null || CFG.badge === 'What if')) CFG.badge = tr(KIND === 'conspiracy' ? 'Conspiracy' : 'Explaining');
 $('badge').textContent = SERIES?.ep && !EXPLAIN ? `${CFG.badge} #${SERIES.ep}` : CFG.badge;
 const XSTEPS = (typeof STEPS === 'undefined' || !STEPS ? [] : STEPS).map(([a, b]) => [evT(a), tr(b)]);
@@ -9989,7 +9989,7 @@ function updateHud(t) {
     const val = tt => ty === 'timer' && s.until != null ? Math.max(0, (s.until - tt) * (s.scale ?? 1)) : statVal(s, tt);
     const v = val(t), dv = v - val(t - 0.12), moving = Math.abs(dv) > 1e-6 && ty !== 'timer';
     const k0 = clamp((t - (s.show ?? 0)) / (CFG.countUp ?? 0.7)), vv = ty === 'timer' || ty === 'timeline' ? v : k0 < 1 ? v * EASE.out(k0) : v;
-    const a = s.a ?? 1, txt = s.value === false || (FEWNUM && ty === 'meter' && s.value !== true) ? '' : ty === 'vs' ? `${fmtNum(a, s.fmt)} vs ${fmtNum(vv, s.fmt)}` : ty === 'stars' ? '' : fmtNum(vv, ty === 'timer' ? s.fmt ?? 'clock' : ty === 'meter' ? s.fmt ?? 'pct' : ty === 'timeline' ? s.fmt ?? 'year' : s.fmt);
+    const a = s.a ?? 1, txt = s.num === false || (FEWNUM && ty === 'meter' && s.num !== true) ? '' : ty === 'vs' ? `${fmtNum(a, s.fmt)} vs ${fmtNum(vv, s.fmt)}` : ty === 'stars' ? '' : fmtNum(vv, ty === 'timer' ? s.fmt ?? 'clock' : ty === 'meter' ? s.fmt ?? 'pct' : ty === 'timeline' ? s.fmt ?? 'year' : s.fmt);
     if (nd.last !== txt) { nd.v.textContent = txt; nd.last = txt; }
     const max = s.max ?? (ty === 'stars' ? 5 : 100), fr = clamp(v / max);
     if (nd.fill) { const f = ty === 'vs' ? a / Math.max(1e-6, a + v) : fr * (k0 < 1 ? EASE.out(k0) : 1); nd.fill.style.width = (f * 100).toFixed(1) + '%';
@@ -10016,7 +10016,7 @@ function updateHud(t) {
     nd.v.style.color = crit ? 'var(--bad)' : moving ? (good === null ? (s.bad ? 'var(--bad)' : 'var(--accent)') : good ? '#6BE36B' : 'var(--bad)') : '#fff';
     // change pop-up: the jump of the last second, fades 0.8 s after the number stops
     const d1 = v - val(t - 1), d2 = v - val(t - 0.8), big = Math.abs(d1) >= (typeof s.pop === 'number' ? s.pop : 1);
-    if (s.pop !== false && !(FEWNUM && s.pop == null) && s.value !== false && ty !== 'timer' && ty !== 'stars' && ty !== 'timeline' && big && t - (s.show ?? 0) > 0.5) {
+    if (s.pop !== false && !(FEWNUM && s.pop == null) && s.num !== false && ty !== 'timer' && ty !== 'stars' && ty !== 'timeline' && big && t - (s.show ?? 0) > 0.5) {
       const g = s.up ? (d1 >= 0) === (s.up === 'good') : !s.bad, txt2 = (d1 > 0 ? '+' : '−') + fmtNum(Math.abs(d1), s.fmt, (CFG.units ?? 'both') === 'both' ? 'metric' : CFG.units);
       if (nd.dl.textContent !== txt2) nd.dl.textContent = txt2;
       nd.dl.style.color = g ? '#6BE36B' : 'var(--bad)';
@@ -10544,7 +10544,7 @@ const SND = (() => {
     sad:     { bpm: 68,  root: 45, scale: [0, 2, 3, 5, 7, 8, 10], prog: [0, 5, 3, 4], lead: 'keys',    drums: 'none', sevenths: true },  // didn't make it
     none:    { bpm: 100, root: 43, scale: [0, 2, 4, 5, 7, 9, 11], prog: [0], lead: 'keys', drums: 'none', none: true }   // v2.20: no music — ambience and SFX carry the scene (no mood fits the topic)
   };
-  function build(ctx, vbuf, SB = {}) {
+  function build(ctx, vbuf, SB = {}, BO = {}) {   // BO.voice: false = the voice is mixed in afterwards (renderAudio: mixVoice keeps the background under it)
     let s = 987654321; const ar = () => (s = (s * 16807) % 2147483647) / 2147483647;
     const sr = ctx.sampleRate, A = AUDIO;
     // score: the music follows the scene. AUDIO.score = [[t, mood], …] (else AUDIO.mood for the whole video); an ending adds sad / triumph automatically
@@ -10563,7 +10563,7 @@ const SND = (() => {
     const music = ctx.createGain(), mBase = A.music ?? 0.55; music.gain.value = mBase;
     const vduck = ctx.createGain(); music.connect(vduck); if (LOOPX) lfade(vduck); else vduck.connect(master);   // music dips under the voice-over
     const ms = ctx.createGain(); ms.gain.value = 0.35; music.connect(ms); ms.connect(verb);
-    const fx = ctx.createGain(); fx.gain.value = A.sfx ?? 0.9; if (LOOPX) lfade(fx); else fx.connect(master);
+    const fx = ctx.createGain(); fx.gain.value = A.sfx ?? 0.9; const fduck = ctx.createGain(); fx.connect(fduck); if (LOOPX) lfade(fduck); else fduck.connect(master);   // v2.38: sound effects dip under the voice too
     const fs = ctx.createGain(); fs.gain.value = 0.22; fx.connect(fs); fs.connect(verb);
     // helpers
     const env = (g, t, a, hold, r, peak) => { g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(peak, t + a); g.gain.setValueAtTime(peak, t + a + hold); g.gain.linearRampToValueAtTime(0, t + a + hold + r); };
@@ -10847,8 +10847,9 @@ const SND = (() => {
     for (const h of [...(A.hits ?? []), ...steveHits, ...XHITS]) (SFX[h.k] ?? (() => {}))(h.t, h.v ?? 1, h.dur, h.p);
     ducks.sort((a, b) => a - b).forEach(t => { music.gain.setTargetAtTime(mBase * 0.4, t, 0.015); music.gain.setTargetAtTime(mBase, t + 0.25, 0.4); });
     if (vbuf) {
-      const vs = ctx.createBufferSource(), vg = ctx.createGain(); vs.buffer = vbuf; vg.gain.value = (VOICE.gain ?? 1) * 1.15; vs.connect(vg); vg.connect(master); vs.start(0);
-      for (const [a, b] of VOICE.segs) { vduck.gain.setTargetAtTime(A.duck ?? 0.38, Math.max(0, a - 0.12), 0.05); vduck.gain.setTargetAtTime(1, b + 0.15, 0.3); aduck.gain.setTargetAtTime(0.6, Math.max(0, a - 0.12), 0.08); aduck.gain.setTargetAtTime(1, b + 0.15, 0.4); }
+      if (BO.voice !== false) { const vs = ctx.createBufferSource(), vg = ctx.createGain(); vs.buffer = vbuf; vg.gain.value = (VOICE.gain ?? 1) * 1.15; vs.connect(vg); vg.connect(master); vs.start(0); }
+      for (const [a, b] of VOICE.segs) { vduck.gain.setTargetAtTime(A.duck ?? 0.38, Math.max(0, a - 0.12), 0.05); vduck.gain.setTargetAtTime(1, b + 0.15, 0.3); aduck.gain.setTargetAtTime(A.duckAmb ?? 0.55, Math.max(0, a - 0.12), 0.08); aduck.gain.setTargetAtTime(1, b + 0.15, 0.4);
+        fduck.gain.setTargetAtTime(A.duckFx ?? 0.7, Math.max(0, a - 0.1), 0.05); fduck.gain.setTargetAtTime(1, b + 0.12, 0.3); }
     }
   }
   return { build };
@@ -10863,12 +10864,46 @@ const wavBytes = buf => {
   return new Uint8Array(ab);
 };
 const b64 = u8 => { let s = ''; for (let i = 0; i < u8.length; i += 0x8000) s += String.fromCharCode.apply(null, u8.subarray(i, i + 0x8000)); return btoa(s); };
+// v2.38 voice first: the background (music, ambience, sound effects) is rendered on its own, then mixed under the voice so that speech always stays
+// AUDIO.clarity dB above it (default 12, explainer / conspiracy / 16:9 films 14; false = fixed ducking only, as before). Measured in the speech band
+// (rumble below 180 Hz does not count), 60 ms look-ahead: an explosion in the middle of a sentence is pulled down before it lands. Between sentences
+// the background comes back, but never as loud as the voice (AUDIO.bedCap dB under it, default 4).
+let MIXINFO = null;
+function mixVoice(bed, vo, sr) {
+  const n = bed.length, hop = Math.round(sr * 0.01), F = Math.ceil(n / hop), bL = bed.getChannelData(0), bR = bed.numberOfChannels > 1 ? bed.getChannelData(1) : bL, vL = vo.getChannelData(0), vR = vo.numberOfChannels > 1 ? vo.getChannelData(1) : vL;
+  const pv = new Float32Array(F), pb = new Float32Array(F), a = Math.exp(-2 * Math.PI * 180 / sr); let hl = 0, hr = 0, xl = 0, xr = 0;
+  for (let f = 0; f < F; f++) { let sv = 0, sb = 0; const i1 = Math.min(n, (f + 1) * hop);
+    for (let i = f * hop; i < i1; i++) { const v = (vL[i] + vR[i]) * 0.5; sv += v * v; hl = a * (hl + bL[i] - xl); xl = bL[i]; hr = a * (hr + bR[i] - xr); xr = bR[i]; sb += (hl * hl + hr * hr) * 0.5; }
+    pv[f] = sv / (i1 - f * hop || 1); pb[f] = sb / (i1 - f * hop || 1); }
+  const box = (P, w) => { const o = new Float32Array(F); let s = 0; for (let f = 0; f < F; f++) { s += P[f]; if (f >= w) s -= P[f - w]; o[f] = s / Math.min(f + 1, w); } return o; };
+  const ev = box(pv, 5), eb0 = box(pb, 8), eb = new Float32Array(F); for (let f = 0; f < F; f++) { let m = 0; for (let k = Math.max(0, f - 2); k <= Math.min(F - 1, f + 14); k++) m = Math.max(m, eb0[k]); eb[f] = m; }   // loudest of the next 60 ms (the box filter lags 80 ms)
+  const act = new Uint8Array(F), thr = 0.008 * 0.008; let last = -1e9; for (let f = 0; f < F; f++) { if (ev[f] > thr) last = f; act[f] = f - last < 30 ? 1 : 0; } for (let f = F - 1, nx = 1e9; f >= 0; f--) { if (ev[f] > thr) nx = f; if (nx - f < 14) act[f] = 1; }
+  let gs = 0, gn = 0; for (let f = 0; f < F; f++) if (ev[f] > thr) { gs += pv[f]; gn++; } const Lg = gn ? gs / gn : 0; if (!gn) return bed;
+  const loc = new Float32Array(F); { const W = 100, cs = new Float64Array(F + 1), cn = new Float64Array(F + 1); for (let f = 0; f < F; f++) { const on = ev[f] > thr; cs[f + 1] = cs[f] + (on ? pv[f] : 0); cn[f + 1] = cn[f] + (on ? 1 : 0); }
+    for (let f = 0; f < F; f++) { const a0 = Math.max(0, f - W), b0 = Math.min(F, f + W), c = cn[b0] - cn[a0]; loc[f] = c > 8 ? Math.max((cs[b0] - cs[a0]) / c, Lg * 0.12) : Lg; } }   // how loud the narrator is around here (a whispered line gets a quieter background)
+  const M = AUDIO.clarity ?? (EXPLAIN || LAND ? 14 : 12), kM = Math.pow(10, -M / 10), kC = Math.pow(10, -(AUDIO.bedCap ?? 4) / 10), g = new Float32Array(F); let cur = 1, rawS = 0, rawB = 0, outB = 0, worst = 1e9, worstT = 0, worstA = 1e9;
+  for (let f = 0; f < F; f++) { const tgt = act[f] ? loc[f] * kM : Lg * kC, want = eb[f] > tgt ? Math.max(0.045, Math.sqrt(tgt / eb[f])) : 1; cur += (want - cur) * (want < cur ? 0.55 : 0.028); g[f] = cur; }
+  for (let f = 0; f < F; f++) if (act[f] && ev[f] > thr) { rawS += pv[f]; rawB += pb[f]; outB += pb[f] * g[f] * g[f]; }
+  for (let f = 0; f + 200 <= F; f += 50) { let s = 0, b = 0, b2 = 0, c = 0; for (let k = f; k < f + 200; k++) if (act[k] && ev[k] > thr) { s += pv[k]; b += pb[k]; b2 += pb[k] * g[k] * g[k]; c++; } if (c > 60 && b > 0) { const d = 10 * Math.log10(s / b); if (d < worst) { worst = d; worstT = f / 100; } worstA = Math.min(worstA, 10 * Math.log10(s / b2)); } }
+  const out = new AudioBuffer({ numberOfChannels: 2, length: n, sampleRate: sr }), oL = out.getChannelData(0), oR = out.getChannelData(1), mfo = LOOPX ? 0.1 : 0.5, lim = x => { const s = x < 0 ? -x : x; return s <= 0.82 ? x : Math.sign(x) * (0.82 + 0.17 * Math.tanh((s - 0.82) / 0.17)); };
+  for (let i = 0; i < n; i++) { const fp = i / hop - 0.5, f0 = Math.max(0, Math.min(F - 1, Math.floor(fp))), f1 = Math.min(F - 1, f0 + 1), gg = g[f0] + (g[f1] - g[f0]) * Math.max(0, Math.min(1, fp - f0)), fd = Math.min(1, (n - i) / (mfo * sr));
+    oL[i] = lim(bL[i] * gg + vL[i] * fd); oR[i] = lim(bR[i] * gg + vR[i] * fd); }
+  const dB = (s, b) => b > 0 ? 10 * Math.log10(s / b) : 99;
+  MIXINFO = { clarity: M, before: +dB(rawS, rawB).toFixed(1), after: +dB(rawS, outB).toFixed(1), worst: +worst.toFixed(1), worstT: +worstT.toFixed(1), worstAfter: +worstA.toFixed(1), ducked: +(100 * g.reduce((s, x) => s + (x < 0.7 ? 1 : 0), 0) / F).toFixed(0) };
+  console.log(`mix: voice ${MIXINFO.after} dB over the background while speaking (scene as written: ${MIXINFO.before} dB, tightest passage ${MIXINFO.worst} dB at ${MIXINFO.worstT} s, target ${M} dB)`);
+  return out;
+}
 async function renderAudio(sr) {
   const OAC = window.OfflineAudioContext || window.webkitOfflineAudioContext; const oc = new OAC(2, Math.ceil(sr * DUR), sr);
   let vbuf = null;
   if (VOICE?.mp3) try { const bin = atob(VOICE.mp3), u8 = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i); vbuf = await oc.decodeAudioData(u8.buffer); } catch (e) { console.warn('voice decode failed', e); }
   const SB = {}; for (const [k, b] of Object.entries(SFXS)) try { const bin = atob(b), u8 = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i); SB[k] = await oc.decodeAudioData(u8.buffer); } catch (e) { console.warn('sfx decode failed: ' + k); }
-  SND.build(oc, vbuf, SB); return oc.startRendering();
+  const post = !!vbuf && AUDIO.clarity !== false;
+  SND.build(oc, vbuf, SB, { voice: !post }); const bed = await oc.startRendering(); if (!post) return bed;
+  const vc = new OAC(2, bed.length, sr), vs = vc.createBufferSource(), hp = vc.createBiquadFilter(), pk = vc.createBiquadFilter(), cp = vc.createDynamicsCompressor(), vg = vc.createGain();   // the narrator's own chain: rumble out, presence in, evened out
+  vs.buffer = vbuf; hp.type = 'highpass'; hp.frequency.value = 75; pk.type = 'peaking'; pk.frequency.value = 3100; pk.Q.value = 0.8; pk.gain.value = AUDIO.presence ?? 3; cp.threshold.value = -20; cp.knee.value = 8; cp.ratio.value = 3; cp.attack.value = 0.004; cp.release.value = 0.16;
+  vg.gain.value = (VOICE.gain ?? 1) * 1.45; vs.connect(hp); hp.connect(pk); pk.connect(cp); cp.connect(vg); vg.connect(vc.destination); vs.start(0);
+  return mixVoice(bed, await vc.startRendering(), sr);
 }
 
 // --- frame update, sizing, playback, export API ---
@@ -11078,7 +11113,14 @@ window.whatif = {
   },
   thumbs() { return THV.length; },
   thumb(t, i = 0) { TH = THV[i] ?? THV[0]; thumbOn(); const tt = t ?? TH.t ?? CFG.coverT; playing = false; clock = tt; draw(tt); return tt; },
-  async renderAudio(sr = 48000) { return b64(wavBytes(await renderAudio(sr))); },
+  async renderAudio(sr = 48000) { return b64(wavBytes(await renderAudio(sr))); }, get mixInfo() { return MIXINFO; },
+  events() {   // v2.38: what happens when (video time) — voice.py lets the narrator react to it: loud hits, shakes, flashes, music mood, counters that jump, darkness, slow motion
+    const r2 = x => Math.round(x * 100) / 100, hits = [...(AUDIO.hits ?? []), ...XHITS].filter(h => h && h.t >= 0).map(h => ({ t: r2(h.t), k: h.k, v: r2(h.v ?? 1) }));
+    const stats = []; for (const s of STATS) { if (!s.up) continue; const a = s.show ?? 0, b = Math.min(DUR, s.hide ?? DUR); let lo = Infinity, hi = -Infinity; const V = []; for (let x = a; x <= b; x += 0.25) { const v = statVal(s, x); V.push(v); lo = Math.min(lo, v); hi = Math.max(hi, v); }
+      const rg = Math.max(1e-6, hi - lo); for (let i = 2; i < V.length; i++) { const d = V[i] - V[i - 2]; if (Math.abs(d) > rg * 0.12 && (i < 4 || Math.abs(V[i - 2] - V[i - 4]) <= rg * 0.12)) stats.push({ t: r2(a + (i - 1) * 0.25), good: (d > 0) === (s.up === 'good'), k: r2(Math.abs(d) / rg), label: s.label }); } }
+    const score = AUDIO.score === false || (AUDIO.mood === 'none' && !AUDIO.score?.length) ? [[0, 'none']] : AUDIO.score?.length ? AUDIO.score.map(x => [r2(x[0]), x[1]]) : [[0, AUDIO.mood ?? 'horror']];
+    return { dur: DUR, hits, shakes: SHAKES.map(s => ({ t: r2(s.t), amp: r2(s.amp ?? 0.3), dur: r2(s.dur ?? 0.5) })), flashes: FLASHES.map(f => ({ t: r2(f.t), a: r2(f.a ?? 0.5) })), score, stats,
+      night: SKY.map(([x, n]) => [r2(x), SKIES[n]?.nk ?? 0]), slow: (typeof SLOWMO === 'undefined' ? [] : SLOWMO).map(s => [r2(s.t ?? s[0] ?? 0), r2(s.dur ?? s[1] ?? 1)]) }; },
   probe(src) { return eval(src); },   // debugging: node render.mjs page.html --probe "RIGS.length" (code runs inside the engine)
   audit(o = {}) { HITBOX.rep.clear(); const m = motionAudit(o); goreAudit();
     const hit = [...HITBOX.rep.values()].filter(r => r.d > 0.3).sort((a, b) => b.d - a.d).slice(0, 8).map(r => { const i = RIGS.indexOf(r.f), B = r.B, nm = r.f.who ? `'${r.f.who}' #${i}` : r.f.kind === 'zombie' ? `zombie #${i}` : `figure #${i}`;

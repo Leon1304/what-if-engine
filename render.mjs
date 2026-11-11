@@ -122,6 +122,9 @@ async function renderAudio(wav) {
   const t0 = Date.now();
   const b64 = await page.evaluate(() => window.whatif.renderAudio(48000));
   writeFileSync(wav, Buffer.from(b64, 'base64'));
+  const mx = await page.evaluate(() => window.whatif.mixInfo);   // v2.38: how far the narrator stays above music, ambience and sound effects
+  if (mx) { console.log(`mix: voice ${mx.after} dB over the background while speaking (scene as written: ${mx.before} dB · tightest 2 s: ${mx.worst} dB at ${mx.worstT} s → ${mx.worstAfter} dB · target ${mx.clarity} dB)`);
+    if (mx.before < 4) console.log(`MIX: the scene is much louder than the narrator around ${mx.worstT} s (${mx.worst} dB) — the engine pulls it down, but lower the ambience / effect volumes there (AUDIO.amb vol, hits v) or move the loud moment between two sentences`); }
   console.log('wrote', wav, `${Date.now() - t0} ms`); report(errors); await browser.close();
 }
 if (opt('audio')) await renderAudio(opt('audio'));
