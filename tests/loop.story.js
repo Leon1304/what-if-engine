@@ -1,6 +1,6 @@
 const CFG = { dur: 8.4, seed: 3, locale: 'en-US', kind: 'story', badge: 'What if', accent: 'lime', filter: 'film', grain: 0.02, vignette: 0.3, saturation: 1.08, contrast: 1.05,
   shadows: true, area: 30, renderScale: 0.75, msaa: 2, sunAz: -35, handheld: 0.4, coverT: 1.0, capPos: 'mid', karaoke: true, wordRate: 0.085, voice: false, cast: {}, transition: 'auto',
-  series: { name: 'Loop Test', handle: '@test', ep: 1 } };   // v2.22 test: smooth loop — the hook's pre-roll dissolves in over the last 0.6 s (shot at 8 s is mid-dissolve)
+  series: { name: 'Loop Test', handle: '@test', ep: 1 } };   // v2.23 test: smooth loop — the hook's pre-roll dissolves in over the last 0.6 s (shot at 8 s is mid-dissolve)
 const LIVE = {};
 const BEATS = [
   { t: 0, dur: 2.4, kick: 'What if …', text: 'your house *walked away?*', big: true, instant: true },

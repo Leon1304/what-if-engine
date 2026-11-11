@@ -26,7 +26,7 @@ if _story and _d and float(_d.group(1)) > 58:
 if _d and _e and float(_d.group(1)) - float(_e.group(1)) > 6.5:
     print(f'WARNING: end card + loop take {float(_d.group(1)) - float(_e.group(1)):.1f} s — keep them ≤ 6 s and let the scene keep moving underneath (viewers swipe on static cards)')
 if re.search(r"\breview:\s*\{", story):
-    print('WARNING: END.review is gone since v2.22 (no review card) — delete it; the closing line goes in END.say, the loop line in END.loop')
+    print('WARNING: END.review is gone since v2.23 (no review card) — delete it; the closing line goes in END.say, the loop line in END.loop')
 if not re.search(r"\bloop:\s*false", story) and not re.search(r"\bloop:\s*['\"`]", story):
     print('NOTE: no END.loop — add the loop line (≤ 8 words) that ends at the seam and leads into the first spoken line, e.g. loop: "…which is exactly why nobody should ever ask:"')
 if re.search(r"\bloop:\s*false", story):

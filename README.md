@@ -14,7 +14,7 @@ Push an assembled page to `renders/<slug>.html` (output of `assemble.py`, voice 
 `https://github.com/Leon1304/what-if-engine/releases/download/render-<slug>/<slug>.mp4`
 Manual run: Actions → render → Run workflow (page path, width 1440 / 2160 / 1080).
 
-## Engine v2.22 (Nov 2026): no review card, seamless loop
+## Engine v2.23 (Nov 2026): no review card, seamless loop
 - **Review card removed:** `END.review` is ignored (card, stars, voice and sounds gone); the CTA sits on the end card again; assemble.py warns if a story still has one.
 - **Seamless loop (`CFG.loop`, default on):** the last `CFG.loopFade` s (0.6) dissolve into the hook's pre-roll (scene + camera at t − DUR), so the last frame is frame 0; cards fade, the clock switches to the hook time, an `instant` hook caption fades in as it stands on frame 0; music and SFX fade with it. `END.loop` = last spoken line, right-aligned to end at the seam and lead into the hook.
 

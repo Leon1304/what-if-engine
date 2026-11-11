@@ -13,7 +13,7 @@
   body { margin: 0; background: #07080B; display: grid; place-items: center; overflow: hidden; font-family: var(--ui); -webkit-font-smoothing: antialiased; color: #fff; }
   #stage { position: relative; width: 540px; height: 960px; overflow: hidden; container-type: size; background: #000; cursor: pointer; -webkit-user-select: none; user-select: none; touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
   #gl { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
-  #loopv { position: absolute; inset: 0; width: 100%; height: 100%; display: block; opacity: 0; pointer-events: none; }   /* v2.22 loop: the hook's first frames dissolve in over the last shot */
+  #loopv { position: absolute; inset: 0; width: 100%; height: 100%; display: block; opacity: 0; pointer-events: none; }   /* v2.23 loop: the hook's first frames dissolve in over the last shot */
   #dim, #flash { position: absolute; inset: 0; pointer-events: none; opacity: 0; }
   #dim { background: #000; }
   #flash { background: #fff; }
@@ -337,8 +337,8 @@ const STATS = [
   { label: 'Fence', keys: [[0, 100], [11.1, 100], [12.6, 0]], fmt: 'pct', show: 'b2', bad: true, up: 'good' },
   { label: 'Survival', keys: [[0, 64], ['b2-0.1', 64], ['b2+0.6', 41], [11.1, 41], [12.6, 12], ['b5+1.2', 12], ['b5+2.4', 81]], fmt: 'pct', show: 'b1', up: 'good' }
 ];
-// End card: question drives comments. say = closing line under the card, loop = the very last spoken line (v2.22): it leads into the hook, so the restart
-//   completes the sentence ("… which is exactly why nobody should ever ask:" → hook). The review card is gone since v2.22 (END.review is ignored).
+// End card: question drives comments. say = closing line under the card, loop = the very last spoken line (v2.23): it leads into the hook, so the restart
+//   completes the sentence ("… which is exactly why nobody should ever ask:" → hook). The review card is gone since v2.23 (END.review is ignored).
 // END.ending = { type: 'survived' | 'dead', n: 2, of: 4, title } → result card instead of a vote (q/opts not needed), then the loop
 const END = { t: 18.3, q: 'Silo, cellar or tractor – where do *you* hide?', opts: ['Silo', 'Cellar', 'Tractor'], cta: 'Comment A, B or C', loop: 'Because sooner or later, someone asks —' };
 // Sound: mood horror | epic | action | funny | science | chill | tense | party | triumph | sad — or score: [[t, mood], …] (music follows the scene).
@@ -374,7 +374,7 @@ const AUDIO = {
 // ---- v2.7 ----
 // Stats: type 'meter' = needle gauge 0–100 (left / right labels, e.g. Believability: left: 'Nope', right: 'Totally real'), type 'timeline' = year strip (from, to, marks: [[1969, 'Moon landing']], fmt 'year').
 // SPLIT = [{ t, dur, a: 'main' | { p, l, fov, p2, l2 }, b: { … }, labels: ['Myth', 'Reality'], kinds: ['bad', 'good'] }] — two cameras top / bottom, wipes in; no callouts, AO or lens blur meanwhile.
-// CFG.loop (default true) — v2.22 smooth loop: over the last CFG.loopFade s (0.6) the hook's first frames (scene + camera just before frame 0) dissolve in
+// CFG.loop (default true) — v2.23 smooth loop: over the last CFG.loopFade s (0.6) the hook's first frames (scene + camera just before frame 0) dissolve in
 //   over the last shot while the cards and captions fade, so the last frame IS frame 0 and the restart is invisible. END.loop = the last spoken line, it ends
 //   right at the seam and leads into the first spoken line. Best: the last CAM shot looks roughly where the hook shot looks (same place, similar direction). false = off.
 // ---- v2.20 retention ----
@@ -435,7 +435,7 @@ const TEASES = (typeof TEASE === 'undefined' || !TEASE ? [] : [].concat(TEASE)).
 const teaseV = t => { for (const x of TEASES) if (t >= x.t && t < x.t + x.dur) return x.at + (t - x.t) * (x.rate ?? 1); return t; };
 if (typeof FLASHES !== 'undefined') for (const x of TEASES) FLASHES.push({ t: x.t, dur: 0.2, a: 0.85 }, { t: x.t + x.dur, dur: 0.24, a: 0.7 });
 if (CFG.loop === undefined) CFG.loop = true;   // v2.20: every video loops back into its hook
-const LOOPX = CFG.loop ? clamp(CFG.loopFade ?? 0.6, 0.2, 1.5) : 0;   // v2.22: dissolve length into the hook's pre-roll
+const LOOPX = CFG.loop ? clamp(CFG.loopFade ?? 0.6, 0.2, 1.5) : 0;   // v2.23: dissolve length into the hook's pre-roll
 const SLOW = [...(typeof SLOWMO === 'undefined' ? [] : SLOWMO), ...FREEZES.map(x => ({ t: x.t, dur: x.dur, rate: 0, ramp: x.ramp ?? 0.06, catch: 0 }))];
 const _sr = (s, t) => { const rp = Math.min(s.ramp ?? 0.18, s.dur / 2), k = clamp(Math.min((t - s.t) / rp, (s.t + s.dur - t) / rp)); return 1 + ((s.rate ?? 0.3) - 1) * k * k * (3 - 2 * k); };
 SLOW.forEach(s => { let lost = 0; for (let x = s.t; x < s.t + s.dur; x += 0.001) lost += (1 - _sr(s, x)) * 0.001; s._c = s.catch ?? 0.6; s._a = s._c > 0 ? 2 * lost / s._c : 0; });
@@ -7943,7 +7943,7 @@ function updateHud(t) {
   const si = XSTEPS.length && t < endT ? XSTEPS.findLastIndex(s => s[0] <= t) : -1;
   if (si >= 0) { if (phaseEl.dataset.k !== 's' + si) { phaseEl.dataset.k = 's' + si; phaseEl.className = 'step'; phaseEl.innerHTML = `<b>${si + 1}/${XSTEPS.length}</b>${esc(XSTEPS[si][1])}`; }
     phaseEl.style.transform = `scale(${(0.72 + 0.28 * span(t, XSTEPS[si][0], 0.4, 'back')).toFixed(3)})`; }
-  else { const pt = LOOPX && t >= DUR - LOOPX * 0.4 ? 0 : t;   // v2.22 loop: the clock already shows the hook's time when the restart comes
+  else { const pt = LOOPX && t >= DUR - LOOPX * 0.4 ? 0 : t;   // v2.23 loop: the clock already shows the hook's time when the restart comes
     const ph = tr(typeof PHASES === 'undefined' ? '' : typeof PHASES === 'function' ? PHASES(pt) : (PHASES.filter(p => p[0] <= pt).pop() ?? [0, ''])[1]);
     if (phaseEl.dataset.k !== 'p' || phaseEl.textContent !== ph) { phaseEl.dataset.k = 'p'; phaseEl.className = ''; phaseEl.textContent = ph; phaseEl.style.transform = ''; } }
   // stats
@@ -8017,7 +8017,7 @@ function updateHud(t) {
     if (st) { const html = `<b>${st.kind === 'right' ? '✓ ' + esc(st.text ?? 'Steve was… right?!') : '✗ ' + esc(st.text ?? 'Steve was wrong')}</b>`; if (stampEl.dataset.k !== st.t + '') { stampEl.innerHTML = html; stampEl.className = st.kind; stampEl.dataset.k = st.t + ''; }
       const k = span(t, st.t, 0.22, 'out'), out = span(t, st.t + 1.55, 0.35); stampEl.style.opacity = (k * (1 - out)).toFixed(3); stampEl.style.transform = `scale(${(1.8 - 0.8 * k).toFixed(3)})`; }
     else stampEl.style.opacity = '0'; }
-  // v2.22 loop: in the last moments the hook caption fades in exactly as it stands on frame 0, so the restart doesn't pop it in
+  // v2.23 loop: in the last moments the hook caption fades in exactly as it stands on frame 0, so the restart doesn't pop it in
   const hookIn = LOOPX && BEATS[0]?.instant && BEATS[0].t <= 0.05 && !PCARD && t >= DUR - LOOPX * 0.4, ct = hookIn ? BEATS[0].t : t;
   let idx = -1; BEATS.forEach((b, i) => { if (ct >= b.t && ct < b.t + b.dur && ct < endT) idx = i; });
   if (PCARD && t < PREV.dur) idx = -1;   // the intro card speaks for itself (the beat underneath is still voiced)
@@ -8261,7 +8261,7 @@ function updateSplit(t) {
   splitA.style.top = `calc(${y.toFixed(3)}% - 7.2cqw)`; splitB.style.top = `calc(${y.toFixed(3)}% + 2.4cqw)`;
   for (const e of [splitA, splitB]) { e.style.opacity = clamp(kl * 1.4).toFixed(3); e.style.transform = `scale(${(0.7 + 0.3 * kl).toFixed(3)})`; }
 }
-// loop ending (CFG.loop, v2.22): cards, captions and callouts fade with the dissolve, so the last frame looks like frame 0 (badge + scene)
+// loop ending (CFG.loop, v2.23): cards, captions and callouts fade with the dissolve, so the last frame looks like frame 0 (badge + scene)
 for (const x of TEASES) XHITS.push({ t: Math.max(0, x.t - 0.08), k: 'whoosh', v: 0.75 }, { t: x.t + x.dur - 0.06, k: 'whoosh', v: 0.55 });   // flash-forward in / out
 const teaseEl = $('tease');
 function updateTease(t) {
@@ -8467,7 +8467,7 @@ const SND = (() => {
     const noise = ctx.createBuffer(1, sr * 2, sr); { const d = noise.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = ar() * 2 - 1; }
     const ir = ctx.createBuffer(2, Math.floor(sr * 2.6), sr); for (let c = 0; c < 2; c++) { const d = ir.getChannelData(c); for (let i = 0; i < d.length; i++) d[i] = (ar() * 2 - 1) * (1 - i / d.length) ** 3.4; }
     const comp = ctx.createDynamicsCompressor(); comp.threshold.value = -16; comp.knee.value = 10; comp.ratio.value = 3.5; comp.attack.value = 0.005; comp.release.value = 0.2;
-    const master = ctx.createGain(), mfo = LOOPX ? 0.1 : 0.5; master.gain.setValueAtTime(0.9, 0); master.gain.setValueAtTime(0.9, Math.max(0, DUR - mfo)); master.gain.linearRampToValueAtTime(0, DUR);   // v2.22 loop: no long fade-out — the voice carries over the seam
+    const master = ctx.createGain(), mfo = LOOPX ? 0.1 : 0.5; master.gain.setValueAtTime(0.9, 0); master.gain.setValueAtTime(0.9, Math.max(0, DUR - mfo)); master.gain.linearRampToValueAtTime(0, DUR);   // v2.23 loop: no long fade-out — the voice carries over the seam
     const lfade = g => { if (!LOOPX) return g; const f = ctx.createGain(); f.gain.setValueAtTime(1, 0); f.gain.setValueAtTime(1, DUR - LOOPX); f.gain.linearRampToValueAtTime(0, DUR - 0.05); g.connect(f); f.connect(master); return f; };   // music + SFX fade with the dissolve, the restart's first hit lands on the seam
     master.connect(comp); comp.connect(ctx.destination);
     const verb = ctx.createConvolver(); verb.buffer = ir; const vOut = ctx.createGain(); vOut.gain.value = 0.3; verb.connect(vOut); vOut.connect(master);
@@ -8780,7 +8780,7 @@ function update(t) {
   scenePass.t0 = tv; scenePass.times = THUMB_ON || SPLIT_NOW ? null : mbTimes(tv);   // tv: motion-blur samples (and the camera reset in needsMB) stay in the teased moment
   if (THUMB_ON) { U.uBlur.value = U.uZoom.value = U.uDip.value = U.uDef.value = U.uAb.value = 0; }
 }
-// v2.22 smooth loop: in the last LOOPX s the scene + camera at t − DUR (the moments just before frame 0) render first and are kept on #loopv,
+// v2.23 smooth loop: in the last LOOPX s the scene + camera at t − DUR (the moments just before frame 0) render first and are kept on #loopv,
 // which dissolves in over the last shot → the final frame equals frame 0, the restart is seamless. Everything is a function of t, so this stays frame-exact.
 const loopV = $('loopv'), loopCtx = loopV.getContext('2d');
 const draw = t => {

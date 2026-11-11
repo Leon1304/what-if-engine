@@ -264,7 +264,7 @@ Props sind statisch und werden beim Start zu wenigen Meshes verschmolzen (`bake`
 - Zeitleiste (v2.7): Zähler `type: 'timeline'`, `from`, `to`, `marks: [[1969, 'Apollo 11'], …]`, Wert = Jahr (`fmt: 'year'`, negativ = BC).
 - Kamera auf einen Anker (v2.8): `focusShot(anker, t, dauer, { dist, az, el, center, fov, push })` in der Szene fügt einen Schnitt mit langsamem Push-in in `CAM` ein, z. B. auf ein Pinnwand-Foto (`B.item(2)`, `dist: 1.6`), einen Globus-Pin (`center` = Planetenmitte, dann schaut die Kamera von außen drauf), eine Schicht oder ein Lineup-Objekt. Spart lange Kamera-Listen.
 - Planeten (v2.8): `planet()` ist jetzt glatt mit weichen Wolken und Atmosphärenrand (`smooth: false` = alter kantiger Look).
-- Loop-Ende: seit v2.22 nahtlose Überblendung statt Wisch, siehe „Neu in v2.22“ unten.
+- Loop-Ende: seit v2.23 nahtlose Überblendung statt Wisch, siehe „Neu in v2.23“ unten.
 - Zähler mit Einheiten: `fmt: 'speed' | 'dist' | 'height' | 'depth' | 'temp' | 'mass'` (metrisch eingeben, zeigt z. B. „195 km/h · 121 mph“); `type: 'graph'` zeichnet die Kurve (z. B. Fallgeschwindigkeit bis zur Endgeschwindigkeit, `mark` = Grenzwert).
 
 # Neu in v2.16
@@ -420,7 +420,7 @@ Sie wirken zusätzlich zu `CAM`:
 
 ## Ende über laufender Szene, Loop immer an
 - `CFG.endDim` (0,38, vorher fest 0,55): Abdunklung unter der Endcard; Ende „dead“ mindestens 0,7. Die Kamera soll unter den Karten weiterfahren (kein Standbild).
-- `CFG.loop` ist standardmäßig an; `loop: false` schaltet es ab. Seit v2.22 Überblendung statt Wisch (unten).
+- `CFG.loop` ist standardmäßig an; `loop: false` schaltet es ab. Seit v2.23 Überblendung statt Wisch (unten).
 
 ## Musik nur, wenn sie passt
 - `AUDIO.mood: 'none'` oder `AUDIO.score: false` = keine Musik, nur Hintergrundgeräusche und SFX (die Geräusche werden dann etwas lauter gemischt). Einzelne Abschnitte gehen auch: `score: [[0, 'none'], [21, 'tense']]`.
@@ -451,7 +451,7 @@ Story-Video über 58 s · Endcard + Loop über 6,5 s · `loop: false` · kein `T
 - Look von „you“ (`outfit`): `grey` · `silver` (Haarfarben), `scar` (Narbe über dem Auge), `workjacket` (olivgrüne Arbeitsjacke mit Kragen, Reißverschluss, Brusttaschen), `cardigan` (Strickjacke mit V-Ausschnitt und Knöpfen), `boots`, `readers` (dünne Lesebrille).
 - Querschnitt-Trick: `ground()` ist von unten unsichtbar. Eine Kamera knapp unter y = 0 zeigt Erdgeschoss und Keller zugleich (Puppenhaus-Schnitt); die Schnittkante davor mit Erd-Boxen gestalten.
 
-# Neu in v2.22 (Bewertungskarte weg, nahtloser Loop)
+# Neu in v2.23 (Bewertungskarte weg, nahtloser Loop)
 
 ## Keine Bewertungskarte mehr
 `END.review` wird ignoriert (Karte, Sterne, Stimme und Sounds sind raus); `assemble.py` warnt, wenn es noch in einer Story steht. Die CTA steht wieder auf der Endcard. Endcard + Loop zusammen höchstens 6 s.

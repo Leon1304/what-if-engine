@@ -98,7 +98,7 @@ for i, b in enumerate(BEATS):
 # instead of the story outro "What would you have done?"; a stray story outro in END.say / END.loop is replaced
 EXPL = CFG.get('kind') in ('explain', 'conspiracy', 'debunk')
 WWYD = re.compile(r"\s*What would you have done\??(\s*Drop it in the comments\.?)?", re.I)
-LOOP_TAIL = 0.12   # v2.22: the loop line ends this long before the seam
+LOOP_TAIL = 0.12   # v2.23: the loop line ends this long before the seam
 LOOP_SAY = clean(END['loop']) if END and CFG.get('loop', True) is not False and isinstance(END.get('loop'), str) and END['loop'].strip() else ''
 if EXPL and LOOP_SAY and WWYD.search(LOOP_SAY): LOOP_SAY = WWYD.sub(' ', LOOP_SAY).strip()
 LOOP_EST = (0.38 * len(LOOP_SAY.split()) + 0.25 * max(1, len(re.findall(r'[.!?…:—]', LOOP_SAY))) + 0.3) if LOOP_SAY else 0
@@ -110,7 +110,7 @@ if END and END.get('say') is not False and (isinstance(END.get('say'), str) or E
     say = clean(END['say']) if isinstance(END.get('say'), str) else (outro() if EXPL and END.get('q') else clean(END['q']))
     if EXPL and WWYD.search(say): say = WWYD.sub(' ', say).strip() or outro()
     lines.append(('end', END['t'] + 0.35, DUR - LOOP_EST - LOOP_TAIL - 0.25 - END['t'] - 0.35, say, [], 0, None, END.get('pace', 1), None, 1))
-if LOOP_SAY:   # v2.22 loop line: right-aligned below, so it ends just before the seam and the restart (hook) completes it
+if LOOP_SAY:   # v2.23 loop line: right-aligned below, so it ends just before the seam and the restart (hook) completes it
     lines.append(('loop', DUR - LOOP_EST - LOOP_TAIL, LOOP_EST + 0.5, LOOP_SAY, [], 0, None, (END or {}).get('pace', 1), None, 1))
 
 # --- synthesis (cached per line) ---

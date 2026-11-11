@@ -65,7 +65,7 @@ const STATS = [
   { label: 'Fence', keys: [[0, 100], [11.1, 100], [12.6, 0]], fmt: 'pct', show: 'b2', bad: true, up: 'good' },
   { label: 'Survival', keys: [[0, 64], ['b2-0.1', 64], ['b2+0.6', 41], [11.1, 41], [12.6, 12], ['b5+1.2', 12], ['b5+2.4', 81]], fmt: 'pct', show: 'b1', up: 'good' }
 ];
-// End card: question drives comments. say = closing line, loop = last spoken line that leads into the hook (v2.22, no review card)
+// End card: question drives comments. say = closing line, loop = last spoken line that leads into the hook (v2.23, no review card)
 // END.ending = { type: 'survived' | 'dead', n: 2, of: 4, title } → result card instead of a vote (q/opts not needed), then the loop
 const END = { t: 18.3, q: 'Silo, cellar or tractor – where do *you* hide?', opts: ['Silo', 'Cellar', 'Tractor'], cta: 'Comment A, B or C', loop: 'Because sooner or later, someone asks —' };
 // Sound: mood horror | epic | action | funny | science | chill | tense | party | triumph | sad — or score: [[t, mood], …] (music follows the scene).
@@ -104,7 +104,7 @@ const AUDIO = {
 // ---- v2.7 ----
 // Stats: type 'meter' = needle gauge 0–100 (left / right labels, e.g. Believability: left: 'Nope', right: 'Totally real'), type 'timeline' = year strip (from, to, marks: [[1969, 'Moon landing']], fmt 'year').
 // SPLIT = [{ t, dur, a: 'main' | { p, l, fov, p2, l2 }, b: { … }, labels: ['Myth', 'Reality'], kinds: ['bad', 'good'] }] — two cameras top / bottom, wipes in; no callouts, AO or lens blur meanwhile.
-// CFG.loop (default true) — v2.22: the hook's pre-roll dissolves in over the last CFG.loopFade s (0.6), END.loop leads into the hook. false = off.
+// CFG.loop (default true) — v2.23: the hook's pre-roll dissolves in over the last CFG.loopFade s (0.6), END.loop leads into the hook. false = off.
 // ---- v2.20 retention ----
 // TEASE = [{ t: 'b5', dur: 0.6, at: 'b11+0.4', label: 'Later tonight' }] — flash-forward: for dur s the frame shows scene + camera at video time `at` (the climax), HUD, voice and captions keep
 //   running; white flash + whoosh in and out. One per video at the mid-video dip (~40–55 % of the runtime).
