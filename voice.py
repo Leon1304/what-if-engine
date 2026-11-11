@@ -6,7 +6,7 @@
 #   BEATS[].say may contain ' | ' = a deliberate pause (0.3 s) · BEATS[].tone: calm | tense | worried | excited | shout | whisper | sad | dramatic | deadpan | curious | relieved
 #   v2.38 emotion: without a tone the narrator reacts to the scene sentence by sentence (<slug>.events.json from assemble.py: loud hits, shakes, music mood,
 #   counters that jump) — tempo, loudness, pitch level and pitch range (PSOLA, formants stay), whisper / shout colour. In say: '[whisper] Too quiet.' sets the tone
-#   of one sentence, '[gasp]' '[sigh]' are sounds, '[whoa]' '[ugh]' '[hm]' '[oh]' '[ha]' '[wow]' short spoken reactions. CFG.voice: { auto: false, emotion: 0..1.5 }
+#   of one sentence, '[gasp]' '[sigh]' are sounds, '[whoa]' '[wow]' '[ugh]' '[hm]' '[oh]' '[ha]' '[noway]' '[great]' '[yikes]' '[seriously]' '[comeon]' short spoken reactions. CFG.voice: { auto: false, emotion: 0..1.5 }
 #   lines spoken by an on-screen character (who: 'steve' | 'you' | any char name) get a mouth track (open/shape per 1/30 s) → lip sync in the video
 #   --lang es|fr|it|pt|hi|ja|zh + <slug>.<lang>.json (translated texts) → language version (voice + captions in that language)
 import hashlib, json, os, re, subprocess, sys, tempfile
@@ -88,7 +88,9 @@ def weight(tok):   # rough spoken length of a caption token
 EMO = {'calm': (0.96, 0.92, -0.3, 0.9, None), 'tense': (0.94, 0.95, 0.4, 0.8, None), 'worried': (1.03, 1.0, 1.0, 1.2, None), 'excited': (1.07, 1.1, 1.6, 1.5, None),
        'shout': (1.05, 1.22, 2.6, 1.4, 'shout'), 'whisper': (0.9, 0.8, 0.0, 0.7, 'whisper'), 'sad': (0.9, 0.9, -1.0, 0.7, None), 'dramatic': (0.92, 1.0, -0.6, 1.2, None),
        'deadpan': (0.97, 0.95, -0.6, 0.5, None), 'curious': (0.98, 1.0, 0.6, 1.35, None), 'relieved': (0.95, 0.95, -0.3, 1.05, None)}
-REACTS = {'gasp': None, 'sigh': None, 'whoa': ('Whoa!', 'excited'), 'ugh': ('Ugh.', 'deadpan'), 'hm': ('Hmm.', 'deadpan'), 'oh': ('Oh no.', 'worried'), 'ha': ('Ha!', 'excited'), 'wow': ('Wow.', 'curious')}
+# reaction words: (text, tone, speed). Spoken slowly and never rushed — checked with a speech recogniser: at normal narrator speed "Whoa!" and "Wow!" turn into a mumbled "well…"
+REACTS = {'gasp': None, 'sigh': None, 'whoa': ('Whoa—', 'excited', 0.86), 'wow': ('Wow.', 'curious', 0.86), 'ugh': ('Ugh.', 'deadpan', 0.9), 'hm': ('Hmm.', 'deadpan', 0.9), 'oh': ('Oh no.', 'worried', 0.95),
+          'ha': ('Ha ha.', 'excited', 0.95), 'noway': ('No way.', 'curious', 0.95), 'great': ('Great.', 'deadpan', 0.95), 'yikes': ('Yikes.', 'worried', 0.95), 'seriously': ('Seriously?', 'deadpan', 0.95), 'comeon': ('Oh, come on.', 'deadpan', 0.98)}
 VAUTO = vc.get('auto', True) is not False and '--no-auto' not in args; EMO_K = float(vc.get('emotion', 1.0))
 # what happens when: from the built page (assemble.py → <slug>.events.json), else from what the story file lists
 try: EV = json.load(open(f'{OUT}.events.json' if os.path.exists(f'{OUT}.events.json') else f'{slug}.events.json'))
@@ -241,9 +243,9 @@ def speak(say, sp, vo, gap, ctx=None):   # sentence by sentence: own tempo and t
             if out: out.append(np.zeros(int((gap if k else 0.32) * SR), np.float32))
             for r_ in rc:
                 if REACTS[r_] is None: a_ = react_sound(r_)
-                else: tx, tn = REACTS[r_]; e_ = EMO[tn]; a_ = level(prosody(synth(tx, sp * e_[0], vo), e_[2], e_[3]), e_[1])
-                out += [a_, np.zeros(int(0.09 * SR), np.float32)]
-                if first and len(out) == 2: lead = (len(a_) + int(0.09 * SR)) / SR
+                else: tx, tn, rs = REACTS[r_]; e_ = EMO[tn]; a_ = level(prosody(synth(tx, rs, vo), e_[2] * 0.6, 1 + (e_[3] - 1) * 0.6), max(1.1, e_[1]))   # a little louder than the sentence, gentler pitch change: the word has to stay clear
+                out += [a_, np.zeros(int(0.17 * SR), np.float32)]
+                if first and len(out) == 2: lead = (len(a_) + int(0.17 * SR)) / SR
                 notes.append(f'[{r_}]')
             if not p.strip(): continue
             e = EMO.get(tone); kk = strength * EMO_K
