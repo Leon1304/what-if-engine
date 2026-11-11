@@ -795,7 +795,7 @@ function house(p, x, z, o = {}) {   // farmhouse: stone plinth, corner boards, f
   if (o.chimney !== false) { box(g, 0.45, 1.5, 0.45, '#7A6A5E', w * 0.26, h + 0.2, -d * 0.16, { surf: 'brick' }); box(g, 0.56, 0.1, 0.56, '#5E5048', w * 0.26, h + 1.7, -d * 0.16, NC); }
   box(g, 1.15, 1.92, 0.06, trim, 0, 0.2, d / 2 + 0.03, NC); box(g, 0.95, 1.78, 0.02, '#1A140F', 0, 0.2, d / 2 + 0.065, NC);   // frame + dark doorway (seen when open)
   const door = dyn(grp(g, -0.475, 0.2, d / 2 + 0.085)); door.userData.sign = 1; door.userData.angle = 1.7;   // openDoor(house, t)
-  box(door, 0.95, 1.78, 0.05, doorC, 0.475, 0, 0); for (const yy of [0.25, 1.0]) box(door, 0.6, 0.5, 0.02, shade(doorC, -0.06), 0.475, yy, 0.03, NC); ball(door, 0.045, '#D9B65C', 0.8, 0.9, 0.06, { detail: 0, ...NC });
+  box(door, 0.95, 1.78, 0.05, doorC, 0.475, 0, 0); for (const yy of [0.25, 1.0]) box(door, 0.6, 0.5, 0.02, shade(doorC, -0.022), 0.475, yy, 0.03, NC);   // v2.40: panels a shade darker (-0.06 turned a dark door's panels black) ball(door, 0.045, '#D9B65C', 0.8, 0.9, 0.06, { detail: 0, ...NC });
   const windows = [];
   const winMat = mat(o.win ?? '#FFE2A0', { em: o.win ?? '#FFC060', ei: o.lit ?? 0, own: true });
   const win = (cx, cy, cz, ry, front) => {   // local +z points out of the wall
@@ -1216,7 +1216,7 @@ function field(p, x, z, w, d, o = {}) {   // crop rows (instanced); crop: corn |
   im.castShadow = false; im.receiveShadow = true; g.add(im);   // crops cast no shadow: much cheaper, hardly visible
   return { g, im };
 }
-const haybale = (p, x, z, ry = 0) => { const g = stat(grp(p, x, 0, z, ry)); cyl(g, 0.6, 0.6, 1.1, '#D9B65C', 0, 0.6, -0.55, { rx: Math.PI / 2, seg: 10 }); return g; };
+const haybale = (p, x, z, ry = 0) => { const g = stat(grp(p, x, 0, z, ry)); cyl(g, 0.6, 0.6, 1.1, '#D9B65C', 0, 0.6 - 0.55, 0, { rx: Math.PI / 2, seg: 10 }); return g; };   // lies on the ground at (x, z): cyl() + rx had lifted it 0.55 m and pushed it 0.55 m back
 // v2.40 vehicle parts: bodies from side profiles with real wheel arches, wheels with rims and tread, lamp pairs as one mesh; fuse() merges the paint work of one vehicle into a few draw calls
 const _vcM = new Map(), _vcMat = (rough = 0.88, metal = 0) => { const k = rough + '|' + metal; if (!_vcM.has(k)) _vcM.set(k, new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: rough, metalness: metal })); return _vcM.get(k); };
 const _vcGeo = (key, build) => G('vc' + key, () => { const t = new THREE.Group(), gs = []; build(t); t.updateMatrixWorld(true);   // a small model built from primitives once → one vertex-coloured geometry (shared by every copy)
@@ -1441,16 +1441,16 @@ function clothMat(c, o = {}) {   // pin: 'left' (flag on a pole) | 'top' (curtai
     sh.vertexShader = 'uniform float uT, uW, uA, uL, uS;\n' + sh.vertexShader.replace('#include <begin_vertex>', `#include <begin_vertex>
       ${o.pin === 'top' ? 'float k = clamp(-position.y / uL, 0.0, 1.0); float u = -position.y, v = position.x;' : 'float k = clamp(position.x / uL, 0.0, 1.0); float u = position.x, v = position.y;'}
       float w = (0.35 + 0.65 * uW) * uA, ph = uT * 5.5 * uS;
-      transformed.z += k * w * (0.16 * sin(u * 3.1 - ph) + 0.07 * sin(u * 6.7 - ph * 1.7 + v * 2.3) + 0.04 * sin(v * 5.0 + ph * 0.9));
+      transformed.z += k * w * (${o.wall ? '0.27 + ' : ''}0.16 * sin(u * 3.1 - ph) + 0.07 * sin(u * 6.7 - ph * 1.7 + v * 2.3) + 0.04 * sin(v * 5.0 + ph * 0.9))${o.wall ? ' * 0.55' : ''};
       ${o.pin === 'top' ? 'transformed.x += k * w * 0.05 * sin(ph * 0.6 + v);' : 'transformed.y -= k * k * 0.12 * (1.2 - min(uW, 1.0)) * uL;'}`); };
-  m.customProgramCacheKey = () => 'cloth' + (o.pin ?? 'left');
+  m.customProgramCacheKey = () => 'cloth' + (o.pin ?? 'left') + (o.wall ? 'w' : '');
   return m;
 }
 // cloth(p, { w, h, color, stripes: [hex…], x, y, z, ry, pin: 'left' | 'top', amp }) — a waving sheet; returns its group
-function cloth(p, o = {}) {
+function cloth(p, o = {}) {   // wall: true = hangs in front of a wall (local +z is away from it): the folds only move outwards, nothing dips into the stone
   const w = o.w ?? 1.4, h = o.h ?? 0.9, top = o.pin === 'top', g = dyn(grp(p, o.x ?? 0, o.y ?? 0, o.z ?? 0, o.ry ?? 0)), cs = o.stripes ?? [o.color ?? '#D94F3D'];
   cs.forEach((c, i) => { const n = cs.length, geo = top ? new THREE.PlaneGeometry(w / n, h, 6, 10).translate(-w / 2 + (i + 0.5) * w / n, -h / 2, 0) : new THREE.PlaneGeometry(w, h / n, 14, 4).translate(w / 2, h / 2 - (i + 0.5) * h / n, 0);
-    const me = new THREE.Mesh(geo, clothMat(c, { pin: o.pin, len: top ? h : w, amp: o.amp, speed: o.speed })); me.castShadow = true; me.receiveShadow = true; g.add(me); });
+    const me = new THREE.Mesh(geo, clothMat(c, { pin: o.pin, len: top ? h : w, amp: o.amp, speed: o.speed, wall: o.wall })); me.castShadow = true; me.receiveShadow = true; g.add(me); });
   return g;
 }
 // flagpole(p, x, z, { h, colors: [hex…], w, fh }) — pole with a waving flag (horizontal stripes)
@@ -8764,7 +8764,7 @@ function castle(p, x, z, o = {}) {
   const keep = grp(g, 0, 0, -3); box(keep, 9, 14, 9, shade(c, -0.05), 0, 0, 0, { surf: 'stone' }); box(keep, 9.3, 0.35, 9.3, shade(c, -0.12), 0, 9.2, 0, NC); box(keep, 9.4, 0.6, 9.4, shade(c, -0.14), 0, 0, 0, NC); for (let i = 0; i < 4; i++) for (const sx of [-1, 1]) box(keep, 0.8, 0.9, 0.5, shade(c, -0.05), sx * 4.3, 14, -3.6 + i * 2.4); for (let i = 0; i < 4; i++) box(keep, 0.5, 0.9, 0.8, shade(c, -0.05), -3.6 + i * 2.4, 14, 4.3);
   for (let k = 0; k < 3; k++) for (const sx of [-1, 0, 1]) box(keep, 0.6, 1.2, 0.1, '#1E1E22', sx * 2.6, 4 + k * 3.5, 4.52, NC);
   const fg = grp(p ?? world, x, groundH(x, z), z, o.ry ?? 0), fl = []; for (const [fx, fy, fz] of [[0, 14, -3], [-h, H + 9.8, -h], [h, H + 9.8, h]]) { box(g, 0.1, 3, 0.1, '#5A5E64', fx, fy, fz); fl.push(cloth(fg, { w: 1.6, h: 1.0, color: o.flag ?? '#B8302A', stripes: [o.flag ?? '#B8302A', o.flag2 ?? '#F2C531'], x: fx, y: fy + 2.95, z: fz, pin: 'left' })); }
-  for (const sx of [-1, 1]) cloth(fg, { w: 1.4, h: 3.2, color: o.flag ?? '#B8302A', stripes: [o.flag ?? '#B8302A', o.flag2 ?? '#F2C531'], x: sx * 3.6, y: H + 1.2, z: h + 2.05, pin: 'top' });
+  for (const sx of [-1, 1]) cloth(fg, { w: 1.4, h: 3.2, color: o.flag ?? '#B8302A', stripes: [o.flag ?? '#B8302A', o.flag2 ?? '#F2C531'], x: sx * 3.6, y: H + 1.2, z: h + 2.16, pin: 'top', wall: true });   // v2.40: in front of the round tower and waving outwards only (the wall used to poke through the banner)
   C.gate = (t, open = true) => (C.acts.push({ t, open }), sfx(t, 'rumble', 0.6), C);
   tick(t => { let k = o.open ? 1 : 0; for (const a of C.acts) { const u = sm01((t - a.t) / 3); k = a.open ? Math.max(k, u) : Math.min(k, 1 - u); } pc.position.y = k * 5; db.rotation.x = -(1 - k) * 1.45; });
   return C;
