@@ -2268,6 +2268,29 @@ function planter(p, x, z, ry = 0, o = {}) {   // concrete flower trough with blo
     ball(g, 0.07, pick2(o.flowers ?? ['#E8506A', '#FFD84A', '#FFFFFF', '#B070E0', '#FF8A3D'], hv(i + 20)), xx + 0.04, 0.68, (hv(i + 30) - 0.5) * 0.25, { detail: 0, ...NC }); }
   return g;
 }
+// ---- v2.33.3 horror kit: convex security mirror, porthole lens (mirror / peephole view) ----
+function convexMirror(p, x, y, z, o = {}) {   // round convex shop mirror on a wall bracket; faces +z (ry turns it), rx tilts it down. → { g, at: [x, y, z] (centre) }
+  const r = o.r ?? 0.42, g = stat(grp(p ?? world, x, y, z, o.ry ?? 0)); g.rotation.x = o.rx ?? 0.35;
+  cyl(g, 0.025, 0.025, 0.32, '#3A3D42', 0, 0, -0.18, { rx: Math.PI / 2, seg: 8, metal: 0.5 });
+  cyl(g, r * 1.06, r * 1.06, 0.05, '#1E2126', 0, 0, -0.02, { rx: Math.PI / 2, seg: 32 });
+  const dome = new THREE.Mesh(new THREE.SphereGeometry(r, 32, 16, 0, Math.PI * 2, 0, Math.PI / 2.6), mat(o.color ?? '#B9C6CF', { metal: 0.95, rough: 0.06, em: '#5E6A72', ei: 0.35, own: true }));
+  dome.rotation.x = Math.PI / 2; dome.position.z = -0.22 * r; dome.scale.set(1, 0.55, 1); g.add(dome);
+  return { g, dome, at: [x, y, z] };
+}
+function lensMask(win, o = {}) {   // round porthole in front of the camera during win = [[t0, t1], …]: view through a convex mirror, peephole or scope (rest of the frame dark)
+  const R = o.r ?? 0.96, d = 0.5, G = new THREE.Group(); G.userData.dyn = true; world.add(G);
+  const m = (c, op) => new THREE.MeshBasicMaterial({ color: c, transparent: op < 1, opacity: op, depthTest: false, depthWrite: false, fog: false, toneMapped: false });
+  const ring = new THREE.Mesh(new THREE.RingGeometry(R, 9, 72), m(o.color ?? '#07080A', 1)), rim = new THREE.Mesh(new THREE.RingGeometry(R * 0.975, R * 1.045, 72), m(o.rim ?? '#8C959C', 1));
+  const shade = new THREE.Mesh(new THREE.RingGeometry(R * 0.72, R * 0.975, 72), m('#000000', o.vignette ?? 0.32)), sheen = new THREE.Mesh(new THREE.CircleGeometry(R * 0.3, 32), m('#FFFFFF', o.sheen ?? 0.05));
+  sheen.position.set(-R * 0.35, R * 0.42, 0); sheen.scale.set(1.4, 0.7, 1);
+  for (const [k, mm] of [[996, shade], [997, sheen], [998, ring], [999, rim]]) { mm.renderOrder = k; mm.frustumCulled = false; G.add(mm); }
+  const _f = new THREE.Vector3(); G.visible = false;
+  POSTCAM.push(t => { const on = win.some(([a, b]) => t >= a && t < b); G.visible = on; if (!on) return;
+    camera.getWorldDirection(_f); G.position.copy(camera.position).addScaledVector(_f, d); G.quaternion.copy(camera.quaternion);
+    G.scale.setScalar(d * Math.tan(camera.fov * Math.PI / 360) * camera.aspect); });
+  return G;
+}
+function hideDuring(obj, win) { dyn(obj.root ?? obj); tick(t => { (obj.root ?? obj).visible = !win.some(([a, b]) => t >= a && t < b); }); return obj; }   // e.g. 'you' missing in the mirror view
 function busstop(p, x, z, ry = 0) {   // shelter (glass back and sides, roof, bench) + sign pole; local +z faces the road
   const g = stat(grp(p, x, groundH(x, z), z, ry)), gl = mat('#BFD8E8', { opacity: 0.35, rough: 0.1 }), NC = { cast: false };
   box(g, 2.6, 0.08, 1.3, '#3A3D44', 0, 2.4, 0.1); for (const s of [-1, 1]) box(g, 0.08, 2.4, 0.08, '#3A3D44', s * 1.25, 0, -0.45);
@@ -9564,6 +9587,11 @@ const SND = (() => {
       fire: (t, v, d = 4) => { nz(t, 0.6, Math.max(0, d - 1.4), 0.8, 0.16 * v, fx, 'lowpass', 520); for (let x = 0; x < d * 9; x++) nz(t + ar() * d, 0.001, 0, 0.015, (0.08 + ar() * 0.14) * v, fx, 'bandpass', 1400 + ar() * 2200, 0, 1.2); },
       ticks: (t, v, d = 1) => { for (let x = 0; x < d * 14; x++) tone('square', 1900, t + x / 14, 0.001, 0, 0.025, 0.08 * v, fx); },
       tick: (t, v) => tone('square', 1900, t, 0.001, 0, 0.03, 0.1 * v, fx),
+      chime: (t, v) => { bellFx(t, 659, v * 0.8); bellFx(t + 0.34, 523, v * 0.8); },   // v2.33.3 shop door chime (ding-dong)
+      knock: (t, v, d = 0.6) => { const n = Math.max(1, Math.round(d / 0.2)); for (let k = 0; k < n; k++) { const tt = t + k * 0.2 + ar() * 0.02; nz(tt, 0.001, 0.01, 0.08, 0.55 * v, fx, 'bandpass', 210, 0, 1.4); tone('sine', 92, tt, 0.001, 0.02, 0.13, 0.4 * v, fx, { to: 70, glide: 0.1 }); } },   // knuckles on a wooden door, d = length (one knock per 0.2 s)
+      static: (t, v, d = 0.6) => { tone('square', 2300, t, 0.001, 0.012, 0.01, 0.05 * v, fx, { lp: 5000 }); nz(t + 0.02, 0.02, Math.max(0, d - 0.12), 0.08, 0.1 * v, fx, 'bandpass', 2100, 0, 0.7); for (let k = 0; k < d * 22; k++) nz(t + ar() * d, 0.001, 0.003, 0.01, 0.1 * v, fx, 'highpass', 3600); tone('square', 2300, t + d, 0.001, 0.012, 0.01, 0.04 * v, fx, { lp: 5000 }); },   // walkie-talkie: click, hiss, click
+      caralarm: (t, v, d = 2) => { const os = tone('square', 720, t, 0.01, Math.max(0, d - 0.03), 0.02, 0.032 * v, fx, { lp: 2600 }); for (let x = 0; x < d * 6; x++) { os.frequency.setValueAtTime(x % 2 ? 1180 : 720, t + x / 6); } },
+      lift: (t, v, d = 3) => { nz(t, 0.001, 0.05, 0.3, 0.45 * v, fx, 'bandpass', 950, 0, 2.2); tone('sine', 140, t, 0.001, 0.03, 0.3, 0.3 * v, fx, { to: 90, glide: 0.2 }); tone('sawtooth', 52, t + 0.35, 0.5, Math.max(0, d - 1.2), 0.4, 0.045 * v, fx, { lp: 380 }); nz(t + 0.35, 0.5, Math.max(0, d - 1.2), 0.4, 0.09 * v, fx, 'lowpass', 240); for (let k = 0; k < d * 2; k++) nz(t + 0.6 + k * 0.5 + ar() * 0.1, 0.001, 0.01, 0.05, 0.1 * v, fx, 'bandpass', 1500, 0, 3); },   // mine cage: gate clank, motor, cable ticks
       ding: (t, v) => { bellFx(t, 1568, v); bellFx(t + 0.08, 2093, v * 0.7); },
       stinger: (t, v) => { const r = moodAt(t).root + 24; for (const iv of [0, 7, 12, 15]) bellFx(t, mtof(r + iv), v * 0.8); tone('sine', 70, t, 0.003, 0.05, 1.2, 0.7 * v, fx, { to: 35, glide: 0.6 }); ducks.push(t); },
       pop: (t, v) => tone('sine', 320, t, 0.002, 0, 0.09, 0.3 * v, fx, { to: 900, glide: 0.06 }),

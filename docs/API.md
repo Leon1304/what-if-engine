@@ -550,3 +550,9 @@ Test/Vorschau: `tests/hoplites.*` (Aufstellung, Helme auf Ständern, alle Schild
 ## Ozean im Querschnitt
 - `oceanSection(p, x, z, { w: 44, h: 36, d: 6, y, bed: 0.3, trench: { w, floor }, water: [oben, unten], rock, opacity, labels: { t, every, dur, u, zones: [[v, 'Name'], …] } })`: Museums-Querschnitt bis zum Tiefseegraben: dunkler Fels mit V-förmigem Graben, durchsichtige Wassersäule, die mit der Tiefe dunkler wird, weiße Oberflächenlinie. `O.at(u, v)` = Anker auf der Vorderseite (u −1 … 1 quer, v 0 Oberfläche … 1 Grabengrund), `O.top`, `O.floorY`. Dazu `RULER` mit `fmt: 'depth'`, `invert: true` und ein Mini-Schiff `ship(…, { len: 2.6 })` auf `O.top`.
 - Test: `tests/ocean-blast.story.js`.
+
+# Neu in v2.33.3 (Horror-Kit)
+- `convexMirror(p, x, y, z, { r: 0.42, ry, rx: 0.35, color })` → `{ g, dome, at }`: runder Sicherheitsspiegel (Shop, Tankstelle, Lager) am Wandarm, Vorderseite +z, `rx` neigt ihn nach unten.
+- `lensMask([[t0, t1], …], { r: 0.96, color, rim, vignette, sheen })`: runde Linse vor der Kamera in diesen Zeitfenstern, Rest des Bildes dunkel (Blick in den Spiegel, durch den Türspion, durchs Zielfernrohr). `r` = Radius relativ zur halben Bildbreite. Dazu im `CAM` eine weite Einstellung (fov 70–95) von der Spiegel- bzw. Spionposition.
+- `hideDuring(obj, [[t0, t1], …])`: blendet ein Objekt oder eine Figur in diesen Fenstern aus (z. B. „you“ fehlt im Spiegel).
+- SFX: `chime` (Ladentür-Gong) · `knock` (Klopfen an Holztür, `dur` = Länge, ein Schlag pro 0,2 s) · `static` (Funkgerät: Klick, Rauschen, Klick; `dur`) · `caralarm` (Autoalarm, `dur`) · `lift` (Förderkorb: Gitter knallt, Motor, Seil-Ticks; `dur`).
