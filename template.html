@@ -1940,7 +1940,7 @@ function horde(o = {}) {
   const j = (dst, A, x, y, z, rx, ry, rz, ord = 'XYZ') => dst.multiplyMatrices(A, T.compose(V.set(x, y, z), Q.setFromEuler(E.set(rx, ry, rz, ord)), ONE));
   const put = (im, idx, A, x, y, z) => im.setMatrixAt(idx, out.multiplyMatrices(A, T.makeTranslation(x, y, z)));
   const go = (x0, z0, x1, z1, d) => { const D = Math.hypot(x1 - x0, z1 - z0), k = D ? Math.min(1, d / D) : 1; return [lerp(x0, x1, k), lerp(z0, z1, k), k < 1, Math.atan2(x1 - x0, z1 - z0)]; };
-  const state = (q, t) => {   // v2.19 layer: fixed spots (q.cy = height of the spot), jostle, flee (o.flee.path(i, d, q) → [x, z, y, yaw] for custom escape routes)
+  const state1 = (q, t) => {   // v2.19 layer: fixed spots (q.cy = height of the spot), jostle, flee (o.flee.path(i, d, q) → [x, z, y, yaw] for custom escape routes)
     const tf = o.flee ? o.flee.t + q.dl * 0.45 : 1e9; q.cy = q.y ?? 0;
     if (q.fixed && t <= tf) { const j = o.jostle ? o.jostle * 0.12 : 0; return [q.x0 + j * Math.sin(t * 0.9 + q.ph), q.z0 + j * Math.cos(t * 0.7 + q.ph * 1.3), false, q.yaw + (o.jostle ? 0.15 * Math.sin(t * 0.5 + q.ph) : 0), 0]; }
     if (o.flee && t > tf) { const d = (o.flee.speed ?? 4.5) * (0.8 + 0.4 * hash(q.ph * 3)) * (t - tf);
@@ -1949,6 +1949,11 @@ function horde(o = {}) {
       q.cy = (q.y ?? 0) * (1 - EASE.inOut(clamp((t - tf) / 0.7))); return [S[0] + Math.sin(a) * d, S[1] + Math.cos(a) * d, true, a, S[4] + d]; }
     const r = state0(q, t); if (o.jostle && !r[2]) { r[0] += o.jostle * 0.12 * Math.sin(t * 0.9 + q.ph); r[1] += o.jostle * 0.12 * Math.cos(t * 0.7 + q.ph * 1.3); } return r;
   };
+  // v2.27 gaze: { t, at: [x,y,z], spread, turn, tilt, arms: 'down' | 'up', face } — from t (+ up to spread s per member) everyone stops, turns to `at` and looks up at it (fireworks, UFO, eclipse); zombies stop hammering
+  const GZ = o.gaze, gT = q => q.gt ??= GZ.t + hash(q.ph * 7.31 + 2.2) * (GZ.spread ?? 0.8);
+  const state = (q, t) => { if (!GZ || t <= gT(q)) return state1(q, t); const r = state1(q, gT(q)); r[2] = false;
+    if (GZ.face !== false) { const [gx, , gz] = GZ.at ?? [0, 30, 0], ty = Math.atan2(gx - r[0], gz - r[1]), d = ((ty - r[3] + Math.PI) % TAU + TAU) % TAU - Math.PI; r[3] += d * sm01((t - gT(q)) / (GZ.turn ?? 0.7)); }
+    return r; };
   const state0 = (q, t) => {   // → [x, z, moving, yaw, walked]
     const up = rise ? 0.8 : 0, age = t - q.b - up; if (age <= 0) return [q.x0, q.z0, false, Math.atan2(tx - q.x0, tz - q.z0), 0];
     if (o.wait) {
@@ -1990,15 +1995,17 @@ function horde(o = {}) {
           x += dn.dx * dn.push * EASE.out(k); z += dn.dz * dn.push * EASE.out(k); y += 0.16 * sm01(k) * q.sc - (dn.sink && a > 2.4 ? Math.min(2.6, (a - 2.4) * 0.9) : 0); }
         if (dn?.drop) { fa = 0; y = groundH(x, z) - Math.min(3.2, 4.9 * (t - dn.t) ** 2); } if (dn?.squash) fa = 0;
         base.compose(V.set(x, y, z), Q.setFromEuler(E.set(-fa * (dn?.dir ?? 1), yaw, 0, 'YXZ')), dn?.squash ? SC.set(q.sc * 1.35, q.sc * Math.max(0.12, 1 - 14 * (t - dn.t)), q.sc * 1.35) : SC.setScalar(q.sc));
-        const S = rigState(moving ? mode : 'idle', u, t, q.o), up = !dn && (o.armsUp ? o.armsUp(t, i) : false);
+        const S = rigState(moving ? mode : 'idle', u, t, q.o), gk = GZ && !dn ? sm01((t - gT(q)) / (GZ.turn ?? 0.7)) : 0, up = !dn && ((o.armsUp ? o.armsUp(t, i) : false) || (GZ?.arms === 'up' && gk > 0.5));
         if (dn) { const a = t - dn.t, k = clamp(a / 0.45), tw = human ? 0 : 0.12 * Math.sin(t * 9 + q.ph) * Math.exp(-a * 0.8);
           S.las = lerp(S.las, -2.5 + tw, k); S.ras = lerp(S.ras, -2.4 - tw, k); S.laz = -0.4 * k; S.raz = 0.4 * k; S.lae = S.rae = -0.2; S.lt = S.rt = lerp(S.lt, -0.12, k); S.lk = S.rk = lerp(S.lk, 0.3, k); S.lz = -0.1 * k; S.rz = 0.1 * k; S.crx = 0; S.nrx = -0.1 * k; S.nry *= 1 - k; }
-        if (!moving && !human && !dn) {   // arrived: hammer on whatever is in front
+        if (!moving && !human && !dn && gk < 1) {   // arrived: hammer on whatever is in front (fades out while gazing)
           const p1 = Math.abs(Math.sin(t * 5.5 + q.ph)), p2 = Math.abs(Math.sin(t * 5.5 + q.ph + 0.9));
           S.las = -1.45 - 0.45 * p1 + q.o.armOff; S.ras = -1.5 - 0.45 * p2; S.lae = -0.35 + 0.25 * p1; S.rae = -0.35 + 0.25 * p2; S.crx = 0.18 + 0.05 * p1;
         }
         if (moving && !human) { const k = ((t / q.stP + q.o.sd) % 1 + 1) % 1; if (k < 0.07) { const e = Math.sin(Math.PI * k / 0.07); S.crx += 0.35 * e; S.las -= 0.4 * e; S.ras -= 0.5 * e; S.nrx += 0.2 * e; } }   // the odd stumble
         if (up) { const s = Math.sin(t * 8 + q.ph); S.las = -2.75 + 0.25 * s; S.ras = -2.75 - 0.25 * s; S.lae = S.rae = -0.35; S.laz = -0.25; S.raz = 0.25; }
+        if (gk > 0) { S.nrx = lerp(S.nrx, -(GZ.tilt ?? 0.55), gk); S.nry = lerp(S.nry, 0, gk); S.crx = lerp(S.crx, -0.08, gk);   // v2.27 gaze: head back, mouth-breathing awe
+          if (GZ.arms !== 'up') { S.las = lerp(S.las, -0.3 - 0.06 * Math.sin(t * 1.3 + q.ph), gk); S.ras = lerp(S.ras, -0.25, gk); S.lae = lerp(S.lae, -0.3, gk); S.rae = lerp(S.rae, -0.3, gk); } }
         if (rise && em < 1) { S.las = lerp(-2.6, S.las, em); S.ras = lerp(-2.4, S.ras, em); }   // claw out of the ground
         j(Mh, base, S.hx, S.H + S.by, 0, S.hrx, S.hry, S.hrz);
         j(Mc, Mh, 0, 0.02, 0, S.crx, S.cry, S.crz); put(torso, i, Mc, 0, 0.29, 0);
@@ -2145,6 +2152,49 @@ function meteor(o = {}) {   // from/to [x,y,z], t0 → t1 (impact), size: burnin
   emit('smoke', { at: pos, t0, t1, rate: 18, size: s, jitter: s * 0.5 });
   if (o.boom !== false) explode(bx, by, bz, t1, { size: s * 2 });
   return g;
+}
+
+// --- fireworks (v2.27): crate prop + rockets with spark trails and bursts, one shared coloured light, real fireworks sound ---
+function fireworkBox(p, x, y, z, o = {}) {   // wooden crate of fireworks: coloured tubes with fuses, yellow warning stripe; front = +z. o: size, ry, colors, color (wood)
+  const s = o.size ?? 1, g = grp(p, x, y, z, o.ry ?? 0), wood = o.color ?? '#9A6B3E', cols = o.colors ?? ['#E84A5F', '#3DA5FF', '#FFD23F', '#6BE36B', '#C77DFF', '#FF8A3A'];
+  box(g, 0.62 * s, 0.34 * s, 0.44 * s, wood);
+  for (const zz of [-1, 1]) box(g, 0.64 * s, 0.05 * s, 0.03 * s, shade(wood, -0.2), 0, 0.29 * s, zz * 0.21 * s);
+  box(g, 0.6 * s, 0.07 * s, 0.012, '#E8C547', 0, 0.12 * s, 0.222 * s, { cast: false });
+  box(g, 0.12 * s, 0.07 * s, 0.014, '#2A2A2A', 0, 0.12 * s, 0.224 * s, { cast: false });
+  for (let i = 0; i < 6; i++) { const cx = (-0.2 + (i % 3) * 0.2) * s, cz = (i < 3 ? -0.1 : 0.1) * s, h = (0.16 + 0.08 * hash(i * 3.1 + x * 0.7 + z)) * s;
+    cyl(g, 0.06 * s, 0.06 * s, h, cols[i % cols.length], cx, 0.34 * s, cz, { seg: 8 });
+    cyl(g, 0.062 * s, 0.062 * s, 0.025 * s, '#F4F0E6', cx, 0.34 * s + h * 0.55, cz, { seg: 8, cast: false });
+    cyl(g, 0.007, 0.007, 0.08 * s, '#3A3A3A', cx, 0.34 * s + h, cz, { seg: 4, cast: false }); }
+  g.top = 0.58 * s; return g;
+}
+function fireworks(o = {}) {   // o: from [x,y,z] launch point · at [x,y,z] centre of the bursts · area [sx,sy,sz] · t0, t1, every (s) | n · rise (s) · kinds peony|willow|crackle|palm · colors · size · light (intensity | false) · dist · sound (true | volume) · seed
+  const [fx, fy, fz] = o.from ?? [0, 0.5, 0], [cx, cy, cz] = o.at ?? [fx, fy + 26, fz], [ax, ay, az] = o.area ?? [16, 8, 10];
+  const t0 = o.t0 ?? 0, t1 = o.t1 ?? t0 + 6, n = o.n ?? Math.max(1, Math.round((t1 - t0) / (o.every ?? 0.4)) + 1), s = o.size ?? 1, rise = o.rise ?? 1.1, sd = o.seed ?? 7;
+  const kinds = o.kinds ?? ['peony', 'peony', 'willow', 'crackle', 'palm'], cols = o.colors ?? ['#FF4D6D', '#3DA5FF', '#7CFF6B', '#FFD23F', '#C77DFF', '#FF8A3A', '#5CF2FF'];
+  const B = [], up = 2.3;   // spread ~130° from straight up: reads as a full ball once gravity pulls it down
+  for (let i = 0; i < n; i++) {
+    const h = k => hash(sd * 31.7 + i * 7.13 + k * 1.91);
+    const tl = t0 + (n > 1 ? i * (t1 - t0) / (n - 1) : 0) + (h(1) - 0.5) * 0.14, tb = tl + rise * (0.85 + 0.3 * h(2));
+    const P = [cx + (h(3) - 0.5) * ax, cy + (h(4) - 0.5) * ay, cz + (h(5) - 0.5) * az];
+    const kind = kinds[Math.floor(h(6) * kinds.length) % kinds.length], c = cols[Math.floor(h(7) * cols.length) % cols.length], c2 = cols[Math.floor(h(8) * cols.length) % cols.length], wob = (h(9) - 0.5) * 1.2;
+    const pos = tt => { const k = clamp((tt - tl) / (tb - tl)), e = 1 - (1 - k) * (1 - k); return [lerp(fx, P[0], k) + Math.sin(k * 9 + i) * 0.15 * k, lerp(fy, P[1], e), lerp(fz, P[2], k) + wob * Math.sin(k * Math.PI)]; };
+    emit('spark', { at: pos, t0: tl, t1: tb, rate: 80, life: 0.5, speed: 0.7, spread: 0.5, g: -3, size: 0.09 * s, jitter: 0.04, colors: ['#FFF4C8', '#FFB040'] });
+    const big = { at: P, t0: tb, burstSpread: 0.03, spread: up, jitter: 0.2 * s };
+    if (kind === 'willow') emit('spark', { ...big, burst: 120, life: 2.8, speed: 7 * s, g: -3.4, drag: 1.1, size: 0.15 * s, grow: -0.5, colors: ['#FFF0B0', '#FFC24A', '#E07A1A'] });
+    else if (kind === 'palm') { emit('spark', { ...big, burst: 26, life: 2.2, speed: 11 * s, g: -4, drag: 0.9, size: 0.26 * s, grow: -0.3, colors: ['#FFE7A0', c], pick: true }); emit('spark', { ...big, burst: 70, life: 1.2, speed: 4 * s, g: -2, drag: 1.8, size: 0.12 * s, colors: [c2], pick: true }); }
+    else if (kind === 'crackle') { emit('spark', { ...big, burst: 100, life: 1.5, speed: 8.5 * s, g: -2.2, drag: 1.6, size: 0.17 * s, colors: [c], pick: true });
+      emit('spark', { at: P, t0: tb + 0.5, burst: 150, burstSpread: 0.55, life: 0.3, speed: 1.2, spread: Math.PI, g: 0, size: 0.1 * s, grow: -0.2, colors: ['#FFFFFF', '#FFF6C0'], pick: true, jitter: 5 * s }); }
+    else emit('spark', { ...big, burst: 160, life: 1.9, speed: 9 * s, g: -2.2, drag: 1.5, size: 0.18 * s, grow: -0.4, colors: [c, c2], pick: true });
+    B.push({ t: tb, p: P, color: kind === 'willow' ? '#FFC24A' : c, kind, launch: tl });
+  }
+  let L = null;
+  if (o.light !== false) {   // one shared light jumps to the newest burst (colour + flash): the light budget stays at one
+    L = new THREE.PointLight('#ffffff', 0, o.dist ?? 90, 1.4); world.add(L); const I = typeof o.light === 'number' ? o.light : 900;
+    tick(t => { let best = null, bv = 0; for (const b of B) { const a = t - b.t; if (a >= 0 && a < 1.4) { const v = Math.exp(-a * 3) * Math.min(1, a / 0.05); if (v > bv) { bv = v; best = b; } } }
+      L.intensity = I * bv; if (best) { L.position.set(best.p[0], best.p[1], best.p[2]); L.color.set(best.color); } });
+  }
+  if (o.sound !== false) { const v = typeof o.sound === 'number' ? o.sound : 1; for (const b of B) (AUDIO.hits ??= []).push({ t: VT(b.t), k: 'fireworks', v: v * (0.55 + 0.3 * hash(b.t * 13.7)) }); }
+  return { bursts: B, light: L };
 }
 
 // --- city: towers, roads, a grid generator and traffic ---

@@ -225,6 +225,7 @@ Für alles, was fällt, fliegt, umkippt oder zerbricht, statt Handanimation. Vor
 - Aufruf: `horde({kind:'zombie'|'human', n, from:[x,z], r, to:[x,z], stop, pile, around, t0, t1, speed:[a,b], mode:'shamble'|'walk'|'run', rise, wait:{line:[[x,z],[x,z]], until, stop, pile}, lift:(t,i)=>dy, armsUp:(t,i)=>bool, skin, shirts, pants, eyes, scale})` → `{count(t)}`.
 - Ablauf: Die Masse erscheint zwischen `t0` und `t1`, steigt aus dem Boden (`rise`), läuft zu einer Barriere (`wait.line`), drängt dort bis `until` und strömt dann zum Ziel. Mit `around: true` umzingelt sie es. Wer ankommt, bleibt stehen; Zombies hämmern dann.
 - `kind: 'human'` setzt Hauttöne, bunte Shirts, dunkle Augen, `walk` und kein `rise`. `lift` lässt hüpfen oder Wellen laufen, `armsUp` reißt die Arme hoch (Jubel, Panik). Pro Mitglied variieren über `hash(i)`.
+- Starren (v2.27): `gaze: { t, at: [x, y, z], spread: 0.8, turn: 0.7, tilt: 0.55, arms: 'down' | 'up', face }` – ab `t` (pro Mitglied bis `spread` s später) bleibt jeder stehen, dreht sich zu `at` und schaut hoch (Feuerwerk, UFO, Sonnenfinsternis); Zombies hören auf zu hämmern. `face: false` = nicht drehen; `h.hit()` geht danach wie gewohnt.
 
 ## Partikel und Licht
 
@@ -518,3 +519,10 @@ Zusätzliche Felder in `THUMB` (je Variante), sparsam 1–2 pro Thumbnail:
 
 # Tests
 `bash tests/run.sh [name …]` baut die Beispiel-Story aus `template.html` und alle Szenen in `tests/` und rendert je drei Bilder; Seitenfehler lassen den Test scheitern. Der Workflow `test` läuft bei jeder Engine-Änderung auf GitHub. Neue Funktionen bekommen eine kleine Testszene in `tests/<thema>.story.js` + `.scene.js`.
+
+# Neu in v2.27 (Feuerwerk, starrende Massen)
+
+## Feuerwerk
+- `fireworkBox(p, x, y, z, { size, ry, colors, color })` → Holzkiste mit bunten Röhren, Zündschnüren und Warnstreifen (Vorderseite +z), `box.top` = Höhe der Röhren; tragbar mit `carry`, für eigene Bewegung `dyn(box)`.
+- `fireworks({ from: [x, y, z], at: [x, y, z], area: [sx, sy, sz], t0, t1, every: 0.4 | n, rise: 1.1, kinds: ['peony', 'willow', 'crackle', 'palm'], colors, size, light: 900 | false, dist: 90, sound: true | Lautstärke, seed })` → `{ bursts: [{ t, p, color, kind, launch }], light }`. Raketen mit Funkenschweif steigen von `from` auf und zerplatzen um `at`: peony = bunte Kugel, willow = goldener Regen, crackle = Kugel + weißes Knistern, palm = wenige dicke Arme. Ein einziges Licht springt zur neuesten Explosion (Farbe + Aufblitzen), pro Explosion die echte Feuerwerks-Aufnahme (`AUDIO.hits` automatisch). Zeiten sind Szenenzeit (SLOWMO wird umgerechnet).
+- Tipp: `at` 20–30 m hoch, Kamera 30–50 m entfernt, fov 50–56; dazu `horde({ gaze: { t, at } })`, dann starrt die Menge hoch. Test: `tests/fireworks.story.js`.

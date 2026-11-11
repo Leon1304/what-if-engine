@@ -1,0 +1,10 @@
+const CFG = { dur: 9, seed: 3, locale: 'en-US', kind: 'story', badge: 'What if', accent: 'purple', filter: 'film', shadows: true, area: 30, renderScale: 0.75, msaa: 2, sunAz: -35, handheld: 0.5, capPos: 'mid', karaoke: true, voice: false, series: null, cast: {}, transition: 'auto' };
+const LIVE = {};
+const BEATS = [{ t: 0, dur: 3, kick: 'Test', text: 'Fireworks and a *gazing* crowd', big: true, instant: true }, { t: 3.2, dur: 4, text: 'Every zombie *stops* and stares.' }];
+const CAM = [{ t: 0, p: [0, 6, 34], l: [0, 10, -6], fov: 55 }, { t: 9, p: [4, 5, 30], l: [0, 11, -6], fov: 52 }];
+const SHAKES = [], FLASHES = [];
+const SKY = [[0, 'night']];
+const PHASES = t => 'Test';
+const STATS = [{ label: 'Zombies', value: t => LIVE.z ? LIVE.z(t) : 0, show: 0.5 }];
+const END = { t: 7.4, q: 'Which burst was *best?*', opts: ['Peony', 'Willow', 'Crackle'], cta: 'Comment A, B or C', loop: 'And then —' };
+const AUDIO = { mood: 'none', amb: [[0, 9, 'night', 0.6]], hits: [] };
