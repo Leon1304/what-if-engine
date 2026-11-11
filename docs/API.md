@@ -783,3 +783,9 @@ Dinge zerbrechen so, wie sie gebaut sind. Alles ist echte Physik (einmal vorab s
 - Keine Handanimation für Brüche (`vanish` + Partikel) mehr, wenn das Objekt größer als eine Kiste ist.
 - `CFG.destruction: false` = Verhalten vor v2.36 (Blockraster, Autos bleiben heil).
 - Test/Vorschau: `tests/destruction.*`.
+
+# Neu in v2.37 (Erklär- und Conspiracy-Videos: wenige Zahlen)
+
+- `CFG.numbers`: `'few'` ist Standard bei `kind: 'explain' | 'conspiracy'`: Die Believability-Nadel (`type: 'meter'`) zeigt keine Prozentzahl mehr (Nadel und Beschriftung reichen), Zähler zeigen keine „+120“/„−30 %“-Einblendungen. `'all'` = wie in Story-Videos.
+- Pro Zähler: `value: false` = nur Balken/Nadel ohne Zahl (geht in jedem Video), `value: true` bzw. `pop: true` holt Zahl bzw. Einblendung im `'few'`-Modus zurück.
+- `assemble.py` zählt bei Erklär- und Conspiracy-Videos, was der Zuschauer lesen müsste, und meldet `numbers on screen: 6 (captions 2 · callouts/ruler 3 · cards 1) + 4 counter(s)`. Mehr als 4 Zahlen im ganzen Video oder mehr als 1 Zähler gibt eine WARNING. `numbers: 'all'` in `CFG` schaltet die Prüfung ab.

@@ -13,6 +13,31 @@ t = open('template.html', encoding='utf-8').read()
 story = open(f'{slug}.story.js', encoding='utf-8').read().strip()
 scene = open(f'{slug}.scene.js', encoding='utf-8').read().strip()
 
+def _block(name):   # source text of `const NAME = [ … ];` in the story
+    m = re.search(r'\bconst\s+' + name + r'\s*=\s*\[', story)
+    if not m: return ''
+    d, i = 0, m.end() - 1
+    for j in range(i, len(story)):
+        c = story[j]
+        if c == '[': d += 1
+        elif c == ']':
+            d -= 1
+            if d == 0: return story[i:j + 1]
+    return story[i:]
+def _strs(src, key):   # values of key: '…' | "…" | `…`
+    return [m.group(2) for m in re.finditer(key + r"""\s*:\s*(['"`])((?:\\.|(?!\1).)*)\1""", src, re.S)]
+_num = lambda s: len(re.findall(r'(?<![A-Za-z#])\d[\d.,]*', re.sub(r'\bb\d+\b', '', s)))
+if re.search(r"kind:\s*'(explain|conspiracy|debunk)'", story) and not re.search(r"numbers:\s*'all'", story):
+    # v2.37: explainer / conspiracy videos show few numbers — count what the viewer would have to read
+    _cap = sum(_num(s) for s in _strs(_block('BEATS'), 'text'))
+    _st = _block('STATS'); _cnt = len(re.findall(r'\blabel\s*:', _st)) - len(re.findall(r"type:\s*'(?:meter|timeline|stars)'", _st)) - len(re.findall(r'\bvalue:\s*false', _st))
+    _co = len(re.findall(r'\bvalue\s*:', _block('CALLOUTS'))) + len(re.findall(r'callout\([^;]*\bvalue\s*:', scene)) + len(re.findall(r'\bconst\s+RULER\b', story))
+    _co += sum(_num(s) for s in _strs(_block('CALLOUTS'), 'text') + _strs(_block('CALLOUTS'), 'sub')) + sum(_num(s) for ln in scene.split('\n') if 'callout(' in ln for s in _strs(ln, 'text'))
+    _cards = len(_strs(_block('FACTS'), 'big')) + sum(_num(s) for s in _strs(_block('GUESS'), 'text') + _strs(_block('MYTH'), 'text') + _strs(_block('FACTS'), 'text'))
+    _tot = _cap + _co + _cards
+    print(f'numbers on screen: {_tot} (captions {_cap} · callouts/ruler {_co} · cards {_cards}) + {max(0, _cnt)} counter(s)')
+    if _tot > 4 or _cnt > 1:
+        print(f"WARNING: too many numbers for an explainer / conspiracy video — budget: 4 on screen in the whole video (one of them the FACTS card) and at most 1 counter. Keep a number only where the viewer needs it to follow or to be amazed; say the rest in words (\"hotter than the Sun's surface\", \"in under a second\") or leave it out. Counters only when a quantity is the story (height, speed, temperature).")
 if re.search(r"kind:\s*'(explain|conspiracy|debunk)'", story) and re.search(r'would you have done', story, re.I):
     print('WARNING: explainer / conspiracy videos end on a fitting question, not "What would you have done?" — change END.cta / say / loop')
 _d = re.search(r"\bdur:\s*([\d.]+)", story)

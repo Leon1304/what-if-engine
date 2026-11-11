@@ -332,6 +332,7 @@ const CFG = {
   voice: 'deep',           // voice-over: deep | deep-uk | narrator | false — or { name, speed: 1.06, gap: 0.22 (pause after a sentence), pitch: -1.1, gain: 1 }
   series: null,            // { name: 'What If Lab', handle: '@whatiflab', ep: 1, next: 'part 2', prev: { q, opts, pick, dur: 3.5, mode: 'chip' } } → series intro + outro; prev (ep 2+) = 'You chose: …' chip next to the badge while the cold open runs (mode 'card' = old full-screen card from frame 0)
   cast: {},                // extra name cards for BEATS[].who, e.g. { mayor: { name: 'The Mayor', role: 'Has a plan' } } (steve is built in)
+  numbers: null,           // 'few' (default in explainer / conspiracy videos: meters without a figure, no +/− pop-ups) | 'all'
   statStagger: 0.45,       // stats appear one after another (s between them); countUp: 0.7 = numbers count up when they appear
   transition: 'auto'       // cuts: auto (whip, whip, zoom …) | whip | zoom | dip | blur | cut — per key: tr, td, dir
 };
@@ -9803,6 +9804,7 @@ document.documentElement.style.setProperty('--accent', ACC); document.documentEl
 if (CFG.accent === 'red' || /^#(f|e)[0-9a-f][0-4]/i.test(ACC)) document.documentElement.style.setProperty('--bad', '#FFB020');   // red accent → danger words turn amber
 const SERIES = CFG.series;
 const KIND = CFG.kind === 'debunk' ? 'conspiracy' : CFG.kind ?? 'story', EXPLAIN = KIND === 'explain' || KIND === 'conspiracy';   // explainer 'Explaining' / conspiracy check 'Conspiracy': badge without episode number
+const FEWNUM = (CFG.numbers ?? (EXPLAIN ? 'few' : 'all')) === 'few';   // v2.37: explainer / conspiracy videos show few numbers — the needle of a meter speaks for itself (value: true = show the figure), no +/− pop-ups (pop: true = show); any stat: value: false = bar or needle only
 if (EXPLAIN && (CFG.badge == null || CFG.badge === 'What if')) CFG.badge = tr(KIND === 'conspiracy' ? 'Conspiracy' : 'Explaining');
 $('badge').textContent = SERIES?.ep && !EXPLAIN ? `${CFG.badge} #${SERIES.ep}` : CFG.badge;
 const XSTEPS = (typeof STEPS === 'undefined' || !STEPS ? [] : STEPS).map(([a, b]) => [evT(a), tr(b)]);
@@ -9987,7 +9989,7 @@ function updateHud(t) {
     const val = tt => ty === 'timer' && s.until != null ? Math.max(0, (s.until - tt) * (s.scale ?? 1)) : statVal(s, tt);
     const v = val(t), dv = v - val(t - 0.12), moving = Math.abs(dv) > 1e-6 && ty !== 'timer';
     const k0 = clamp((t - (s.show ?? 0)) / (CFG.countUp ?? 0.7)), vv = ty === 'timer' || ty === 'timeline' ? v : k0 < 1 ? v * EASE.out(k0) : v;
-    const a = s.a ?? 1, txt = ty === 'vs' ? `${fmtNum(a, s.fmt)} vs ${fmtNum(vv, s.fmt)}` : ty === 'stars' ? '' : fmtNum(vv, ty === 'timer' ? s.fmt ?? 'clock' : ty === 'meter' ? s.fmt ?? 'pct' : ty === 'timeline' ? s.fmt ?? 'year' : s.fmt);
+    const a = s.a ?? 1, txt = s.value === false || (FEWNUM && ty === 'meter' && s.value !== true) ? '' : ty === 'vs' ? `${fmtNum(a, s.fmt)} vs ${fmtNum(vv, s.fmt)}` : ty === 'stars' ? '' : fmtNum(vv, ty === 'timer' ? s.fmt ?? 'clock' : ty === 'meter' ? s.fmt ?? 'pct' : ty === 'timeline' ? s.fmt ?? 'year' : s.fmt);
     if (nd.last !== txt) { nd.v.textContent = txt; nd.last = txt; }
     const max = s.max ?? (ty === 'stars' ? 5 : 100), fr = clamp(v / max);
     if (nd.fill) { const f = ty === 'vs' ? a / Math.max(1e-6, a + v) : fr * (k0 < 1 ? EASE.out(k0) : 1); nd.fill.style.width = (f * 100).toFixed(1) + '%';
@@ -10014,7 +10016,7 @@ function updateHud(t) {
     nd.v.style.color = crit ? 'var(--bad)' : moving ? (good === null ? (s.bad ? 'var(--bad)' : 'var(--accent)') : good ? '#6BE36B' : 'var(--bad)') : '#fff';
     // change pop-up: the jump of the last second, fades 0.8 s after the number stops
     const d1 = v - val(t - 1), d2 = v - val(t - 0.8), big = Math.abs(d1) >= (typeof s.pop === 'number' ? s.pop : 1);
-    if (s.pop !== false && ty !== 'timer' && ty !== 'stars' && ty !== 'timeline' && big && t - (s.show ?? 0) > 0.5) {
+    if (s.pop !== false && !(FEWNUM && s.pop == null) && s.value !== false && ty !== 'timer' && ty !== 'stars' && ty !== 'timeline' && big && t - (s.show ?? 0) > 0.5) {
       const g = s.up ? (d1 >= 0) === (s.up === 'good') : !s.bad, txt2 = (d1 > 0 ? '+' : '−') + fmtNum(Math.abs(d1), s.fmt, (CFG.units ?? 'both') === 'both' ? 'metric' : CFG.units);
       if (nd.dl.textContent !== txt2) nd.dl.textContent = txt2;
       nd.dl.style.color = g ? '#6BE36B' : 'var(--bad)';
