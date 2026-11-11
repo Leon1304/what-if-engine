@@ -824,3 +824,9 @@ Dinge zerbrechen so, wie sie gebaut sind. Alles ist echte Physik (einmal vorab s
 - `boomGate(p, x, z, { w: 8, ry, close: t, dur: 2.2, open: t2 })` → `{ g, arm, closedAt }`: Schrankenpfosten mit rot-weißem Arm entlang lokal +x. Offen steht der Arm hoch; ab `close` senkt er sich in `dur` s, Warnlampe blinkt, Piepen kommt von selbst; `open` hebt ihn wieder.
 - `roadBridge(p, x0, x1, z, { w: 10, pylonH: 22, color, y })`: Straßenbrücke von x0 bis x1 mit Fahrbahn, Mittellinie, Gehwegen, Geländer, zwei Pylonen und Hängeseilen.
 - SFX `horn` (Auto- und Bushupe, `dur`).
+
+# Neu in v2.39.2 (Bergwerk: Stollen, Förderkorb, Stirnlampe, Funkgerät)
+- `mineTunnel(p, x, z, { len: 60, w: 4, h: 3.2, every: 3, lampEvery: 9, dead: [i …], y })` → `{ g, lamps, w, h, len }`: Stollen von z Richtung −z mit Felswänden, Holzausbau, Gleisen mit Schwellen, Kabel, Rohr und Notlampen (`dead` = Indizes, die aus sind; `lamps` = [x, y, z, an]).
+- `mineCage(p, x, z, { h: 40, close: t, up: t, dur: 3, ry })` → `{ g, cage, y(t) }`: Schachtgerüst mit Förderkorb (Gitterkorb, Licht); das Scherengitter vorne (+z) schließt bei `close`, der Korb fährt ab `up` in `dur` s `h` m hoch, mit Geräusch `lift`.
+- `headlamp(rig, { color, battery: t => 0..1, flicker: [[t0, t1]], intensity: 90, dist, angle })` → `{ helmet, light }`: Schutzhelm mit Stirnlampe und Lichtkegel in Blickrichtung (Hut und Haare werden ausgeblendet).
+- `walkie(rig, { talk: [[t0, t1], …] })`: Funkgerät an der Brust, rote LED blinkt, solange gesprochen wird.

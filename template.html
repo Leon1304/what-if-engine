@@ -2657,6 +2657,47 @@ function roadBridge(p, x0, x1, z, o = {}) {   // road deck from x0 to x1 (width 
     for (let k = 1; k <= 7; k++) for (const s of [-1, 1]) for (const d of [-1, 1]) { const hx = px + d * k * L * 0.032, hh = py - 3 - k * (py - 5) / 8; box(g, 0.05, Math.max(0.5, hh - 1.2), 0.05, '#C9CDD3', hx, 1.2, s * (w / 2 + 1.9), NC); } }
   return g;
 }
+// ---- v2.39.2 mine kit: tunnel, cage lift, headlamp with helmet, walkie-talkie ----
+function mineTunnel(p, x, z, o = {}) {   // timbered mine drift running from z toward −z (len m): rock walls, timber sets, rails with sleepers, cable, pipe, emergency lamps (dead: [i, …] stay off)
+  const w = o.w ?? 4, h = o.h ?? 3.2, L = o.len ?? 60, g = stat(grp(p ?? world, x, o.y ?? groundH(x, z), z)), NC = { cast: false }, rk = o.color ?? '#4A423A', tb = '#6B4A2A';
+  box(g, w + 1.2, 0.1, L, '#2E2924', 0, 0, -L / 2, { recv: true }); box(g, w + 1.6, 0.7, L, shade(rk, -0.1), 0, h, -L / 2);
+  for (const s of [-1, 1]) { box(g, 0.7, h, L, rk, s * (w / 2 + 0.35), 0, -L / 2); for (let i = 0; i < L / 1.6; i++) { const zz = -i * 1.6 - hash(i * 7 + s) * 1.2; ball(g, 0.35 + hash(i * 3 + s) * 0.35, shade(rk, (hash(i + s * 9) - 0.5) * 0.25), s * (w / 2 - 0.05), 0.3 + hash(i * 5 + s) * (h - 0.6), zz, { detail: 0, ...NC }); } }
+  for (let i = 0; i <= L / (o.every ?? 3); i++) { const zz = -i * (o.every ?? 3) - 0.5; for (const s of [-1, 1]) box(g, 0.24, h, 0.24, tb, s * (w / 2 - 0.15), 0, zz); box(g, w, 0.26, 0.3, tb, 0, h - 0.26, zz); }
+  for (const s of [-1, 1]) box(g, 0.07, 0.1, L, '#8A8F96', s * 0.55, 0.1, -L / 2, { metal: 0.6, ...NC }); for (let i = 0; i < L / 0.7; i++) box(g, 1.6, 0.06, 0.18, '#4A3424', 0, 0.06, -0.3 - i * 0.7, NC);
+  cyl(g, 0.03, 0.03, L, '#1E1E1E', w / 2 - 0.35, h - 0.55, -L / 2, { rx: Math.PI / 2, seg: 6, ...NC }); cyl(g, 0.09, 0.09, L, '#7A6A4A', -(w / 2 - 0.4), h - 0.45, -L / 2, { rx: Math.PI / 2, seg: 8, ...NC });
+  const lamps = [], dead = o.dead ?? []; for (let i = 0; i * (o.lampEvery ?? 9) < L; i++) { const zz = -2 - i * (o.lampEvery ?? 9), on = !dead.includes(i); box(g, 0.22, 0.14, 0.14, '#2A2D33', w / 2 - 0.35, h - 0.95, zz, NC); box(g, 0.16, 0.08, 0.06, '', w / 2 - 0.35, h - 0.92, zz + 0.08, { mat: mat(on ? '#FFB85A' : '#3A3226', on ? { basic: true, glow: 1.8 } : {}), ...NC }); lamps.push([x + w / 2 - 0.35, h - 0.9, z + zz, on]); }
+  return { g, lamps, w, h, len: L };
+}
+function mineCage(p, x, z, o = {}) {   // shaft frame + cage lift (front +z with a scissor gate): gate closes at close (t), cage rises h m from up (t) over dur s → { g, cage, y(t) }
+  const g = stat(grp(p ?? world, x, groundH(x, z), z, o.ry ?? 0)), NC = { cast: false }, H = o.h ?? 40, T = o.up ?? 1e9, D = o.dur ?? 3, TC = o.close ?? T - 0.6, st = '#5A5E66';
+  for (const sx of [-1, 1]) for (const sz of [-1, 1]) box(g, 0.2, H + 4, 0.2, st, sx * 1.35, 0, sz * 1.35, { metal: 0.4 });
+  for (let k = 0; k < (H + 4) / 2; k++) box(g, 2.9, 0.12, 0.12, st, 0, k * 2, -1.35, NC);
+  const cage = dyn(grp(g, 0, 0, 0)); box(cage, 2.3, 0.12, 2.3, '#3A3D42', 0, 0, 0); box(cage, 2.3, 0.12, 2.3, '#3A3D42', 0, 2.5, 0);
+  for (const sx of [-1, 1]) for (let i = 0; i < 9; i++) box(cage, 0.04, 2.5, 0.04, '#8A8F96', sx * 1.13, 0, -1.1 + i * 0.275, NC);
+  for (let i = 0; i < 9; i++) box(cage, 0.04, 2.5, 0.04, '#8A8F96', -1.1 + i * 0.275, 0, -1.13, NC);
+  ball(cage, 0.08, '', 0, 2.4, 0, { mat: mat('#FFE2A0', { basic: true, glow: 2 }), detail: 0, ...NC });
+  const gate = dyn(grp(cage, 0, 0, 1.13)), bars = []; for (let i = 0; i < 8; i++) { const b = box(gate, 0.05, 2.3, 0.04, '#B8BEC6', 0, 0.1, 0, NC); bars.push(b); }
+  if (T < 1e8) { sfx(TC, 'lift', 0.6, D + 0.6); }
+  const y = t => H * span(t, T, D, 'inOut');
+  tick(t => { cage.position.y = y(t); const k = span(t, TC, 0.45, 'out'); bars.forEach((b, i) => { b.position.x = lerp(-1.05 + (i % 2) * 0.1 + Math.floor(i / 2) * 0.05, -1.05 + i * 0.3, k); b.rotation.z = (i % 2 ? 1 : -1) * 0.5 * k * 0; }); });
+  return { g, cage, y };
+}
+function headlamp(f, o = {}) {   // hard hat + lamp on the forehead, spotlight along the gaze; battery: t => 0..1 dims it, flicker: [[t0, t1], …] stutters
+  const NC = { cast: false }, hh = dyn(grp(f.head, 0, 0.36, 0)); if (f.hat) f.hat.visible = false; if (f.hair && o.hideHair !== false) f.hair.visible = false;
+  const shell = new THREE.Mesh(new THREE.SphereGeometry(0.245, 18, 10, 0, Math.PI * 2, 0, Math.PI / 2), mat(o.color ?? '#F2F0EA', { rough: 0.5 })); shell.scale.set(1, 0.8, 1.05); hh.add(shell);
+  cyl(hh, 0.29, 0.29, 0.025, o.color ?? '#F2F0EA', 0, -0.01, 0.02, { seg: 20 }); box(hh, 0.02, 0.06, 0.4, shade(o.color ?? '#F2F0EA', -0.1), 0, 0.16, -0.2, NC);
+  const lamp = grp(hh, 0, 0.05, 0.24); box(lamp, 0.11, 0.08, 0.06, '#2A2D33', 0, 0, 0, NC); const lens = box(lamp, 0.07, 0.05, 0.02, '', 0, 0.015, 0.035, { mat: mat('#FFF6D8', { basic: true, glow: 2.2, own: true }), ...NC });
+  const sp = new THREE.SpotLight(o.lightColor ?? '#FFF1D8', 0, o.dist ?? 28, o.angle ?? 0.42, 0.6, 1.25); sp.position.set(0, 0.02, 0.06); lamp.add(sp, sp.target); sp.target.position.set(0, -0.6, 6);
+  const fl = o.flicker ?? [], bat = o.battery ?? (() => 1), I = o.intensity ?? 90;
+  tick(t => { let k = clamp(bat(t)); if (fl.some(([a, b]) => t >= a && t < b)) k *= noise1(t * 26) > 0.1 ? 0.15 : 1; sp.intensity = I * k; lens.material.opacity = 1; lens.visible = k > 0.05; });
+  return { helmet: hh, light: sp };
+}
+function walkie(f, o = {}) {   // walkie-talkie clipped to the chest (left), LED blinks while talk = [[t0, t1], …]
+  const NC = { cast: false }, w = dyn(grp(f.chest, -0.14, 0.42, 0.16)); box(w, 0.09, 0.16, 0.05, '#1E1F22', 0, 0, 0, NC); cyl(w, 0.012, 0.012, 0.14, '#111', 0.025, 0.16, 0, { seg: 6, ...NC }); box(w, 0.06, 0.05, 0.004, '', 0, 0.09, 0.027, { mat: mat('#7AE07A', { basic: true, glow: 0.6 }), ...NC });
+  const led = box(w, 0.018, 0.018, 0.01, '', 0.03, 0.135, 0.026, { mat: mat('#FF3A2A', { basic: true, glow: 2.4 }), ...NC }); dyn(led);
+  tick(t => { led.visible = (o.talk ?? []).some(([a, b]) => t >= a && t < b) && Math.floor(t * 6) % 2 === 0; });
+  return w;
+}
 function busstop(p, x, z, ry = 0) {   // shelter (glass back and sides, roof, bench) + sign pole; local +z faces the road
   const g = stat(grp(p, x, groundH(x, z), z, ry)), gl = mat('#BFD8E8', { opacity: 0.35, rough: 0.1 }), NC = { cast: false };
   box(g, 2.6, 0.08, 1.3, '#3A3D44', 0, 2.4, 0.1); for (const s of [-1, 1]) box(g, 0.08, 2.4, 0.08, '#3A3D44', s * 1.25, 0, -0.45);
