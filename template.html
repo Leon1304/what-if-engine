@@ -545,7 +545,7 @@ function mat(hex, o = {}) {   // o: rough, metal, em (emissive hex), ei, opacity
     ? new THREE.MeshBasicMaterial({ color: hex, transparent: tr, opacity: o.opacity ?? 1, depthWrite: !tr })
     : new THREE.MeshStandardMaterial({ color: hex, roughness: o.rough ?? 0.88, metalness: o.metal ?? 0, flatShading: o.flat ?? true, emissive: o.em ?? '#000000', emissiveIntensity: o.ei ?? 1, transparent: tr, opacity: o.opacity ?? 1, depthWrite: !tr });
   if (o.wind && !o.basic) windify(m, o.wind === 'local' ? 'local' : 'attr');
-  if (o.own) m.userData.own = true;
+  if (o.own) m.userData.own = true; if (o.side != null) m.side = o.side;
   if (o.glow) m.color.multiplyScalar(1 + o.glow);
   if (!o.own) _mats.set(key, m);
   return m;
@@ -1150,9 +1150,14 @@ function figure(o = {}) {
   };
   const [legL, shinL, footL] = leg(-1), [legR, shinR, footR] = leg(1);
   const chest = grp(hips, 0, 0.02, 0); rbox(chest, 0.52, 0.62, 0.3, shirt, 0, -0.02, 0);
-  const arm = sx => {
+  const HANDS = [], arm = sx => {
     const ua = grp(chest, sx * 0.34, 0.54, 0), fa = grp(ua, 0, -0.29, 0);
-    rbox(ua, 0.16, 0.34, 0.16, shirt, 0, -0.32, 0); rbox(fa, 0.145, 0.3, 0.145, shirt, 0, -0.27, 0); rbox(fa, 0.15, 0.15, 0.15, skin, 0, -0.39, 0);
+    rbox(ua, 0.16, 0.34, 0.16, shirt, 0, -0.32, 0); rbox(fa, 0.145, 0.3, 0.145, shirt, 0, -0.27, 0);
+    // hand: palm, three fingers in one, index finger, thumb — posed by hands() / gestures (curl about the knuckles)
+    const hd = grp(fa, 0, -0.25, 0); hd.userData.handRoot = true; rbox(hd, 0.1, 0.095, 0.14, skin, 0, -0.095, 0).userData.hand = true;
+    const fg = grp(hd, 0, -0.09, -0.022), ix = grp(hd, 0, -0.09, 0.048), th = grp(hd, -sx * 0.03, -0.035, 0.062);
+    box(fg, 0.085, 0.085, 0.095, skin, 0, -0.085, 0).userData.hand = true; box(ix, 0.07, 0.085, 0.04, skin, 0, -0.085, 0).userData.hand = true; box(th, 0.05, 0.07, 0.042, skin, 0, -0.07, 0).userData.hand = true;
+    HANDS.push({ hd, fg, ix, th, sx });
     return [ua, fa];
   };
   const [armL, foreL] = arm(-1), [armR, foreR] = arm(1);
@@ -1210,7 +1215,7 @@ function figure(o = {}) {
   if (o.hold) o.holdShape === 'board' ? box(foreR, 0.27, 0.34, 0.03, o.hold, 0, -0.62, 0.08) : box(foreR, 0.09, 0.24, 0.09, o.hold, 0, -0.6, 0.03);   // held item: flashlight/megaphone (along the forearm) or holdShape 'board' (clipboard)
   root.scale.setScalar(o.scale ?? 1);
   const f = { root, body, hips, chest, neck, head, legL, legR, shinL, shinR, footL, footR, armL, armR, foreL, foreR, mouth, brows, eyes, hat, coat, hair: hairG, cape,
-    expr: o.expr, kind: o.kind ?? 'human', id, sd: hash(id * 7.31 + 0.5), look: o.look, talk: o.talk, who: o.who, M, fx: [] };
+    expr: o.expr, kind: o.kind ?? 'human', id, sd: hash(id * 7.31 + 0.5), look: o.look, talk: o.talk, who: o.who, M, fx: [], hands: HANDS };
   RIGS.push(f);
   tick(t => pose(f, 'idle', 0, t));   // breathes, blinks and looks around even if the scene never poses it; later pose()/walk() calls win
   return f;
@@ -2523,7 +2528,7 @@ function astronaut(o = {}) {   // spacesuit rig: helmet shell with tinted visor 
   rbox(f.chest, 0.5, 0.64, 0.26, '#DADDE2', 0, -0.02, -0.27); for (let i = 0; i < 3; i++) box(f.chest, 0.36, 0.03, 0.02, trim, 0, 0.1 + i * 0.12, -0.41, NC);
   box(f.chest, 0.26, 0.16, 0.05, '#5E6672', 0, 0.28, 0.16, NC); ['#FF4040', '#40FF70', '#40B0FF'].forEach((c, i) => box(f.chest, 0.035, 0.035, 0.02, '', -0.07 + i * 0.07, 0.36, 0.19, { mat: mat(c, { basic: true, glow: 1.2 }), ...NC }));
   box(f.armL, 0.02, 0.09, 0.12, o.patch ?? '#2E6FD9', -0.085, -0.17, 0, NC);
-  for (const fa of [f.foreL, f.foreR]) { if (fa.children[1]) fa.children[1].material = mat('#C9CDD3', { flat: false }); cyl(fa, 0.09, 0.09, 0.06, trim, 0, -0.3, 0, { seg: 10, ...NC }); }
+  for (const fa of [f.foreL, f.foreR]) { fa.traverse(m => { if (m.isMesh && m.userData.hand) m.material = mat('#C9CDD3', { flat: false }); }); cyl(fa, 0.09, 0.09, 0.06, trim, 0, -0.3, 0, { seg: 10, ...NC }); }
   f.helmet = hm; f.astronaut = true; return f;
 }
 // floatIn(rig, { t0, t1, drift: [dx, dy, dz] per s, spin, bob }) — weightless: slow drift and tumble, limbs float
@@ -4812,7 +4817,7 @@ function gear(f, kind, o = {}) {
       if (V(16) < 0.25) cyl(H, 0.03, 0.03, 0.01, '#E8C02A', 0.21, 0.08, 0.02, { rz: Math.PI / 2, seg: 8, ...NC });
       const coat = P(17, ['#5A1E1E', '#1E2A5A', '#3A2A1E', '#1E1E1E']); if (V(18) < 0.6) { rbox(C, 0.6, 0.6, 0.38, coat, 0, -0.04, -0.02); for (const sx of [-1, 1]) box(C, 0.04, 0.5, 0.02, '#C9A64A', sx * 0.12, 0.0, 0.18, NC); box(Hp, 0.5, 0.6, 0.06, coat, 0, -0.62, -0.13); both((ua, s, fa) => { rbox(fa, 0.17, 0.1, 0.17, '#C9A64A', 0, -0.25, 0); }); }
       box(Hp, 0.48, 0.09, 0.32, P(19, ['#B8302A', '#E8C02A', '#2E5AA8']), 0, 0.03, 0); box(Hp, 0.08, 0.3, 0.02, P(19, ['#B8302A', '#E8C02A', '#2E5AA8']), 0.15, -0.25, 0.16, { rz: 0.2, ...NC });
-      both((ua, s, fa, th, sh, ft) => { rbox(sh, 0.2, 0.3, 0.21, '#2A1E16', 0, -0.36, 0); }); if (V(20) < 0.15) { f.foreL.children.forEach(c => { if (Math.abs(c.position.y + 0.315) < 0.01) c.visible = false; }); cone(f.foreL, 0.03, 0.12, '#C9CED4', 0, -0.47, 0.0, { rx: Math.PI, metal: 0.7 }); }   // hook hand
+      both((ua, s, fa, th, sh, ft) => { rbox(sh, 0.2, 0.3, 0.21, '#2A1E16', 0, -0.36, 0); }); if (V(20) < 0.15) { f.foreL.children.forEach(c => { if (c.userData.handRoot || Math.abs(c.position.y + 0.315) < 0.01) c.visible = false; }); cone(f.foreL, 0.03, 0.12, '#C9CED4', 0, -0.47, 0.0, { rx: Math.PI, metal: 0.7 }); }   // hook hand
       break;
     }
     case 'cowboy': {
@@ -6054,6 +6059,673 @@ function lodRegister(root, size) { const small = [], ws = new THREE.Vector3(); r
 DEFER.push(() => { for (const a of BEAST_ALL) lodRegister(a.root, Math.max(a.L, a.lh) * a.sc); });
 
 /* ====================================================================== */
+/* v2.17 — hands with fingers (hands, gesture), more ways to move (crawl, sneak, swim, tread, climb, stairs, stumble, slide, dance),
+   people together (hug, highFive, handshake, piggyback, pull, shove, chat), people and animals (pet, feed, fetch, lead, perch),
+   cartoon acting (boing, faceFx, soot, wet, idle, idleMix) */
+/* ====================================================================== */
+Object.assign(PART, {
+  steam:  { rate: 6, life: 2.2, speed: 0.45, spread: 0.2, g: 0.35, size: 0.12, grow: 2.2, colors: ['#FFFFFF', '#F2F4F6'], opacity: 0.32, jitter: 0.12, soft: true, wind: [0.15, 0] },
+  crumbs: { burst: 14, life: 1.2, speed: 1.2, spread: 1.1, g: -9.8, size: 0.016, grow: 0, colors: ['#C8963E', '#A8742E', '#E8C080'], geo: 'box', spin: 6, floor: true, pick: true },
+  grease: { rate: 18, life: 0.45, speed: 1.8, spread: 0.9, g: -6, size: 0.03, grow: -0.5, colors: ['#FFE9A0', '#FFF6D0'], basic: true, geo: 'box', jitter: 0.1 },
+  drip:   { rate: 8, life: 0.7, speed: 0.05, spread: 0.6, g: -9.8, size: 0.03, grow: 0, colors: ['#BFE6FF', '#E8F6FF'], basic: true, opacity: 0.8, jitter: 0.22 },
+  splat:  { burst: 26, life: 0.9, speed: 3.2, spread: 1.2, g: -9.8, size: 0.07, grow: -0.2, colors: ['#D83A2A'], basic: true, floor: true, pick: true }
+});
+// base position / heading of a rig (walk path if it walks, else where the scene put it) — keeps every frame a pure function of t
+const _bp = (f, t) => f._posAt ? f._posAt(t) : (f._p0 ?? (f.root ?? f).position).clone(), _byaw = (f, t) => f._yawAt ? f._yawAt(t) : (f._y0 ?? (f.root ?? f).rotation.y);
+const _cap = f => { if (!f || f._capd) return; f._capd = true; DEFER.push(() => { const r = f.root ?? f.g ?? f; f._p0 = r.position.clone(); f._y0 = r.rotation.y; }); };
+// hand poses: [finger curl, index curl, thumb (−1 out … 0 relaxed … 1 tucked)]
+const HANDP = { relax: [0.3, 0.2, 0], open: [0, 0, -0.5], fist: [1.7, 1.7, 1], point: [1.7, 0, 1], thumb: [1.7, 1.7, -1], grip: [1.25, 1.15, 0.7], claw: [0.9, 0.9, -0.3], loose: [1.05, 0.95, 0.4], spread: [-0.15, -0.15, -0.9] };
+const _rsBase = rigState, _arBase = applyRig, MOVES = {};
+rigState = function (mode, u, t, o = {}) {
+  const S = MOVES[mode] ? MOVES[mode](u, t, o) : _rsBase(mode, u, t, o);
+  if (S.hfL == null) { const P = HANDP[o.zb ? 'claw' : mode === 'panic' ? 'spread' : mode === 'run' ? 'loose' : mode === 'cheer' ? 'fist' : 'relax'];
+    S.hfL = S.hfR = P[0]; S.hiL = S.hiR = P[1]; S.htL = S.htR = P[2]; if (mode === 'point') [S.hfR, S.hiR, S.htR] = HANDP.point; }
+  return S;
+};
+applyRig = function (f, S) {
+  _arBase(f, S);
+  if (f.hands) for (const h of f.hands) { const R = h.sx > 0, fc = (R ? S.hfR : S.hfL) ?? 0.3, ic = (R ? S.hiR : S.hiL) ?? 0.2, tc = (R ? S.htR : S.htL) ?? 0;
+    h.fg.rotation.z = -h.sx * fc; h.ix.rotation.z = -h.sx * ic; h.th.rotation.set(-0.35 - 1.2 * Math.max(0, -tc), 0, -h.sx * 1.15 * Math.max(0, tc)); }
+};
+const _hset = (S, s, P, e) => { S['hf' + s] = lerp(S['hf' + s] ?? 0.3, P[0], e); S['hi' + s] = lerp(S['hi' + s] ?? 0.2, P[1], e); S['ht' + s] = lerp(S['ht' + s] ?? 0, P[2], e); };
+function hands(f, pose, t0 = 0, t1 = 1e9, o = {}) {   // hand pose relax · open · fist · point · thumb · grip · claw · loose · spread from t0 to t1; o.side 'L' | 'R' | 'both'
+  const P = HANDP[pose] ?? HANDP.relax, sides = (o.side ?? 'both') === 'both' ? ['L', 'R'] : [o.side], fi = o.fade ?? 0.15;
+  (f.fx ??= []).push((t, S) => { const e = env3(t, t0, t1, fi, fi); if (e) for (const s of sides) _hset(S, s, P, e); });
+  return f;
+}
+// grips: weapons, carried things, flashlight and phone close the hand automatically
+{ const _w0 = weapon; weapon = function (f, kind, o = {}) { const W = _w0(f, kind, o); if (W && f?.legL) hands(f, 'grip', o.from ?? -1e9, o.to ?? 1e9, { side: W.part === 'L' ? 'L' : W.part === 'R' ? 'R' : 'both', fade: 0.01 }); return W; };
+  const _c0 = carry; carry = function (f, obj, o = {}) { const r = _c0(f, obj, o); if (f?.legL) hands(f, 'grip', (o.pick ?? 0) + 0.3, o.throw?.t ?? o.drop ?? 1e9, { side: o.both ? 'both' : o.hand ?? 'R' }); return r; };
+  const _f0 = flashlight; flashlight = function (f, o = {}) { const r = _f0(f, o); hands(f, 'grip', o.t0 ?? 0, o.t1 ?? 1e9, { side: 'R' }); return r; };
+  const _p0 = phone; phone = function (f, o = {}) { const r = _p0(f, o); hands(f, 'grip', o.t0 ?? 0, o.t1 ?? 1e9, { side: 'R' }); return r; };
+  const _r0 = react; react = function (f, t0, kind = 'startle', o = {}) { const r = _r0(f, t0, kind, o); const d = o.dur ?? 1.2, hp = { wave: 'open', facepalm: 'open', shrug: 'open', startle: 'spread', flinch: 'spread', hit: 'spread' }[kind]; if (hp && f?.legL) hands(f, hp, t0 + 0.05, t0 + d * 0.85, { side: kind === 'wave' || kind === 'facepalm' ? 'R' : 'both' }); return r; };
+}
+// gesture(rig, t0, kind, { dur, at }) — thumbsup · fistpump · clap · salute · shush · beckon · stop · point (at) · peace · cross (arms crossed)
+function gesture(f, t0, kind = 'thumbsup', o = {}) {
+  const d = o.dur ?? { thumbsup: 1.4, fistpump: 1.4, clap: 2, salute: 1.6, shush: 1.6, beckon: 1.8, stop: 1.4, point: 1.6, peace: 1.4, cross: 2.5 }[kind] ?? 1.5;
+  if (kind === 'clap') for (let k = 0.35; k < d - 0.3; k += 0.32) sfx(t0 + k, 'clap', 0.5);
+  (f.fx ??= []).push((t, S) => {
+    const e = env3(t, t0, t0 + d, 0.22, 0.28); if (!e) return; const u = t - t0, L = (k, v) => { S[k] = lerp(S[k], v, e); };
+    if (kind === 'thumbsup') { L('ras', -0.85); L('raz', 0.1); L('rae', -1.55); _hset(S, 'R', HANDP.thumb, e); S.nrz -= 0.08 * e; }
+    else if (kind === 'fistpump') { const p = Math.max(0, Math.sin(TAU * 1.7 * u)); L('ras', -2.4 - 0.3 * p); L('raz', 0.25); L('rae', -0.9 + 0.6 * p); _hset(S, 'R', HANDP.fist, e); S.crx -= 0.06 * e; }
+    else if (kind === 'clap') { const c = Math.abs(Math.sin(Math.PI * u / 0.32)); L('las', -1.15); L('ras', -1.15); L('lae', -0.9); L('rae', -0.9); L('laz', 0.35 + 0.25 * c); L('raz', -0.35 - 0.25 * c); _hset(S, 'L', HANDP.open, e); _hset(S, 'R', HANDP.open, e); }
+    else if (kind === 'salute') { L('ras', -1.75); L('raz', 0.55); L('rae', -2.25); _hset(S, 'R', HANDP.open, e); S.crx -= 0.04 * e; }
+    else if (kind === 'shush') { L('ras', -1.0); L('raz', -0.15); L('rae', -2.35); _hset(S, 'R', HANDP.point, e); S.nrx += 0.06 * e; }
+    else if (kind === 'beckon') { L('ras', -1.2); L('raz', 0.05); L('rae', -0.7); const c = 0.5 + 0.5 * Math.sin(TAU * 2.2 * u); _hset(S, 'R', [1.6 * c, 1.6 * c, -0.3], e); }
+    else if (kind === 'stop') { L('ras', -1.55); L('raz', 0.05); L('rae', -0.15); _hset(S, 'R', HANDP.open, e); S.crx -= 0.05 * e; }
+    else if (kind === 'point') { L('ras', -1.5); L('raz', 0.08); L('rae', -0.05); _hset(S, 'R', HANDP.point, e); }
+    else if (kind === 'peace') { L('ras', -0.8); L('raz', 0.15); L('rae', -1.75); _hset(S, 'R', [1.7, 0, 1], e); S.nrz -= 0.12 * e; }
+    else if (kind === 'cross') { L('las', -0.55); L('ras', -0.6); L('lae', -1.95); L('rae', -1.85); L('laz', 0.45); L('raz', -0.45); _hset(S, 'L', HANDP.relax, e); _hset(S, 'R', HANDP.relax, e); S.crx -= 0.04 * e; }
+  });
+  if (kind === 'point' && o.at) faceTo(f, o.at, t0, t0 + d);
+  return f;
+}
+// turn a standing figure toward a target (rig, [x,z], [x,y,z]) between t0 and t1 (eases in and out)
+function faceTo(f, at, t0, t1, o = {}) {
+  const r = dyn(f.root); _cap(f); if (at?.legL && at.root) _cap(at);
+  late(t => { const e = env3(t, t0, t1, o.fade ?? 0.35, o.fade ?? 0.35); if (!e) return; const p = r.position, q = at?._posAt ? at._posAt(t) : at?.legL || at?.root ? _bp(at, t) : toV(at);
+    const cur = _byaw(f, t), want = Math.atan2(q.x - p.x, q.z - p.z) + (o.off ?? 0); let d = want - cur; d = Math.atan2(Math.sin(d), Math.cos(d)); r.rotation.y = cur + d * e; });
+  return f;
+}
+// ---- crouch helper: lower the hips by d and keep the feet where they are (two-bone IK) ----
+function _crouch(S, d) {
+  for (const s of ['l', 'r']) { const a = S[s + 't'], k = S[s + 'k'], z = -(LEG1 * Math.sin(a) + LEG2 * Math.sin(a + k)), y = -(LEG1 * Math.cos(a) + LEG2 * Math.cos(a + k)); [S[s + 't'], S[s + 'k']] = legIK(z, y + d); }
+  S.H -= d; return S;
+}
+// ---- extra walk modes: walk(rig, pts, { mode: 'crawl' | 'sneak' | 'tiptoe' | 'swim' | 'limp' }) ----
+MOVES.crawl = (u, t, o) => { const S = _rsBase('idle', 0, t, o), c = TAU * u * 1.6, s = Math.sin(c);
+  S.H = 0.5; S.hrx = 1.25; S.crx = 0.04; S.nrx = -0.95; S.by = 0.015 * Math.abs(Math.cos(c)); S.hrz = 0.04 * s;
+  S.lt = 0.02 + 0.3 * s; S.rt = 0.02 - 0.3 * s; S.lk = 1.5 - 0.3 * Math.max(0, s); S.rk = 1.5 - 0.3 * Math.max(0, -s); S.lf = S.rf = 1.25;
+  S.las = -1.25 - 0.3 * Math.sin(c + Math.PI); S.ras = -1.25 - 0.3 * Math.sin(c); S.lae = -0.35 - 0.2 * Math.max(0, s); S.rae = -0.35 - 0.2 * Math.max(0, -s); S.laz = -0.12; S.raz = 0.12;
+  S.hfL = S.hfR = 0.1; S.hiL = S.hiR = 0.1; S.htL = S.htR = -0.4; S.coat = 0.3; return S; };
+MOVES.sneak = (u, t, o) => { const S = _crouch(_rsBase('walk', u * 1.35, t, o), 0.17), c = TAU * u * 1.35;
+  S.crx += 0.3; S.nrx -= 0.22; S.las = -0.5 + 0.12 * Math.sin(c); S.ras = -0.5 - 0.12 * Math.sin(c); S.lae = S.rae = -1.35; S.laz = -0.3; S.raz = 0.3; S.lf += 0.15; S.rf += 0.15;
+  S.hfL = S.hfR = 0.7; S.hiL = S.hiR = 0.55; S.htL = S.htR = 0.2; return S; };
+MOVES.tiptoe = (u, t, o) => { const S = _rsBase('walk', u * 1.5, t, o), c = TAU * u * 1.5; S.H += 0.04; S.lf += 0.45; S.rf += 0.45; S.las = -0.3; S.ras = -0.3; S.lae = S.rae = -1.2; S.laz = -0.55; S.raz = 0.55; S.crx += 0.08; S.by += 0.01 * Math.sin(2 * c);
+  S.hfL = S.hfR = 0.2; S.hiL = S.hiR = 0; S.htL = S.htR = -0.2; return S; };
+MOVES.limp = (u, t, o) => { const S = _rsBase('walk', u, t, o), c = TAU * u, w = Math.max(0, Math.sin(c)); S.rk = Math.max(S.rk, 0.25) * 0.4; S.H -= 0.05 * w; S.hrz += 0.08 * w; S.crz -= 0.1 * w; S.by -= 0.03 * w; S.ras = 0.15; S.las += 0.1; return S; };
+MOVES.swim = (u, t, o) => { const S = _rsBase('idle', 0, t, o), c = TAU * u * 0.9;
+  S.hrx = 1.42; S.crx = 0.02; S.nrx = -1.05; S.nry = 0.55 * Math.max(0, Math.sin(c)) ** 6; S.H = HIP; S.hrz = 0.18 * Math.sin(c);
+  S.lt = 1.4 + 0.22 * Math.sin(TAU * u * 2.7); S.rt = 1.4 - 0.22 * Math.sin(TAU * u * 2.7); S.lk = S.rk = 0.15; S.lf = S.rf = 1.4 + 1.2;
+  S.las = -Math.PI + c; S.ras = c; S.lae = S.rae = -0.25; S.laz = -0.15; S.raz = 0.15; S.hfL = S.hfR = 0.15; S.hiL = S.hiR = 0.1; S.htL = S.htR = 0.3; return S; };
+MOVES.tread = (u, t, o) => { const S = _rsBase('idle', 0, t, o), c = TAU * t * 0.9;
+  S.lt = -0.55 + 0.3 * Math.sin(c); S.rt = -0.55 - 0.3 * Math.sin(c); S.lk = 1.0 + 0.35 * Math.cos(c); S.rk = 1.0 - 0.35 * Math.cos(c); S.lf = S.rf = 0.6;
+  S.las = -0.35; S.ras = -0.35; S.laz = -1.15 + 0.3 * Math.sin(2 * c); S.raz = 1.15 - 0.3 * Math.sin(2 * c); S.lae = S.rae = -0.45; S.by = 0.05 * Math.sin(2 * c); S.nrx = -0.12;
+  S.hfL = S.hfR = 0.1; S.hiL = S.hiR = 0.05; S.htL = S.htR = -0.3; return S; };
+MOVES.climb = (u, t, o) => { const S = _rsBase('idle', 0, t, o), c = TAU * u, s = Math.sin(c), up = k => Math.max(0, k);
+  S.las = -2.65 + 0.45 * s; S.ras = -2.65 - 0.45 * s; S.lae = -0.25 - 0.55 * up(-s); S.rae = -0.25 - 0.55 * up(s); S.laz = 0.12; S.raz = -0.12;
+  S.lt = -0.25 - 0.95 * up(s); S.rt = -0.25 - 0.95 * up(-s); S.lk = 0.45 + 1.35 * up(s); S.rk = 0.45 + 1.35 * up(-s); S.lf = 0.1; S.rf = 0.1; S.crx = 0.06; S.nrx = -0.25;
+  S.hfL = S.hfR = 1.3; S.hiL = S.hiR = 1.2; S.htL = S.htR = 0.8; return S; };
+// swim at the surface: paddle(rig, pts, { t0, speed, level }) — face down crawl stroke, splashes; tread(rig, t0, t1, { at: [x, z] }) — head above water
+function paddle(f, pts, o = {}) {
+  const W = walk(f, pts, { ...o, mode: 'swim', speed: o.speed ?? 1.1, ramp: o.ramp ?? 0.6 }), t0 = o.t0 ?? 0, lv = o.level;
+  late(t => { if (t < t0 || t > (o.t1 ?? 1e9)) return; const p = f.root.position; p.y = (lv ?? (typeof waterH === 'function' ? waterH(p.x, p.z, t) : 0)) - HIP + 0.12; });
+  emit('spray', { at: t => { const p = rigPos(f, t); return [p.x, (lv ?? 0) + 0.15, p.z]; }, t0, t1: o.t1 ?? DUR, rate: 10, size: 0.07 });
+  return W;
+}
+function tread(f, t0 = 0, t1 = 1e9, o = {}) {
+  const r = dyn(f.root), lv = o.level;
+  if (o.at) r.position.set(o.at[0], 0, o.at[1]);
+  (f.fx ??= []).push((t, S) => { const e = env3(t, t0, t1, 0.3, 0.3); if (!e) return; const A = MOVES.tread(0, t, { sd: f.sd }); for (const k in A) if (S[k] != null) S[k] = lerp(S[k], A[k], e); });
+  late(t => { if (t < t0 || t > t1) return; const p = r.position; p.y = (lv ?? (typeof waterH === 'function' ? waterH(p.x, p.z, t) : 0)) - 1.42 + 0.05 * Math.sin(t * 1.8); });
+  return f;
+}
+// climb(rig, { at: [x, z], ry, y0, y1, t0, speed, ladder: true }) — hand over hand up a ladder (or a wall with ladder: false); stays on top at y1 → end time
+function climb(f, o = {}) {
+  const [x, z] = o.at ?? [0, 0], ry = o.ry ?? 0, y0 = o.y0 ?? 0, y1 = o.y1 ?? 3, t0 = o.t0 ?? 0, v = o.speed ?? 0.55, t1 = t0 + Math.abs(y1 - y0) / v, dx = Math.sin(ry), dz = Math.cos(ry);
+  if (o.ladder !== false) { const L = stat(grp(world, x, y0, z, ry)), h = Math.abs(y1 - y0) + 1.1, c = o.color ?? '#8A6A44'; for (const sx of [-1, 1]) box(L, 0.06, h, 0.06, c, sx * 0.24, 0, 0); for (let y = 0.3; y < h; y += 0.3) box(L, 0.48, 0.04, 0.05, c, 0, y, 0); }
+  const r = dyn(f.root), bx = x - dx * 0.34, bz = z - dz * 0.34;
+  (f.fx ??= []).push((t, S) => { const e = env3(t, t0 - 0.2, t1 + 0.3, 0.25, 0.3); if (!e) return; const A = MOVES.climb(clamp(t - t0, 0, t1 - t0) * v / 0.6, t, { sd: f.sd }); for (const k in A) if (S[k] != null) S[k] = lerp(S[k], A[k], e); });
+  late(t => { if (t < t0 - 0.2 || t > (o.release ?? 1e9)) return; const k = clamp((t - t0) / (t1 - t0)), st = (k * (y1 - y0) / 0.3) % 1; r.position.set(bx, y0 + (y1 - y0) * k - 0.04 * Math.sin(Math.PI * st), bz); r.rotation.y = ry; });
+  for (let tt = t0 + 0.3; tt < t1; tt += 0.6) sfx(tt, 'tick', 0.25);
+  return t1;
+}
+// stairs(p, x, z, { w, n, rise, run, ry, color, rail }) — a flight of steps going +z (local); walk() climbs them by itself (build after ground())
+const STAIRS = [];
+function stairs(p, x, z, o = {}) {
+  const n = o.n ?? 10, rise = o.rise ?? 0.18, run = o.run ?? 0.3, w = o.w ?? 1.4, ry = o.ry ?? 0, c = o.color ?? '#B8B0A0', g = stat(grp(p, x, 0, z, ry));
+  for (let i = 0; i < n; i++) { box(g, w, rise * (i + 1), run, shade(c, i % 2 ? -0.03 : 0), 0, 0, run * (i + 0.5)); box(g, w + 0.02, 0.02, 0.04, shade(c, -0.2), 0, rise * (i + 1) - 0.02, run * i + 0.02, { cast: false }); }
+  if (o.rail !== false) for (const sx of [-1, 1]) { for (let i = 0; i <= n; i += 3) box(g, 0.04, 0.9, 0.04, '#5A5048', sx * (w / 2 - 0.05), rise * Math.min(i, n), run * i); const len = Math.hypot(run * n, rise * n), m = box(g, 0.05, 0.05, len, '#5A5048', sx * (w / 2 - 0.05), 0.9 + rise * n / 2 - 0.025, run * n / 2); m.rotation.x = -Math.atan2(rise, run); }
+  const S = { x, z, ry, n, rise, run, w }; STAIRS.push(S);
+  if (STAIRS.length === 1) DEFER.unshift(() => { const g0 = groundH; groundH = (X, Z) => { let h = g0(X, Z); for (const s of STAIRS) { const c = Math.cos(s.ry), sn = Math.sin(s.ry), lx = (X - s.x) * c - (Z - s.z) * sn, lz = (X - s.x) * sn + (Z - s.z) * c; if (Math.abs(lx) <= s.w / 2 && lz >= 0 && lz <= s.run * s.n + 0.6) h = Math.max(h, g0(s.x, s.z) + s.rise * Math.min(s.n, Math.floor(lz / s.run) + 1)); } return h; }; });
+  return S;
+}
+// stumble(rig, t, { fall, dir, getUp, dazed }) — trips, arms flail; with fall: true goes down (fall()) and gets up at getUp
+function stumble(f, t0, o = {}) {
+  (f.fx ??= []).push((t, S) => { const k = (t - t0) / 0.9; if (k < 0 || k > 1) return; const e = Math.sin(Math.PI * k), w = Math.sin(TAU * 3 * k);
+    S.crx += 0.55 * e; S.nrx -= 0.3 * e; S.by -= 0.06 * e; S.las = lerp(S.las, -2.1 + 0.6 * w, e); S.ras = lerp(S.ras, -1.8 - 0.6 * w, e); S.laz = lerp(S.laz, -0.6, e); S.raz = lerp(S.raz, 0.6, e);
+    S.rt = lerp(S.rt, 0.55, e); S.rk = lerp(S.rk, 0.9, e); _hset(S, 'L', HANDP.spread, e); _hset(S, 'R', HANDP.spread, e); });
+  if (o.fall) fall(f, t0 + 0.4, { dir: o.dir ?? 'front', getUp: o.getUp, dazed: o.dazed });
+  sfx(t0, 'whoosh', 0.3); return f;
+}
+// slide(rig, t0, t1, { kind: 'knees' | 'belly' | 'butt' | 'surf', spray }) — pose while walk() carries it along (power slide, belly slide on ice, slide down a slope)
+function slide(f, t0, t1, o = {}) {
+  const kd = o.kind ?? 'knees';
+  (f.fx ??= []).push((t, S) => { const e = env3(t, t0, t1, 0.18, 0.25); if (!e) return; const L = (k, v) => { S[k] = lerp(S[k], v, e); };
+    if (kd === 'knees') { L('H', 0.5); L('lt', -0.15); L('rt', -0.15); L('lk', 2.35); L('rk', 2.35); L('lf', 1.6); L('rf', 1.6); L('crx', -0.35); L('nrx', 0.2); L('las', -2.6); L('ras', -2.6); L('laz', -0.5); L('raz', 0.5); _hset(S, 'L', HANDP.fist, e); _hset(S, 'R', HANDP.fist, e); }
+    else if (kd === 'belly') { L('H', 0.2); L('hrx', 1.5); L('nrx', -1.2); L('lt', 1.5); L('rt', 1.5); L('lk', 0.1); L('rk', 0.1); L('lf', 2.6); L('rf', 2.6); L('las', -3.0); L('ras', -3.0); L('lae', -0.1); L('rae', -0.1); _hset(S, 'L', HANDP.open, e); _hset(S, 'R', HANDP.open, e); }
+    else if (kd === 'butt') { L('H', 0.18); L('lt', -1.45); L('rt', -1.45); L('lk', 0.1); L('rk', 0.1); L('lf', -1.4); L('rf', -1.4); L('crx', -0.25); L('las', -0.9); L('ras', -0.9); L('laz', -0.7); L('raz', 0.7); L('lae', -0.3); L('rae', -0.3); _hset(S, 'L', HANDP.spread, e); _hset(S, 'R', HANDP.spread, e); }
+    else { L('lt', -0.25); L('rt', 0.35); L('lk', 0.55); L('rk', 0.45); L('hry', 0.9); L('cry', -0.6); L('nry', -0.5); L('crx', 0.2); L('las', -0.4); L('ras', -0.4); L('laz', -1.25); L('raz', 1.25); _hset(S, 'L', HANDP.open, e); _hset(S, 'R', HANDP.open, e); } });
+  if (o.spray !== false) emit(o.spray === 'water' ? 'spray' : 'dust', { at: t => { const p = rigPos(f, t); return [p.x, p.y + 0.1, p.z]; }, t0, t1, rate: 16, size: o.spray === 'water' ? 0.08 : 0.3 });
+  sfx(t0, 'scratch', 0.4); return f;
+}
+// dance(rig, t0, t1, { style: 'bounce' | 'disco' | 'robot' | 'floss' | 'twist' | 'wave' | 'hype', bpm }) — on the beat (default 120 bpm)
+function dance(f, t0, t1, o = {}) {
+  const st = o.style ?? 'bounce', bpm = o.bpm ?? 120, B = 60 / bpm;
+  (f.fx ??= []).push((t, S) => {
+    const e = env3(t, t0, t1, 0.25, 0.3); if (!e) return; const b = (t - t0) / B, ph = b % 1, n = Math.floor(b), s = Math.sin(Math.PI * b), c2 = Math.cos(TAU * b / 2), L = (k, v) => { S[k] = lerp(S[k], v, e); };
+    const bob = 0.5 - 0.5 * Math.cos(TAU * b);
+    if (st === 'bounce' || st === 'hype') { _crouch(S, 0.07 * bob * e); S.nrx += 0.12 * bob * e; L('las', -1.1 - 0.5 * s); L('ras', -1.1 + 0.5 * s); L('lae', -1.6); L('rae', -1.6); L('laz', -0.2); L('raz', 0.2); _hset(S, 'L', HANDP.fist, e); _hset(S, 'R', HANDP.fist, e);
+      if (st === 'hype') { L('ras', -2.6 - 0.3 * Math.abs(s)); L('rae', -0.4); _hset(S, 'R', HANDP.point, e); S.cry += 0.2 * s * e; } }
+    else if (st === 'disco') { const up = n % 2 === 0, k = sm01(Math.min(1, ph / 0.25)); L('ras', up ? lerp(-0.7, -2.7, k) : lerp(-2.7, -0.7, k)); L('raz', up ? 0.55 : -0.55); L('rae', -0.1); _hset(S, 'R', HANDP.point, e);
+      L('las', 0.25); L('laz', -0.7); L('lae', -1.7); S.hx += 0.05 * Math.sin(Math.PI * b) * e; S.hrz += 0.08 * Math.sin(Math.PI * b) * e; _crouch(S, 0.05 * bob * e); S.nry += 0.25 * Math.sin(Math.PI * b) * e; }
+    else if (st === 'robot') { const P = [[-1.57, 0, -1.57, 0], [-1.57, 0, 0, -1.57], [0, -1.57, -1.57, 0], [-1.57, -1.57, -1.57, -1.57]][n % 4], k = sm01(Math.min(1, ph / 0.12));
+      L('las', lerp(S.las, P[0], k)); L('ras', lerp(S.ras, P[1], k)); L('lae', P[2] * 0.9); L('rae', P[3] * 0.9); S.nry += (n % 2 ? 0.45 : -0.45) * sm01(Math.min(1, ph / 0.1)) * e; S.cry += (n % 3 - 1) * 0.15 * e; _hset(S, 'L', HANDP.open, e); _hset(S, 'R', HANDP.open, e); }
+    else if (st === 'floss') { const w = Math.sin(Math.PI * b), f2 = Math.sin(TAU * b); S.hx -= 0.07 * w * e; S.hrz -= 0.1 * w * e; L('laz', -0.25 + 0.55 * w); L('raz', 0.25 + 0.55 * w); L('las', 0.45 * f2); L('ras', -0.45 * f2); L('lae', -0.05); L('rae', -0.05); _hset(S, 'L', HANDP.fist, e); _hset(S, 'R', HANDP.fist, e); }
+    else if (st === 'twist') { _crouch(S, 0.12 * e); const w = Math.sin(TAU * b / 2); S.hry += 0.55 * w * e; S.cry -= 0.45 * w * e; L('las', -0.6 + 0.3 * w); L('ras', -0.6 - 0.3 * w); L('lae', -1.6); L('rae', -1.6); L('laz', -0.5); L('raz', 0.5); _hset(S, 'L', HANDP.loose, e); _hset(S, 'R', HANDP.loose, e); }
+    else if (st === 'wave') { const w = (b * 0.5) % 1, a = k => Math.sin(TAU * (w - k)); L('laz', -1.45 + 0.25 * a(0)); L('raz', 1.45 + 0.25 * a(0.3)); L('lae', -0.5 * a(0.1)); L('rae', 0.5 * a(0.4) - 0.3); S.crz += 0.12 * a(0.2) * e; S.nrz += 0.15 * a(0.2) * e; _hset(S, 'L', HANDP.open, e); _hset(S, 'R', HANDP.open, e); }
+  });
+  return f;
+}
+// ---- people together ----
+const _pair = (a, b, t0, t1, d, o = {}) => {   // turn both toward each other and close the gap to d metres (eases in/out)
+  _cap(a); _cap(b);
+  for (const [p, q] of [[a, b], [b, a]]) { const r = dyn(p.root);
+    late(t => { const e = env3(t, t0, t1, o.fade ?? 0.35, o.fade ?? 0.35); if (!e) return; const P = _bp(p, t), Q = _bp(q, t), dx = Q.x - P.x, dz = Q.z - P.z, L = Math.hypot(dx, dz) || 1, y0 = _byaw(p, t);
+      let dy = Math.atan2(dx, dz) - y0; dy = Math.atan2(Math.sin(dy), Math.cos(dy)); r.rotation.y = y0 + dy * e; const m = (L - d) / 2 * e; r.position.x = P.x + dx / L * m; r.position.z = P.z + dz / L * m; }); }
+};
+function hug(a, b, t0, t1 = t0 + 2.5, o = {}) {   // both turn in, step close and wrap their arms round each other
+  _pair(a, b, t0, t1, 0.42, o);
+  [[a, 1], [b, 0.75]].forEach(([f, hgt]) => (f.fx ??= []).push((t, S) => { const e = env3(t, t0, t1, 0.4, 0.4); if (!e) return; const L = (k, v) => { S[k] = lerp(S[k], v, e); }, sq = 0.04 * Math.sin(TAU * 1.2 * (t - t0));
+    L('las', -1.2 - 0.25 * hgt); L('ras', -1.2 - 0.25 * hgt); L('laz', 0.75 + sq); L('raz', -0.75 - sq); L('lae', -1.15); L('rae', -1.15); S.crx += 0.1 * e; S.nrz += (hgt === 1 ? 0.2 : -0.2) * e; S.nry += (hgt === 1 ? 0.35 : -0.35) * e; _hset(S, 'L', HANDP.open, e); _hset(S, 'R', HANDP.open, e); }));
+  return [a, b];
+}
+function highFive(a, b, t, o = {}) {   // hands meet at t (clap sound, a little burst)
+  _pair(a, b, t - 0.9, t + 0.8, 0.95, o);
+  for (const f of [a, b]) (f.fx ??= []).push((tt, S) => { const k = tt - t; if (k < -0.9 || k > 0.8) return; const e = k < 0 ? sm01((k + 0.9) / 0.5) : 1 - sm01((k - 0.2) / 0.6), hit = k > 0 && k < 0.2 ? Math.sin(Math.PI * k / 0.2) : 0;
+    S.ras = lerp(S.ras, -2.35 + 0.25 * hit, e); S.raz = lerp(S.raz, -0.25, e); S.rae = lerp(S.rae, -0.25 - (k < -0.2 ? 0.5 * (1 - sm01((k + 0.5) / 0.3)) : 0), e); S.crx -= 0.06 * e; _hset(S, 'R', HANDP.open, e); });
+  sfx(t, 'clap', 0.9); cbBurst('spark', () => { const P = rigPos(a, t), Q = rigPos(b, t); return v3((P.x + Q.x) / 2, 2.05, (P.z + Q.z) / 2); }, t, { n: 10, speed: 2.5, size: 0.05, life: 0.35 });
+  return [a, b];
+}
+function handshake(a, b, t0, t1 = t0 + 1.8, o = {}) {
+  _pair(a, b, t0, t1, 0.85, o);
+  for (const f of [a, b]) (f.fx ??= []).push((t, S) => { const e = env3(t, t0, t1, 0.35, 0.35); if (!e) return; const pump = 0.12 * Math.sin(TAU * 2.6 * (t - t0)) * env3(t, t0 + 0.4, t1 - 0.4, 0.1, 0.1);
+    S.ras = lerp(S.ras, -0.85 + pump, e); S.raz = lerp(S.raz, -0.32, e); S.rae = lerp(S.rae, -0.55, e); _hset(S, 'R', HANDP.grip, e); S.crx += 0.04 * e; });
+  return [a, b];
+}
+// piggyback(carrier, rider, t0, t1) — rider jumps on the carrier's back and rides along (walk the carrier)
+function piggyback(c, r, t0, t1 = 1e9, o = {}) {
+  _cap(r); const rr = dyn(r.root), env = t => Math.min(sm01((t - t0 + 0.5) / 0.5), 1 - sm01((t - t1) / 0.5));
+  (c.fx ??= []).push((t, S) => { const e = env(t); if (e <= 0) return; S.crx += 0.35 * e; S.las = lerp(S.las, 0.55, e); S.ras = lerp(S.ras, 0.55, e); S.lae = lerp(S.lae, -1.45, e); S.rae = lerp(S.rae, -1.45, e); S.laz = lerp(S.laz, -0.3, e); S.raz = lerp(S.raz, 0.3, e); _hset(S, 'L', HANDP.grip, e); _hset(S, 'R', HANDP.grip, e); S.H -= 0.03 * e; });
+  (r.fx ??= []).push((t, S) => { const e = env(t); if (e <= 0) return; S.lt = lerp(S.lt, -1.35, e); S.rt = lerp(S.rt, -1.35, e); S.lk = lerp(S.lk, 1.5, e); S.rk = lerp(S.rk, 1.5, e); S.lz = lerp(S.lz, -0.35, e); S.rz = lerp(S.rz, 0.35, e);
+    S.las = lerp(S.las, -1.85, e); S.ras = lerp(S.ras, -1.85, e); S.laz = lerp(S.laz, 0.45, e); S.raz = lerp(S.raz, -0.45, e); S.lae = lerp(S.lae, -1.15, e); S.rae = lerp(S.rae, -1.15, e); S.crx += 0.35 * e; });
+  late(t => { const e = env(t); if (e <= 0) return; c.root.updateWorldMatrix(true, true); const P = c.chest.localToWorld(v3(0, -0.42, -0.36)), Q = c.root.getWorldQuaternion(new THREE.Quaternion());
+    if (e < 1) { const p0 = _bp(r, t < t0 ? t0 - 0.5 : t1 + 0.5); P.lerpVectors(p0, P, e); P.y += Math.sin(Math.PI * e) * 0.4; } rr.position.copy(P); rr.quaternion.slerp(Q, e); });
+  return [c, r];
+}
+// pull(a, b, t0, t1): a drags b by the hand (walk both, b a little behind); shove(a, b, t, { power }): a shoves b, who stumbles back (falls at power ≥ 1.5)
+function pull(a, b, t0, t1, o = {}) {
+  (a.fx ??= []).push((t, S) => { const e = env3(t, t0, t1, 0.3, 0.3); if (!e) return; S.ras = lerp(S.ras, 0.5, e); S.rae = lerp(S.rae, -0.15, e); S.raz = lerp(S.raz, 0.15, e); S.crx += 0.28 * e; _hset(S, 'R', HANDP.grip, e); });
+  (b.fx ??= []).push((t, S) => { const e = env3(t, t0, t1, 0.3, 0.3); if (!e) return; S.ras = lerp(S.ras, -1.35, e); S.rae = lerp(S.rae, -0.05, e); S.crx -= 0.15 * e; _hset(S, 'R', HANDP.grip, e); });
+  return [a, b];
+}
+function shove(a, b, t, o = {}) {
+  const pw = o.power ?? 1, rb = dyn(b.root); _cap(a); _cap(b);
+  (a.fx ??= []).push((tt, S) => { const k = tt - t; if (k < -0.45 || k > 0.7) return; const e = k < 0 ? sm01((k + 0.45) / 0.45) : 1 - sm01(k / 0.7), push = k < 0 ? -0.25 * sm01((k + 0.45) / 0.45) : 0.15;
+    S.las = lerp(S.las, -1.45, e); S.ras = lerp(S.ras, -1.45, e); S.lae = lerp(S.lae, k < 0 ? -1.6 : -0.2, e); S.rae = S.lae; S.laz = lerp(S.laz, 0.2, e); S.raz = lerp(S.raz, -0.2, e); S.crx += (0.3 + push) * e; _hset(S, 'L', HANDP.open, e); _hset(S, 'R', HANDP.open, e); });
+  late(tt => { const k = tt - t; if (k < 0) return; const P = _bp(a, t), Q = _bp(b, t), B = _bp(b, tt), dx = Q.x - P.x, dz = Q.z - P.z, L = Math.hypot(dx, dz) || 1, d = pw * 0.9 * (1 - Math.exp(-k * 4)); rb.position.x = B.x + dx / L * d; rb.position.z = B.z + dz / L * d; });
+  if (pw >= 1.5) fall(b, t + 0.25, { from: rigPos(a, t), getUp: o.getUp }); else stumble(b, t, {});
+  sfx(t, 'punch', 0.35); return [a, b];
+}
+// chat(a, b, t0, t1, { turns: [[t0, t1, 'a'|'b'], …] }) — face each other, the speaker talks with hands, the listener nods
+function chat(a, b, t0, t1, o = {}) {
+  const T = o.turns ?? (() => { const L = []; let w = 0; for (let t = t0; t < t1 - 0.4; t += 1.8, w ^= 1) L.push([t, Math.min(t1, t + 1.7), w ? 'b' : 'a']); return L; })(), who = (f, t) => T.some(([x, y, s]) => t >= x && t < y && (s === 'a' ? f === a : f === b));
+  _pair(a, b, t0, t1, o.dist ?? 1.1, { fade: 0.5 });
+  for (const f of [a, b]) { const prev = f.talk; f.talk = t => who(f, t) || (typeof prev === 'function' ? prev(t) : false);
+    (f.fx ??= []).push((t, S) => { const e = env3(t, t0, t1, 0.4, 0.4); if (!e) return; if (who(f, t)) { const g = Math.sin(TAU * 0.9 * t + f.sd * 9), g2 = Math.sin(TAU * 1.3 * t + f.sd * 4);
+        S.ras = lerp(S.ras, -0.65 + 0.25 * g, e); S.rae = lerp(S.rae, -1.25 + 0.3 * g2, e); S.raz = lerp(S.raz, 0.15, e); S.las = lerp(S.las, -0.35 + 0.15 * g2, e); S.lae = lerp(S.lae, -0.9, e); S.nry += 0.12 * g * e; _hset(S, 'R', HANDP.open, e * 0.8); _hset(S, 'L', HANDP.open, e * 0.6); }
+      else { const nod = Math.max(0, Math.sin(TAU * 0.55 * t + f.sd * 7)) ** 8; S.nrx += 0.22 * nod * e; S.las = lerp(S.las, -0.3, e * 0.5); S.lae = lerp(S.lae, -1.4, e * 0.5); } }); }
+  return [a, b];
+}
+// ---- people and animals ----
+const _apos = (A, t) => (A._posAt ? A._posAt(t) : (A.root ?? A.g).position.clone());
+function pet(f, A, t0, t1 = t0 + 2.5, o = {}) {   // crouch down and stroke the animal's back; dogs wag, others look up
+  const low = (A.lh ?? 1) * (A.sc ?? 1) < 0.75; faceTo(f, { root: A.root, legL: 1, _posAt: t => _apos(A, t) }, t0 - 0.3, t1 + 0.2);
+  (f.fx ??= []).push((t, S) => { const e = env3(t, t0, t1, 0.45, 0.4); if (!e) return; if (low) _crouch(S, 0.42 * e); S.crx += (low ? 0.5 : 0.2) * e; const st = Math.sin(TAU * 0.9 * (t - t0));
+    S.ras = lerp(S.ras, -1.15 + 0.2 * st, e); S.rae = lerp(S.rae, -0.35, e); S.raz = lerp(S.raz, 0.05, e); _hset(S, 'R', HANDP.open, e); });
+  if (A.do) A.do(['dog', 'wolf', 'fox'].includes(A.kind) ? 'wag' : 'look', t0 + 0.3, { dur: t1 - t0, at: rigPos(f, t0).toArray() });
+  return f;
+}
+function feed(f, A, t0, o = {}) {   // hold out food; the animal eats it (food: apple · carrot · bone · fish · any food() kind)
+  const it = food(world, o.item ?? (['dog', 'wolf', 'lion', 'tiger', 'bear', 'cat'].includes(A.kind) ? 'bone' : 'carrot'), 0, 0, 0, { scale: o.scale ?? 1 }), dur = o.dur ?? 2.2, te = t0 + dur * 0.6;
+  holdItem(f, it, t0 - 0.6, te, { after: 'hide' }); faceTo(f, { root: A.root, legL: 1, _posAt: t => _apos(A, t) }, t0 - 0.6, t0 + dur);
+  const low = (A.lh ?? 1) * (A.sc ?? 1) < 0.9;
+  (f.fx ??= []).push((t, S) => { const e = env3(t, t0 - 0.4, t0 + dur, 0.4, 0.4); if (!e) return; if (low) _crouch(S, 0.3 * e); S.ras = lerp(S.ras, low ? -0.95 : -1.35, e); S.rae = lerp(S.rae, -0.2, e); S.crx += 0.25 * e; });
+  if (A.do) A.do(['cow', 'horse', 'zebra', 'donkey', 'deer', 'doe', 'goat', 'sheep', 'camel', 'giraffe', 'elephant', 'rabbit', 'reindeer', 'moose'].includes(A.kind) ? 'graze' : 'snap', te - 0.35, { dur: 0.9 });
+  sfx(te, 'crunch', 0.7); emit('crumbs', { at: rigPos(f, te).add(v3(0, low ? 0.5 : 1.1, 0)).toArray(), t0: te, t1: te + 0.1, burst: 12 });
+  return it;
+}
+function fetch(f, dog, t, o = {}) {   // throw a stick at t, the dog runs after it and brings it back → time it is back
+  const stick = dyn(grp(world)); cyl(stick, 0.025, 0.03, 0.75, '#7A5A3A', 0, -0.375, 0, { rx: Math.PI / 2 });
+  const P0 = rigPos(f, t), to = o.to ?? [P0.x + 9, P0.z], v = o.speed ?? 8, d0 = dog._posAt ? dog._posAt(t) : dog.root.position.clone(), dist = Math.hypot(to[0] - d0.x, to[1] - d0.z), ta = t + 0.25 + dist / v + 0.6;
+  const home = [P0.x + 0.9 * Math.sign(d0.x - P0.x || 1), P0.z + 0.6], tb = ta + 0.3 + Math.hypot(home[0] - to[0], home[1] - to[1]) / (v * 0.75) + 0.6;
+  holdItem(f, { g: stick }, -1e9, t, { after: 'free' }); toss(stick, t, { from: [P0.x, P0.y + 1.7, P0.z], to, h: o.h ?? 3, spin: 6 });
+  (f.fx ??= []).push((tt, S) => { const k = tt - t; if (k < -0.6 || k > 0.5) return; const e = k < 0 ? sm01((k + 0.6) / 0.4) : 1 - sm01(k / 0.5), back = k < 0 ? sm01((k + 0.6) / 0.6) : 0;
+    S.ras = lerp(S.ras, k < 0 ? -2.6 * back + 0.4 : -1.6, e); S.rae = lerp(S.rae, k < 0 ? -1.4 * back : -0.1, e); S.crx += (k < 0 ? -0.15 : 0.25) * e; });
+  walk(dog, [[d0.x, d0.z], to, home], { t0: t + 0.25, speed: v, t1: 1e9 });
+  late(tt => { if (tt < ta - 0.05) return; dog.root.updateWorldMatrix(true, true); const m = dog.head ?? dog.root, z = (dog.D?.hd?.[0] ?? 0.2) * 0.9; stick.position.copy(m.localToWorld(v3(0, -0.02, z))); stick.quaternion.copy(m.getWorldQuaternion(new THREE.Quaternion())); stick.rotateY(Math.PI / 2); });
+  if (dog.do) dog.do('wag', tb, { dur: 2.5 });
+  return tb;
+}
+function lead(f, A, pts, o = {}) {   // lead an animal by the rein: the figure walks pts, the animal follows gap m behind
+  const t0 = o.t0 ?? 0, v = o.speed ?? 1.3, gap = o.gap ?? 1.9; walk(f, pts, { t0, speed: v, mode: o.mode ?? 'walk' });
+  let tot = 0; for (let i = 1; i < pts.length; i++) tot += Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]);
+  const cut = (P, len) => { const out = [P[0]]; let acc = 0; for (let i = 1; i < P.length; i++) { const d = Math.hypot(P[i][0] - P[i - 1][0], P[i][1] - P[i - 1][1]); if (acc + d >= len) { const k = (len - acc) / d; out.push([lerp(P[i - 1][0], P[i][0], k), lerp(P[i - 1][1], P[i][1], k)]); return out; } acc += d; out.push(P[i]); } return out; };
+  walk(A, cut(pts, Math.max(0.5, tot - gap)), { t0: t0 + gap / v, speed: v });
+  const rein = dyn(grp(world)); cyl(rein, 0.012, 0.012, 1, '#3A2A1A', 0, -1, 0, { cast: false });
+  (f.fx ??= []).push((t, S) => { if (t < t0 - 0.3) return; S.ras = lerp(S.ras, 0.25, 0.8); S.rae = lerp(S.rae, -0.5, 0.8); _hset(S, 'R', HANDP.grip, 1); });
+  late(t => { if (t < t0 - 0.3) { rein.visible = false; return; } rein.visible = true; f.root.updateWorldMatrix(true, true); A.root.updateWorldMatrix(true, true);
+    const P = f.foreR.localToWorld(v3(0, -0.4, 0.05)), Q = (A.head ?? A.root).localToWorld(v3(0, 0, (A.L ?? 1) * 0.12)), d = Q.clone().sub(P), L = d.length();
+    rein.position.copy(P); rein.scale.set(1, L, 1); rein.quaternion.setFromUnitVectors(v3(0, -1, 0), d.normalize()); });
+  return f;
+}
+// perch(bird, target, t, { from, speed, off }) — the bird flies over and lands on a shoulder (rig), a head (rig, off: 'head') or a point [x, y, z]; it stays there and rides along
+function perch(B, target, t, o = {}) {
+  const sp = o.speed ?? 6, isRig = !!target?.legL, off = o.off === 'head' ? v3(0, 0.42, 0) : v3(0.2, 0.62, -0.02), at = tt => { if (!isRig) return toV(target); target.root.updateWorldMatrix(true, true); return (o.off === 'head' ? target.head : target.chest).localToWorld(off.clone()); };
+  const from = o.from ?? (B.g ?? B.root).position.toArray(), end = at(t).toArray(), mid = [(from[0] + end[0]) / 2, Math.max(from[1], end[1]) + 2.5, (from[2] + end[2]) / 2];
+  let len = 0; const P = [from, mid, end]; for (let i = 1; i < 3; i++) len += Math.hypot(P[i][0] - P[i - 1][0], P[i][1] - P[i - 1][1], P[i][2] - P[i - 1][2]);
+  const t0 = t - len / sp - 0.9; fly(B, P, { t0, speed: sp });
+  const node = B.g ?? B.root;
+  late(tt => { if (tt < t) return; node.position.copy(at(tt)); if (isRig) node.rotation.y = rigYaw(target, tt) + (o.ry ?? 0); });
+  return t0;
+}
+// ---- cartoon acting ----
+// boing(obj, t, { amp, dur }) — squash and stretch with a wobble (landing, bump, surprise)
+function boing(obj, t0, o = {}) {
+  const n = dyn(obj.root ?? obj.g ?? obj), s0 = n.scale.clone(), amp = o.amp ?? 0.3, d = o.dur ?? 0.8;
+  (n.userData.boings ??= []).push({ t0, amp, d });
+  if (!n.userData.boingLate) { n.userData.boingLate = true; late(t => { let sy = 1; for (const b of n.userData.boings) { const k = (t - b.t0) / b.d; if (k < 0 || k > 1) continue; sy *= 1 - b.amp * Math.exp(-4 * k) * Math.cos(TAU * 2.2 * k); } const sx = 1 / Math.sqrt(sy); n.scale.set(s0.x * sx, s0.y * sy, s0.z * sx); }); }
+  return obj;
+}
+const _glyph = (p, kind, c) => {   // small 3D symbols built from boxes: ? ! Z heart drop vein
+  const g = grp(p), m = { mat: mat(c, { basic: true }), cast: false };
+  if (kind === '!') { box(g, 0.05, 0.16, 0.03, '', 0, 0.08, 0, m); box(g, 0.05, 0.05, 0.03, '', 0, 0, 0, m); }
+  else if (kind === '?') { mesh(g, G('qarc', () => new THREE.TorusGeometry(0.06, 0.02, 6, 12, Math.PI * 1.4)), m.mat, 0, 0.19, 0, { rz: -0.6, cast: false }); box(g, 0.04, 0.07, 0.03, '', 0, 0.07, 0, m); box(g, 0.045, 0.045, 0.03, '', 0, 0, 0, m); }
+  else if (kind === 'Z') { box(g, 0.14, 0.03, 0.02, '', 0, 0.15, 0, m); box(g, 0.14, 0.03, 0.02, '', 0, 0, 0, m); const q = grp(g, 0, 0.09, 0); q.rotation.z = 0.85; box(q, 0.2, 0.03, 0.02, '', 0, -0.015, 0, m); }
+  else if (kind === 'heart') { ball(g, 0.05, '', -0.035, 0.04, 0, { ...m, detail: 1 }); ball(g, 0.05, '', 0.035, 0.04, 0, { ...m, detail: 1 }); cone(g, 0.068, 0.095, '', 0, 0.035, 0, { ...m, rx: Math.PI, seg: 8 }); }
+  else if (kind === 'drop') { ball(g, 0.03, '', 0, 0, 0, { ...m, detail: 1 }); cone(g, 0.028, 0.05, '', 0, 0.005, 0, { ...m, seg: 8 }); }
+  else if (kind === 'vein') { for (let i = 0; i < 4; i++) { const q = grp(g); q.rotation.z = i * Math.PI / 2; box(q, 0.07, 0.025, 0.02, '', 0.045, 0.02, 0, m); box(q, 0.025, 0.06, 0.02, '', 0.07, 0.02, 0, m); } }
+  return g;
+};
+// faceFx(rig, kind, t0, t1) — cartoon face effects: sweat · tears · blush · steam · question · exclaim · hearts · zzz · anger
+function faceFx(f, kind, t0, t1 = t0 + 2, o = {}) {
+  const H = f.head, g = dyn(grp(H)), on = t => t >= t0 && t <= t1, F = [];
+  if (kind === 'sweat') for (let i = 0; i < 3; i++) { const d = dyn(_glyph(g, 'drop', '#8FD8FF')); F.push(t => { const k = ((t - t0) / 0.9 + i / 3) % 1, sx = i % 2 ? 1 : -1; d.position.set(sx * 0.21, 0.36 - 0.35 * k * k, 0.12); d.scale.setScalar(on(t) ? Math.min(1, k * 6) * (1 - k * 0.4) : 0); }); }
+  else if (kind === 'tears') for (const sx of [-1, 1]) { const st = dyn(grp(g, sx * 0.085, 0.17, 0.2)); box(st, 0.035, 1, 0.012, '', 0, -1, 0, { mat: mat('#7FC8FF', { basic: true, opacity: 0.85 }), cast: false }); const dr = dyn(_glyph(g, 'drop', '#7FC8FF'));
+    F.push(t => { const k = clamp((t - t0) / 0.5); st.scale.y = on(t) ? 0.2 * k : 0; const q = ((t - t0) / 0.6 + (sx > 0 ? 0.5 : 0)) % 1; dr.position.set(sx * 0.1, -0.05 - 0.6 * q * q, 0.2); dr.scale.setScalar(on(t) && t > t0 + 0.4 ? 1 : 0); }); }
+  else if (kind === 'blush') for (const sx of [-1, 1]) { const b = dyn(grp(g, sx * 0.115, 0.11, 0.196)); box(b, 0.08, 0.04, 0.006, '', 0, 0, 0, { mat: mat('#FF5A6E', { basic: true, opacity: 0.75 }), cast: false }); F.push(t => { b.scale.setScalar(env3(t, t0, t1, 0.3, 0.3)); }); }
+  else if (kind === 'steam') for (let i = 0; i < 6; i++) { const b = dyn(grp(g)); ball(b, 0.06, '', 0, 0, 0, { mat: mat('#F2F2F2', { basic: true, opacity: 0.85 }), detail: 1, cast: false }); const sx = i % 2 ? 1 : -1;
+    F.push(t => { const k = ((t - t0) / 0.7 + i / 6) % 1; b.position.set(sx * (0.22 + 0.15 * k), 0.15 + 0.35 * k, -0.02); b.scale.setScalar(on(t) ? (0.6 + 1.8 * k) * (1 - k) : 0); }); }
+  else if (kind === 'hearts') for (let i = 0; i < 3; i++) { const h = dyn(_glyph(g, 'heart', '#FF3A5E')); F.push(t => { const k = ((t - t0) / 1.4 + i / 3) % 1; h.position.set(0.28 * Math.sin(TAU * (k + i / 3)), 0.45 + 0.35 * k, 0.28 * Math.cos(TAU * (k + i / 3))); h.scale.setScalar(on(t) ? Math.sin(Math.PI * k) * 1.4 : 0); }); }
+  else if (kind === 'zzz') for (let i = 0; i < 3; i++) { const z = dyn(_glyph(g, 'Z', '#FFFFFF')); F.push(t => { const k = ((t - t0) / 2.1 + i / 3) % 1; z.position.set(0.18 + 0.3 * k, 0.4 + 0.45 * k, 0.05); z.scale.setScalar(on(t) ? (0.6 + 0.8 * k) * Math.sin(Math.PI * k) * 1.3 : 0); z.rotation.z = 0.2 * Math.sin(TAU * k); }); }
+  else if (kind === 'question' || kind === 'exclaim') { const q = dyn(_glyph(g, kind === 'question' ? '?' : '!', kind === 'question' ? '#FFE14D' : '#FF4A3A')); const sc = 1.8;
+    F.push(t => { const k = (t - t0) / 0.25, pop = k < 1 ? 1 + 0.4 * Math.sin(Math.PI * Math.min(1, k)) : 1; q.position.set(0, 0.48 + 0.03 * Math.sin(TAU * 1.5 * t), 0); q.scale.setScalar(on(t) ? sc * pop * env3(t, t0, t1, 0.12, 0.2) : 0); });
+    sfx(t0, kind === 'question' ? 'pop' : 'ding', 0.5); }
+  else if (kind === 'anger') { const v = dyn(_glyph(g, 'vein', '#FF2A2A')); F.push(t => { v.position.set(0.17, 0.33, 0.12); v.scale.setScalar(on(t) ? 1.1 + 0.25 * Math.max(0, Math.sin(TAU * 3 * t)) : 0); }); }
+  tick(t => { g.visible = t >= t0 - 0.05 && t <= t1 + 0.6; if (g.visible) F.forEach(fn => fn(t)); });
+  if (kind === 'steam') { sfx(t0, 'hiss', 0.5); }
+  return f;
+}
+// soot(rig, t, { afro, smoke }) — after a blast: black face and clothes (eyes stay white), puffy singed hair, smoke curls; wet(rig, t0, { t1, drip }) — soaked: darker, shiny, drips
+function _recolor(f, t0, t1, fn, o = {}) {
+  const L = []; f.root.traverse(m => { if (!m.isMesh || !m.material?.color || m.userData.noRecolor) return; const mt = m.material, c = mt.color, lum = 0.3 * c.r + 0.59 * c.g + 0.11 * c.b; if (lum > 0.82 && !o.all) return; const m2 = mt.clone(); fn(m2); L.push([m, mt, m2]); });
+  tick(t => { const on = t >= t0 && t < t1; for (const [m, a, b] of L) m.material = on ? b : a; });
+}
+function soot(f, t0, o = {}) {
+  _recolor(f, t0, o.t1 ?? 1e9, m => { m.color.lerp(new THREE.Color('#2A2522'), 0.78); m.roughness = 1; });
+  if (o.afro !== false) { const a = dyn(grp(f.head, 0, 0.3, -0.02)); for (let i = 0; i < 14; i++) { const u = i / 14 * TAU, r = 0.2 + 0.06 * hash(i * 3.1); ball(a, 0.11 + 0.03 * hash(i), '#231E1B', Math.cos(u) * r, 0.06 + 0.1 * hash(i * 1.7), Math.sin(u) * r, { detail: 0, cast: false }); } ball(a, 0.17, '#231E1B', 0, 0.16, 0, { detail: 1, cast: false });
+    tick(t => { const k = clamp((t - t0) / 0.15); a.scale.setScalar(t < t0 ? 0 : 0.6 + 0.4 * k + 0.08 * Math.exp(-(t - t0) * 6) * Math.sin((t - t0) * 30)); if (f.hair) f.hair.visible = t < t0; if (f.hat) f.hat.visible = t < t0; }); }
+  if (o.smoke !== false) emit('smoke', { at: t => { f.root.updateWorldMatrix(true, true); return f.head.localToWorld(v3(0, 0.45, 0)).toArray(); }, t0, t1: t0 + (o.smokeDur ?? 2.5), rate: 5, size: 0.25, opacity: 0.45 });
+  return f;
+}
+function wet(f, t0, o = {}) {
+  _recolor(f, t0, o.t1 ?? 1e9, m => { m.color.multiplyScalar(0.68); m.roughness = Math.min(m.roughness ?? 1, 0.35); }, { all: false });
+  if (o.drip !== false) emit('drip', { at: t => { const p = rigPos(f, t); return [p.x, p.y + 0.85, p.z]; }, t0, t1: Math.min(o.t1 ?? 1e9, t0 + (o.dripDur ?? 6)), rate: 9 });
+  return f;
+}
+// idle(rig, t0, t1, kind): tap (foot, impatient) · cross (arms crossed) · scratch (head) · watch (checks the time) · shift (weight) · hips (hands on hips) · stretch · pocket (hands behind the back)
+function idle(f, t0, t1, kind = 'shift') {
+  (f.fx ??= []).push((t, S) => { const e = env3(t, t0, t1, 0.35, 0.35); if (!e) return; const u = t - t0, L = (k, v) => { S[k] = lerp(S[k], v, e); };
+    if (kind === 'tap') { const k = Math.max(0, Math.sin(TAU * 2.4 * u)); L('rf', S.rf - 0.35 * k); L('rt', -0.08); L('rk', 0.08); L('las', -0.55); L('ras', -0.6); L('lae', -1.95); L('rae', -1.85); L('laz', 0.45); L('raz', -0.45); S.nrz += 0.06 * e; }
+    else if (kind === 'cross') { L('las', -0.55); L('ras', -0.6); L('lae', -1.95); L('rae', -1.85); L('laz', 0.45); L('raz', -0.45); S.crx -= 0.04 * e; S.hx += 0.03 * e; }
+    else if (kind === 'scratch') { L('ras', -2.6); L('raz', 0.35); L('rae', -1.9 + 0.12 * Math.sin(TAU * 4 * u)); S.nrz -= 0.12 * e; _hset(S, 'R', HANDP.claw, e); }
+    else if (kind === 'watch') { L('las', -1.0); L('laz', 0.35); L('lae', -1.6); S.nrx += 0.38 * e; S.nry -= 0.25 * e; L('ras', -0.4); L('rae', -0.4); }
+    else if (kind === 'shift') { const w = Math.sin(TAU * 0.25 * u); S.hx += 0.045 * w * e; S.hrz += 0.05 * w * e; S.crz -= 0.04 * w * e; }
+    else if (kind === 'hips') { L('las', 0.22); L('ras', 0.22); L('laz', -0.7); L('raz', 0.7); L('lae', -1.75); L('rae', -1.75); _hset(S, 'L', HANDP.loose, e); _hset(S, 'R', HANDP.loose, e); S.crx -= 0.05 * e; }
+    else if (kind === 'stretch') { const k = Math.sin(Math.PI * clamp(u / Math.max(0.5, t1 - t0))); L('las', -3.0); L('ras', -3.0); L('laz', 0.2); L('raz', -0.2); L('lae', -0.15); L('rae', -0.15); S.crx -= 0.2 * k * e; S.nrx -= 0.25 * k * e; S.by += 0.02 * k * e; _hset(S, 'L', HANDP.spread, e); _hset(S, 'R', HANDP.spread, e); }
+    else if (kind === 'pocket') { L('las', 0.45); L('ras', 0.45); L('laz', 0.2); L('raz', -0.2); L('lae', -0.9); L('rae', -0.9); S.crx -= 0.06 * e; }
+  });
+  if (kind === 'stretch') { const ex = f.expr; f.expr = t => t >= t0 && t <= t1 ? 'surprised' : typeof ex === 'function' ? ex(t) : ex; }
+  return f;
+}
+function idleMix(f, t0, t1, o = {}) {   // random small idle actions every few seconds (seeded per figure)
+  const K = o.kinds ?? ['shift', 'cross', 'scratch', 'watch', 'hips', 'tap', 'pocket']; let t = t0 + 0.5 + 1.5 * hash(f.sd * 7); let i = 0;
+  while (t < t1 - 1.5) { const d = 1.8 + 1.4 * hash(f.sd * 3 + i), k = K[Math.floor(hash(f.sd * 11 + i * 1.7) * K.length) % K.length]; idle(f, t, Math.min(t1, t + d), k); t += d + (o.every ?? 2.5) * (0.6 + 0.8 * hash(f.sd * 5 + i)); i++; }
+  return f;
+}
+// hold any object in a hand between t0 and t1 (follows the hand exactly); o.side 'L' | 'R', o.off [x,y,z] in hand space
+function holdItem(f, it, t0, t1 = 1e9, o = {}) {   // o.after: 'rest' (back where it was) · 'hide' · 'free' (another animation takes over)
+  const n = dyn(it.g ?? it.root ?? it), fa = o.side === 'L' ? f.foreL : f.foreR, off = v3(...(o.off ?? [0, -0.4, 0.07])), qo = new THREE.Quaternion().setFromEuler(new THREE.Euler(...(o.rot ?? [0, 0, 0]))), after = o.after ?? 'rest';
+  let p0 = null, q0 = null; DEFER.push(() => { p0 = n.position.clone(); q0 = n.quaternion.clone(); });
+  hands(f, o.pose ?? 'grip', t0, t1, { side: o.side ?? 'R', fade: 0.1 });
+  late(t => { if (t >= t0 && t <= t1) { n.visible = true; f.root.updateWorldMatrix(true, true); n.position.copy(fa.localToWorld(off.clone())); n.quaternion.copy(fa.getWorldQuaternion(new THREE.Quaternion())).multiply(qo); return; }
+    if (t > t1 && after === 'free') return; if (t > t1 && after === 'hide') { n.visible = false; return; } if (p0) { n.position.copy(p0); n.quaternion.copy(q0); n.visible = true; } });
+  return it;
+}
+
+/* ---------------------------------------------------------------------- */
+/* v2.17 food & drink — food(p, kind, x, y, z, { state, scale, ry, plate }) · eat · drink · foodFight · cooking: pan, pot, toaster, grill, campfire, marshmallow ·
+   places: foodtruck, counter, shelf, buffet — no real brands: plain colours, stripes and pictograms only */
+/* ---------------------------------------------------------------------- */
+const _dsMC = new Map(), _dsM = c => _dsMC.get(c) ?? (_dsMC.set(c, new THREE.MeshStandardMaterial({ color: c, side: THREE.DoubleSide, flatShading: true, roughness: 0.8 })), _dsMC.get(c));
+const FD = (() => {
+  const NC = { cast: false }, ring = (p, n, r, y, fn) => { for (let i = 0; i < n; i++) { const a = i / n * TAU; fn(Math.cos(a) * r, y, Math.sin(a) * r, a, i); } };
+  const sprinkles = (p, n, r, y, cols) => ring(p, n, 1, y, (x, yy, z, a, i) => { const rr = r * (0.55 + 0.4 * hash(i * 3.3)), q = box(p, 0.012, 0.008, 0.03, cols[i % cols.length], Math.cos(a + i) * rr, yy, Math.sin(a + i) * rr, NC); q.rotation.y = i * 1.7; });
+  const B = {
+    pizza: (b) => { cyl(b, 0.2, 0.2, 0.025, '#D9A45A', 0, 0, 0, { seg: 20 }); cyl(b, 0.185, 0.185, 0.008, '#C8402A', 0, 0.025, 0, { seg: 20, ...NC }); cyl(b, 0.175, 0.175, 0.006, '#F2C14E', 0, 0.03, 0, { seg: 18, ...NC });
+      ring(b, 7, 0.11, 0.036, (x, y, z) => cyl(b, 0.025, 0.025, 0.006, '#A82A22', x, y, z, { seg: 10, ...NC })); cyl(b, 0.025, 0.025, 0.006, '#A82A22', 0, 0.036, 0, { seg: 10, ...NC }); ring(b, 5, 0.07, 0.037, (x, y, z, a) => box(b, 0.025, 0.004, 0.012, '#3E8E3A', x + 0.04, y, z, { ...NC, ry: a }));
+      for (let i = 0; i < 4; i++) { const q = box(b, 0.36, 0.006, 0.004, '#B07A3A', 0, 0.037, 0, NC); q.rotation.y = i * Math.PI / 4; } return { r: 0.2, w: 0.4, h: 0.04, inner: '#F2C14E' }; },
+    slice: (b) => { const P = [[0, -0.16], [0.075, 0.05], [-0.075, 0.05]]; plate(b, P, 0.012, '#E2B26A', 0, 0, 0); plate(b, [[0, -0.14], [0.064, 0.045], [-0.064, 0.045]], 0.006, '#F2C14E', 0, 0.012, 0, NC);
+      cyl(b, 0.016, 0.016, 0.16, '#C8893E', 0, 0.002, 0.056, { rz: Math.PI / 2, seg: 8 }); for (const [x, z] of [[0, -0.07], [0.025, 0.0], [-0.025, -0.01]]) cyl(b, 0.017, 0.017, 0.005, '#A82A22', x, 0.018, z, { seg: 10, ...NC }); return { r: 0.11, w: 0.15, h: 0.03, inner: '#F2C14E', bite: 'tip' }; },
+    burger: (b) => { cyl(b, 0.09, 0.085, 0.035, '#D9984E', 0, 0, 0, { seg: 16 }); cyl(b, 0.098, 0.098, 0.016, '#5BB042', 0, 0.035, 0, { seg: 9 }); cyl(b, 0.095, 0.095, 0.03, '#5A3420', 0, 0.048, 0, { seg: 16 });
+      const ch = box(b, 0.17, 0.008, 0.17, '#F7C531', 0, 0.078, 0, NC); ch.rotation.y = 0.3; cyl(b, 0.08, 0.08, 0.01, '#D8402A', 0, 0.086, 0, { seg: 14, ...NC });
+      const top = ball(b, 0.093, '#D9984E', 0, 0.096, 0, { detail: 2 }); top.scale.set(1, 0.6, 1); for (let i = 0; i < 9; i++) { const a = i * 2.4, r = 0.035 + 0.04 * hash(i); _ell(b, '#F4EEDC', Math.cos(a) * r, 0.096 + 0.052 - r * 0.18, Math.sin(a) * r, 0.008, 0.004, 0.005, NC); }
+      return { r: 0.095, w: 0.19, h: 0.15, inner: '#F2E2B8' }; },
+    fries: (b) => { const C = grp(b); for (const [x, z, ry] of [[0, 0, 0]]) { void x; void z; void ry; } cyl(C, 0.07, 0.05, 0.11, '#D8342A', 0, 0, 0, { seg: 4, ry: Math.PI / 4 }); box(C, 0.03, 0.03, 0.002, '#F7C531', 0, 0.06, 0.044, NC);
+      for (let i = 0; i < 16; i++) { const x = (hash(i * 1.3) - 0.5) * 0.07, z = (hash(i * 2.1) - 0.5) * 0.05, q = box(b, 0.012, 0.12 + 0.03 * hash(i), 0.012, hash(i * 5) > 0.3 ? '#F2C24E' : '#E8A93A', x, 0.06, z, NC); q.rotation.set((hash(i * 7) - 0.5) * 0.5, 0, (hash(i * 9) - 0.5) * 0.5); }
+      return { r: 0.05, w: 0.1, h: 0.17, inner: '#F2C24E' }; },
+    hotdog: (b) => { for (const sx of [-1, 1]) _ell(b, '#D9A45A', sx * 0.025, 0.025, 0, 0.03, 0.028, 0.1); cyl(b, 0.022, 0.022, 0.2, '#B8452E', 0, 0.045, 0, { rx: Math.PI / 2, seg: 10 }); for (const z of [-0.1, 0.1]) ball(b, 0.022, '#B8452E', 0, 0.045, z, { detail: 1 });
+      for (let i = 0; i < 6; i++) { const q = box(b, 0.035, 0.006, 0.008, '#F2D23A', 0, 0.068, -0.075 + i * 0.03, NC); q.rotation.y = i % 2 ? 0.6 : -0.6; } return { r: 0.12, w: 0.08, h: 0.07, inner: '#F2DDB0' }; },
+    taco: (b) => { const sh = mesh(b, G('tacoShell2', () => new THREE.CylinderGeometry(0.08, 0.08, 0.16, 16, 1, true, Math.PI, Math.PI)), _dsM('#E8B04A'), 0, 0.08, 0, {});
+      sh.rotation.set(0, 0, Math.PI / 2); for (let i = 0; i < 10; i++) ball(b, 0.022, ['#5BB042', '#8A4A2A', '#D8402A', '#F7E07A'][i % 4], (hash(i) - 0.5) * 0.09, 0.12 + 0.015 * hash(i * 3), (hash(i * 2) - 0.5) * 0.12, { detail: 0, ...NC }); return { r: 0.08, w: 0.16, h: 0.16, inner: '#8A4A2A' }; },
+    sushi: (b) => { box(b, 0.34, 0.02, 0.14, '#C9A26A', 0, 0, 0); box(b, 0.34, 0.012, 0.02, '#A8824A', 0, -0.012, -0.05); box(b, 0.34, 0.012, 0.02, '#A8824A', 0, -0.012, 0.05);
+      for (let i = 0; i < 3; i++) { const x = -0.12 + i * 0.07; _ell(b, '#F4F1E8', x, 0.035, -0.03, 0.028, 0.016, 0.018); _ell(b, i % 2 ? '#E8705A' : '#C8303A', x, 0.05, -0.03, 0.03, 0.007, 0.02); }
+      for (let i = 0; i < 3; i++) { const x = 0.02 + i * 0.05; cyl(b, 0.022, 0.022, 0.03, '#1E2A1E', x, 0.02, 0.035, { seg: 12 }); cyl(b, 0.017, 0.017, 0.002, '#F4F1E8', x, 0.05, 0.035, { seg: 12, ...NC }); cyl(b, 0.007, 0.007, 0.003, ['#E8705A', '#5BB042', '#F7C531'][i], x, 0.051, 0.035, { seg: 8, ...NC }); }
+      ball(b, 0.016, '#8ACB4A', -0.15, 0.03, 0.04, { detail: 0 }); return { r: 0.07, w: 0.34, h: 0.06, inner: '#F4F1E8' }; },
+    ramen: (b) => { cyl(b, 0.12, 0.07, 0.09, '#D8342A', 0, 0, 0, { seg: 18 }); mesh(b, G('ramenRim', () => new THREE.TorusGeometry(0.118, 0.008, 5, 22)), mat('#F4F1E8'), 0, 0.09, 0, { rx: Math.PI / 2, cast: false }); cyl(b, 0.112, 0.112, 0.004, '#D9A45A', 0, 0.088, 0, { seg: 18, ...NC });
+      for (let i = 0; i < 6; i++) mesh(b, G('noodle', () => new THREE.TorusGeometry(0.035, 0.005, 4, 10, Math.PI)), mat('#F2D27A'), -0.04 + (i % 3) * 0.03, 0.091, -0.02 + Math.floor(i / 3) * 0.04, { rx: -Math.PI / 2, rz: i, cast: false });
+      const e = ball(b, 0.028, '#F8F4EA', 0.05, 0.092, 0.03, { detail: 1 }); e.scale.set(1, 0.5, 1); cyl(b, 0.014, 0.014, 0.004, '#F2A51A', 0.05, 0.104, 0.03, { seg: 10, ...NC });
+      cyl(b, 0.025, 0.025, 0.006, '#F8F4F2', -0.05, 0.092, 0.04, { seg: 12, ...NC }); cyl(b, 0.01, 0.01, 0.002, '#F07AA8', -0.05, 0.098, 0.04, { seg: 8, ...NC }); box(b, 0.03, 0.035, 0.002, '#1E2A1E', 0.0, 0.088, -0.07, { rx: -0.3, ...NC });
+      for (let i = 0; i < 8; i++) cyl(b, 0.004, 0.004, 0.003, '#5BB042', (hash(i) - 0.5) * 0.12, 0.093, (hash(i * 3) - 0.5) * 0.1, { seg: 6, ...NC });
+      for (const sx of [0, 0.012]) { const s = box(b, 0.006, 0.006, 0.24, '#C9A26A', 0.06 + sx, 0.1, -0.02, NC); s.rotation.set(0.25, 0.3, 0); } return { r: 0.12, w: 0.24, h: 0.1, inner: '#D9A45A', steam: 0.1 }; },
+    cake: (b, o) => { cyl(b, 0.22, 0.22, 0.02, '#F4F1E8', 0, 0, 0, { seg: 24 }); cyl(b, 0.16, 0.16, 0.06, '#E8C48A', 0, 0.02, 0, { seg: 22 }); cyl(b, 0.163, 0.163, 0.015, o.cream ?? '#F7D7E4', 0, 0.08, 0, { seg: 22 }); cyl(b, 0.16, 0.16, 0.06, '#E8C48A', 0, 0.095, 0, { seg: 22 });
+      cyl(b, 0.168, 0.168, 0.02, o.cream ?? '#F7D7E4', 0, 0.155, 0, { seg: 22 }); ring(b, 14, 0.162, 0.13, (x, y, z, a, i) => cone(b, 0.014, 0.035 + 0.02 * hash(i), o.cream ?? '#F7D7E4', x, y + 0.01, z, { rx: Math.PI, seg: 6, ...NC }));
+      ring(b, 6, 0.11, 0.175, (x, y, z) => { _ell(b, '#D8283A', x, y + 0.016, z, 0.018, 0.02, 0.018); cone(b, 0.012, 0.01, '#3E8E3A', x, y + 0.032, z, { seg: 5, ...NC }); });
+      const C = []; for (let i = 0; i < (o.candles ?? 3); i++) { const a = i / (o.candles ?? 3) * TAU + 0.4, x = Math.cos(a) * 0.05, z = Math.sin(a) * 0.05; cyl(b, 0.007, 0.007, 0.08, ['#4FA8E8', '#F7C531', '#E8705A'][i % 3], x, 0.175, z, { seg: 6 }); C.push(cone(b, 0.009, 0.03, '', x, 0.258, z, { mat: mat('#FFB43A', { basic: true, glow: 2 }), seg: 6, ...NC })); }
+      return { r: 0.17, w: 0.34, h: 0.2, inner: '#E8C48A', flames: C }; },
+    cupcake: (b) => { cyl(b, 0.04, 0.032, 0.045, '#E8705A', 0, 0, 0, { seg: 12 }); for (let i = 0; i < 6; i++) box(b, 0.004, 0.045, 0.004, '#F4F1E8', Math.cos(i) * 0.037, 0, Math.sin(i) * 0.037, NC);
+      for (let i = 0; i < 3; i++) { const r = 0.045 - i * 0.012; mesh(b, G('swirl' + i, () => new THREE.TorusGeometry(r, 0.016 - i * 0.003, 6, 14)), mat('#F7D7E4'), 0, 0.055 + i * 0.02, 0, { rx: Math.PI / 2 }); } ball(b, 0.014, '#D8283A', 0, 0.115, 0, { detail: 1 }); return { r: 0.045, w: 0.09, h: 0.12, inner: '#E8C48A' }; },
+    donut: (b, o) => { mesh(b, G('donut', () => new THREE.TorusGeometry(0.055, 0.03, 10, 18)), mat('#D9A45A'), 0, 0.03, 0, { rx: Math.PI / 2 }); const ic = mesh(b, G('donutI', () => new THREE.TorusGeometry(0.055, 0.031, 6, 18, TAU)), mat(o.icing ?? '#F07AA8'), 0, 0.038, 0, { rx: Math.PI / 2, cast: false }); ic.scale.set(1, 1, 0.75);
+      sprinkles(b, 18, 0.07, 0.062, ['#FFFFFF', '#4FA8E8', '#F7C531', '#5BB042']); return { r: 0.085, w: 0.17, h: 0.06, inner: '#F2DDB0' }; },
+    icecream: (b, o) => { const c = cone(b, 0.045, 0.14, '#D9A45A', 0, 0, 0, { rx: Math.PI, seg: 10 }); c.position.y = 0.07; for (let i = 0; i < 4; i++) { const q = box(b, 0.002, 0.14, 0.002, '#B07A3A', 0, 0, 0, NC); q.position.set(Math.cos(i * 1.6) * 0.03, 0.08, Math.sin(i * 1.6) * 0.03); q.rotation.z = 0.5 * (i % 2 ? 1 : -1); }
+      const cols = o.scoops ?? ['#F7D7E4', '#6A3A22']; cols.forEach((cc, i) => { ball(b, 0.05 - i * 0.004, cc, 0, 0.165 + i * 0.07, 0, { detail: 2 }); ring(b, 6, 0.045 - i * 0.004, 0.14 + i * 0.07, (x, y, z) => ball(b, 0.012, cc, x, y, z, { detail: 0, ...NC })); });
+      return { r: 0.05, w: 0.1, h: 0.18 + cols.length * 0.07, inner: cols[0], drips: cols[0], top: 0.165 + (cols.length - 1) * 0.07 + 0.05 }; },
+    popcorn: (b) => { cyl(b, 0.09, 0.065, 0.2, '#F4F1E8', 0, 0, 0, { seg: 16 }); for (let i = 0; i < 8; i++) { const a = i / 8 * TAU, q = box(b, 0.035, 0.2, 0.004, '#D8342A', Math.cos(a) * 0.079, 0, Math.sin(a) * 0.079, NC); q.rotation.y = -a + Math.PI / 2; q.rotation.z = 0.12 * 0; }
+      for (let i = 0; i < 30; i++) { const a = hash(i) * TAU, r = 0.08 * Math.sqrt(hash(i * 3.1)); ball(b, 0.018, hash(i * 7) > 0.3 ? '#FFF6D8' : '#F7D27A', Math.cos(a) * r, 0.205 + 0.03 * hash(i * 5) * (1 - r / 0.09), Math.sin(a) * r, { detail: 0, ...NC }); } return { r: 0.09, w: 0.18, h: 0.24, inner: '#FFF6D8' }; },
+    apple: (b, o) => { _ell(b, o.color ?? '#D8283A', 0, 0.04, 0, 0.042, 0.04, 0.042, { detail: 2 }); cyl(b, 0.003, 0.004, 0.025, '#5A3A1E', 0, 0.075, 0, { rz: 0.2, seg: 5 }); box(b, 0.025, 0.003, 0.012, '#3E8E3A', 0.01, 0.092, 0, { rz: 0.5, ...NC }); return { r: 0.042, w: 0.084, h: 0.08, inner: '#F7EDC8' }; },
+    orange: (b) => { _ell(b, '#F28A1A', 0, 0.038, 0, 0.038, 0.037, 0.038, { detail: 2 }); box(b, 0.008, 0.004, 0.008, '#3E6A2A', 0, 0.074, 0, NC); return { r: 0.038, w: 0.076, h: 0.075, inner: '#F7B03A' }; },
+    banana: (b) => { const P = [[0, 0.03, -0.09], [0, 0.02, -0.04], [0, 0.017, 0.01], [0, 0.022, 0.06], [0, 0.04, 0.1]]; _chain(b, P, 0.017, 0.012, '#F7D23A'); cyl(b, 0.005, 0.006, 0.02, '#5A4A2A', 0, 0.035, -0.105, { rx: 0.9, seg: 5 }); return { r: 0.1, w: 0.04, h: 0.05, inner: '#FFF4C8' }; },
+    watermelon: (b) => { const sh = [[0, 0], [0.11, -0.06], [-0.11, -0.06]]; void sh; const w = mesh(b, G('melon', () => new THREE.CylinderGeometry(0.12, 0.12, 0.035, 16, 1, false, Math.PI * 0.75, Math.PI * 0.5)), mat('#E8404A'), 0, 0.06, 0, { rx: Math.PI / 2 });
+      const r = mesh(b, G('melonR', () => new THREE.CylinderGeometry(0.128, 0.128, 0.034, 16, 1, false, Math.PI * 0.75, Math.PI * 0.5)), mat('#3E8E3A'), 0, 0.06, -0.0005, { rx: Math.PI / 2 }); r.scale.set(1, 0.97, 1); void w;
+      for (let i = 0; i < 6; i++) _ell(b, '#1E1E1E', (hash(i) - 0.5) * 0.08, 0.0 + 0.03 * hash(i * 2), 0.018, 0.005, 0.008, 0.002, NC); b.children.forEach(c => c.position.y += 0.0); return { r: 0.02, w: 0.18, h: 0.1, inner: '#E8404A' }; },
+    grapes: (b) => { for (let i = 0; i < 16; i++) { const l = Math.floor(i / 5), k = i % 5; ball(b, 0.017, '#7A3A8A', (k - 2) * 0.018 * (1 - l * 0.2), 0.12 - l * 0.026, (hash(i) - 0.5) * 0.02, { detail: 1 }); } cyl(b, 0.003, 0.003, 0.04, '#5A4A2A', 0, 0.12, 0, { seg: 4 }); return { r: 0.02, w: 0.1, h: 0.16, inner: '#C8E07A' }; },
+    carrot: (b) => { cone(b, 0.022, 0.16, '#F28A1A', 0, 0, 0, { rx: Math.PI / 2, seg: 8 }); for (let i = 0; i < 3; i++) box(b, 0.006, 0.05, 0.006, '#3E8E3A', (i - 1) * 0.008, 0.0, -0.09, { rx: -1.1 + i * 0.15, ...NC }); return { r: 0.08, w: 0.045, h: 0.045, inner: '#F7B03A' }; },
+    strawberry: (b) => { cone(b, 0.022, 0.04, '#D8283A', 0, 0, 0, { rx: Math.PI, seg: 8 }); for (let i = 0; i < 5; i++) box(b, 0.012, 0.002, 0.004, '#3E8E3A', Math.cos(i * 1.25) * 0.012, 0.04, Math.sin(i * 1.25) * 0.012, { ry: -i * 1.25, ...NC }); return { r: 0.022, w: 0.044, h: 0.045, inner: '#F7A0A0' }; },
+    bread: (b) => { const l = _ell(b, '#C88A3E', 0, 0.045, 0, 0.065, 0.05, 0.12, { detail: 2 }); void l; for (let i = 0; i < 3; i++) box(b, 0.05, 0.004, 0.012, '#E8C48A', 0, 0.093, -0.06 + i * 0.06, { ry: 0.6, ...NC }); return { r: 0.12, w: 0.13, h: 0.1, inner: '#F4E2B8' }; },
+    baguette: (b) => { _ell(b, '#D9A45A', 0, 0.03, 0, 0.03, 0.028, 0.25, { detail: 2 }); for (let i = 0; i < 5; i++) box(b, 0.035, 0.003, 0.008, '#F2D29A', 0, 0.057, -0.16 + i * 0.08, { ry: 0.7, ...NC }); return { r: 0.25, w: 0.06, h: 0.06, inner: '#F4E2B8' }; },
+    croissant: (b) => { const P = [[-0.07, 0.02, 0.03], [-0.04, 0.03, -0.01], [0, 0.035, -0.02], [0.04, 0.03, -0.01], [0.07, 0.02, 0.03]]; _chain(b, P, 0.018, 0.034, '#D9984E'); for (let i = 1; i < 4; i++) cyl(b, 0.036, 0.036, 0.006, '#B8763A', P[i][0], P[i][1] - 0.003, P[i][2], { rz: Math.PI / 2, seg: 10, ...NC }); return { r: 0.04, w: 0.16, h: 0.06, inner: '#F4E2B8' }; },
+    pretzel: (b) => { for (const [x, rz] of [[-0.03, 0.5], [0.03, -0.5]]) mesh(b, G('pretz', () => new THREE.TorusGeometry(0.04, 0.012, 6, 14, Math.PI * 1.6)), mat('#8A4A1E'), x, 0.012, 0, { rx: -Math.PI / 2, rz, cast: true }); for (let i = 0; i < 10; i++) box(b, 0.006, 0.004, 0.006, '#FFFFFF', (hash(i) - 0.5) * 0.12, 0.026, (hash(i * 3) - 0.5) * 0.07, NC); return { r: 0.05, w: 0.14, h: 0.03, inner: '#F4E2B8' }; },
+    cheese: (b) => { const w = prism(b, 0.14, 0.07, 0.1, '#F7C531', 0, 0, 0); void w; for (let i = 0; i < 5; i++) cyl(b, 0.008 + 0.006 * hash(i), 0.008 + 0.006 * hash(i), 0.002, '#D8A21A', -0.05 + i * 0.025, 0.012 + 0.03 * hash(i * 2), 0.051, { rx: Math.PI / 2, seg: 8, ...NC }); return { r: 0.05, w: 0.14, h: 0.07, inner: '#F7D24A' }; },
+    cookie: (b) => { cyl(b, 0.045, 0.048, 0.012, '#C88A3E', 0, 0, 0, { seg: 14 }); for (let i = 0; i < 7; i++) box(b, 0.01, 0.006, 0.01, '#4A2A1A', Math.cos(i * 2.3) * 0.028 * hash(i + 1), 0.012, Math.sin(i * 2.3) * 0.03 * hash(i + 2), NC); return { r: 0.048, w: 0.096, h: 0.018, inner: '#D9A45A' }; },
+    chocolate: (b) => { box(b, 0.08, 0.012, 0.16, '#6A3A22', 0, 0, 0); for (let i = 0; i < 4; i++) for (const x of [-0.019, 0.019]) box(b, 0.034, 0.006, 0.035, '#7A4A2A', x, 0.012, -0.06 + i * 0.04, NC); box(b, 0.084, 0.014, 0.07, '#D8342A', 0, -0.001, 0.05); box(b, 0.085, 0.002, 0.01, '#F2D23A', 0, 0.013, 0.05, NC); return { r: 0.08, w: 0.08, h: 0.02, inner: '#5A2E1A' }; },
+    candy: (b, o) => { const c = o.color ?? '#E8404A'; _ell(b, c, 0, 0.02, 0, 0.025, 0.02, 0.02); for (const sx of [-1, 1]) cone(b, 0.02, 0.025, c, sx * 0.035, 0.02, 0, { rz: sx * Math.PI / 2, seg: 6 }); box(b, 0.051, 0.008, 0.041, '#FFFFFF', 0, 0.016, 0, NC); return { r: 0.02, w: 0.1, h: 0.04, inner: c }; },
+    lollipop: (b, o) => { cyl(b, 0.004, 0.004, 0.14, '#F4F1E8', 0, 0, 0, { seg: 5 }); cyl(b, 0.045, 0.045, 0.014, o.color ?? '#E8404A', 0, 0.17, 0, { rx: Math.PI / 2, seg: 18 }); for (let i = 0; i < 3; i++) mesh(b, G('lolS' + i, () => new THREE.TorusGeometry(0.012 + i * 0.011, 0.004, 4, 16, TAU * 0.8)), mat('#FFFFFF'), 0, 0.17, 0.008, { cast: false }); return { r: 0.045, w: 0.09, h: 0.22, inner: o.color ?? '#E8404A' }; },
+    steak: (b) => { const s = _ell(b, '#7A3A22', 0, 0.015, 0, 0.09, 0.016, 0.06, { detail: 2 }); void s; _ell(b, '#F4E2C8', -0.07, 0.016, 0.02, 0.02, 0.012, 0.04, NC); for (let i = 0; i < 4; i++) box(b, 0.1, 0.003, 0.008, '#2A1A12', 0, 0.03, -0.035 + i * 0.023, { ry: 0.5, ...NC }); return { r: 0.06, w: 0.18, h: 0.032, inner: '#C8504A' }; },
+    drumstick: (b) => { _ell(b, '#B8642E', 0, 0.035, 0.02, 0.04, 0.035, 0.06); cyl(b, 0.01, 0.012, 0.07, '#F4F1E8', 0, 0.03, -0.06, { rx: Math.PI / 2, seg: 6 }); for (const sx of [-1, 1]) ball(b, 0.012, '#F4F1E8', sx * 0.009, 0.03, -0.1, { detail: 0 }); return { r: 0.06, w: 0.08, h: 0.07, inner: '#F4E2C8' }; },
+    egg: (b) => { plate(b, [[0, -0.07], [0.06, -0.04], [0.07, 0.03], [0.02, 0.07], [-0.05, 0.06], [-0.07, 0], [-0.04, -0.06]], 0.006, '#FBFAF4', 0, 0, 0); const y = ball(b, 0.024, '#F7A51A', 0.005, 0.006, 0, { detail: 2 }); y.scale.set(1, 0.6, 1); return { r: 0.07, w: 0.14, h: 0.02, inner: '#F7A51A' }; },
+    pancakes: (b) => { for (let i = 0; i < 5; i++) cyl(b, 0.08 - 0.002 * hash(i), 0.08, 0.016, '#D9A45A', 0.004 * (hash(i * 2) - 0.5), i * 0.016, 0.004 * (hash(i * 3) - 0.5), { seg: 16 }); box(b, 0.035, 0.015, 0.035, '#F7E07A', 0, 0.08, 0, NC);
+      cyl(b, 0.07, 0.07, 0.003, '#8A4A1E', 0, 0.08, 0, { seg: 14, ...NC }); ring(b, 6, 0.078, 0.06, (x, y, z) => cone(b, 0.008, 0.025, '#8A4A1E', x, y, z, { rx: Math.PI, seg: 5, ...NC })); return { r: 0.08, w: 0.16, h: 0.1, inner: '#F2DDB0' }; },
+    sandwich: (b) => { const T = [[0, -0.06], [0.07, 0.05], [-0.07, 0.05]]; plate(b, T, 0.014, '#F4E2B8', 0, 0, 0); plate(b, T.map(([x, z]) => [x * 1.08, z * 1.08]), 0.008, '#5BB042', 0, 0.014, 0, NC); plate(b, T, 0.008, '#E8A0A0', 0, 0.022, 0, NC); plate(b, T.map(([x, z]) => [x * 1.04, z * 1.04]), 0.005, '#F7C531', 0, 0.03, 0, NC); plate(b, T, 0.014, '#F4E2B8', 0, 0.035, 0);
+      return { r: 0.06, w: 0.14, h: 0.05, inner: '#F4E2B8' }; },
+    // drinks
+    cup: (b, o) => { cyl(b, 0.042, 0.032, 0.14, o.color ?? '#F4F1E8', 0, 0, 0, { seg: 14 }); cyl(b, 0.043, 0.04, 0.05, o.band ?? '#D8342A', 0, 0.05, 0, { seg: 14, ...NC }); cyl(b, 0.045, 0.045, 0.012, '#F4F1E8', 0, 0.14, 0, { seg: 14 }); const s = cyl(b, 0.005, 0.005, 0.1, o.straw ?? '#4FA8E8', 0.01, 0.15, 0, { seg: 6 }); s.rotation.z = -0.15; return { r: 0.042, w: 0.085, h: 0.2, inner: '#6A3A22', drink: true }; },
+    can: (b, o) => { cyl(b, 0.033, 0.033, 0.12, o.color ?? '#2E86AB', 0, 0, 0, { seg: 14 }); cyl(b, 0.034, 0.034, 0.03, o.band ?? '#F4F1E8', 0, 0.05, 0, { seg: 14, ...NC }); cyl(b, 0.028, 0.033, 0.008, '#C9CDD3', 0, 0.12, 0, { seg: 14, metal: 0.6 }); box(b, 0.012, 0.002, 0.02, '#A8ACB2', 0, 0.128, 0.008, NC); return { r: 0.033, w: 0.066, h: 0.13, inner: '#6A3A22', drink: true, fizz: true }; },
+    mug: (b, o) => { cyl(b, 0.04, 0.038, 0.09, o.color ?? '#F4F1E8', 0, 0, 0, { seg: 14 }); cyl(b, 0.035, 0.035, 0.002, '#4A2A1A', 0, 0.082, 0, { seg: 14, ...NC }); mesh(b, G('mugH', () => new THREE.TorusGeometry(0.022, 0.007, 6, 10, Math.PI)), mat(o.color ?? '#F4F1E8'), 0.04, 0.045, 0, { rz: -Math.PI / 2 }); return { r: 0.04, w: 0.11, h: 0.09, inner: '#4A2A1A', drink: true, steam: 0.09 }; },
+    glass: (b, o) => { mesh(b, G('glassC', () => new THREE.CylinderGeometry(0.035, 0.03, 0.12, 14, 1, true)), mat('#DDEEFF', { opacity: 0.35, rough: 0.05, side: THREE.DoubleSide }), 0, 0.06, 0, { cast: false }); cyl(b, 0.03, 0.028, 0.09, o.color ?? '#F7A51A', 0, 0.004, 0, { seg: 14, ...NC }); cyl(b, 0.03, 0.03, 0.004, '#DDEEFF', 0, 0, 0, { seg: 14, opacity: 0.5, ...NC }); return { r: 0.035, w: 0.07, h: 0.12, inner: o.color ?? '#F7A51A', drink: true }; },
+    bottle: (b, o) => { cyl(b, 0.032, 0.032, 0.16, o.color ?? '#3E8E3A', 0, 0, 0, { seg: 12, opacity: 0.85, rough: 0.15 }); cyl(b, 0.012, 0.03, 0.05, o.color ?? '#3E8E3A', 0, 0.16, 0, { seg: 12, opacity: 0.85 }); cyl(b, 0.013, 0.013, 0.012, '#C9CDD3', 0, 0.21, 0, { seg: 10 }); box(b, 0.066, 0.05, 0.066, o.band ?? '#F4F1E8', 0, 0.05, 0, { ...NC, opacity: 1 }).scale.set(1, 1, 1); return { r: 0.032, w: 0.064, h: 0.22, inner: '#F7E07A', drink: true }; },
+    milkshake: (b, o) => { mesh(b, G('shakeG', () => new THREE.CylinderGeometry(0.045, 0.03, 0.14, 14, 1, true)), mat('#DDEEFF', { opacity: 0.35, side: THREE.DoubleSide }), 0, 0.07, 0, { cast: false }); cyl(b, 0.043, 0.029, 0.13, o.color ?? '#F7B7CF', 0, 0.002, 0, { seg: 14, ...NC });
+      for (let i = 0; i < 3; i++) mesh(b, G('whip' + i, () => new THREE.TorusGeometry(0.032 - i * 0.009, 0.014 - i * 0.002, 6, 14)), mat('#FFFFFF'), 0, 0.15 + i * 0.016, 0, { rx: Math.PI / 2, cast: false }); ball(b, 0.012, '#D8283A', 0, 0.2, 0, { detail: 1 }); const s = cyl(b, 0.006, 0.006, 0.14, '#D8342A', 0.015, 0.13, 0, { seg: 6 }); s.rotation.z = -0.2; return { r: 0.045, w: 0.09, h: 0.22, inner: o.color ?? '#F7B7CF', drink: true }; },
+    juicebox: (b, o) => { box(b, 0.05, 0.1, 0.035, o.color ?? '#F28A1A', 0, 0, 0); _ell(b, '#F7B03A', 0, 0.05, 0.0181, 0.016, 0.018, 0.002, NC); const s = cyl(b, 0.004, 0.004, 0.06, '#F4F1E8', 0.012, 0.1, 0, { seg: 5 }); s.rotation.z = -0.3; return { r: 0.018, w: 0.05, h: 0.1, inner: '#F7B03A', drink: true }; },
+    // dishes
+    plate: (b, o) => { cyl(b, o.r ?? 0.13, (o.r ?? 0.13) * 0.75, 0.018, o.color ?? '#F8F6F2', 0, 0, 0, { seg: 22 }); cyl(b, (o.r ?? 0.13) * 0.72, (o.r ?? 0.13) * 0.72, 0.002, shade(o.color ?? '#F8F6F2', -0.04), 0, 0.018, 0, { seg: 20, ...NC }); return { r: o.r ?? 0.13, w: 0.26, h: 0.02, dish: true, top: 0.02 }; },
+    bowl: (b, o) => { cyl(b, 0.09, 0.05, 0.06, o.color ?? '#F8F6F2', 0, 0, 0, { seg: 18 }); return { r: 0.09, w: 0.18, h: 0.06, dish: true, top: 0.05 }; },
+    tray: (b, o) => { box(b, 0.42, 0.015, 0.3, o.color ?? '#D8342A', 0, 0, 0); for (const sx of [-1, 1]) { box(b, 0.42, 0.025, 0.01, o.color ?? '#D8342A', 0, 0.01, sx * 0.145); box(b, 0.01, 0.025, 0.3, o.color ?? '#D8342A', sx * 0.205, 0.01, 0); } return { r: 0.15, w: 0.42, h: 0.03, dish: true, top: 0.015 }; },
+    board: (b) => { box(b, 0.32, 0.02, 0.22, '#B8864E', 0, 0, 0); cyl(b, 0.012, 0.012, 0.022, '#8A5A2E', 0.13, 0, 0, { seg: 8 }); return { r: 0.11, w: 0.32, h: 0.02, dish: true, top: 0.02 }; },
+    fork: (b) => { box(b, 0.012, 0.004, 0.13, '#C9CDD3', 0, 0, 0, { metal: 0.7 }); for (const x of [-0.008, 0, 0.008]) box(b, 0.003, 0.004, 0.04, '#C9CDD3', x, 0, 0.08, { metal: 0.7 }); return { r: 0.08, w: 0.02, h: 0.004 }; },
+    knife: (b) => { box(b, 0.012, 0.005, 0.09, '#3A3A3A', 0, 0, -0.04); box(b, 0.016, 0.002, 0.1, '#C9CDD3', 0, 0.001, 0.06, { metal: 0.7 }); return { r: 0.09, w: 0.02, h: 0.005 }; },
+    bone: (b) => { cyl(b, 0.012, 0.012, 0.13, '#F4F1E8', 0, 0.015, 0, { rx: Math.PI / 2, seg: 6 }); for (const z of [-0.065, 0.065]) for (const x of [-0.012, 0.012]) ball(b, 0.016, '#F4F1E8', x, 0.015, z, { detail: 0 }); return { r: 0.08, w: 0.05, h: 0.03, inner: '#F4F1E8' }; },
+    fish: (b) => { _ell(b, '#8AA8B8', 0, 0.02, 0, 0.025, 0.022, 0.07); cone(b, 0.025, 0.035, '#8AA8B8', 0, 0.02, -0.08, { rx: -Math.PI / 2, seg: 4 }); return { r: 0.07, w: 0.05, h: 0.045, inner: '#F4C8B8' }; },
+    pie: (b) => { cyl(b, 0.12, 0.1, 0.035, '#D9A45A', 0, 0, 0, { seg: 18 }); const c = ball(b, 0.12, '#FFFFFF', 0, 0.035, 0, { detail: 2 }); c.scale.set(1, 0.45, 1); ball(b, 0.015, '#D8283A', 0, 0.09, 0, { detail: 1 }); return { r: 0.12, w: 0.24, h: 0.09, inner: '#FFFFFF', splat: '#FFFFFF' }; },
+    tomato: (b) => { _ell(b, '#E03A2A', 0, 0.035, 0, 0.038, 0.034, 0.038, { detail: 2 }); for (let i = 0; i < 5; i++) box(b, 0.014, 0.003, 0.005, '#3E8E3A', Math.cos(i * 1.25) * 0.008, 0.068, Math.sin(i * 1.25) * 0.008, { ry: -i * 1.25, ...NC }); return { r: 0.038, w: 0.076, h: 0.07, inner: '#F27A6A', splat: '#E03A2A' }; },
+    spaghetti: (b) => { cyl(b, 0.11, 0.07, 0.04, '#F8F6F2', 0, 0, 0, { seg: 18 }); for (let i = 0; i < 9; i++) mesh(b, G('spag', () => new THREE.TorusGeometry(0.035, 0.005, 4, 12)), mat('#F2D27A'), (hash(i) - 0.5) * 0.08, 0.045 + 0.01 * hash(i * 2), (hash(i * 3) - 0.5) * 0.08, { rx: hash(i * 4) * 3, ry: hash(i * 5) * 3, cast: false });
+      const s = ball(b, 0.05, '#C8402A', 0, 0.06, 0, { detail: 1 }); s.scale.set(1, 0.35, 1); for (let i = 0; i < 3; i++) ball(b, 0.016, '#7A3A22', (i - 1) * 0.03, 0.075, 0.01, { detail: 1 }); return { r: 0.11, w: 0.22, h: 0.08, inner: '#F2D27A', splat: '#C8402A' }; },
+  };
+  return { B, NC };
+})();
+// food(p, kind, x, y, z, { state: 'fresh' | 'steam' | 'burnt' | 'frozen' | 'moldy' | 'melting' | 'bitten', scale, ry, plate, color, t0 }) → F with F.g, F.bite(i, t) …
+function food(p, kind, x = 0, y = 0, z = 0, o = {}) {
+  const mk = FD.B[kind] ?? (console.warn('food: unknown kind ' + kind), FD.B.apple), g0 = grp(p ?? world, x, y, z, o.ry ?? 0), g = o.still ? g0 : dyn(g0), sc = o.scale ?? 1;
+  let dishTop = 0; if (o.plate) { const pb = grp(g); const D = FD.B[o.plate === true ? 'plate' : o.plate](pb, {}); dishTop = D.top ?? 0.02; }
+  const b0 = grp(g, 0, dishTop * sc, 0), b = o.still ? b0 : dyn(b0); b.scale.setScalar(sc); const I = mk(b, o) ?? {}, F = { g, b, kind, I, sc, bites: [], ...I };
+  if (o.still) { if (I.steam && o.steam !== false) emit('steam', { at: (g.updateWorldMatrix(true, false), b.localToWorld(v3(0, (I.top ?? I.h) + 0.02, 0)).toArray()), t0: o.t0 ?? 0, t1: DUR, rate: 3, size: 0.08 }); return F; }
+  const top = () => (I.top ?? I.h) * sc, at = (dy = 0) => t => { g.updateWorldMatrix(true, false); return b.localToWorld(v3(0, (I.top ?? I.h) + dy, 0)).toArray(); };
+  const st = o.state ?? 'fresh', t0 = o.t0 ?? 0;
+  if ((st === 'steam' || I.steam) && st !== 'frozen' && o.steam !== false) emit('steam', { at: at(0.02), t0, t1: o.t1 ?? DUR, rate: 4 + 4 * sc, size: 0.06 * Math.max(1, sc) + 0.04 });
+  if (I.flames) tick(t => I.flames.forEach((fl, i) => { fl.scale.set(1, 0.8 + 0.3 * Math.abs(Math.sin(t * 13 + i * 2.1)) + 0.15 * Math.sin(t * 29 + i), 1); fl.visible = !(F.blownAt != null && t >= F.blownAt); }));
+  if (st === 'burnt') { b.traverse(m => { if (m.isMesh && m.material?.color && !m.material.userData?.basic) { m.material = m.material.clone(); m.material.color.lerp(new THREE.Color('#2A1E16'), 0.75); } }); emit('smoke', { at: at(0.02), t0, t1: o.t1 ?? DUR, rate: 2, size: 0.12, opacity: 0.4 }); }
+  if (st === 'frozen') { b.traverse(m => { if (m.isMesh && m.material?.color) { m.material = m.material.clone(); m.material.color.lerp(new THREE.Color('#BFE4FF'), 0.45); } }); const w = I.w ?? 0.1, h = I.h ?? 0.1; box(b, w * 1.15, h * 1.2, Math.max(w, (I.r ?? 0.05) * 2) * 1.15, '', 0, -0.005, 0, { mat: mat('#CFEFFF', { opacity: 0.35, rough: 0.05 }), cast: false }); }
+  if (st === 'moldy') { for (let i = 0; i < 9; i++) _ell(b, ['#7A9A3A', '#9AB84A', '#F4F1E8'][i % 3], (hash(i) - 0.5) * (I.w ?? 0.1) * 0.8, (I.h ?? 0.05) * (0.5 + 0.5 * hash(i * 3)), (hash(i * 2) - 0.5) * (I.r ?? 0.05) * 1.6, 0.012, 0.008, 0.012, FD.NC); emit('steam', { at: at(0.05), t0, t1: o.t1 ?? DUR, rate: 3, size: 0.08, colors: ['#9ACD32', '#B8D84A'], opacity: 0.22 }); }
+  if (st === 'melting' || (I.drips && st !== 'frozen')) { const dg = dyn(grp(b)), D = []; for (let i = 0; i < 5; i++) { const a = i / 5 * TAU + 0.3, r = (I.r ?? 0.05) * 0.95; D.push(cone(dg, 0.009, 0.03, I.drips ?? I.inner, Math.cos(a) * r, (I.top ?? I.h) - 0.035, Math.sin(a) * r, { rx: Math.PI, seg: 6, cast: false })); }
+    const pd = cyl(world, 0.001, 0.001, 0.002, I.drips ?? I.inner, x, y + 0.001, z, { seg: 14, cast: false }); dyn(pd);
+    tick(t => { const k = st === 'melting' ? clamp((t - t0) / 8) : 0.2; D.forEach((d, i) => { d.scale.set(1, 1 + 4 * k * (0.5 + hash(i)), 1); }); pd.scale.set(1 + 120 * k * sc, 1, 1 + 120 * k * sc); pd.visible = st === 'melting' && t > t0; }); }
+  // bites: each one takes a chunk off the side that faces the eater (−z), shows the inside, the last one finishes it
+  const n = o.bites ?? 3, face = dyn(grp(b, 0, 0, 0)); _ell(face, I.inner ?? '#F2E2B8', 0, (I.h ?? 0.05) * 0.5, 0, (I.w ?? 0.1) * 0.32, (I.h ?? 0.05) * 0.42, 0.006, FD.NC); face.visible = false;
+  const R = I.bite === 'tip' ? 0.16 : (I.r ?? 0.05);
+  F.bite = (i, t) => (F.bites.push(t), F);
+  tick(t => { let k = 0; for (const tb of F.bites) if (t >= tb) k++; if (st === 'bitten') k = Math.max(k, 1); if (!k) { b.scale.setScalar(sc); b.position.z = 0; face.visible = false; b.visible = true; return; }
+    if (k >= n && !I.drink && !I.dish) { b.visible = false; return; } const kk = I.drink ? 0 : k / n, s = 1 - 0.85 * kk; b.scale.set(sc, sc, sc * s); b.position.z = R * sc * (1 - s); face.visible = !I.drink && !I.dish; face.position.z = -R + 0.002; });
+  F.top = top; F.at = at; F.blow = t => { F.blownAt = t; emit('smoke', { at: at(0.06), t0: t, t1: t + 0.4, burst: 6, size: 0.05, opacity: 0.6 }); return F; };
+  return F;
+}
+// eat(rig, F, t0, { bites, every, side, after }) — picks it up, takes bites (chunks off, crumbs, chewing, crunch), puts the rest back or finishes it
+function eat(f, F, t0, o = {}) {
+  const n = o.bites ?? 3, ev = o.every ?? 1.1, side = o.side ?? 'R', t1 = t0 + 0.4 + n * ev, A = side === 'L' ? ['las', 'lae', 'laz'] : ['ras', 'rae', 'raz'], sg = side === 'L' ? -1 : 1;
+  _hold2(f, F, t0 - 0.35, t1, { side, after: o.after ?? 'hide', mouth: k => { for (let i = 0; i < n; i++) { const tb = t0 + 0.4 + i * ev; if (k >= tb - 0.35 && k <= tb + 0.15) return sm01((k - tb + 0.35) / 0.3) * (1 - sm01((k - tb) / 0.15)); } return 0; } });
+  for (let i = 0; i < n; i++) { const tb = t0 + 0.4 + i * ev; F.bite(i, tb); sfx(tb, F.drink ? 'slurp' : ['crunch', 'munch', 'chomp'][i % 3], 0.6);
+    emit('crumbs', { at: () => { f.root.updateWorldMatrix(true, true); return f.head.localToWorld(v3(0, 0.05, 0.25)).toArray(); }, t0: tb, t1: tb + 0.05, burst: 8, colors: [F.inner ?? '#C8963E', shade(F.inner ?? '#C8963E', -0.2)] }); }
+  const prev = f.talk; f.talk = t => { for (let i = 0; i < n; i++) { const tb = t0 + 0.4 + i * ev; if (t > tb + 0.05 && t < tb + ev * 0.7) return Math.sin(t * 22) > -0.2; } return typeof prev === 'function' ? prev(t) : false; };
+  (f.fx ??= []).push((t, S) => { const e = env3(t, t0 - 0.35, t1, 0.3, 0.35); if (!e) return; let m = 0; for (let i = 0; i < n; i++) { const tb = t0 + 0.4 + i * ev; m = Math.max(m, env3(t, tb - 0.38, tb + 0.2, 0.25, 0.18)); }
+    S[A[0]] = lerp(S[A[0]], lerp(-0.55, -0.95, m), e); S[A[1]] = lerp(S[A[1]], lerp(-1.35, -2.0, m), e); S[A[2]] = lerp(S[A[2]], sg * lerp(0.05, -0.38, m), e); S.nrx += 0.12 * m * e; S.crx += 0.04 * m * e; });
+  return t1;
+}
+function drink(f, F, t0, o = {}) {   // sips: cup to the lips, tilts, head back, gulps (cans fizz when they open)
+  const n = o.sips ?? 2, ev = o.every ?? 1.3, t1 = t0 + 0.4 + n * ev; if (F.fizz) sfx(t0 - 0.1, 'fizz', 0.6);
+  _hold2(f, F, t0 - 0.35, t1, { side: o.side ?? 'R', after: o.after ?? 'rest', tilt: true, mouth: k => { for (let i = 0; i < n; i++) { const tb = t0 + 0.4 + i * ev; if (k >= tb - 0.35 && k <= tb + ev * 0.6) return sm01((k - tb + 0.35) / 0.3) * (1 - sm01((k - tb - ev * 0.45) / 0.15)); } return 0; } });
+  for (let i = 0; i < n; i++) { const tb = t0 + 0.4 + i * ev; sfx(tb, 'slurp', 0.5); sfx(tb + 0.35, 'gulp', 0.6); }
+  (f.fx ??= []).push((t, S) => { const e = env3(t, t0 - 0.35, t1, 0.3, 0.35); if (!e) return; let m = 0; for (let i = 0; i < n; i++) { const tb = t0 + 0.4 + i * ev; m = Math.max(m, env3(t, tb - 0.38, tb + ev * 0.55, 0.25, 0.2)); }
+    S.ras = lerp(S.ras, lerp(-0.55, -1.1, m), e); S.rae = lerp(S.rae, lerp(-1.35, -2.2, m), e); S.raz = lerp(S.raz, lerp(0.05, -0.35, m), e); S.nrx -= 0.35 * m * e; S.crx -= 0.05 * m * e; });
+  return t1;
+}
+// held food: sits in the hand, upright, and moves to the mouth for each bite / sip
+const _fdE = new THREE.Euler();
+function _hold2(f, F, t0, t1, o) {
+  const n = F.g, fa = o.side === 'L' ? f.foreL : f.foreR; let p0 = null, q0 = null; DEFER.push(() => { p0 = n.position.clone(); q0 = n.quaternion.clone(); });
+  hands(f, 'grip', t0, t1, { side: o.side ?? 'R', fade: 0.12 }); const tq = new THREE.Quaternion();
+  late(t => { if (t >= t0 && t <= t1) { f.root.updateWorldMatrix(true, true); const H = fa.localToWorld(v3(0, -0.42, 0.05)), m = o.mouth ? o.mouth(t) : 0;
+      _fdE.setFromQuaternion(f.root.getWorldQuaternion(tq), 'YXZ'); n.quaternion.setFromAxisAngle(_AY, _fdE.y); const top = F.top ? F.top() : 0.05, rr = (F.r ?? 0.05) * F.sc;
+      const M = f.head.localToWorld(v3(0, 0.06, 0.2)), mouthAt = v3(); if (o.tilt) { const a = -1.1 * m; mouthAt.copy(M).sub(v3(0, top * Math.cos(a), top * Math.sin(a)).applyQuaternion(n.quaternion)).add(v3(0, 0, 0.03).applyQuaternion(n.quaternion)); n.rotateX(a); }
+      else mouthAt.copy(M).add(v3(0, -top * 0.5, rr + 0.02).applyQuaternion(n.quaternion));
+      n.position.lerpVectors(H.add(v3(0, -top * 0.45, 0)), mouthAt, m); n.visible = true; return; }
+    if (t > t1 && o.after === 'hide') { n.visible = false; return; } if (p0) { n.position.copy(p0); n.quaternion.copy(q0); n.visible = true; } });
+}
+// foodFight(from, to, t, { kind, h }) — throws food (rig or point) at a rig or point; on impact: splat on the face / body / ground, goo, sound
+function foodFight(from, to, t, o = {}) {
+  const kind = o.kind ?? 'pie', F = food(world, kind, 0, -50, 0, { scale: o.scale ?? 1 }), isR = !!from?.legL, isT = !!to?.legL;
+  const P0 = isR ? _bp(from, t).add(v3(0.3, 1.7, 0)) : toV(from), Tq = isT ? _bp(to, t + 0.8).add(v3(0, 1.55, 0)) : toV(to);
+  const P = tossPath(P0.toArray(), Tq.toArray(), t, { h: o.h ?? 1.2, bounces: 0, r: 0 }), land = P.land, node = F.g;
+  if (isR) { holdItem(from, F, t - 0.9, t, { after: 'free' }); (from.fx ??= []).push((tt, S) => { const k = tt - t; if (k < -0.6 || k > 0.45) return; const e = k < 0 ? sm01((k + 0.6) / 0.4) : 1 - sm01(k / 0.45); S.ras = lerp(S.ras, k < 0 ? -2.7 : -1.5, e); S.rae = lerp(S.rae, k < 0 ? -1.6 : -0.1, e); S.crx += (k < 0 ? -0.2 : 0.3) * e; }); }
+  tick(tt => { if (tt < t) { if (!isR) node.position.set(0, -50, 0); return; } if (tt > land) { node.visible = false; return; } node.visible = true; P.at(tt, node.position); node.rotation.x = (tt - t) * 7; });
+  const col = F.I.splat ?? F.inner ?? '#D83A2A';
+  emit('splat', { at: Tq.toArray(), t0: land, t1: land + 0.05, burst: 26, colors: [col, shade(col, -0.15)] }); sfx(land, 'splat', 1);
+  if (isT) { const sp = dyn(grp(to.head, 0, 0.2, 0.2)); _ell(sp, col, 0, 0, 0.01, 0.25, 0.23, 0.04, { detail: 2, cast: false }); for (let i = 0; i < 6; i++) cone(sp, 0.025, 0.08 + 0.08 * hash(i), col, (i - 2.5) * 0.07, -0.22, 0.02, { rx: Math.PI, seg: 6, cast: false });
+    for (let i = 0; i < 7; i++) { const a = i / 7 * TAU; _ell(sp, col, Math.cos(a) * 0.25, Math.sin(a) * 0.22, 0.01, 0.07, 0.06, 0.03, { detail: 1, cast: false }); }
+    tick(tt => { sp.visible = tt >= land && tt < (o.clean ?? 1e9); sp.scale.setScalar(tt < land ? 0 : Math.min(1, 0.6 + (tt - land) * 6) * (1 + 0.15 * Math.exp(-(tt - land) * 8) * Math.sin((tt - land) * 40))); });
+    react(to, land, 'hit', { amp: 0.8 }); if (o.face !== false) faceFx(to, 'exclaim', land + 0.1, land + 1.1); }
+  else { const g = stat(grp(world, Tq.x, groundH(Tq.x, Tq.z) + 0.01, Tq.z)); plate(g, [[0, -0.3], [0.25, -0.15], [0.3, 0.12], [0.08, 0.3], [-0.22, 0.24], [-0.3, -0.05]], 0.01, col, 0, 0, 0, { cast: false }); appear(g, land, { from: 'pop' }); }
+  return land;
+}
+// ---- cooking ----
+// pan(p, x, y, z, { item: 'egg' | 'steak' | 'pancakes' | 'bacon', t0, t1, flip: [t, …], burn: t }) — sizzles with grease spatter, cooks from raw to brown, flips through the air
+function pan(p, x, y, z, o = {}) {
+  const g = stat(grp(p ?? world, x, y, z, o.ry ?? 0)), t0 = o.t0 ?? 0, t1 = o.t1 ?? DUR, NC = FD.NC;
+  cyl(g, 0.15, 0.13, 0.04, '#2A2A2E', 0, 0, 0, { seg: 20, metal: 0.5, rough: 0.4 }); cyl(g, 0.135, 0.135, 0.002, '#3A3A40', 0, 0.01, 0, { seg: 20, ...NC }); box(g, 0.03, 0.02, 0.22, '#1E1E22', 0, 0.025, -0.25); box(g, 0.035, 0.025, 0.1, '#3A2418', 0, 0.025, -0.33);
+  const it = o.item ?? 'egg', F = food(p ?? world, it === 'bacon' ? 'steak' : it, x, y + 0.012, z, { scale: it === 'pancakes' ? 0.95 : 1, steam: false }); F.g.rotation.y = o.ry ?? 0;
+  if (it === 'pancakes') F.b.children.slice(5).forEach(c => c.visible = false);
+  const raw = [], C2 = new THREE.Color('#5A3418'); F.b.traverse(m => { if (m.isMesh && m.material?.color) { m.material = m.material.clone(); raw.push([m.material, m.material.color.clone()]); } });
+  const flips = o.flip ?? [];
+  tick(t => { const k = clamp((t - t0) / Math.max(1, (o.burn ?? t1) - t0)), burnK = o.burn != null ? clamp((t - o.burn) / 2) : 0; raw.forEach(([m, c]) => m.color.copy(c).lerp(C2, 0.25 * k + 0.6 * burnK));
+    let dy = 0, rx = 0; for (const tf of flips) { const u = (t - tf) / 0.7; if (u >= 0 && u <= 1) { dy = 0.6 * 4 * u * (1 - u); rx = TAU * 0.5 * sm01(u); } else if (u > 1) rx += Math.PI; } F.g.position.y = y + 0.012 + dy; F.b.rotation.x = rx % TAU; });
+  for (const tf of flips) sfx(tf, 'whoosh', 0.3);
+  if (o.sizzle !== false) { sfx(t0, 'sizzle', 0.7); AUDIO.hits[AUDIO.hits.length - 1].dur = t1 - t0; emit('grease', { at: [x, y + 0.06, z], t0, t1, rate: 14 }); emit('steam', { at: [x, y + 0.08, z], t0, t1, rate: 5, size: 0.08 }); }
+  if (o.burn != null) emit('smoke', { at: [x, y + 0.1, z], t0: o.burn, t1, rate: 5, size: 0.25, opacity: 0.55 });
+  return { g, F };
+}
+// pot(p, x, y, z, { t0, boil: t, over: t, lid, color }) — bubbles, steam, rattling lid, boils over with foam and hiss
+function pot(p, x, y, z, o = {}) {
+  const g = stat(grp(p ?? world, x, y, z)), NC = FD.NC, R = o.r ?? 0.14, H = o.h ?? 0.16, t0 = o.t0 ?? 0, tb = o.boil ?? t0 + 2, to = o.over;
+  cyl(g, R, R * 0.95, H, o.color ?? '#B8BCC2', 0, 0, 0, { seg: 20, metal: 0.6, rough: 0.35 }); for (const sx of [-1, 1]) box(g, 0.05, 0.02, 0.03, '#2A2A2E', sx * (R + 0.02), H * 0.8, 0);
+  const surf = dyn(cyl(g, R * 0.93, R * 0.93, 0.004, o.liquid ?? '#E8D8A8', 0, H - 0.03, 0, { seg: 20, ...NC }));
+  const bub = dyn(grp(g)), BB = []; for (let i = 0; i < 9; i++) BB.push(ball(bub, 0.012, shade(o.liquid ?? '#E8D8A8', 0.08), 0, 0, 0, { detail: 0, cast: false }));
+  const lid = o.lid !== false ? dyn(grp(g, 0, H, 0)) : null; if (lid) { cyl(lid, R * 1.02, R * 1.02, 0.012, o.color ?? '#B8BCC2', 0, 0, 0, { seg: 20, metal: 0.6 }); ball(lid, 0.018, '#2A2A2E', 0, 0.02, 0, { detail: 0 }); }
+  const foam = to != null ? dyn(grp(g, 0, H - 0.005, 0)) : null; if (foam) { ball(foam, R * 1.05, '#FBF8EE', 0, 0, 0, { detail: 1, cast: false }).scale.set(1, 0.35, 1); for (let i = 0; i < 8; i++) { const a = i / 8 * TAU; cone(foam, 0.03, 0.12, '#FBF8EE', Math.cos(a) * R * 1.02, -0.11, Math.sin(a) * R * 1.02, { rx: Math.PI, seg: 6, cast: false }); } }
+  tick(t => { const b = clamp((t - t0) / Math.max(0.1, tb - t0)); BB.forEach((s, i) => { const u = (t * (0.8 + 0.6 * hash(i)) + hash(i * 3)) % 1, a = hash(i * 7) * TAU, r = R * 0.8 * Math.sqrt(hash(i * 5)); s.position.set(Math.cos(a) * r, H - 0.03, Math.sin(a) * r); s.scale.setScalar(b > 0.05 ? Math.sin(Math.PI * u) * (0.6 + b) : 0); });
+    if (lid) { const r = t > tb ? Math.max(0, Math.sin(t * 31) * Math.sin(t * 7)) : 0; lid.position.y = H + 0.012 * r; lid.rotation.z = 0.04 * r * Math.sin(t * 17); lid.visible = !(to != null && t > to); }
+    if (foam) { const k = clamp((t - to) / 1.2); foam.visible = t > to; foam.scale.set(1, 0.4 + 0.8 * k, 1); foam.position.y = H - 0.005 + 0.04 * k; } surf.position.y = H - 0.03 + 0.003 * Math.sin(t * 9) * b; });
+  emit('steam', { at: [x, y + H + 0.03, z], t0: t0 + (tb - t0) * 0.4, t1: DUR, rate: 6, size: 0.07 });
+  sfx(tb, 'boil', 0.6); AUDIO.hits[AUDIO.hits.length - 1].dur = DUR - tb; if (to != null) { sfx(to, 'hiss', 0.9); emit('steam', { at: [x, y + H, z], t0: to, t1: to + 2, rate: 14, size: 0.1 }); }
+  return { g, lid };
+}
+// toaster(p, x, y, z, { pop: t, h }) — slices pop up out of the toaster (ding), flip and drop back
+function toaster(p, x, y, z, o = {}) {
+  const g = stat(grp(p ?? world, x, y, z, o.ry ?? 0)), NC = FD.NC, tp = o.pop ?? 2, h = o.h ?? 0.7;
+  rbox(g, 0.28, 0.18, 0.15, o.color ?? '#C9CDD3', 0, 0, 0, { metal: 0.6, rough: 0.3 }); for (const sx of [-1, 1]) box(g, 0.2, 0.012, 0.025, '#1E1E22', 0, 0.175, sx * 0.03, NC); box(g, 0.02, 0.05, 0.03, '#2A2A2E', 0.15, 0.1, 0, NC);
+  const T = [-1, 1].map(sx => { const s = dyn(grp(g, 0, 0, sx * 0.03)); box(s, 0.13, 0.12, 0.015, '#D9984E', 0, 0, 0); box(s, 0.12, 0.11, 0.016, '#C87A3A', 0, 0.005, 0, NC); return s; });
+  tick(t => T.forEach((s, i) => { const u = (t - tp - i * 0.06) / (Math.sqrt(8 * h / 9.8)); if (u < 0) { s.position.y = 0.09; s.rotation.z = 0; return; } const k = Math.min(1, u); s.position.y = 0.09 + 4 * h * k * (1 - k); s.rotation.z = (i ? -1 : 1) * TAU * 0.5 * sm01(k); }));
+  sfx(tp, 'pop', 0.8); sfx(tp + 0.05, 'ding', 0.6); return { g };
+}
+// grill(p, x, z, { t0, items: ['steak', 'hotdog', 'burger' …], flare: [t, …] }) — kettle barbecue: glowing coals, smoke, items browning, flare-ups
+function grill(p, x, z, o = {}) {
+  const g = stat(grp(p ?? world, x, groundH(x, z), z, o.ry ?? 0)), NC = FD.NC, t0 = o.t0 ?? 0, Y = 0.85;
+  for (let i = 0; i < 3; i++) { const a = i / 3 * TAU; _seg(g, [Math.cos(a) * 0.12, Y - 0.15, Math.sin(a) * 0.12], [Math.cos(a) * 0.3, 0, Math.sin(a) * 0.3], 0.018, 0.018, '#2A2A2E'); }
+  const bowl = mesh(g, G('grillB', () => new THREE.SphereGeometry(0.32, 18, 8, 0, TAU, Math.PI / 2, Math.PI / 2)), mat('#1E1E22', { rough: 0.5, side: THREE.DoubleSide }), 0, Y, 0); void bowl;
+  const coal = dyn(grp(g)); for (let i = 0; i < 14; i++) ball(coal, 0.04, '', (hash(i) - 0.5) * 0.36, Y - 0.12 + 0.03 * hash(i * 2), (hash(i * 3) - 0.5) * 0.36, { mat: mat('#FF5A1A', { basic: true, glow: 1.6 }), detail: 0, cast: false });
+  for (let i = -5; i <= 5; i++) box(g, 0.006, 0.006, 0.6 * Math.sqrt(1 - (i / 5.5) ** 2), '#8A8E94', i * 0.05, Y - 0.02, 0, { metal: 0.7, cast: false });
+  const lid = grp(g, -0.34, Y + 0.02, 0); mesh(lid, G('grillB', () => null), mat('#1E1E22', { side: THREE.DoubleSide }), 0, 0, 0, { rx: Math.PI }); lid.rotation.z = 1.35;
+  (o.items ?? ['steak', 'hotdog', 'burger']).forEach((k, i) => { const F = food(world, k === 'burger' ? 'steak' : k, 0, 0, 0, { scale: 1.1, steam: false }); const a = i / 3 * TAU; F.g.position.set(x + Math.cos(a) * 0.14, groundH(x, z) + Y - 0.015, z + Math.sin(a) * 0.14); F.g.rotation.y = a; });
+  emit('smoke', { at: [x, groundH(x, z) + Y + 0.1, z], t0, t1: o.t1 ?? DUR, rate: 5, size: 0.35, opacity: 0.45 }); sfx(t0, 'sizzle', 0.5); AUDIO.hits[AUDIO.hits.length - 1].dur = (o.t1 ?? DUR) - t0;
+  for (const tf of o.flare ?? []) { emit('fire', { at: [x, groundH(x, z) + Y, z], t0: tf, t1: tf + 0.6, rate: 60, size: 0.35 }); glow(x, groundH(x, z) + Y + 0.3, z, { t0: tf, t1: tf + 0.7, intensity: 8, dist: 4, color: '#FF8A3A' }); sfx(tf, 'fire', 0.7); }
+  tick(t => coal.children.forEach((c, i) => c.scale.setScalar(0.85 + 0.2 * Math.sin(t * 3 + i))));
+  return { g };
+}
+// campfire(p, x, z, { t0, size }) — ring of stones, crossed logs, fire, glow, crackle; marshmallow(rig, fire, { t0, t1, burn }) — toasts one on a stick, it catches fire at burn, gets blown out
+function campfire(p, x, z, o = {}) {
+  const s = o.size ?? 1, y = groundH(x, z), g = stat(grp(p ?? world, x, y, z)), t0 = o.t0 ?? 0;
+  for (let i = 0; i < 10; i++) { const a = i / 10 * TAU; _ell(g, shade('#7A7670', (hash(i) - 0.5) * 0.2), Math.cos(a) * 0.5 * s, 0.06 * s, Math.sin(a) * 0.5 * s, 0.11 * s, 0.08 * s, 0.09 * s, { detail: 0 }); }
+  for (let i = 0; i < 4; i++) { const a = i / 4 * TAU + 0.4, L = cyl(g, 0.05 * s, 0.06 * s, 0.7 * s, '#5A3A22', Math.cos(a) * 0.12 * s, 0.05 * s, Math.sin(a) * 0.12 * s, { seg: 7 }); L.rotation.set(0, -a, 1.25); }
+  emit('fire', { at: [x, y + 0.08, z], t0, t1: o.t1 ?? DUR, rate: 40 * s, size: 0.4 * s }); emit('spark', { at: [x, y + 0.3, z], t0, t1: o.t1 ?? DUR, rate: 3, size: 0.04, speed: 2.5, g: 1 });
+  glow(x, y + 0.6, z, { t0, t1: o.t1 ?? DUR, intensity: (o.light ?? 3.5) * s, dist: 6 * s, color: '#FF9A40' }); sfx(t0, 'fire', 0.5); AUDIO.hits[AUDIO.hits.length - 1].dur = (o.t1 ?? DUR) - t0;
+  return { g, x, z, y, pos: v3(x, y + 0.35, z) };
+}
+function marshmallow(f, fire, o = {}) {
+  const t0 = o.t0 ?? 0, t1 = o.t1 ?? t0 + 6, tb = o.burn, st = dyn(grp(world)); cyl(st, 0.008, 0.01, 0.9, '#8A6A44', 0, 0, 0, { seg: 5 }); const m = cyl(st, 0.025, 0.025, 0.045, '#FBF8EE', 0, 0.9, 0, { seg: 10 });
+  const mm = m.material = m.material.clone(), C0 = new THREE.Color('#FBF8EE'), C1 = new THREE.Color('#C88A3E'), C2 = new THREE.Color('#2A1E16');
+  holdItem(f, { g: st }, t0, t1, { rot: [-1.2, 0, 0], off: [0, -0.4, 0.06], after: 'free' }); tick(t => { const k = clamp((t - t0) / (t1 - t0)), b = tb != null ? clamp((t - tb) / 1.5) : 0; mm.color.copy(C0).lerp(C1, k * 0.9).lerp(C2, b); st.visible = t >= t0 - 0.01 && t <= t1; });
+  faceTo(f, fire.pos ?? fire, t0 - 0.5, t1);
+  (f.fx ??= []).push((t, S) => { const e = env3(t, t0, t1, 0.3, 0.3); if (!e) return; S.ras = lerp(S.ras, -1.0, e); S.rae = lerp(S.rae, -0.35, e); S.raz = lerp(S.raz, -0.1, e); });
+  if (tb != null) { emit('fire', { at: () => { st.updateWorldMatrix(true, false); return m.getWorldPosition(v3()).toArray(); }, t0: tb, t1: tb + 1.6, rate: 30, size: 0.08 }); react(f, tb + 0.2, 'startle'); faceFx(f, 'exclaim', tb + 0.2, tb + 1.2);
+    (f.fx ??= []).push((t, S) => { const k = env3(t, tb + 1.0, tb + 1.8, 0.15, 0.2); if (k) { S.crx += 0.15 * k; S.nrx += 0.1 * k; } }); sfx(tb + 1.2, 'whoosh', 0.4); }
+  return st;
+}
+// ---- places ----
+const _picto = (p, kind, x, y, z, s) => { const g = grp(p, x, y, z); g.scale.setScalar(s); FD.B[kind](grp(g), {}); g.rotation.x = 0.0; return g; };
+// foodtruck(p, x, z, { ry, color, awning, vendor, menu }) — serving window, striped awning, menu board with food pictures, string lights, condiments
+function foodtruck(p, x, z, o = {}) {
+  const g = stat(grp(p ?? world, x, groundH(x, z), z, o.ry ?? 0)), c = o.color ?? '#F2B33A', NC = FD.NC;
+  for (const [wx, wz] of [[-1.1, 1.6], [1.1, 1.6], [-1.1, -1.8], [1.1, -1.8]]) { cyl(g, 0.42, 0.42, 0.28, '#1E1E22', wx, 0.42, wz, { rz: Math.PI / 2, seg: 14 }); cyl(g, 0.2, 0.2, 0.3, '#C9CDD3', wx, 0.42, wz, { rz: Math.PI / 2, seg: 10, ...NC }); }
+  rbox(g, 2.3, 2.5, 5.6, c, 0, 0.55, 0, { rf: 0.12 }); rbox(g, 2.25, 1.1, 1.4, c, 0, 0.55, 3.0, { rf: 0.2 }); box(g, 2.1, 0.55, 0.05, '#2A3A4A', 0, 1.15, 3.71, { rough: 0.1, metal: 0.3, ...NC });
+  box(g, 0.05, 1.0, 3.2, '#2A2A2E', 1.16, 1.45, -0.6); box(g, 0.06, 1.05, 3.3, shade(c, -0.15), 1.17, 1.42, -0.6, NC); box(g, 0.5, 0.07, 3.4, '#C9CDD3', 1.35, 1.38, -0.6, { metal: 0.5 });
+  const aw = grp(g, 1.18, 2.55, -0.6); for (let i = 0; i < 8; i++) box(aw, 0.9, 0.04, 0.42, i % 2 ? '#F4F1E8' : (o.awning ?? '#D8342A'), 0.45, 0, -1.47 + i * 0.42, { rz: -0.35 }); for (let i = 0; i < 8; i++) cone(aw, 0.21, 0.18, i % 2 ? '#F4F1E8' : (o.awning ?? '#D8342A'), 0.86, -0.37, -1.47 + i * 0.42, { rx: Math.PI, seg: 3, ...NC });
+  const mb = grp(g, 1.17, 2.15, -2.55); box(mb, 0.04, 0.85, 1.1, '#1E1E22', 0, -0.4, 0); ['burger', 'fries', 'hotdog', 'cup'].forEach((k, i) => { const q = _picto(mb, k, 0.05, -0.3 - Math.floor(i / 2) * 0.38, -0.27 + (i % 2) * 0.54, 1.3); q.rotation.set(0, Math.PI / 2, -0.3); });
+  for (let i = 0; i < 5; i++) { cyl(g, 0.025, 0.025, 0.14, i % 2 ? '#F2D23A' : '#D8342A', 1.45, 1.45, -1.6 + i * 0.12, { seg: 8 }); } box(g, 0.14, 0.18, 0.12, '#C9CDD3', 1.45, 1.45, 0.2, { metal: 0.5 });
+  for (let i = 0; i < 12; i++) ball(g, 0.035, '', 1.35 + 0.4 * Math.sin(i / 11 * Math.PI) * 0, 2.62 - 0.12 * Math.sin(i / 11 * Math.PI), -2.25 + i * 0.33, { mat: mat(['#FFE07A', '#FF8A6A', '#8AD8FF'][i % 3], { basic: true, glow: 1.4 }), detail: 0, cast: false });
+  ['burger', 'fries', 'cup', 'hotdog'].forEach((k, i) => food(g, k, 1.4, 1.45, -1.0 + i * 0.35, { steam: false, still: true }));
+  if (o.vendor !== false) { const v = figure({ shirt: '#F4F1E8', pants: '#2E3A5C', hatStyle: 'cap', hat: o.awning ?? '#D8342A', expr: 'happy' }); v.root.position.set(x + 0.5 * Math.cos(o.ry ?? 0), groundH(x, z) + 0.75, z - 0.5 * Math.sin(o.ry ?? 0)); v.root.rotation.y = (o.ry ?? 0) + Math.PI / 2; world.add(v.root); g.vendor = v; }
+  return g;
+}
+// counter(p, x, z, { kind: 'fastfood' | 'bakery' | 'icecream' | 'cafe', w, ry, staff }) — shop counter with menu boards (pictures), till, display
+function counter(p, x, z, o = {}) {
+  const k = o.kind ?? 'fastfood', w = o.w ?? 4, g = stat(grp(p ?? world, x, groundH(x, z), z, o.ry ?? 0)), NC = FD.NC, acc = { fastfood: '#D8342A', bakery: '#B8864E', icecream: '#F07AA8', cafe: '#3E6A4A' }[k];
+  box(g, w, 1.0, 0.7, '#F4F1E8', 0, 0, 0); box(g, w + 0.06, 0.06, 0.78, '#3A3A40', 0, 1.0, 0); box(g, w, 0.18, 0.02, acc, 0, 0.75, 0.36, NC);
+  box(g, 0.35, 0.22, 0.3, '#2A2A2E', -w / 2 + 0.5, 1.06, 0); box(g, 0.3, 0.16, 0.02, '#4AD8A8', -w / 2 + 0.5, 1.2, 0.08, { mat: mat('#4AD8A8', { basic: true, glow: 0.8 }), ...NC, rx: -0.4 });
+  const mb = grp(g, 0, 2.3, -0.9); const items = { fastfood: ['burger', 'fries', 'hotdog', 'cup', 'icecream', 'taco'], bakery: ['bread', 'croissant', 'cupcake', 'donut', 'pretzel', 'cookie'], icecream: ['icecream', 'milkshake', 'cupcake', 'donut', 'cup', 'lollipop'], cafe: ['mug', 'croissant', 'cupcake', 'sandwich', 'cookie', 'cup'] }[k];
+  items.forEach((it, i) => { const bx = (i - 2.5) * (w / 6.2); box(mb, w / 6.6, 0.75, 0.04, '#1E1E22', bx, 0, 0); const q = _picto(mb, it, bx, 0.18, 0.06, 2.2); q.rotation.x = 0.35; box(mb, w / 9, 0.06, 0.01, '#F7C531', bx, 0.06, 0.03, NC); });
+  if (k === 'fastfood') { box(g, 0.6, 0.7, 0.5, '#C9CDD3', w / 2 - 0.5, 1.06, -0.2, { metal: 0.5 }); for (let i = 0; i < 3; i++) box(g, 0.12, 0.06, 0.06, ['#D8342A', '#F28A1A', '#2E86AB'][i], w / 2 - 0.68 + i * 0.18, 1.55, 0.06, NC); for (let i = 0; i < 2; i++) { food(g, 'tray', -0.4 + i * 0.9, 1.06, 0.1, { still: true }); food(g, 'burger', -0.48 + i * 0.9, 1.08, 0.1, { still: true }); food(g, 'fries', -0.3 + i * 0.9, 1.08, 0.08, { still: true }); } }
+  if (k === 'bakery' || k === 'icecream') { const cs = grp(g, 0.3, 1.06, 0); box(cs, w * 0.55, 0.45, 0.55, '', 0, 0, 0, { mat: mat('#DDEEFF', { opacity: 0.25, rough: 0.05 }), cast: false }); for (let i = 0; i < 6; i++) { const xx = -w * 0.24 + i * w * 0.095;
+      if (k === 'bakery') food(cs, ['bread', 'croissant', 'cupcake', 'donut', 'pretzel', 'cake'][i], xx, 0.02, 0, { scale: i === 5 ? 0.7 : 1.2, steam: false, still: true, candles: 0 }); else { box(cs, w * 0.08, 0.1, 0.35, '#C9CDD3', xx, 0.02, 0, { metal: 0.4 }); box(cs, w * 0.075, 0.03, 0.33, ['#F7D7E4', '#6A3A22', '#F7F0C8', '#8ACB6A', '#F28A1A', '#B8A0E8'][i], xx, 0.12, 0, NC); } } }
+  if (k === 'cafe') { box(g, 0.55, 0.5, 0.4, '#C9CDD3', w / 2 - 0.6, 1.06, -0.15, { metal: 0.6, rough: 0.3 }); for (let i = 0; i < 2; i++) cyl(g, 0.02, 0.02, 0.08, '#2A2A2E', w / 2 - 0.72 + i * 0.24, 1.32, 0.08, { seg: 8 }); for (let i = 0; i < 4; i++) food(g, 'mug', -0.6 + i * 0.25, 1.06, 0.15, { steam: i < 2, still: true }); }
+  if (o.staff) { const s = figure({ shirt: acc, pants: '#2E3A5C', hatStyle: 'cap', hat: acc, expr: 'happy' }); s.root.position.set(x - Math.sin(o.ry ?? 0) * 0.8, groundH(x, z), z - Math.cos(o.ry ?? 0) * 0.8); s.root.rotation.y = o.ry ?? 0; world.add(s.root); g.staff = s; }
+  return g;
+}
+// shelf(p, x, z, { kind: 'grocery' | 'drinks' | 'snacks' | 'produce' | 'cans', w, h, ry, sides }) — supermarket shelving full of plain-coloured products with price strips
+function shelf(p, x, z, o = {}) {
+  const k = o.kind ?? 'grocery', w = o.w ?? 2.4, H = o.h ?? 1.9, g = stat(grp(p ?? world, x, groundH(x, z), z, o.ry ?? 0)), NC = FD.NC, D = 0.5, sides = o.sides ?? 1;
+  box(g, w, H, 0.06, '#E8E6E2', 0, 0, 0); for (const sx of [-1, 1]) box(g, 0.05, H, D * 2, '#C9CDD3', sx * w / 2, 0, 0);
+  const lv = k === 'produce' ? 3 : 5, cols = ['#D8342A', '#2E86AB', '#F7C531', '#3E8E3A', '#F28A1A', '#7A3A8A', '#F4F1E8', '#1E2A44'];
+  for (let sd = 0; sd < sides; sd++) { const zs = sd ? -1 : 1;
+    for (let l = 0; l < lv; l++) { const y = 0.1 + l * (H - 0.15) / lv; box(g, w - 0.06, 0.03, D, '#D8D6D2', 0, y, zs * D / 2); box(g, w - 0.06, 0.035, 0.01, l % 2 ? '#F7E07A' : '#F4F1E8', 0, y - 0.005, zs * D, NC);
+      let xx = -w / 2 + 0.1; let i = 0; while (xx < w / 2 - 0.1) { const hh = 0.0 + l * 0.3 + i, c = cols[Math.floor(hash(hh * 1.7 + x) * cols.length)], kk = k === 'grocery' ? ['box', 'box', 'can', 'bottle', 'bag'][Math.floor(hash(hh * 3.1) * 5)] : k === 'drinks' ? (l < 2 ? 'big' : 'bottle') : k === 'snacks' ? (l % 2 ? 'bag' : 'box') : k === 'cans' ? 'can' : 'crate';
+        const zz = zs * D * 0.5; if (kk === 'box') { const bw = 0.16, bh = 0.24 + 0.06 * hash(hh); for (let r = 0; r < 2; r++) { box(g, bw * 0.95, bh, 0.06, c, xx + bw / 2, y + 0.03, zz + zs * (0.1 - r * 0.12)); box(g, bw * 0.8, bh * 0.25, 0.002, '#F4F1E8', xx + bw / 2, y + 0.03 + bh * 0.55, zz + zs * 0.131, NC); } xx += bw; }
+        else if (kk === 'can') { for (let r = 0; r < 3; r++) cyl(g, 0.035, 0.035, 0.12, c, xx + 0.04, y + 0.03, zz + zs * (0.15 - r * 0.09), { seg: 10 }); xx += 0.08; }
+        else if (kk === 'bottle' || kk === 'big') { const big = kk === 'big'; for (let r = 0; r < 2; r++) { cyl(g, big ? 0.05 : 0.035, big ? 0.05 : 0.035, big ? 0.24 : 0.2, c, xx + 0.05, y + 0.03, zz + zs * (0.12 - r * 0.12), { seg: 10, opacity: 0.9 }); cyl(g, 0.015, big ? 0.045 : 0.03, 0.06, c, xx + 0.05, y + 0.03 + (big ? 0.24 : 0.2), zz + zs * (0.12 - r * 0.12), { seg: 8 }); } xx += big ? 0.11 : 0.08; }
+        else if (kk === 'bag') { const q = _ell(g, c, xx + 0.08, y + 0.15, zz + zs * 0.05, 0.075, 0.12, 0.05); void q; box(g, 0.1, 0.03, 0.002, '#F4F1E8', xx + 0.08, y + 0.15, zz + zs * 0.1, NC); xx += 0.16; }
+        else { box(g, 0.45, 0.16, D * 0.9, '#B8864E', xx + 0.23, y + 0.03, zz); const fk = ['apple', 'orange', 'banana', 'tomato', 'carrot'][Math.floor(hash(hh * 2) * 5)]; for (let r = 0; r < 6; r++) food(g, fk, xx + 0.1 + (r % 3) * 0.12, y + 0.17, zz + (Math.floor(r / 3) - 0.5) * 0.18, { steam: false, still: true, ry: hash(r * 3 + hh) * 6 }); xx += 0.47; }
+        i++; } } }
+  return g;
+}
+// buffet(p, x, z, { n, ry }) — long table: cloth and skirt, steaming chafing dishes, plates, cake, fruit, drinks dispenser
+function buffet(p, x, z, o = {}) {
+  const n = o.n ?? 5, w = n * 0.9 + 0.6, g = stat(grp(p ?? world, x, groundH(x, z), z, o.ry ?? 0)), NC = FD.NC;
+  box(g, w, 0.76, 0.9, '#F4F1E8', 0, 0, 0); box(g, w + 0.04, 0.6, 0.92, o.skirt ?? '#B8302A', 0, 0.1, 0, NC); box(g, w + 0.06, 0.02, 0.94, '#FFFFFF', 0, 0.76, 0);
+  const fills = ['#E8C48A', '#C8402A', '#5BB042', '#F2D27A', '#7A3A22', '#F7E07A'];
+  for (let i = 0; i < n; i++) { const xx = -w / 2 + 0.6 + i * 0.9; box(g, 0.6, 0.12, 0.4, '#C9CDD3', xx, 0.78, 0, { metal: 0.7, rough: 0.25 }); box(g, 0.56, 0.02, 0.36, fills[i % fills.length], xx, 0.89, 0, NC);
+    const lid = mesh(g, G('chafeLid', () => new THREE.CylinderGeometry(0.2, 0.2, 0.6, 12, 1, false, 0, Math.PI)), mat('#C9CDD3', { metal: 0.7, rough: 0.25 }), xx, 0.92, -0.22, { rz: Math.PI / 2 }); lid.rotation.set(-0.7, 0, Math.PI / 2);
+    emit('steam', { at: [xx + (hash(i) - 0.5) * 0.3, 0.95, 0], t0: o.t0 ?? 0, t1: DUR, rate: 3, size: 0.1 }); }
+  for (let i = 0; i < 6; i++) cyl(g, 0.12, 0.09, 0.012, '#FFFFFF', -w / 2 + 0.2, 0.78 + i * 0.012, 0.25, { seg: 16 });
+  food(g, 'cake', w / 2 - 0.25, 0.78, 0.2, { scale: 1.2, candles: 0, still: true }); const fb = grp(g, w / 2 - 0.25, 0.78, -0.2); FD.B.bowl(fb, {}); for (let i = 0; i < 6; i++) food(fb, ['apple', 'orange', 'banana'][i % 3], (hash(i) - 0.5) * 0.08, 0.04 + 0.02 * (i % 2), (hash(i * 2) - 0.5) * 0.08, { steam: false, still: true });
+  return g;
+}
+
+/* ====================================================================== */
 /* SCENE — written per video between the markers (wrapped in a block: names are free) */
 /* ====================================================================== */
 /* @SCENE-BEGIN */
@@ -7096,6 +7768,17 @@ const SND = (() => {
       blow: (t, v) => { nz(t, 0.05, 0.45, 0.7, 0.42 * v, fx, 'bandpass', 900, 380, 0.8); nz(t, 0.02, 0.2, 0.4, 0.2 * v, fx, 'highpass', 2500); },
       hooves: (t, v, d = 2, p = 1) => { const r = p === 2 ? 7.5 : 5.2; for (let k = 0; k < d * r; k++) { const tk = t + k / r + (k % 2) * 0.04 + ar() * 0.012; tone('sine', 210 + ar() * 50, tk, 0.001, 0.01, 0.05, 0.12 * v, fx, { to: 110, glide: 0.04 }); nz(tk, 0.001, 0.005, 0.03, 0.12 * v, fx, 'bandpass', 1800, 0, 1.5); } }
     });
+    Object.assign(SFX, {   // v2.17 food, hands and acting
+      clap: (t, v) => { nz(t, 0.001, 0.012, 0.05, 0.55 * v, fx, 'bandpass', 1800, 0, 0.9); nz(t, 0.001, 0.006, 0.03, 0.3 * v, fx, 'highpass', 3200, 0, 0.7); },
+      crunch: (t, v) => { for (let k = 0; k < 6; k++) nz(t + k * 0.028 + ar() * 0.01, 0.002, 0.012, 0.03, 0.32 * v, fx, 'bandpass', 2400 + ar() * 1800, 0, 1.6); },
+      munch: (t, v) => { for (let k = 0; k < 3; k++) { nz(t + k * 0.16, 0.01, 0.04, 0.06, 0.2 * v, fx, 'lowpass', 900, 0, 1); tone('sine', 140 + ar() * 40, t + k * 0.16, 0.01, 0.03, 0.05, 0.05 * v, fx); } },
+      slurp: (t, v) => { nz(t, 0.05, 0.25, 0.12, 0.28 * v, fx, 'bandpass', 900, 2600, 3.5); },
+      gulp: (t, v) => { tone('sine', 320, t, 0.01, 0.05, 0.07, 0.18 * v, fx, { to: 140, glide: 0.1 }); nz(t, 0.005, 0.03, 0.05, 0.08 * v, fx, 'lowpass', 600, 0, 1); },
+      fizz: (t, v) => { nz(t, 0.002, 0.02, 0.06, 0.4 * v, fx, 'highpass', 2500, 0, 0.8); nz(t + 0.05, 0.05, 0.5, 0.4, 0.12 * v, fx, 'highpass', 6000, 0, 0.5); },
+      sizzle: (t, v, d = 4) => { nz(t, 0.3, Math.max(0.2, d - 0.6), 0.3, 0.1 * v, fx, 'highpass', 4500, 0, 0.6); for (let k = 0; k < d * 14; k++) nz(t + k / 14 + ar() * 0.05, 0.001, 0.005, 0.012, 0.09 * v * ar(), fx, 'highpass', 5000, 0, 0.5); },
+      boil: (t, v, d = 4) => { for (let k = 0; k < d * 9; k++) { const tt = t + k / 9 + ar() * 0.08; tone('sine', 260 + ar() * 240, tt, 0.003, 0.02, 0.03, 0.05 * v, fx, { to: 520 + ar() * 300, glide: 0.04 }); } nz(t, 0.4, Math.max(0.2, d - 0.8), 0.4, 0.04 * v, fx, 'lowpass', 700, 0, 0.7); },
+    });
+    SFX.splat ??= SFX.impact;
     const SMAP2 = { roar: [1.2, 0.3], growl: [1.1, 0], howl: [1.0, 0], trumpet: [1.1, 0], neigh: [1.0, 0], song: [1.0, 0], caw: [0.9, 0], squawk: [0.9, 0], meow: [0.9, 0], bleat: [0.9, 0], bray: [1.0, 0], trex: [1.3, 0], raptor: [1.0, 0], monster: [1.3, 0.2], wingflap: [1.0, 0, 0, 1], heli: [0.9, 0, 0, 1], sinking: [1.0, 0] };   // v2.16: real recordings (CC0 / public domain, sfx/README.md)
     for (const [k, [g, syn, atEnd, loop]] of Object.entries(SMAP2)) { const buf = SB[k]; if (!buf) continue; const synth = SFX[k] ?? (() => {});
       SFX[k] = (t, v = 1, d, p) => { const s = ctx.createBufferSource(), gg = ctx.createGain(); s.buffer = buf; s.playbackRate.value = (typeof p === 'number' ? p : 1) * (0.95 + 0.1 * ar()); gg.gain.value = g * v; s.connect(gg); gg.connect(fx);

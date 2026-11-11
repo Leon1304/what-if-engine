@@ -301,5 +301,43 @@ Echte Aufnahmen (CC0 / Public Domain, Quellen in `sfx/README.md`) für roar · g
 ## Detailstufen (LOD)
 Kleine Teile ferner Tiere (Zähne, Krallen, Muster) blenden automatisch aus, wenn das Tier weiter als `CFG.lodFar` (Standard 70) × seine Größe entfernt ist. Eigene große Modelle: `lodRegister(root, größe_m)`.
 
+# Neu in v2.17
+
+## Hände
+Jede Figur hat Hände mit Fingern (Handfläche, drei Finger, Zeigefinger, Daumen). `hands(rig, pose, t0, t1, { side: 'L' | 'R' | 'both' })` mit relax · open · fist · point · thumb · grip · claw · loose · spread. Automatisch: Waffen, `carry`, Taschenlampe, Handy und gehaltenes Essen greifen zu, Zombies krallen, Panik spreizt, Rennen ballt locker, `react` (wave, facepalm, shrug, startle) öffnet die Hände.
+`gesture(rig, t, kind, { dur, at })`: thumbsup · fistpump · clap (mit Klatschen) · salute · shush · beckon · stop · point (dreht sich zu `at`) · peace · cross (Arme verschränkt). `faceTo(rig, ziel, t0, t1)` dreht eine stehende Figur zu einem Rig oder Punkt.
+
+## Neue Bewegungen
+- `walk(rig, pts, { mode })` kennt zusätzlich crawl (auf allen vieren, ca. 0,6 m/s) · sneak (geduckt schleichen, ca. 1 m/s) · tiptoe · limp.
+- `climb(rig, { at: [x, z], ry, y0, y1, t0, speed, ladder })` → Endzeit: Hand über Hand eine Leiter hinauf (baut die Leiter, `ladder: false` für eine Wand); oben bleibt die Figur stehen.
+- `stairs(p, x, z, { n, rise, run, w, ry, rail })`: Treppe Richtung +z mit Geländer; `walk` läuft automatisch die Stufen hinauf (nach `ground()` bauen).
+- `stumble(rig, t, { fall, dir, getUp })`: stolpert mit rudernden Armen, mit `fall: true` hinfallen und bei `getUp` aufstehen.
+- `slide(rig, t0, t1, { kind: 'knees' | 'belly' | 'butt' | 'surf', spray: 'water' })`: Pose, während `walk` die Figur weiterträgt (Knie-Rutscher, Bauchrutscher auf Eis, Po-Rutsche, Surf-Haltung), mit Staub oder Gischt.
+- `dance(rig, t0, t1, { style, bpm })`: bounce · hype · disco · robot · floss · twist · wave, im Takt (Standard 120 bpm).
+- Wasser: `paddle(rig, pts, { t0, speed, level })` schwimmt Kraul an der Oberfläche mit Spritzern; `tread(rig, t0, t1, { at, level })` tritt Wasser, Kopf über Wasser.
+
+## Figuren zusammen
+`hug(a, b, t0, t1)` · `highFive(a, b, t)` (Klatschen, kleiner Funkenstoß) · `handshake(a, b, t0, t1)` · `piggyback(träger, reiter, t0, t1)` (Träger mit `walk` bewegen) · `pull(a, b, t0, t1)` (a zieht b an der Hand, beide laufen) · `shove(a, b, t, { power, getUp })` (b stolpert zurück, ab power 1,5 fällt er) · `chat(a, b, t0, t1, { turns })` (wenden sich zu, der Sprecher gestikuliert und bewegt die Lippen, der Zuhörer nickt). Die beiden müssen nicht exakt stehen: sie drehen sich zueinander und rücken auf den passenden Abstand.
+
+## Figuren und Tiere
+`pet(rig, tier, t0, t1)` (hockt sich bei kleinen Tieren hin, streichelt; Hunde wedeln) · `feed(rig, tier, t, { item })` (hält Futter hin, das Tier frisst; Standard Karotte bzw. Knochen) · `fetch(rig, hund, t, { to })` → Rückkehrzeit (wirft einen Stock, der Hund holt ihn und bringt ihn zurück) · `lead(rig, tier, pts, { t0, speed, gap })` (führt ein Pferd am Zügel, das Tier folgt) · `perch(vogel, ziel, t, { from, off: 'head' })` (Vogel fliegt herbei und landet auf Schulter, Kopf oder Punkt und reitet mit).
+
+## Cartoon-Schauspiel
+- `boing(obj, t, { amp, dur })`: Stauchen und Strecken mit Nachwippen.
+- `faceFx(rig, kind, t0, t1)`: sweat · tears · blush · steam · question · exclaim · hearts · zzz · anger.
+- `soot(rig, t)`: nach einer Explosion schwarzes Gesicht und Kleidung (Augen bleiben weiß), verkokelte Afro-Haare, Rauchkringel. `wet(rig, t0, { t1 })`: klitschnass, dunkler, glänzend, tropft.
+- `idle(rig, t0, t1, kind)`: tap · cross · scratch · watch · shift · hips · stretch · pocket; `idleMix(rig, t0, t1)` streut zufällige kleine Aktionen.
+- `holdItem(rig, obj, t0, t1, { side, off, rot, after: 'rest' | 'hide' | 'free' })`: beliebiges Objekt in der Hand.
+
+## Essen und Trinken
+`food(p, kind, x, y, z, { state, scale, ry, plate, still, t0 })` → F. Kinds: pizza · slice · burger · fries · hotdog · taco · sushi · ramen · cake (`candles`, `F.blow(t)`) · cupcake · donut · icecream (`scoops`) · popcorn · apple · orange · banana · watermelon · grapes · carrot · strawberry · bread · baguette · croissant · pretzel · cheese · cookie · chocolate · candy · lollipop · steak · drumstick · egg · pancakes · sandwich · pie · tomato · spaghetti · bone · fish; Getränke cup · can · mug · glass · bottle · milkshake · juicebox; Geschirr plate · bowl · tray · board · fork · knife. `plate: true | 'bowl' | 'tray' | 'board'` stellt es auf Geschirr. Keine Marken: Farben über `color`, `band`.
+Zustände (`state`): fresh · steam · burnt (dunkel, raucht) · frozen (Eisblock) · moldy (grüne Flecken, Mief) · melting (tropft, Pfütze wächst ab `t0`) · bitten. Deko-Essen (Regale, Theken) mit `still: true`: spart Rechenzeit.
+- `eat(rig, F, t0, { bites, every, side, after })` → Endzeit: nimmt es, beißt (jeder Biss nimmt ein Stück weg und zeigt das Innere, Krümel, Kauen mit Lippen, Crunch), danach weg (`after: 'hide'`) oder zurück (`'rest'`).
+- `drink(rig, F, t0, { sips })`: zum Mund, kippen, Kopf zurück, Schlürfen und Schlucken; Dosen zischen beim Öffnen.
+- `foodFight(von, ziel, t, { kind: 'pie' | 'tomato' | 'spaghetti' | …, h })` → Aufprallzeit: Wurf mit Ausholen, Flugbahn, Klecks im Gesicht (bei einem Rig) oder auf dem Boden, Spritzer, Splat, Reaktion.
+- Kochen: `pan(p, x, y, z, { item: 'egg' | 'steak' | 'pancakes', t0, t1, flip: [t…], burn })` (brutzelt, Fettspritzer, bräunt, Wenden durch die Luft) · `pot(p, x, y, z, { t0, boil, over, lid })` (Blasen, Dampf, klappernder Deckel, kocht über) · `toaster(p, x, y, z, { pop, h })` · `grill(p, x, z, { t0, items, flare: [t…] })` · `campfire(p, x, z, { t0, size, light })` · `marshmallow(rig, feuer, { t0, t1, burn })` (bräunt, fängt Feuer, Erschrecken).
+- Orte: `foodtruck(p, x, z, { ry, color, awning, vendor })` · `counter(p, x, z, { kind: 'fastfood' | 'bakery' | 'icecream' | 'cafe', w, ry, staff })` · `shelf(p, x, z, { kind: 'grocery' | 'drinks' | 'snacks' | 'produce' | 'cans', w, h, ry, sides })` · `buffet(p, x, z, { n, ry })`. Speisekarten zeigen Bilder statt Schrift.
+- Neue Partikel: steam · crumbs · grease · drip · splat; neue Sounds: clap · crunch · munch · slurp · gulp · fizz · sizzle · boil.
+
 # Tests
 `bash tests/run.sh [name …]` baut die Beispiel-Story aus `template.html` und alle Szenen in `tests/` und rendert je drei Bilder; Seitenfehler lassen den Test scheitern. Der Workflow `test` läuft bei jeder Engine-Änderung auf GitHub. Neue Funktionen bekommen eine kleine Testszene in `tests/<thema>.story.js` + `.scene.js`.
