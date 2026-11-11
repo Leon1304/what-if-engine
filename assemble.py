@@ -13,6 +13,10 @@ t = open('template.html', encoding='utf-8').read()
 story = open(f'{slug}.story.js', encoding='utf-8').read().strip()
 scene = open(f'{slug}.scene.js', encoding='utf-8').read().strip()
 
+if re.search(r'\bconst\s+GUESS\b', story) and not re.search(r'questionCards:\s*true|card:\s*true', story):
+    print('NOTE: GUESS shows no card any more (v2.39) — ask the question in a beat (the narrator says it, e.g. "Quick guess: lava, the Sun, or five times hotter?") and give the answer in the last beat before the end card; delete GUESS')
+if re.search(r'\bconst\s+MYTH\b', story) and not re.search(r'questionCards:\s*true|card:\s*true', story):
+    print('NOTE: MYTH shows no claim card any more (v2.39) — the narrator states the claim in a beat right after the hook; only the verdict stamp appears, right before the end card (verdictAt), together with the spoken verdict in the last beat')
 def _block(name):   # source text of `const NAME = [ … ];` in the story
     m = re.search(r'\bconst\s+' + name + r'\s*=\s*\[', story)
     if not m: return ''

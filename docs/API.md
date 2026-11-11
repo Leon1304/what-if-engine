@@ -811,3 +811,10 @@ Dinge zerbrechen so, wie sie gebaut sind. Alles ist echte Physik (einmal vorab s
 - Auch Effekte ducken jetzt unter der Stimme (`AUDIO.duckFx`, 0.7), Atmo stärker (`AUDIO.duckAmb`, 0.55). Die Stimme hat eine eigene Kette (Präsenz bei 3 kHz, `AUDIO.presence` dB, eigener Kompressor) und hängt nicht mehr am Kompressor der Effekte: Laute Szenen drücken sie nicht mehr weg.
 - `render.mjs` meldet nach dem Ton: `mix: voice 15 dB over the background while speaking (scene as written: 8.3 dB · tightest passage 2.7 dB at 8 s · target 12 dB)`. Liegt die Szene selbst unter 4 dB, kommt eine `MIX:`-Zeile mit der Stelle: dort Atmo/Effekte leiser setzen oder den lauten Moment zwischen zwei Sätze legen.
 - `AUDIO.clarity: false` = nur festes Ducking wie vor v2.38.
+
+# Neu in v2.39 (keine Zwischenfragen-Karten in Erklär- und Conspiracy-Videos)
+
+- `GUESS` zeigt keine Karte mehr (weder „Guess first“ mit Optionen und Countdown noch „The answer“). Die Frage stellt der Erzähler in einem Beat, die Antwort kommt im letzten Beat vor der Endcard.
+- `MYTH` zeigt keine Behauptungs-Karte mehr. Die Behauptung spricht der Erzähler; im Bild erscheint nur der Urteils-Stempel (False / True / Half true), und zwar ganz am Ende: 2,3 s vor der Endcard (`verdictAt: 'b9+0.4'` legt ihn woanders hin, `verdictDur`, `stamp: false` = gar kein Stempel). Bei mehreren Einträgen gibt es ein Urteil (das letzte).
+- Alte Darstellung: `CFG.questionCards: true` oder `card: true` am Eintrag. `assemble.py` weist darauf hin, wenn eine Story noch `GUESS`/`MYTH` enthält.
+- `FACTS`-Karte und Endcard bleiben.

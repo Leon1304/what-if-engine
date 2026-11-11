@@ -15,6 +15,10 @@ Push an assembled page to `renders/<slug>.html` (output of `assemble.py`, voice 
 `https://github.com/Leon1304/what-if-engine/releases/download/render-<slug>/<slug>.mp4`
 Manual run: Actions → render → Run workflow (page path, width 1440 / 2160 / 1080).
 
+## Engine v2.39 (Nov 2026): no question cards mid-video
+- `GUESS` shows no card and `MYTH` no claim card any more: the narrator asks, the answer comes at the very end (MYTH: only its verdict stamp right before the end card). `CFG.questionCards: true` / `card: true` = as before
+- v2.38.1–3: reaction words are acted (own melody and length), spoken slowly; no `[hm]`
+
 ## Engine v2.38 (Nov 2026): a narrator with feeling, voice first in the mix
 - The narrator reacts to the scene sentence by sentence (loud hits, shakes, music mood, counters that jump): tempo, loudness, pitch level and range (PSOLA), real whisper, pushed shout; `[whisper]` / `[gasp]` / `[sigh]` / `[whoa]` tags in `say`; `CFG.voice: { emotion, auto }`
 - Music, ambience and sound effects are mixed under the voice afterwards: speech stays `AUDIO.clarity` dB above everything else (look-ahead, speech band), effects duck too, the voice has its own chain; `render.mjs` reports the margin (`mix: …`)
