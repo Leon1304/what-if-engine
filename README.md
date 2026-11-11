@@ -15,6 +15,11 @@ Push an assembled page to `renders/<slug>.html` (output of `assemble.py`, voice 
 `https://github.com/Leon1304/what-if-engine/releases/download/render-<slug>/<slug>.mp4`
 Manual run: Actions → render → Run workflow (page path, width 1440 / 2160 / 1080).
 
+## Engine v2.31 (Nov 2026): smooth motion, checked against the published videos
+- Scene ticks that switch poses or look targets are cross-faded (`CFG.poseFade`), every frame starts from the built scene (same picture in every worker / CI block), chained `walk()`s hand over and turn, even cornering for walkers, animals and traffic, gait by speed, layered combat combos, smooth hand-overs (`board`, `carry`, ragdolls), 5 motion-blur samples for fast actions
+- Hitboxes reworked: walkers only sidestep what their authored path actually runs into (stable in tight rooms), smooth weights instead of switches
+- Audit judges what the viewer sees (on screen, not across cuts), adds camera jumps and objects that flip in one frame
+
 ## Engine v2.30 (Nov 2026): long-video mode (16:9, 3–10 min)
 - Automatic for every 16:9 page (`CFG.long: false` = off): 3D at full output resolution + 4× MSAA (`CFG.fast` = old speed), calm HUD (badge row only at the start, at chapters, with data, on the end card), chapter title cards from `STEPS`, `FACTS` as lower thirds, two-line sentence-case subtitles split at natural breaks (`CFG.subWords`), brighter nights (`CFG.nightLift`), more aerial haze (`CFG.haze`), soft spray, wet sand along coasts.
 - `MAP2D`: full-frame 1940s map card drawn crisp every frame (push/pan between two views, self-drawing arrows, pins, areas, labels); the 3D scene is skipped while it covers the frame.

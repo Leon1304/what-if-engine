@@ -660,3 +660,26 @@ Test: `tests/long.*` (Kapitelkarten, Bauchbinde, Untertitel-Umbruch, Zeitleiste,
 - Ausgenommen (automatisch): Sitzende, Hockende, Liegende, Fallende, Ragdolls, festgehaltene (`holdRig`), Reiter, Figuren in Fahrzeugen (anderes Elternobjekt), Figuren hoch über dem Boden (Leiter, Dach). Berührende Paare automatisch: `hug`, `highFive`, `handshake`, `chat` (alle `_pair`), `piggyback`, `pull`, `shove`, `carry` (Figur tragen), Mensch und Tier bei `pet`, `feed`, `fetch`, `lead`.
 - `noHit(figur | objekt)` = nie schieben / nie blockieren (z. B. Badewanne, in der jemand steht), `noHit(a, b, t0, t1)` = die zwei dürfen sich in dem Fenster berühren. `CFG.hitboxes = false` schaltet alles ab. Das alte „Abstand halten“ (1,1 m Schieben) ist ersetzt.
 - Test: `tests/hitbox.story.js` + `.scene.js`.
+
+# Neu in v2.31 (flüssige Videos: Prüfung an echten Videos, Posen-Überblendung, Hitboxen überarbeitet)
+
+## Was die Engine jetzt selbst glättet
+- **Posenwechsel in Szenen-Ticks:** `tick(t => pose(f, t < 5 ? 'idle' : 'cheer', 0, t))` klappte früher in einem Bild um (Arme 170°). Die Engine fragt denselben Tick, welche Pose er kurz vorher gewählt hat, und blendet über `CFG.poseFade` s (0,24, in Videozeit; 0 = aus). Gilt auch, wenn ein Tick eine Figur nur zeitweise posiert (`if (t > 3) pose(…)`: weich aus der Steh-/Geh-Pose und zurück), für Geher und für `figur.look = …` in Ticks (der Kopf dreht sich, statt zu springen). Nichts dafür tun – einfach `pose()` mit der gewünschten Pose aufrufen.
+- **Jedes Bild startet aus der gebauten Szene:** Position, Drehung, Größe und Sichtbarkeit aller beweglichen Objekte (`dyn`) werden vor jedem Bild zurückgesetzt. Ein Tick, der etwas nur „solange es fährt“ oder „ab 5 s“ setzt, ergibt damit in Vorschau, jedem Render-Worker und jedem CI-Block dasselbe Bild (vorher: was das letzte Bild hinterlassen hatte → Sprünge an Blockgrenzen). Folge: Was nach einem Ereignis bleiben soll, muss der Tick für jedes spätere t setzen (z. B. Endrichtung eines Fahrzeugs), `CFG.restReset: false` schaltet es ab.
+- **Mehrere `walk()` auf einer Figur** übergeben jetzt an ihrem `t0` (vorher hielt der zuletzt geschriebene Weg die Figur die ganze Zeit an seinem Start fest) und drehen in 0,45 s in die neue Richtung.
+- **Kurven:** Geher, Tiere und `traffic()`-Autos drehen gleichmäßig durch Ecken (Blickrichtung = Sehne über ±0,35–2,2 m je nach Tempo; Autos runden die Ecke), vorher zwei 45°-Schritte bzw. 90° in einem Bild.
+- **Gangart nach Tempo:** `walk(…, { mode: 'walk' })` über 2,4 m/s und `'shamble'` über 1,7 m/s werden zum Lauf (Zombies mit Armen nach vorn), sonst flimmern die Beine. `gait: false` behält die Gangart.
+- **Kampf-Kombos:** überlappende Schwünge, Schläge und Tritte liegen der Reihe nach übereinander (jeder blendet über den vorigen), vorher sprang der Arm beim Wechsel.
+- **Übergaben:** `board()` (Boot → Laufen) steht in 0,3 s auf und steigt aus; `carry()` greift nach Dingen auf Tisch/Theke (statt sich zum Boden zu bücken) und nimmt sie weich in die Hand; Würfe aus `carry` starten genau an der Hand; Ragdolls starten dort, wo die Figur steht, auch wenn der Szenen-Tick mit `if (t >= T) return` übergibt; Raketen kippen am Ziel nicht mehr; `lever()` schwingt weicher.
+- **Bewegungsunschärfe:** schnelle Aktionen (`MBAUTO`) rendern mit 5 statt 3 Teilbildern (Schliere statt drei Geisterbilder). `CFG.mbSamples` setzt einen festen Wert.
+
+## Hitboxen (überarbeitet)
+- **Geher:** Der geschriebene Weg ist der Plan. Er wird nur dort korrigiert, wo der Körper wirklich in etwas hineinliefe: seitlicher Schritt um genau das fehlende Stück, 0,7 s vorher ein- und nachher ausgeblendet. Wege, die vor einem Tisch enden oder durch eine Tür führen, bleiben unverändert (vorher: Ausweichen vor allem „in der Nähe“ → Zittern in engen Räumen). Geher weichen stehenden Figuren aus; Geher untereinander werden nur sanft auseinandergeschoben.
+- **Weiche Gewichte statt Schalter:** Setzt sich jemand, fällt, wird gehalten oder springt, blendet die Korrektur aus (kein Zurückspringen).
+- Fallen (`trap()`) sind nie Hindernis. Sonst wie in v2.29 (`noHit`, `HITBOX:`-Meldungen).
+
+## Prüfung (`--audit`, läuft bei `--shots` mit)
+- Urteilt wie der Zuschauer: nur was im Bild und groß genug ist (ab ca. 1,2 % der Bildhöhe), nichts über Schnitte und `TEASE`-Sprünge hinweg; Endlos-Requisiten, die ans ferne Ende zurückgesetzt werden, und simulierte Objekte bei Aufprall zählen nicht.
+- Neu: `the camera turns / jumps … without a cut` (Kamerasprung ohne Schnitt → `tr: 'cut'` oder echte Fahrt), `object … turns N° in one frame` (Objekt dreht in einem Bild um, z. B. Fahrzeug, dessen Richtung aus einer winzigen Bewegung berechnet wird → `drive()`/`walk()` nutzen oder Richtung beim Stillstand festhalten).
+- `PRESNAP.push([t, fn])` (für Engine-Funktionen): wertet die Szene einmal vor dem ersten Bild bei t aus und merkt sich, was eine Aktion von dort braucht – statt „beim ersten gerenderten Bild“.
+- Test: `tests/smooth.story.js` + `.scene.js`.

@@ -1305,8 +1305,10 @@ function figure(o = {}) {
   root.scale.setScalar(o.scale ?? 1);
   const f = { root, body, hips, chest, neck, head, legL, legR, shinL, shinR, footL, footR, armL, armR, foreL, foreR, mouth, brows, eyes, hat, coat, hair: hairG, cape,
     expr: o.expr, kind: o.kind ?? 'human', id, sd: hash(id * 7.31 + 0.5), look: o.look, talk: o.talk, who: o.who, M, fx: [], hands: HANDS };
+  let _lookV = f.look;   // v2.31: look targets switched inside a scene tick are cross-faded (see poseProbe)
+  Object.defineProperty(f, 'look', { enumerable: true, get: () => _lookV, set: v => { if (TKP) { TKP.look.set(f, v); return; } _lookV = v; if (TK && !TK._idle && !TK._poser) TK._poser = TK._redo = true; } });
   RIGS.push(f);
-  tick(t => pose(f, 'idle', 0, t));   // breathes, blinks and looks around even if the scene never poses it; later pose()/walk() calls win
+  tick(t => pose(f, 'idle', 0, t))._idle = true;   // breathes, blinks and looks around even if the scene never poses it; later pose()/walk() calls win
   return f;
 }
 // expressions: o = mouth open, sm = smile (− = frown), by/br = brows up / inner end up (− = angry), es = eye size (0.5 = half-closed), ps = pupil size, asym = lopsided smirk
@@ -1445,9 +1447,34 @@ function applyRig(f, S) {
   if (f.coat) f.coat.rotation.x = S.coat;
   if (f.cape) f.cape.rotation.x = 0.06 + S.coat * 1.35;
 }
+// v2.31 pose switches: a scene tick that calls pose(rig, 'idle') in one frame and pose(rig, 'cheer') in the next used to flip the whole body at once.
+// Ticks are pure functions of t, so the engine asks the same tick which mode it chose a moment ago and cross-fades over POSEFADE s (CFG.poseFade, 0 = off).
+const POSEFADE = CFG.poseFade ?? 0.24, PREVPOSE = '\u0000prev', _poseOpt = (f, o) => ({ v: o.v, cl: o.cl, sd: f.sd, zb: f.kind === 'zombie', dangle: f.dangle, armOff: f.armOff, tilt: f.tilt, lean: f.lean }); let TK = null, TKP = null;   // TK: the tick running now · TKP: Map(rig → mode) while a tick runs as a probe (pose() only records)
+const _lkKey = v => v == null || v === false ? '' : typeof v === 'function' ? 'fn' : Array.isArray(v) ? v.join() : v;
+function poseProbe(f, st) {
+  const seen = new Map(), run = tt => { let M = seen.get(tt); if (M) return M; M = { mode: new Map(), look: new Map() }; seen.set(tt, M); TKP = M; try { f(tt); } finally { TKP = null; } return M; };
+  const v0 = VT(st), back = d => d <= 0 ? st : ST(v0 - d), now = run(st), old = run(back(POSEFADE)); f._blend = f._out = null;   // POSEFADE counts in video time (the same length in slow motion)
+  const md = (M, r) => M.mode.get(r) ?? PREVPOSE, lk = (M, r) => _lkKey(M.look.get(r));   // PREVPOSE: this tick did not pose the rig then — the idle / walk pose of the ticks before it showed
+  const last = (r, val) => {   // when did this rig's value last change? (8 steps, then 3 halvings: ~4 ms) → [probe just before the change, blend weight]
+    const cur = val(now, r), h = POSEFADE / 8; let k = 1; while (k < 8 && val(run(back(k * h)), r) === cur) k++;
+    let a = k * h, b = (k - 1) * h; for (let i = 0; i < 3; i++) { const m = (a + b) / 2; if (val(run(back(m)), r) === cur) b = m; else a = m; }
+    return [run(back(a)), clamp((a + b) / 2 / POSEFADE)]; };
+  for (const [r, m] of now.mode) { if (md(old, r) === m) continue; const [M, w] = last(r, md), from = md(M, r); if (from !== m) (f._blend ??= new Map()).set(r, { from, w }); }
+  for (const [r] of old.mode) { if (now.mode.has(r)) continue; const [M, w] = last(r, md), from = md(M, r); if (from !== PREVPOSE) (f._out ??= new Map()).set(r, { from, w }); }   // the tick stopped posing it: fades back to the idle / walk pose
+  for (const [r] of now.look) { if (!old.look.has(r) || lk(now, r) === lk(old, r)) continue; const [M, w] = last(r, lk); r._lookFrom = { from: M.look.get(r), w }; }
+}
+function runTickers(st) {
+  for (const r of RIGS) r._lookFrom = null;
+  for (const f of tickers) { TK = f; if (f._poser && POSEFADE > 0) poseProbe(f, st); f(st);
+    if (f._redo) { f._redo = false; if (POSEFADE > 0) { poseProbe(f, st); f(st); } }   // first frame this tick poses a figure: once more, now with its history
+    if (f._out) for (const [r, B] of f._out) { if (r.isModel || r._S0t !== st || B.w >= 1) continue; const o = r._o0 ?? {}, A = rigState(B.from, 0, st, _poseOpt(r, o)), S = { ...r._S0 }, k = EASE.inOut(B.w); for (const key in S) S[key] = lerp(A[key], S[key], k); poseFin(r, S, r._m0, st, o); } }
+  TK = null;
+}
 function pose(f, mode, ph, t = 0, o = {}) {   // walk run shamble idle panic cheer point hold — o: { v: speed m/s, w: weight of mode (0..1), from: mode blended in with 1 − w, turn }
-  if (f.isModel) return f.pose(mode, ph / TAU, t, o);
-  const opt = { v: o.v, cl: o.cl, sd: f.sd, zb: f.kind === 'zombie', dangle: f.dangle, armOff: f.armOff, tilt: f.tilt, lean: f.lean };
+  if (TKP) { if (o.from == null) TKP.mode.set(f, mode); return; }
+  let X = null; if (TK && o.from == null && !TK._idle) { if (!TK._poser) TK._poser = TK._redo = true; X = TK._blend?.get(f) ?? null; }   // X: cross-fade from what was shown a moment ago
+  if (f.isModel) return f.pose(mode, ph / TAU, t, X && typeof X.from === 'string' ? { ...o, from: X.from, w: X.w } : o);
+  const opt = _poseOpt(f, o);
   const S = rigState(mode, ph / TAU, t, opt);
   let m = mode;
   if (o.from && o.w != null && o.w < 1) {
@@ -1455,6 +1482,12 @@ function pose(f, mode, ph, t = 0, o = {}) {   // walk run shamble idle panic che
     for (const key in S) S[key] = lerp(A[key], S[key], k);
     if (k < 0.5) m = o.from;
   }
+  const mine = f._S0t === t && f._S0own === TK; if (!mine) f._S0p = f._S0t === t ? f._S0 : null;   // _S0p: what the ticks before this one showed this frame (kept when this tick runs twice)
+  if (X && X.w < 1) { const A = X.from === PREVPOSE ? f._S0p : rigState(X.from, ph / TAU, t, opt); if (A) { const k = EASE.inOut(X.w); for (const key in S) S[key] = lerp(A[key], S[key], k); } }
+  f._S0 = { ...S }; f._S0t = t; f._S0own = TK; f._m0 = m; f._o0 = o;   // what this frame shows before the acting layers — the next tick (or a fade-out) blends from it
+  poseFin(f, S, m, t, o);
+}
+function poseFin(f, S, m, t, o) {
   for (const fx of f.fx) fx(t, S);
   if (o.turn) S.broll = clamp(-o.turn * (o.v ?? 0) * 0.07, -0.3, 0.3);   // lean into curves
   applyRig(f, S);
@@ -1611,7 +1644,7 @@ const PATHS = [];   // every walk() path — biome() keeps them free of trees an
 // move a figure/animal rig (or any Object3D) along [[x, z], …]: speeds up and slows down smoothly, turns ahead of corners, blends walk ↔ idle.
 // o: t0, t1, speed, mode, loop, endMode, startMode, ramp (s to reach full speed; 0 = instant), face (fixed heading), y, stride (animals), graze
 function walk(obj, pts, o = {}) {
-  const path = new Path(pts, o.loop), node = dyn(obj.root ?? obj), t0 = o.t0 ?? 0, t1 = o.t1 ?? 1e9, v = o.speed ?? 1.4, mode = o.mode ?? 'walk';
+  const path = new Path(pts, o.loop), node = dyn(obj.root ?? obj), t0 = o.t0 ?? 0, t1 = o.t1 ?? 1e9, v = o.speed ?? 1.4, m0 = o.mode ?? 'walk', mode = obj.legL && o.gait !== false && ((m0 === 'walk' && v > 2.4) || (m0 === 'shamble' && v > 1.7)) ? 'run' : m0;   // v2.31 gait by speed: too fast for a walk / shamble (legs would flicker) → runs (zombies: arms out); gait: false keeps the mode
   PATHS.push(path); WALKS.push({ obj, path });
   const rig = !!(obj.legL || obj.quad || obj.isModel), ra = o.ramp ?? (rig ? clamp(0.16 + 0.07 * v, 0.2, 0.55) : 0);
   const Tp = o.loop ? 1e9 : ra && path.len < v * ra ? 2 * Math.sqrt(path.len * ra / v) : path.len / v + ra, Te = Math.min(Tp, t1 - t0);
@@ -1623,11 +1656,12 @@ function walk(obj, pts, o = {}) {
     if (tau > Te - tr) { const r = Te - tau; return vp * (Te - tr) - 0.5 * a * r * r; }
     return 0.5 * a * tr * tr + vp * (tau - tr);
   };
-  const yawAt = s => { const a = path.dir(s - 0.35), b = path.dir(s + 0.35), x = a.x + b.x, z = a.z + b.z; return Math.hypot(x, z) > 1e-5 ? Math.atan2(x, z) : null; };
+  const tw = clamp(0.3 * v, 0.35, 2.2), yawAt = s => { const a = path.at(s - tw), b = path.at(s + tw), x = b.x - a.x, z = b.z - a.z; return Math.hypot(x, z) > 1e-3 ? Math.atan2(x, z) : null; };   // v2.31: heading = chord over ±tw m (grows with speed) → turns through a corner evenly (was: two 45° steps, one frame each for anything fast)
   const sc = (obj.root ?? obj).scale.x, Cl = obj.legL ? cycleLen(mode, v) * sc : 0, stride = o.stride ?? (obj.kind === 'chicken' ? 16 : 4), bl = Math.max(ra, 0.22);
   let y0 = yawAt(0) ?? 0;
   const gW = (s, P) => { if (!rig || !STAIRS.length) return groundH(P.x, P.z); let h = 0; for (let k = -2; k <= 2; k++) { const Q = path.at(s + k * 0.075); h += groundH(Q.x, Q.z); } return h / 5; };   // v2.29: on stairs the body rises smoothly (was: 18 cm jump per step); the feet still find the steps (foot IK)
-  const rt = obj.root ?? obj; (rt._walks ??= []).push({ t0, v, pos: t => { const s = dist(t - t0), P = path.at(s); return new THREE.Vector3(P.x, gW(s, P) + (o.y ?? 0), P.z); }, yaw: t => o.face ?? (yawAt(dist(t - t0)) ?? y0) });
+  const rt = obj.root ?? obj; const me = { t0, v, pos: t => { const s = dist(t - t0), P = path.at(s); return new THREE.Vector3(P.x, gW(s, P) + (o.y ?? 0), P.z); }, yaw: t => { let y = o.face ?? (yawAt(dist(t - t0)) ?? y0); const i = rt._walks.indexOf(me), u = t - t0;   // v2.31: a walk that follows another one turns into its new heading over 0.45 s (was: spun round in one frame)
+      if (i > 0 && o.face == null && u < 0.45) { const yp = rt._walks[i - 1].yaw(t0); y = yp + Math.atan2(Math.sin(y - yp), Math.cos(y - yp)) * sm01(Math.max(0, u) / 0.45); } return y; } }; (rt._walks ??= []).push(me);
   const pick = t => { let w = rt._walks[0]; for (const x of rt._walks) if (x.t0 <= t) w = x; return w; };
   obj._posAt = t => pick(t).pos(t); obj._yawAt = t => pick(t).yaw(t);
   if (o.prints && obj.legL) {   // footprints (snow, sand, mud): o.prints = true | hex colour; o.printLife (s)
@@ -1640,9 +1674,10 @@ function walk(obj, pts, o = {}) {
     tick(t => { items.forEach(([x, z, yw, ta], i) => { const u = t - ta, k = u < 0 ? 0 : u > life ? Math.max(0, 1 - (u - life) / 2) : 1; o3.position.set(x, groundH(x, z) + 0.012, z); o3.rotation.set(0, yw, 0); o3.scale.setScalar(k * sc); o3.updateMatrix(); im.setMatrixAt(i, o3.matrix); }); im.instanceMatrix.needsUpdate = true; });
   }
   return tick(t => {
+    if (rt._walks.length > 1 && pick(t) !== me) return;   // v2.31: several walks on one figure hand over at their t0 (was: the walk written last held the figure at its start the whole time)
     const tau = t - t0, s = dist(tau), moving = tau > 0 && tau < Te;
     const P = path.at(s); node.position.set(P.x, gW(s, P) + (o.y ?? 0), P.z);
-    const yw = yawAt(s) ?? y0; node.rotation.y = o.face ?? yw;
+    const yw = yawAt(s) ?? y0; node.rotation.y = me.yaw(t);
     const w = moving ? clamp(Math.min(tau, Te - tau) / bl) : 0, vn = moving ? (dist(tau + 0.02) - dist(tau - 0.02)) / 0.04 : 0;
     const from = tau < Te / 2 ? (o.startMode ?? 'idle') : (o.endMode ?? 'idle');
     let turn = (yawAt(s + 0.5) ?? yw) - (yawAt(s - 0.5) ?? yw); turn = Math.atan2(Math.sin(turn), Math.cos(turn));
@@ -1720,6 +1755,7 @@ const _ia = new THREE.Vector3(), _ib = new THREE.Vector3(), _iq = new THREE.Quat
 const handAt = (f, side, out) => { const fa = side === 'L' ? f.foreL : f.foreR; fa.updateWorldMatrix(true, false); return out.set(0, -0.36, 0.05).applyMatrix4(fa.matrixWorld); };
 const rigPos = (f, t, out = new THREE.Vector3()) => f._posAt ? out.copy(f._posAt(t)) : out.copy((f.root ?? f).position);
 const rigYaw = (f, t) => f._yawAt ? f._yawAt(t) : (f.root ?? f).rotation.y;
+const PRESNAP = [];   // v2.31: [t, fn] — the scene is evaluated once at t before the first frame and fn() captures what an action needs from that moment (where a throw leaves the hand …): pure, whatever frame renders first
 const HITPAIR = [];   // v2.29 hitboxes: [a, b, t0, t1] — two figures that may touch then (hug, piggyback, pull …); see HITBOXES
 // noHit(figure | object) — never pushed / never blocks · noHit(a, b, t0, t1) — these two may overlap in that window
 function noHit(a, b, t0 = -1e9, t1 = 1e9) { if (b && (b.legL || b.root)) { HITPAIR.push([a, b, t0, t1]); return a; } if (a?.legL) a.hit = false; else (a?.g ?? a?.root ?? a).userData.noHit = true; return a; }
@@ -1760,9 +1796,10 @@ function carry(f, obj, o = {}) {   // o.heavy: true | kg — leans back, knees s
   const tp = o.pick ?? 0, ta = tp + 0.35, th = o.throw?.t, td = o.drop, tEnd = th ?? td ?? 1e9; if (obj.legL) HITPAIR.push([f, obj, tp - 0.5, tEnd + 0.8]);
   const off = new THREE.Vector3(...(o.offset ?? (both ? [0, -0.05, 0.28] : [0, -0.1, 0.05])));
   let P = null, dropAt = null;
+  const high = !both && tp > -0.3 && p0.y - groundH(p0.x, p0.z) > 0.45; if (high) _reach(f, side, () => node.parent ? node.parent.localToWorld(p0.clone()) : p0, ta, null, { pre: 0.35, post: 0.3 });   // v2.31: something on a table or counter is reached for (no bow to the floor)
   (f.fx ??= []).push((t, S) => {   // body: bend + reach, hold, wind-up and follow-through
     const bend = (tc) => { const k = (t - tc) / 0.7; if (k < 0 || k > 1) return 0; return Math.sin(Math.PI * k); };
-    const b = Math.max(bend(tp), td != null ? bend(td - 0.35) : 0);
+    const b = Math.max(high ? 0 : bend(tp), td != null ? bend(td - 0.35) : 0);
     if (b > 0) { S.H -= 0.34 * b; S.crx += 0.7 * b; S.nrx += 0.15 * b; S.las = lerp(S.las, -0.95, b); S.ras = lerp(S.ras, -0.95, b); S.lae = lerp(S.lae, -0.2, b); S.rae = lerp(S.rae, -0.2, b);
       [S.lt, S.lk] = legIK(0.1, ANK - S.H); [S.rt, S.rk] = legIK(-0.02, ANK - S.H); }
     const hold = env3(t, ta, tEnd + (th != null ? 0 : -0.35), 0.3, 0.2);
@@ -1777,11 +1814,14 @@ function carry(f, obj, o = {}) {   // o.heavy: true | kg — leans back, knees s
       if (ft > 0 && ft < 1) { const k = 1 - sm01(ft); S.ras = lerp(S.ras, -2.3, k); S.rae = lerp(S.rae, -0.15, k); S.cry -= 0.35 * k; S.crx += 0.18 * k; if (both) { S.las = lerp(S.las, -2.1, k); S.lae = lerp(S.lae, -0.15, k); } } }
   });
   if (th != null) sfx(th, 'whoosh', 0.6);
+  if (th != null) PRESNAP.push([th - 1e-4, () => { const h = node.position; P = tossPath([h.x, h.y, h.z], o.throw.to, th, o.throw); }]);   // v2.31: the throw starts exactly where the hand lets go (was: from wherever the figure stood in the first rendered frame)
+  if (th == null && td != null) PRESNAP.push([td - 1e-4, () => { const yw = rigYaw(f, td), rp = f.root.position; dropAt = [rp.x + Math.sin(yw) * 0.6, rp.z + Math.cos(yw) * 0.6, yw]; }]);
   late(t => {
-    if (t < ta) { node.position.copy(p0); node.rotation.copy(r0); return; }
+    if (t < ta - 0.08) { node.position.copy(p0); node.rotation.copy(r0); return; }
     if (t < tEnd) {   // in the hand(s)
       if (both) { handAt(f, 'L', _ia); handAt(f, 'R', _ib); node.position.addVectors(_ia, _ib).multiplyScalar(0.5); } else handAt(f, side, node.position);
-      _ie.set(0, rigYaw(f, t), 0); node.position.add(_ib.copy(off).applyEuler(_ie)); node.rotation.set(r0.x, rigYaw(f, t) + (o.ry ?? 0), r0.z); return;
+      _ie.set(0, rigYaw(f, t), 0); node.position.add(_ib.copy(off).applyEuler(_ie)); node.rotation.set(r0.x, rigYaw(f, t) + (o.ry ?? 0), r0.z);
+      const wg = tp > -0.3 ? sm01((t - ta + 0.08) / 0.2) : 1; if (wg < 1) { node.position.lerpVectors(p0, node.position, wg); node.rotation.y = lerp(r0.y, node.rotation.y, wg); } return;   // v2.31: eases from its place into the hand
     }
     if (th != null) {   // flying
       if (!P) { const yw = rigYaw(f, th), rp = rigPos(f, th, _ia); P = tossPath([rp.x + Math.sin(yw) * 0.45 + Math.cos(yw) * 0.3, rp.y + 1.75, rp.z + Math.cos(yw) * 0.45 - Math.sin(yw) * 0.3], o.throw.to, th, o.throw); }
@@ -2417,7 +2457,8 @@ function traffic(loops, o = {}) {   // cars driving around closed loops; until: 
       const kr = rnd(), col = pick(o.colors ?? ['#D94F3D', '#3D7BD9', '#F2F2F2', '#E3B23C', '#3DA56A', '#2A2D33']), kind = kr < 0.15 ? 'truck' : (o.kinds ?? ['car', 'car', 'taxi', 'van', 'sports', 'pickup', 'car', 'police'])[Math.floor(hash(k * 7.3 + lp[0][0] * 1.7 + lp[0][1]) * (o.kinds?.length ?? 8))];
       const v = vehicle(world, 0, 0, { kind, color: kind === 'taxi' || kind === 'police' ? undefined : col, siren: false }); dyn(v.g);
       const s0 = (k / (o.per ?? 2)) * path.len + rr(0, 3), sp = o.speed ?? rr(6, 10), t0 = o.t0 ?? 0;
-      tick(t => { const s = s0 + sp * (clamp(t, t0, o.until ?? 1e9) - t0), P = path.at(s), D = path.dir(s); v.g.position.set(P.x, 0.05, P.z); v.g.rotation.y = Math.atan2(D.x, D.z); });
+      const R = clamp(0.45 * sp, 1.5, 5), at5 = s => { let x = 0, z = 0; for (let j = -2; j <= 2; j++) { const P = path.at(s + j * R / 4); x += P.x; z += P.z; } return [x / 5, z / 5]; };   // v2.31: cars round the corners (was: turned 90° in one frame)
+      tick(t => { const s = s0 + sp * (clamp(t, t0, o.until ?? 1e9) - t0), P = at5(s), A = at5(s - 0.4), B = at5(s + 0.4); v.g.position.set(P[0], 0.05, P[1]); v.g.rotation.y = Math.atan2(B[0] - A[0], B[1] - A[1]); });
       cars.push(v);
     }
   });
@@ -3044,7 +3085,9 @@ async function physicsBake() {
   const starts = new Map(), snap = nd => { nd.getWorldPosition(_pv); nd.getWorldQuaternion(_pq); return [_pv.clone(), _pq.clone()]; }, times = [...new Set([...PHYS.bodies.map(B => B.t0), ...PHYS.rags.map(f => f._rag.t)])];
   for (const tt of times) { const now = [], prev = [];
     for (const [arr, dt] of [[now, 0], [prev, 1 / 60]]) { stepScene(physT(tt - dt)); world.updateMatrixWorld(true);
-      for (const B of PHYS.bodies) if (B.t0 === tt) arr.push(['b', B, snap(B.node)]); for (const f of PHYS.rags) if (f._rag.t === tt) arr.push(['r', f, RAGSEG.map(([, part]) => snap(f[part]))]); }
+      for (const B of PHYS.bodies) if (B.t0 === tt) arr.push(['b', B, snap(B.node)]);
+      if (PHYS.rags.some(f => f._rag.t === tt)) { stepScene(physT(tt - dt - 1e-4)); world.updateMatrixWorld(true); }   // v2.31 ragdolls: an instant before the start — scene ticks that hand over with `if (t >= T) return` still place the figure (was: started from the build position)
+      for (const f of PHYS.rags) if (f._rag.t === tt) arr.push(['r', f, RAGSEG.map(([, part]) => snap(f[part]))]); }
     now.forEach(([k, X, a], i) => { const b = prev[i][2]; if (k === 'b') starts.set(X, { p: a[0], q: a[1], v: a[0].clone().sub(b[0]).multiplyScalar(60) }); else { X._rag.a = a; X._rag.b = b; } }); }
   const live = [];
   const mkBody = (B, k0) => { const S = starts.get(B), o = B.o, ws = B.node.getWorldScale(new THREE.Vector3()), lb = localBox(B.node), h = lb.getSize(new THREE.Vector3()).multiply(ws).multiplyScalar(0.5), c = lb.getCenter(new THREE.Vector3()).multiply(ws);
@@ -4134,7 +4177,7 @@ function cbRig(f) {
 }
 function cbFace(f, t0, t1, T, off = 0) { if (T) cbRig(f).face.push({ t0, t1, T, off }); }
 function cbFinalize(f) {   // after the scene is built: combat pose runs last; face windows turn the whole figure toward its target
-  const C = f._cb; f.fx = [...f.fx.filter(x => !x._cb), ...f.fx.filter(x => x._cb)];
+  const C = f._cb; C.A.sort((a, b) => (a.s0 ?? a.t ?? a.t0 ?? 0) - (b.s0 ?? b.t ?? b.t0 ?? 0)); f.fx = [...f.fx.filter(x => !x._cb), ...f.fx.filter(x => x._cb)];
   if (!C.face.length) return; C.face.sort((a, b) => a.t0 - b.t0);
   const y0 = (f.root ?? f).rotation.y, base = f._yawAt ?? (() => y0), basePos = f._posAt ?? (() => (f.root ?? f).position);
   f._yawAt = t => { let y = base(t); for (const w of C.face) { const k = env3(t, w.t0, w.t1, 0.3, 0.45); if (!k) continue; const P = w.T.pos(clamp(t, w.t0, w.t1)), p = basePos(t);
@@ -4195,7 +4238,8 @@ function cbPose(f, t, S) {
   // stance: feet apart, knees soft (only while standing)
   const stW = Math.max(aim ? aim.w * 0.9 : 0, sw ? sw.w : 0, bl ? bl.w * 0.7 : 0, bw ? bw.w : 0, st ? st.w : 0, mel?.guard ? 0.6 : 0);
   if (still && stW > 0) {
-    const lg = sw ? swingAt(sw.a, t).lunge * sw.w : 0, dip = 0.04 * stW + 0.07 * lg; S.H -= dip;
+    let lg = 0; for (const a of C.A) if (a.type === 'swing') { const ws = a.wt(t); if (ws > 0) lg = lerp(lg, swingAt(a, t).lunge, ws); }
+    const dip = 0.04 * stW + 0.07 * lg; S.H -= dip;
     [S.lt, S.lk] = legIK(lerp(0.04, 0.17 + 0.2 * lg, stW), ANK - S.H); [S.rt, S.rk] = legIK(lerp(-0.03, -0.13 - 0.1 * lg, stW), ANK - S.H); S.lz = -0.06 * stW; S.rz = 0.06 * stW; S.lf = S.rf = 0;
   }
   const look = (d, w, k = 0.85) => { if (!(w > 0)) return; S.nry = lerp(S.nry, clamp(Math.atan2(d.x, d.z) * k, -1, 1), w); S.nrx = lerp(S.nrx, clamp(-Math.asin(clamp(d.y, -1, 1)) * 0.75, -0.7, 0.6), w); };
@@ -4233,8 +4277,10 @@ function cbPose(f, t, S) {
   if (mel) {
     const W = mel; let w = W.guard ? 1 : 0; for (const a of C.A) if ((a.type === 'swing' || a.type === 'block') && a.W === W) w = Math.max(w, env3(t, a.s0 - 0.2, a.s4 + 0.9, 0.3, 0.5));
     let K = { hand: MGUARD.h.clone(), blade: MGUARD.b.clone(), edge: MGUARD.e.clone() }, AR = (cbPose.g ??= armIK('R', MGUARD.h));
-    if (sw && sw.a.W === W) { const k = swingAt(sw.a, t), ws = sw.w; K = { hand: K.hand.lerp(k.hand, ws), blade: nlerp(K.blade, k.blade, ws), edge: nlerp(K.edge, k.edge, ws) }; AR = angLerp(AR, swingArm(sw.a, t), ws);
-      S.cry += k.cry * ws; S.crx += k.crx * ws; S.hry += k.hry * ws; S.H -= k.dip * ws; w = Math.max(w, ws); }
+    const bd = { cry: 0, crx: 0, hry: 0, dip: 0 };   // v2.31: swings that overlap (combos) are layered in order — each blends in over the one before (was: switched in one frame)
+    for (const a of C.A) { if (a.type !== 'swing' || a.W !== W) continue; const ws = a.wt(t); if (ws <= 0) continue; const k = swingAt(a, t); K = { hand: K.hand.lerp(k.hand, ws), blade: nlerp(K.blade, k.blade, ws), edge: nlerp(K.edge, k.edge, ws) }; AR = angLerp(AR, swingArm(a, t), ws);
+      for (const q in bd) bd[q] = lerp(bd[q], k[q], ws); w = Math.max(w, ws); }
+    S.cry += bd.cry; S.crx += bd.crx; S.hry += bd.hry; S.H -= bd.dip;
     if (bl && bl.a.W === W) { const wb = bl.w; K.hand.lerp(MBLOCK.h, wb); nlerp(K.blade, MBLOCK.b, wb, K.blade); nlerp(K.edge, MBLOCK.e, wb, K.edge); AR = angLerp(AR, cbPose.b ??= armIK('R', MBLOCK.h), wb); w = Math.max(w, wb); S.crx -= 0.06 * wb; S.nrx += 0.05 * wb; }
     if (w > 0) { setArm(S, 'R', AR, w); if (W.both) setArm(S, 'L', armIK('L', armFK('R', AR).addScaledVector(K.blade, W.pole ? 0.42 : -0.15)), w);
       W._want = { d: K.blade, up: K.edge, w }; }
@@ -4264,7 +4310,7 @@ function cbPose(f, t, S) {
     const tw = j >= 2 ? lerp(j === 2 ? 0.4 : -0.35, j === 2 ? -0.35 : 0, e) : 0.4 * (j === 1 ? e : 0); S.cry += tw * w; S.crx += (j === 2 ? 0.2 * e : j === 3 ? 0.2 * (1 - e) : -0.08) * w;
   }
   // --- punch / kick
-  if (st) { const a = st.a, w = st.w, k = a.t - t;
+  for (const a of C.A) { if (a.type !== 'strike') continue; const w = a.wt(t), k = a.t - t; if (w <= 0) continue;   // v2.31: punch / kick combos layer in order
     const ext = k > 0 ? sm01(1 - k / 0.16) : 1 - sm01(-k / 0.28);   // snap out, slower back
     if (a.kind === 'kick') { S.rt = lerp(S.rt, -1.45, ext * w); S.rk = lerp(S.rk, 0.15 + 0.9 * (1 - ext), w); S.crx -= 0.22 * ext * w; S.las = lerp(S.las, -0.9, w); S.ras = lerp(S.ras, -0.6, w); S.laz = -0.5 * w; S.raz = 0.5 * w; }
     else { const g0 = a.side === 'L' ? v3(-0.12, 0.62, 0.24) : v3(0.18, 0.62, 0.22), hit = a.side === 'L' ? v3(-0.04, 0.66, 0.62) : v3(0.08, 0.66, 0.62);
@@ -4594,7 +4640,7 @@ function missile(o = {}) {   // { from: [x,y,z] | jet/heli/tank, at, t0, t1 | sp
     else { explode(P3.x, Math.max(groundH(P3.x, P3.z), P3.y - 0.8), P3.z, t1, { size: o.size ?? 1.3 }); hitReact(T, t1, { from: P0, kill: true, ragdoll: true, power: 7 }); } }
   return { t1, at: P3 };
 }
-function misLate(M, t) { const on = t >= M.t0 && t < M.t1; M.g.visible = on; if (!on) return; const p = M.path(t), q = M.path(t + 0.02); M.g.position.copy(p); qLook(q.sub(p), _AY, M.g.quaternion); M.fl.scale.z = 0.8 + 0.3 * Math.sin(t * 57); }
+function misLate(M, t) { const on = t >= M.t0 && t < M.t1; M.g.visible = on; if (!on) return; const p = M.path(t), q = t + 0.02 > M.t1 ? p.clone().multiplyScalar(2).sub(M.path(t - 0.02)) : M.path(t + 0.02); M.g.position.copy(p); qLook(q.sub(p), _AY, M.g.quaternion); M.fl.scale.z = 0.8 + 0.3 * Math.sin(t * 57); }
 function shotDown(J, t, o = {}) {   // hit: smoke and fire trail, rolls, dives and crashes
   const P = flyPose(J, t), V = carrierVel(J, t), g = 9.8 * 0.7, e = new THREE.Euler().setFromQuaternion(P.q, 'YXZ'); let tg = 0;
   for (let k = 0; k < 600; k++) { tg = k * 0.02; const y = P.p.y + V.y * tg - 0.5 * g * tg * tg; if (y <= groundH(P.p.x + V.x * tg, P.p.z + V.z * tg)) break; }
@@ -5037,7 +5083,7 @@ function lever(p, x, y, z, o = {}) {
   box(g, 0.3, 0.52, 0.04, '#3A3D44', 0, -0.26, 0, { metal: 0.4 }); for (const [bx, by] of [[-0.11, -0.2], [0.11, -0.2], [-0.11, 0.2], [0.11, 0.2]]) ball(g, 0.016, '#A9B0B8', bx, by, 0.025, { detail: 0, ...NC });
   box(g, 0.13, 0.08, 0.07, '#24272C', 0, 0.12, 0.04, NC); box(g, 0.13, 0.08, 0.07, '#24272C', 0, -0.2, 0.04, NC);
   const h = dyn(grp(g, 0, 0, 0.08)); cyl(h, 0.022, 0.022, 0.36, '#A9B0B8', 0, 0, 0, { seg: 8, metal: 0.6 }); ball(h, 0.055, o.color ?? '#D8342A', 0, 0.38, 0, { detail: 1 });
-  tick(tt => { const a = tt - t, k = a < 0 ? 0 : EASE.back(clamp(a / 0.3)); h.rotation.x = lerp(-0.25, Math.PI - 0.35, k); });
+  MBAUTO.push([t, t + 0.3]); tick(tt => { const a = tt - t, k = a < 0 ? 0 : EASE.back(sm01(a / 0.42)); h.rotation.x = lerp(-0.25, Math.PI - 0.35, k); });
   sfx(t, 'tick', 0.6); sfx(t + 0.26, 'impact', 0.5);
   return { g, handle: h, at: () => { g.updateWorldMatrix(true, true); return g.localToWorld(v3(0, 0.3, 0.12)).toArray(); } };
 }
@@ -5064,7 +5110,8 @@ function trapBase(p, x, z, o) { cbInit(); const g = dyn(grp(p, x, groundH(x, z),
 const steelM = () => mat('#7A8088', { metal: 0.6, rough: 0.35 }), darkM = () => mat('#2A2D33', { metal: 0.4, rough: 0.5 });
 
 function trap(p, kind, x, z, o = {}) {
-  const g = trapBase(p, x, z, o), t = o.t ?? o.at ?? 1e9, NC = { cast: false }, Tr = { kind, g, x, z, t }, V = o.victim, here = v3(x, groundH(x, z), z), from = o.from ?? [x, 0.3, z];
+  const g = trapBase(p, x, z, o), t = o.t ?? o.at ?? 1e9, NC = { cast: false }, Tr = { kind, g, x, z, t }, V = o.victim; g.userData.noHit = true;   // v2.31: traps are stepped on, never a hitbox
+  const here = v3(x, groundH(x, z), z), from = o.from ?? [x, 0.3, z];
   const vf = typeof V === 'object' && V?.legL ? V : null, tick2 = fn => tick(tt => fn(tt));
   switch (kind) {
     case 'bear': {   // steel jaws with teeth snap shut; the victim is stuck and hops on one leg
@@ -6703,8 +6750,10 @@ function launch(S, t, o = {}) {   // destroyer VLS: missiles leave the deck cell
 }
 function rampDown(S, t, o = {}) { S.acts.push({ k: 'ramp', t, down: o.up ? false : true }); if (o.sfx !== false) { sfx(t, 'clang', 0.8); sfx(t + 0.85, 'splash', 0.7); } if (!o.up) { const P = carrierPoint(S, t + 0.9, v3(0, 0, S.len * 0.55)); splash(P.x, P.z, t + 0.9, { size: 1.4 }); } return S; }
 function board(S, f, i, o = {}) {   // figure rides in seat i (any ship: rowers, crew, troops) until o.t1, then is free (walk it off: seatAt(S, i, t)); seated seats sit automatically
-  if (f.root && !f.root.parent) world.add(f.root); dyn(f.root ?? f); const st = S.seats[i % S.seats.length]; if (o.sit ?? st[3]) f.fx?.push((t, S2) => { if (t > (o.t1 ?? 1e9)) return; const A = rigState('sit', 0, t, { sd: f.sd, seatH: o.h ?? 0.42 }); for (const k in S2) S2[k] = A[k] ?? S2[k]; if (S.oars?.length && (o.row ?? true)) { const ph = t * TAU * 0.45; S2.las = S2.ras = -1.1 - 0.5 * Math.sin(ph); S2.lae = S2.rae = -0.4 - 0.4 * Math.max(0, Math.cos(ph)); S2.crx = 0.15 * Math.sin(ph); } });
-  late(t => { if (t > (o.t1 ?? 1e9)) return; const r = f.root ?? f; S.g.updateWorldMatrix(true, false); const P = v3(st[0] * S.k, st[1] * S.k, st[2] * S.k).applyMatrix4(S.g.matrixWorld); r.position.copy(P); r.quaternion.copy(S.g.getWorldQuaternion(_iq2)); if (o.ry) r.rotateY(o.ry); }); return f;
+  if (f.root && !f.root.parent) world.add(f.root); dyn(f.root ?? f); const st = S.seats[i % S.seats.length]; const t1 = o.t1 ?? 1e9, bo = o.blend ?? 0.3, bw = t => t1 > 1e8 ? 1 : 1 - sm01((t - t1) / bo);   // v2.31: gets up and steps off over 0.3 s (was: sat one frame, ran the next)
+  if (o.sit ?? st[3]) f.fx?.push((t, S2) => { const w = bw(t); if (w <= 0) return; const A = rigState('sit', 0, t, { sd: f.sd, seatH: o.h ?? 0.42 }); for (const k in S2) S2[k] = lerp(S2[k], A[k] ?? S2[k], w); if (S.oars?.length && (o.row ?? true)) { const ph = t * TAU * 0.45; S2.las = S2.ras = lerp(S2.las, -1.1 - 0.5 * Math.sin(ph), w); S2.lae = S2.rae = lerp(S2.lae, -0.4 - 0.4 * Math.max(0, Math.cos(ph)), w); S2.crx = lerp(S2.crx, 0.15 * Math.sin(ph), w); } });
+  late(t => { const w = bw(t); if (w <= 0) return; const r = f.root ?? f; S.g.updateWorldMatrix(true, false); const P = v3(st[0] * S.k, st[1] * S.k, st[2] * S.k).applyMatrix4(S.g.matrixWorld), Q = S.g.getWorldQuaternion(_iq2); if (o.ry) Q.multiply(new THREE.Quaternion().setFromAxisAngle(_AY, o.ry));
+    if (w >= 1) { r.position.copy(P); r.quaternion.copy(Q); } else { r.position.lerp(P, w); r.position.y += 0.25 * Math.sin(Math.PI * w); r.quaternion.slerp(Q, w); } }); return f;
 }
 const seatAt = (S, i, t) => { const st = S.seats[i % S.seats.length], P = carrierPoint(S, t, v3(st[0] * S.k, st[1] * S.k, st[2] * S.k)); return [P.x, P.z]; };
 
@@ -9077,7 +9126,7 @@ function fallDown(f, t, o = {}) {
    Skipped automatically: sitting, crouching, lying, falling, ragdolls, held / carried / riding figures, figures inside vehicles (other parent).
    noHit(figure | object) opts out, noHit(a, b, t0, t1) lets two figures touch (hug, piggyback, pull, shove, carry and _pair moments do this already).
 /* ---------------------------------------------------------------------- */
-const HITBOX = { boxes: [], grid: new Map(), cell: 2, rep: new Map() }, _hb = new THREE.Vector3(), _hbB = new THREE.Box3(), _hbM = new THREE.Matrix4();
+const HITBOX = { boxes: [], grid: new Map(), cell: 2, rep: new Map(), people: [] }, _hb = new THREE.Vector3(), _hbB = new THREE.Box3(), _hbM = new THREE.Matrix4();
 const _hbKey = (i, j) => i * 100003 + j;
 function hitBuild() {
   const skip = new Set(); for (const f of RIGS) if (f.root) skip.add(f.root); for (const a of BEAST_ALL) skip.add(a.root ?? a.g);
@@ -9102,6 +9151,8 @@ function hitBuild() {
     if (o.isMesh && o.geometry?.attributes?.position) { const m = o.material; if (!(m?.transparent && (m.opacity ?? 1) < 0.5) && m?.depthWrite !== false) { o.geometry.boundingBox ?? o.geometry.computeBoundingBox(); add(o.matrixWorld, o.geometry.boundingBox, s2); } }
     for (const c of o.children) walk(c, s2); };
   world.updateMatrixWorld(true); for (const c of world.children) walk(c, null);
+  for (const f of RIGS) { const r = f.root; if (!f.legL || f.hit === false || !r || r.parent !== world || (f._posAt && f._yawAt)) continue;   // people standing on their spot: walkers plan round them
+    const rr = 0.21 * r.scale.x; HITBOX.people.push({ f, x: r.position.x, z: r.position.z, hx: rr, hz: rr, ux: 1, uz: 0, vx: 0, vz: 1, y0: r.position.y, y1: r.position.y + 1.7 * r.scale.x }); }
 }
 const _hbQ = (x, z, r) => { const s = HITBOX.cell, out = new Set(); for (let i = Math.floor((x - r) / s); i <= Math.floor((x + r) / s); i++) for (let j = Math.floor((z - r) / s); j <= Math.floor((z + r) / s); j++) for (const B of HITBOX.grid.get(_hbKey(i, j)) ?? []) out.add(B); return out; };
 function hitPush(x, z, r, y, out) {   // circle (x, z, r) at feet height y vs the props → push [dx, dz] (box by box, 3 rounds; fades out for deep overlaps) and the deepest overlap
@@ -9117,53 +9168,71 @@ function hitPush(x, z, r, y, out) {   // circle (x, z, r) at feet height y vs th
   out.deep = deep; out.what = what; return [cx - x, cz - z];
 }
 const _hbUp = new THREE.Vector3();
-function hitFree(f, t) {   // standing or walking on its own feet right now?
-  const r = f.root; if (!f.legL || f.hit === false || f._rag || !r || r.parent !== world || !r.visible) return false;
-  if (f.hips && f.hips.position.y < HIP * 0.72) return false;   // sitting, crouching, kneeling
-  if (_hbUp.set(0, 1, 0).applyQuaternion(r.quaternion).y < 0.94) return false;   // lying, tumbling, hanging upside down
-  if (f._falls?.some(F => t >= F.t - 0.15 && (F.up == null || t < F.up + 1.0))) return false;
-  if (HOLDS.some(h => h.f === f && t >= h.t0 - 0.1 && t <= h.t1 + 0.4)) return false;
-  return r.position.y - groundH(r.position.x, r.position.z) < 0.6;   // not up in the air (jumps, ladders)
+const _hbRamp = (t, a, b, d = 0.3) => t < a - d || t > b + d ? 1 : t < a ? 1 - sm01((t - a + d) / d) : t > b ? sm01((t - b) / d) : 0;   // 1 outside [a, b], eases to 0 inside
+// v2.31: how free a figure is to be moved (0..1) — a smooth weight, never a switch, so a correction eases out when somebody sits down, falls, is held or jumps
+function hitFree(f, t) {
+  const r = f.root; if (!f.legL || f.hit === false || f._rag || !r || r.parent !== world || !r.visible) return 0;
+  let w = f.hips ? sm01((f.hips.position.y - HIP * 0.62) / (HIP * 0.16)) : 1;   // sitting, crouching, kneeling
+  w *= sm01((_hbUp.set(0, 1, 0).applyQuaternion(r.quaternion).y - 0.8) / 0.14);   // lying, tumbling, hanging upside down
+  w *= 1 - sm01((r.position.y - groundH(r.position.x, r.position.z) - 0.3) / 0.3);   // up in the air (jumps, ladders)
+  if (w > 0 && f._falls) for (const F of f._falls) w *= _hbRamp(t, F.t - 0.15, F.up == null ? 1e9 : F.up + 1.0);
+  if (w > 0) for (const h of HOLDS) if (h.f === f) w *= _hbRamp(t, h.t0 - 0.1, h.t1 + 0.4);
+  return w;
 }
+const hitThere = f => { const r = f.root; return !f.legL || f.hit === false || f._rag || !r?.visible || r.parent !== world ? 0 : sm01((_hbUp.set(0, 1, 0).applyQuaternion(r.quaternion).y - 0.6) / 0.25); };   // how much somebody is in the way (seated people are, bodies on the ground are not)
 const _hbPair = (a, b, t) => HITPAIR.some(([p, q, t0, t1]) => t >= t0 && t <= t1 && ((p === a && q === b) || (p === b && q === a)));
 const _hbBeast = a => { const n = a.root ?? a.g; if (!n?.visible || !a.L || a.hit === false) return null; const s = a.sc ?? 1, yw = n.rotation.y, c = Math.cos(yw), sn = Math.sin(yw), rr = (a.bw ?? 0.4) * s * 0.5;
   return { x: n.position.x, z: n.position.z, ux: c, uz: -sn, vx: sn, vz: c, hx: rr, hz: a.L * s * 0.35 + rr, y0: n.position.y, y1: n.position.y + ((a.lh ?? 0.6) + (a.bh ?? 0.5)) * s, beast: a }; };
-function hitSteer(f, t, x, z, r, y, obs) {   // a walker sidesteps what is on (or next to) its line: lateral offset = missing clearance, eased in over the last 0.9 m before and out after
-  const yw = f._yawAt(t), hx = Math.sin(yw), hz = Math.cos(yw), sx = hz, sz = -hx; let ox = 0, oz = 0;
-  const one = (B, circ) => { if (B.y1 < y + 0.35 || B.y0 > y + 1.6) return; const rx = B.x - x, rz = B.z - z, lg = rx * hx + rz * hz, lt = rx * sx + rz * sz;
-    const hLat = circ ? B.hx : Math.abs(B.hx * (B.ux * sx + B.uz * sz)) + Math.abs(B.hz * (B.vx * sx + B.vz * sz)), hLong = circ ? B.hx : Math.abs(B.hx * (B.ux * hx + B.uz * hz)) + Math.abs(B.hz * (B.vx * hx + B.vz * hz));
-    const mv = B.mv, need = hLat + r + (circ || B.beast ? 0.2 : 0.04) - (mv ? lt : Math.abs(lt)); if (need <= 0) return; const w = (1 - sm01((Math.abs(lg) - hLong) / 0.9)) * (1 - sm01((need - 1.2) / 0.8)); if (w <= 0) return;   // people and animals: a little personal space
-    const sg = mv ? -1 : -(Math.sign(lt) || 1); ox += sx * sg * need * w; oz += sz * sg * need * w; };   // moving people: always pass keeping to the same side (no flip-flop)
-  for (const B of _hbQ(x, z, r + 3)) one(B, false);
-  for (const B of obs) if (B.f !== f && !B.amv && !_hbPair(f, B.f ?? B.beast, t) && !(B.beast?.riders?.includes(f)) && Math.abs(B.x - x) < 4 && Math.abs(B.z - z) < 4) one(B, !!B.f);
-  return [ox, oz];
+// Walkers (v2.31): the authored path is the plan — it is only corrected where the body would actually run into something. Every 0.05 s of the path
+// (absolute grid, cached: path and props never change) gets the sideways step that clears what the body overlaps there (props, people standing on
+// their spot); the figure eases into it over HB_WIN s before and out after. Paths that stop in front of a table or thread a doorway stay untouched.
+const HB_DT = 0.05, HB_WIN = 0.7;
+function hitSample(f, j, r) {
+  const C = f._hbC ??= new Map(); let S = C.get(j); if (S) return S;
+  const tt = j * HB_DT, p = f._posAt(tt), a = f._posAt(tt - 0.04), b = f._posAt(tt + 0.04), sp = Math.hypot(b.x - a.x, b.z - a.z) / 0.08, info = {};
+  let dx = 0, dz = 0, deep = -1, what = null;
+  const P = HITBOX.people.filter(q => q.f !== f && Math.abs(q.x - p.x) < 1.2 && Math.abs(q.z - p.z) < 1.2 && p.y + 1.6 > q.y0 && p.y < q.y1 && !_hbPair(f, q.f, tt));
+  if (sp < 0.08) {   // standing (before the start, at the end): shortest way out
+    [dx, dz] = hitPush(p.x, p.z, r, p.y, info); deep = info.deep; what = info.what;
+    for (const q of P) { const ox = p.x + dx - q.x, oz = p.z + dz - q.z, d = Math.hypot(ox, oz), m = r + q.hx; if (d < m && d > 1e-4) { dx += ox / d * (m - d); dz += oz / d * (m - d); } }
+  } else {   // moving: step sideways (never forwards / backwards — no lurching through thin walls)
+    const hx = (b.x - a.x) / (sp * 0.08), hz = (b.z - a.z) / (sp * 0.08), sx = hz, sz = -hx; let lo = 0, hi = 0;
+    const one = (B, circ, mg) => { const rx = B.x - p.x, rz = B.z - p.z;
+      if (circ) { if (Math.hypot(rx, rz) >= r + B.hx + mg) return; }
+      else { const lx = -(rx * B.ux + rz * B.uz), lz = -(rx * B.vx + rz * B.vz), ox = lx - clamp(lx, -B.hx, B.hx), oz = lz - clamp(lz, -B.hz, B.hz); if (Math.hypot(ox, oz) >= r) return; }
+      const lt = rx * sx + rz * sz, hLat = circ ? B.hx : Math.abs(B.hx * (B.ux * sx + B.uz * sz)) + Math.abs(B.hz * (B.vx * sx + B.vz * sz)), need = hLat + r + mg - Math.abs(lt); if (need <= 0) return;
+      const fade = 1 - sm01((need - 1.1) / 0.6); if (fade < 1 && need - r > deep) { deep = need - r; what = B; }
+      if (lt > -0.002) hi = Math.min(hi, -need * fade); else lo = Math.max(lo, need * fade); };   // obstacle on the +side → step to the −side
+    for (const B of _hbQ(p.x, p.z, r + 0.1)) if (B.y1 >= p.y + 0.35 && B.y0 <= p.y + 1.6) one(B, false, 0.04);
+    for (const q of P) one(q, true, 0.15);
+    const d = lo + hi; dx = sx * d; dz = sz * d;
+  }
+  S = [dx, dz, deep, what]; C.set(j, S); return S;
+}
+function hitWalker(f, t, r, out) {   // eased sidestep at time t: per axis the largest step in the window, weighted by how close in time it is
+  const j0 = Math.ceil((t - HB_WIN) / HB_DT), j1 = Math.floor((t + HB_WIN) / HB_DT); let xp = 0, xn = 0, zp = 0, zn = 0; out.deep = -1;
+  for (let j = j0; j <= j1; j++) { const S = hitSample(f, j, r); if (Math.abs(j * HB_DT - t) < HB_DT && S[2] > out.deep) { out.deep = S[2]; out.what = S[3]; } if (!S[0] && !S[1]) continue;
+    const k = 1 - sm01(Math.abs(j * HB_DT - t) / HB_WIN), x = S[0] * k, z = S[1] * k; if (x > xp) xp = x; if (x < xn) xn = x; if (z > zp) zp = z; if (z < zn) zn = z; }
+  return [xp + xn, zp + zn];
 }
 function hitResolve(t) {
   if (CFG.hitboxes === false) return;
-  const F = RIGS.filter(f => hitFree(f, t)); if (!F.length) return;
-  const R = F.map(f => 0.21 * f.root.scale.x), P0 = F.map(f => [f.root.position.x, f.root.position.z]), info = {};
-  const obs = [];   // people (where they are before this frame's corrections) and animals, as obstacles for walkers
-  for (const g of RIGS) { if (!g.legL || g.hit === false || !g.root?.visible || g.root.parent !== world || g._rag) continue; if (_hbUp.set(0, 1, 0).applyQuaternion(g.root.quaternion).y < 0.7) continue;
-    const i = F.indexOf(g), q = g.root.position, rg = 0.21 * g.root.scale.x, mv = !!g._posAt && g._posAt(t + 0.05).distanceTo(g._posAt(t - 0.05)) > 0.01;
-    obs.push({ f: g, mv, x: i >= 0 ? P0[i][0] : q.x, z: i >= 0 ? P0[i][1] : q.z, hx: rg, hz: rg, ux: 1, uz: 0, vx: 0, vz: 1, y0: q.y, y1: q.y + 1.7 * g.root.scale.x }); }
-  for (const a of BEAST_ALL) { const B = _hbBeast(a); if (!B) continue; const n = a.root ?? a.g; B.amv = !!(n._fly || a._posAt) && _flyPose(n._fly ? n : a, t + 0.05).p.distanceTo(_flyPose(n._fly ? n : a, t - 0.05).p) > 0.01; obs.push(B); }
-  // 1) walkers steer round props, people and animals (smooth sidestep, no pops)
-  F.forEach((f, i) => { if (!f._yawAt || !f._posAt) return; const p = f.root.position, [dx, dz] = hitSteer(f, t, P0[i][0], P0[i][1], R[i], p.y, obs); p.x += dx; p.z += dz; });
-  // 2) whatever still overlaps a prop is pushed out (figures placed inside things, corners)
-  const props = rep => F.forEach((f, i) => { const p = f.root.position, [dx, dz] = hitPush(p.x, p.z, R[i], p.y, info); p.x += dx; p.z += dz;
-    if (rep && info.deep > 0.12) { const k = f.root, prev = HITBOX.rep.get(k); if (!prev || info.deep > prev.d) HITBOX.rep.set(k, { f, d: info.deep, t, B: info.what }); } });
-  props(true);
-  // 3) people apart (half each; seated / busy people and animals push but are not moved)
-  const P = F.map(f => [f.root.position.x, f.root.position.z]), D = F.map(() => [0, 0]);
-  for (let i = 0; i < F.length; i++) for (let j = i + 1; j < F.length; j++) { const dx = P[j][0] - P[i][0], dz = P[j][1] - P[i][1], d = Math.hypot(dx, dz), m = R[i] + R[j];
-    if (d >= m || _hbPair(F[i], F[j], t) || Math.abs(F[i].root.position.y - F[j].root.position.y) > 1) continue; const nx = d > 1e-4 ? dx / d : 1, nz = d > 1e-4 ? dz / d : 0, k = (m - d) / 2 * (1 - sm01((m - d - 0.3) / 0.3));
-    D[i][0] -= nx * k; D[i][1] -= nz * k; D[j][0] += nx * k; D[j][1] += nz * k; }
-  for (const B of obs) { if (B.f && F.includes(B.f)) continue;
-    F.forEach((g, i) => { if (_hbPair(g, B.f ?? B.beast, t) || B.beast?.riders?.includes(g)) return; const gy = g.root.position.y; if (gy + 1.6 < B.y0 || gy > B.y1) return;
-      const dx = P[i][0] - B.x, dz = P[i][1] - B.z, u = B.f ? 0 : clamp(dx * B.vx + dz * B.vz, -(B.hz - B.hx), B.hz - B.hx), ox = dx - B.vx * u, oz = dz - B.vz * u, d = Math.hypot(ox, oz), m = R[i] + B.hx;
-      if (d >= m || d < 1e-4) return; const k = (m - d) * (1 - sm01((m - d - 0.35) / 0.35)); D[i][0] += ox / d * k; D[i][1] += oz / d * k; }); }
-  let any = false; F.forEach((f, i) => { if (D[i][0] || D[i][1]) { f.root.position.x += D[i][0]; f.root.position.z += D[i][1]; any = true; } });
-  if (any) props(false);   // pushed apart into a wall? out again
+  const F = [], W = [], R = [], info = {};
+  for (const f of RIGS) { const w = hitFree(f, t); if (w > 0) { F.push(f); W.push(w); R.push(0.21 * f.root.scale.x); } }
+  const note = (f, deep, what) => { if (deep > 0.12) { const prev = HITBOX.rep.get(f.root); if (!prev || deep > prev.d) HITBOX.rep.set(f.root, { f, d: deep, t, B: what }); } };
+  // 1) props: walkers ease round what their path runs into; everybody else is pushed out of what they were placed in
+  F.forEach((f, i) => { const p = f.root.position, wk = !!(f._posAt && f._yawAt), [dx, dz] = wk ? hitWalker(f, t, R[i], info) : hitPush(p.x, p.z, R[i], p.y, info); p.x += dx * W[i]; p.z += dz * W[i]; note(f, info.deep, info.what); });
+  // 2) people apart: each gives way by how free it is; seated or busy people and animals stay put and the others move
+  const A = RIGS.map(f => { const i = F.indexOf(f), th = i >= 0 ? 1 : hitThere(f); return th > 0 ? { f, i, th, w: i >= 0 ? W[i] : 0, r: 0.21 * f.root.scale.x, x: f.root.position.x, z: f.root.position.z, y: f.root.position.y, dx: 0, dz: 0 } : null; }).filter(Boolean);
+  for (let a = 0; a < A.length; a++) for (let b = a + 1; b < A.length; b++) { const P = A[a], Q = A[b]; if (!P.w && !Q.w) continue; const dx = Q.x - P.x, dz = Q.z - P.z, d = Math.hypot(dx, dz), m = P.r + Q.r;
+    if (d >= m || Math.abs(P.y - Q.y) > 1 || _hbPair(P.f, Q.f, t)) continue; const nx = d > 1e-4 ? dx / d : 1, nz = d > 1e-4 ? dz / d : 0, k = (m - d) * (1 - sm01((m - d - 0.3) / 0.3)) * P.th * Q.th, ka = k * P.w * (1 - 0.5 * Q.w), kb = k * Q.w * (1 - 0.5 * P.w);
+    P.dx -= nx * ka; P.dz -= nz * ka; Q.dx += nx * kb; Q.dz += nz * kb; }
+  for (const a of BEAST_ALL) { const B = _hbBeast(a); if (!B) continue;
+    for (const P of A) { if (!P.w || a.riders?.includes(P.f) || _hbPair(P.f, a, t) || P.y + 1.6 < B.y0 || P.y > B.y1) continue;
+      const dx = P.x - B.x, dz = P.z - B.z, u = clamp(dx * B.vx + dz * B.vz, -(B.hz - B.hx), B.hz - B.hx), ox = dx - B.vx * u, oz = dz - B.vz * u, d = Math.hypot(ox, oz), m = P.r + B.hx;
+      if (d >= m || d < 1e-4) continue; const k = (m - d) * (1 - sm01((m - d - 0.35) / 0.35)) * P.w; P.dx += ox / d * k; P.dz += oz / d * k; } }
+  for (const P of A) { if (!P.dx && !P.dz) continue; const p = P.f.root.position; p.x += P.dx; p.z += P.dz;
+    if (!(P.f._posAt && P.f._yawAt)) { const [dx, dz] = hitPush(p.x, p.z, P.r, p.y, info); p.x += dx * P.w; p.z += dz * P.w; } }   // pushed into a wall? out again
 }
 
 // --- bake: merge all static props (stat) into one mesh per material — far fewer draw calls, 2–3× faster frames ---
@@ -9980,7 +10049,7 @@ const CUTS = CAM.filter(k => k.cut).map(k => k.t).sort((a, b) => a - b);
 const _m1 = new THREE.Vector3(), _m2 = new THREE.Vector3(), _d1 = new THREE.Vector3(), _d2 = new THREE.Vector3();
 function mbTimes(t) {   // CFG.motionBlur: 'auto' (fast frames only) | 'all' | false — CFG.mbSamples (3), CFG.shutter (0.5 = 180°); MBLUR = [[t0, t1], …] forces it
   const mode = CFG.motionBlur ?? 'auto'; if (!EXPORT || !mode) return null;
-  const n = CFG.mbSamples ?? 3, sh = (CFG.shutter ?? 0.5) / FPS;
+  const n = CFG.mbSamples ?? (MBAUTO.some(([x, y]) => t >= x && t <= y) ? 5 : 3), sh = (CFG.shutter ?? 0.5) / FPS;   // v2.31: fast actions (swings, kicks, throws, landings) get 5 samples — a smear instead of three ghosts
   let a = 0, b = DUR + 10; for (const c of CUTS) { if (c <= t) a = c; else { b = c; break; } }
   const lo = Math.max(a, t - sh / 2), hi = Math.min(b - 1e-4, t + sh / 2);
   if (mode === 'auto' && !needsMB(t, lo, hi)) return null;
@@ -10000,16 +10069,22 @@ function needsMB(t, lo, hi) {
   return move > (CFG.mbThreshold ?? 0.02);   // ≈ 4 % of the frame per frame: whips, cranes, shakes — not slow drifts
 }
 const _lv = new THREE.Vector3(), _lv2 = new THREE.Vector3(), _lm = new THREE.Matrix4();
+function lookAng(f, L, t) {   // look target → [yaw, pitch] of the neck (clamped), or null
+  const tg = L === 'cam' || L === true ? _lv.copy(camera.position) : typeof L === 'function' ? _lv.fromArray(L(t)) : typeof L === 'string' ? (TRACK[L] ? TRACK[L].obj.getWorldPosition(_lv) : null)
+    : L.isObject3D ? L.getWorldPosition(_lv) : L.root ? L.root.getWorldPosition(_lv) : _lv.fromArray(L);
+  if (!tg) return null;
+  const p = _lv2.copy(tg).applyMatrix4(_lm.copy(f.chest.matrixWorld).invert()).sub(f.neck.position);
+  const yw = Math.atan2(p.x, p.z), fwd = 1 - sm01((Math.abs(yw) - 2.0) / 0.9);   // v2.31: a target that passes behind the back lets the head come forward (was: flipped from one shoulder to the other in one frame)
+  return [clamp(yw, -1.2, 1.2) * fwd, clamp(-Math.atan2(p.y - 0.2, Math.hypot(p.x, p.z)), -0.5, 0.6) * fwd];
+}
 function lookPass(t) {   // figure.look = 'cam' | [x,y,z] | t => [x,y,z] | object | track name → the head turns toward it (after the camera has moved)
   for (const f of RIGS) {
-    const L = f.look; if (!L) continue;
-    const tg = L === 'cam' || L === true ? _lv.copy(camera.position) : typeof L === 'function' ? _lv.fromArray(L(t)) : typeof L === 'string' ? (TRACK[L] ? TRACK[L].obj.getWorldPosition(_lv) : null)
-      : L.isObject3D ? L.getWorldPosition(_lv) : L.root ? L.root.getWorldPosition(_lv) : _lv.fromArray(L);
-    if (!tg) continue;
+    const L = f.look, B = f._lookFrom; if (!L && !B) continue;
     f.chest.updateWorldMatrix(true, false);
-    const p = _lv2.copy(tg).applyMatrix4(_lm.copy(f.chest.matrixWorld).invert()).sub(f.neck.position), w = f.lookW ?? 1;
-    f.neck.rotation.y = lerp(f.neck.rotation.y, clamp(Math.atan2(p.x, p.z), -1.2, 1.2), w);
-    f.neck.rotation.x = lerp(f.neck.rotation.x, clamp(-Math.atan2(p.y - 0.2, Math.hypot(p.x, p.z)), -0.5, 0.6), w);
+    const y0 = f.neck.rotation.y, x0 = f.neck.rotation.x, w = f.lookW ?? 1, A = L ? lookAng(f, L, t) : null; if (L && !A && !B) continue;
+    let ty = A ? lerp(y0, A[0], w) : y0, tx = A ? lerp(x0, A[1], w) : x0;
+    if (B && B.w < 1) { const A0 = B.from ? lookAng(f, B.from, t) : null, k = EASE.inOut(B.w); ty = lerp(A0 ? lerp(y0, A0[0], w) : y0, ty, k); tx = lerp(A0 ? lerp(x0, A0[1], w) : x0, tx, k); }   // v2.31: a new target set in a tick → the head turns over POSEFADE s
+    f.neck.rotation.y = ty; f.neck.rotation.x = tx;
   }
 }
 const _sc = new THREE.Vector3();
@@ -10369,13 +10444,17 @@ async function renderAudio(sr) {
 }
 
 // --- frame update, sizing, playback, export API ---
+let RESTS = null;   // v2.31: built transform + visibility of everything that moves (dyn) — every frame starts from the scene as built, so a tick that only sets something
+//   "while it moves" or "from 5 s on" gives the same picture in the preview, in every render worker and in every CI block (was: whatever the last frame left behind)
 function stepScene(t) {   // everything in the 3D scene at time t (no HUD) — also used for motion-blur sub-frames
   const st = ST(t);
+  if (!RESTS) { RESTS = []; scene.traverse(n => { if (n.userData.dyn && !n.isInstancedMesh && !n.isCamera) RESTS.push([n, n.position.clone(), n.quaternion.clone(), n.scale.clone(), n.visible]); }); }
+  if (CFG.restReset !== false) for (const R of RESTS) { const n = R[0]; n.position.copy(R[1]); n.quaternion.copy(R[2]); n.scale.copy(R[3]); n.visible = R[4]; }
   for (const f of RIGS) { const r = f.root; if (!r) continue;   // v2.29: every frame starts from the figure's built pose — nothing left over from other frames
     const R = f._rest0 ??= { p: r.position.clone(), q: r.quaternion.clone(), s: r.scale.clone(), v: r.visible, bp: f.body?.position.clone(), bq: f.body?.quaternion.clone() };
     r.position.copy(R.p); r.quaternion.copy(R.q); r.scale.copy(R.s); r.visible = R.v; if (f.body) { f.body.position.copy(R.bp); f.body.quaternion.copy(R.bq); } }
   applySky(t); WIND.t.value = st;
-  for (const f of tickers) f(st);
+  runTickers(st);
   for (const h of hordes) h.update(st);
   for (const f of LATE) f(st);
   updateEmitters(st);
@@ -10487,6 +10566,7 @@ function thumbOn() {
   const U = fin.uniforms; U.uSat.value = (CFG.saturation ?? 1.08) * 1.25; U.uCon.value = (CFG.contrast ?? 1.05) * 1.12; U.uVig.value = Math.max(U.uVig.value, 0.55); U.uGrain.value = 0;
 }
 if (PENDING.length) await Promise.all(PENDING);
+for (const [tt, fn] of PRESNAP.sort((a, b) => a[0] - b[0])) { stepScene(tt); world.updateMatrixWorld(true); fn(); }
 await physicsBake();   // simulate once, then every frame plays it back
 document.querySelectorAll('.err').forEach(n => n.remove());
 // --- motion audit (v2.29) — render.mjs --shots (and --audit) runs it: whatif.audit() → list of warnings ---
@@ -10494,47 +10574,63 @@ document.querySelectorAll('.err').forEach(n => n.remove());
 //   2) purity: 12 moments evaluated again after jumping back from later times and after skipping frames, the way render workers and
 //      CI shards do; anything that differs shows up in the MP4 as flicker or objects jumping between frames
 const AUD_J = ['body', 'hips', 'chest', 'neck', 'head', 'armL', 'armR', 'foreL', 'foreR', 'legL', 'legR', 'shinL', 'shinR'], _av = new THREE.Vector3(), _aq = new THREE.Quaternion();
+const _ab = new THREE.Box3(), _as = new THREE.Sphere(), _ac = new THREE.Vector3();
+// v2.31: what the viewer can see — inside the frame (10 % margin) and at least ~1.2 % of the frame height
+function audOn(x, y, z, r) { _ac.set(x, y, z).applyMatrix4(camera.matrixWorldInverse); const d = -_ac.z; if (d < 0.05) return d > -r ? 1 : 0; const hy = Math.tan(camera.fov * Math.PI / 360) * d, hx = hy * camera.aspect;
+  return d < camera.far && Math.abs(_ac.x) < hx * 1.1 + r && Math.abs(_ac.y) < hy * 1.1 + r && r / hy > 0.012 ? r / hy : 0; }   // → share of the frame height (0 = not visible)
 function audItems() {
-  const L = [];
-  RIGS.forEach((f, i) => { if (f.root?.parent) L.push({ k: 'rig', n: f.root, f, name: `${f.who ? `'${f.who}'` : f.kind === 'zombie' ? 'zombie' : 'figure'} #${i}`, JN: AUD_J.filter(j => f[j]), J: AUD_J.map(j => f[j]).filter(Boolean) }); });
+  world.updateMatrixWorld(true); const L = [];
+  RIGS.forEach((f, i) => { if (f.root?.parent) L.push({ k: 'rig', n: f.root, f, name: `${f.who ? `'${f.who}'` : f.kind === 'zombie' ? 'zombie' : 'figure'} #${i}`, r: 0.9 * f.root.scale.x, up: 0.9 * f.root.scale.x, JN: AUD_J.filter(j => f[j]), J: AUD_J.map(j => f[j]).filter(Boolean) }); });
   const seen = new Set(L.map(x => x.n)); let c = 0;
   const fxOnly = n => { let all = true, any = false; n.traverse(m => { if (m.isMesh || m.isSprite) { any = true; if (!(m.isSprite || m.material?.isMeshBasicMaterial)) all = false; } }); return any && all; };   // tracers, flashes, beams: effects, not objects
   world.traverse(n => { if (!n.userData.dyn || n.isInstancedMesh || n.isLight || n.isSprite || seen.has(n) || c > 600 || fxOnly(n)) return; for (let p = n.parent; p && p !== world; p = p.parent) if (seen.has(p) || p.userData.dyn) return; seen.add(n); c++;
-    L.push({ k: 'obj', n, name: n.name || (BEAST_ALL.some(b => (b.root ?? b.g) === n) ? 'animal' : 'object') + ' #' + c, J: [] }); });
+    L.push({ k: 'obj', n, r: clamp(_ab.setFromObject(n).getBoundingSphere(_as).radius || 0.3, 0.15, 40), up: 0, name: n.name || (BEAST_ALL.some(b => (b.root ?? b.g) === n) ? 'animal' : 'object') + ' #' + c, J: [] }); });
   world.traverse(m => { if (m.isInstancedMesh && m.userData.crowd && m.count > 0) L.push({ k: 'crowd', n: m, name: 'crowd', J: [] }); });
   return L;
 }
 function audSnap(L) {
-  world.updateMatrixWorld(true);
+  world.updateMatrixWorld(true); camera.updateMatrixWorld(true);
   return L.map(it => { const n = it.n; let vis = n.visible; for (let p = n.parent; vis && p; p = p.parent) vis = p.visible;
     if (it.k === 'crowd') { const a = n.instanceMatrix.array; let s = 0; for (let i = 0; i < Math.min(n.count, 400); i++) s += a[i * 16 + 12] * 1.3 + a[i * 16 + 13] * 0.7 + a[i * 16 + 14]; return { vis, p: [s, 0, 0], q: [] }; }
-    n.getWorldPosition(_av); return { vis, p: [_av.x, _av.y, _av.z], q: it.J.map(j => j.quaternion.toArray()) }; });
+    const rag = it.f?._rag && it.f.hips; (rag ? it.f.hips : n).getWorldPosition(_av); if (rag) _av.y -= HIP * it.f.root.scale.x;   // ragdolls: measured at the hips (a tumbling ragdoll's root swings round its pelvis)
+    if (vis && _av.y + it.r < groundH(_av.x, _av.z) - 6 && camera.position.y > groundH(camera.position.x, camera.position.z) - 1) vis = false;   // parked deep under the ground
+    return { vis, on: vis ? audOn(_av.x, _av.y + it.up, _av.z, it.r) : 0, p: [_av.x, _av.y, _av.z], q: it.J.map(j => j.quaternion.toArray()), wq: it.k === 'obj' ? n.getWorldQuaternion(_aq).toArray() : null }; });
 }
 const audAng = (a, b) => 2 * Math.acos(Math.min(1, Math.abs(a[0] * b[0] + a[1] * b[1] + a[2] * b[2] + a[3] * b[3])));
 function motionAudit(o = {}) {
   const fps = o.fps ?? 30, dt = 1 / fps, N = Math.floor(DUR * fps), L = audItems(), W = new Map(), warn = (key, sev, msg) => { const w = W.get(key); if (!w || sev > w.sev) W.set(key, { sev, msg }); };
   const at = (n, p) => `(${p[0].toFixed(1)}, ${p[2].toFixed(1)})`, K = 12, keyT = [...Array(K).keys()].map(k => Math.round((k + 0.5) / K * N)), ref = new Map();
-  let prev = null, prev2 = null; const flips = L.map(() => []);
+  let prev = null, prev2 = null, tvP = 0, cam1 = null, cam2 = null; const flips = L.map(() => []), _cd = new THREE.Vector3(), physN = new Map(PHYS.bodies.map(B => [B.node, B]));
+  const hitNow = (n, ts) => { const B = physN.get(n); return !!B && (Math.abs(ts - B.t0) < 0.25 || PHYS.blasts.some(b => Math.abs(ts - b.t) < 0.25)); };   // simulated things may be kicked off violently (impact, blast)
+  const cutAt = (a, b) => Math.abs(b - a - dt) > 0.05 || CUTS.some(c => c > a + 1e-6 && c <= b + 1e-6);   // a camera cut or the jump into / out of a TEASE flash-forward lies between two frames
   for (let i = 0; i <= N; i++) {
-    const t = i * dt; stepScene(t); const S = audSnap(L), mbw = MBAUTO.some(([x, y]) => t >= x - 0.02 && t <= y + 0.02); if (keyT.includes(i)) ref.set(i, S);   // mbw: fast action with motion blur — only big flips count
-    if (prev) L.forEach((it, j) => { const a = S[j], b = prev[j], c = prev2?.[j]; if (!a.vis || !b.vis || it.k === 'crowd') return;
+    const t = i * dt, tv = teaseV(t); stepScene(tv); const cut = i > 0 && cutAt(tvP, tv); tvP = tv; if (cut) { prev = prev2 = cam1 = cam2 = null; flips.forEach(F => { F.length = 0; }); }   // v2.31: as the viewer sees it — nothing is compared across a cut
+    const S = audSnap(L), mbw = MBAUTO.some(([x, y]) => t >= x - 0.02 && t <= y + 0.02); if (keyT.includes(i)) ref.set(i, S);   // mbw: fast action with motion blur — only big flips count
+    { camera.getWorldDirection(_cd); const cm = { p: camera.position.clone(), d: _cd.clone() }, shk = SHAKES.some(s => t >= s.t - 0.05 && t <= s.t + (s.dur ?? 0.6) + 0.1);   // camera: a jump that is not a cut
+      if (cam1 && cam2 && !shk) { const a1 = cm.d.angleTo(cam1.d), a0 = cam1.d.angleTo(cam2.d), m1 = cm.p.distanceTo(cam1.p), m0 = cam1.p.distanceTo(cam2.p), ref2 = Math.max(2, cm.p.distanceTo(_l));
+        if (a1 > 0.1 && a1 > 3 * a0 + 0.05) warn('cam:turn', 6 + a1, `the camera turns ${(a1 * 57.3).toFixed(0)}° in one frame at ${t.toFixed(2)} s without a cut – make it a cut (tr: 'cut') or a real move`);
+        else if (m1 / ref2 > 0.2 && m1 > 3 * m0 + 0.3) warn('cam:jump', 6 + m1 / ref2, `the camera jumps ${m1.toFixed(1)} m in one frame at ${t.toFixed(2)} s without a cut – make it a cut (tr: 'cut') or a real move`); }
+      cam2 = cam1; cam1 = cm; }
+    if (prev) L.forEach((it, j) => { const a = S[j], b = prev[j], c = prev2?.[j]; if (!a.vis || !b.vis || it.k === 'crowd' || !(a.on && b.on ? true : Math.max(a.on, b.on) > 0.05)) return;   // off screen: nobody sees it (coming into / leaving the frame: only when it is big enough to notice)
       const d = [a.p[0] - b.p[0], a.p[1] - b.p[1], a.p[2] - b.p[2]], dl = Math.hypot(...d);
       if (c?.vis) { const e = [b.p[0] - c.p[0], b.p[1] - c.p[1], b.p[2] - c.p[2]], el = Math.hypot(...e), jerk = Math.hypot(d[0] - e[0], d[1] - e[1], d[2] - e[2]);
-        if (jerk > (mbw ? 1.5 : 0.6) && dl > 0.12 && dl > 0.5 * el) warn(it.name + ':jump', jerk, `${it.name} jumps ${dl.toFixed(2)} m in one frame at ${t.toFixed(2)} s ${at(it.n, a.p)}`);
+        const app = jerk * Math.max(a.on, b.on) / it.r, wrap = el > 0.01 && dl > 20 * el && d[0] * e[0] + d[1] * e[1] + d[2] * e[2] < 0 && Math.min(a.on, b.on) < 0.08;   // app: the jump as a share of the frame height · wrap: a looping prop sent back to the far end
+        if (jerk > (mbw ? 1.5 : 0.6) && jerk > 0.35 * Math.max(dl, el) && app > 0.012 && !wrap && dl > 0.12 && dl > 0.5 * el && !hitNow(it.n, ST(tv))) warn(it.name + ':jump', jerk, `${it.name} jumps ${dl.toFixed(2)} m in one frame at ${t.toFixed(2)} s ${at(it.n, a.p)}`);
         if (dl > 0.02 && el > 0.02 && d[0] * e[0] + d[1] * e[1] + d[2] * e[2] < -0.5 * dl * el) { const F = flips[j]; F.push(i); while (F.length && F[0] < i - 12) F.shift();
           if (F.length >= 4) warn(it.name + ':jitter', F.length, `${it.name} jitters back and forth around ${t.toFixed(2)} s ${at(it.n, a.p)}`); } }
-      a.q.forEach((q, k) => { if (dl > 0.08 && /^(leg|shin)/.test(it.JN[k])) return;   // legs of a figure running > 2.4 m/s: gait at motion-blur speed, not a pose switch
+      if (a.wq && c?.vis && dl < 0.3 && !physN.has(it.n)) { const ang = audAng(a.wq, b.wq), angPrev = audAng(b.wq, c.wq); if (ang > (mbw ? 1.6 : 0.6) && ang > 3 * angPrev + 0.15) warn(it.name + ':turn', ang, `${it.name} turns ${(ang * 57.3).toFixed(0)}° in one frame at ${t.toFixed(2)} s ${at(it.n, a.p)}`); }
+      a.q.forEach((q, k) => { if ((dl > 0.05 && /^(leg|shin)/.test(it.JN[k])) || (dl > 0.1 && /^(arm|fore)/.test(it.JN[k]))) return;   // legs of a figure running > 2.4 m/s: gait at motion-blur speed, not a pose switch
         const ang = audAng(q, b.q[k]), angPrev = c?.vis ? audAng(b.q[k], c.q[k]) : ang;
         if (ang > (mbw ? 2.1 : 0.75) && ang > 3 * angPrev + 0.2) warn(it.name + ':snap:' + it.JN[k], ang, `${it.name}: ${it.JN[k]} snaps ${(ang * 57.3).toFixed(0)}° in one frame at ${t.toFixed(2)} s ${at(it.n, a.p)}`); }); });
     prev2 = prev; prev = S;
   }
   // purity: back from the end (reverse order) and forward with skipped frames — must match the straight run exactly
-  const cmp = (i, S, how) => { const R = ref.get(i); L.forEach((it, j) => { const a = S[j], b = R[j]; if (!a.vis && !b.vis) return; const t = (i * dt).toFixed(2);
+  const cmp = (i, S, how) => { const R = ref.get(i); L.forEach((it, j) => { const a = S[j], b = R[j]; if ((!a.vis && !b.vis) || !(a.on || b.on)) return; const t = (i * dt).toFixed(2);
       if (a.vis !== b.vis) return warn(it.name + ':pure', 9, `${it.name} is ${b.vis ? 'visible' : 'hidden'} at ${t} s in a straight run but ${a.vis ? 'visible' : 'hidden'} ${how} – state left over from other frames (flickers between render workers)`);
       const dp = Math.hypot(a.p[0] - b.p[0], a.p[1] - b.p[1], a.p[2] - b.p[2]); if (dp > 0.003) return warn(it.name + ':pure', 5 + dp, `${it.name} is ${dp.toFixed(2)} m off at ${t} s ${how} ${at(it.n, b.p)} – state left over from other frames (jumps between render workers)`);
       for (let k = 0; k < a.q.length; k++) if (audAng(a.q[k], b.q[k]) > 0.01) return warn(it.name + ':pure', 4, `${it.name}: ${it.JN[k]} differs at ${t} s ${how} – pose left over from other frames`); }); };
-  for (const i of [...keyT].reverse()) { stepScene(i * dt); cmp(i, audSnap(L), 'after jumping back'); }
-  for (const i of keyT) { stepScene(0); stepScene(i * dt); cmp(i, audSnap(L), 'when frames are skipped'); }
+  for (const i of [...keyT].reverse()) { stepScene(teaseV(i * dt)); cmp(i, audSnap(L), 'after jumping back'); }
+  for (const i of keyT) { stepScene(0); stepScene(teaseV(i * dt)); cmp(i, audSnap(L), 'when frames are skipped'); }
   return [...W.values()].sort((a, b) => b.sev - a.sev).slice(0, o.max ?? 14).map(w => w.msg);
 }
 window.whatif = {
