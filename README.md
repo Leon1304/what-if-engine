@@ -14,6 +14,9 @@ Push an assembled page to `renders/<slug>.html` (output of `assemble.py`, voice 
 `https://github.com/Leon1304/what-if-engine/releases/download/render-<slug>/<slug>.mp4`
 Manual run: Actions → render → Run workflow (page path, width 1440 / 2160 / 1080).
 
+## Engine v2.21 (Nov 2026): landmines and warning signs
+- `boundingMine()` (jumping mine with prongs, launch, burst at height, x-ray parts, rusty dud), `warnSign()` (red minefield sign), `markerFlag()` (find-spot flag).
+
 ## Engine v2.20 (Nov 2026): retention and sound
 - **Flash-forward:** `TEASE = [{ t, dur: 0.6, at, label }]` — for `dur` s the frame shows scene + camera at video time `at` (the climax) while HUD, voice and captions keep running; flash + whoosh in and out, optional label chip.
 - **Series recap chip:** `CFG.series.prev` now shows a small "You chose: Cellar ✓" chip next to the badge while the cold open plays (`mode: 'card'` = old full-screen recap).

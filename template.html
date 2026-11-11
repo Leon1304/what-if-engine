@@ -3164,6 +3164,78 @@ function strata(p, x, z, o = {}) {
   return { g, top, layerY: i => ys[i], at };
 }
 
+// --- v2.21 landmines and warnings -------------------------------------------------------------------------------------------------------------------
+// boundingMine(p, x, z, { scale: 1, t, launch, h: 1, burst: true, size: 0.7, rust, buried: true, xray: [t0, t1], ry })
+//   bounding ("jumping") anti-personnel mine as in history explainers: steel canister in a launch tube, only the three prongs show above the ground.
+//   t = prongs pressed (click) · launch = a small charge fires the canister straight up (dust, thump) · it peaks at h metres and bursts there
+//   (burst: false = a dud that drops back). xray = shell turns glassy and shows the parts (launch charge, main charge, steel balls).
+//   → { g, can, launch, apex, height(t), at: { prongs, can, tube, charge } } — at.* are t => [x,y,z] anchors for callouts / RULER (scene time)
+function boundingMine(p, x, z, o = {}) {
+  const s = o.scale ?? 1, gy = o.y ?? groundH(x, z), g = grp(p, x, gy, z, o.ry ?? 0), G = 9.81; const NC = { cast: false };
+  const col = o.rust ? '#9A5E36' : '#4E5442', dark = o.rust ? '#5E3822' : '#2F342A', H = 0.13 * s, R = 0.051 * s, bury = o.buried === false ? 0 : H;
+  const shell = mat(col, { own: true, rough: o.rust ? 0.95 : 0.7, metal: o.rust ? 0.1 : 0.35 });
+  // launch tube (stays in the ground) + the hole it leaves
+  const tubeM = mat(dark, { own: true }); cyl(g, R * 1.14, R * 1.1, H + 0.012 * s, '', 0, -bury - 0.014 * s, 0, { seg: 16, cast: false, mat: tubeM });
+  const hole = cyl(g, R * 1.1, R * 1.1, 0.004, '#0E0C0A', 0, 0.003, 0, { seg: 16, cast: false }); dyn(hole); hole.visible = false;
+  // canister: body, rims, cap, fuze stem, three prongs
+  const can = dyn(grp(g, 0, 0, 0)), body = grp(can, 0, -bury, 0);
+  cyl(body, R, R, H, '', 0, 0, 0, { seg: 16, mat: shell });
+  for (const yy of [0.012, 0.116]) cyl(body, R * 1.05, R * 1.05, 0.008 * s, '', 0, yy * s, 0, { seg: 16, mat: shell });
+  cyl(body, R * 0.98, R, 0.006 * s, dark, 0, H, 0, { seg: 16 });
+  cyl(body, 0.009 * s, 0.012 * s, 0.05 * s, o.rust ? '#6A4228' : '#5C6052', 0, H, 0, { seg: 8 });
+  const pr = dyn(grp(body, 0, H + 0.05 * s, 0));
+  for (let i = 0; i < 3; i++) { const a = i * 2.094; box(pr, 0.005 * s, 0.032 * s, 0.005 * s, o.rust ? '#5A3420' : '#2A2D26', Math.cos(a) * 0.007 * s, 0, Math.sin(a) * 0.007 * s, { rz: Math.cos(a) * 0.25, rx: -Math.sin(a) * 0.25 }); }
+  // parts for the x-ray view (hidden otherwise)
+  const parts = dyn(grp(body, 0, 0, 0)); parts.visible = false;
+  cyl(parts, R * 0.8, R * 0.8, 0.012 * s, '', 0, 0.004 * s, 0, { seg: 14, mat: mat('#3A3A3A', { em: '#FF6A2A', ei: 0.35 }) });   // launch charge
+  cyl(parts, R * 0.48, R * 0.48, 0.075 * s, '', 0, 0.025 * s, 0, { seg: 12, mat: mat('#E8C24A', { em: '#E8C24A', ei: 0.25 }) });   // main charge
+  for (let i = 0; i < 24; i++) { const a = i / 12 * Math.PI * 2 + (i >= 12 ? 0.26 : 0); ball(parts, 0.007 * s, '#C9CED6', Math.cos(a) * R * 0.74, (i >= 12 ? 0.07 : 0.045) * s, Math.sin(a) * R * 0.74, { detail: 0, ...NC }); }
+  // motion
+  const t0 = o.t ?? 1e9, L = o.launch ?? 1e9, D = Math.max(0.05, (o.h ?? 1) + bury - H / 2), v0 = Math.sqrt(2 * G * D), tA = v0 / G, B = L + tA, burst = o.burst !== false;
+  const disp = tt => { if (tt < L) return 0; const u = tt - L; if (u <= tA || burst) return Math.max(0, v0 * u - 0.5 * G * u * u); const fall = v0 * u - 0.5 * G * u * u; return Math.max(bury, fall); };
+  const height = tt => gy - bury + H / 2 + disp(tt) - gy;
+  tick(tt => {
+    pr.position.y = H + 0.05 * s - 0.008 * s * span(tt, t0, 0.06);
+    can.position.y = disp(tt); can.rotation.x = tt > L ? 0.35 * span(tt, L, tA) : 0; can.rotation.z = tt > L ? -0.2 * span(tt, L, tA) : 0;
+    if (!burst && tt > L + 2 * tA) can.rotation.z = -1.45 * span(tt, L + 2 * tA, 0.25, 'out');
+    can.visible = !(burst && tt >= B); hole.visible = tt >= L;
+    const xr = o.xray && tt >= o.xray[0] && tt < o.xray[1], xk = o.xray ? span(tt, o.xray[0], 0.3) * (1 - span(tt, o.xray[1] - 0.3, 0.3)) : 0;
+    parts.visible = !!xr; for (const m of [shell, tubeM]) { m.transparent = xk > 0.01; m.opacity = 1 - (m === shell ? 0.72 : 0.85) * xk; m.depthWrite = xk < 0.01; }
+  });
+  if (o.t != null) sfx(t0, 'tick', 0.9);
+  if (o.launch != null) {
+    emit('dust', { at: [x, gy + 0.05, z], t0: L, burst: 16, size: 0.22 * Math.max(1, s * 0.7), speed: 1.8 }); emit('debris', { at: [x, gy + 0.03, z], t0: L, burst: 8, size: 0.022 * s, speed: 2.2 });
+    sfx(L, 'impact', 0.45); sfx(L + 0.02, 'pop', 0.8);
+    if (burst) { explode(x, gy + (o.h ?? 1), z, B, { size: o.size ?? 0.7, crater: false }); sfx(B, 'explosion', 0.9); }
+  }
+  const P = (yy, tt) => { const w = new THREE.Vector3(0, yy + disp(tt ?? 0), 0); g.localToWorld(w); return w.toArray(); };
+  return { g, can, launch: L, apex: B, height, at: { prongs: tt => P(H + 0.06 * s - bury, tt), can: tt => P(H / 2 - bury, tt), charge: tt => P(0.006 * s - bury, tt), tube: () => P(-bury * 0.5, 0) } };
+}
+// warnSign(p, x, z, { kind: 'mines' | 'danger' | 'keepout', text, ry, h: 1.1, size: 0.62, rust }) — minefield / danger sign on a post (red triangle, skull, text)
+function warnSign(p, x, z, o = {}) {
+  const h = o.h ?? 1.1, sz = o.size ?? 0.62, g = grp(p, x, groundH(x, z), z, o.ry ?? 0), kind = o.kind ?? 'mines';
+  box(g, 0.05, h + 0.05, 0.05, o.rust ? '#5A3A26' : '#6B5638', 0, 0, -0.03);
+  const txt = o.text ?? { mines: 'MINES', danger: 'DANGER', keepout: 'KEEP OUT' }[kind] ?? 'DANGER';
+  const tex = canvasTex(512, 512, (c, w) => {
+    c.clearRect(0, 0, w, w); c.beginPath(); c.moveTo(16, 40); c.lineTo(w - 16, 40); c.lineTo(w / 2, w - 16); c.closePath(); c.fillStyle = o.rust ? '#A8322A' : '#D42A22'; c.fill(); c.lineWidth = 14; c.strokeStyle = '#F4F0E6'; c.stroke();
+    c.fillStyle = '#F4F0E6'; c.textAlign = 'center'; c.font = `900 ${txt.length > 6 ? 62 : 84}px Arial, sans-serif`; c.fillText(txt, w / 2, 140);
+    const cx = w / 2, cy = 250; c.beginPath(); c.arc(cx, cy, 52, 0, Math.PI * 2); c.fill(); c.fillRect(cx - 32, cy + 30, 64, 40);   // skull
+    c.fillStyle = '#D42A22'; c.beginPath(); c.arc(cx - 20, cy - 4, 14, 0, 7); c.arc(cx + 20, cy - 4, 14, 0, 7); c.fill(); c.fillRect(cx - 4, cy + 18, 8, 14);
+    for (const k of [-14, 0, 14]) c.fillRect(cx + k - 3, cy + 50, 6, 20);
+    c.strokeStyle = '#F4F0E6'; c.lineWidth = 16; c.lineCap = 'round'; c.beginPath(); c.moveTo(cx - 80, cy + 92); c.lineTo(cx + 80, cy + 132); c.moveTo(cx + 80, cy + 92); c.lineTo(cx - 80, cy + 132); c.stroke();
+  });
+  const m = new THREE.MeshStandardMaterial({ map: tex, transparent: true, alphaTest: 0.5, roughness: 0.8, emissive: '#ffffff', emissiveMap: tex, emissiveIntensity: 0.18, side: THREE.DoubleSide });
+  const pl = new THREE.Mesh(new THREE.PlaneGeometry(sz, sz), m); pl.position.set(0, h - sz * 0.3, 0.005); pl.castShadow = true; g.add(pl); dyn(pl);   // own textured material: keep it out of bake()
+  return { g, at: () => { const v = new THREE.Vector3(0, h - sz * 0.3, 0); g.localToWorld(v); return v.toArray(); } };
+}
+// markerFlag(p, x, z, { color: '#D42A22', t, h: 0.6 }) — small marker flag on a thin stick (deminers mark found mines); pops in at t
+function markerFlag(p, x, z, o = {}) {
+  const h = o.h ?? 0.6, g = grp(p, x, groundH(x, z), z, o.ry ?? 0); const NC = { cast: false };
+  cyl(g, 0.008, 0.01, h, '#D8D2C0', 0, 0, 0, { seg: 5, ...NC }); box(g, 0.16, 0.1, 0.006, o.color ?? '#D42A22', 0.08, h - 0.1, 0, NC);
+  if (o.t != null) appear(g, o.t, { from: 'rise' }); else stat(g);
+  return g;
+}
+
 // focusShot(at, t, dur, { dist: 3, az: 20, el: 8, center: [x,y,z], fov: 38, push: 0.82, tr, fy }) — from the scene: adds a cut + slow push-in on an anchor to CAM
 //   at = [x,y,z] | anchor function (board item, globe pin, layer, lineup item …); center = globe centre → the camera looks at the pin from outside (along the surface normal)
 function focusShot(at, t, dur, o = {}) {

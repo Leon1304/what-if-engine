@@ -430,5 +430,13 @@ Sie wirken zusätzlich zu `CAM`:
 ## assemble.py-Hinweise (v2.20)
 Story-Video über 58 s · Endcard + Bewertung über 6,5 s · `loop: false` · kein `TEASE` ab 40 s · Rückblick als Vollbild-Karte · unbekannte Musikstimmung oder Geräuschart.
 
+# Neu in v2.21 (Minen und Warnschilder)
+
+## Springmine (Erklärvideos zu Minen, Weltkrieg, Kampfmittel)
+- `boundingMine(p, x, z, { scale: 1, t, launch, h: 1, burst: true, size: 0.7, rust, buried: true, y, xray: [t0, t1], ry })`: Springmine wie die „Bouncing Betty“: Stahlbehälter im Abschussrohr, nur die drei Zünderstifte schauen aus dem Boden. `t` = Stifte werden gedrückt (Klick), `launch` = eine kleine Ladung schießt den Behälter senkrecht hoch (Staub, Dumpfschlag), er erreicht `h` m und zerplatzt dort (`burst: false` = Blindgänger, fällt zurück und kippt um). `xray` macht Hülle und Rohr gläsern und zeigt die Teile (Treibladung, Hauptladung, Stahlkugeln). `rust: true` = alter, rostiger Fund; `buried: false` steht sie frei auf dem Boden, `y` setzt die Höhe (z. B. Oberkante eines `strata`-Blocks). Nur schematisch, keine Bauanleitung.
+  → `{ g, can, launch, apex, height(t), at: { prongs, can, charge, tube } }`; `at.*` sind Anker für `callout()`, `height(t)` speist ein `RULER` (`LIVE.h = t => …`).
+- `warnSign(p, x, z, { kind: 'mines' | 'danger' | 'keepout', text, ry, h: 1.1, size: 0.62, rust })`: rotes Dreiecksschild mit Totenkopf und Text auf einem Pfosten; mit `appear(S.g, t)` einblenden. → `{ g, at }`
+- `markerFlag(p, x, z, { color, t, h: 0.6 })`: kleines Markierungsfähnchen (Fundstelle), poppt bei `t` auf.
+
 # Tests
 `bash tests/run.sh [name …]` baut die Beispiel-Story aus `template.html` und alle Szenen in `tests/` und rendert je drei Bilder; Seitenfehler lassen den Test scheitern. Der Workflow `test` läuft bei jeder Engine-Änderung auf GitHub. Neue Funktionen bekommen eine kleine Testszene in `tests/<thema>.story.js` + `.scene.js`.
