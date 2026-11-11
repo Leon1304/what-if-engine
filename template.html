@@ -9852,7 +9852,7 @@ function updateCamera(t) {
   const nr = a.pov ? 0.03 : 0.1; if (camera.near !== nr) { camera.near = nr; camera.updateProjectionMatrix(); }
   let fv = fov * fk * FOVK; CAMROLL = 0; for (const f of CAMFX) { const r = f(t, _p, _l, fv); if (r != null) fv = r; }   // v2.19: vertigo, crashZoom, droneShot, shaky
   camera.position.copy(_p); camera.lookAt(_l); for (const f of POSTCAM) f(t); if (CAMROLL) camera.rotateZ(CAMROLL);
-  if (Math.abs(camera.fov - fv) > 1e-3) { camera.fov = fv; camera.updateProjectionMatrix(); }
+  if (camera.fov !== fv) { camera.fov = fv; camera.updateProjectionMatrix(); }   // exactly the lens of this moment (was: kept the last one while it changed by less than 0.001° — a leftover from earlier frames)
   if (Math.abs(fy - 0.5) > 1e-3) camera.rotateX(-Math.atan((0.5 - fy) * 2 * Math.tan(THREE.MathUtils.degToRad(fv) / 2)));   // subject at fy (0 = top) instead of behind the centred caption
   if (yaw) camera.rotateY(yaw);
   const fdist = f => f == null ? null : typeof f === 'number' ? f : Array.isArray(f) ? _p.distanceTo(_tp.fromArray(f)) : TRACK[f] ? _p.distanceTo(TRACK[f].obj.getWorldPosition(_tp).add(_tp2.set(0, TRACK[f].dy ?? 1.55, 0))) : null;
@@ -10994,7 +10994,11 @@ function stepScene(t) {   // everything in the 3D scene at time t (no HUD) — a
   if (CFG.restReset !== false) for (const R of RESTS) { const n = R[0]; n.position.copy(R[1]); n.quaternion.copy(R[2]); n.scale.copy(R[3]); n.visible = R[4]; }
   for (const f of RIGS) { const r = f.root; if (!r) continue;   // v2.29: every frame starts from the figure's built pose — nothing left over from other frames
     const R = f._rest0 ??= { p: r.position.clone(), q: r.quaternion.clone(), s: r.scale.clone(), v: r.visible, bp: f.body?.position.clone(), bq: f.body?.quaternion.clone() };
-    r.position.copy(R.p); r.quaternion.copy(R.q); r.scale.copy(R.s); r.visible = R.v; if (f.body) { f.body.position.copy(R.bp); f.body.quaternion.copy(R.bq); } }
+    r.position.copy(R.p); r.quaternion.copy(R.q); r.scale.copy(R.s); r.visible = R.v; if (f.body) { f.body.position.copy(R.bp); f.body.quaternion.copy(R.bq); }
+    // every part of the figure too (hair, hat, coat, cape, head, hands, face, gear …): layers that add to a part (inertia, sway, recoil) start from the built pose in every frame —
+    // was: hair / hat / cape kept what the frames before had added, so a render block that starts in a fresh page showed them somewhere else (the pop at block borders)
+    if (!f.isModel && CFG.restReset !== false) { const P = f._restP ??= (() => { const a = []; r.traverse(n => { if (n !== r && n !== f.body && !n.userData.dyn && !n.isBone && !n.isSkinnedMesh) a.push([n, n.position.clone(), n.rotation.clone(), n.scale.clone(), n.visible]); }); return a; })();
+      for (let i = 0; i < P.length; i++) { const Q = P[i], n = Q[0]; n.position.copy(Q[1]); n.rotation.copy(Q[2]); n.scale.copy(Q[3]); n.visible = Q[4]; } } }
   applySky(t); WIND.t.value = st;
   runTickers(st);
   for (const h of hordes) h.update(st);
@@ -11113,9 +11117,12 @@ await physicsBake();   // simulate once, then every frame plays it back
 document.querySelectorAll('.err').forEach(n => n.remove());
 // --- motion audit (v2.29) — render.mjs --shots (and --audit) runs it: whatif.audit() → list of warnings ---
 //   1) pops: every figure, animal and moving object at 30 fps — sudden jumps, joints that snap in one frame, jitter (back and forth every frame)
-//   2) purity: 12 moments evaluated again after jumping back from later times and after skipping frames, the way render workers and
-//      CI shards do; anything that differs shows up in the MP4 as flicker or objects jumping between frames
-const AUD_J = ['body', 'hips', 'chest', 'neck', 'head', 'armL', 'armR', 'foreL', 'foreR', 'legL', 'legR', 'shinL', 'shinR'], _av = new THREE.Vector3(), _aq = new THREE.Quaternion();
+//   2) purity: a frame must not depend on the frames drawn before it. The video is rendered in blocks (12 on GitHub, each in a fresh page) and inside a block by
+//      workers that draw every 3rd frame — whatever a frame inherits from earlier ones pops at block borders or flickers. Checked at every border of 12 and 20 blocks
+//      and 12 more moments: jumped to straight from 0 s · played frame by frame · only every 3rd frame · after jumping back — and (render.mjs) in a second, freshly
+//      opened page. Compared: EVERY part below every figure, animal and moving object (hair, hat, coat, hands, face, held things …: place, rotation, size, visible),
+//      the camera, lights, materials and instanced effects. Lines read "MOTION: … depends on earlier frames".
+const AUD_J = ['body', 'hips', 'chest', 'neck', 'head', 'armL', 'armR', 'foreL', 'foreR', 'legL', 'legR', 'shinL', 'shinR', 'hat', 'hair', 'coat', 'cape'], _av = new THREE.Vector3(), _aq = new THREE.Quaternion();
 const _ab = new THREE.Box3(), _as = new THREE.Sphere(), _ac = new THREE.Vector3();
 // v2.31: what the viewer can see — inside the frame (10 % margin) and at least ~1.2 % of the frame height
 function audOn(x, y, z, r) { _ac.set(x, y, z).applyMatrix4(camera.matrixWorldInverse); const d = -_ac.z; if (d < 0.05) return d > -r ? 1 : 0; const hy = Math.tan(camera.fov * Math.PI / 360) * d, hx = hy * camera.aspect;
@@ -11139,15 +11146,54 @@ function audSnap(L) {
     return { vis, on: vis ? audOn(_av.x, _av.y + it.up, _av.z, it.r) : 0, p: [_av.x, _av.y, _av.z], q: it.J.map(j => j.quaternion.toArray()), wq: it.k === 'obj' ? n.getWorldQuaternion(_aq).toArray() : null }; });
 }
 const audAng = (a, b) => 2 * Math.acos(Math.min(1, Math.abs(a[0] * b[0] + a[1] * b[1] + a[2] * b[2] + a[3] * b[3])));
+const AUD_N = 13;   // per part: 9 rotation/scale + 3 place + visible
+function audParts(L) {   // every node below every figure, animal and moving object, with the figure part it belongs to (hair, hat, coat, handR, mouth …)
+  const P = [], seen = new Map();
+  L.forEach((it, j) => { if (it.k === 'crowd') return; const f = it.f, nm = new Map(), put = (n, s) => { if (n?.isObject3D && !nm.has(n)) nm.set(n, s); };
+    if (f) { for (const h of f.hands ?? []) put(h.hd, h.sx < 0 ? 'handL' : 'handR'); if (f.M) for (const k in f.M) [].concat(f.M[k]).forEach(x => put(x, 'mouth'));
+      for (const k in f) { const v = f[k]; if (k[0] === '_' || k === 'look') continue; if (v?.isObject3D) put(v, k); else if (Array.isArray(v)) v.forEach(x => put(x, k)); } }
+    it.n.traverse(n => { if (seen.has(n) || P.length >= 16000) return; seen.set(n, P.length); let p = n, s; while (p && !(s = nm.get(p)) && p !== it.n) p = p.parent;
+      P.push({ n, j, top: n === it.n, pi: n === it.n ? -1 : seen.get(n.parent) ?? -1, part: n === it.n ? '' : s ?? n.name ?? '' }); }); });
+  const mats = [], ms = new Set(); P.forEach((q, pi) => { const m = q.n.material; if (m && !Array.isArray(m) && !ms.has(m) && mats.length < 4000) { ms.add(m); mats.push({ m, j: q.j, part: q.part, pi }); } });
+  const lights = []; scene.traverse(n => { if (n.isLight) lights.push(n); });
+  const inst = []; scene.traverse(n => { if (n.isInstancedMesh) inst.push(n); });
+  return { P, mats, lights, inst };
+}
+function audPure(Q) {   // everything a frame shows of the moving things, as numbers: local transform + visibility of every part, materials, lights, instanced effects, camera
+  world.updateMatrixWorld(true); camera.updateMatrixWorld(true);
+  const P = Q.P, n0 = P.length * AUD_N, n1 = n0 + Q.mats.length * 5, n2 = n1 + Q.lights.length * 2, n3 = n2 + Q.inst.length, a = new Float32Array(n3 + 14);
+  for (let i = 0, o = 0; i < P.length; i++, o += AUD_N) { const n = P[i].n, e = (P[i].top ? n.matrixWorld : n.matrix).elements;
+    a[o] = e[0]; a[o + 1] = e[1]; a[o + 2] = e[2]; a[o + 3] = e[4]; a[o + 4] = e[5]; a[o + 5] = e[6]; a[o + 6] = e[8]; a[o + 7] = e[9]; a[o + 8] = e[10]; a[o + 9] = e[12]; a[o + 10] = e[13]; a[o + 11] = e[14];
+    let v = n.visible; const pi = P[i].pi; if (pi < 0) for (let p = n.parent; v && p; p = p.parent) v = p.visible; else if (v) v = a[pi * AUD_N + 12] > 0; a[o + 12] = v ? 1 : 0; }
+  Q.mats.forEach(({ m }, i) => { const o = n0 + i * 5, c = m.color, e = m.emissive, k = m.emissiveIntensity ?? 1; a[o] = m.visible === false ? -1 : m.opacity ?? 1; if (c) { a[o + 1] = c.r + 2 * c.g; a[o + 2] = c.b + 2 * c.g; } if (e) { a[o + 3] = (e.r + 2 * e.g) * k; a[o + 4] = (e.b + 2 * e.g) * k; } });
+  Q.lights.forEach((l, i) => { const o = n1 + i * 2; let v = l.visible; for (let p = l.parent; v && p; p = p.parent) v = p.visible; a[o] = v ? l.intensity : 0; a[o + 1] = l.color.r + 2 * l.color.g + 4 * l.color.b; });
+  Q.inst.forEach((m, i) => { const x = m.instanceMatrix.array, c = Math.min(m.count, 3000); let s = 0, w = 0; for (let k = 0; k < c; k++) { const o = k * 16, sz = Math.abs(x[o]) + Math.abs(x[o + 1]) + Math.abs(x[o + 2]) + Math.abs(x[o + 5]) + Math.abs(x[o + 9]); s += sz * (x[o + 12] * 1.3 + x[o + 13] * 0.7 + x[o + 14] + 1); w += sz; }   // order does not matter (pooled effects), parked (size 0) instances do not count
+    let v = m.visible; for (let p = m.parent; v && p; p = p.parent) v = p.visible; a[n2 + i] = v && w > 0 ? s / w : 0; });
+  { const e = camera.matrixWorld.elements, o = n3; a[o] = e[0]; a[o + 1] = e[1]; a[o + 2] = e[2]; a[o + 3] = e[4]; a[o + 4] = e[5]; a[o + 5] = e[6]; a[o + 6] = e[8]; a[o + 7] = e[9]; a[o + 8] = e[10]; a[o + 9] = e[12]; a[o + 10] = e[13]; a[o + 11] = e[14]; a[o + 12] = camera.fov; a[o + 13] = camera.near; }
+  return a;
+}
+// the moments the purity check looks at: the first frame of every render block (12 = GitHub, 20 = long videos / local shards) + 12 scattered ones
+function audFrames(NF, N) { const s = new Set(); for (const nb of [12, 20]) for (let k = 1; k < nb; k++) s.add(Math.floor(k * NF / nb)); for (let k = 0; k < 12; k++) s.add(1 + Math.floor(hash(k * 7.13 + 0.37) * (NF - 2)));
+  return [...s].filter(i => i > 0 && i <= N).sort((a, b) => a - b); }
+// fingerprint per part (two grids of 0.5 mm / 0.03°, so a value sitting on a grid line cannot fake a difference) — to compare two browser pages without shipping every matrix
+function audHash(a, n, out, at) { for (let i = 0; i < n; i++) { let h1 = 2166136261, h2 = 2166136261; for (let k = 0; k < AUD_N; k++) { const x = a[i * AUD_N + k] * 2000; h1 = Math.imul(h1 ^ Math.round(x), 16777619); h2 = Math.imul(h2 ^ Math.round(x + 0.5), 16777619); } out[at + 2 * i] = h1 >>> 0; out[at + 2 * i + 1] = h2 >>> 0; } }
+const audB64 = u32 => b64(new Uint8Array(u32.buffer)), audU32 = s => { const b = atob(s), u = new Uint8Array(b.length); for (let i = 0; i < b.length; i++) u[i] = b.charCodeAt(i); return new Uint32Array(u.buffer); };
+function audFresh(o = {}) {   // runs in a second, freshly opened page (render.mjs): the block starts, latest first, each jumped to straight from 0 s — the way a render block begins
+  const fps = o.fps ?? 30, dt = 1 / fps, N = Math.floor(DUR * fps), L = audItems(), Q = audParts(L), n = Q.P.length + 1, F = audFrames(Math.round(DUR * fps), N).filter((i, k, A) => A.length <= 24 || k % Math.ceil(A.length / 24) === 0);
+  const out = new Uint32Array(F.length * 2 * n), cam = new Float32Array(AUD_N);
+  [...F].reverse().forEach(i => { stepScene(teaseV(0)); stepScene(teaseV(i * dt)); const a = audPure(Q), k = F.indexOf(i); audHash(a, n - 1, out, k * 2 * n); cam.set(a.subarray(a.length - 14, a.length - 1)); audHash(cam, 1, out, k * 2 * n + 2 * (n - 1)); });
+  return { frames: F, parts: n - 1, data: audB64(out) };
+}
 function motionAudit(o = {}) {
   const fps = o.fps ?? 30, dt = 1 / fps, N = Math.floor(DUR * fps), L = audItems(), W = new Map(), warn = (key, sev, msg) => { const w = W.get(key); if (!w || sev > w.sev) W.set(key, { sev, msg }); };
-  const at = (n, p) => `(${p[0].toFixed(1)}, ${p[2].toFixed(1)})`, K = 12, keyT = [...Array(K).keys()].map(k => Math.round((k + 0.5) / K * N)), ref = new Map();
+  const at = (n, p) => `(${p[0].toFixed(1)}, ${p[2].toFixed(1)})`, Q = audParts(L), keyT = o.purity === false ? [] : audFrames(Math.round(DUR * fps), N), keyS = new Set(keyT), ref = new Map(), JMP = new Map();
+  for (const i of keyT) { stepScene(teaseV(0)); stepScene(teaseV(i * dt)); JMP.set(i, audPure(Q)); }   // purity, first: every moment jumped to straight from 0 s (the way a render block starts) — before the straight run below has left anything behind
   let prev = null, prev2 = null, tvP = 0, cam1 = null, cam2 = null; const flips = L.map(() => []), _cd = new THREE.Vector3(), physN = new Map(PHYS.bodies.map(B => [B.node, B]));
   const hitNow = (n, ts) => { const B = physN.get(n); return !!B && (Math.abs(ts - B.t0) < 0.25 || PHYS.blasts.some(b => Math.abs(ts - b.t) < 0.25)); };   // simulated things may be kicked off violently (impact, blast)
   const cutAt = (a, b) => Math.abs(b - a - dt) > 0.05 || CUTS.some(c => c > a + 1e-6 && c <= b + 1e-6);   // a camera cut or the jump into / out of a TEASE flash-forward lies between two frames
   for (let i = 0; i <= N; i++) {
     const t = i * dt, tv = teaseV(t); stepScene(tv); const cut = i > 0 && cutAt(tvP, tv); tvP = tv; if (cut) { prev = prev2 = cam1 = cam2 = null; flips.forEach(F => { F.length = 0; }); }   // v2.31: as the viewer sees it — nothing is compared across a cut
-    const S = audSnap(L), mbw = MBAUTO.some(([x, y]) => t >= x - 0.02 && t <= y + 0.02); if (keyT.includes(i)) ref.set(i, S);   // mbw: fast action with motion blur — only big flips count
+    const S = audSnap(L), mbw = MBAUTO.some(([x, y]) => t >= x - 0.02 && t <= y + 0.02); if (keyS.has(i)) ref.set(i, { S, U: audPure(Q) });   // mbw: fast action with motion blur — only big flips count
     { camera.getWorldDirection(_cd); const cm = { p: camera.position.clone(), d: _cd.clone() }, shk = SHAKES.some(s => t >= s.t - 0.05 && t <= s.t + (s.dur ?? 0.6) + 0.1);   // camera: a jump that is not a cut
       if (cam1 && cam2 && !shk) { const a1 = cm.d.angleTo(cam1.d), a0 = cam1.d.angleTo(cam2.d), m1 = cm.p.distanceTo(cam1.p), m0 = cam1.p.distanceTo(cam2.p), ref2 = Math.max(2, cm.p.distanceTo(_l));
         if (a1 > 0.1 && a1 > 3 * a0 + 0.05) warn('cam:turn', 6 + a1, `the camera turns ${(a1 * 57.3).toFixed(0)}° in one frame at ${t.toFixed(2)} s without a cut – make it a cut (tr: 'cut') or a real move`);
@@ -11166,13 +11212,33 @@ function motionAudit(o = {}) {
         if (ang > (mbw ? 2.1 : 0.75) && ang > 3 * angPrev + 0.2) warn(it.name + ':snap:' + it.JN[k], ang, `${it.name}: ${it.JN[k]} snaps ${(ang * 57.3).toFixed(0)}° in one frame at ${t.toFixed(2)} s ${at(it.n, a.p)}`); }); });
     prev2 = prev; prev = S;
   }
-  // purity: back from the end (reverse order) and forward with skipped frames — must match the straight run exactly
-  const cmp = (i, S, how) => { const R = ref.get(i); L.forEach((it, j) => { const a = S[j], b = R[j]; if ((!a.vis && !b.vis) || !(a.on || b.on)) return; const t = (i * dt).toFixed(2);
-      if (a.vis !== b.vis) return warn(it.name + ':pure', 9, `${it.name} is ${b.vis ? 'visible' : 'hidden'} at ${t} s in a straight run but ${a.vis ? 'visible' : 'hidden'} ${how} – state left over from other frames (flickers between render workers)`);
-      const dp = Math.hypot(a.p[0] - b.p[0], a.p[1] - b.p[1], a.p[2] - b.p[2]); if (dp > 0.003) return warn(it.name + ':pure', 5 + dp, `${it.name} is ${dp.toFixed(2)} m off at ${t} s ${how} ${at(it.n, b.p)} – state left over from other frames (jumps between render workers)`);
-      for (let k = 0; k < a.q.length; k++) if (audAng(a.q[k], b.q[k]) > 0.01) return warn(it.name + ':pure', 4, `${it.name}: ${it.JN[k]} differs at ${t} s ${how} – pose left over from other frames`); }); };
-  for (const i of [...keyT].reverse()) { stepScene(teaseV(i * dt)); cmp(i, audSnap(L), 'after jumping back'); }
-  for (const i of keyT) { stepScene(0); stepScene(teaseV(i * dt)); cmp(i, audSnap(L), 'when frames are skipped'); }
+  // purity: the same moment reached in other ways must match the straight run exactly — every part, not only the main joints
+  const P = Q.P, nP = P.length, n0 = nP * AUD_N, n1 = n0 + Q.mats.length * 5, n2 = n1 + Q.lights.length * 2, n3 = n2 + Q.inst.length, TAIL = '– depends on earlier frames', cm = x => x >= 0.995 ? x.toFixed(2) + ' m' : (x * 100).toFixed(1) + ' cm';
+  const cmp = (i, A, how) => { const R = ref.get(i); if (!R) return; const B = R.U, t = (i * dt).toFixed(2), per = new Map();
+    for (let k = 0, o = 0; k < nP; k++, o += AUD_N) { const va = A[o + 12], vb = B[o + 12]; if (!va && !vb) continue; const q = P[k]; let e = per.get(q.j); if (!e) per.set(q.j, e = { sc: 0, parts: new Map(), vis: null });
+      if (va !== vb) { if (!e.vis && (q.pi < 0 || A[q.pi * AUD_N + 12] === B[q.pi * AUD_N + 12])) e.vis = { part: q.part, was: vb > 0 }; continue; }   // the topmost part that is shown / hidden differently
+      let dr = 0; for (let c = 0; c < 9; c++) dr = Math.max(dr, Math.abs(A[o + c] - B[o + c])); const dp = Math.hypot(A[o + 9] - B[o + 9], A[o + 10] - B[o + 10], A[o + 11] - B[o + 11]);
+      if (dp > 0.002 || dr > 0.004) { const sc = dp + 0.35 * dr, w = e.parts.get(q.part); if (!w || sc > w.sc) e.parts.set(q.part, { sc, dp, dr }); e.sc = Math.max(e.sc, sc); } }
+    Q.mats.forEach((mm, k) => { const o = n0 + k * 5; let d = 0; for (let c = 0; c < 5; c++) d = Math.max(d, Math.abs(A[o + c] - B[o + c])); if (d > 0.02 && A[mm.pi * AUD_N + 12] + B[mm.pi * AUD_N + 12] > 0) { let e = per.get(mm.j); if (!e) per.set(mm.j, e = { sc: 0, parts: new Map(), vis: null }); e.mat ??= mm.part || 'body'; } });
+    for (const [j, e] of per) { if (!e.sc && !e.vis && !e.mat) continue; const it = L[j], on = R.S[j].on > 0, key = it.name + ':pure', off = on ? '' : ' (off screen at that moment)';
+      if (e.vis) { warn(key, (on ? 30 : 3) + 1, `${it.name}${e.vis.part ? ': ' + e.vis.part : ''} is ${e.vis.was ? 'visible' : 'hidden'} at ${t} s when the video plays straight through, but ${e.vis.was ? 'hidden' : 'visible'} ${how} ${TAIL}${off}`); continue; }
+      if (!e.sc) { warn(key, on ? 12 : 2, `${it.name}: the colour / opacity of its ${e.mat} differs at ${t} s ${how} ${TAIL}${off}`); continue; }
+      const top = [...e.parts].sort((a, b) => b[1].sc - a[1].sc), [pn, w] = top[0], more = top.slice(1, 4).map(x => x[0] || 'whole body').filter(Boolean);
+      warn(key, (on ? 30 : 3) + Math.min(5, e.sc * 4), `${it.name}: ${pn ? pn : 'the whole ' + (it.k === 'rig' ? 'figure' : 'object')} is ${[w.dp > 0.002 ? cm(w.dp) : '', w.dr > 0.004 ? (Math.asin(Math.min(1, w.dr)) * 57.3).toFixed(1) + '°' : ''].filter(Boolean).join(' / ')} off at ${t} s ${how}${more.length ? ' (also: ' + more.join(', ') + ')' : ''} ${TAIL}${off}`); }
+    Q.lights.forEach((l, k) => { const o = n1 + k * 2; if (Math.abs(A[o] - B[o]) > 0.02 * (1 + Math.abs(B[o])) || Math.abs(A[o + 1] - B[o + 1]) > 0.03) warn('light:pure:' + k, 8, `a light${l.name ? ' (' + l.name + ')' : ''} is ${A[o] > B[o] ? 'brighter' : A[o] < B[o] ? 'darker' : 'another colour'} at ${t} s ${how} (${A[o].toFixed(2)} instead of ${B[o].toFixed(2)}) ${TAIL}`); });
+    Q.inst.forEach((m, k) => { const o = n2 + k; if (Math.abs(A[o] - B[o]) > 0.02 * (1 + Math.abs(B[o]))) warn('inst:pure:' + k, 7, `${m.userData.crowd ? 'a crowd' : 'an instanced effect' + (m.name ? ' (' + m.name + ')' : '')} differs at ${t} s ${how} ${TAIL}`); });
+    { let dr = 0; for (let c = 0; c < 9; c++) dr = Math.max(dr, Math.abs(A[n3 + c] - B[n3 + c])); const dp = Math.hypot(A[n3 + 9] - B[n3 + 9], A[n3 + 10] - B[n3 + 10], A[n3 + 11] - B[n3 + 11]), df = Math.abs(A[n3 + 12] - B[n3 + 12]) + Math.abs(A[n3 + 13] - B[n3 + 13]);
+      if (dp > 0.002 || dr > 0.002 || df > 0.01) warn('cam:pure', 40, `the camera is ${[dp > 0.002 ? cm(dp) : '', dr > 0.002 ? (dr * 57.3).toFixed(2) + '°' : '', df > 0.01 ? 'lens ' + df.toFixed(2) : ''].filter(Boolean).join(' / ')} off at ${t} s ${how} ${TAIL}`); } };
+  for (const i of keyT) cmp(i, JMP.get(i), 'when a render block starts there (jumped to from 0 s)');
+  for (const i of keyT) { stepScene(teaseV(0)); for (let k = 8; k >= 0; k--) if (i - 3 * k >= 0) stepScene(teaseV((i - 3 * k) * dt)); cmp(i, audPure(Q), 'when only every 3rd frame is drawn (render workers)'); }
+  for (const i of [...keyT].reverse()) { stepScene(teaseV(i * dt)); cmp(i, audPure(Q), 'after jumping back from later frames'); }
+  const fr = o.fresh;   // fingerprints from a second, freshly opened page (render.mjs): catches what only a new page shows — values captured at the first frame drawn, anything random at build time
+  if (fr?.data) { const H = audU32(fr.data), n = fr.parts + 1, mine = new Uint32Array(2 * n), cam = new Float32Array(AUD_N);
+    if (fr.parts !== nP) warn('fresh:n', 50, `the scene is built differently every time the page loads (${fr.parts} moving parts in a second page, ${nP} here) – something random (Math.random, Date) at build time: every render worker draws another scene (flicker)`);
+    else fr.frames.forEach((i, k) => { const R = ref.get(i); if (!R) return; audHash(R.U, nP, mine, 0); cam.set(R.U.subarray(R.U.length - 14, R.U.length - 1)); audHash(cam, 1, mine, 2 * nP); const bad = new Map(), o = k * 2 * n;
+      for (let p = 0; p < n; p++) if (mine[2 * p] !== H[o + 2 * p] && mine[2 * p + 1] !== H[o + 2 * p + 1]) { if (p === nP) { warn('cam:pure', 39, `the camera differs at ${(i * dt).toFixed(2)} s in a freshly opened page ${TAIL} (or on what the page drew first)`); continue; }
+        const q = P[p]; if (!R.U[p * AUD_N + 12]) continue; const s = bad.get(q.j) ?? new Set(); s.add(q.part || 'whole body'); bad.set(q.j, s); }
+      for (const [j, s] of bad) { const it = L[j], on = R.S[j].on > 0; warn(it.name + ':pure', (on ? 29 : 2.5), `${it.name}: ${[...s].slice(0, 4).join(', ')} differ${s.size === 1 ? 's' : ''} at ${(i * dt).toFixed(2)} s in a freshly opened page ${TAIL} or on what the page drew first / on something random at build time${on ? '' : ' (off screen at that moment)'}`); } }); }
   return [...W.values()].sort((a, b) => b.sev - a.sev).slice(0, o.max ?? 14).map(w => w.msg);
 }
 window.whatif = {
@@ -11201,7 +11267,8 @@ window.whatif = {
     return { dur: DUR, hits, shakes: SHAKES.map(s => ({ t: r2(s.t), amp: r2(s.amp ?? 0.3), dur: r2(s.dur ?? 0.5) })), flashes: FLASHES.map(f => ({ t: r2(f.t), a: r2(f.a ?? 0.5) })), score, stats,
       night: SKY.map(([x, n]) => [r2(x), SKIES[n]?.nk ?? 0]), slow: (typeof SLOWMO === 'undefined' ? [] : SLOWMO).map(s => [r2(s.t ?? s[0] ?? 0), r2(s.dur ?? s[1] ?? 1)]) }; },
   probe(src) { return eval(src); },   // debugging: node render.mjs page.html --probe "RIGS.length" (code runs inside the engine)
-  audit(o = {}) { HITBOX.rep.clear(); const m = motionAudit(o); goreAudit();
+  audit(o = {}) { if (o.fresh === true) return audFresh(o);   // second page: fingerprints only (see motionAudit)
+    HITBOX.rep.clear(); const m = motionAudit(o); goreAudit();
     const hit = [...HITBOX.rep.values()].filter(r => r.d > 0.3).sort((a, b) => b.d - a.d).slice(0, 8).map(r => { const i = RIGS.indexOf(r.f), B = r.B, nm = r.f.who ? `'${r.f.who}' #${i}` : r.f.kind === 'zombie' ? `zombie #${i}` : `figure #${i}`;
       return `${nm} stands ${r.d.toFixed(2)} m inside ${B?.src ? 'a ' + B.src : 'an object'} (${(2 * B.hx).toFixed(1)} × ${(2 * B.hz).toFixed(1)} m, ${B.y0.toFixed(1)}–${B.y1.toFixed(1)} m high, at ${B.x.toFixed(1)}, ${B.z.toFixed(1)}) around ${r.t.toFixed(2)} s – ${r.d > 0.45 ? 'too deep to push out: move the figure or its path, or noHit() if it is meant to be inside' : 'pushed out automatically; place it beside it'}`; });
     return { motion: m, gore: [...GORE.warn], hit }; },

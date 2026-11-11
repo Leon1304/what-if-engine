@@ -6,6 +6,8 @@
 //   node render.mjs page.html --audio out.wav
 //   node render.mjs page.html --srt out.srt   (v2.30: subtitles for YouTube, same pages + timing as the captions)
 //   node render.mjs page.html --audit   → MOTION: / HITBOX: / GORE: lines (pops, snapping joints, jitter, state left over between frames, figures inside props); --shots runs it too (--no-audit = off)
+//     The audit also opens the page a second time and compares both (anything that depends on earlier frames or differs from page to page pops at the borders of
+//     render blocks / flickers between render workers); --no-fresh skips that second page.
 // Landscape pages (CFG.aspect: '16:9') render 16:9 with the same --w (short side): 1440 → 2560x1440.
 // Needs in this folder: npm i three@0.170.0 playwright ; ffmpeg on PATH.
 // Frames stay in <out>.frames/: a stopped run resumes, and --redo a-b re-renders only that time range (after a scene/caption
@@ -26,13 +28,13 @@ const src = readFileSync(file, 'utf8');
 const LAND = /\baspect:\s*['"](16:9|landscape)['"]/.test(src);   // v2.25: 16:9 page → 1920x1080 viewport; --w is always the short side (1440 = 2K → 2560x1440)
 const html = /^\s*<!doctype/i.test(src) ? src : '<!doctype html><html><head><meta charset="utf-8"></head><body>' + src + '</body></html>';
 
-async function openPage() {
+async function openPage(W0 = W) {   // W0: render width of this page (the audit pages draw nothing worth seeing → tiny)
   const browser = await chromium.launch({
     executablePath: existsSync('/opt/pw-browsers/chromium') ? '/opt/pw-browsers/chromium' : undefined,
     args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'],
     proxy: process.env.HTTPS_PROXY ? { server: process.env.HTTPS_PROXY } : undefined
   });
-  const ctx = await browser.newContext({ viewport: LAND ? { width: 1920, height: 1080 } : { width: 1080, height: 1920 }, deviceScaleFactor: W / 1080, ignoreHTTPSErrors: true });
+  const ctx = await browser.newContext({ viewport: LAND ? { width: 1920, height: 1080 } : { width: 1080, height: 1920 }, deviceScaleFactor: W0 / 1080, ignoreHTTPSErrors: true });
   await ctx.addInitScript(() => { window.__EXPORT__ = true; });
   await ctx.route('**/*', route => {
     const url = route.request().url();
@@ -51,10 +53,16 @@ async function openPage() {
   await page.goto('http://whatif.local/');
   try { await page.waitForFunction(() => window.whatif, null, { timeout: 120000 }); }
   catch { console.log('PAGE DID NOT START\n' + errors.join('\n')); await browser.close(); process.exit(1); }
-  await page.evaluate(async ([w, F]) => { await document.fonts.ready; window.whatif.setRenderWidth(w); window.whatif.fps?.(F); window.whatif.seek(0); }, [LAND ? Math.round(W * 16 / 9) : W, fps]);
+  await page.evaluate(async ([w, F]) => { await document.fonts.ready; window.whatif.setRenderWidth(w); window.whatif.fps?.(F); window.whatif.seek(0); }, [LAND ? Math.round(W0 * 16 / 9) : W0, fps]);
   return { browser, page, errors };
 }
 const report = errors => { if (errors.length) console.log('PAGE ERRORS:\n' + [...new Set(errors)].slice(0, 12).join('\n')); };
+// purity, second page: a freshly opened page jumps straight to the block starts and sends fingerprints of every moving part; the audit in the first page compares them
+async function freshPrints() {
+  if (flag('no-fresh')) return null;
+  const { browser, page } = await openPage(135);
+  try { return await page.evaluate(() => window.whatif.audit({ fresh: true })); } catch (e) { return null; } finally { await browser.close(); }
+}
 const AF = 'loudnorm=I=-14:TP=-1.5:LRA=11,aresample=48000', igPath = v => v.replace(/\.mp4$/, '') + '-ig.mp4';
 const ff = args => { const r = spawnSync('ffmpeg', ['-y', '-loglevel', 'error', ...args], { stdio: 'inherit' }); if (r.status !== 0) { console.log('ffmpeg failed'); process.exit(1); } };
 
@@ -69,8 +77,8 @@ if (opt('probe')) {   // v2.29 debugging: evaluate code inside the engine (after
   report(errors); await browser.close(); process.exit(0);
 }
 if (flag('audit') && !opt('shots')) {   // v2.29: node render.mjs page.html --audit → motion + gore check of the whole video, no images
-  const { browser, page, errors } = await openPage(), t0 = Date.now();
-  const A = await page.evaluate(() => window.whatif.audit());
+  const t0 = Date.now(), fresh = await freshPrints(), { browser, page, errors } = await openPage(135);
+  const A = await page.evaluate(fresh => window.whatif.audit({ fresh }), fresh);
   for (const m of A.motion) console.log('MOTION: ' + m); for (const m of A.hit ?? []) console.log('HITBOX: ' + m); for (const g of A.gore) console.log('GORE: ' + g);
   if (!A.motion.length) console.log('motion: ok (no pops, jitter or left-over state)');
   console.log(`audit ${((Date.now() - t0) / 1000).toFixed(0)} s`); report(errors); await browser.close(); process.exit(0);
@@ -88,7 +96,8 @@ if (opt('shots')) {
   }
   const info = await page.evaluate(() => window.whatif.info()), { gore: G0, ...rest } = info;
   console.log('scene:', JSON.stringify(rest));
-  const A = flag('no-audit') ? { motion: [], gore: G0 ?? [] } : await page.evaluate(() => window.whatif.audit?.() ?? { motion: [], gore: [] });   // v2.29 motion + gore audit
+  const fresh = flag('no-audit') ? null : await freshPrints();
+  const A = flag('no-audit') ? { motion: [], gore: G0 ?? [] } : await page.evaluate(fresh => window.whatif.audit?.({ fresh }) ?? { motion: [], gore: [] }, fresh);   // v2.29 motion + gore audit
   for (const m of A.motion) console.log('MOTION: ' + m);
   for (const m of A.hit ?? []) console.log('HITBOX: ' + m);
   for (const g of A.gore) console.log('GORE: ' + g);
