@@ -17,8 +17,6 @@ Manual run: Actions → render → Run workflow (page path, width 1440 / 2160 / 
 ## Engine v2.24 (Nov 2026): thumbnails with a wow effect
 - `THUMB.focus` + `dof` (sharp subject, melted background), `rays` (light burst with a clear hole for the subject), `glow`, `q` (big question mark), `hide` (blurred payoff box).
 
-## Engine v2.22 (Nov 2026): no review card, seamless loop
-
 ## Engine v2.23 (Nov 2026): no review card, seamless loop
 - **Review card removed:** `END.review` is ignored (card, stars, voice and sounds gone); the CTA sits on the end card again; assemble.py warns if a story still has one.
 - **Seamless loop (`CFG.loop`, default on):** the last `CFG.loopFade` s (0.6) dissolve into the hook's pre-roll (scene + camera at t − DUR), so the last frame is frame 0; cards fade, the clock switches to the hook time, an `instant` hook caption fades in as it stands on frame 0; music and SFX fade with it. `END.loop` = last spoken line, right-aligned to end at the seam and lead into the hook.

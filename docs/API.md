@@ -459,8 +459,6 @@ Zusätzliche Felder in `THUMB` (je Variante), sparsam 1–2 pro Thumbnail:
 - `q: true | [x%, y%]`: großes Fragezeichen in der Akzentfarbe.
 - `hide: [x%, y%, breite%, höhe%]` (+ `hideText`, Standard „???“): verwischter Kasten über der Auflösung, damit die Frage offen bleibt.
 
-# Neu in v2.22 (Bewertungskarte weg, nahtloser Loop)
-
 # Neu in v2.23 (Bewertungskarte weg, nahtloser Loop)
 
 ## Keine Bewertungskarte mehr
