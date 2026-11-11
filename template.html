@@ -1217,68 +1217,143 @@ function field(p, x, z, w, d, o = {}) {   // crop rows (instanced); crop: corn |
   return { g, im };
 }
 const haybale = (p, x, z, ry = 0) => { const g = stat(grp(p, x, 0, z, ry)); cyl(g, 0.6, 0.6, 1.1, '#D9B65C', 0, 0.6, -0.55, { rx: Math.PI / 2, seg: 10 }); return g; };
-function vehicle(p, x, z, o = {}) {   // kind: car | sports | taxi | police | van | pickup | bus | truck | tractor — returns { g, wheels } (police: { siren } light bar)
+// v2.40 vehicle parts: bodies from side profiles with real wheel arches, wheels with rims and tread, lamp pairs as one mesh; fuse() merges the paint work of one vehicle into a few draw calls
+const _vcM = new Map(), _vcMat = (rough = 0.88, metal = 0) => { const k = rough + '|' + metal; if (!_vcM.has(k)) _vcM.set(k, new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: rough, metalness: metal })); return _vcM.get(k); };
+const _vcGeo = (key, build) => G('vc' + key, () => { const t = new THREE.Group(), gs = []; build(t); t.updateMatrixWorld(true);   // a small model built from primitives once → one vertex-coloured geometry (shared by every copy)
+  t.traverse(o => { if (!o.isMesh) return; const g = o.geometry.index ? o.geometry.toNonIndexed() : o.geometry.clone(); for (const k of Object.keys(g.attributes)) if (k !== 'position' && k !== 'normal') g.deleteAttribute(k); g.applyMatrix4(o.matrixWorld);
+    const n = g.attributes.position.count, ca = new Float32Array(n * 3), c = o.material.color; for (let i = 0; i < n; i++) { ca[3 * i] = c.r; ca[3 * i + 1] = c.g; ca[3 * i + 2] = c.b; } g.setAttribute('color', new THREE.BufferAttribute(ca, 3)); gs.push(g); });
+  return mergeGeometries(gs); });
+const _boxesG = list => G('bx' + JSON.stringify(list), () => mergeGeometries(list.map(([w, h, d, x, y, z]) => new THREE.BoxGeometry(w, h, d).translate(x, y, z))));   // several boxes as one geometry (a pair of lamps = one mesh, one material)
+function _vWheel(p, x, z, r, w, o = {}) {   // road wheel in a pivot that spins about x (rotation order YXZ: rotation.y steers); style: alloy | steel | lug (tractor, off-road)
+  const pv = grp(p, x, r, z), st = o.style ?? 'alloy', rim = o.rim ?? '#C4CAD2'; pv.rotation.order = 'YXZ'; pv.userData.r = r; pv.userData.keep = true; pv.userData.steer = !!o.steer;
+  const geo = _vcGeo(`wheel|${r}|${w}|${st}|${rim}`, t => { const X = { rz: Math.PI / 2 }, ax = (rr, len, c, seg) => cyl(t, rr, rr, len, c, 0, -len / 2, 0, { ...X, seg });
+    ax(r, w, '#1F2125', 14); ax(r * 0.985, w * 0.5, '#2B2E33', 14).scale.set(1.012, 1, 1.012);   // tyre + a slightly proud tread band
+    if (st === 'lug') { const n = Math.max(8, Math.round(TAU * r / 0.3)); for (let i = 0; i < n; i++) { const q = grp(t); q.rotation.x = i / n * TAU; box(q, w * 0.56, 0.07, 0.1, '#17181B', (i % 2 ? 1 : -1) * w * 0.23, r - 0.03, 0, { ry: (i % 2 ? 1 : -1) * 0.5 }); }
+      ax(r * 0.6, w + 0.02, rim, 10); ax(r * 0.42, w + 0.05, shade(rim, -0.12), 8); ax(r * 0.16, w + 0.09, '#3A3D44', 6); return; }
+    if (st === 'steel') { ax(r * 0.62, w + 0.02, rim, 10); ax(r * 0.4, w + 0.035, '#2A2D33', 8); ax(r * 0.2, w + 0.06, rim, 6); return; }
+    ax(r * 0.66, w + 0.016, '#2A2D33', 10); ax(r * 0.17, w + 0.05, rim, 6);
+    for (let i = 0; i < 5; i++) { const q = grp(t); q.rotation.x = i / 5 * TAU + 0.3; box(q, w + 0.034, r * 0.58, r * 0.17, rim, 0, r * 0.08, 0); } });
+  mesh(pv, geo, _vcMat(0.82), 0, 0, 0); return pv;
+}
+function vehicle(p, x, z, o = {}) {   // kind: car | sports | taxi | police | van | pickup | bus | truck | tractor — returns { g, wheels, doors, headMat, … } (police: { siren } light bar)
   const kind = o.kind ?? 'car', g = grp(p, x, 0, z, o.ry ?? 0), wheels = [], NC = { cast: false };
-  const c = o.color ?? (kind === 'taxi' ? '#F2C230' : kind === 'police' ? '#F2F2F2' : kind === 'bus' ? '#E3B23C' : '#3A7BD5');
-  const head = mat('#FFF6D8', { em: '#FFF2C0', ei: o.lights ?? 0.6, own: true }), tail = mat('#C8202A', { em: '#FF2020', ei: o.lights ?? 0.5 }), dark = '#24272D', glass = '#9FC3D9';
-  const wheel = (wx, wz, r, w) => { const pv = grp(g, wx, r, wz); pv.rotation.order = 'YXZ'; pv.userData.r = r; pv.userData.steer = wz > 0; cyl(pv, r, r, w, '#22252B', 0, -w / 2, 0, { rz: Math.PI / 2, seg: 12 }); cyl(pv, r * 0.55, r * 0.55, w + 0.02, '#B8BEC6', 0, -(w + 0.02) / 2, 0, { rz: Math.PI / 2, seg: 8, ...NC }); wheels.push(pv); };
-  const lights = (hw, hy, zf, zb, tw = 0.3) => { for (const sx of [-1, 1]) { box(g, tw, 0.14, 0.04, '', sx * hw, hy, zf, { mat: head, ...NC }); box(g, tw * 0.9, 0.14, 0.04, '', sx * hw, hy, zb, { mat: tail, ...NC }); } };
+  const c = o.color ?? (kind === 'taxi' ? '#F2C230' : kind === 'police' ? '#F2F2F2' : kind === 'bus' ? '#E3B23C' : '#3A7BD5'), c2 = shade(c, -0.09);
+  const head = mat('#FFF6D8', { em: '#FFF2C0', ei: o.lights ?? 0.6, own: true }), tail = mat('#C8202A', { em: '#FF2020', ei: o.lights ?? 0.5 }), dark = '#24272D', glass = '#9FC3D9', under = '#1B1D21', chrome = '#C9CED6', amber = '#F29A1F', GL = { rough: 0.25, cast: false };
+  const wheel = (wx, wz, r, w, style, rim) => { const pv = _vWheel(g, wx, wz, r, w, { style, rim, steer: wz > 0 }); wheels.push(pv); return pv; };
+  const lamps = (m, list) => mesh(g, _boxesG(list), m, 0, 0, 0, NC), pair = (w, h, d, hx, y, zz) => [[w, h, d, -hx, y, zz], [w, h, d, hx, y, zz]];
+  const ears = list => { const m = mesh(g, _boxesG(list), mat(dark), 0, 0, 0, NC); m.userData.keep = true; m.userData.noHit = true; return m; };   // mirrors: stick out, but are no obstacle and not part of the crash box
+  const arch = (zc, r, yb, pad = 0.06, n = 5) => { const ra = r + pad, a = [[zc + ra, yb]]; for (let i = 0; i <= n; i++) { const t = Math.PI * i / n; a.push([zc + ra * Math.cos(t), r + ra * Math.sin(t)]); } a.push([zc - ra, yb]); return a; };   // wheel arch in a side profile, front → back
+  const pane = (w, a, b, m = 0.06, col = glass) => { const dz = b[0] - a[0], dy = b[1] - a[1], L = Math.hypot(dz, dy), q = grp(g, 0, (a[1] + b[1]) / 2, (a[0] + b[0]) / 2); q.rotation.x = Math.atan2(dz, dy); box(q, w, L - 2 * m, 0.03, col, 0, -(L - 2 * m) / 2, 0, GL); q.userData.L = L - 2 * m; return q; };   // glass on a slanted face between two profile points
+  const wipers = (q, hx, out = 1) => { for (const sx of [-1, 1]) box(q, 0.022, hx * 0.95, 0.016, '#15171A', sx * hx * 0.5 + hx * 0.36, -q.userData.L / 2 + 0.03, out * 0.024, { rz: 1.12, ...NC }); };
   let siren = null; const doors = [], meta = { len: 3.8, lampX: 0.55, lampY: 0.66, trackW: 1.7 };
-  if (kind === 'tractor') {
-    box(g, 1.3, 0.9, 2.4, c, 0, 0.55, 0.2); box(g, 1.1, 1.2, 1.1, c, 0, 1.45, -0.45); box(g, 1.0, 0.8, 1.0, glass, 0, 1.6, -0.45, { opacity: 0.55, rough: 0.2 });
-    box(g, 1.22, 0.08, 1.22, dark, 0, 2.62, -0.45, NC); box(g, 0.9, 0.5, 0.04, dark, 0, 0.75, 1.41, NC);
-    for (const sx of [-1, 1]) { box(g, 0.2, 0.14, 0.04, '', sx * 0.4, 1.2, 1.41, { mat: head, ...NC }); box(g, 0.55, 0.12, 1.2, c, sx * 0.85, 1.6, -0.6, NC); }
-    cyl(g, 0.08, 0.08, 0.9, '#333', 0.35, 1.4, 1.0); cyl(g, 0.1, 0.1, 0.08, '#222', 0.35, 2.3, 1.0, NC);
-    wheel(0.85, -0.6, 0.85, 0.5); wheel(-0.85, -0.6, 0.85, 0.5); wheel(0.75, 1.0, 0.45, 0.35); wheel(-0.75, 1.0, 0.45, 0.35);
-  } else if (kind === 'truck') {
-    box(g, 2, 1.5, 2.2, c, 0, 0.45, 2.2); box(g, 2.1, 2.2, 4.4, '#E8E8E8', 0, 0.45, -1.2);
-    box(g, 1.8, 0.6, 0.04, glass, 0, 1.25, 3.31, { rough: 0.25, ...NC }); box(g, 1.2, 0.45, 0.04, dark, 0, 0.6, 3.31, NC); box(g, 2.04, 0.2, 0.14, dark, 0, 0.38, 3.32, NC);
-    for (const sx of [-1, 1]) { box(g, 0.28, 0.16, 0.04, '', sx * 0.78, 0.7, 3.32, { mat: head, ...NC }); box(g, 0.1, 0.3, 0.16, dark, sx * 1.1, 1.4, 2.95, NC); box(g, 0.2, 0.3, 0.04, '', sx * 0.85, 0.7, -3.42, { mat: tail, ...NC }); }
-    for (let i = -1; i <= 1; i++) for (const sx of [-1, 1]) box(g, 0.03, 2.1, 0.1, '#C9CDD3', sx * 1.06, 0.5, -1.2 + i * 1.4, NC);
-    for (const wz of [2.4, -0.4, -2.6]) { wheel(1.0, wz, 0.45, 0.3); wheel(-1.0, wz, 0.45, 0.3); }
-  } else if (kind === 'bus') {   // city bus: long body, window band, doors, destination sign
-    box(g, 2.4, 2.4, 10, c, 0, 0.4, 0); box(g, 2.44, 0.9, 9.4, '#2A3442', 0, 1.6, -0.1, { rough: 0.25, ...NC }); box(g, 2.2, 1.0, 0.04, '#2A3442', 0, 1.5, 5.01, NC);
-    box(g, 1.4, 0.25, 0.05, '#1A1A1A', 0, 2.5, 5.01, NC); box(g, 1.2, 0.14, 0.03, '', 0, 2.55, 5.04, { mat: mat('#FFB020', { em: '#FFB020', ei: 0.8 }), ...NC });
-    for (const zz of [3.6, -0.6]) box(g, 0.05, 1.9, 1.1, '#2A3442', 1.21, 0.45, zz, NC);
-    box(g, 2.44, 0.2, 10.04, dark, 0, 0.35, 0, NC); lights(0.85, 0.75, 5.02, -5.02, 0.35);
-    for (const wz of [3.4, -3.2]) { wheel(1.1, wz, 0.5, 0.32); wheel(-1.1, wz, 0.5, 0.32); }
-  } else if (kind === 'van') {
-    box(g, 1.9, 1.75, 4.6, c, 0, 0.35, -0.1); box(g, 1.92, 0.6, 1.0, glass, 0, 1.3, 1.6, { rough: 0.25 }); box(g, 1.7, 0.6, 0.04, glass, 0, 1.3, 2.13, { rough: 0.25, ...NC });
-    box(g, 0.04, 1.2, 1.3, shade(c, -0.08), 0.96, 0.6, -0.2, NC); for (const sz of [-1, 1]) box(g, 1.94, 0.18, 0.12, dark, 0, 0.3, sz * 2.2 - 0.1, NC);
-    lights(0.68, 0.75, 2.16, -2.36); for (const wz of [1.4, -1.5]) { wheel(0.92, wz, 0.4, 0.28); wheel(-0.92, wz, 0.4, 0.28); }
-  } else if (kind === 'pickup') {
-    box(g, 1.85, 0.7, 4.8, c, 0, 0.4, 0); box(g, 1.7, 0.7, 1.7, c, 0, 1.1, 0.5); box(g, 1.72, 0.5, 1.5, glass, 0, 1.2, 0.55, { rough: 0.25, ...NC });
-    box(g, 1.6, 0.05, 2.0, dark, 0, 1.05, -1.3, NC); for (const sx of [-1, 1]) box(g, 0.1, 0.35, 2.1, c, sx * 0.88, 1.1, -1.3, NC); box(g, 1.85, 0.35, 0.1, c, 0, 1.1, -2.35, NC);
-    for (const sz of [-1, 1]) box(g, 1.9, 0.2, 0.14, dark, 0, 0.35, sz * 2.4, NC); lights(0.65, 0.85, 2.41, -2.41);
-    for (const wz of [1.5, -1.5]) { wheel(0.9, wz, 0.45, 0.3); wheel(-0.9, wz, 0.45, 0.3); }
-  } else {   // car · sports · taxi · police
-    const sp = kind === 'sports', L = sp ? 4.2 : 3.8, H = sp ? 0.5 : 0.6;
-    box(g, 1.7, H, L, c, 0, 0.32, 0);
-    if (sp) { box(g, 1.4, 0.42, 1.6, glass, 0, 0.82, -0.35, { rough: 0.2 }); box(g, 1.42, 0.06, 1.3, c, 0, 1.22, -0.45); box(g, 1.6, 0.06, 0.35, dark, 0, 1.0, -1.95, NC); for (const sx of [-1, 1]) box(g, 0.06, 0.2, 0.06, dark, sx * 0.6, 0.82, -1.95, NC); }
-    else { box(g, 1.5, 0.55, 2.0, glass, 0, 0.92, -0.2, { rough: 0.25 }); box(g, 1.52, 0.1, 2.0, c, 0, 1.47, -0.2); box(g, 0.06, 0.55, 0.12, c, 0.73, 0.92, -0.2, NC); box(g, 0.06, 0.55, 0.12, c, -0.73, 0.92, -0.2, NC); }
-    for (const sz of [-1, 1]) box(g, 1.74, 0.16, 0.12, dark, 0, 0.28, sz * L / 2, NC);
-    box(g, 0.7, 0.16, 0.03, dark, 0, 0.55, L / 2 + 0.015, NC); box(g, 0.4, 0.12, 0.02, '#F2F2F2', 0, 0.45, -L / 2 - 0.07, NC);
-    for (const sx of [-1, 1]) box(g, 0.12, 0.1, 0.18, c, sx * 0.82, sp ? 0.85 : 1.0, 0.65, NC);
-    lights(0.55, 0.62, L / 2, -L / 2);
-    if (kind === 'taxi') { box(g, 0.55, 0.18, 0.28, '#1A1A1A', 0, 1.57, -0.2, NC); box(g, 0.5, 0.14, 0.3, '', 0, 1.6, -0.2, { mat: mat('#FFE9A0', { em: '#FFE9A0', ei: 0.7 }), ...NC }); for (const sx of [-1, 1]) for (let k = 0; k < 6; k++) box(g, 0.02, 0.1, 0.18, k % 2 ? '#1A1A1A' : '#F2F2F2', sx * 0.86, 0.45, -0.9 + k * 0.18, NC); }
+  if (kind === 'tractor') {   // open farm tractor: narrow hood with grille, frame, platform, seat, steering wheel, roll bar, mudguards over the big lug wheels (a driver stands at [0, 1.25, -0.35])
+    finPlate(g, [[1.4, 0.72], [1.4, 1.4], [1.26, 1.5], [0.12, 1.54], [0.12, 0.64], [1.28, 0.64]], 0.92, c);
+    box(g, 0.78, 0.5, 2.3, c2, 0, 0.6, -0.3); box(g, 0.84, 0.52, 0.34, c, 0, 1.25, 0.24);   // frame / gearbox, instrument cowl
+    box(g, 0.74, 0.5, 0.04, dark, 0, 0.76, 1.405, NC); for (let i = 0; i < 3; i++) box(g, 0.66, 0.035, 0.02, '#4A4E56', 0, 0.86 + i * 0.13, 1.43, NC);
+    lamps(head, pair(0.2, 0.13, 0.04, 0.3, 1.335, 1.405));
+    for (const sx of [-1, 1]) { box(g, 0.02, 0.26, 0.62, dark, sx * 0.462, 0.96, 0.78, NC);
+      const fa = []; for (let i = 0; i <= 6; i++) { const a = (35 + i * 115 / 6) * Math.PI / 180; fa.push([-0.6 + 0.99 * Math.cos(a), 0.85 + 0.99 * Math.sin(a)]); } for (let i = 6; i >= 0; i--) { const a = (35 + i * 115 / 6) * Math.PI / 180; fa.push([-0.6 + 0.92 * Math.cos(a), 0.85 + 0.92 * Math.sin(a)]); }
+      finPlate(g, fa, 0.5, c, sx * 0.85); box(g, 0.05, 0.62, 0.9, c, sx * 0.585, 1.2, -0.62, NC); }   // mudguard + inner cheek
+    box(g, 1.2, 0.1, 1.2, '#3A3D44', 0, 1.15, -0.45); box(g, 1.36, 0.14, 0.16, dark, 0, 0.36, 1.0); box(g, 1.2, 0.3, 0.3, dark, 0, 0.7, -0.6, NC);   // platform, front axle, rear axle
+    box(g, 0.5, 0.1, 0.42, dark, 0, 1.72, -0.86); box(g, 0.5, 0.5, 0.09, dark, 0, 1.8, -1.06); box(g, 0.1, 0.5, 0.1, '#3A3D44', 0, 1.25, -0.9, NC);   // seat
+    _seg(g, [0, 1.6, 0.2], [0, 2.2, -0.02], 0.03, 0.03, dark, NC); mesh(g, G('vsteer', () => new THREE.TorusGeometry(0.19, 0.025, 5, 12)), mat(dark), 0, 2.22, -0.03, { rx: -1.0, ...NC }); box(g, 0.34, 0.03, 0.04, dark, 0, 2.2, -0.03, { rx: 0.55, ...NC });
+    for (const sx of [-1, 1]) box(g, 0.08, 1.5, 0.08, dark, sx * 0.5, 1.25, -1.2); box(g, 1.08, 0.08, 0.08, dark, 0, 2.7, -1.2);   // roll bar
+    cyl(g, 0.06, 0.06, 0.85, '#34363B', 0.28, 1.5, 0.95); cyl(g, 0.085, 0.085, 0.1, '#222', 0.28, 2.32, 0.95, NC); cyl(g, 0.075, 0.075, 0.26, '#55595F', -0.28, 1.52, 0.55, NC); cyl(g, 0.1, 0.1, 0.06, '#34363B', -0.28, 1.78, 0.55, NC);
+    box(g, 0.26, 0.1, 0.2, dark, 0, 0.56, -1.35, NC);
+    wheel(0.85, -0.6, 0.85, 0.5, 'lug'); wheel(-0.85, -0.6, 0.85, 0.5, 'lug'); wheels[0].userData.steer = wheels[1].userData.steer = false; wheel(0.75, 1.0, 0.45, 0.3, 'lug').userData.steer = true; wheel(-0.75, 1.0, 0.45, 0.3, 'lug').userData.steer = true;
+  } else if (kind === 'truck') {   // box truck: cab-over with raked windscreen, wind deflector, frame, tank, cargo box with ribs and rear doors
+    finPlate(g, [[3.3, 0.62], [3.2, 0.45], ...arch(2.4, 0.45, 0.45), [1.1, 0.45], [1.1, 1.95], [2.95, 1.95], [3.12, 1.9], [3.3, 1.2]], 2, c);
+    box(g, 1.32, 0.55, 1.9, under, 0, 0.44, 2.2, NC); box(g, 1.0, 0.32, 6.3, under, 0, 0.5, -0.1); finPlate(g, [[1.12, 1.95], [2.5, 1.95], [1.12, 2.5]], 1.8, c);
+    wipers(pane(1.8, [3.3, 1.2], [3.12, 1.9], 0.05), 0.5); box(g, 1.2, 0.45, 0.04, dark, 0, 0.6, 3.31, NC); for (let i = 0; i < 3; i++) box(g, 1.1, 0.03, 0.02, '#4A4E56', 0, 0.7 + i * 0.12, 3.335, NC); box(g, 2.04, 0.2, 0.14, dark, 0, 0.38, 3.32, NC);
+    lamps(head, pair(0.28, 0.16, 0.04, 0.78, 0.78, 3.305)); lamps(tail, pair(0.2, 0.3, 0.04, 0.85, 0.85, -3.405));
+    for (const sx of [-1, 1]) { finPlate(g, [[3.07, 1.25], [2.97, 1.8], [2.3, 1.8], [2.3, 1.25]], 0.03, glass, sx * 1.0, 0, 0, GL); box(g, 0.02, 0.035, 0.14, dark, sx * 1.005, 1.1, 2.38, NC); box(g, 0.2, 0.06, 0.5, dark, sx * 0.92, 0.5, 2.62 - 1.3, NC); box(g, 0.08, 0.1, 0.03, amber, sx * 0.95, 0.74, 3.305, NC); }
+    ears([[0.1, 0.3, 0.16, -1.1, 1.55, 2.95], [0.1, 0.3, 0.16, 1.1, 1.55, 2.95]]);
+    box(g, 2.1, 1.72, 4.4, '#E8E8E8', 0, 0.93, -1.2); box(g, 2.14, 0.08, 4.44, '#C9CDD3', 0, 0.9, -1.2, NC); box(g, 2.14, 0.06, 4.44, '#C9CDD3', 0, 2.62, -1.2, NC);
+    for (let i = -1; i <= 1; i++) for (const sx of [-1, 1]) box(g, 0.03, 1.6, 0.1, '#C9CDD3', sx * 1.06, 0.99, -1.2 + i * 1.4, NC);
+    box(g, 0.03, 1.56, 0.02, '#9AA0A8', 0, 1.0, -3.41, NC); for (const sx of [-1, 1]) { box(g, 0.04, 1.4, 0.03, '#9AA0A8', sx * 0.3, 1.08, -3.415, NC); box(g, 0.34, 0.42, 0.03, dark, sx * 0.9, 0.42, -3.2, NC); }
+    box(g, 1.9, 0.1, 0.08, dark, 0, 0.5, -3.36, NC); rod(g, 0.2, 0.2, 0.8, chrome, 0.78, 0.66, 0.75, { seg: 10 }); box(g, 0.5, 0.36, 0.5, '#3A3D44', -0.76, 0.5, 0.75, NC);
+    for (const wz of [2.4, -0.4, -2.6]) { wheel(0.91, wz, 0.45, 0.3, 'steel'); wheel(-0.91, wz, 0.45, 0.3, 'steel'); }
+  } else if (kind === 'bus') {   // city bus: wheel arches, window band with pillars, two doors, destination sign, roof units
+    finPlate(g, [[5, 0.6], [4.9, 0.4], ...arch(3.4, 0.5, 0.4), ...arch(-3.2, 0.5, 0.4), [-4.9, 0.4], [-5, 0.6], [-5, 2.7], [-4.9, 2.8], [4.94, 2.8], [5, 2.74]], 2.4, c);
+    box(g, 1.7, 0.78, 9.4, under, 0, 0.3, 0, NC);
+    box(g, 2.42, 0.9, 9.4, '#2A3442', 0, 1.6, -0.1, GL); for (const sx of [-1, 1]) for (let i = 0; i < 9; i++) { const zz = -4.8 + i * 1.175; if (sx > 0 && (zz > 3.9 || Math.abs(zz + 0.6) < 0.7)) continue; box(g, 0.02, 0.9, 0.12, c, sx * 1.21, 1.6, zz, NC); }
+    box(g, 2.44, 0.07, 9.7, c2, 0, 1.5, -0.05, NC);
+    box(g, 2.2, 1.06, 0.04, '#2A3442', 0, 1.42, 5.005, GL); box(g, 1.4, 0.25, 0.05, '#1A1A1A', 0, 2.5, 5.01, NC); box(g, 1.2, 0.14, 0.03, '', 0, 2.55, 5.04, { mat: mat('#FFB020', { em: '#FFB020', ei: 0.8 }), ...NC });
+    for (const sx of [-1, 1]) box(g, 0.025, 0.6, 0.02, '#15171A', sx * 0.5 + 0.2, 1.46, 5.035, { rz: 1.1, ...NC });
+    for (const zz of [4.46, -0.6]) { box(g, 0.035, 1.9, zz > 0 ? 0.9 : 1.1, '#2A3442', 1.2025, 0.45, zz, GL); box(g, 0.02, 1.9, 0.05, c2, 1.215, 0.45, zz, NC); box(g, 0.02, 0.1, zz > 0 ? 1.0 : 1.2, c2, 1.215, 2.35, zz, NC); }
+    for (const sz of [-1, 1]) box(g, 2.44, 0.22, 0.12, dark, 0, 0.38, sz * 4.98, NC);
+    lamps(head, pair(0.35, 0.14, 0.04, 0.85, 0.82, 5.005)); lamps(tail, [...pair(0.3, 0.14, 0.04, 0.85, 0.82, -5.005), ...pair(0.14, 0.3, 0.04, 1.0, 2.3, -5.005)]);
+    box(g, 1.9, 0.7, 0.04, '#2A3442', 0, 1.7, -5.005, GL); box(g, 1.5, 0.45, 0.03, dark, 0, 0.72, -5.01, NC); for (const sx of [-1, 1]) box(g, 0.1, 0.1, 0.03, amber, sx * 1.08, 0.84, 5.005, NC);
+    box(g, 1.6, 0.2, 2.2, '#D4D7DC', 0, 2.8, 1.6); box(g, 1.5, 0.14, 1.4, '#D4D7DC', 0, 2.8, -2.4); box(g, 0.7, 0.06, 0.7, '#8E949C', 0, 2.8, -0.3, NC);
+    ears([[0.08, 0.34, 0.16, -1.3, 2.1, 4.92], [0.08, 0.34, 0.16, 1.3, 2.1, 4.92], [0.14, 0.04, 0.04, -1.24, 2.4, 4.92], [0.14, 0.04, 0.04, 1.24, 2.4, 4.92]]);
+    for (const wz of [3.4, -3.2]) { wheel(1.05, wz, 0.5, 0.32, 'steel'); wheel(-1.05, wz, 0.5, 0.32, 'steel'); }
+  } else if (kind === 'van') {   // panel van: flat nose with raked windscreen, cab windows, sliding door, rear doors with windows
+    const zF = 2.13, zR = -2.3;
+    finPlate(g, [[zF, 0.5], [zF - 0.1, 0.35], ...arch(1.4, 0.4, 0.35), ...arch(-1.5, 0.4, 0.35), [zR + 0.08, 0.35], [zR, 0.5], [zR, 2.0], [zR + 0.1, 2.1], [1.5, 2.1], [1.7, 2.02], [2.05, 1.22], [zF, 1.1]], 1.9, c);
+    box(g, 1.3, 0.58, 4.0, under, 0, 0.3, -0.1, NC);
+    wipers(pane(1.66, [2.05, 1.22], [1.7, 2.02], 0.07), 0.46);
+    for (const sx of [-1, 1]) { finPlate(g, [[1.9, 1.28], [1.64, 1.9], [0.95, 1.9], [0.95, 1.28]], 0.03, glass, sx * 0.95, 0, 0, GL); box(g, 0.02, 0.035, 0.14, dark, sx * 0.955, 1.14, 1.0, NC); box(g, 0.08, 0.1, 0.03, amber, sx * 0.86, 0.72, zF + 0.005, NC);
+      box(g, 0.62, 0.5, 0.03, glass, sx * 0.4, 1.36, zR, GL); box(g, 0.03, 0.2, 0.02, dark, sx * 0.07, 1.05, zR - 0.01, NC); }
+    box(g, 0.02, 1.25, 1.3, c2, 0.955, 0.6, -0.2, NC); box(g, 0.02, 0.04, 1.5, dark, 0.957, 1.9, -0.3, NC); box(g, 0.02, 0.035, 0.14, dark, 0.967, 1.14, 0.3, NC);
+    box(g, 0.02, 1.5, 0.02, c2, 0, 0.45, zR - 0.005, NC);
+    box(g, 0.9, 0.2, 0.03, dark, 0, 0.6, zF + 0.012, NC); for (const sz of [zF, zR]) box(g, 1.94, 0.18, 0.12, dark, 0, 0.3, sz, NC);
+    lamps(head, pair(0.3, 0.16, 0.04, 0.68, 0.83, zF + 0.005)); lamps(tail, pair(0.14, 0.46, 0.04, 0.84, 1.05, zR - 0.005));
+    ears([[0.12, 0.2, 0.07, -1.03, 1.3, 1.88], [0.12, 0.2, 0.07, 1.03, 1.3, 1.88]]);
+    for (const wz of [1.4, -1.5]) { wheel(0.82, wz, 0.4, 0.28, 'steel'); wheel(-0.82, wz, 0.4, 0.28, 'steel'); }
+  } else if (kind === 'pickup') {   // pickup: fenders with arches, cab with raked windscreen, open bed with tailgate
+    finPlate(g, [[2.4, 0.55], [2.3, 0.4], ...arch(1.5, 0.45, 0.4), ...arch(-1.5, 0.45, 0.4), [-2.3, 0.4], [-2.4, 0.55], [-2.4, 1.1], [1.5, 1.1], [2.15, 1.07], [2.4, 1.0]], 1.85, c);
+    box(g, 1.2, 0.63, 4.3, under, 0, 0.34, 0, NC);
+    finPlate(g, [[-0.35, 1.1], [1.38, 1.1], [0.95, 1.8], [-0.3, 1.8]], 1.7, c);
+    wipers(pane(1.54, [1.38, 1.1], [0.95, 1.8]), 0.42); pane(1.3, [-0.35, 1.1], [-0.3, 1.8], 0.14);
+    for (const sx of [-1, 1]) { finPlate(g, [[1.24, 1.16], [0.92, 1.68], [0.26, 1.68], [0.26, 1.16]], 0.03, glass, sx * 0.85, 0, 0, GL); finPlate(g, [[0.16, 1.16], [0.16, 1.68], [-0.22, 1.68], [-0.25, 1.16]], 0.03, glass, sx * 0.85, 0, 0, GL);
+      box(g, 0.02, 0.035, 0.14, dark, sx * 0.93, 0.98, 0.3, NC); box(g, 0.1, 0.35, 2.1, c, sx * 0.88, 1.1, -1.3, NC); box(g, 0.12, 0.03, 2.1, dark, sx * 0.88, 1.45, -1.3, NC); box(g, 0.08, 0.1, 0.03, amber, sx * 0.86, 0.9, 2.405, NC); }
+    box(g, 1.66, 0.05, 2.0, dark, 0, 1.062, -1.3, NC); box(g, 1.85, 0.35, 0.1, c, 0, 1.1, -2.35, NC); box(g, 0.3, 0.05, 0.02, dark, 0, 1.3, -2.405, NC);
+    box(g, 1.0, 0.3, 0.03, dark, 0, 0.6, 2.41, NC); for (let i = 0; i < 2; i++) box(g, 0.92, 0.035, 0.02, '#4A4E56', 0, 0.68 + i * 0.12, 2.43, NC);
+    for (const sz of [-1, 1]) box(g, 1.9, 0.2, 0.14, dark, 0, 0.35, sz * 2.4, NC);
+    lamps(head, pair(0.3, 0.14, 0.04, 0.65, 0.92, 2.405)); lamps(tail, pair(0.14, 0.3, 0.04, 0.82, 0.84, -2.405));
+    ears([[0.12, 0.16, 0.07, -0.99, 1.2, 1.2], [0.12, 0.16, 0.07, 0.99, 1.2, 1.2]]);
+    for (const wz of [1.5, -1.5]) { wheel(0.79, wz, 0.45, 0.3, 'lug'); wheel(-0.79, wz, 0.45, 0.3, 'lug'); }
+  } else {   // car · sports · taxi · police: three-box body with arches, greenhouse with raked glass, front doors that open onto a dark cabin
+    const sp = kind === 'sports', L = sp ? 4.2 : 3.8, hl = L / 2, r = sp ? 0.36 : 0.38, wz = 1.2 * L / 3.8, yb = 0.28, yB = sp ? 0.82 : 0.94, yR = sp ? 1.28 : 1.57, pad = sp ? 0.04 : 0.06;
+    const cz1 = sp ? 0.55 : 0.82, cz0 = sp ? -1.3 : -1.32, rz1 = sp ? -0.1 : 0.2, rz0 = sp ? -0.8 : -0.92, zB = sp ? -0.42 : -0.2, zh = cz1 - 0.2, dl = zh - zB, nose = sp ? 0.04 : 0.16, tailD = sp ? 0.04 : 0.14;
+    finPlate(g, [[hl, 0.4], [hl - 0.1, yb], ...arch(wz, r, yb, pad), ...arch(-wz, r, yb, pad), [-hl + 0.1, yb], [-hl, 0.4], [-hl, yB - tailD], [-hl + 0.07, yB - 0.01], [cz0, yB], [cz1, yB], [hl - 0.26, yB - nose * 0.4], [hl, yB - nose]], 1.7, c);
+    box(g, 1.1, 2 * r + pad + 0.01 - 0.24, L - 0.5, under, 0, 0.24, 0, NC);
+    finPlate(g, [[cz0, yB], [cz1, yB], [rz1, yR], [rz0, yR]], 1.5, c);
+    wipers(pane(1.34, [cz1, yB], [rz1, yR]), 0.36); pane(1.34, [cz0, yB], [rz0, yR]);
+    const zf = y => cz1 + (rz1 - cz1) * (y - yB) / (yR - yB), zr = y => cz0 + (rz0 - cz0) * (y - yB) / (yR - yB), y0 = yB + 0.05, y1 = yR - 0.1;
+    const wF = m => [[zf(y0) - 0.1 - m, y0 + m], [zf(y1) - 0.1 - m, y1 - m], [zB + 0.05 + m, y1 - m], [zB + 0.05 + m, y0 + m]], wR = [[zB - 0.05, y0], [zB - 0.05, y1], [zr(y1) + 0.1, y1], [zr(y0) + 0.1, y0]];
+    const doorC = kind === 'police' ? '#1E2A44' : c;
+    for (const sx of [1, -1]) {
+      finPlate(g, wR, 0.03, glass, sx * 0.75, 0, 0, GL); finPlate(g, wF(0.012), 0.012, '#121417', sx * 0.75, 0, 0, NC); box(g, 0.012, yB - 0.42, dl - 0.06, '#121417', sx * 0.85, 0.38, (zh + zB) / 2, NC);   // rear glass · dark cabin behind the front door
+      box(g, 0.02, 0.035, 0.13, dark, sx * 0.855, yB - 0.15, zB - 0.16, NC); if (kind === 'police') box(g, 0.02, yB - 0.36, 0.5, doorC, sx * 0.855, 0.34, zB - 0.27, NC);
+      const hg = grp(g, sx * 0.86, 0.32, zh); hg.userData.sign = sx > 0 ? -1 : 1; hg.userData.angle = 1.1; hg.userData.keep = true; doors.push(hg);   // doors: openDoor(car, t, { i: 0 driver, 1 passenger })
+      box(hg, 0.04, yB - 0.34, dl, doorC, 0, 0.02, -dl / 2, NC); finPlate(hg, wF(0).map(([a, b]) => [a - zh, b - 0.32]), 0.03, glass, -sx * 0.11, 0, 0, GL);
+      box(hg, 0.03, 0.035, 0.14, dark, sx * 0.03, yB - 0.47, -dl + 0.12, NC); box(hg, 0.12, 0.09, 0.07, doorC, -sx * 0.035, yB - 0.3, -0.1, NC);
+      if (kind === 'taxi') for (let k = 0; k < 4; k++) box(hg, 0.02, 0.1, dl / 4, k % 2 ? '#1A1A1A' : '#F2F2F2', sx * 0.022, 0.2, -dl / 8 - k * dl / 4, NC);
+      fuse(hg);
+      box(g, 0.08, 0.1, 0.03, amber, sx * 0.76, 0.64, hl + 0.005, NC);
+    }
+    for (const sz of [-1, 1]) box(g, 1.74, 0.16, 0.12, dark, 0, 0.28, sz * hl, NC);
+    box(g, 0.7, 0.16, 0.03, dark, 0, 0.55, hl + 0.015, NC); box(g, 0.4, 0.12, 0.02, '#F2F2F2', 0, 0.46, -hl - 0.008, NC); box(g, 0.36, 0.1, 0.02, '#F2F2F2', 0, 0.31, hl + 0.066, NC); box(g, 0.09, 0.06, 0.12, '#55585E', -0.5, 0.2, -hl + 0.03, NC);
+    if (sp) { box(g, 1.6, 0.06, 0.35, dark, 0, 1.0, -1.95, NC); for (const sx of [-1, 1]) box(g, 0.06, 0.2, 0.06, dark, sx * 0.6, 0.82, -1.95, NC); box(g, 0.5, 0.05, 0.6, dark, 0, yB - 0.03, 1.2, { rx: 0.03, ...NC }); }
+    lamps(head, pair(0.3, 0.14, 0.04, 0.55, 0.69, hl)); lamps(tail, pair(0.27, 0.14, 0.04, 0.55, 0.69, -hl));
+    if (kind === 'taxi') { box(g, 0.55, 0.18, 0.28, '#1A1A1A', 0, yR, -0.2, NC); box(g, 0.5, 0.14, 0.3, '', 0, yR + 0.03, -0.2, { mat: mat('#FFE9A0', { em: '#FFE9A0', ei: 0.7 }), ...NC }); }
     if (kind === 'police') {
-      for (const sx of [-1, 1]) box(g, 0.02, 0.5, 2.2, '#1E2A44', sx * 0.86, 0.38, -0.1, NC);
-      box(g, 1.0, 0.1, 0.3, '#2A2A2A', 0, 1.57, -0.2, NC);
-      const r = mat('#FF2A2A', { em: '#FF2020', ei: 2, own: true }), b = mat('#2A5BFF', { em: '#2050FF', ei: 2, own: true });
-      box(g, 0.45, 0.14, 0.26, '', -0.24, 1.67, -0.2, { mat: r, ...NC }); box(g, 0.45, 0.14, 0.26, '', 0.24, 1.67, -0.2, { mat: b, ...NC });
-      siren = t => { const k = Math.floor(t * 6) % 2; r.emissiveIntensity = k ? 2.2 : 0.2; b.emissiveIntensity = k ? 0.2 : 2.2; };
+      box(g, 1.0, 0.1, 0.3, '#2A2A2A', 0, yR, -0.2, NC);
+      const rm = mat('#FF2A2A', { em: '#FF2020', ei: 2, own: true }), bm = mat('#2A5BFF', { em: '#2050FF', ei: 2, own: true });
+      box(g, 0.45, 0.14, 0.26, '', -0.24, yR + 0.1, -0.2, { mat: rm, ...NC }); box(g, 0.45, 0.14, 0.26, '', 0.24, yR + 0.1, -0.2, { mat: bm, ...NC });
+      siren = t => { const k = Math.floor(t * 6) % 2; rm.emissiveIntensity = k ? 2.2 : 0.2; bm.emissiveIntensity = k ? 0.2 : 2.2; };
       if (o.siren !== false) tick(siren);
     }
-    for (const sx of [1, -1]) { const hg = grp(g, sx * 0.86, 0.32, 0.55); hg.userData.sign = sx > 0 ? -1 : 1; hg.userData.angle = 1.1; doors.push(hg);   // doors: openDoor(car, t, { i: 0 driver, 1 passenger })
-      box(hg, 0.05, H * 0.92, 1.05, c, 0, 0.02, -0.525, NC); box(hg, 0.04, 0.5, 0.95, glass, -sx * 0.1, H, -0.5, { rough: 0.25, ...NC }); box(hg, 0.03, 0.03, 0.14, dark, sx * 0.03, H * 0.62, -0.85, NC); }
-    Object.assign(meta, { len: L, lampY: 0.66 });
-    for (const wz of [1.2 * L / 3.8, -1.2 * L / 3.8]) { wheel(0.85, wz, sp ? 0.36 : 0.38, 0.28); wheel(-0.85, wz, sp ? 0.36 : 0.38, 0.28); }
+    Object.assign(meta, { len: L, lampY: 0.66, trackW: 1.44 });
+    for (const z2 of [wz, -wz]) { wheel(0.722, z2, r, 0.28); wheel(-0.722, z2, r, 0.28); }
   }
-  if (kind === 'van') Object.assign(meta, { len: 4.26, front: 2.13, lampX: 0.68, lampY: 0.82, trackW: 1.84 });
-  if (kind === 'pickup') Object.assign(meta, { len: 4.82, front: 2.41, lampX: 0.65, lampY: 0.92, trackW: 1.8 });
-  if (kind === 'bus') Object.assign(meta, { len: 10, front: 5.02, lampX: 0.85, lampY: 0.82, trackW: 2.2 });
-  if (kind === 'truck') Object.assign(meta, { len: 6.6, front: 3.32, lampX: 0.78, lampY: 0.78, trackW: 2.0 });
-  if (kind === 'tractor') Object.assign(meta, { len: 2.4, front: 1.41, lampX: 0.4, lampY: 1.27, trackW: 1.7 });
+  if (kind === 'van') Object.assign(meta, { len: 4.26, front: 2.13, lampX: 0.68, lampY: 0.82, trackW: 1.64 });
+  if (kind === 'pickup') Object.assign(meta, { len: 4.82, front: 2.41, lampX: 0.65, lampY: 0.92, trackW: 1.58 });
+  if (kind === 'bus') Object.assign(meta, { len: 10, front: 5.02, lampX: 0.85, lampY: 0.82, trackW: 2.1 });
+  if (kind === 'truck') Object.assign(meta, { len: 6.6, front: 3.32, lampX: 0.78, lampY: 0.78, trackW: 1.82 });
+  if (kind === 'tractor') Object.assign(meta, { len: 2.4, front: 1.41, lampX: 0.3, lampY: 1.34, trackW: 1.7 });
+  fuse(g);
   return { g, wheels, siren, kind, headMat: head, doors, _steer: true, ...meta };
 }
 // --- aircraft: plane(p, { kind: 'jet' | 'prop' | 'airliner', color, scale }) and heli(p, { color }) → { g, prop/rotor }; move them with fly() ---
@@ -3118,12 +3193,12 @@ function fuse(root) {   // merge every plain-coloured static mesh below root (no
     g.applyMatrix4(M4.multiplyMatrices(inv, o.matrixWorld));
     const n = g.attributes.position.count, ca = new Float32Array(n * 3), cc = mt.color; for (let i = 0; i < n; i++) { ca[3 * i] = cc.r; ca[3 * i + 1] = cc.g; ca[3 * i + 2] = cc.b; }
     g.setAttribute('color', new THREE.BufferAttribute(ca, 3));
-    const vk = [mt.flatShading, mt.roughness, mt.metalness, mt.side, o.castShadow].join('|');
-    if (!B.has(vk)) B.set(vk, { mt, cast: o.castShadow, gs: [] }); B.get(vk).gs.push(g); done.push(o);
+    const vk = [mt.flatShading, mt.roughness, mt.metalness, mt.side, o.castShadow].join('|'); g.computeBoundingBox(); const bs = g.boundingBox.getSize(new THREE.Vector3());
+    if (!B.has(vk)) B.set(vk, { mt, cast: o.castShadow, gs: [], ms: [] }); B.get(vk).gs.push(g); B.get(vk).ms.push([mt, bs.x * bs.y + bs.y * bs.z + bs.x * bs.z]); done.push(o);
   });
   for (const o of done) o.removeFromParent();
   for (const [vk, b] of B) { const mk = vk.split('|').slice(0, 4).join('|'); let m = _fuseM.get(mk); if (!m) { m = new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: b.mt.flatShading, roughness: b.mt.roughness, metalness: b.mt.metalness, side: b.mt.side }); _fuseM.set(mk, m); }
-    const me = new THREE.Mesh(mergeGeometries(b.gs), m); me.castShadow = b.cast; me.receiveShadow = true; root.add(me); }
+    const me = new THREE.Mesh(mergeGeometries(b.gs), m); me.castShadow = b.cast; me.receiveShadow = true; me.userData.fmats = b.ms; root.add(me); }   // fmats: the paints that went into this mesh (debris and rubble take their colours from them)
   return root;
 }
 function inst(p, list, m, geo = boxG(1, 1, 1)) {   // list: [[x, y, z, sx, sy, sz, ry?], …] → one InstancedMesh (windows, lights, rivets)
@@ -3325,9 +3400,9 @@ function rocket(p, x, z, o = {}) {   // stands on the ground, launches at t0 wit
 const PHYS = { bodies: [], blasts: [], rags: [], kin: [], ready: false, t0: 1e9 };
 const _pv = new THREE.Vector3(), _pv2 = new THREE.Vector3(), _pq = new THREE.Quaternion(), _pq2 = new THREE.Quaternion(), _pm = new THREE.Matrix4(), _pm2 = new THREE.Matrix4(), _ps = new THREE.Vector3(1, 1, 1);
 const physT = ts => typeof VT === 'function' ? VT(ts) : ts;   // scene time → video time (slow motion)
-function localBox(node) {   // bounding box in the node's own frame (unscaled)
+function localBox(node, skip) {   // bounding box in the node's own frame (unscaled); skip: m => true leaves a mesh out
   node.updateWorldMatrix(true, true); const inv = _pm.copy(node.matrixWorld).invert(), B = new THREE.Box3(), b = new THREE.Box3(), M = new THREE.Matrix4();
-  node.traverse(m => { if (!m.isMesh || m.isInstancedMesh || !m.visible) return; const mt = m.material; if (mt && (mt.blending === THREE.AdditiveBlending || mt.opacity < 0.3)) return;
+  node.traverse(m => { if (!m.isMesh || m.isInstancedMesh || !m.visible || (skip && skip(m))) return; const mt = m.material; if (mt && (mt.blending === THREE.AdditiveBlending || mt.opacity < 0.3)) return;
     if (!m.geometry.boundingBox) m.geometry.computeBoundingBox(); b.copy(m.geometry.boundingBox).applyMatrix4(M.multiplyMatrices(inv, m.matrixWorld)); B.union(b); });
   return B.isEmpty() ? B.set(new THREE.Vector3(-0.25, 0, -0.25), new THREE.Vector3(0.25, 0.5, 0.25)) : B;
 }
@@ -3364,22 +3439,22 @@ function breakApart0(obj, t, o = {}) {
                                                                     crash() adds it on its own
    explode(x, y, z, t, { breaks: [obj, …] })                        the blast wrecks what is listed (vehicle → crash, tall building → collapse, anything else → breakApart)
    CFG.destruction: false = the plain version of before (grid of blocks, cars stay whole) */
-const _dcols = node => { const L = []; node.traverse(m => { if (!m.isMesh || m.isInstancedMesh || !m.visible || !m.material?.color || m.material.transparent || m.material.isMeshBasicMaterial) return; m.geometry.boundingBox ?? m.geometry.computeBoundingBox(); const s = m.geometry.boundingBox.getSize(new THREE.Vector3()).multiply(m.getWorldScale(new THREE.Vector3())); L.push([m.material, s.x * s.y + s.y * s.z + s.x * s.z]); });
+const _dcols = node => { const L = []; node.traverse(m => { if (!m.isMesh || m.isInstancedMesh || !m.visible || !m.material?.color || m.material.transparent || m.material.isMeshBasicMaterial) return; if (m.userData.fmats) { L.push(...m.userData.fmats); return; } m.geometry.boundingBox ?? m.geometry.computeBoundingBox(); const s = m.geometry.boundingBox.getSize(new THREE.Vector3()).multiply(m.getWorldScale(new THREE.Vector3())); L.push([m.material, s.x * s.y + s.y * s.z + s.x * s.z]); });
   const by = new Map(); for (const [mt, a] of L) by.set(mt, (by.get(mt) ?? 0) + a); return [...by.entries()].sort((a, b) => b[1] - a[1]).slice(0, 6).map(([mt]) => mt); };
 const _solidBox = node => { const B = new THREE.Box3(), b = new THREE.Box3(); node.updateWorldMatrix(true, true); node.traverse(m => { if (!m.isMesh || m.isInstancedMesh || !m.visible || !m.material || m.material.transparent || m.material.blending === THREE.AdditiveBlending) return; m.geometry.boundingBox ?? m.geometry.computeBoundingBox(); B.union(b.copy(m.geometry.boundingBox).applyMatrix4(m.matrixWorld)); }); return B.isEmpty() ? B.setFromObject(node) : B; };   // what is really there (no light cones, no glass)
 const _dhex = mats => mats.length ? mats.map(m => '#' + m.color.getHexString()) : ['#8A6A48', '#6B4A2B'];
 function _dustPuff(x, y, z, t, s, o = {}) { emit('dust', { at: [x, y, z], t0: t, burst: Math.round(clamp(14 * s, 10, 70)), size: clamp(0.45 * s, 0.3, 4), speed: clamp(1.1 * s, 0.8, 7), life: o.life ?? 2.8, jitter: 0.5 * s, colors: o.colors ?? ['#A89E8A', '#8A806E', '#C4BBA8'] }); }
 const _dsMat = mt => { if (mt.side === THREE.DoubleSide) return mt; if (!_DSM.has(mt)) { const c = mt.clone(); c.side = THREE.DoubleSide; if (mt.userData.surf) surfFx(c, mt.userData.surf, { indoor: mt.userData.surfIn }); c.userData.own = true; _DSM.set(mt, c); } return _DSM.get(mt); };
 function _fragGeo(geo, M, cell, hs) {   // shell fragments of a mesh in world space: its triangles are cut down to the cell size and grouped by a wobbly grid (roofs, silos, cones break like sheets, not like blocks)
-  const g = geo.index ? geo.toNonIndexed() : geo, P = g.attributes.position, st = [], out = [], V = i => new THREE.Vector3().fromBufferAttribute(P, i).applyMatrix4(M), mid = (a, b) => a.clone().add(b).multiplyScalar(0.5);
-  for (let i = 0; i + 2 < P.count; i += 3) st.push([V(i), V(i + 1), V(i + 2)]);
-  while (st.length) { const [A, B, C] = st.pop(), ab = A.distanceTo(B), bc = B.distanceTo(C), ca = C.distanceTo(A), L = Math.max(ab, bc, ca); if (L <= cell * 1.1 || out.length + st.length > 1400) { out.push([A, B, C]); continue; }
-    if (L === ab) { const m = mid(A, B); st.push([A, m, C], [m, B, C]); } else if (L === bc) { const m = mid(B, C); st.push([A, B, m], [A, m, C]); } else { const m = mid(C, A); st.push([A, B, m], [m, B, C]); } }
+  const g = geo.index ? geo.toNonIndexed() : geo, P = g.attributes.position, CA = g.attributes.color, st = [], out = [], V = i => new THREE.Vector3().fromBufferAttribute(P, i).applyMatrix4(M), mid = (a, b) => a.clone().add(b).multiplyScalar(0.5);
+  for (let i = 0; i + 2 < P.count; i += 3) st.push([V(i), V(i + 1), V(i + 2), i]);   // 4th entry: where the triangle's colour comes from (fused, vertex-coloured models)
+  while (st.length) { const [A, B, C, ci] = st.pop(), ab = A.distanceTo(B), bc = B.distanceTo(C), ca = C.distanceTo(A), L = Math.max(ab, bc, ca); if (L <= cell * 1.1 || out.length + st.length > 1400) { out.push([A, B, C, ci]); continue; }
+    if (L === ab) { const m = mid(A, B); st.push([A, m, C, ci], [m, B, C, ci]); } else if (L === bc) { const m = mid(B, C); st.push([A, B, m, ci], [A, m, C, ci]); } else { const m = mid(C, A); st.push([A, B, m, ci], [m, B, C, ci]); } }
   const cells = new Map(), c = new THREE.Vector3();
   for (const T of out) { c.copy(T[0]).add(T[1]).add(T[2]).multiplyScalar(1 / 3); const k = [Math.floor(c.x / cell + 0.33 * Math.sin(c.y * 2.3 / cell + c.z * 1.1 / cell + hs)), Math.floor(c.y / cell + 0.33 * Math.sin(c.z * 2.1 / cell + c.x * 1.3 / cell + hs * 2)), Math.floor(c.z / cell + 0.33 * Math.sin(c.x * 1.9 / cell + c.y * 1.7 / cell + hs * 3))].join('|'); (cells.get(k) ?? cells.set(k, []).get(k)).push(T); }
   return [...cells.values()].map(L => { const ctr = new THREE.Vector3(); let area = 0; for (const T of L) { ctr.add(T[0]).add(T[1]).add(T[2]); area += c.copy(T[1]).sub(T[0]).cross(T[2].clone().sub(T[0])).length() / 2; } ctr.multiplyScalar(1 / (3 * L.length));
-    const pos = new Float32Array(L.length * 9); L.forEach((T, i) => T.forEach((v, j) => { pos[i * 9 + j * 3] = v.x - ctr.x; pos[i * 9 + j * 3 + 1] = v.y - ctr.y; pos[i * 9 + j * 3 + 2] = v.z - ctr.z; }));
-    const fg = new THREE.BufferGeometry(); fg.setAttribute('position', new THREE.BufferAttribute(pos, 3)); fg.computeVertexNormals(); return { geo: fg, c: ctr, area }; });
+    const pos = new Float32Array(L.length * 9), col = CA ? new Float32Array(L.length * 9) : null; L.forEach((T, i) => { for (let j = 0; j < 3; j++) { const v = T[j]; pos[i * 9 + j * 3] = v.x - ctr.x; pos[i * 9 + j * 3 + 1] = v.y - ctr.y; pos[i * 9 + j * 3 + 2] = v.z - ctr.z; if (col) { col[i * 9 + j * 3] = CA.getX(T[3]); col[i * 9 + j * 3 + 1] = CA.getY(T[3]); col[i * 9 + j * 3 + 2] = CA.getZ(T[3]); } } });
+    const fg = new THREE.BufferGeometry(); fg.setAttribute('position', new THREE.BufferAttribute(pos, 3)); if (col) fg.setAttribute('color', new THREE.BufferAttribute(col, 3)); fg.computeVertexNormals(); return { geo: fg, c: ctr, area }; });
 }
 function breakApart(obj, t, o = {}) {
   if (o.legacy || CFG.destruction === false) return breakApart0(obj, t, o);
@@ -3465,7 +3540,7 @@ function collapse(obj, t, o = {}) {
   return { t1: te + 1.2, style, ...r };
 }
 function wreck(v, t, o = {}) {
-  const g = dyn(v.g ?? v.root ?? v), lb = localBox(g), sz = lb.getSize(new THREE.Vector3()), lvl = clamp(o.level ?? 1, 0.3, 1.6), side = o.side ?? 'front', NC = { cast: false }, sd = hash(g.id * 0.71), s0 = g.scale.clone();
+  const g = dyn(v.g ?? v.root ?? v), lb = localBox(g, m => m.userData.noHit), sz = lb.getSize(new THREE.Vector3()), lvl = clamp(o.level ?? 1, 0.3, 1.6), side = o.side ?? 'front', NC = { cast: false }, sd = hash(g.id * 0.71), s0 = g.scale.clone();
   const cols = _dhex(_dcols(g)), body = cols[0] ?? '#3A7BD5', dm = grp(g), fz = side === 'rear' ? -1 : 1, lat = side === 'left' || side === 'right', sx = side === 'left' ? -1 : 1;
   for (let i = 0; i < 7; i++) { const h1 = hash(i * 3.1 + sd), h2 = hash(i * 5.7 + sd), h3 = hash(i * 8.3 + sd), w = (lat ? sz.z : sz.x) * (0.22 + 0.3 * h1), hh = sz.y * (0.14 + 0.2 * h2), col = shade(body, -0.12 - 0.3 * h3);   // crumpled panels on the side that was hit
     const u = (h2 - 0.5) * (lat ? sz.z : sz.x) * 0.7, y = lb.min.y + sz.y * (0.16 + 0.42 * h3);
@@ -8248,7 +8323,7 @@ const _picto = (p, kind, x, y, z, s) => { const g = grp(p, x, y, z); g.scale.set
 // foodtruck(p, x, z, { ry, color, awning, vendor, menu }) — serving window, striped awning, menu board with food pictures, string lights, condiments
 function foodtruck(p, x, z, o = {}) {
   const g = stat(grp(p ?? world, x, groundH(x, z), z, o.ry ?? 0)), c = o.color ?? '#F2B33A', NC = FD.NC;
-  for (const [wx, wz] of [[-1.1, 1.6], [1.1, 1.6], [-1.1, -1.8], [1.1, -1.8]]) { cyl(g, 0.42, 0.42, 0.28, '#1E1E22', wx, 0.42 - 0.14, wz, { rz: Math.PI / 2, seg: 14 }); cyl(g, 0.2, 0.2, 0.3, '#C9CDD3', wx, 0.42 - 0.15, wz, { rz: Math.PI / 2, seg: 10, ...NC }); }   /* wheels on the ground (they hovered 14 cm above it) */
+  for (const [wx, wz] of [[-1.1, 1.6], [1.1, 1.6], [-1.1, -1.8], [1.1, -1.8]]) _vWheel(g, wx, wz, 0.42, 0.28, { style: 'steel' });   // v2.40: wheels with rims on the ground (the old cylinders hovered 14 cm above it)
   rbox(g, 2.3, 2.5, 5.6, c, 0, 0.55, 0, { rf: 0.12 }); rbox(g, 2.25, 1.1, 1.4, c, 0, 0.55, 3.0, { rf: 0.2 }); box(g, 2.1, 0.55, 0.05, '#2A3A4A', 0, 1.15, 3.71, { rough: 0.1, metal: 0.3, ...NC });
   box(g, 0.05, 1.0, 3.2, '#2A2A2E', 1.16, 1.45, -0.6); box(g, 0.06, 1.05, 3.3, shade(c, -0.15), 1.17, 1.42, -0.6, NC); box(g, 0.5, 0.07, 3.4, '#C9CDD3', 1.35, 1.38, -0.6, { metal: 0.5 });
   const aw = grp(g, 1.18, 2.55, -0.6); for (let i = 0; i < 8; i++) box(aw, 0.9, 0.04, 0.42, i % 2 ? '#F4F1E8' : (o.awning ?? '#D8342A'), 0.45, 0, -1.47 + i * 0.42, { rz: -0.35 }); for (let i = 0; i < 8; i++) cone(aw, 0.21, 0.18, i % 2 ? '#F4F1E8' : (o.awning ?? '#D8342A'), 0.86, -0.37, -1.47 + i * 0.42, { rx: Math.PI, seg: 3, ...NC });
@@ -8323,12 +8398,13 @@ function stream(src, t0, t1, o = {}) {
   return im;
 }
 // ---- two wheels ----
-function _wheel(p, r, w, c, rim, x, y, z, o = {}) {   // tyre + rim + spokes in a group that spins about x
-  const g = grp(p, x, y, z); g.userData.r = r; mesh(g, G('tyre' + r + w, () => new THREE.TorusGeometry(r - w / 2, w / 2, 6, 18)), mat(c ?? '#1E1E22'), 0, 0, 0, { ry: Math.PI / 2 });
-  cyl(g, w * 0.4, w * 0.4, w * 1.4, '#9A9EA4', 0, -w * 0.7, 0, { rz: Math.PI / 2, seg: 6, cast: false }); const ns = o.spokes ?? 8;   // hub and disc sit on the axle (they were off-centre by up to 0.7 × width and wobbled as the wheel turned)
-  for (let i = 0; i < ns; i++) { const q = box(g, 0.006, (r - w) * 2, 0.008, rim ?? '#C9CDD3', 0, -(r - w), 0, { cast: false }); q.position.y = 0; q.rotation.x = i * Math.PI / ns; }
-  if (o.disc) cyl(g, r - w * 0.9, r - w * 0.9, w * 0.5, rim ?? '#C9CDD3', 0, -w * 0.25, 0, { rz: Math.PI / 2, seg: 14, cast: false });
-  return g;
+function _wheel(p, r, w, c, rim, x, y, z, o = {}) {   // tyre + rim + spokes in a group that spins about x — one cached mesh per wheel type (v2.40; hub and disc sit on the axle: they were off-centre and wobbled)
+  const g = grp(p, x, y, z), ns = o.spokes ?? 8; g.userData.r = r; g.userData.keep = true;
+  const geo = _vcGeo(`whl|${r}|${w}|${c}|${rim}|${ns}|${!!o.disc}`, t => { mesh(t, new THREE.TorusGeometry(r - w / 2, w / 2, 6, 18), mat(c ?? '#1E1E22'), 0, 0, 0, { ry: Math.PI / 2 });
+    cyl(t, w * 0.4, w * 0.4, w * 1.4, '#9A9EA4', 0, -w * 0.7, 0, { rz: Math.PI / 2, seg: 6 });
+    for (let i = 0; i < ns; i++) { const q = box(t, 0.006, (r - w) * 2, 0.008, rim ?? '#C9CDD3', 0, -(r - w), 0); q.position.y = 0; q.rotation.x = i * Math.PI / ns; }
+    if (o.disc) cyl(t, r - w * 0.9, r - w * 0.9, w * 0.5, rim ?? '#C9CDD3', 0, -w * 0.25, 0, { rz: Math.PI / 2, seg: 14 }); });
+  mesh(g, geo, _vcMat(0.88), 0, 0, 0); return g;
 }
 // bike(p, { kind: 'bicycle' | 'motorcycle' | 'scooter' | 'skateboard', x, z, ry, color }) → V for drive(V, pts, { speed }) and rideBike(rig, V)
 function bike(p, o = {}) {
@@ -8372,18 +8448,35 @@ function rails(p, pts, o = {}) {   // straight segments of track: ballast, sleep
   return g;
 }
 // train(p, { kind: 'commuter' | 'subway' | 'steam' | 'freight', cars, x, z, ry, color }) → T; run(T, { t0, from: [x,z], to: [x,z], speed, stop }) along the rails
-function train(p, o = {}) {
+function train(p, o = {}) {   // v2.40: bogies, couplers and gangways between the cars, roof units, pantograph, doors with windows, tail lights; steam engine with dome, cab windows, cylinders and coupling rods that follow the wheels
   const k = o.kind ?? 'commuter', n = o.cars ?? 3, g = dyn(grp(p ?? world, o.x ?? 0, groundH(o.x ?? 0, o.z ?? 0) + 0.37, o.z ?? 0, o.ry ?? 0)), c = o.color ?? { commuter: '#E8E6E2', subway: '#C9CDD3', steam: '#1E2A1E', freight: '#8A3A22' }[k], NC = { cast: false }, CL = k === 'steam' ? 9 : 16, T = { g, root: g, kind: k, wheels: [], cars: [], len: n * (CL + 0.8) };
-  for (let i = 0; i < n; i++) { const cg = grp(g, 0, 0, -i * (CL + 0.8)), loco = i === 0;
-    for (const z of [-CL * 0.32, CL * 0.32]) for (const sx of [-1, 1]) T.wheels.push(_wheel(cg, 0.45, 0.1, '#2A2A2E', '#5A5E64', sx * 0.72, 0.45 - 0.37 + 0.37, z, { disc: true, spokes: 4 }));
-    if (k === 'steam' && loco) { cyl(cg, 1.0, 1.0, 5.5, c, 0, 1.6 - 2.75, 2.6, { rx: Math.PI / 2, seg: 16 });   /* boiler lies on the frame: cyl() + rx lifted it by half its length (2.75 m) */ cyl(cg, 0.3, 0.38, 1.0, '#1E1E22', 0, 2.5, 4.4, { seg: 12 }); rbox(cg, 2.6, 2.6, 2.8, c, 0, 0.6, -1.8, { rf: 0.1 }); box(cg, 2.8, 0.15, 3.1, '#1E1E22', 0, 3.2, -1.8);
-      for (let r = 0; r < 4; r++) cyl(cg, 1.03, 1.03, 0.08, '#C9A64A', 0, 1.6, 0.4 + r * 1.3, { rx: Math.PI / 2, seg: 16, ...NC }); cone(cg, 1.0, 1.0, '#3A2A2A', 0, 0.4, 5.7, { rx: Math.PI / 2, seg: 4 }); box(cg, 2.8, 0.5, 9, '#3A2A2A', 0, 0.1, 0); T.chimney = [0, 3.6, 4.4 - i * (CL + 0.8)];
-      for (let w = 0; w < 3; w++) for (const sx of [-1, 1]) T.wheels.push(_wheel(cg, 0.75, 0.12, '#2A2A2E', '#B8302A', sx * 0.75, 0.75 - 0.37 + 0.37, 3.5 - w * 1.65, { spokes: 10 })); }
-    else if (k === 'freight' && !loco) { box(cg, 2.8, 0.3, CL, '#3A3A40', 0, 0.3, 0); box(cg, 2.7, 2.6, CL - 0.6, o.boxColors?.[i % 3] ?? ['#2E86AB', '#B8302A', '#3E8E3A'][i % 3], 0, 0.6, 0); for (let r = 0; r < 8; r++) box(cg, 2.72, 2.4, 0.06, '#1E1E22', 0, 0.7, -CL / 2 + 1 + r * (CL - 2) / 7, NC); }
-    else { rbox(cg, 2.9, 3.1, CL, c, 0, 0.35, 0, { rf: 0.12 }); box(cg, 2.92, 0.35, CL - 0.2, o.stripe ?? (k === 'subway' ? '#2E86AB' : '#D8342A'), 0, 1.0, 0, NC);
-      for (let w = 0; w < (k === 'subway' ? 5 : 7); w++) for (const sx of [-1, 1]) box(cg, 0.03, 0.75, 1.3, '', sx * 1.46, 1.75, -CL / 2 + 1.6 + w * (CL - 3.2) / ((k === 'subway' ? 5 : 7) - 1), { mat: mat('#2A3A4A', { rough: 0.1, metal: 0.3, em: '#FFE8B0', ei: o.lit ? 0.6 : 0 }), ...NC });
-      for (const sx of [-1, 1]) for (const z of [-CL * 0.18, CL * 0.18]) { box(cg, 0.04, 2.1, 1.3, '#5A5E64', sx * 1.46, 0.5, z, NC); }
-      if (loco) { box(cg, 2.4, 1.0, 0.05, '#2A3A4A', 0, 1.9, CL / 2 + 0.01, { rough: 0.1, metal: 0.3, ...NC }); for (const sx of [-0.85, 0.85]) ball(cg, 0.12, '', sx, 0.9, CL / 2 + 0.02, { mat: mat('#FFF6D8', { basic: true, glow: 1.6 }), detail: 1, cast: false }); } } T.cars.push(cg); }
+  const steel = '#2A2A2E', winM = mat('#2A3A4A', { rough: 0.1, metal: 0.3, em: '#FFE8B0', ei: o.lit ? 0.6 : 0 }), stripe = o.stripe ?? (k === 'subway' ? '#2E86AB' : '#D8342A');
+  for (let i = 0; i < n; i++) { const cg = grp(g, 0, 0, -i * (CL + 0.8)), loco = i === 0, last = i === n - 1, steam = k === 'steam' && loco;
+    for (const z of [-CL * 0.32, CL * 0.32]) { if (!steam) { box(cg, 1.9, 0.34, 2.5, steel, 0, 0.28, z); for (const sx of [-1, 1]) box(cg, 0.1, 0.16, 2.2, '#3A3D44', sx * 0.86, 0.36, z, NC); }   // bogie frame
+      for (const dz of steam ? [0] : [-0.75, 0.75]) for (const sx of [-1, 1]) T.wheels.push(_wheel(cg, 0.45, 0.1, steel, '#5A5E64', sx * 0.72, 0.45, z + dz + (steam ? (z > 0 ? 1.6 : 0.4) : 0), { disc: true, spokes: 4 })); }
+    if (!last) { box(cg, 0.24, 0.2, 0.84, steel, 0, 0.42, -CL / 2 - 0.4, NC); if (k !== 'freight' && !steam) box(cg, 1.7, 2.3, 0.82, '#3A3D44', 0, 0.75, -CL / 2 - 0.4); }   // coupler + gangway bellows: the cars are joined, not floating 0.8 m apart
+    if (steam) { rod(cg, 1.0, 1.0, 5.5, c, 0, 1.6, 2.6, { seg: 16 }); cyl(cg, 0.3, 0.38, 1.0, '#1E1E22', 0, 2.5, 4.4, { seg: 12 }); cyl(cg, 0.42, 0.34, 0.14, '#1E1E22', 0, 3.5, 4.4, { seg: 12, ...NC });   // boiler lies on the frame (it floated 2.75 m above it: cyl() + rx lifts by half its length)
+      rbox(cg, 2.6, 2.6, 2.8, c, 0, 0.6, -1.8, { rf: 0.1 }); box(cg, 2.8, 0.15, 3.1, '#1E1E22', 0, 3.2, -1.8);
+      for (let r = 0; r < 4; r++) rod(cg, 1.03, 1.03, 0.08, '#C9A64A', 0, 1.6, 0.4 + r * 1.3, { seg: 16, ...NC });
+      rod(cg, 0, 1.0, 0.5, '#2A2A2A', 0, 1.6, 5.6, { seg: 16 }); cyl(cg, 0.36, 0.42, 0.5, '#C9A64A', 0, 2.55, 2.4, { seg: 10 }); ball(cg, 0.36, '#C9A64A', 0, 3.05, 2.4, { detail: 1, ...NC }); cyl(cg, 0.16, 0.2, 0.4, '#1E1E22', 0, 2.55, 1.0, { seg: 8, ...NC });
+      box(cg, 2.8, 0.5, 9, '#3A2A2A', 0, 0.1, 0); finPlate(cg, [[4.5, 0.1], [5.5, 0.1], [4.5, 0.75]], 2.2, '#3A2A2A'); for (const sx of [-1, 1]) { box(cg, 0.5, 0.06, 5.2, '#2A2A2A', sx * 1.15, 0.62, 2.6, NC); rod(cg, 0.3, 0.3, 1.0, '#2A2A2A', sx * 1.12, 0.62, 4.6, { seg: 10 });
+        mesh(cg, _boxesG([[0.04, 0.7, 0.9, sx * 1.31, 2.35, -1.5], [0.04, 0.7, 0.5, sx * 1.31, 2.35, -2.6]]), winM, 0, 0, 0, NC); }
+      mesh(cg, _boxesG([[0.6, 0.6, 0.04, -0.75, 2.45, -0.39], [0.6, 0.6, 0.04, 0.75, 2.45, -0.39]]), winM, 0, 0, 0, NC); ball(cg, 0.16, '', 0, 2.75, 5.36, { mat: mat('#FFF6D8', { basic: true, glow: 1.6 }), detail: 1, cast: false }); T.chimney = [0, 3.6, 4.4 - i * (CL + 0.8)];
+      const dw = []; for (let w = 0; w < 3; w++) for (const sx of [-1, 1]) { const q = _wheel(cg, 0.75, 0.12, steel, '#B8302A', sx * 0.75, 0.75, 3.5 - w * 1.65, { spokes: 10 }); T.wheels.push(q); dw.push(q); }
+      const rods = [-1, 1].map(sx => { const r = dyn(grp(cg, sx * 0.9, 0.75, 1.85)); box(r, 0.06, 0.1, 3.5, '#B8BEC6', 0, -0.05, 0, { metal: 0.5 }); box(r, 0.05, 0.08, 1.5, '#B8BEC6', 0, -0.04, 2.3, { metal: 0.5 }); return r; });
+      late(() => { const a = dw[0].rotation.x; rods.forEach((r, j) => { const b = a + j * Math.PI / 2; r.position.y = 0.75 + 0.3 * Math.cos(b); r.position.z = 1.85 + 0.3 * Math.sin(b); }); }); }   // coupling rods ride on the crank pins: pure function of the wheel angle
+    else if (k === 'freight' && !loco) { box(cg, 2.8, 0.3, CL, '#3A3A40', 0, 0.3, 0); const bc = o.boxColors?.[i % 3] ?? ['#2E86AB', '#B8302A', '#3E8E3A'][i % 3]; box(cg, 2.7, 2.6, CL - 0.6, bc, 0, 0.6, 0); for (let r = 0; r < 8; r++) box(cg, 2.72, 2.4, 0.06, '#1E1E22', 0, 0.7, -CL / 2 + 1 + r * (CL - 2) / 7, NC);
+      for (const sx of [-1, 1]) { box(cg, 0.04, 2.3, 2.6, shade(bc, -0.08), sx * 1.36, 0.75, 0, NC); box(cg, 0.05, 0.08, 3.0, '#1E1E22', sx * 1.37, 3.06, 0, NC); box(cg, 0.05, 0.5, 0.06, '#C9CDD3', sx * 1.39, 1.5, 0.9, NC); } box(cg, 2.3, 0.08, CL - 1.2, shade(bc, -0.12), 0, 3.2, 0, NC); }
+    else { rbox(cg, 2.9, 3.1, CL, c, 0, 0.35, 0, { rf: 0.12 }); for (const sx of [-1, 1]) box(cg, 0.02, 0.35, CL - 0.4, stripe, sx * 1.452, 1.0, 0, NC);   // stripe on the sides (the band used to cross the nose and the lamps)
+      const nw = k === 'subway' ? 5 : 7, wl = []; for (let w = 0; w < nw; w++) for (const sx of [-1, 1]) wl.push([0.03, 0.75, 1.3, sx * 1.46, 2.125, -CL / 2 + 1.6 + w * (CL - 3.2) / (nw - 1)]);
+      for (const sx of [-1, 1]) for (const z of [-CL * 0.18, CL * 0.18]) { box(cg, 0.04, 2.1, 1.3, '#5A5E64', sx * 1.462, 0.5, z, NC); wl.push([0.03, 0.8, 0.4, sx * 1.475, 2.1, z - 0.3], [0.03, 0.8, 0.4, sx * 1.475, 2.1, z + 0.3]); box(cg, 0.02, 2.0, 0.03, '#3A3D44', sx * 1.485, 0.55, z, NC); }
+      mesh(cg, _boxesG(wl), winM, 0, 0, 0, NC);
+      box(cg, 1.5, 0.22, 2.4, '#B8BCC2', 0, 3.42, CL * 0.25); box(cg, 1.5, 0.22, 2.4, '#B8BCC2', 0, 3.42, -CL * 0.25); box(cg, 2.2, 0.5, CL * 0.3, '#3A3D44', 0, 0.02, 0, NC);
+      if (loco) { box(cg, 2.4, 1.0, 0.05, '#2A3A4A', 0, 1.9, CL / 2 + 0.01, { rough: 0.1, metal: 0.3, ...NC }); box(cg, 1.2, 0.22, 0.04, '#1A1A1A', 0, 3.0, CL / 2 + 0.012, NC); box(cg, 2.6, 0.3, 0.3, '#3A3D44', 0, 0.2, CL / 2 - 0.05); for (const sx of [-0.85, 0.85]) ball(cg, 0.12, '', sx, 0.9, CL / 2 + 0.02, { mat: mat('#FFF6D8', { basic: true, glow: 1.6 }), detail: 1, cast: false });
+        if (k === 'commuter') { const pg = grp(cg, 0, 3.45, -CL * 0.02); box(pg, 1.0, 0.1, 1.4, '#3A3D44', 0, 0, 0, NC); for (const sx of [-1, 1]) { _seg(pg, [sx * 0.4, 0.1, -0.6], [sx * 0.3, 0.75, 0.2], 0.03, 0.03, '#5A5E64', NC); _seg(pg, [sx * 0.3, 0.75, 0.2], [sx * 0.4, 1.3, -0.5], 0.03, 0.03, '#5A5E64', NC); } box(pg, 1.5, 0.05, 0.14, '#2A2A2E', 0, 1.3, -0.5, NC); } }
+      if (last) mesh(cg, _boxesG([[0.26, 0.16, 0.04, -0.95, 0.95, -CL / 2 - 0.005], [0.26, 0.16, 0.04, 0.95, 0.95, -CL / 2 - 0.005]]), mat('#C8202A', { em: '#FF2020', ei: 0.6 }), 0, 0, 0, NC); }
+    T.cars.push(cg); }
+  _fuseDyn(g);
   return T;
 }
 function run(T, o = {}) {   // drive the train straight from → to (soft start/stop), wheels turn, smoke from a steam engine, horn
@@ -8400,14 +8493,28 @@ function trainStation(p, x, z, o = {}) {
   return g;
 }
 // ---- service vehicles ----
-const _truckBase = (g, L, W, c, cab, V) => { for (const z of [L * 0.32, -L * 0.25, -L * 0.38]) for (const sx of [-1, 1]) { const w = _wheel(g, 0.48, 0.32, '#1E1E22', '#C9CDD3', sx * W / 2, 0.48, z, { disc: true, spokes: 6 }); w.rotation.order = 'YXZ'; w.userData.steer = z > 0; if (V) { V.wheels.push(w); V._steer = true; } }   // v2.40: wheels registered for drive() (they used to stand still)
-  box(g, W, 0.4, L, '#2A2A2E', 0, 0.45, 0); rbox(g, W, 1.9, cab, c, 0, 0.75, L / 2 - cab / 2, { rf: 0.1 }); box(g, W * 0.9, 0.75, 0.04, '#2A3A4A', 0, 1.65, L / 2 + 0.005, { rough: 0.1, metal: 0.3, cast: false }); for (const sx of [-1, 1]) box(g, 0.03, 0.6, cab * 0.5, '#2A3A4A', sx * W / 2, 1.7, L / 2 - cab * 0.4, { cast: false });
-  for (const sx of [-0.8, 0.8]) ball(g, 0.1, '', sx * W / 2, 0.95, L / 2 + 0.01, { mat: mat('#FFF6D8', { basic: true, glow: 1.4 }), detail: 1, cast: false }); };
+const _truckBase = (g, L, W, c, cab, V, hb = 2.55) => {   // v2.40: one side profile (cab with raked windscreen + body of height hb) with wheel arches, wheels flush in the arches and registered for drive() (they used to stand still), grille, bumper, mirrors
+  const NC = { cast: false }, dark = '#24272D', zf = L * 0.32, zr = L < 7.5 ? [-L * 0.3] : [-L * 0.25, -L * 0.38], hl = L / 2, zc = hl - cab, gl = { rough: 0.1, metal: 0.3, cast: false };   // short trucks: one rear axle (two overlapped each other)
+  const arch = zc2 => { const a = [[zc2 + 0.54, 0.45]]; for (let i = 0; i <= 5; i++) { const t = Math.PI * i / 5; a.push([zc2 + 0.54 * Math.cos(t), 0.48 + 0.54 * Math.sin(t)]); } a.push([zc2 - 0.54, 0.45]); return a; };
+  finPlate(g, [[hl, 0.62], [hl - 0.1, 0.45], ...arch(zf), ...zr.flatMap(arch), [-hl + 0.06, 0.45], [-hl, 0.6], [-hl, hb], [zc, hb], [zc, 2.65], [hl - 0.5, 2.65], [hl - 0.16, 2.5], [hl, 1.55]], W, c);
+  box(g, W - 0.7, 0.62, L - 0.4, '#1B1D21', 0, 0.42, 0, NC);
+  { const a = [hl, 1.55], b = [hl - 0.16, 2.5], dz = b[0] - a[0], dy = b[1] - a[1], Lg = Math.hypot(dz, dy) - 0.1, q = grp(g, 0, (a[1] + b[1]) / 2, (a[0] + b[0]) / 2); q.rotation.x = Math.atan2(dz, dy); box(q, W * 0.9, Lg, 0.04, '#2A3A4A', 0, -Lg / 2, 0, gl); for (const sx of [-1, 1]) box(q, 0.025, W * 0.3, 0.016, '#15171A', sx * W * 0.2 + W * 0.12, -Lg / 2 + 0.03, 0.03, { rz: 1.12, ...NC }); }
+  for (const sx of [-1, 1]) { finPlate(g, [[hl - 0.22, 1.6], [hl - 0.36, 2.42], [zc + 0.5, 2.42], [zc + 0.5, 1.6]], 0.03, '#2A3A4A', sx * W / 2, 0, 0, gl); box(g, 0.02, 0.04, 0.16, dark, sx * (W / 2 + 0.005), 1.42, zc + 0.62, NC); box(g, 0.14, 0.06, 0.6, dark, sx * (W / 2 - 0.06), 0.52, zf + 0.9 > hl - 0.1 ? zc + 0.4 : zf + 0.9, NC); }
+  box(g, W * 0.6, 0.5, 0.04, dark, 0, 0.72, hl + 0.01, NC); for (let i = 0; i < 3; i++) box(g, W * 0.54, 0.035, 0.02, '#4A4E56', 0, 0.82 + i * 0.13, hl + 0.035, NC);
+  box(g, W + 0.04, 0.22, 0.14, dark, 0, 0.42, hl + 0.02, NC); box(g, W + 0.04, 0.18, 0.1, dark, 0, 0.45, -hl, NC);
+  mesh(g, _boxesG([[0.3, 0.18, 0.05, -0.8 * W / 2, 1.0, hl + 0.01], [0.3, 0.18, 0.05, 0.8 * W / 2, 1.0, hl + 0.01]]), mat('#FFF6D8', { basic: true, glow: 1.4 }), 0, 0, 0, NC);
+  mesh(g, _boxesG([[0.16, 0.34, 0.04, -(W / 2 - 0.14), 1.0, -hl - 0.005], [0.16, 0.34, 0.04, W / 2 - 0.14, 1.0, -hl - 0.005]]), mat('#C8202A', { em: '#FF2020', ei: 0.5 }), 0, 0, 0, NC);
+  const er = mesh(g, _boxesG([[0.1, 0.34, 0.16, -(W / 2 + 0.11), 1.95, hl - 0.3], [0.1, 0.34, 0.16, W / 2 + 0.11, 1.95, hl - 0.3]]), mat(dark), 0, 0, 0, NC); er.userData.keep = true; er.userData.noHit = true;
+  for (const z of [zf, ...zr]) for (const sx of [-1, 1]) { const w = _vWheel(g, sx * (W / 2 - 0.148), z, 0.48, 0.32, { style: 'steel', steer: z > 0 }); if (V) { V.wheels.push(w); V._steer = true; } } };
 const _lightbar = (g, y, z, w, cols) => { const L = []; cols.forEach((c, i) => L.push(box(g, w / cols.length * 0.9, 0.14, 0.25, '', (i - (cols.length - 1) / 2) * w / cols.length, y, z, { mat: mat(c, { basic: true, glow: 2 }), cast: false }))); tick(t => L.forEach((m, i) => m.visible = Math.floor(t * 6 + i * (i % 2 ? 1.5 : 0)) % 2 === 0)); return L; };
 // firetruck(p, x, z, { ry }) → F with F.ladder(t0, t1, { yaw, pitch, extend }), F.spray(t0, t1, { at }) (water jet from the ladder tip)
 function firetruck(p, x, z, o = {}) {
   const L = 9, W = 2.5, g = dyn(grp(p ?? world, x, groundH(x, z), z, o.ry ?? 0)), F = { g, root: g, wheels: [], len: L, acts: [] };
-  _truckBase(g, L, W, '#C8202A', 2.6, F); box(g, W, 1.7, L - 2.8, '#C8202A', 0, 0.85, -1.3); for (let i = 0; i < 4; i++) box(g, 0.03, 1.2, 1.2, '#C9CDD3', W / 2, 1.05, -4.5 + i * 1.45, { metal: 0.6, cast: false }); box(g, W + 0.02, 0.12, L - 2.8, '#F4F1E8', 0, 1.6, -1.3, { cast: false });
+  _truckBase(g, L, W, '#C8202A', 2.6, F); { const NC = { cast: false };   // v2.40: roller shutters on both sides (the old panels hung 0.6 m over the tail and only on one side), pump panel, hose reel, roof walkway
+    for (const sx of [-1, 1]) { for (const [zz, ln, y0, hh] of [[0.95, 1.5, 1.12, 1.3], [-0.72, 1.3, 1.12, 1.3], [-4.1, 0.7, 1.12, 1.3]]) { box(g, 0.03, hh, ln, '#C9CDD3', sx * (W / 2 + 0.002), y0, zz, { metal: 0.5, ...NC }); for (let k = 1; k < 5; k++) box(g, 0.012, 0.025, ln - 0.06, '#9AA0A8', sx * (W / 2 + 0.02), y0 + k * hh / 5, zz, NC); }
+      box(g, 0.03, 0.5, 1.9, '#C9CDD3', sx * (W / 2 + 0.002), 1.72, -2.84, { metal: 0.5, ...NC }); box(g, 0.02, 0.12, L - 2.9, '#F4F1E8', sx * (W / 2 + 0.03), 2.3, -1.3, NC); }
+    box(g, 0.04, 0.56, 0.9, '#2A2D33', W / 2 + 0.004, 1.12, -1.9, NC); for (let k = 0; k < 3; k++) { cyl(g, 0.07, 0.07, 0.05, ['#C9CDD3', '#E3B23C', '#C9CDD3'][k], W / 2 + 0.03, 1.24 + (k % 2) * 0.2, -2.16 + k * 0.26, { rz: Math.PI / 2, seg: 8, ...NC }); }
+    box(g, W - 0.5, 0.05, L - 3.2, '#8E949C', 0, 2.55, -1.3, NC); box(g, 0.5, 0.3, 1.6, '#3A3D44', -0.8, 2.6, 0.6); for (const sx of [-1, 1]) box(g, 0.04, 0.2, L - 3.2, '#C9CDD3', sx * (W / 2 - 0.1), 2.55, -1.3, NC); }
   _lightbar(g, 2.7, L / 2 - 1.3, 1.6, ['#FF2A2A', '#4A8AFF', '#FF2A2A', '#4A8AFF']);
   const tt = dyn(grp(g, 0, 2.55, -2.5)); cyl(tt, 0.6, 0.6, 0.3, '#C9CDD3', 0, 0, 0, { seg: 14, metal: 0.5 }); const boom = dyn(grp(tt, 0, 0.35, 0)), ext = dyn(grp(boom, 0, 0, 0));
   for (const [G2, len, w] of [[boom, 7, 0.75], [ext, 6.5, 0.6]]) { for (const sx of [-1, 1]) box(G2, 0.06, 0.12, len, '#C9CDD3', sx * w / 2, 0, len / 2, { metal: 0.6 }); for (let r = 0.4; r < len; r += 0.45) box(G2, w, 0.04, 0.04, '#C9CDD3', 0, 0.02, r, { metal: 0.6, cast: false }); }
@@ -8416,16 +8523,17 @@ function firetruck(p, x, z, o = {}) {
   tick(t => { let yaw = 0, pitch = 0, ex = 0; for (const a of F.acts) { const k = sm01((t - a.t0) / Math.max(0.2, a.t1 - a.t0)); yaw = lerp(yaw, a.yaw ?? 0, k); pitch = lerp(pitch, a.pitch ?? 0.7, k); ex = lerp(ex, a.extend ?? 5, k); }
     tt.rotation.y = yaw; boom.rotation.x = -pitch; ext.position.z = ex; });
   F.spray = (t0, t1, q = {}) => { stream(() => { g.updateWorldMatrix(true, true); return tip.localToWorld(v3(0, 0.1, 0.4)).toArray(); }, t0, t1, { dir: () => { const d = q.at ? toV(q.at).sub(tip.getWorldPosition(v3())) : v3(0, 0.3, 1).applyQuaternion(tip.getWorldQuaternion(new THREE.Quaternion())); d.y += d.length() * 0.18; return d.toArray(); }, speed: q.speed ?? 16, n: q.n ?? 260, size: 0.22, spread: 0.07, opacity: 0.85 }); return F; };
-  if (o.siren !== false) sfx(o.t0 ?? 0, 'alarm', 0.4);
+  _fuseDyn(g); if (o.siren !== false) sfx(o.t0 ?? 0, 'alarm', 0.4);
   return F;
 }
 function ambulance(p, x, z, o = {}) {
-  const L = 6, W = 2.2, g = dyn(grp(p ?? world, x, groundH(x, z), z, o.ry ?? 0)), A = { g, root: g, wheels: [], len: L }; _truckBase(g, L, W, '#F4F1E8', 2.0, A);
-  rbox(g, W, 2.3, L - 2.0, '#F4F1E8', 0, 0.75, -1.0, { rf: 0.08 }); box(g, W + 0.02, 0.3, L - 0.2, '#D8342A', 0, 1.3, -0.05, { cast: false }); box(g, W + 0.02, 0.1, L - 0.2, '#2E86AB', 0, 1.65, -0.05, { cast: false });
+  const L = 6, W = 2.2, g = dyn(grp(p ?? world, x, groundH(x, z), z, o.ry ?? 0)), A = { g, root: g, wheels: [], len: L }; _truckBase(g, L, W, '#F4F1E8', 2.0, A, 3.05);
+  for (const sx of [-1, 1]) { box(g, 0.02, 0.24, L - 0.5, '#D8342A', sx * (W / 2 + 0.003), 1.12, -0.1, { cast: false }); box(g, 0.02, 0.08, L - 2.3, '#2E86AB', sx * (W / 2 + 0.003), 1.42, -1.0, { cast: false }); box(g, 0.03, 0.5, 0.8, '#2A3A4A', sx * (W / 2), 2.2, -0.2, { rough: 0.1, metal: 0.3, cast: false }); }   // v2.40: stripes on the sides only (the band ran across the windscreen), side windows, dark load bay behind the rear doors
+  box(g, W - 0.24, 2.1, 0.02, '#23262B', 0, 0.82, -L / 2 - 0.004, { cast: false }); box(g, 0.6, 0.5, 0.02, '#B8BEC6', -0.3, 0.9, -L / 2 - 0.01, { cast: false }); box(g, 1.2, 0.12, 0.5, '#C9CDD3', 0, 3.05, -1.0, { cast: false });
   for (const sx of [-1, 1]) { const s = grp(g, sx * (W / 2 + 0.012), 2.1, -1.2); box(s, 0.01, 0.55, 0.55, '#2E86AB', 0, -0.27, 0, { cast: false }); box(s, 0.012, 0.42, 0.12, '#FFFFFF', 0, -0.21, 0, { cast: false }); box(s, 0.012, 0.12, 0.42, '#FFFFFF', 0, -0.06, 0, { cast: false }); }   // star-of-life style blue square with a white cross (generic)
-  _lightbar(g, 2.65, L / 2 - 1.0, 1.4, ['#FF2A2A', '#FFFFFF', '#4A8AFF']); A.doors = [-1, 1].map(sx => { const d = dyn(grp(g, sx * W / 2, 0.75, -L / 2)); box(d, W / 2, 2.2, 0.05, '#F4F1E8', -sx * W / 4, 0, 0); return d; });
-  A.open = t => { tick(tt => { const k = sm01((tt - t) / 1.2); A.doors.forEach((d, i) => d.rotation.y = (i ? -1 : 1) * k * 1.9); }); sfx(t, 'door', 0.6); return A; };
-  if (o.siren !== false) sfx(o.t0 ?? 0, 'alarm', 0.4); return A;
+  _lightbar(g, 2.65, L / 2 - 1.0, 1.4, ['#FF2A2A', '#FFFFFF', '#4A8AFF']); A.doors = [-1, 1].map(sx => { const d = dyn(grp(g, sx * W / 2, 0.75, -L / 2 - 0.03)); box(d, W / 2, 2.2, 0.05, '#F4F1E8', -sx * W / 4, 0, 0); box(d, W / 2 - 0.3, 0.6, 0.03, '#2A3A4A', -sx * W / 4, 1.3, -0.02, { rough: 0.1, metal: 0.3, cast: false }); box(d, 0.05, 0.3, 0.04, '#24272D', -sx * (W / 2 - 0.1), 0.8, -0.03, { cast: false }); box(d, W / 2, 0.24, 0.02, '#D8342A', -sx * W / 4, 0.37, -0.03, { cast: false }); return d; });
+  A.open = t => { tick(tt => { const u = (tt - t) / 1.2, k = u <= 0 ? 0 : u >= 1.6 ? 1 : sm01(u) + 0.045 * Math.sin(clamp(u - 0.75, 0, 0.85) / 0.85 * TAU) * (1 - clamp((u - 0.75) / 0.85)); A.doors.forEach((d, i) => d.rotation.y = (i ? -1 : 1) * k * 1.9); }); sfx(t, 'door', 0.6); return A; };   // v2.40: the doors swing a little past the stop and settle
+  _fuseDyn(g); if (o.siren !== false) sfx(o.t0 ?? 0, 'alarm', 0.4); return A;
 }
 // excavator(p, x, z, { ry, color }) → E; E.dig(t, { at: [x, z], dump: [x, z] }) scoops, swings and dumps with dirt
 function excavator(p, x, z, o = {}) {
@@ -8440,7 +8548,7 @@ function excavator(p, x, z, o = {}) {
       const ph = [[0, 1.0, -0.25, 1.2, 0.9, 0], [1.0, 0.6, 0.35, 1.9, 1.9, 0], [1.6, 0.8, -0.35, 1.4, 0.5, 0], [2.4, 1.0, -0.35, 1.4, 0.5, dy], [3.4, 0.5, -0.2, 0.9, -0.5, dy], [4.0, 1.2, -0.25, 1.2, 0.9, 0]];
       let cur = ph[0]; for (let i = 1; i < ph.length; i++) { const [tt, dd] = ph[i]; if (u >= tt) { const k = sm01((u - tt) / dd); cur = cur.map((v, j) => j < 2 ? ph[i][j] : lerp(v, ph[i][j], k)); } } [, , a1, a2, a3, sw] = cur; full = u > 1.5 && u < 3.5; }
     up.rotation.y = sw; b1.rotation.x = a1; b2.rotation.x = a2; bk.rotation.x = a3; dirt.visible = full; });
-  sfx(o.t0 ?? 0, 'engine', 0.5); return E;
+  _fuseDyn(g); sfx(o.t0 ?? 0, 'engine', 0.5); return E;
 }
 // crane(p, x, z, { h, jib, ry }) → C; C.move(t0, t1, { yaw, trolley, hook }) — tower crane: mast, jib with trolley, counterweight, cab, hook on a cable; C.hookAt(t)
 function crane(p, x, z, o = {}) {
@@ -8458,11 +8566,11 @@ function crane(p, x, z, o = {}) {
 }
 function monstertruck(p, x, z, o = {}) {
   const g = dyn(grp(p ?? world, x, groundH(x, z), z, o.ry ?? 0)), c = o.color ?? '#3A9A2A', M = { g, root: g, wheels: [], len: 5.5, trackW: 3.0 }, NC = { cast: false };
-  for (const zz of [1.8, -1.8]) for (const sx of [-1, 1]) { const w = _wheel(g, 1.0, 0.9, '#1E1E22', '#C9CDD3', sx * 1.5, 1.0, zz, { disc: true, spokes: 6 }); for (let i = 0; i < 14; i++) { const q = box(w, 0.92, 0.16, 0.18, '#2A2A2E', 0, -0.08, 0, NC); q.position.set(0, Math.cos(i / 14 * TAU) * 0.98, Math.sin(i / 14 * TAU) * 0.98); q.rotation.x = -i / 14 * TAU; } M.wheels.push(w); }
+  for (const zz of [1.8, -1.8]) for (const sx of [-1, 1]) { const w = _wheel(g, 1.0, 0.9, '#1E1E22', '#C9CDD3', sx * 1.5, 1.0, zz, { disc: true, spokes: 6 }); for (let i = 0; i < 14; i++) { const q = box(w, 0.92, 0.16, 0.18, '#2A2A2E', 0, -0.08, 0, NC); q.position.set(0, Math.cos(i / 14 * TAU) * 0.98, Math.sin(i / 14 * TAU) * 0.98); q.rotation.x = -i / 14 * TAU; } fuse(w); M.wheels.push(w); }
   for (const sx of [-1, 1]) for (const zz of [1.8, -1.8]) { _seg(g, [sx * 0.6, 1.9, zz * 0.8], [sx * 1.2, 1.0, zz], 0.08, 0.08, '#C9CDD3'); cyl(g, 0.12, 0.12, 0.8, '#F2B33A', sx * 0.8, 1.2, zz * 0.85, { rz: sx * 0.6, seg: 8 }); }
   box(g, 1.4, 0.4, 4.6, '#2A2A2E', 0, 1.7, 0); rbox(g, 2.6, 1.0, 5.4, c, 0, 2.1, 0, { rf: 0.2 }); rbox(g, 2.2, 0.85, 2.4, c, 0, 3.05, -0.4, { rf: 0.2 }); box(g, 2.1, 0.6, 0.04, '#2A3A4A', 0, 3.15, 0.8, { rough: 0.1, ...NC });
   for (let i = 0; i < 4; i++) ball(g, 0.11, '', -0.6 + i * 0.4, 3.95, 0.6, { mat: mat('#FFF6D8', { basic: true, glow: 1.4 }), detail: 0, cast: false }); for (let i = 0; i < 5; i++) { const q = box(g, 0.05, 0.6, 1.2, '#F28A1A', 1.31, 2.15, -1.8 + i * 0.9, NC); q.rotation.x = 0.4; }
-  return M;
+  fuse(g); return M;
 }
 // balloon(p, { x, y, z, colors, scale }) → B; fly(B, pts, { speed }) — hot-air balloon: striped envelope, basket with passengers, burner bursts
 function balloon(p, o = {}) {
