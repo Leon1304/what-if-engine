@@ -1412,7 +1412,8 @@ function jump(obj, t0, o = {}) {
   else tick(t => { node.position.y = y0 + fxf(t); });
   return obj;
 }
-function animal(o = {}) {   // kind: cow | pig | sheep | dog | chicken — returns rig { root, body, legs, head }
+function animal(o = {}) {   // kind: cow | pig | sheep | dog | chicken (+ every beast() kind) — returns rig { root, body, legs, head }; detail: false = old blocky look
+  if ((o.kind ?? 'cow') !== 'chicken' && o.detail !== false && typeof BEASTS !== 'undefined' && BEASTS[o.kind ?? 'cow']) return beast({ ...o, kind: o.kind ?? 'cow' });
   const k = o.kind ?? 'cow';
   const S = { cow: [1.0, 0.75, 1.9, 0.75, '#F2F0EA'], pig: [0.75, 0.55, 1.2, 0.4, '#F2B3B0'], sheep: [0.8, 0.6, 1.2, 0.5, '#EDEBE4'], dog: [0.4, 0.4, 0.95, 0.45, '#A9743F'], chicken: [0.3, 0.3, 0.4, 0.22, '#FFFFFF'] }[k];
   const [w, h, d, legH, c] = S, col = o.color ?? c, root = new THREE.Group(), body = grp(root, 0, legH, 0);
@@ -1467,6 +1468,7 @@ function gerald(o = {}) {   // Gerald, the channel's chicken: in every video, ne
   g.gerald = true; return g;
 }
 function animalPose(a, moving, ph, t, graze = 0, w = moving ? 1 : 0, s = 0) {   // quadrupeds trot in diagonal pairs; chickens strut with a head-lock
+  if (a.poseFn) return a.poseFn(t, w, s, graze);   // beast() / bird(): own gait
   const sd = a.sd ?? 0, br = Math.sin(TAU * t / (a.kind === 'cow' ? 4.2 : 2.4) + sd * 20);
   a.body.scale.set(1, 1 + 0.015 * br, 1 + 0.01 * br); a.body.rotation.set(0, 0, 0); a.head.rotation.set(0, 0, 0); a.head.position.copy(a.head0);
   if (a.kind === 'chicken') {
@@ -1523,7 +1525,7 @@ function walk(obj, pts, o = {}) {
   const yawAt = s => { const a = path.dir(s - 0.35), b = path.dir(s + 0.35), x = a.x + b.x, z = a.z + b.z; return Math.hypot(x, z) > 1e-5 ? Math.atan2(x, z) : null; };
   const sc = (obj.root ?? obj).scale.x, Cl = obj.legL ? cycleLen(mode, v) * sc : 0, stride = o.stride ?? (obj.kind === 'chicken' ? 16 : 4), bl = Math.max(ra, 0.22);
   let y0 = yawAt(0) ?? 0;
-  const rt = obj.root ?? obj; (rt._walks ??= []).push({ t0, pos: t => { const P = path.at(dist(t - t0)); return new THREE.Vector3(P.x, groundH(P.x, P.z) + (o.y ?? 0), P.z); }, yaw: t => o.face ?? (yawAt(dist(t - t0)) ?? y0) });
+  const rt = obj.root ?? obj; (rt._walks ??= []).push({ t0, v, pos: t => { const P = path.at(dist(t - t0)); return new THREE.Vector3(P.x, groundH(P.x, P.z) + (o.y ?? 0), P.z); }, yaw: t => o.face ?? (yawAt(dist(t - t0)) ?? y0) });
   const pick = t => { let w = rt._walks[0]; for (const x of rt._walks) if (x.t0 <= t) w = x; return w; };
   obj._posAt = t => pick(t).pos(t); obj._yawAt = t => pick(t).yaw(t);
   if (o.prints && obj.legL) {   // footprints (snow, sand, mud): o.prints = true | hex colour; o.printLife (s)
@@ -2321,6 +2323,7 @@ function school(o = {}) {   // instanced fish school circling a centre: n, at [x
   return im;
 }
 function shark(p, o = {}) {   // shark (or o.kind 'whale'): segmented body that sways, fins, gills, teeth; move with fly() (nose +z)
+  if (o.legacy !== true) return sea(p, { ...o, kind: SEA[o.kind] ? o.kind : o.kind === 'whale' ? 'humpback' : 'white', len: o.len ?? (o.kind === 'whale' ? 9 : 3) * (o.scale ?? 1), scale: 1 });
   const s = o.scale ?? 1, wh = o.kind === 'whale', c = o.color ?? (wh ? '#3E5A78' : '#7E8C99'), belly = wh ? '#C9D6E0' : '#E8ECEF', g = dyn(grp(p, o.x ?? 0, o.y ?? 0, o.z ?? 0)), b = grp(g); b.scale.setScalar(s * (wh ? 3.2 : 1));
   const head = grp(b, 0, 0, 0.6), mid = grp(b, 0, 0, 0), tail = dyn(grp(b, 0, 0, -0.9)), tail2 = dyn(grp(tail, 0, 0, -0.8)); dyn(mid);
   ball(head, 0.5, c, 0, 0, 0.35, { detail: 1, flat: false }).scale.set(0.75, 0.62, 1.5); ball(head, 0.48, belly, 0, -0.12, 0.3, { detail: 1, flat: false }).scale.set(0.7, 0.45, 1.4);
@@ -4848,6 +4851,712 @@ function squad(kind, n, o = {}) {
 }
 
 /* ====================================================================== */
+/* ANIMALS (v2.14) — beast(): 34 detailed quadrupeds with real gaits (walk · trot · pace · gallop · hop, chosen by speed),
+   foot-planting leg IK, spine flex, actions (roar, howl, sit, lie, rear, pounce …); herd(); bird() + flock(); sea(): sharks,
+   whales, dolphins, fish, rays, turtles, octopus with swimming body waves, bites and spouts                                   */
+/* ====================================================================== */
+const _aw = (t, a, b, ri = 0.25, ro = 0.3) => sm01((t - a) / ri) * sm01((b - t) / ro);   // smooth action window
+const _AXY = new THREE.Vector3(0, 1, 0), _LQ = (x, y, q) => x + (y - x) * q;
+const _ell = (p, c, x, y, z, ax, ay, az, o = {}) => { const m = ball(p, 0.5, c, x, y, z, { detail: o.detail ?? 1, ...o }); m.scale.set(ax * 2, ay * 2, az * 2); return m; };   // ellipsoid, semi-axes
+function _seg(p, a, b, r0, r1, c, o = {}) {   // tapered cylinder from point a to point b
+  const A = new THREE.Vector3(...a), d = new THREE.Vector3(...b).sub(A), L = d.length() || 1e-4, s = o.seg ?? 6;
+  const m = mesh(p, G(`c${r1}|${r0}|1|${s}`, () => new THREE.CylinderGeometry(r1, r0, 1, s)), o.mat ?? mat(c, o), 0, 0, 0, o);
+  m.scale.set(1, L, 1); m.position.copy(A).addScaledVector(d, 0.5); m.quaternion.setFromUnitVectors(_AXY, d.normalize()); return m;
+}
+const _chain = (p, P, r0, r1, c, o = {}) => { const n = P.length - 1; for (let i = 0; i < n; i++) { _seg(p, P[i], P[i + 1], lerp(r0, r1, i / n), lerp(r0, r1, (i + 1) / n), c, o); if (i) ball(p, lerp(r0, r1, i / n), c, ...P[i], { detail: 0, ...o }); } };
+const _walkP = (p0, steps, k = 1) => { const P = [p0]; for (const d of steps) { const q = P[P.length - 1]; P.push([q[0] + d[0] * k, q[1] + d[1] * k, q[2] + d[2] * k]); } return P; };
+const _rotYZ = (y, z, a) => { const c = Math.cos(a), s = Math.sin(a); return [y * c - z * s, y * s + z * c]; };
+function _marks(p, E, list, c, o = {}) {   // blobs lying on an ellipsoid E [cx,cy,cz,ax,ay,az]: [u (−1 back … 1 front), phi (0 top, ±π/2 sides), w (along), h (around), tilt, th]
+  const [cx, cy, cz, ax, ay, az] = E, M = new THREE.Matrix4(), X = new THREE.Vector3(), Y = new THREE.Vector3(), Z = new THREE.Vector3();
+  for (const [u0, ph, w, h, tl = 0, th = 0.02] of list) {
+    const u = clamp(u0, -0.97, 0.97), rr = Math.sqrt(1 - u * u), x = Math.sin(ph) * ax * rr, y = Math.cos(ph) * ay * rr, z = u * az;
+    Z.set(x / (ax * ax), y / (ay * ay), z / (az * az)).normalize(); Y.set(Math.cos(ph) * ax, -Math.sin(ph) * ay, 0); Y.addScaledVector(Z, -Y.dot(Z)); if (Y.lengthSq() < 1e-8) Y.set(0, 0, 1); Y.normalize(); X.crossVectors(Y, Z);
+    const m = ball(p, 0.5, c, cx + x, cy + y, cz + z, { detail: 1, cast: false, ...o }); M.makeBasis(X, Y, Z); m.quaternion.setFromRotationMatrix(M); m.rotateZ(tl); m.scale.set(w, h, th);
+  }
+}
+const _fuseDyn = root => { const L = []; root.traverse(o => { if (o.isGroup && (o.userData.dyn || o === root)) L.push(o); }); L.forEach(g => fuse(g)); };
+
+// ---------------- quadrupeds ----------------
+const BZ = {   // leg rest angles (from vertical, + = backwards) and segment ratios: front (f, fr), hind (h, hr)
+  cat:   { f: [0.32, 0.02, -0.3], fr: [0.42, 0.38, 0.2], h: [-0.62, 0.72, -0.18], hr: [0.4, 0.4, 0.2] },
+  hoof:  { f: [0.18, 0.02, -0.16], fr: [0.36, 0.36, 0.28], h: [-0.55, 0.6, -0.1], hr: [0.36, 0.38, 0.26] },
+  plant: { f: [0.1, -0.02, 0], fr: [0.5, 0.42, 0.08], h: [-0.2, 0.22, 0], hr: [0.48, 0.44, 0.08] },
+  hop:   { f: [0.3, 0, -0.3], fr: [0.45, 0.4, 0.15], h: [-1.0, 1.3, -1.45], hr: [0.38, 0.32, 0.3] },
+  sprawl:{ f: [0, 0, 0], fr: [0.45, 0.45, 0.1], h: [0, 0, 0], hr: [0.45, 0.45, 0.1] }
+};
+const BEASTS = {
+  lion:     { L: 1.45, lh: 0.62, bh: 0.6, bw: 0.5, c: '#C99A55', b: '#E8CFA0', k: '#3E2614', nk: [0.24, 0.45, 0.19], hd: [0.32, 0.3, 0.3], sn: [0.2, 0.17, 0.19], ear: 'round', tail: [0.85, 0.03, 'tuft'], leg: [0.1, 0.062], ft: 'paw', z: 'cat', flex: 0.22, gal: 'rot', fang: 1, eye: 'cat', iris: '#C8902A', voice: 'roar', mane: '#7A4626', lmane: 1, cs: [1.08, 1.06] },
+  lioness:  { base: 'lion', mane: null, lmane: 0, s: 0.88 },
+  tiger:    { base: 'lion', c: '#E3782A', b: '#F5F0E6', mane: null, lmane: 0, stripes: '#1C1816', cheek: '#F5F0E6', s: 1.05, iris: '#D8A030', tailC: null },
+  leopard:  { base: 'lion', L: 1.15, lh: 0.48, bh: 0.44, bw: 0.36, c: '#D9A85A', b: '#F2E6CC', mane: null, lmane: 0, spots: 'rosette', voice: 'growl', tail: [0.8, 0.035, 'thin'], nk: [0.24, 0.42, 0.13], hd: [0.26, 0.24, 0.24], sn: [0.15, 0.13, 0.15], leg: [0.08, 0.05] },
+  cheetah:  { base: 'leopard', lh: 0.6, bh: 0.38, bw: 0.3, c: '#DCB064', spots: 'dot', tear: 1, flex: 0.34, hd: [0.22, 0.2, 0.21], sn: [0.12, 0.12, 0.13], duty: 0.26, leg: [0.065, 0.04] },
+  wolf:     { L: 0.95, lh: 0.5, bh: 0.36, bw: 0.3, c: '#878789', b: '#DCD9D2', k: '#3A3A3C', nk: [0.26, 0.45, 0.13], hd: [0.24, 0.21, 0.21], sn: [0.22, 0.11, 0.11], ear: 'point', tail: [0.48, 0.065, 'bushy'], leg: [0.065, 0.04], ft: 'paw', z: 'cat', flex: 0.18, gal: 'rot', fang: 1, eye: 'front', iris: '#D8B030', voice: 'howl', nose: '#1A1A1A', saddle: '#5E5E62' },
+  fox:      { base: 'wolf', L: 0.55, lh: 0.25, bh: 0.2, bw: 0.17, c: '#D9682A', b: '#F5EFE6', nk: [0.15, 0.45, 0.075], hd: [0.14, 0.12, 0.13], sn: [0.13, 0.06, 0.06], ear: 'pointBig', tail: [0.4, 0.06, 'bushy'], tip: '#F5EFE6', socks: '#2A211D', leg: [0.035, 0.02], voice: 'bark', saddle: null },
+  dog:      { base: 'wolf', L: 0.7, lh: 0.38, bh: 0.3, bw: 0.25, c: '#B8803E', b: '#E6D2AE', nk: [0.2, 0.55, 0.1], hd: [0.2, 0.18, 0.18], sn: [0.14, 0.1, 0.11], ear: 'flop', tail: [0.32, 0.03, 'up'], leg: [0.05, 0.032], voice: 'bark', fang: 0, saddle: null, iris: '#6A4020' },
+  cat:      { base: 'lion', L: 0.4, lh: 0.2, bh: 0.16, bw: 0.13, c: '#8E9298', b: '#D8D8D6', mane: null, lmane: 0, stripes: '#5A5E66', nk: [0.08, 0.6, 0.055], hd: [0.11, 0.1, 0.11], sn: [0.05, 0.05, 0.06], ear: 'point', tail: [0.3, 0.018, 'up'], leg: [0.028, 0.017], voice: 'meow', iris: '#9AC040', fang: 0 },
+  bear:     { L: 1.5, lh: 0.55, bh: 0.72, bw: 0.68, c: '#6B4A2E', b: '#7A5636', k: '#2A1A10', nk: [0.22, 0.25, 0.25], hd: [0.36, 0.32, 0.34], sn: [0.2, 0.16, 0.17], ear: 'roundSmall', tail: [0.1, 0.06, 'stub'], leg: [0.14, 0.1], ft: 'bear', z: 'plant', flex: 0.12, gal: 'rot', fang: 1, eye: 'front', iris: '#2A1A10', voice: 'roar', hump: 1, snoutC: '#9A7A58', nose: '#1A1A1A', nt: 'dog' },
+  polar:    { base: 'bear', c: '#F1ECE0', b: '#E6DFD0', snoutC: '#E6DFD0', s: 1.1, nk: [0.4, 0.2, 0.22], hump: 0 },
+  panda:    { base: 'bear', s: 0.75, c: '#F4F2EC', b: '#F4F2EC', snoutC: '#F4F2EC', panda: '#1E1C1C', hump: 0, sn: [0.14, 0.15, 0.16], hd: [0.38, 0.34, 0.38], voice: 'growl' },
+  deer:     { L: 1.0, lh: 0.66, bh: 0.42, bw: 0.32, c: '#9C6B42', b: '#EDE2CF', k: '#2A1E16', nk: [0.42, 0.95, 0.09, 1.3], hd: [0.22, 0.18, 0.17], sn: [0.15, 0.1, 0.1], hp: 0.25, ear: 'big', tail: [0.14, 0.04, 'flag'], leg: [0.055, 0.025], ft: 'hoof', z: 'hoof', flex: 0.14, gal: 'rot', eye: 'side', voice: 'bleat', herb: 1, antler: 'deer', rump: '#F2EDE4', nose: '#1A1A1A' },
+  doe:      { base: 'deer', antler: null, s: 0.9 },
+  reindeer: { base: 'deer', c: '#7E6A58', b: '#E8E2D6', ruff: '#EDE6DA', antler: 'reindeer', s: 1.1 },
+  moose:    { base: 'deer', L: 1.8, lh: 1.12, bh: 0.82, bw: 0.66, c: '#4A3526', b: '#5A4232', nk: [0.45, 0.4, 0.2, 1.4], hd: [0.42, 0.3, 0.26], sn: [0.34, 0.24, 0.22], antler: 'palm', hump: 1, bell: 1, leg: [0.09, 0.045], voice: 'moo', rump: null, tail: [0.08, 0.04, 'stub'], ear: 'big' },
+  horse:    { L: 1.45, lh: 0.9, bh: 0.7, bw: 0.5, c: '#8A5530', b: '#8A5530', k: '#2A1A12', nk: [0.62, 0.78, 0.15, 1.6], hd: [0.38, 0.24, 0.2], sn: [0.32, 0.18, 0.16], hp: 0.5, ear: 'pointSmall', tail: [0.75, 0.06, 'horse'], leg: [0.085, 0.045], ft: 'hoof', z: 'hoof', flex: 0.06, gal: 'tra', eye: 'side', voice: 'neigh', herb: 1, mane: '#2A1A12', hmane: 1, blaze: '#F4F0E8', nose: '#3A2A22', nkK: 1.05 },
+  zebra:    { base: 'horse', L: 1.25, lh: 0.78, bh: 0.62, nk: [0.55, 0.8, 0.14, 1.35], c: '#F4F2EE', b: '#F4F2EE', stripes: '#1A1A1C', mane: '#1A1A1C', hmane: 'up', tail: [0.5, 0.03, 'tuft'], blaze: null },
+  donkey:   { base: 'horse', L: 1.1, lh: 0.66, bh: 0.55, nk: [0.5, 0.8, 0.13, 1.35], c: '#8E8478', b: '#DAD4CA', ear: 'long', hmane: 'up', mane: '#4A443C', tail: [0.45, 0.03, 'tuft'], blaze: null, snoutC: '#DAD4CA' },
+  cow:      { L: 1.55, lh: 0.7, bh: 0.78, bw: 0.68, c: '#F2F0EA', b: '#F2F0EA', k: '#2A2A2A', nk: [0.32, 0.3, 0.27, 1.3], hd: [0.38, 0.32, 0.3], sn: [0.16, 0.22, 0.28], hp: 0.35, ear: 'side', tail: [0.75, 0.025, 'tuft'], leg: [0.095, 0.055], ft: 'hoof', z: 'hoof', flex: 0.06, gal: 'tra', eye: 'side', voice: 'moo', herb: 1, patches: '#2A2A2A', horns: 'cow', udder: 1, snoutC: '#EAB8AA' },
+  bull:     { base: 'cow', c: '#3A2A22', b: '#3A2A22', patches: null, horns: 'bull', udder: 0, ring: 1, cs: [1.12, 1.12], hump: 1, snoutC: '#5A4238', s: 1.08 },
+  pig:      { L: 0.95, lh: 0.32, bh: 0.52, bw: 0.48, c: '#F2B5AE', b: '#F2B5AE', k: '#9A5A58', nk: [0.12, 0.2, 0.24], hd: [0.3, 0.28, 0.28], sn: [0.12, 0.13, 0.15], ear: 'flop', tail: [0.12, 0.015, 'curl'], leg: [0.06, 0.04], ft: 'hoof', z: 'hoof', flex: 0.05, gal: 'tra', maxG: 'trot', eye: 'side', voice: 'oink', herb: 1, disc: '#E89A94' },
+  boar:     { base: 'pig', c: '#4E3E32', b: '#4E3E32', bristle: '#2E241E', tusk: 'boar', disc: '#3A2E28', ear: 'point', maxG: 'gallop' },
+  sheep:    { L: 0.85, lh: 0.42, bh: 0.48, bw: 0.44, c: '#EFECE4', b: '#EFECE4', k: '#3A3632', nk: [0.15, 0.45, 0.12], hd: [0.22, 0.18, 0.15], sn: [0.1, 0.12, 0.12], headC: '#3A3632', ear: 'side', tail: [0.12, 0.05, 'stub'], leg: [0.04, 0.028], legC: '#3A3632', ft: 'hoof', z: 'hoof', flex: 0.06, gal: 'tra', eye: 'side', voice: 'bleat', herb: 1, wool: 1 },
+  goat:     { L: 0.8, lh: 0.5, bh: 0.38, bw: 0.3, c: '#E8E2D6', b: '#E8E2D6', k: '#3A3632', nk: [0.22, 0.75, 0.08], hd: [0.2, 0.17, 0.14], sn: [0.12, 0.1, 0.1], ear: 'side', tail: [0.1, 0.03, 'upStub'], leg: [0.04, 0.025], ft: 'hoof', z: 'hoof', flex: 0.08, gal: 'tra', eye: 'goat', iris: '#C8A040', voice: 'bleat', herb: 1, horns: 'goat', beard: 1 },
+  camel:    { L: 1.55, lh: 1.15, bh: 0.7, bw: 0.55, c: '#C9A26B', b: '#D8B888', k: '#5A4026', nk: [0.8, 0.7, 0.12, 1.4], hd: [0.32, 0.22, 0.2], sn: [0.22, 0.17, 0.15], hp: 0.1, ear: 'roundSmall', tail: [0.45, 0.025, 'tuft'], leg: [0.075, 0.04], ft: 'pad', nails: false, z: 'hoof', flex: 0.04, gal: 'tra', pace: 1, eye: 'side', voice: 'grunt', herb: 1, humps: 1 },
+  elephant: { L: 2.5, lh: 1.5, bh: 1.55, bw: 1.35, c: '#8E8B88', b: '#8E8B88', k: '#3A3836', nk: [0.32, 0.2, 0.55], hd: [0.85, 0.95, 0.8], sn: [0.2, 0.4, 0.35], ear: 'elephant', tail: [0.9, 0.035, 'tuft'], leg: [0.3, 0.24], ft: 'pad', z: 'plant', flex: 0, gal: 'tra', maxG: 'walk', eye: 'side', voice: 'trumpet', trunk: 1.9, tusk: 'elephant', nt: 'none' },
+  giraffe:  { L: 1.45, lh: 1.7, bh: 0.85, bw: 0.58, c: '#E4B45E', b: '#F2DDB0', k: '#4A2E1A', nk: [1.9, 1.0, 0.13, 1.35], hd: [0.32, 0.2, 0.18], sn: [0.26, 0.15, 0.13], hp: 0.45, ear: 'side', tail: [0.85, 0.025, 'tuft'], leg: [0.075, 0.04], ft: 'hoof', z: 'hoof', flex: 0.05, gal: 'tra', pace: 1, eye: 'side', voice: null, herb: 1, spots: 'patch', patchC: '#8A5530', ossicone: 1, fl: 1.18, mane: '#8A5530', hmane: 'up' },
+  rhino:    { L: 2.3, lh: 0.7, bh: 0.98, bw: 0.98, c: '#8E8A86', b: '#8E8A86', k: '#3A3836', nk: [0.25, 0.15, 0.42], hd: [0.62, 0.42, 0.4], sn: [0.32, 0.3, 0.32], hp: 0.35, ear: 'point', tail: [0.35, 0.03, 'tuft'], leg: [0.17, 0.14], ft: 'pad', z: 'plant', flex: 0.05, gal: 'tra', eye: 'side', voice: 'snort', herb: 1, horn: 'rhino', folds: 1 },
+  hippo:    { L: 2.5, lh: 0.45, bh: 1.05, bw: 1.2, c: '#8A7482', b: '#D8A6A8', k: '#3A2E36', nk: [0.2, 0.15, 0.5], hd: [0.55, 0.5, 0.6], sn: [0.45, 0.45, 0.7], ear: 'tiny', tail: [0.3, 0.06, 'stub'], leg: [0.19, 0.16], ft: 'pad', z: 'plant', flex: 0.03, gal: 'tra', maxG: 'trot', eye: 'top', voice: 'grunt', herb: 1, tusk: 'hippo', snoutC: '#9A8290' },
+  croc:     { L: 1.5, lh: 0.2, bh: 0.32, bw: 0.62, c: '#4E5E34', b: '#C8C294', k: '#2A3420', nk: [0.15, 0.05, 0.24], hd: [0.32, 0.18, 0.32], sn: [0.65, 0.12, 0.2], ear: 'none', tail: [2.0, 0.15, 'croc'], leg: [0.07, 0.05], ft: 'claw', z: 'sprawl', flex: 0, gal: 'tra', maxG: 'walk', eye: 'top', iris: '#C8B040', voice: 'hiss', fang: 2, scutes: 1, sprawl: 1, nt: 'nostrils' },
+  rabbit:   { L: 0.28, lh: 0.12, bh: 0.2, bw: 0.17, c: '#A08A72', b: '#F0EBE2', k: '#4A3E34', nk: [0.04, 0.6, 0.06], hd: [0.11, 0.1, 0.1], sn: [0.05, 0.06, 0.07], ear: 'rabbit', tail: [0.05, 0.045, 'puff'], leg: [0.03, 0.016], ft: 'paw', z: 'hop', flex: 0.2, gal: 'rot', maxG: 'hop', eye: 'side', voice: null, herb: 1, rest: -0.2, nt: 'cat', nose: '#C8908A' }
+};
+BEASTS.lioness.mane = null;
+const _bdef = k => { const d = BEASTS[k]; if (!d.base) return d; const { base, ...rest } = d; return { ..._bdef(base), ...rest }; };
+const BEAST_ALL = [];
+function beast(o = {}) {   // kind: see BEASTS — real proportions in metres; walk(b, pts, { speed }) picks walk / trot / gallop from the speed
+  const kind = BEASTS[o.kind] ? o.kind : 'lion', D = _bdef(kind), sc = (o.scale ?? 1) * (D.s ?? 1), sd = o.seed != null ? hash(o.seed * 7.31 + 0.5) : hash(++_rigN * 3.7 + 0.21), NC = { cast: false };
+  const C = o.color ?? shade(D.c, (hash(sd * 91) - 0.5) * (D.var ?? 0.07)), B = o.belly ?? D.b ?? C, K = D.k ?? shade(C, -0.3), HC = D.headC ?? C, SC = D.snoutC ?? HC;
+  const { L, lh, bh, bw } = D, Z = BZ[D.z] ?? BZ.cat, spr = !!D.sprawl;
+  const dF = ((D.fl ?? 1) - 1) * lh, slope = -Math.atan2(dF, 0.65 * L) + (D.rest ?? 0), by0 = lh + bh * 0.35 + dF / 2;
+  const root = dyn(grp(o.parent ?? world, o.x ?? 0, 0, o.z ?? 0, o.ry ?? 0)); root.scale.setScalar(sc);
+  const body = dyn(grp(root, 0, by0, 0)), fr = dyn(grp(body)), rr = dyn(grp(body)); body.rotation.x = slope;
+  // --- torso: chest, hips, belly, markings
+  const cs = D.cs ?? [1, 1], EC = [0, bh * 0.04, L * 0.2, bw * 0.5 * cs[0], bh * 0.5 * cs[1], L * 0.36], EH = [0, 0, -L * 0.22, bw * 0.47, bh * 0.47, L * 0.33];
+  _ell(fr, C, ...EC, { detail: 2 }); _ell(rr, C, ...EH, { detail: 2 }); _ell(body, C, 0, bh * 0.02, -L * 0.01, bw * 0.47 * Math.min(cs[0], 1.04), bh * 0.47, L * 0.36, { detail: 2 });
+  if (B !== C) { _ell(fr, B, 0, -bh * 0.17, L * 0.16, bw * 0.36, bh * 0.32, L * 0.3, { detail: 2 }); _ell(rr, B, 0, -bh * 0.17, -L * 0.14, bw * 0.34, bh * 0.3, L * 0.3, { detail: 2 }); }
+  const rnd = i => hash(sd * 131 + i * 7.77);
+  if (D.stripes) for (const [g, E, n] of [[fr, EC, 7], [rr, EH, 7]]) { const Ls = []; for (let i = 0; i < n; i++) { const u = -0.82 + 1.64 * (i + 0.5) / n + (rnd(i) - 0.5) * 0.08, w = E[5] * (kind === 'zebra' ? 0.09 : 0.065);
+      const p1 = kind === 'zebra' ? 2.6 : 1.9 + 0.3 * rnd(i + 3), sk = (rnd(i + 9) - 0.5) * 0.12; for (const s of [-1, 1]) for (let ph = kind === 'zebra' ? 0 : 0.15; ph < p1; ph += 0.24) Ls.push([u + sk * ph, s * ph, w * (1 - 0.35 * ph / p1), Math.min(E[3], E[4]) * 0.32, 0, Math.min(E[3], E[4]) * 0.08]); }
+    _marks(g, E, Ls, D.stripes, { th: 0.01 }); }
+  if (D.spots) for (const [g, E] of [[fr, EC], [rr, EH]]) { const Ls = [], n = D.spots === 'patch' ? 26 : 40;
+    for (let i = 0; i < n; i++) { const u = -0.88 + 1.76 * rnd(i * 3 + 1), ph = (rnd(i * 3 + 2) - 0.5) * 4.4, sz = D.spots === 'patch' ? E[5] * 0.2 : E[5] * (D.spots === 'dot' ? 0.075 : 0.1);
+      if (D.spots === 'rosette') for (let r = 0; r < 4; r++) { const a = r * 1.7 + i; Ls.push([u + Math.cos(a) * 0.05, ph + Math.sin(a) * 0.09, sz * 0.55, sz * 0.4, 0, Math.min(E[3], E[4]) * 0.08]); } else Ls.push([u, ph, sz, sz * (D.spots === 'patch' ? 1.4 : 1), 0, Math.min(E[3], E[4]) * 0.08]); }
+    _marks(g, E, Ls, D.patchC ?? K); }
+  if (D.patches) { _marks(fr, EC, [[0.1, 1.1, EC[5] * 0.6, EC[4] * 0.9, 0.4], [-0.3, -0.9, EC[5] * 0.5, EC[4] * 0.8, -0.3], [0.2, 0.2, EC[5] * 0.4, EC[3] * 0.6]], D.patches); _marks(rr, EH, [[-0.2, -1.2, EH[5] * 0.7, EH[4] * 1.0, 0.2], [0.3, 1.3, EH[5] * 0.5, EH[4] * 0.7], [-0.5, 0.3, EH[5] * 0.5, EH[3] * 0.7]], D.patches); }
+  if (D.saddle) { _ell(fr, D.saddle, EC[0], EC[1] + EC[4] * 0.14, EC[2] - EC[5] * 0.05, EC[3] * 0.94, EC[4] * 0.9, EC[5] * 0.9, { detail: 2 }); _ell(rr, D.saddle, EH[0], EH[1] + EH[4] * 0.14, EH[2] + EH[5] * 0.05, EH[3] * 0.94, EH[4] * 0.9, EH[5] * 0.88, { detail: 2 }); }
+  if (D.panda) _ell(fr, D.panda, EC[0], EC[1], EC[2] - EC[5] * 0.2, EC[3] * 1.03, EC[4] * 1.03, EC[5] * 0.34, { detail: 2 });
+  if (D.rump) _ell(rr, D.rump, 0, bh * 0.06, EH[2] - EH[5] * 0.9, bw * 0.3, bh * 0.3, EH[5] * 0.14, NC);
+  if (D.ruff) _ell(fr, D.ruff, 0, -bh * 0.02, L * 0.5, bw * 0.38, bh * 0.42, L * 0.12);
+  if (D.hump) _ell(fr, C, 0, bh * 0.38, L * 0.24, bw * 0.3, bh * 0.22, L * 0.2);
+  if (D.humps) for (const z of D.humps === 2 ? [0.22, -0.18] : [0]) _ell(body, C, 0, bh * 0.42, L * z, bw * 0.34, bh * (D.humps === 2 ? 0.34 : 0.45), L * (D.humps === 2 ? 0.16 : 0.27), { detail: 2 });
+  if (D.udder) { _ell(rr, '#F0B8B0', 0, -bh * 0.42, -L * 0.06, bw * 0.17, bh * 0.12, L * 0.1); for (const [x, z] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) cyl(rr, 0.012, 0.016, 0.06, '#E8A8A0', x * 0.045, -bh * 0.52 - 0.04, -L * 0.06 + z * 0.045, NC); }
+  if (D.wool) for (const [g, E] of [[fr, EC], [rr, EH]]) for (let i = 0; i < 18; i++) { const u = -0.85 + 1.7 * rnd(i * 5 + 3), ph = (rnd(i * 5 + 4) - 0.5) * 4.2, rr0 = Math.sqrt(1 - u * u);
+    ball(g, bh * (0.15 + 0.05 * rnd(i)), C, E[0] + Math.sin(ph) * E[3] * rr0 * 0.95, E[1] + Math.cos(ph) * E[4] * rr0 * 0.95, E[2] + u * E[5] * 0.95, { detail: 1 }); }
+  if (D.bristle) for (let i = 0; i < 12; i++) box(i < 6 ? fr : rr, 0.025, 0.06, 0.05, D.bristle, 0, bh * 0.43 - Math.abs(i - 4) * 0.01, L * (0.48 - i * 0.085), { rx: -0.4, ...NC });
+  if (D.scutes) for (let i = 0; i < 12; i++) for (const x of [-1, 0, 1]) box(i < 6 ? fr : rr, 0.06, 0.04, 0.09, K, x * bw * 0.16, bh * 0.44, L * (0.5 - i * 0.09), NC);
+  if (D.folds) { _marks(fr, EC, [-1.4, -0.7, 0, 0.7, 1.4].map(ph => [-0.62, ph, 0.03, EC[4] * 0.55, 0, 0.03]), K); _marks(rr, EH, [-1.4, -0.7, 0, 0.7, 1.4].map(ph => [0.55, ph, 0.03, EH[4] * 0.55, 0, 0.03]), K); }
+  // --- neck & head
+  const [nl, ne, nr0, nd = 1] = D.nk, nr = nr0 * (D.nkK ?? 1.3), nRest = Math.PI / 2 - ne;
+  const neck = dyn(grp(fr, 0, bh * 0.22, L * 0.42)); neck.rotation.order = 'YXZ'; neck.rotation.x = nRest;
+  cyl(neck, nr * 0.8, nr, nl + nr * 0.6, C, 0, -nr * 0.6, 0, { seg: 9 }).scale.z = nd; _ell(neck, C, 0, nl, 0, nr * 0.8, nr * 0.8, nr * 0.8 * nd);
+  if (D.lmane) { for (let i = 0; i < 4; i++) for (let j = 0; j < 7; j++) { const a = j / 7 * TAU + i * 0.45; ball(neck, nr * (0.95 - i * 0.08), D.mane, Math.sin(a) * nr * 0.85, nl * (i / 3) * 0.95 - nr * 0.2, Math.cos(a) * nr * 0.85 - nr * 0.2, { detail: 1 }); } for (let i = 0; i < 6; i++) ball(fr, bh * 0.17, D.mane, (rnd(i + 40) - 0.5) * bw * 0.5, bh * (0.12 - i * 0.06), L * 0.5 - i * 0.015, { detail: 1 }); }
+  if (D.hmane) { const up = D.hmane === 'up', n = 8; for (let i = 0; i < n; i++) box(neck, up ? nr * 0.22 : nr * 0.35, nl / n * 1.25, nr * (up ? 0.35 : 0.42), D.stripes && i % 2 ? '#F4F2EE' : D.mane, 0, nl * i / n, -nr * nd * 0.82 - (up ? nr * 0.1 : 0), { rx: up ? 0 : 0.3 }); }
+  if (D.stripes && kind === 'zebra') for (let i = 0; i < 6; i++) cyl(neck, nr * 0.84 + 0.004, nr * 0.86 + 0.004, nl * 0.06, D.stripes, 0, nl * (0.08 + i * 0.15), 0, { seg: 8, ...NC }).scale.z = nd;
+  if (D.spots === 'patch') for (let i = 0; i < 9; i++) for (let j = 0; j < 4; j++) { const a = j * 1.57 + (i % 2) * 0.78, y = nl * (0.05 + i * 0.105), rr0 = lerp(nr, nr * 0.78, y / nl); const m = _ell(neck, D.patchC, Math.sin(a) * rr0, y, Math.cos(a) * rr0 * nd, nr * 0.38, nl * 0.04, 0.012, NC); m.rotation.y = a; }
+  const HK = D.hk ?? 1.2, [hl, hh, hw] = D.hd.map(v => v * HK), [sl, sh, sw] = D.sn.map(v => v * HK);
+  const head = dyn(grp(neck, 0, nl, 0)); head.rotation.order = 'YXZ';
+  const skY = hh * 0.12, skZ = hl * 0.22, zS = skZ + hl * 0.38 + sl * 0.3, yS = skY - hh / 2 + sh / 2 + hh * 0.04, zN = zS + sl / 2;
+  _ell(head, HC, 0, skY, skZ, hw / 2, hh / 2, hl / 2); _ell(head, SC, 0, yS, zS, sw / 2, sh / 2, sl / 2);
+  if (kind === 'lion') { for (let i = 0; i < 16; i++) { const a = i / 16 * TAU, R = hh * 0.66; ball(head, hh * 0.3, D.mane, Math.sin(a) * R * 1.1, skY + Math.cos(a) * R - hh * 0.06, skZ - hl * 0.18, { detail: 1 }); } }
+  if (D.cheek) for (const s of [-1, 1]) _ell(head, D.cheek, s * hw * 0.28, skY - hh * 0.18, skZ + hl * 0.12, hw * 0.16, hh * 0.18, hl * 0.2);
+  if (D.blaze) { _ell(head, D.blaze, 0, skY + hh * 0.38, skZ + hl * 0.3, hw * 0.12, hh * 0.12, hl * 0.22, NC); _ell(head, D.blaze, 0, yS + sh * 0.42, zS, sw * 0.12, sh * 0.1, sl * 0.4, NC); }
+  if (D.panda) for (const s of [-1, 1]) _ell(head, D.panda, s * hw * 0.22, skY + hh * 0.08, skZ + hl * 0.42, hw * 0.13, hh * 0.15, hl * 0.08, { ...NC, rz: s * 0.5 });
+  if (D.stripes && kind !== 'zebra') _marks(head, [0, skY, skZ, hw / 2, hh / 2, hl / 2], [[0.45, 0, hl * 0.04, hw * 0.25], [0.2, 0, hl * 0.04, hw * 0.3], [0.3, 1.3, hl * 0.05, hh * 0.3, 0.3], [0.3, -1.3, hl * 0.05, hh * 0.3, -0.3]], D.stripes);
+  if (D.stripes && kind === 'zebra') { _marks(head, [0, skY, skZ, hw / 2, hh / 2, hl / 2], [-0.4, -0.1, 0.2, 0.5].flatMap(u => [[u, 1.2, hl * 0.05, hh * 0.6], [u, -1.2, hl * 0.05, hh * 0.6]]), D.stripes); _marks(head, [0, yS, zS, sw / 2, sh / 2, sl / 2], [-0.5, 0, 0.5].flatMap(u => [[u, 0, sl * 0.06, sw * 0.6], [u, 1.3, sl * 0.06, sh * 0.5], [u, -1.3, sl * 0.06, sh * 0.5]]), D.stripes); }
+  if (D.tear) for (const s of [-1, 1]) _marks(head, [0, skY, skZ, hw / 2, hh / 2, hl / 2], [[0.55, s * 0.9, 0.012, hh * 0.45, s * 0.4]], '#1A1410');
+  // mouth: jaw (opens), inside, tongue, teeth, nose
+  const jz = skZ + hl * 0.1, jaw = dyn(grp(head, 0, yS - sh * 0.28, jz)), jl = zN - jz;
+  _ell(jaw, SC, 0, -sh * 0.06, jl * 0.52, sw * 0.4, sh * 0.2, jl * 0.5);
+  _ell(head, '#5A1E1E', 0, yS - sh * 0.3, zS - sl * 0.05, sw * 0.34, sh * 0.14, sl * 0.42, NC);
+  _ell(jaw, '#C86A6A', 0, sh * 0.04, jl * 0.5, sw * 0.24, sh * 0.06, jl * 0.36, NC);
+  if (D.fang === 1) for (const s of [-1, 1]) { cone(head, sw * 0.055, sh * 0.34, '#F4F0E6', s * sw * 0.2, yS - sh * 0.32 - sh * 0.34, zN - sl * 0.16, { rx: Math.PI, ...NC }); cone(jaw, sw * 0.045, sh * 0.24, '#F4F0E6', s * sw * 0.18, -sh * 0.0, jl * 0.86, NC); }
+  if (D.fang === 2) for (const s of [-1, 1]) for (let i = 0; i < 9; i++) { cone(head, sw * 0.035, sh * 0.3, '#EDE6D2', s * sw * 0.42, yS - sh * 0.42 - sh * 0.3, zN - sl * (0.06 + i * 0.1), { rx: Math.PI, ...NC }); cone(jaw, sw * 0.03, sh * 0.25, '#EDE6D2', s * sw * 0.36, sh * 0.02, jl * 0.95 - i * sl * 0.1, NC); }
+  const nt = D.nt ?? (D.disc ? 'disc' : D.herb ? 'nostrils' : D.eye === 'cat' ? 'cat' : 'dog');
+  if (nt === 'cat' || nt === 'dog') _ell(head, D.nose ?? (nt === 'cat' ? '#B07060' : '#1A1A1A'), 0, yS + sh * 0.3, zN - sw * 0.05, sw * 0.17, sw * 0.11, sw * 0.12, NC);
+  else if (nt === 'nostrils') for (const s of [-1, 1]) _ell(head, D.nose ?? shade(SC, -0.42), s * sw * 0.2, yS + sh * (kind === 'croc' ? 0.45 : 0.08), zN - sl * 0.04, sw * 0.07, sw * 0.05, sw * 0.06, NC);
+  else if (nt === 'disc') { cyl(head, sw * 0.44, sw * 0.44, sl * 0.12, D.disc, 0, yS - sl * 0.06, zN - sl * 0.02, { rx: Math.PI / 2, seg: 10 }); for (const s of [-1, 1]) _ell(head, '#5A2E2E', s * sw * 0.15, yS, zN + sl * 0.04, sw * 0.06, sw * 0.09, 0.01, NC); }
+  if (D.ring) mesh(head, G('nring' + sw, () => new THREE.TorusGeometry(sw * 0.16, sw * 0.03, 6, 12)), mat('#C8A040', { metal: 0.6, rough: 0.3 }), 0, yS - sh * 0.32, zN + sl * 0.02, NC);
+  // eyes (iris, pupil, glint)
+  const et = D.eye ?? 'side', es = hw * (et === 'top' ? 0.11 : 0.12), glintM = mat('#FFFFFF', { basic: true });
+  for (const s of [-1, 1]) {
+    let ex, ey, ez, nx, nz;
+    if (et === 'cat' || et === 'front') { ex = s * hw * 0.27; ey = skY + hh * 0.18; ez = skZ + hl * 0.38; nx = s * 0.45; nz = 0.9; }
+    else if (et === 'top') { ex = s * hw * 0.3; ey = skY + hh * 0.48; ez = skZ + hl * 0.3; nx = s * 0.6; nz = 0.6; _ell(head, HC, ex, ey - es * 0.4, ez, es * 1.5, es * 1.1, es * 1.6); ey += es * 0.35; }
+    else { ex = s * hw * 0.43; ey = skY + hh * 0.16; ez = skZ + hl * 0.3; nx = s; nz = 0.35; }
+    ball(head, es, D.iris ?? '#2A1A10', ex, ey, ez, { detail: 1, ...NC });
+    const pu = ball(head, es * 0.62, '#0E0C0B', ex + nx * es * 0.55, ey, ez + nz * es * 0.55, { detail: 1, ...NC });
+    if (et === 'cat') pu.scale.set(0.42, 1.15, 0.6); if (et === 'goat') pu.scale.set(1, 0.42, 1.25);
+    ball(head, es * 0.22, '', ex + nx * es * 0.82, ey + es * 0.38, ez + nz * es * 0.82, { mat: glintM, detail: 0, ...NC });
+  }
+  // ears
+  const ears = [], ek = D.ear ?? 'round', ec = D.panda ?? HC, ei = shade(ec, kind === 'fox' ? 0.25 : -0.15);
+  if (ek !== 'none') for (const s of [-1, 1]) {
+    const big = ek === 'elephant', eg = dyn(grp(head, s * hw * (big ? 0.44 : 0.3), skY + hh * (big ? 0.05 : 0.38), skZ - hl * (big ? 0.0 : 0.05))); let r0 = [0, 0, 0];
+    if (ek === 'round' || ek === 'roundSmall' || ek === 'tiny') { const r = hh * (ek === 'round' ? 0.2 : ek === 'tiny' ? 0.08 : 0.13); _ell(eg, ec, 0, r * 0.5, 0, r, r * 0.85, r * 0.35); _ell(eg, ei, 0, r * 0.45, r * 0.2, r * 0.6, r * 0.5, r * 0.22, NC); r0 = [0, 0, -s * 0.25]; }
+    else if (ek.startsWith('point')) { const r = hh * (ek === 'pointBig' ? 0.26 : ek === 'pointSmall' ? 0.13 : 0.18), h = hh * (ek === 'pointBig' ? 0.62 : ek === 'pointSmall' ? 0.48 : 0.42); cone(eg, r, h, kind === 'fox' ? '#2A211D' : ec).scale.z = 0.38; cone(eg, r * 0.6, h * 0.75, ei, 0, 0.01, r * 0.12, NC).scale.z = 0.25; r0 = [-0.15, 0, -s * 0.2]; }
+    else if (ek === 'big' || ek === 'long' || ek === 'rabbit') { const ln = hh * (ek === 'big' ? 0.36 : ek === 'long' ? 0.5 : 0.95), w = hh * (ek === 'rabbit' ? 0.18 : 0.16); _ell(eg, ec, 0, ln, 0, w, ln, w * 0.4); _ell(eg, ei, 0, ln, w * 0.18, w * 0.6, ln * 0.82, w * 0.22, NC); r0 = ek === 'big' ? [-0.2, 0, -s * 0.85] : [-0.25, 0, -s * (ek === 'long' ? 0.3 : 0.12)]; }
+    else if (ek === 'side') { _ell(eg, ec, 0, hh * 0.22, 0, hh * 0.12, hh * 0.24, hh * 0.05); _ell(eg, ei, 0, hh * 0.22, hh * 0.02, hh * 0.07, hh * 0.18, hh * 0.03, NC); r0 = [0.1, 0, -s * 1.35]; }
+    else if (ek === 'flop') { _ell(eg, kind === 'pig' ? ec : shade(ec, -0.12), 0, hh * 0.22, 0, hh * 0.15, hh * 0.26, hh * 0.05); r0 = kind === 'pig' ? [0.7, 0, -s * 0.5] : [0, 0, s * 2.7]; }
+    else if (big) { const k = hh * 0.95, P = [[0.05, 0.45], [-0.3, 0.62], [-0.85, 0.5], [-1.0, 0.0], [-0.75, -0.55], [-0.3, -0.68], [0.0, -0.2]].map(([z, y]) => [z * k, y * k]); finPlate(eg, P, 0.05, ec); finPlate(eg, P.map(([z, y]) => [z * 0.8 - 0.02, y * 0.8]), 0.02, shade(ec, 0.06), s * 0.03, 0, 0, NC); r0 = [0, -s * 0.3, 0]; }
+    eg.rotation.set(...r0); eg.userData.r0 = r0; eg.userData.big = big; ears.push(eg);
+  }
+  // horns, antlers, tusks, trunk, extras
+  const top = skY + hh * 0.42, AC = '#D9C7A2', IV = '#F0E8D6';
+  if (D.antler === 'deer' || D.antler === 'reindeer') for (const s of [-1, 1]) { const A = D.antler === 'reindeer' ? 1.45 : 1, P = _walkP([s * hw * 0.2, top, skZ - hl * 0.02], [[s * 0.06, 0.12, -0.05], [s * 0.08, 0.14, -0.03], [s * 0.05, 0.13, 0.04], [s * 0.0, 0.1, 0.08]], A);
+    _chain(head, P, 0.022 * A, 0.009 * A, AC); for (const [i, d] of [[1, [0, 0.05, 0.12]], [2, [-s * 0.02, 0.13, 0.03]], [3, [-s * 0.03, 0.11, -0.02]]]) _seg(head, P[i], P[i].map((v, j) => v + d[j] * A), 0.012 * A, 0.006 * A, AC);
+    if (D.antler === 'reindeer') _seg(head, P[1], [P[1][0] - s * 0.04, P[1][1] + 0.02, P[1][2] + 0.2], 0.012, 0.02, AC); }
+  if (D.antler === 'palm') for (const s of [-1, 1]) { const P = _walkP([s * hw * 0.25, top, skZ - hl * 0.05], [[s * 0.16, 0.05, -0.03], [s * 0.1, 0.06, 0]]); _chain(head, P, 0.04, 0.03, AC); const pg = grp(head, ...P[2]); pg.rotation.z = s * 0.55;
+    plate(pg, [[0, 0.1], [s * 0.3, 0.2], [s * 0.48, 0.05], [s * 0.42, -0.15], [s * 0.1, -0.14]], 0.035, AC); for (let i = 0; i < 6; i++) cone(pg, 0.022, 0.12, AC, s * (0.12 + i * 0.065), 0, 0.17 - i * 0.055 + (i > 3 ? -0.05 : 0), { rz: -s * 0.4 }); }
+  if (D.horns === 'cow' || D.horns === 'bull') for (const s of [-1, 1]) { const bl = D.horns === 'bull', P = _walkP([s * hw * 0.4, top - hh * 0.05, skZ], bl ? [[s * 0.14, 0.02, 0.03], [s * 0.08, 0.06, 0.08], [0, 0.08, 0.06]] : [[s * 0.08, 0.03, 0.02], [s * 0.03, 0.07, 0.04]]); _chain(head, P, bl ? 0.045 : 0.03, 0.012, '#EDE4CC'); ball(head, 0.014, '#3A3228', ...P[P.length - 1], { detail: 0, ...NC }); }
+  if (D.horns === 'goat') for (const s of [-1, 1]) _chain(head, _walkP([s * hw * 0.22, top, skZ + hl * 0.05], [[s * 0.02, 0.1, -0.04], [s * 0.03, 0.06, -0.09], [s * 0.03, 0.0, -0.1], [s * 0.02, -0.05, -0.06]]), 0.028, 0.008, '#8A7A62');
+  if (D.horn === 'rhino') { cone(head, sw * 0.32, sh * 1.35, '#BCB0A0', 0, yS + sh * 0.35, zN - sl * 0.28, { rx: -0.35 }); cone(head, sw * 0.22, sh * 0.6, '#BCB0A0', 0, yS + sh * 0.42, zN - sl * 0.82, { rx: -0.2 }); }
+  if (D.ossicone) for (const s of [-1, 1]) { cyl(head, 0.022, 0.03, 0.13, C, s * hw * 0.2, top - 0.03, skZ - hl * 0.08, { rz: -s * 0.18 }); ball(head, 0.032, '#2A1E16', s * (hw * 0.2 + 0.022), top + 0.1, skZ - hl * 0.08, { detail: 0 }); }
+  if (D.tusk === 'elephant') for (const s of [-1, 1]) _chain(head, _walkP([s * sw * 0.42, yS - sh * 0.25, zS - sl * 0.2], [[s * 0.04, -0.28, 0.16], [s * 0.04, -0.12, 0.28], [s * 0.02, 0.1, 0.22]]), 0.07, 0.025, IV);
+  if (D.tusk === 'boar') for (const s of [-1, 1]) _chain(head, _walkP([s * sw * 0.42, yS - sh * 0.15, zN - sl * 0.25], [[s * 0.03, 0.05, 0.02], [s * 0.0, 0.05, -0.02]]), 0.016, 0.005, IV, NC);
+  if (D.tusk === 'hippo') for (const s of [-1, 1]) cone(jaw, 0.04, 0.14, IV, s * sw * 0.32, 0, jl * 0.82, NC);
+  if (D.bell) _ell(head, C, 0, yS - sh * 0.75, skZ + hl * 0.05, sw * 0.13, sh * 0.5, sw * 0.14);
+  if (D.beard) cone(head, sw * 0.16, sh * 0.9, shade(C, -0.08), 0, yS - sh * 0.5 - sh * 0.9, zN - sl * 0.4, { rx: Math.PI });
+  if (D.hmane && D.hmane !== 'up') box(head, 0.06, hh * 0.15, hl * 0.3, D.mane, 0, top - hh * 0.1, skZ + hl * 0.05, { rx: -0.6 });
+  let trunk = null;
+  if (D.trunk) { const n = 8, ls = D.trunk / n; let par = head; trunk = [];
+    for (let i = 0; i < n; i++) { const g = dyn(grp(par, 0, i ? -ls : yS + sh * 0.05, i ? 0 : zN - sl * 0.18)); cyl(g, lerp(sw * 0.38, sw * 0.13, i / n), lerp(sw * 0.38, sw * 0.13, (i + 1) / n), ls * 1.08, C, 0, -ls * 1.04, 0, { seg: 8 }); trunk.push(g); par = g; }
+    _ell(trunk[n - 1], shade(C, -0.3), 0, -ls * 1.03, 0, sw * 0.12, 0.012, sw * 0.12, NC); }
+  // --- legs: 3 segments + foot, solved by IK every frame (feet stay planted)
+  const LG = [], ft = D.ft ?? 'paw', lc = D.panda ?? D.legC ?? C;
+  for (let i = 0; i < 4; i++) {
+    const s = i % 2 ? 1 : -1, front = i < 2, par = front ? fr : rr, A = front ? Z.f : Z.h, R = front ? Z.fr : Z.hr;
+    const rT = D.leg[0] * (front ? 1 : 1.08), rB = D.leg[1], hf = rB * ({ hoof: 1.5, paw: 1.0, bear: 1.0, pad: 0.5, claw: 0.8 }[ft] ?? 1);
+    const hx = s * bw * (spr ? 0.44 : D.lx ?? 0.3), hy = front ? -bh * 0.12 : -bh * 0.05, hz = front ? L * 0.32 : -L * 0.33;
+    const [yr, zr] = _rotYZ(hy, hz, slope), Hv = by0 + yr - hf;
+    let l1, l2, l3, zN0;
+    if (spr) { l1 = bw * 0.32; l3 = rB * 0.5; l2 = Math.max(0.05, Hv + l1 * 0.25 - l3); zN0 = zr; }
+    else { const k = Hv / (R[0] * Math.cos(A[0]) + R[1] * Math.cos(A[1]) + R[2] * Math.cos(A[2])); l1 = k * R[0]; l2 = k * R[1]; l3 = k * R[2]; zN0 = zr - (l1 * Math.sin(A[0]) + l2 * Math.sin(A[1]) + l3 * Math.sin(A[2])); }
+    const u = dyn(grp(par, hx, hy, hz)), m = dyn(grp(u, 0, -l1, 0)), n = dyn(grp(m, 0, -l2, 0)), f = dyn(grp(n, 0, -l3, 0));
+    const lo = D.socks ?? lc;
+    cyl(u, rT, rT * 0.72, l1 * 1.04, lc, 0, -l1 * 1.04, 0, { seg: 7 }); _ell(u, D.panda ?? C, 0, -l1 * 0.18, front ? 0 : rT * 0.25, rT * (front ? 1.08 : 1.18), l1 * 0.42, rT * (front ? 1.35 : 1.6));
+    ball(m, rT * 0.72, lc, 0, 0, 0, { detail: 1 }); cyl(m, rT * 0.72, rB * 1.1, l2 * 1.04, D.socks && !front ? lc : lc, 0, -l2 * 1.04, 0, { seg: 7 });
+    ball(n, rB * 1.1, lo, 0, 0, 0, { detail: 1 }); cyl(n, rB * 1.05, rB, l3 * 1.04, lo, 0, -l3 * 1.04, 0, { seg: 6 });
+    if (D.stripes && kind === 'zebra') for (const [g, l, r] of [[m, l2, rT * 0.8], [n, l3, rB * 1.05]]) for (let j = 0; j < 3; j++) cyl(g, r + 0.004, r + 0.004, l * 0.1, D.stripes, 0, -l * (0.2 + j * 0.28), 0, { seg: 7, ...NC });
+    if (ft === 'hoof') cyl(f, rB * 1.0, rB * 1.22, hf, D.hoofC ?? '#2A2420', 0, -hf, 0, { seg: 7 });
+    else if (ft === 'paw') _ell(f, lo, 0, -hf * 0.45, rB * 0.55, rB * 1.25, hf * 0.55, rB * 1.75);
+    else if (ft === 'bear') { _ell(f, lo, 0, -hf * 0.45, rB * 0.7, rB * 1.35, hf * 0.55, rB * 1.9); for (let c = -1.5; c <= 1.5; c++) cone(f, rB * 0.12, rB * 0.55, '#E8DCC0', c * rB * 0.42, -hf * 0.7, rB * 2.3, { rx: Math.PI / 2, ...NC }); }
+    else if (ft === 'pad') { cyl(f, rB * 1.08, rB * 1.22, hf, lo, 0, -hf, 0, { seg: 9 }); if (D.nails !== false) for (let c = -1; c <= 1; c++) _ell(f, '#E6DCC8', c * rB * 0.55, -hf * 0.5, rB * 1.08, rB * 0.22, hf * 0.42, rB * 0.15, NC); }
+    else { _ell(f, lo, 0, -hf * 0.5, rB * 0.5, rB * 1.6, hf * 0.5, rB * 1.8); for (let c = -1.5; c <= 1.5; c++) cone(f, rB * 0.15, rB * 0.9, K, c * rB * 0.6, -hf * 0.8, rB * 2.2, { rx: Math.PI / 2, ...NC }); }
+    LG.push({ u, m, n, f, s, front, hx, hy, hz, l1, l2, l3, A, zN: zN0, hf });
+  }
+  // --- tail
+  const [tl, tr, ts] = D.tail, TN = ['stub', 'puff', 'upStub', 'flag'].includes(ts) ? 1 : ts === 'croc' ? 6 : 4, tsl = tl / TN;
+  const tail = dyn(grp(rr, 0, bh * (ts === 'croc' ? 0.0 : 0.22), -L * 0.52)), TS = [];
+  const tR = { tuft: 0.35, bushy: 0.6, thin: 0.25, up: 2.2, horse: 0.32, stub: 1.3, flag: 1.5, curl: 1.4, croc: Math.PI / 2 - 0.08, puff: 1.6, upStub: 2.3 }[ts] ?? 0.4;
+  const tCurl = { tuft: [0, 0.1, 0.25, 0.45], thin: [0, 0.2, 0.4, 0.6], bushy: [0, 0.05, 0.1, 0.12], up: [0, -0.2, -0.3, -0.3], horse: [0, -0.12, -0.15, -0.15], curl: [0, 1.4, 1.4, 1.4], croc: [0, 0.02, 0.02, 0.02, 0.02, 0.02] }[ts] ?? [0, 0, 0, 0, 0, 0];
+  let tp = tail;
+  for (let i = 0; i < TN; i++) {
+    const g = dyn(grp(tp, 0, i ? -tsl : 0, 0)), ra = lerp(tr, tr * (ts === 'croc' ? 0.12 : 0.6), i / TN), rb = lerp(tr, tr * (ts === 'croc' ? 0.12 : 0.6), (i + 1) / TN), tc = i === TN - 1 && D.tip ? D.tip : D.tailC ?? C;
+    if (ts === 'bushy') _ell(g, tc, 0, -tsl * 0.55, 0, ra * 1.1, tsl * 0.85, ra * 1.1, { detail: 2 });
+    else if (ts === 'horse') box(g, ra * 1.5, tsl * 1.12, ra * 1.1, D.mane ?? K, 0, -tsl * 1.06, 0);
+    else if (ts === 'stub' || ts === 'upStub') _ell(g, tc, 0, -tl * 0.4, 0, tr, tl * 0.55, tr * 0.9);
+    else if (ts === 'puff') ball(g, tr, B, 0, -tr * 0.2, 0, { detail: 1 });
+    else if (ts === 'flag') { _ell(g, tc, 0, -tl * 0.45, 0, tr * 1.6, tl * 0.55, tr * 0.8); _ell(g, '#F4F0EA', 0, -tl * 0.45, -tr * 0.45, tr * 1.3, tl * 0.48, tr * 0.5, NC); }
+    else { const cm = cyl(g, ra, rb, tsl * 1.05, tc, 0, -tsl * 1.03, 0, { seg: ts === 'croc' ? 7 : 5 }); if (ts === 'croc') { cm.scale.x = 0.62; cm.scale.z = 1.25; for (const x of [-1, 1]) box(g, 0.04, 0.05, tsl * 0.5, K, x * ra * 0.35, -tsl * 0.5, -ra * 1.15, { rx: Math.PI / 2, ...NC }); } }
+    if (ts === 'tuft' && i === TN - 1) _ell(g, D.tuftC ?? K, 0, -tsl * 1.05, 0, tr * 2.6, tsl * 0.35, tr * 2.6);
+    if (D.stripes && ['tuft', 'thin', 'up'].includes(ts)) cyl(g, ra * 1.12, ra * 1.12, tsl * 0.14, D.stripes, 0, -tsl * 0.6, 0, { seg: 6, ...NC });
+    TS.push(g); tp = g;
+  }
+  tail.rotation.x = tR;
+  // grazing reach: neck pitch that brings the mouth near the ground
+  const nbY = by0 + bh * 0.22, reach = nl + hl * 0.5 + sl;
+  const grazeNp = clamp(ne - Math.asin(clamp((hh * 0.4 - nbY) / reach, -1, 1)), 0, 2.4);
+  const a = { root, body, fr, rr, neck, head, jaw, ears, tail, TS, trunk, LG, legs: LG.map(l => l.u), kind, D, quad: true, beast: true, sd, sc, lh, bh, bw, L, by0, slope, nRest, ne, grazeNp, tR, tCurl,
+    head0: head.position.clone(), fx: [], acts: [], eye: [skY + hh * 0.18, skZ + hl * 0.45], nose: [yS, zN] };
+  a.poseFn = (t, w, s, graze) => beastPose(a, t, w, s, graze);
+  a.do = (k, t, oo) => beastDo(a, k, t, oo);
+  _fuseDyn(root);
+  tick(t => { if (!a._posAt) beastPose(a, t, 0, 0, o.graze ?? (D.herb ? 0.6 : 0)); });
+  BEAST_ALL.push(a);
+  return a;
+}
+const _GAITS = { walk: { off: [0.25, 0.75, 0, 0.5], d: 0.64, lift: 0.1 }, pace: { off: [0, 0.5, 0, 0.5], d: 0.6, lift: 0.1 }, trot: { off: [0, 0.5, 0.5, 0], d: 0.42, lift: 0.17 },
+  rot: { off: [0.64, 0.52, 0, 0.12], d: 0.32, lift: 0.24 }, tra: { off: [0.52, 0.64, 0, 0.12], d: 0.34, lift: 0.22 }, hop: { off: [0.5, 0.55, 0, 0.04], d: 0.3, lift: 0.28 } };
+function _ik2(hy, hz, ty, tz, l1, l2, back) {   // two-bone IK in the sagittal plane → absolute angles [a1, a2] (from vertical, + = backwards)
+  let dz = tz - hz, dy = ty - hy, d = Math.hypot(dz, dy); const dmax = (l1 + l2) * 0.999, dmin = Math.abs(l1 - l2) + 0.02 * (l1 + l2);
+  if (d > dmax) { dz *= dmax / d; dy *= dmax / d; d = dmax; } else if (d < dmin) { const k = dmin / Math.max(d, 1e-5); dz = d < 1e-5 ? 0 : dz * k; dy = d < 1e-5 ? -dmin : dy * k; d = dmin; }
+  const aT = Math.atan2(-dz, -dy), al = Math.acos(clamp((l1 * l1 + d * d - l2 * l2) / (2 * l1 * d), -1, 1)), a1 = back ? aT + al : aT - al;
+  const ky = hy - l1 * Math.cos(a1), kz = hz - l1 * Math.sin(a1); return [a1, Math.atan2(-(hz + dz - kz), -(hy + dy - ky))];
+}
+function beastPose(a, t, w = 0, s = 0, graze = 0) {
+  const D = a.D, lh = a.lh, lhW = lh * a.sc, sd = a.sd, mx = D.maxG ?? 'gallop';
+  let v = 0, vc = 0.6;
+  if (a._posAt && w > 0) { const p0 = a._posAt(t - 0.05), p1 = a._posAt(t + 0.05); v = Math.hypot(p1.x - p0.x, p1.z - p0.z) / 0.1; const wk = a.root._walks; if (wk) { let e = wk[0]; for (const x of wk) if (x.t0 <= t) e = x; vc = e.v ?? v; } }
+  const Fr = v * v / (9.81 * lhW), Frc = Math.max(0.02, vc * vc / (9.81 * lhW)), Sw = Math.max(0.55 * lhW, lhW * 2.3 * Math.pow(Frc, 0.3)), S = Sw / a.sc, U = s / Sw;
+  let ww = 1, wt = 0, wg = 0;
+  if (mx === 'hop') { ww = 0; wg = 1; } else if (mx !== 'walk') { const k1 = sm01((Fr - 0.3) / 0.3), k2 = mx === 'gallop' ? sm01((Fr - 1.9) / 1.0) : 0; ww = 1 - k1; wt = k1 * (1 - k2); wg = k1 * k2; }
+  const GW = D.pace ? _GAITS.pace : _GAITS.walk, GT = D.pace ? _GAITS.pace : _GAITS.trot, GG = mx === 'hop' ? _GAITS.hop : D.gal === 'tra' ? _GAITS.tra : _GAITS.rot;
+  let by = 0, bz = 0, bp = 0, br = 0, fx = 0, np = 0, ny = 0, hp = 0, hy = 0, hr = 0, jaw = 0, tl = 0, tsA = 0.08, tsF = 2.2, ear = 0, earB = 0, trk = 0, lat = 0, rig = 0, rest = 0;
+  const T = a._T ?? (a._T = [[0, 0, 0], [0, 0, 0], [0, 0, 0], [0, 0, 0]]), A3 = a._A3 ?? (a._A3 = [0, 0, 0, 0]);
+  for (let i = 0; i < 4; i++) { let z = 0, y = 0, lk = 0;
+    if (w > 0) { for (let gi = 0; gi < 3; gi++) { const G = gi === 0 ? GW : gi === 1 ? GT : GG, gw = gi === 0 ? ww : gi === 1 ? wt : wg; if (gw < 1e-3) continue;
+        const d = gi === 2 && D.duty ? D.duty : G.d, uu = ((U - G.off[i]) % 1 + 1) % 1, half = S * d / 2; let fz, fy = 0, k = 0;
+        if (uu < d) fz = half * (1 - 2 * uu / d); else { const q = (uu - d) / (1 - d); fz = -half + 2 * half * sm01(q); k = Math.sin(Math.PI * q); fy = G.lift * lh * k * (D.sprawl ? 0.5 : 1); }
+        z += gw * fz; y += gw * fy; lk += gw * k; } z *= w; y *= w; lk *= w; }
+    T[i][0] = a.LG[i].zN + z; T[i][1] = y; T[i][2] = lk; A3[i] = 0; }
+  if (w > 0) { const c1 = TAU * U, c2 = Math.cos(2 * c1);
+    by += w * (ww * 0.012 * lh * c2 + wt * 0.03 * lh * c2 + wg * 0.07 * lh * Math.cos(c1 - TAU * 0.85));
+    bp += w * (wg * 0.09 * Math.sin(c1 - TAU * 0.35) + wt * 0.012 * Math.sin(2 * c1));
+    fx += w * wg * (D.flex ?? 0.1) * Math.cos(c1 - TAU * 0.75);
+    br += w * ww * 0.025 * Math.sin(c1);
+    np += w * (ww * (D.herb ? 0.05 : 0.02) * c2 + wg * 0.12 * Math.sin(c1 - TAU * 0.2) + (wt + wg) * (D.runNeck ?? (D.fang ? 0.25 : 0.12)));
+    tl += w * (wt * 0.25 + wg * 0.65) * (D.tLift ?? 1); tsA = lerp(tsA, 0.1, w);
+    if (mx === 'hop') { by += w * 0.45 * lh * Math.max(0, Math.sin(c1 - 0.6)); bp += w * 0.22 * Math.sin(c1 - 1.2); }
+    if (D.sprawl) { fx = 0; }
+  }
+  const iw = 1 - w;
+  if (iw > 0) {
+    hy += iw * 0.5 * noise1(t * 0.22 + sd * 40); hp += iw * 0.08 * noise1(t * 0.3 + sd * 17);
+    const gz = graze * iw * (D.herb ? sm01((noise1(t * 0.12 + sd * 23) + 0.2) / 0.4) : 0);
+    np += gz * a.grazeNp; hp += gz * 0.3; jaw += gz * 0.06 * (1 + Math.sin(t * 9)); hy *= 1 - gz * 0.7;
+    tsA += iw * (D.herb ? 0.32 : 0.12) * (0.4 + 0.6 * Math.max(0, noise1(t * 0.3 + sd * 3))); tsF = D.herb ? 2.6 : 1.4;
+  }
+  // actions
+  const pivot = (i, th) => { const g = a.LG[i], [y0, z0] = _rotYZ(g.hy, g.hz, a.slope), [y1, z1] = _rotYZ(g.hy, g.hz, a.slope + th); return [y0 - y1, z0 - z1]; };   // keep leg i's hip in place while pitching th
+  for (const Ac of a.acts) { const q = _aw(t, Ac.t0, Ac.t1, Ac.ri, Ac.ro); if (q <= 0) continue; const k = Ac.k, u = clamp((t - Ac.t0) / Math.max(1e-3, Ac.t1 - Ac.t0));
+    if (k === 'roar' || k === 'trumpet') { jaw = _LQ(jaw, D.trunk ? 0.35 : D.roarJaw ?? 0.75, q); np = _LQ(np, -0.15, q); hp = _LQ(hp, -0.3, q); hy *= 1 - q; hr += q * 0.05 * Math.sin(t * 31); earB = _LQ(earB, 1, q); trk = _LQ(trk, 1, q); }
+    else if (k === 'call') { jaw = _LQ(jaw, 0.25 + 0.12 * Math.sin(t * 14), q); np -= 0.12 * q; hp -= 0.2 * q; }
+    else if (k === 'snap') { const j = u < 0.75 ? sm01(u / 0.25) : 1 - sm01((u - 0.75) / 0.06); jaw = _LQ(jaw, 0.95 * j, q); hp -= 0.25 * j * q; }
+    else if (k === 'yawn') { jaw = _LQ(jaw, 0.85 * Math.sin(Math.PI * u), q); hp -= 0.3 * q * Math.sin(Math.PI * u); }
+    else if (k === 'graze' || k === 'eat' || k === 'drink') { np = _LQ(np, a.grazeNp, q); hp = _LQ(hp, 0.3, q); hy *= 1 - q; jaw += q * 0.06 * (1 + Math.sin(t * 9)); if (k === 'drink' && kind_ok(a, 'giraffe')) { lat = q * 0.35; bp += q * 0.12; } }
+    else if (k === 'shake') { br += q * 0.35 * Math.sin(t * 26); hy += q * 0.4 * Math.sin(t * 26 + 1); earB += q * 0.5; }
+    else if (k === 'stalk') { by -= q * 0.25 * lh; np = _LQ(np, 0.35, q); hp -= 0.35 * q; tl -= 0.15 * q; earB -= 0.3 * q; }
+    else if (k === 'charge') { np = _LQ(np, 0.45, q); hp = _LQ(hp, 0.3, q); earB = _LQ(earB, 1, q); }
+    else if (k === 'wag') { tsA = _LQ(tsA, 0.55, q); tsF = _LQ(tsF, 16, q); tl += 0.5 * q; }
+    else if (k === 'look' && Ac.at) { const p = a._posAt ? a._posAt(t) : a.root.position, yw = a._yawAt ? a._yawAt(t) : a.root.rotation.y; let dy = Math.atan2(Ac.at[0] - p.x, Ac.at[2] - p.z) - yw; dy = Math.atan2(Math.sin(dy), Math.cos(dy)); ny += q * clamp(dy * 0.5, -0.7, 0.7); hy = _LQ(hy, clamp(dy * 0.5, -0.8, 0.8), q); }
+    else if (k === 'sit' || k === 'howl') { const th = D.herb ? -0.45 : -0.55, [dy0, dz0] = pivot(2, th), drop = lh * 0.42; bp = _LQ(bp, th, q); by = _LQ(by, dy0 - drop, q); bz = _LQ(bz, dz0, q);
+      for (const i of [2, 3]) { T[i][0] = _LQ(T[i][0], a.LG[i].zN + lh * 0.45, q); T[i][1] *= 1 - q; A3[i] = _LQ(A3[i], -1.2, q); }
+      for (const i of [0, 1]) { T[i][0] = _LQ(T[i][0], a.LG[i].zN - lh * 0.05, q); T[i][1] *= 1 - q; }
+      if (k === 'howl') { np = _LQ(np, -0.45, q); hp = _LQ(hp, -0.9, q); jaw = _LQ(jaw, 0.4 + 0.08 * Math.sin(t * 5), q * sm01((u - 0.1) / 0.15)); hy *= 1 - q; } }
+    else if (k === 'lie' || k === 'sleep') { const drop = a.by0 - a.bh * 0.5; by = _LQ(by, -drop, q); bp = _LQ(bp, 0, q);
+      for (let i = 0; i < 4; i++) { const fr0 = i < 2, cat = !D.herb; T[i][0] = _LQ(T[i][0], a.LG[i].zN + (fr0 ? (cat ? lh * 0.55 : -lh * 0.1) : lh * 0.35), q); T[i][1] *= 1 - q; A3[i] = _LQ(A3[i], fr0 ? (cat ? -1.2 : 1.9) : -1.3, q); }
+      if (k === 'sleep') { np = _LQ(np, a.grazeNp * 0.55, q); hp = _LQ(hp, 0.35, q); hy *= 1 - q; earB -= 0.3 * q; tsA *= 1 - q; } }
+    else if (k === 'rear' || k === 'stand') { const th = k === 'rear' ? -0.85 : -1.25, [dy0, dz0] = pivot(2, th * q); bp += th * q; by += dy0; bz += dz0;
+      for (const i of [0, 1]) { const ph2 = k === 'rear' ? Math.sin(t * 11 + i * 1.3) * 0.15 : 0; T[i][0] = _LQ(T[i][0], a.LG[i].zN + lh * (0.35 + ph2), q); T[i][1] = _LQ(T[i][1], lh * (1.1 + ph2), q); A3[i] = _LQ(A3[i], k === 'rear' ? 1.4 : 0.4, q); }
+      np = _LQ(np, k === 'rear' ? -0.2 : 0.3, q); jaw = Math.max(jaw, q * (k === 'stand' ? 0.3 : 0.15)); tl += 0.4 * q; }
+    else if (k === 'buck' || k === 'kick') { const th = 0.35 * Math.sin(Math.PI * u), [dy0, dz0] = pivot(0, th * q); bp += th * q; by += dy0; bz += dz0;
+      for (const i of [2, 3]) { T[i][0] = _LQ(T[i][0], a.LG[i].zN - lh * 0.55, q * Math.sin(Math.PI * u)); T[i][1] = _LQ(T[i][1], lh * 0.6, q * Math.sin(Math.PI * u)); } np += 0.3 * q; tl += 0.8 * q; }
+    else if (k === 'pounce' || k === 'leap') { const h = Ac.h ?? lh * 0.9, arc = Math.sin(Math.PI * u), cr = u < 0.15 ? Math.sin(Math.PI * u / 0.15) : 0; by += q * (h * arc - cr * lh * 0.15); bp += q * (-0.3 * Math.cos(Math.PI * u) * arc - 0.1 * cr);
+      for (let i = 0; i < 4; i++) { const fr0 = i < 2; T[i][0] = _LQ(T[i][0], a.LG[i].zN + (fr0 ? lh * 0.55 : -lh * 0.5), q * arc); T[i][1] = _LQ(T[i][1], h * arc * 0.9 + lh * 0.1, q * arc); } tl += 0.5 * q; earB += 0.6 * q; jaw = Math.max(jaw, 0.5 * q * arc * (D.fang ? 1 : 0)); }
+    else if (k === 'swipe') { const sw2 = Math.sin(Math.PI * u), [dy0, dz0] = pivot(2, -0.25 * sw2 * q); bp -= 0.25 * sw2 * q; by += dy0; bz += dz0; T[0][0] = _LQ(T[0][0], a.LG[0].zN + lh * (0.2 + 0.5 * Math.sin(Math.PI * u * 1.3)), q * sw2); T[0][1] = _LQ(T[0][1], lh * 0.6, q * sw2); A3[0] = _LQ(A3[0], -0.6, q * sw2); jaw = Math.max(jaw, 0.5 * q * sw2); earB += q; }
+    else if (k === 'down') { rig = Math.max(rig, q); br = _LQ(br, D.sprawl ? 3.0 : 1.45, q); by = _LQ(by, a.bw * 0.48 - a.by0, q); tsA *= 1 - q; hp = _LQ(hp, 0.2, q); jaw = _LQ(jaw, 0.15, q); hy *= 1 - q; }
+  }
+  // apply: body, spine, neck, head
+  const brth = Math.sin(TAU * t / (1.6 + a.L) + sd * 20), bpT = a.slope + bp;
+  a.body.position.set(0, a.by0 + by, bz); a.body.rotation.set(bpT, 0, br); a.body.scale.set(1, 1 + 0.015 * brth, 1 + 0.01 * brth);
+  a.fr.rotation.x = fx; a.rr.rotation.x = -fx;
+  if (D.sprawl && w > 0) { const sw3 = 0.12 * w * Math.sin(TAU * U + 0.5); a.fr.rotation.y = sw3; a.rr.rotation.y = -sw3; }
+  a.neck.rotation.set(a.nRest + np, ny, 0);
+  a.head.rotation.set(-(a.nRest + np) - (bpT + fx) * 0.85 + (D.hp ?? 0) + hp, hy, hr);
+  a.jaw.rotation.x = jaw;
+  // legs: IK to the foot targets
+  for (let i = 0; i < 4; i++) { const g = a.LG[i], th = bpT + (g.front ? fx : -fx), lk = T[i][2];
+    if (D.sprawl) { g.u.rotation.set(0, g.s * (T[i][0] - g.zN) / (g.l1 + 0.2) * -1.2, g.s * (1.32 + 0.6 * lk)); g.m.rotation.set(0, 0, -g.s * (1.45 + 0.3 * lk)); g.n.rotation.set(0, 0, 0); g.f.rotation.set(0, 0, 0); continue; }
+    let [y1, z1] = _rotYZ(g.hy, g.hz, g.front ? fx : -fx); [y1, z1] = _rotYZ(y1, z1, bpT); y1 += a.by0 + by; z1 += bz;
+    const a3 = g.A[2] + (g.front ? 1.3 : -0.45) * lk * (D.z === 'plant' ? 0.4 : 1) + A3[i], ty = T[i][1] + g.hf, tz = T[i][0];
+    const [a1, a2] = _ik2(y1, z1, ty + g.l3 * Math.cos(a3), tz + g.l3 * Math.sin(a3), g.l1, g.l2, g.front);
+    let r1 = a1 - th, r2 = a2 - a1, r3 = a3 - a2, r4 = -a3 + (g.front ? 0.7 : 0.3) * lk;
+    if (rig > 0) { r1 = _LQ(r1, g.A[0] - a.slope + 0.15 * Math.sin(t * 3 + i), rig); r2 = _LQ(r2, g.A[1] - g.A[0], rig); r3 = _LQ(r3, g.A[2] - g.A[1], rig); r4 = _LQ(r4, -g.A[2], rig); }
+    g.u.rotation.set(r1, 0, lat * (g.front ? g.s : 0)); g.m.rotation.x = r2; g.n.rotation.x = r3; g.f.rotation.x = r4;
+  }
+  // ears, tail, trunk
+  a.ears.forEach((e, i) => { const r = e.userData.r0, s2 = i ? 1 : -1, fl = 0.35 * bump((t * 0.23 + sd * 5 + i * 0.37) % 1.7, 0, 0.12) * iw;
+    if (e.userData.big) e.rotation.set(r[0], r[1] - s2 * (0.2 * Math.sin(t * 1.3 + i) * (1 - earB) + 0.75 * clamp(earB)), r[2]); else e.rotation.set(r[0] - 0.55 * earB + fl, r[1], r[2] + s2 * fl * 0.5); });
+  a.tail.rotation.set(a.tR + tl, 0, tsA * Math.sin(t * tsF + sd * 9));
+  a.TS.forEach((g, i) => { if (!i) return; g.rotation.x = (a.tCurl[i] ?? 0) * (1 - 0.6 * clamp(tl)) - (D.sprawl ? 0 : tl * 0.12); g.rotation.z = tsA * 0.7 * Math.sin(t * tsF + sd * 9 - i * 0.8) + (D.sprawl ? 0.18 * w * Math.sin(TAU * U - i * 0.9) : 0); });
+  if (a.trunk) a.trunk.forEach((g, i) => { const k = i / a.trunk.length; g.rotation.x = (i ? (-0.03 - 0.16 * k * k) * (1 - trk) - trk * 0.42 : -0.25 * trk) + 0.05 * Math.sin(t * 1.1 + i * 0.5 + sd * 4) * (1 - trk); g.rotation.z = 0.07 * Math.sin(t * 0.8 - i * 0.4 + sd * 6) * (1 - 0.5 * trk); });
+  for (const f of a.fx) f(t, a);
+}
+const kind_ok = (a, k) => a.kind === k;
+function beastDo(a, k, t, o = {}) {   // a.do('roar' | 'call' | 'howl' | 'trumpet' | 'snap' | 'yawn' | 'sit' | 'lie' | 'sleep' | 'rear' | 'stand' | 'buck' | 'pounce' | 'swipe' | 'graze' | 'drink' | 'shake' | 'stalk' | 'charge' | 'wag' | 'look' | 'down', t, { dur, at, h, getUp, sfx })
+  const dur = o.dur ?? { roar: 2, call: 1.2, howl: 3.2, trumpet: 2, snap: 0.9, yawn: 2, sit: 4, lie: 5, sleep: 6, rear: 1.8, stand: 3, buck: 0.9, kick: 0.9, pounce: 1.1, leap: 1.1, swipe: 0.8, graze: 4, eat: 4, drink: 4, shake: 1.2, stalk: 4, charge: 3, wag: 3, look: 2, down: 3 }[k] ?? 2;
+  const A = { ri: { pounce: 0.06, leap: 0.06, snap: 0.05, swipe: 0.08, buck: 0.1, kick: 0.1, shake: 0.1, down: 0.35 }[k] ?? 0.3, ro: { pounce: 0.12, leap: 0.12, snap: 0.08, swipe: 0.15 }[k] ?? 0.35, ...o, k, t0: t, t1: t + dur };
+  if (k === 'down' && !o.getUp) A.t1 = 1e9;
+  a.acts.push(A);
+  const v = a.D.voice, snd = o.sfx ?? ({ roar: v === 'trumpet' ? 'trumpet' : ['roar', 'growl'].includes(v) ? v : v ?? 'roar', call: v, howl: 'howl', trumpet: 'trumpet', snap: 'chomp', rear: v === 'neigh' ? 'neigh' : null, stand: ['roar', 'growl'].includes(v) ? 'roar' : null }[k] ?? null);
+  if (snd && o.sfx !== false) { sfx(t + (k === 'snap' ? dur * 0.78 : k === 'howl' ? 0.4 : 0.1), snd, o.vol ?? 1); AUDIO.hits[AUDIO.hits.length - 1].dur = k === 'howl' ? dur - 0.6 : dur * 0.8; }
+  if (k === 'trumpet' && o.spray) emit('spray', { at: st => { const p = a._posAt ? a._posAt(st) : a.root.position, yw = a._yawAt ? a._yawAt(st) : a.root.rotation.y, f = (a.L * 0.7 + a.D.hd[0]) * a.sc, h = (a.by0 + a.bh * 0.5 + a.D.trunk * 0.7) * a.sc; return [p.x + Math.sin(yw) * f, p.y + h, p.z + Math.cos(yw) * f]; }, t0: t + 0.5, t1: t + dur - 0.3, rate: 70, speed: 5, spread: 0.35, size: 0.12, life: 1.1 });
+  return a;
+}
+function herd(kind, n, o = {}) {   // n beasts walking together: kind (or [kinds]), at [x,z] → to [x,z] (or path), t0, speed (stampede ≥ 6), spread, seed, scale, dust
+  const sd = o.seed ?? 1, pts = o.path ?? [o.at ?? [0, 0], o.to ?? [0, 40]], t0 = o.t0 ?? 0, v = o.speed ?? 1.2, sp = o.spread ?? 2.6, R = [];
+  const ex = pts[pts.length - 1][0] - pts[0][0], ez = pts[pts.length - 1][1] - pts[0][1], el = Math.hypot(ex, ez) || 1, dx = ex / el, dz = ez / el, cols = Math.max(1, Math.ceil(Math.sqrt(n * 1.4)));
+  let plen = 0; for (let i = 1; i < pts.length; i++) plen += Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]);
+  for (let i = 0; i < n; i++) { const h1 = hash(i * 7.13 + sd * 3.1), h2 = hash(i * 3.7 + sd * 9.3), h3 = hash(i * 5.1 + sd), row = Math.floor(i / cols), col = i % cols;
+    const ox = (col - (cols - 1) / 2) * sp + (h1 - 0.5) * sp * 0.6, oz = -row * sp * 1.3 + (h2 - 0.5) * sp * 0.6, P = pts.map(([x, z]) => [x + dz * ox + dx * oz, z - dx * ox + dz * oz]);
+    const b = beast({ kind: Array.isArray(kind) ? kind[i % kind.length] : kind, seed: sd * 31 + i, scale: (o.scale ?? 1) * (0.9 + 0.2 * h3), x: P[0][0], z: P[0][1], ry: Math.atan2(dx, dz), graze: o.graze });
+    if (o.walk !== false) walk(b, P, { t0: t0 + (o.stagger ?? 0.12) * row + h1 * 0.15, speed: v * (0.94 + 0.12 * h2), t1: o.t1 });
+    R.push(b); }
+  if (o.dust ?? v > 5) R.forEach((b, i) => { if (i % 2) return; emit('dust', { at: st => { const p = b._posAt ? b._posAt(st) : b.root.position; return [p.x, 0.25, p.z]; }, t0: t0 + 0.4, t1: t0 + plen / v, rate: 7 }); });
+  return R;
+}
+DEFER.push(() => {   // hoof beats for trotting / galloping hoofed animals (a few, so herds don't drown the mix)
+  const H = BEAST_ALL.filter(a => a._posAt && a.D.ft === 'hoof' && a.steps !== false).slice(0, 4), vol = 0.7 / Math.sqrt(Math.max(1, H.length));
+  for (const a of H) { let st = null; const lhW = a.lh * a.sc;
+    for (let t = 0; t <= DUR + 0.1; t += 0.1) { const p0 = a._posAt(t - 0.05), p1 = a._posAt(t + 0.05), v = Math.hypot(p1.x - p0.x, p1.z - p0.z) / 0.1, on = v * v / (9.81 * lhW) > 0.45;
+      if (on && st == null) st = t; if ((!on || t > DUR) && st != null) { if (t - st > 0.4) { sfx(st, 'hooves', vol); AUDIO.hits[AUDIO.hits.length - 1].dur = t - st; AUDIO.hits[AUDIO.hits.length - 1].p = v > 7 ? 2 : 1; } st = null; } } }
+});
+
+// ---------------- birds ----------------
+const BIRDS = {
+  gull:     { span: 1.3, bl: 0.42, c: '#F6F6F4', b: '#FFFFFF', w: '#AEB8C2', tip: '#1E1E22', bk: '#F2C230', beak: 'gull', lg: 0.08, leg: '#E8A07A', tail: 'fan', tailC: '#FFFFFF', hz: 2.6, glide: 0.6, chord: 0.16, voice: 'squawk', webbed: 1, up: -0.15 },
+  eagle:    { span: 2.0, bl: 0.8, c: '#4A2E1A', b: '#4A2E1A', w: '#3E2614', tip: '#2A1A10', head: '#F4F2EC', tailC: '#F4F2EC', bk: '#F2C230', beak: 'hook', lg: 0.12, leg: '#F2C230', tail: 'fan', hz: 1.8, glide: 0.85, fingers: 1, chord: 0.24, voice: 'screech', iris: '#F2C230', up: -0.55 },
+  hawk:     { base: 'eagle', span: 1.2, bl: 0.5, c: '#8A5A34', b: '#EADCC4', w: '#7A4E2C', head: '#8A5A34', tailC: '#B8522A', iris: '#E8B030' },
+  vulture:  { span: 2.5, bl: 0.9, c: '#2A2420', b: '#2A2420', w: '#2A2420', tip: '#1A1614', head: '#D8A08A', ruff: '#EDE4D4', bk: '#C8B8A0', beak: 'hook', lg: 0.14, leg: '#8A8078', tail: 'short', hz: 1.2, glide: 0.95, fingers: 1, chord: 0.26, neck: 0.16, voice: 'screech', up: -0.5 },
+  pigeon:   { span: 0.65, bl: 0.3, c: '#8A92A2', b: '#9AA2B0', w: '#8A92A2', tip: '#3A3E48', bars: '#3A3E48', head: '#6A7286', ring: '#4A8A6A', bk: '#3A3A3A', beak: 'short', lg: 0.05, leg: '#D8606A', tail: 'fan', tailC: '#6A7286', hz: 6, glide: 0.15, chord: 0.2, voice: 'coo', iris: '#E8701A', peck: 1, bob: 1, up: -0.1 },
+  crow:     { span: 0.95, bl: 0.45, c: '#1A1A1E', b: '#1A1A1E', w: '#1A1A1E', tip: '#141418', bk: '#141418', beak: 'straight', lg: 0.07, leg: '#141418', tail: 'wedge', hz: 4, glide: 0.25, fingers: 1, chord: 0.22, voice: 'caw', peck: 1, up: -0.2 },
+  raven:    { base: 'crow', span: 1.25, bl: 0.6 },
+  parrot:   { span: 0.95, bl: 0.75, c: '#D9322A', b: '#D9322A', w: '#2E6FD9', tip: '#2E4FA9', bars: '#F2C230', head: '#D9322A', face: '#F4F2EE', bk: '#F0EAD8', beak: 'parrot', lg: 0.06, leg: '#6A6A6A', tail: 'long', tailC: '#D9322A', hz: 5, glide: 0.2, chord: 0.2, voice: 'squawk', iris: '#F2E8A0', up: -0.7 },
+  owl:      { span: 1.05, bl: 0.45, c: '#8A6A48', b: '#E6D6BA', w: '#7A5A3A', tip: '#5A4028', bk: '#3A3A3A', beak: 'hook', lg: 0.06, leg: '#E6D6BA', tail: 'short', hz: 2.6, glide: 0.5, chord: 0.26, eye: 'owl', iris: '#F2C230', disc: '#E6D6BA', tufts: 1, voice: 'hoot', neck: 0.01, hr: 0.24, up: -0.9 },
+  duck:     { span: 0.9, bl: 0.55, c: '#8A7A62', b: '#B8A890', w: '#8A7A62', tip: '#5A4E3E', bars: '#3A5AC8', head: '#2E7A4A', ring: '#F4F2EE', bk: '#E8C84A', beak: 'flat', lg: 0.06, leg: '#F08A30', tail: 'short', hz: 7, glide: 0, chord: 0.18, voice: 'quack', webbed: 1, waddle: 1, up: 0 },
+  flamingo: { span: 1.5, bl: 0.6, c: '#F5A0B0', b: '#F5A0B0', w: '#F07888', tip: '#1E1E22', bk: '#F5C8C8', beak: 'flamingo', lg: 0.8, leg: '#E87888', tail: 'short', hz: 3, glide: 0.2, chord: 0.18, neck: 0.5, voice: 'honk', trail: 1, up: -0.1 },
+  swan:     { span: 2.2, bl: 1.0, c: '#F8F8F6', b: '#F8F8F6', w: '#F0F0EE', tip: '#E8E8E4', bk: '#E8701A', beak: 'flat', lg: 0.1, leg: '#2A2A2A', tail: 'short', hz: 2.4, glide: 0.1, chord: 0.2, neck: 0.5, voice: 'honk', webbed: 1, waddle: 1, up: 0 },
+  penguin:  { span: 0.5, bl: 0.7, c: '#1E2024', b: '#F4F4F2', w: '#1E2024', tip: '#1E2024', bk: '#1E2024', beak: 'straight', lg: 0.05, leg: '#E8901A', tail: 'short', hz: 0, flightless: 1, waddle: 1, patch: '#F2C230', voice: 'honk', up: -1.35, webbed: 1 },
+  sparrow:  { span: 0.24, bl: 0.15, c: '#8A6A48', b: '#D8CCB8', w: '#7A5A3A', tip: '#4A3626', bars: '#F0E8DC', bk: '#3A3A3A', beak: 'cone', lg: 0.025, leg: '#C8A890', tail: 'fork', hz: 13, glide: 0.05, chord: 0.22, voice: 'tweet', peck: 1, up: -0.25 }
+};
+const _bdefB = k => { const d = BIRDS[k]; if (!d.base) return d; const { base, ...rest } = d; return { ..._bdefB(base), ...rest }; };
+function bird(o = {}) {   // kind: see BIRDS — fly(b, [[x,y,z], …], { speed }) flaps / glides / dives by itself, sits (wings folded) when it stops; walk(b, pts) on the ground
+  const kind = BIRDS[o.kind] ? o.kind : 'gull', D = _bdefB(kind), sc = o.scale ?? 1, sd = hash((o.seed ?? ++_rigN) * 5.3 + 0.7), NC = { cast: false };
+  const g = dyn(grp(o.parent ?? world, o.x ?? 0, o.y ?? 0, o.z ?? 0, o.ry ?? 0)); g.scale.setScalar(sc); g.rotation.order = 'YXZ';
+  const bl = D.bl, bw = bl * (D.flightless ? 0.27 : 0.2), bh = bl * (D.flightless ? 0.27 : 0.22), C = D.c, B = D.b ?? C, HC = D.head ?? C;
+  const b = dyn(grp(g)), bod = dyn(grp(b));
+  _ell(bod, C, 0, 0, 0, bw, bh, bl * 0.34, { detail: 2 }); _ell(bod, B, 0, -bh * 0.22, bl * 0.03, bw * 0.92, bh * 0.8, bl * 0.3, { detail: 2 });
+  if (D.patch) for (const s of [-1, 1]) _ell(bod, D.patch, s * bw * 0.55, bh * 0.4, bl * 0.28, bw * 0.3, bh * 0.25, bl * 0.06, NC);
+  const nl = D.neck ?? bh * 0.3, nk = dyn(grp(bod, 0, bh * 0.45, bl * 0.25)); nk.rotation.order = 'YXZ';
+  if (nl > 0.05) cyl(nk, bw * 0.32, bw * 0.5, nl + bw * 0.3, D.neckC ?? (kind === 'vulture' ? HC : C), 0, -bw * 0.3, 0, { seg: 7 });
+  if (D.ruff) for (let i = 0; i < 8; i++) { const a = i / 8 * TAU; ball(nk, bw * 0.3, D.ruff, Math.sin(a) * bw * 0.45, 0.02, Math.cos(a) * bw * 0.45, { detail: 1 }); }
+  if (D.ring) cyl(nk, bw * 0.42, bw * 0.46, bw * 0.15, D.ring, 0, nl * 0.4, 0, { seg: 8, ...NC });
+  const hd = dyn(grp(nk, 0, nl, 0)); hd.rotation.order = 'YXZ'; const hr = bl * (D.hr ?? 0.13);
+  _ell(hd, HC, 0, hr * 0.15, hr * 0.3, hr, hr * (D.eye === 'owl' ? 0.95 : 0.92), hr * 1.08);
+  const beak = (r, len, c, y, z0, o2 = {}) => cone(hd, r, len, c, 0, y - len / 2, z0 + len / 2, { rx: Math.PI / 2, ...o2 });
+  const bk = D.bk;
+  switch (D.beak) {
+    case 'gull': beak(hr * 0.2, hr * 1.15, bk, hr * 0.05, hr * 0.95); cone(hd, hr * 0.08, hr * 0.22, bk, 0, hr * 0.02 - hr * 0.22, hr * 2.0, { rx: Math.PI, ...NC }); ball(hd, hr * 0.07, '#D83A2A', 0, -hr * 0.06, hr * 1.85, { detail: 0, ...NC }); break;
+    case 'hook': beak(hr * 0.3, hr * 0.85, bk, 0, hr * 0.85); cone(hd, hr * 0.14, hr * 0.4, bk, 0, -hr * 0.05 - hr * 0.4, hr * 1.6, { rx: Math.PI }); _ell(hd, '#F2D040', 0, hr * 0.12, hr * 0.98, hr * 0.28, hr * 0.22, hr * 0.15, NC); break;
+    case 'short': beak(hr * 0.14, hr * 0.55, bk, 0, hr * 0.95); _ell(hd, '#E8E8E4', 0, hr * 0.18, hr * 1.02, hr * 0.12, hr * 0.08, hr * 0.12, NC); break;
+    case 'straight': beak(hr * 0.24, hr * 1.25, bk, hr * 0.02, hr * 0.85); break;
+    case 'flat': _ell(hd, bk, 0, -hr * 0.12, hr * 1.42, hr * 0.36, hr * 0.12, hr * 0.62); if (kind === 'swan') _ell(hd, '#1E1E1E', 0, -hr * 0.02, hr * 1.0, hr * 0.22, hr * 0.2, hr * 0.2, NC); break;
+    case 'parrot': _ell(hd, bk, 0, hr * 0.05, hr * 1.02, hr * 0.32, hr * 0.48, hr * 0.38); cone(hd, hr * 0.14, hr * 0.42, bk, 0, -hr * 0.2 - hr * 0.42, hr * 1.25, { rx: Math.PI }); _ell(hd, '#2A2A2A', 0, -hr * 0.3, hr * 0.95, hr * 0.2, hr * 0.15, hr * 0.2, NC); if (D.face) for (const s of [-1, 1]) _ell(hd, D.face, s * hr * 0.75, hr * 0.15, hr * 0.6, hr * 0.15, hr * 0.42, hr * 0.42, NC); break;
+    case 'flamingo': beak(hr * 0.24, hr * 0.8, bk, 0, hr * 0.9); { const bt = grp(hd, 0, 0, hr * 1.65); bt.rotation.x = 1.0; cone(bt, hr * 0.17, hr * 0.7, '#1E1E22', 0, -hr * 0.35, hr * 0.35, { rx: Math.PI / 2 }); } break;
+    default: beak(hr * 0.3, hr * 0.6, bk, -hr * 0.05, hr * 0.85);
+  }
+  const glintM = mat('#FFFFFF', { basic: true });
+  if (D.eye === 'owl') { _ell(hd, D.disc, 0, hr * 0.12, hr * 0.85, hr * 0.92, hr * 0.8, hr * 0.28, NC); for (const s of [-1, 1]) { const x = s * hr * 0.4; ball(hd, hr * 0.26, D.iris, x, hr * 0.25, hr * 1.05, { detail: 1, ...NC }); ball(hd, hr * 0.15, '#0E0C0B', x, hr * 0.25, hr * 1.24, { detail: 1, ...NC }); ball(hd, hr * 0.05, '', x + s * 0.01, hr * 0.33, hr * 1.36, { mat: glintM, detail: 0, ...NC }); if (D.tufts) cone(hd, hr * 0.16, hr * 0.5, C, s * hr * 0.55, hr * 0.85, hr * 0.2, { rz: -s * 0.3 }); } }
+  else for (const s of [-1, 1]) { const x = s * hr * 0.72, y = hr * 0.38, z = hr * 0.62, r = hr * 0.17; if (D.iris) ball(hd, r * 1.3, D.iris, x, y, z, { detail: 1, ...NC }); ball(hd, r, '#0E0C0B', x + s * r * 0.35, y, z + r * 0.2, { detail: 1, ...NC }); ball(hd, r * 0.3, '', x + s * r * 0.95, y + r * 0.4, z + r * 0.5, { mat: glintM, detail: 0, ...NC }); }
+  // wings: inner (arm) + outer (hand) plates, coverts, bars, dark tips or fingered primaries
+  const W = [], span = D.span, Cw = span * (D.chord ?? 0.2), Li = Math.max(span * 0.5 * 0.42 - bw * 0.6, span * 0.12), Lo = span * 0.5 * (D.flightless ? 0.45 : 0.58), th = Math.max(0.006, Cw * 0.05);
+  for (const s of [-1, 1]) {
+    const sh = dyn(grp(bod, s * bw * 0.75, bh * 0.38, bl * 0.06)), hn = dyn(grp(sh, s * Li, 0, 0)), X = x => s * x; sh.rotation.order = 'ZYX';
+    plate(sh, [[0, Cw * 0.5], [X(Li), Cw * 0.45], [X(Li), -Cw * 0.5], [0, -Cw * 0.45]], th, D.w);
+    plate(sh, [[0, Cw * 0.52], [X(Li), Cw * 0.47], [X(Li), Cw * 0.0], [0, -Cw * 0.05]], th, D.cov ?? (D.flightless ? D.w : C), 0, th * 0.9, 0);
+    if (D.bars) for (const zb of [-0.02, -0.18]) plate(sh, [[X(Li * 0.12), Cw * zb], [X(Li), Cw * (zb + 0.03)], [X(Li), Cw * (zb - 0.08)], [X(Li * 0.12), Cw * (zb - 0.11)]], th, D.bars, 0, th * 1.6, 0, NC);
+    plate(hn, [[0, Cw * 0.45], [X(Lo * 0.7), Cw * 0.32], [X(Lo), Cw * 0.02], [X(Lo * 0.9), -Cw * 0.28], [X(Lo * 0.4), -Cw * 0.45], [0, -Cw * 0.5]], th, D.w);
+    if (D.fingers) for (let f = 0; f < 5; f++) { const zc = Cw * (0.24 - 0.15 * f), tx = Lo * (1.12 - 0.05 * Math.abs(f - 1.5)); plate(hn, [[X(Lo * 0.5), zc + Cw * 0.06], [X(tx), zc + Cw * 0.02 - f * Cw * 0.03], [X(tx * 0.97), zc - Cw * 0.06 - f * Cw * 0.03], [X(Lo * 0.5), zc - Cw * 0.06]], th, D.tip, 0, th * 0.4, 0); }
+    else plate(hn, [[X(Lo * 0.55), Cw * 0.37], [X(Lo), Cw * 0.02], [X(Lo * 0.9), -Cw * 0.28], [X(Lo * 0.55), -Cw * 0.36]], th, D.tip, 0, th * 0.7, 0, NC);
+    W.push({ sh, hn, s });
+  }
+  // tail
+  const tg = dyn(grp(bod, 0, bh * 0.15, -bl * 0.3)), tw = bw * 0.55, tL = bl * (D.tail === 'long' ? 0.85 : 0.32);
+  plate(tg, { fan: [[-tw, 0.02], [tw, 0.02], [tw * 1.5, -tL], [-tw * 1.5, -tL]], fork: [[-tw, 0.02], [tw, 0.02], [tw * 1.6, -tL], [0, -tL * 0.62], [-tw * 1.6, -tL]], long: [[-tw * 0.6, 0.02], [tw * 0.6, 0.02], [tw * 0.3, -tL], [-tw * 0.3, -tL]], wedge: [[-tw, 0.02], [tw, 0.02], [tw * 0.9, -tL * 0.8], [0, -tL], [-tw * 0.9, -tL * 0.8]], short: [[-tw * 0.8, 0.02], [tw * 0.8, 0.02], [tw, -tL * 0.5], [-tw, -tL * 0.5]] }[D.tail ?? 'fan'], th, D.tailC ?? D.w);
+  // legs + toes
+  const LGs = [], lg = D.lg, lr = Math.max(0.004, bl * 0.022), toe = Math.max(0.02, bl * 0.12);
+  const upA = Math.abs(D.up ?? -0.25), ext = Math.sqrt((bh * Math.cos(upA)) ** 2 + (bl * 0.34 * Math.sin(upA)) ** 2);
+  for (const s of [-1, 1]) { const lp = dyn(grp(b, s * bw * 0.35, -ext * 0.85, 0)); cyl(lp, lr * 1.3, lr, lg, D.leg, 0, -lg, 0, { seg: 5, ...NC });
+    const ft = dyn(grp(lp, 0, -lg, 0)); for (const an of [-0.45, 0, 0.45]) box(ft, lr * 1.4, lr * 1.2, toe, D.leg, Math.sin(an) * toe * 0.45, 0, Math.cos(an) * toe * 0.45, { ry: an, ...NC }); box(ft, lr * 1.3, lr * 1.2, toe * 0.5, D.leg, 0, 0, -toe * 0.2, NC);
+    if (D.webbed) plate(ft, [[0, 0], [toe * 0.45, toe * 0.85], [-toe * 0.45, toe * 0.85]], lr, D.leg, 0, lr * 0.5, 0, NC);
+    LGs.push({ lp, ft, s }); }
+  const B2 = { g, root: g, b, bod, neck: nk, head: hd, W, tg, LG: LGs, D, kind, sd, sc, bl, bh, hb: lg + ext * 0.85, ext, quad: true, bird: true, by0: 0.2, fx: [], acts: [], eye: [hr * 0.38, hr * 0.9] };
+  B2.poseFn = (t, w, s) => birdPose(B2, t, { w, s });
+  B2.do = (k, t, oo = {}) => { const dur = oo.dur ?? 1.5; B2.acts.push({ k, t0: t, t1: t + dur, ri: 0.15, ro: 0.25, ...oo }); if (k === 'call' && D.voice && oo.sfx !== false) sfx(t, D.voice, oo.vol ?? 1); return B2; };
+  _fuseDyn(g);
+  tick(t => { if (!B2._posAt) birdPose(B2, t, null); });
+  return B2;
+}
+function birdPose(B, t, wk = null) {
+  const D = B.D, node = B.g, sd = B.sd;
+  let v = 0, vy = 0, rx = 0, rz = 0;
+  if (node._fly) { const P0 = node._fly(t - 0.06), P1 = node._fly(t + 0.06), P = node._fly(t); v = Math.hypot(P1[0][0] - P0[0][0], P1[0][1] - P0[0][1], P1[0][2] - P0[0][2]) / 0.12; vy = (P1[0][1] - P0[0][1]) / 0.12; rx = P[1]; rz = P[3]; }
+  const fl = D.flightless ? 0 : sm01((v - 0.3) / 1.4), fold = 1 - fl;
+  let flap = sm01((noise1(t * 0.35 + sd * 50) - (2 * (D.glide ?? 0.3) - 1)) / 0.35);
+  flap = Math.max(flap, clamp(vy / 1.5), clamp((5 - v) / 3)); if (vy < -3) flap *= 0.25; flap *= fl;
+  const tuck = clamp((-vy - 5) / 6) * fl, ph = TAU * (D.hz || 1) * t + sd * 10, sn = Math.sin(ph), A = D.amp ?? (D.span > 1.6 ? 0.55 : 0.85);
+  let peck = 0, call = 0, grab = 0, spread = 0, hy = 0;
+  for (const Ac of B.acts) { const q = _aw(t, Ac.t0, Ac.t1, Ac.ri, Ac.ro); if (q <= 0) continue; if (Ac.k === 'call') call = Math.max(call, q); if (Ac.k === 'grab') grab = Math.max(grab, q); if (Ac.k === 'spread') spread = Math.max(spread, q); if (Ac.k === 'peck') peck = Math.max(peck, q * bump((t - Ac.t0) % 0.6, 0, 0.3)); }
+  const fW = Math.max(fold * (1 - spread), 0), flp = Math.max(flap, spread * (0.4 + 0.6 * Math.max(0, sn)));
+  B.W.forEach(Wg => { const s = Wg.s;
+    if (D.flightless) { const wf = wk ? 0.3 * Math.sin(TAU * wk.s / 0.25) * wk.w : 0; Wg.sh.rotation.set(0, s * 0.15, s * (-1.25 + 0.25 + wf)); return; }
+    Wg.sh.rotation.set(-1.45 * fW, s * (1.45 * fW + 0.55 * tuck), s * ((0.08 + flp * A * sn) * (1 - fW) - 0.06 * fW));
+    Wg.sh.scale.x = 1 - 0.45 * Math.max(fW, tuck * 0.6);
+    Wg.hn.rotation.set(0, s * (0.4 * flp * Math.max(0, Math.cos(ph)) + 0.3 * tuck), s * ((-0.05 + flp * A * 0.55 * Math.sin(ph - 0.8)) * (1 - fW))); });
+  // body: perched upright, flying level; cancel the flight path's pitch / bank when sitting
+  B.b.position.y = B.hb * fold - 0.03 * B.bl * flap * sn; B.b.rotation.set(-rx * fold, 0, -rz * fold);
+  let bp = (D.up ?? -0.25) * fold, br = 0, hz2 = 0;
+  if (wk && wk.w > 0) { const k = TAU * wk.s / Math.max(0.08, D.lg * 2.2 + B.bl * 0.3); B.LG.forEach((L, i) => { L.lp.rotation.x = 0.55 * Math.sin(k + i * Math.PI) * wk.w; }); B.b.position.y += 0.02 * B.bl * Math.abs(Math.cos(k)) * wk.w; if (D.waddle) br = 0.14 * Math.sin(k) * wk.w; if (D.bob) hz2 = B.bl * 0.12 * (sm01((((k / TAU) % 1) - 0.7) / 0.2) - ((k / TAU) % 1)) * wk.w; }
+  else B.LG.forEach(L => { L.lp.rotation.x = fl * (D.trail ? 1.55 : 1.3) - grab * 1.9; });
+  B.LG.forEach(L => { L.lp.position.y = -lerp(B.bh, B.ext, fold) * 0.85; });
+  B.bod.rotation.set(bp, 0, br);
+  // neck / head: look around when sitting (jerky), steady in flight; long necks stretch forward in flight
+  const k2 = t / 0.9 + sd * 13, i2 = Math.floor(k2), j2 = sm01((k2 - i2 - 0.8) / 0.2); hy = fold * lerp(hash(i2 + sd * 97) - 0.5, hash(i2 + 1 + sd * 97) - 0.5, j2) * (D.eye === 'owl' ? 2.6 : 1.5);
+  if (D.peck && !wk) { const q = t / 2.7 + sd * 7, pk = Math.floor(q); if (hash(pk + sd * 3) < 0.5) peck = Math.max(peck, fold * bump(q - pk, 0.1, 0.15)); }
+  const nr = lerp(D.neck > 0.3 ? 0.15 : 0.25, Math.PI / 2 - 0.15, fl);
+  B.neck.rotation.set(nr + peck * 0.6, hy * 0.4, 0); B.head.rotation.set(-nr - bp + peck * 0.9 - call * 0.35, hy * 0.6, 0); B.head.position.z = hz2;
+  B.tg.rotation.x = 0.12 * fold - 0.25 * flap * 0 + 0.15 * clamp((4 - v) / 3) * fl; B.tg.scale.x = 1 + 0.5 * clamp((4 - v) / 3) * fl;
+  B.LG.forEach(L => { L.ft.rotation.x = fl * 0.8 - grab * 0.8; });
+  for (const f of B.fx) f(t, B);
+}
+const BIRD_T = { value: 0 };
+function flock(o = {}) {   // many distant birds in one draw call: circle (at, r, h, speed) or migrate (from → to, t0 → t1, formation 'v'); scatter: t → they burst away
+  const n = o.n ?? 30, [cx, cy, cz] = o.at ?? o.from ?? [0, 25, 0], R = o.r ?? 15, H = o.h ?? 6, sp = o.speed ?? 8, size = o.size ?? 0.9, hz = o.hz ?? 3.5, k0 = o.kind ?? 'gull';
+  const col = o.color ?? { gull: '#F4F4F2', crow: '#1A1A1E', pigeon: '#8A92A2', starling: '#2A2A30', vulture: '#2A2420', duck: '#6A5A42', flamingo: '#F5A0B0', parrot: '#D9322A', goose: '#6A5E50', bat: '#2A2224' }[k0] ?? '#2A2A30';
+  const geo = G('flockG', () => { const P = [], Wt = [], tri = (a, b, c, wa, wb, wc) => { P.push(...a, ...b, ...c); Wt.push(wa, wb, wc); };
+    tri([0, 0.05, 0.3], [-0.06, 0, -0.1], [0.06, 0, -0.1], 0, 0, 0); tri([0, 0.05, 0.3], [0.06, 0, -0.1], [0, -0.05, 0.1], 0, 0, 0); tri([0, 0.05, 0.3], [0, -0.05, 0.1], [-0.06, 0, -0.1], 0, 0, 0);
+    tri([0, 0.04, -0.08], [-0.1, 0, -0.32], [0.1, 0, -0.32], 0, 0.1, 0.1);
+    for (const s of [-1, 1]) { tri([s * 0.04, 0.02, 0.12], [s * 0.25, 0.02, 0.1], [s * 0.04, 0.02, -0.06], 0, 0.5, 0); tri([s * 0.25, 0.02, 0.1], [s * 0.25, 0.02, -0.06], [s * 0.04, 0.02, -0.06], 0.5, 0.5, 0); tri([s * 0.25, 0.02, 0.1], [s * 0.5, 0.02, -0.06], [s * 0.25, 0.02, -0.06], 0.5, 1, 0.5); }
+    const gg = new THREE.BufferGeometry(); gg.setAttribute('position', new THREE.Float32BufferAttribute(P, 3)); gg.setAttribute('aW', new THREE.Float32BufferAttribute(Wt, 1)); gg.computeVertexNormals(); return gg; });
+  const m = new THREE.MeshStandardMaterial({ color: col, flatShading: true, roughness: 0.85, side: THREE.DoubleSide }), uHz = { value: hz };
+  m.onBeforeCompile = sh => { sh.uniforms.uT = BIRD_T; sh.uniforms.uHz = uHz; sh.vertexShader = 'uniform float uT; uniform float uHz; attribute float aW;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n  float fp = sin(uT * uHz * 6.2832 + float(gl_InstanceID) * 2.399);\n  transformed.y += fp * aW * 0.5; transformed.x *= 1.0 - 0.18 * aW * max(0.0, -fp);'); };
+  const im = new THREE.InstancedMesh(geo, m, n), o3 = new THREE.Object3D(); im.frustumCulled = false; im.castShadow = false; world.add(dyn(im));
+  const to = o.to, t0 = o.t0 ?? 0, t1 = o.t1 ?? (to ? t0 + Math.hypot(to[0] - cx, to[1] - cy, to[2] - cz) / sp : 1e9);
+  tick(t => { BIRD_T.value = t;
+    for (let i = 0; i < n; i++) { const h1 = hash(i * 1.37 + 3), h2 = hash(i * 2.71 + 5), h3 = hash(i * 4.13 + 7); let x, y, z, yaw, bank = 0;
+      if (to) { const k = clamp((t - t0) / (t1 - t0)), row = Math.floor((i + 1) / 2), sd2 = i % 2 ? 1 : -1, ox = o.formation === 'v' ? sd2 * row * size * 1.6 : (h1 - 0.5) * R, oz = o.formation === 'v' ? -row * size * 1.3 : (h2 - 0.5) * R, oy = o.formation === 'v' ? 0 : (h3 - 0.5) * H;
+        const dx = to[0] - cx, dz = to[2] - cz, dl = Math.hypot(dx, dz) || 1, ux = dx / dl, uz = dz / dl; yaw = Math.atan2(dx, dz);
+        x = lerp(cx, to[0], k) + uz * ox + ux * oz + 0.4 * Math.sin(t * 0.7 + i); y = lerp(cy, to[1], k) + oy + 0.3 * Math.sin(t * 0.9 + i * 2); z = lerp(cz, to[2], k) - ux * ox + uz * oz; }
+      else { const rr = R * (0.45 + 0.55 * h1), w = sp / rr * (o.dir ?? 1) * (0.85 + 0.3 * h2), a = h3 * TAU + t * w; x = cx + Math.sin(a) * rr; z = cz + Math.cos(a) * rr; y = cy + (h2 - 0.5) * H + 0.6 * Math.sin(t * 0.5 + i); yaw = a + (w > 0 ? Math.PI / 2 : -Math.PI / 2); bank = -0.35 * Math.sign(w); }
+      if (o.scatter != null && t > o.scatter) { const u2 = t - o.scatter, a2 = h1 * TAU; x += Math.sin(a2) * u2 * (4 + 4 * h2); z += Math.cos(a2) * u2 * (4 + 4 * h2); y += u2 * (2 + 3 * h3); yaw = a2; }
+      o3.position.set(x, y, z); o3.rotation.set(0, yaw, bank); o3.rotation.order = 'YXZ'; o3.scale.setScalar(size * (0.85 + 0.3 * h3) * 2); o3.updateMatrix(); im.setMatrixAt(i, o3.matrix); }
+    im.instanceMatrix.needsUpdate = true; });
+  return im;
+}
+
+// ---------------- sea creatures ----------------
+const SEAPROF = {   // body radius along the length (u: 0 nose … 1 tail base), × R
+  shark: [[0, 0.1], [0.05, 0.45], [0.12, 0.72], [0.22, 0.92], [0.33, 1], [0.5, 0.88], [0.7, 0.55], [0.88, 0.25], [1, 0.12]],
+  cet:   [[0, 0.18], [0.05, 0.22], [0.09, 0.52], [0.15, 0.8], [0.3, 0.98], [0.4, 1], [0.6, 0.85], [0.8, 0.45], [0.93, 0.2], [1, 0.12]],
+  orca:  [[0, 0.3], [0.04, 0.62], [0.12, 0.88], [0.3, 1], [0.5, 0.92], [0.72, 0.55], [0.9, 0.22], [1, 0.12]],
+  whale: [[0, 0.35], [0.05, 0.62], [0.15, 0.86], [0.3, 1], [0.5, 0.9], [0.75, 0.45], [0.92, 0.18], [1, 0.1]],
+  fish:  [[0, 0.25], [0.08, 0.65], [0.2, 0.92], [0.38, 1], [0.6, 0.8], [0.82, 0.4], [1, 0.16]],
+  tuna:  [[0, 0.15], [0.1, 0.6], [0.25, 0.9], [0.42, 1], [0.65, 0.75], [0.85, 0.3], [1, 0.08]],
+  round: [[0, 0.42], [0.1, 0.8], [0.35, 1], [0.65, 0.85], [0.88, 0.4], [1, 0.22]],
+  angler:[[0, 0.75], [0.08, 0.95], [0.25, 1], [0.5, 0.75], [0.8, 0.35], [1, 0.15]],
+  sword: [[0, 0.2], [0.1, 0.55], [0.25, 0.9], [0.4, 1], [0.65, 0.7], [0.85, 0.28], [1, 0.08]]
+};
+const SEA = {
+  white:      { L: 4.5, R: 0.105, wx: 0.9, prof: 'shark', c: '#6C7C8A', b: '#F2F2EE', fam: 'shark', caud: 'lunate', dorsal: [0.13, 0.13, 0.36, 0.5], d2: [0.025, 0.025, 0.78], pect: [0.2, 0.08, 0.3, 0.35], pel: 1, anal: 1, teeth: 1, gills: 5, hz: 0.9, amp: 0.07, eye: [0.13, 0.009] },
+  shark:      { base: 'white' },
+  megalodon:  { base: 'white', L: 16, R: 0.115, c: '#4E5864', b: '#E2E2DC', teeth: 2, scars: 1, hz: 0.45 },
+  hammerhead: { base: 'white', L: 4, R: 0.08, c: '#8A9198', head: 'hammer', caud: 'het', dorsal: [0.17, 0.1, 0.36, 0.25], pect: [0.15, 0.06, 0.3, 0.3] },
+  tiger:      { base: 'white', L: 4.2, R: 0.1, c: '#7A7466', b: '#E8E4DA', caud: 'het', marks: 'tiger', prof: 'orca' },
+  mako:       { base: 'white', L: 3.2, R: 0.09, c: '#2E4A86', b: '#F4F4F0', hz: 1.2 },
+  whaleshark: { base: 'white', L: 11, R: 0.1, wx: 1.15, wy: 0.85, c: '#3E4E5E', b: '#DCDCD4', prof: 'whale', caud: 'het', marks: 'spots', teeth: 0, hz: 0.4, eye: [0.08, 0.005] },
+  dolphin:    { L: 2.5, R: 0.085, wx: 0.85, prof: 'cet', c: '#7A8A9A', b: '#E8ECF0', fam: 'cet', caud: 'fluke', dorsal: [0.12, 0.12, 0.45, 0.45], pect: [0.13, 0.05, 0.24, 0.6], hz: 1.6, amp: 0.05, marks: 'dolphin', eye: [0.14, 0.008], smile: 1 },
+  orca:       { L: 7, R: 0.1, wx: 0.9, prof: 'orca', c: '#141619', b: '#F4F4F2', fam: 'cet', caud: 'fluke', dorsal: [0.24, 0.08, 0.45, 0.05], pect: [0.15, 0.08, 0.26, 0.6], marks: 'orca', hz: 0.9, amp: 0.045, eye: [0.13, 0.006], teeth: 1 },
+  humpback:   { L: 14, R: 0.1, prof: 'whale', c: '#2A3644', b: '#C8D0D8', fam: 'cet', caud: 'fluke', dorsal: [0.025, 0.05, 0.62, 0.3], pect: [0.32, 0.06, 0.3, 0.9], pectC: '#E8ECEE', marks: 'groove', barn: 1, hz: 0.35, amp: 0.04, eye: [0.2, 0.004] },
+  whale:      { base: 'humpback' },
+  bluewhale:  { base: 'humpback', L: 25, R: 0.075, c: '#5A7090', b: '#7A90A8', pect: [0.12, 0.03, 0.27, 0.5], pectC: null, dorsal: [0.015, 0.03, 0.75, 0.4], marks: 'mottle', barn: 0 },
+  tuna:       { L: 2, R: 0.14, wx: 0.72, prof: 'tuna', c: '#1E2E5A', b: '#DCE0E6', fam: 'fish', caud: 'lunate', dorsal: [0.12, 0.12, 0.33, 0.5], d2: [0.1, 0.05, 0.56], pect: [0.18, 0.04, 0.28, 0.2], finlets: '#F2C230', hz: 2, amp: 0.06, eye: [0.1, 0.022], stripe: '#9FB4CC' },
+  swordfish:  { L: 3, R: 0.1, wx: 0.75, prof: 'sword', c: '#2E3E5E', b: '#D8D8D4', fam: 'fish', bill: 0.3, caud: 'lunate', dorsal: [0.16, 0.1, 0.25, 0.3], pect: [0.12, 0.03, 0.27, 0.3], hz: 1.4, amp: 0.06, eye: [0.08, 0.02] },
+  clownfish:  { L: 0.11, R: 0.17, wx: 0.5, prof: 'fish', c: '#F2701E', b: '#F2701E', fam: 'fish', caud: 'round', dorsal: [0.12, 0.5, 0.4, 0.05], pect: [0.15, 0.08, 0.3, 0.3], marks: 'clown', hz: 3.5, amp: 0.1, eye: [0.14, 0.035], finEdge: '#1A1A1A' },
+  tang:       { L: 0.25, R: 0.24, wx: 0.35, prof: 'round', c: '#2A5ED8', b: '#2A5ED8', fam: 'fish', caud: 'fork', tailC: '#F2D020', dorsal: [0.1, 0.6, 0.4, 0], marks: 'tang', pect: [0.12, 0.06, 0.32, 0.3], hz: 3, amp: 0.08, eye: [0.15, 0.03] },
+  puffer:     { L: 0.45, R: 0.22, wx: 0.85, prof: 'round', c: '#C8B070', b: '#F4F0E4', fam: 'fish', caud: 'round', dorsal: [0.06, 0.1, 0.72, 0.3], pect: [0.1, 0.06, 0.32, 0.2], marks: 'puffer', spikes: 1, hz: 3, amp: 0.05, eye: [0.17, 0.05] },
+  piranha:    { L: 0.3, R: 0.22, wx: 0.45, prof: 'fish', c: '#7E8A8E', b: '#D8402A', fam: 'fish', caud: 'fork', dorsal: [0.1, 0.12, 0.45, 0.2], pect: [0.1, 0.05, 0.3, 0.3], teeth: 1, hz: 3, amp: 0.08, eye: [0.13, 0.03], jawFront: 1 },
+  angler:     { L: 0.8, R: 0.3, wx: 0.8, wy: 0.8, prof: 'angler', c: '#3A2E2A', b: '#4A3C36', fam: 'fish', caud: 'round', dorsal: [0.06, 0.15, 0.6, 0.2], pect: [0.1, 0.06, 0.3, 0.2], teeth: 3, lure: '#7FFFE0', hz: 1.5, amp: 0.05, eye: [0.17, 0.02], jawFront: 1 },
+  goldfish:   { L: 0.15, R: 0.2, wx: 0.6, prof: 'round', c: '#F28A1E', b: '#F8C060', fam: 'fish', caud: 'fancy', dorsal: [0.15, 0.3, 0.4, 0.3], pect: [0.12, 0.08, 0.3, 0.3], hz: 2.5, amp: 0.08, eye: [0.15, 0.04] },
+  salmon:     { L: 0.8, R: 0.11, wx: 0.65, prof: 'tuna', c: '#5A6A7A', b: '#E8D8D0', fam: 'fish', caud: 'fork', dorsal: [0.08, 0.1, 0.42, 0.3], pect: [0.08, 0.04, 0.27, 0.3], marks: 'speck', hz: 2.2, amp: 0.07, eye: [0.08, 0.02] },
+  manta:      { fam: 'ray', L: 3, span: 5, c: '#1E2228', b: '#F2F2EE', hz: 0.35, amp: 0.18 },
+  stingray:   { fam: 'ray', L: 1.2, span: 1.0, c: '#8A7A5A', b: '#F0EAE0', hz: 0.8, amp: 0.12, sting: 1 },
+  turtle:     { fam: 'turtle', L: 1.0, c: '#7A8A5A', shell: '#6A5432', pat: '#8E7244', b: '#E8D8A8', hz: 0.45 },
+  octopus:    { fam: 'octo', L: 1.0, c: '#C64A36', b: '#E88A70', hz: 0.6 }
+};
+const _sdef = k => { const d = SEA[k]; if (!d.base) return d; const { base, ...rest } = d; return { ..._sdef(base), ...rest }; };
+const _interp = (P, u) => { if (u <= P[0][0]) return P[0][1]; for (let i = 1; i < P.length; i++) if (u <= P[i][0]) { const k = (u - P[i - 1][0]) / (P[i][0] - P[i - 1][0]); return lerp(P[i - 1][1], P[i][1], 0.5 - 0.5 * Math.cos(Math.PI * k)); } return P[P.length - 1][1]; };
+const _flyPose = (node, t) => { if (node._fly) { const [p, rx, ry, rz] = node._fly(t); return { p: new THREE.Vector3(...p), e: new THREE.Euler(rx, ry, rz, 'YXZ') }; } if (node._posAt) return { p: node._posAt(t), e: new THREE.Euler(0, node._yawAt ? node._yawAt(t) : node.rotation.y, 0, 'YXZ') }; return { p: node.position.clone(), e: node.rotation.clone() }; };
+const _spd = (node, t) => { const a = _flyPose(node, t - 0.08).p, b = _flyPose(node, t + 0.08).p; return a.distanceTo(b) / 0.16; };
+function seaColor(D, u, a, sd) {   // colour of the body at (u along, a around: 0 = top, π = belly)
+  const y = Math.cos(a), side = Math.abs(Math.sin(a)), C = D.c, B = D.b, line = (D.line ?? -0.05) + 0.1 * Math.sin(u * 37 + sd * 9) + 0.05 * Math.sin(u * 91);
+  let c = y > line ? C : B;
+  switch (D.marks) {
+    case 'orca': c = C; if (y < -0.35 && u > 0.04 && u < 0.62) c = B; if (u > 0.5 && u < 0.75 && y < -0.05 && side > 0.3) c = B; if (u > 0.09 && u < 0.22 && y > 0.05 && y < 0.65 && side > 0.45) c = B; if (u > 0.47 && u < 0.6 && y > 0.78) c = '#7A7E86'; if (u < 0.08 && y < -0.2) c = B; break;
+    case 'tiger': if (y > -0.2 && u > 0.25 && u < 0.92 && Math.sin(u * 52 + Math.sin(a * 3) * 0.8) > 0.72) c = '#4A463E'; break;
+    case 'spots': if (y > -0.1) { const gu = Math.round(u * 46), ga = Math.round(a * 4.5), h = hash(gu * 13.7 + ga * 7.3); if (h > 0.55 && Math.abs(u * 46 - gu) < 0.3 && Math.abs(a * 4.5 - ga) < 0.3) c = '#E8E8E0'; if (Math.abs(Math.sin(u * 23)) < 0.08) c = '#C8CCC8'; } break;
+    case 'dolphin': if (y > 0.55) c = shade(C, -0.1); else if (y > line) c = shade(C, 0.08); break;
+    case 'clown': { const bands = [[0.14, 0.22], [0.43, 0.52], [0.84, 0.9]]; for (const [b0, b1] of bands) { if (u > b0 && u < b1) c = '#FFFFFF'; if ((u > b0 - 0.025 && u <= b0) || (u >= b1 && u < b1 + 0.025)) c = '#1A1A1A'; } break; }
+    case 'tang': c = C; if (y > 0.05 && u > 0.2 && u < 0.85 && y < 0.75 - Math.abs(u - 0.5)) c = '#141820'; if (u > 0.9) c = D.tailC ?? '#F2D020'; break;
+    case 'puffer': if (y > line && hash(Math.round(u * 30) * 7.1 + Math.round(a * 5) * 3.3) > 0.78) c = '#5A4A2A'; break;
+    case 'groove': if (u < 0.45 && y < -0.3 && Math.sin(a * 40) > 0) c = shade(B, -0.18); if (u < 0.12 && y > 0.3 && hash(Math.round(u * 80) + Math.round(a * 9) * 3.7) > 0.8) c = '#4A5462'; break;
+    case 'mottle': if (hash(Math.round(u * 60) * 1.7 + Math.round(a * 7) * 9.1) > 0.82) c = shade(C, 0.12); break;
+    case 'speck': if (y > line && hash(Math.round(u * 50) * 3.1 + Math.round(a * 8) * 5.3) > 0.88) c = '#2A3440'; if (Math.abs(y - line) < 0.08) c = '#D88A8A'; break;
+  }
+  if (D.stripe && Math.abs(y - 0.0) < 0.07 && u > 0.2) c = D.stripe;
+  if (D.scars && y > 0 && hash(Math.round(u * 70) * 2.3 + Math.round(a * 6) * 4.1) > 0.93) c = shade(C, 0.22);
+  return c;
+}
+function sea(p, o = {}) {   // kind: see SEA — fly(S.g, [[x,y,z], …], { speed, loop }) to swim (nose +z); S.do('bite' | 'open' | 'thrash' | 'roll' | 'inflate' | 'spout' | 'click', t, { dur })
+  if (p && !p.isObject3D) { o = p; p = world; }
+  const kind = SEA[o.kind] ? o.kind : 'white', D = _sdef(kind), sd = hash(++_rigN * 4.7 + 0.3), NC = { cast: false };
+  const L = o.len ?? D.L * (o.scale ?? 1), g = dyn(grp(p ?? world, o.x ?? 0, o.y ?? 0, o.z ?? 0)); g.rotation.order = 'YXZ'; if (o.ry) g.rotation.y = o.ry;
+  const b = dyn(grp(g)), S = { g, b, kind, D, L, sd, acts: [], fx: [] };
+  if (D.fam === 'ray') return _ray(S, o); if (D.fam === 'turtle') return _turtle(S, o); if (D.fam === 'octo') return _octo(S, o);
+  const R = D.R * L, PR = SEAPROF[D.prof ?? D.fam] ?? SEAPROF.shark, wx = D.wx ?? 0.9, wy = D.wy ?? 1, NRg = 26, NA = 16;
+  const rad = u => _interp(PR, u) * R, Pt = (u, a) => { const r = rad(u), ca = Math.cos(a); let y = ca * r * wy; if (ca < 0) y *= D.flatB ?? 0.88; if (D.head === 'hammer' && u < 0.1) y *= 0.8; return [Math.sin(a) * r * wx, y, L * (0.5 - u)]; };
+  const pos = [], col = [], cc = new THREE.Color(), cm = new Map(), pushT = (A, B2, C2, hex) => { let q = cm.get(hex); if (!q) { cc.set(hex); q = [cc.r, cc.g, cc.b]; cm.set(hex, q); } pos.push(...A, ...B2, ...C2); for (let i = 0; i < 3; i++) col.push(...q); };
+  for (let j = 0; j < NRg; j++) for (let k = 0; k < NA; k++) { const u0 = j / NRg, u1 = (j + 1) / NRg, a0 = k / NA * TAU, a1 = (k + 1) / NA * TAU, hex = seaColor(D, (u0 + u1) / 2, (a0 + a1) / 2, sd);
+    const A = Pt(u0, a0), B2 = Pt(u1, a0), C2 = Pt(u1, a1), E = Pt(u0, a1); pushT(A, C2, B2, hex); pushT(A, E, C2, hex);
+    if (j === 0) pushT([0, Pt(0, 0)[1] * 0.2, L * 0.5 + R * 0.08], E, A, seaColor(D, 0.01, (a0 + a1) / 2, sd)); if (j === NRg - 1) pushT([0, 0, -L * 0.5], B2, C2, D.c); }
+  const bodyG = new THREE.BufferGeometry(); bodyG.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); bodyG.setAttribute('color', new THREE.Float32BufferAttribute(col, 3)); bodyG.computeVertexNormals();
+  const parts = [bodyG], M4 = new THREE.Matrix4(), Q = new THREE.Quaternion(), V = new THREE.Vector3(), SC1 = new THREE.Vector3(1, 1, 1);
+  const add = (geo, hex, x, y, z, rx = 0, ry = 0, rz = 0, sx = 1, sy = 1, sz = 1) => { let g2 = geo.clone(); if (g2.index) g2 = g2.toNonIndexed(); for (const k of Object.keys(g2.attributes)) if (k !== 'position' && k !== 'normal') g2.deleteAttribute(k); if (!g2.attributes.normal) g2.computeVertexNormals();
+    g2.applyMatrix4(M4.compose(V.set(x, y, z), Q.setFromEuler(new THREE.Euler(rx, ry, rz)), SC1.set(sx, sy, sz))); cc.set(hex); const n = g2.attributes.position.count, a3 = new Float32Array(n * 3); for (let i = 0; i < n; i++) { a3[3 * i] = cc.r; a3[3 * i + 1] = cc.g; a3[3 * i + 2] = cc.b; } g2.setAttribute('color', new THREE.BufferAttribute(a3, 3)); parts.push(g2); };
+  const fth = Math.max(0.004, L * 0.012), fin = (pts, vert) => _plateG(pts.map(([a2, b2]) => [+(a2).toFixed(4), +(b2).toFixed(4)]), +fth.toFixed(4), vert), FC = D.finC ?? D.c;
+  const topY = u => Pt(u, 0)[1], botY = u => Pt(u, Math.PI)[1], zAt = u => L * (0.5 - u);
+  if (D.dorsal) { const [h, bs, u, swp] = D.dorsal, hL = h * L, bL = bs * L; add(fin([[bL * 0.35, -0.03 * L], [-hL * swp + bL * 0.15, hL], [-hL * swp - bL * 0.12, hL * 0.96], [-bL * 0.55, hL * 0.22], [-bL * 0.65, -0.03 * L]], true), D.marks === 'clown' ? '#F2701E' : FC, 0, topY(u) - 0.01 * L, zAt(u)); }
+  if (D.d2) { const [h, bs, u] = D.d2, hL = h * L, bL = bs * L; add(fin([[bL * 0.4, -0.01 * L], [-hL * 0.4, hL], [-bL * 0.6, -0.01 * L]], true), FC, 0, topY(u) - 0.005 * L, zAt(u)); if (D.fam === 'shark' || D.fam === 'fish') add(fin([[bL * 0.4, 0.01 * L], [-hL * 0.4, -hL], [-bL * 0.6, 0.01 * L]], true), FC, 0, botY(u + 0.02) + 0.005 * L, zAt(u + 0.02)); }
+  if (D.pect) { const [ln, wd, u, an] = D.pect, lL = ln * L, wL = wd * L, PCc = D.pectC ?? FC; for (const s of [-1, 1]) { const P0 = Pt(u, s * 1.95), sh2 = D.fam === 'cet' ? [[0, wL * 0.5], [s * lL * 0.9, -lL * 0.25], [s * lL, -lL * 0.42], [s * lL * 0.75, -lL * 0.45], [0, -wL * 0.5]] : [[0, wL * 0.5], [s * lL * 0.95, -lL * 0.55], [s * lL * 0.8, -lL * 0.72], [0, -wL * 0.5]];
+      add(fin(sh2, false), PCc, P0[0] * 0.9, P0[1], P0[2], 0, 0, -s * an); if (D.barn) for (let i = 0; i < 4; i++) add(G('barn', () => new THREE.IcosahedronGeometry(1, 0)), '#E8E4DC', P0[0] + s * lL * (0.2 + i * 0.2) * Math.cos(an), P0[1] - lL * (0.2 + i * 0.2) * Math.sin(an) + fth, P0[2] + wL * 0.4 - lL * i * 0.05, 0, 0, 0, L * 0.006, L * 0.004, L * 0.006); } }
+  if (D.pel) for (const s of [-1, 1]) { const P0 = Pt(0.62, s * 2.3); add(fin([[0, 0.02 * L], [s * 0.05 * L, -0.04 * L], [0, -0.03 * L]], false), FC, P0[0] * 0.8, P0[1], P0[2], 0, 0, -s * 0.6); }
+  if (D.anal) add(fin([[0.02 * L, 0.01 * L], [-0.02 * L, -0.035 * L], [-0.04 * L, 0.01 * L]], true), FC, 0, botY(0.76) + 0.004 * L, zAt(0.76));
+  if (D.finlets) for (let i = 0; i < 6; i++) { const u = 0.72 + i * 0.035; for (const top of [1, -1]) add(fin([[0.01 * L, 0], [-0.005 * L, top * 0.022 * L], [-0.012 * L, 0]], true), D.finlets, 0, (top > 0 ? topY(u) : botY(u)) - top * 0.003 * L, zAt(u)); }
+  const CAUD = { het: [[0.03, 0.02], [-0.2, 0.2], [-0.24, 0.19], [-0.1, 0.0], [-0.13, -0.09], [-0.1, -0.1], [0.02, -0.03]], lunate: [[0.03, 0.02], [-0.12, 0.17], [-0.15, 0.165], [-0.06, 0.0], [-0.15, -0.15], [-0.12, -0.155], [0.03, -0.02]],
+    round: [[0.02, 0.06], [-0.15, 0.13], [-0.22, 0.0], [-0.15, -0.13], [0.02, -0.06]], fork: [[0.02, 0.05], [-0.2, 0.17], [-0.16, 0.0], [-0.2, -0.17], [0.02, -0.05]], fancy: [[0.02, 0.08], [-0.25, 0.3], [-0.45, 0.25], [-0.3, 0.0], [-0.45, -0.25], [-0.25, -0.3], [0.02, -0.08]] };
+  if (D.caud === 'fluke') add(fin([[0, 0.02], [0.13, -0.05], [0.16, -0.1], [0.06, -0.085], [0, -0.05], [-0.06, -0.085], [-0.16, -0.1], [-0.13, -0.05]].map(([x, z]) => [x * L, z * L]), false), D.c, 0, 0, -L * 0.48);
+  else add(fin((CAUD[D.caud] ?? CAUD.het).map(([z, y]) => [z * L, y * L * (D.fam === 'fish' ? 1.4 : 1)]), true), D.tailC ?? (D.marks === 'clown' ? '#F2701E' : D.c), 0, 0, -L * 0.48);
+  if (D.finEdge) add(fin(CAUD.round.map(([z, y]) => [z * L * 1.05 - 0.005 * L, y * L * 1.45]), true), D.finEdge, 0, 0, -L * 0.48, 0, 0, 0, 0.5, 1, 1);
+  if (D.head === 'hammer') { const Wh = L * 0.13, d = L * 0.045; add(_plateG([[-Wh, 0], [-Wh * 0.85, d * 0.8], [0, d], [Wh * 0.85, d * 0.8], [Wh, 0], [Wh * 0.92, -d * 0.7], [0.15 * Wh, -d * 0.6], [0, -d * 1.6], [-0.15 * Wh, -d * 0.6], [-Wh * 0.92, -d * 0.7]].map(([x, z]) => [+x.toFixed(4), +z.toFixed(4)]), +(L * 0.022).toFixed(4), false), D.c, 0, 0, L * 0.47);
+    for (const s of [-1, 1]) add(G('seye', () => new THREE.IcosahedronGeometry(1, 1)), '#0A0A0A', s * Wh * 0.97, 0, L * 0.47, 0, 0, 0, L * 0.009, L * 0.009, L * 0.009); }
+  if (D.bill) add(G('bill', () => new THREE.ConeGeometry(1, 1, 6).rotateX(Math.PI / 2)), D.c, 0, R * 0.05, L * 0.5 + D.bill * L * 0.5 - R * 0.1, 0, 0, 0, R * 0.16, R * 0.06, D.bill * L);
+  // eyes, gills, smile, barnacles
+  const [ue, er] = D.eye ?? [0.12, 0.01], eR = er * L;
+  if (D.head !== 'hammer') for (const s of [-1, 1]) { const P0 = Pt(ue, s * (D.fam === 'cet' ? 1.75 : 1.45)); add(G('seye', () => new THREE.IcosahedronGeometry(1, 1)), '#0A0A0A', P0[0] * 0.97, P0[1], P0[2], 0, 0, 0, eR, eR, eR); }
+  if (D.gills) for (const s of [-1, 1]) for (let i = 0; i < D.gills; i++) { const u = 0.19 + i * 0.018, P0 = Pt(u, s * 1.65), r = rad(u); add(boxG(1, 1, 1), shade(D.c, -0.25), P0[0] * 1.0, P0[1], P0[2], 0.15, 0, 0, L * 0.004, r * 0.75, L * 0.006); }
+  if (D.smile) for (const s of [-1, 1]) add(boxG(1, 1, 1), shade(D.c, -0.3), s * rad(0.06) * 0.8, -rad(0.06) * 0.2, zAt(0.06), 0, s * 0.3, 0, L * 0.004, L * 0.003, L * 0.06);
+  if (D.barn) for (let i = 0; i < 14; i++) { const u = 0.02 + hash(i * 3.1 + sd) * 0.15, a = (hash(i * 5.3 + sd) - 0.5) * 1.6, P0 = Pt(u, a); add(G('barn', () => new THREE.IcosahedronGeometry(1, 0)), '#C8C4BC', ...P0, 0, 0, 0, L * 0.008, L * 0.005, L * 0.008); }
+  // mouth: palate + upper teeth (merged), lower jaw (separate, opens)
+  const um0 = D.jawFront ? 0.02 : D.fam === 'cet' ? 0.02 : 0.06, um1 = D.jawFront ? 0.2 : 0.16, mW = rad(um1) * wx * 0.85, mLen = (um1 - um0) * L, mz0 = zAt(um1), yb = botY((um0 + um1) / 2);
+  let jaw = null;
+  if (D.teeth || D.fam === 'shark') {
+    add(_plateG([[-mW, 0], [-mW * 0.8, mLen * 0.6], [0, mLen], [mW * 0.8, mLen * 0.6], [mW, 0]].map(([x, z]) => [+x.toFixed(4), +z.toFixed(4)]), +(L * 0.01).toFixed(4), false), '#5A1E22', 0, yb - L * 0.003, mz0);
+    const tN = D.teeth === 2 ? 15 : 13, tL = L * (D.teeth === 3 ? 0.06 : D.teeth === 2 ? 0.018 : 0.012), cg = G('tooth', () => new THREE.ConeGeometry(0.5, 1, 4).rotateX(Math.PI).translate(0, -0.5, 0));
+    if (D.teeth) for (let i = 0; i < tN; i++) { const q = i / (tN - 1) * 2 - 1, x = q * mW * 0.92, z = mz0 + mLen * (1 - q * q) * 0.98; add(cg, '#F4F0E6', x, yb - L * 0.002, z, 0, 0, 0, tL * 0.45, tL, tL * 0.45); }
+    jaw = dyn(grp(b, 0, yb - L * 0.004, mz0)); const jm = new THREE.Mesh(_plateG([[-mW, 0], [-mW * 0.8, mLen * 0.55], [0, mLen * 0.95], [mW * 0.8, mLen * 0.55], [mW, 0]].map(([x, z]) => [+x.toFixed(4), +z.toFixed(4)]), +(R * 0.12).toFixed(4), false), mat(D.b)); jm.position.y = -R * 0.06; jm.castShadow = true; jaw.add(jm);
+    if (D.teeth) for (let i = 0; i < tN - 2; i++) { const q = i / (tN - 3) * 2 - 1; cone(jaw, tL * 0.22, tL * 0.85, '#F4F0E6', q * mW * 0.85, -R * 0.0, mLen * (1 - q * q) * 0.9, NC); }
+    _ell(jaw, '#7A2A30', 0, R * 0.0, mLen * 0.4, mW * 0.6, R * 0.02, mLen * 0.35, NC);
+  }
+  const geo = mergeGeometries(parts); geo.computeVertexNormals();
+  const U = { uT: { value: 0 }, uA: { value: 0 }, uV: { value: 0 }, uK: { value: D.k ?? 0.9 }, uL: { value: L }, uZ: { value: L * 0.5 }, uC: { value: 0 }, uW: { value: 0 } };
+  const bend = sh => { Object.assign(sh.uniforms, U); sh.vertexShader = 'uniform float uT, uA, uV, uK, uL, uZ, uC, uW;\n' + sh.vertexShader.replace('#include <begin_vertex>', `#include <begin_vertex>
+  float sz = clamp((uZ - transformed.z) / uL, 0.0, 1.6), env = sz * sz, wv = sin(uT - sz * uK * 6.2832);
+  float ax = abs(transformed.x) / uL;
+  transformed.y += uW * pow(ax, 1.4) * sin(uT - ax * 5.0) * uL;
+  transformed.x += uA * env * wv + uC * env * uL;
+  transformed.y += uV * env * wv;`); };
+  const m = new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: D.rough ?? 0.5, metalness: 0.05, side: THREE.DoubleSide }); m.onBeforeCompile = bend;
+  const me = new THREE.Mesh(geo, m); me.castShadow = true; me.receiveShadow = true; me.customDepthMaterial = new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking }); me.customDepthMaterial.onBeforeCompile = bend; b.add(me);
+  const glM = mat('#FFFFFF', { basic: true });
+  if (D.head !== 'hammer') for (const s of [-1, 1]) { const P0 = Pt(ue, s * (D.fam === 'cet' ? 1.75 : 1.45)); ball(b, eR * 0.3, '', P0[0] * 0.97 + s * eR * 0.8, P0[1] + eR * 0.4, P0[2] + eR * 0.3, { mat: glM, detail: 0, ...NC }); }
+  // extras: angler lure, puffer spikes
+  let lure = null, spikes = null;
+  if (D.lure) { lure = dyn(grp(b, 0, topY(0.12), zAt(0.12))); _chain(lure, [[0, 0, 0], [0, R * 0.6, R * 0.2], [0, R * 0.9, R * 0.7], [0, R * 0.75, R * 1.15]], R * 0.04, R * 0.025, D.c); ball(lure, R * 0.12, '', 0, R * 0.7, R * 1.2, { mat: mat(D.lure, { basic: true, glow: 2.2 }), detail: 1, ...NC }); }
+  if (D.spikes) { spikes = dyn(grp(b)); for (let i = 0; i < 40; i++) { const u = 0.12 + hash(i * 1.7) * 0.7, a = hash(i * 3.9) * TAU, P0 = Pt(u, a), n = new THREE.Vector3(P0[0], P0[1], 0).normalize(); const sp = cone(spikes, R * 0.05, R * 0.28, '#E8DCB0', P0[0], P0[1] - R * 0.14, P0[2], NC); sp.quaternion.setFromUnitVectors(_AXY, n); sp.position.set(P0[0] + n.x * R * 0.1, P0[1] + n.y * R * 0.1, P0[2]); } spikes.scale.setScalar(0.001); }
+  Object.assign(S, { jaw, lure, spikes, U, R, head: dyn(grp(b, 0, rad(ue) * 0.3, zAt(ue))), eye: [0, 0] });
+  S.do = (k, t, oo = {}) => seaDo(S, k, t, oo);
+  tick(t => seaPose(S, t));
+  return S;
+}
+function seaPose(S, t) {
+  const D = S.D, L = S.L, U = S.U, g = S.g, cet = D.fam === 'cet';
+  const sp = (g._fly || g._posAt) ? _spd(g, t) : 0, k = clamp(sp / Math.max(0.3, L * 0.45));
+  let ph = TAU * D.hz * t + S.sd * 20, amp = L * (D.amp ?? 0.07) * (0.35 + 0.65 * k), jaw = 0, lz = 0, rz = 0, inf = 0, ry = 0;
+  for (const A of S.acts) { const q = _aw(t, A.t0, A.t1, A.ri, A.ro); if (q <= 0) continue; const u = clamp((t - A.t0) / (A.t1 - A.t0));
+    if (A.k === 'bite') { const o2 = u < 0.72 ? sm01(u / 0.45) : 1 - sm01((u - 0.72) / 0.07); jaw = Math.max(jaw, q * o2 * (D.jawOpen ?? 0.75)); lz += q * L * 0.1 * sm01(u / 0.7) * (1 - sm01((u - 0.75) / 0.25)); ry += q * 0.12 * Math.sin(t * 9) * (u > 0.75 ? 1 : 0); }
+    else if (A.k === 'open') jaw = Math.max(jaw, q * (D.jawOpen ?? 0.65) * (0.9 + 0.1 * Math.sin(t * 2)));
+    else if (A.k === 'thrash') { ph += q * 14 * (t - A.t0); amp = _LQ(amp, L * 0.14, q); ry += q * 0.25 * Math.sin(t * 13); }
+    else if (A.k === 'roll') rz += q * (A.full === false ? Math.PI / 2 : TAU * sm01(u));
+    else if (A.k === 'inflate') inf = Math.max(inf, q);
+  }
+  let curv = 0; if (g._fly) { const y0 = g._fly(t - 0.25)[2], y1 = g._fly(t + 0.25)[2]; let dy = y1 - y0; dy = Math.atan2(Math.sin(dy), Math.cos(dy)); curv = clamp(dy * 0.06, -0.1, 0.1); }
+  U.uT.value = ph; U.uA.value = cet ? 0 : amp; U.uV.value = cet ? amp * 0.8 : 0; U.uC.value = cet ? curv * 0.5 : curv;
+  S.b.position.z = lz; S.b.rotation.set(0, ry, rz); if (S.jaw) S.jaw.rotation.x = jaw;
+  if (D.spikes) { S.b.scale.set(1 + 0.8 * inf, 1 + 0.8 * inf, 1 + 0.25 * inf); S.spikes.scale.setScalar(Math.max(0.001, inf)); }
+  if (S.lure) S.lure.rotation.x = 0.15 * Math.sin(t * 2.2 + S.sd);
+  for (const f of S.fx) f(t, S);
+}
+function seaDo(S, k, t, o = {}) {
+  const dur = o.dur ?? { bite: 1.0, open: 3, thrash: 1.5, roll: 1.6, inflate: 3, spout: 1.6, click: 1.2, song: 4 }[k] ?? 1.5;
+  S.acts.push({ k, t0: t, t1: t + dur, ri: k === 'bite' ? 0.05 : 0.3, ro: k === 'bite' ? 0.1 : 0.4, ...o });
+  if (k === 'bite' && o.sfx !== false) sfx(t + dur * 0.74, 'chomp', o.vol ?? (S.L > 8 ? 1.4 : 1));
+  if (k === 'inflate' && o.sfx !== false) sfx(t, 'pop', 0.6);
+  if (k === 'click' && o.sfx !== false) sfx(t, 'click', o.vol ?? 1);
+  if (k === 'song' && o.sfx !== false) { sfx(t, 'song', o.vol ?? 1); AUDIO.hits[AUDIO.hits.length - 1].dur = dur; }
+  if (k === 'spout') { if (o.sfx !== false) sfx(t, 'blow', o.vol ?? 1); const L = S.L, loc = new THREE.Vector3(0, S.R * 1.0, L * 0.3);
+    emit('spray', { at: st => { const P = _flyPose(S.g, st); return P.p.add(loc.clone().applyEuler(P.e)).toArray(); }, t0: t, t1: t + dur * 0.6, rate: 90, speed: Math.sqrt(L) * 2.2, spread: 0.18, size: 0.05 * Math.sqrt(L), life: 1.3, g: -6 }); }
+  return S;
+}
+function _ray(S, o) {   // manta / stingray: flat wings that flap in a wave (bend shader), cephalic fins, whip tail
+  const { D, L, b } = S, W = (D.span ?? L * 1.6) / 2, th = L * 0.035, NC = { cast: false };
+  const half = D.sting ? [[0, 0.5], [0.55, 0.42], [0.95, 0.05], [0.8, -0.25], [0.3, -0.48], [0, -0.5]] : [[0, 0.46], [0.18, 0.38], [0.55, 0.14], [1, -0.02], [0.75, -0.1], [0.25, -0.32], [0, -0.38]];
+  const pts = [...half.map(([x, z]) => [x * W, z * L]), ...half.slice(1, -1).reverse().map(([x, z]) => [-x * W, z * L])].map(([x, z]) => [+x.toFixed(4), +z.toFixed(4)]);
+  const parts = [], cc = new THREE.Color(), M4 = new THREE.Matrix4();
+  const add = (geo, hex, y, s = [1, 1, 1], z = 0) => { let g2 = geo.clone(); if (g2.index) g2 = g2.toNonIndexed(); for (const k of Object.keys(g2.attributes)) if (k !== 'position' && k !== 'normal') g2.deleteAttribute(k); g2.applyMatrix4(M4.makeScale(...s).setPosition(0, y, z)); cc.set(hex); const n = g2.attributes.position.count, a3 = new Float32Array(n * 3); for (let i = 0; i < n; i++) { a3[3 * i] = cc.r; a3[3 * i + 1] = cc.g; a3[3 * i + 2] = cc.b; } g2.setAttribute('color', new THREE.BufferAttribute(a3, 3)); parts.push(g2); };
+  add(_plateG(pts, +th.toFixed(4), false), D.c, th * 0.5); add(_plateG(pts, +(th * 0.5).toFixed(4), false), D.b, -th * 0.2, [0.96, 1, 0.96]);
+  add(new THREE.IcosahedronGeometry(1, 1), D.c, th * 0.6, [W * 0.22, L * 0.07, L * 0.3], -L * 0.02);
+  if (!D.sting) for (const s of [-1, 1]) add(_plateG([[0, 0], [s * L * 0.05, L * 0.16], [s * L * 0.1, 0.12 * L], [s * L * 0.08, 0]].map(([x, z]) => [+x.toFixed(4), +z.toFixed(4)]), +(th * 0.6).toFixed(4), false), D.c, 0, [1, 1, 1], L * 0.42);
+  add(new THREE.ConeGeometry(1, 1, 5).rotateX(-Math.PI / 2).translate(0, 0, -0.5), D.c, 0, [L * 0.02, L * 0.02, L * (D.sting ? 1.1 : 0.7)], -L * 0.35);
+  const geo = mergeGeometries(parts); geo.computeVertexNormals();
+  const U = { uT: { value: 0 }, uA: { value: 0 }, uV: { value: 0 }, uK: { value: 0.5 }, uL: { value: L }, uZ: { value: L * 0.5 }, uC: { value: 0 }, uW: { value: 0 } };
+  const bend = sh => { Object.assign(sh.uniforms, U); sh.vertexShader = 'uniform float uT, uA, uV, uK, uL, uZ, uC, uW;\n' + sh.vertexShader.replace('#include <begin_vertex>', `#include <begin_vertex>
+  float ax = abs(transformed.x) / uL; transformed.y += uW * pow(ax, 1.3) * sin(uT - ax * 2.2 + transformed.z / uL * 1.5) * uL;
+  float sz = clamp((uZ - transformed.z) / uL, 0.0, 2.5); transformed.x += uA * sz * sz * sin(uT * 1.3 - sz * 4.0);`); };
+  const m = new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.6, side: THREE.DoubleSide }); m.onBeforeCompile = bend;
+  const me = new THREE.Mesh(geo, m); me.castShadow = true; me.customDepthMaterial = new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking }); me.customDepthMaterial.onBeforeCompile = bend; b.add(me);
+  for (const s of [-1, 1]) { ball(b, L * 0.025, '#0A0A0A', s * L * 0.1, th * 1.2, L * 0.36, { detail: 1, ...NC }); }
+  Object.assign(S, { U, R: th, head: dyn(grp(b, 0, th, L * 0.35)), eye: [0, 0] }); S.do = (k, t, oo = {}) => seaDo(S, k, t, oo);
+  tick(t => { const sp = (S.g._fly || S.g._posAt) ? _spd(S.g, t) : 0, k = 0.5 + 0.5 * clamp(sp / (L * 0.4)); U.uT.value = TAU * D.hz * t + S.sd * 9; U.uW.value = (D.amp ?? 0.15) * k; U.uA.value = L * 0.02; S.b.position.y = -0.02 * L * Math.sin(TAU * D.hz * t + S.sd * 9 - 0.5) * k; for (const f of S.fx) f(t, S); });
+  return S;
+}
+function _turtle(S, o) {   // sea turtle: domed shell with scute pattern, beaked head, big front flippers that stroke like wings
+  const { D, L, b } = S, NC = { cast: false }, sw = L * 0.42, sh2 = L * 0.16;
+  _ell(b, D.shell, 0, 0, 0, sw, sh2, L * 0.45, { detail: 2 }); _ell(b, D.b, 0, -sh2 * 0.35, 0, sw * 0.9, sh2 * 0.55, L * 0.42, { detail: 2 });
+  _marks(b, [0, 0, 0, sw, sh2, L * 0.45], [[0.45, 0, L * 0.18, sw * 0.4], [0, 0, L * 0.2, sw * 0.42], [-0.45, 0, L * 0.18, sw * 0.38], ...[-1, 1].flatMap(s => [[0.4, s * 0.85, L * 0.18, sw * 0.35], [-0.05, s * 0.9, L * 0.2, sw * 0.36], [-0.45, s * 0.85, L * 0.16, sw * 0.3]])], D.pat, { th: 0.03 });
+  const hd = dyn(grp(b, 0, 0, L * 0.45)); _ell(hd, D.c, 0, 0, L * 0.12, L * 0.1, L * 0.085, L * 0.14); _ell(hd, shade(D.c, -0.2), 0, -L * 0.02, L * 0.24, L * 0.06, L * 0.04, L * 0.04);
+  for (const s of [-1, 1]) { ball(hd, L * 0.018, '#0A0A0A', s * L * 0.075, L * 0.025, L * 0.17, { detail: 1, ...NC }); _marks(hd, [0, 0, L * 0.12, L * 0.1, L * 0.085, L * 0.14], [[0.2, s * 1.2, L * 0.05, L * 0.04], [-0.2, s * 0.8, L * 0.04, L * 0.035]], D.shell); }
+  const F = []; for (const [s, fr0] of [[-1, 1], [1, 1], [-1, 0], [1, 0]]) { const fg = dyn(grp(b, s * sw * 0.8, -sh2 * 0.15, fr0 ? L * 0.22 : -L * 0.32)), ln = fr0 ? L * 0.55 : L * 0.2;
+    plate(fg, [[0, L * 0.06], [s * ln * 0.7, -ln * 0.1], [s * ln, -ln * 0.45], [s * ln * 0.75, -ln * 0.4], [0, -L * 0.05]], L * 0.02, D.c); F.push([fg, s, fr0]); }
+  _fuseDyn(S.g);
+  Object.assign(S, { head: hd, eye: [L * 0.03, L * 0.2], F }); S.do = (k, t, oo = {}) => seaDo(S, k, t, oo);
+  tick(t => { const ph = TAU * D.hz * t + S.sd * 7; F.forEach(([fg, s, fr0]) => { fg.rotation.set(fr0 ? 0.3 * Math.sin(ph + 1.2) : 0, s * (fr0 ? 0.25 : 0.5), s * (fr0 ? 0.55 * Math.sin(ph) : 0.15 * Math.sin(ph * 0.5))); }); hd.rotation.x = 0.06 * Math.sin(ph * 0.5); S.b.position.y = -0.03 * L * Math.sin(ph - 0.6); for (const f of S.fx) f(t, S); });
+  return S;
+}
+function _octo(S, o) {   // octopus: mantle, eyes, eight curling arms with suckers; jets (arms trail) when it moves fast
+  const { D, L, b } = S, NC = { cast: false }, mR = L * 0.28, A = [];
+  _ell(b, D.c, 0, mR * 1.2, -mR * 0.6, mR * 0.9, mR * 1.1, mR * 1.25, { detail: 2 }); _ell(b, D.c, 0, mR * 0.25, 0, mR * 0.75, mR * 0.6, mR * 0.75, { detail: 2 });
+  for (const s of [-1, 1]) { _ell(b, '#F2E8C8', s * mR * 0.55, mR * 0.65, mR * 0.25, mR * 0.22, mR * 0.2, mR * 0.18, NC); _ell(b, '#0E0C0B', s * mR * 0.66, mR * 0.65, mR * 0.33, mR * 0.08, mR * 0.14, mR * 0.08, NC); }
+  _marks(b, [0, mR * 1.2, -mR * 0.6, mR * 0.9, mR * 1.1, mR * 1.25], [...Array(14)].map((_, i) => [hash(i * 3.3) * 1.6 - 0.8, (hash(i * 7.1) - 0.5) * 4, mR * 0.12, mR * 0.12]), shade(D.c, -0.15));
+  for (let i = 0; i < 8; i++) { const a = (i + 0.5) / 8 * TAU, rg = dyn(grp(b, Math.sin(a) * mR * 0.5, 0, Math.cos(a) * mR * 0.5)); rg.rotation.y = a; let par = rg; const segs = [], n = 6, ls = L * 0.85 / n;
+    for (let j = 0; j < n; j++) { const sg = dyn(grp(par, 0, 0, j ? ls : 0)), r0 = lerp(mR * 0.22, mR * 0.04, j / n), r1 = lerp(mR * 0.22, mR * 0.04, (j + 1) / n); rod(sg, r1, r0, ls * 1.05, D.c, 0, 0, ls * 0.5, { seg: 6 });
+      for (let q = 0; q < 2; q++) _ell(sg, D.b, 0, -r0 * 0.8, ls * (0.25 + q * 0.5), r0 * 0.45, r0 * 0.15, r0 * 0.45, NC); segs.push(sg); par = sg; }
+    A.push(segs); }
+  _fuseDyn(S.g);
+  Object.assign(S, { head: dyn(grp(b, 0, mR * 0.65, mR * 0.3)), eye: [0, 0], arms: A }); S.do = (k, t, oo = {}) => seaDo(S, k, t, oo);
+  tick(t => { const sp = (S.g._fly || S.g._posAt) ? _spd(S.g, t) : 0, jet = clamp(sp / (L * 1.2)), ph = TAU * D.hz * t;
+    A.forEach((segs, i) => segs.forEach((sg, j) => { const w = Math.sin(ph * (0.8 + 0.1 * (i % 3)) - j * 0.7 + i * 1.3 + S.sd * 5); sg.rotation.x = j ? (0.12 + 0.18 * w) * (1 - jet) + 0.05 * w * jet : 0.25 * (1 - jet) + 1.3 * jet; sg.rotation.y = j ? 0.1 * Math.cos(ph - j * 0.5 + i) * (1 - jet) : 0; }));
+    const pul = jet * Math.sin(ph * 2); S.b.scale.set(1 - 0.05 * pul, 1, 1 - 0.05 * pul); for (const f of S.fx) f(t, S); });
+  return S;
+}
+
+/* ====================================================================== */
 /* SCENE — written per video between the markers (wrapped in a block: names are free) */
 /* ====================================================================== */
 /* @SCENE-BEGIN */
@@ -4980,7 +5689,7 @@ let POV_ON = null; const POV_RIGS = new Set(), _pvv = new THREE.Vector3(), _pvq 
 function povPose(k, t, P, L) {   // first person: eye point in the head; look along the body (head bob from the gait), at a target (look) or with the head (free)
   const T = TRACK[k.pov]; if (!T) { P.set(0, 1.7, 4); L.set(0, 1.5, 0); return; }
   const r = T.rig, head = r?.head ?? T.obj; head.updateWorldMatrix(true, false); if (r?.head) POV_RIGS.add(r);
-  P.copy(_pvv.set(0, k.eyeY ?? (r?.quad ? 0.05 : 0.2), k.eyeZ ?? (r?.quad ? 0.1 : 0.06))).applyMatrix4(head.matrixWorld);
+  P.copy(_pvv.set(0, k.eyeY ?? r?.eye?.[0] ?? (r?.quad ? 0.05 : 0.2), k.eyeZ ?? r?.eye?.[1] ?? (r?.quad ? 0.1 : 0.06))).applyMatrix4(head.matrixWorld);
   const lk = k.look;
   if (lk != null) { if (typeof lk === 'string' && TRACK[lk]) { TRACK[lk].obj.getWorldPosition(L); L.y += TRACK[lk].dy ?? 1.55; } else if (typeof lk === 'function') L.fromArray(lk(t)); else L.fromArray(lk); }
   else if (k.free) L.copy(P).add(_pvv.set(0, 0, 10).applyQuaternion(head.getWorldQuaternion(_pvq)));
@@ -5861,6 +6570,34 @@ const SND = (() => {
       beep: (t, v) => { tone('square', 1760, t, 0.003, 0.06, 0.02, 0.05 * v, fx, { lp: 4000 }); tone('square', 1760, t + 0.12, 0.003, 0.06, 0.02, 0.05 * v, fx, { lp: 4000 }); },
       rumble: (t, v, d = 4) => { nz(t, 0.4, Math.max(0, d - 0.8), 0.4, 0.4 * v, fx, 'lowpass', 160); nz(t, 0.4, Math.max(0, d - 0.8), 0.4, 0.12 * v, fx, 'bandpass', 420, 0, 1.2); for (let k = 0; k < d * 3; k++) tone('sine', 50 + ar() * 20, t + k / 3, 0.01, 0.05, 0.25, 0.25 * v, fx); },
       hiss: (t, v) => { nz(t, 0.02, 0.15, 0.25, 0.3 * v, fx, 'highpass', 3500); nz(t, 0.02, 0.1, 0.2, 0.15 * v, fx, 'bandpass', 1800, 0, 1); }
+    });
+    Object.assign(SFX, {   // animals (v2.14)
+      roar: (t, v, d = 1.6) => { tone('sawtooth', 120, t, 0.12, Math.max(0.2, d * 0.55), d * 0.4, 0.2 * v, fx, { to: 68, glide: d, lp: 900, lpTo: 400 }); tone('square', 62, t, 0.15, Math.max(0.2, d * 0.5), d * 0.4, 0.08 * v, fx, { lp: 300 }); nz(t, 0.1, Math.max(0.2, d * 0.55), d * 0.4, 0.45 * v, fx, 'bandpass', 520, 220, 1.4); for (let k = 0; k < d * 9; k++) nz(t + k / 9, 0.01, 0.04, 0.06, 0.14 * v, fx, 'bandpass', 300, 0, 2); ducks.push(t); },
+      growl: (t, v, d = 1.2) => { tone('sawtooth', 72, t, 0.08, Math.max(0.1, d - 0.3), 0.2, 0.12 * v, fx, { lp: 480 }); for (let k = 0; k < d * 14; k++) nz(t + k / 14, 0.01, 0.025, 0.04, 0.2 * v, fx, 'bandpass', 320, 0, 2.4); },
+      howl: (t, v, d = 2.6) => { tone('triangle', 380, t, 0.35, d * 0.5, 0.5, 0.11 * v, fx, { to: 640, glide: d * 0.45, lp: 2400 }); tone('triangle', 640, t + d * 0.6, 0.05, d * 0.15, d * 0.3, 0.1 * v, fx, { to: 420, glide: d * 0.4, lp: 2200 }); tone('sine', 760, t, 0.4, d * 0.5, 0.5, 0.03 * v, fx, { to: 1280, glide: d * 0.45 }); },
+      trumpet: (t, v, d = 1.4) => { tone('sawtooth', 430, t, 0.04, d * 0.55, d * 0.3, 0.14 * v, fx, { to: 560, glide: d * 0.35, lp: 3200 }); tone('square', 860, t, 0.04, d * 0.5, d * 0.3, 0.05 * v, fx, { to: 1120, glide: d * 0.35, lp: 4000 }); nz(t, 0.03, d * 0.5, d * 0.3, 0.12 * v, fx, 'bandpass', 1400, 0, 1.2); ducks.push(t); },
+      neigh: (t, v) => { for (let k = 0; k < 12; k++) tone('sawtooth', 820 - k * 34 + (k % 2) * 90, t + k * 0.055, 0.004, 0.035, 0.02, 0.07 * v, fx, { lp: 2600 }); nz(t + 0.66, 0.02, 0.1, 0.15, 0.25 * v, fx, 'bandpass', 900, 500, 1); },
+      moo: (t, v) => { tone('sawtooth', 142, t, 0.15, 0.7, 0.45, 0.13 * v, fx, { to: 108, glide: 1.2, lp: 700, lpTo: 380 }); tone('sawtooth', 284, t, 0.15, 0.6, 0.4, 0.03 * v, fx, { to: 216, glide: 1.1, lp: 900 }); },
+      bleat: (t, v) => { for (let k = 0; k < 8; k++) tone('sawtooth', 390 + 35 * (k % 2), t + k * 0.065, 0.008, 0.045, 0.02, 0.07 * v, fx, { lp: 1700 }); },
+      oink: (t, v) => { for (const dt of [0, 0.2]) { nz(t + dt, 0.01, 0.06, 0.06, 0.3 * v, fx, 'bandpass', 420, 0, 3); tone('square', 175, t + dt, 0.01, 0.06, 0.05, 0.06 * v, fx, { lp: 900 }); } },
+      bark: (t, v) => { for (const dt of [0, 0.26]) { nz(t + dt, 0.002, 0.04, 0.08, 0.42 * v, fx, 'bandpass', 950, 420, 1.5); tone('sawtooth', 330, t + dt, 0.002, 0.05, 0.06, 0.1 * v, fx, { to: 210, glide: 0.1, lp: 2000 }); } },
+      meow: (t, v) => { tone('sawtooth', 520, t, 0.06, 0.25, 0.25, 0.07 * v, fx, { to: 720, glide: 0.22, lp: 2600, lpTo: 900 }); },
+      grunt: (t, v) => { tone('sawtooth', 92, t, 0.02, 0.15, 0.15, 0.16 * v, fx, { lp: 420 }); nz(t, 0.02, 0.12, 0.12, 0.2 * v, fx, 'bandpass', 260, 0, 2); },
+      snort: (t, v) => { nz(t, 0.01, 0.12, 0.16, 0.42 * v, fx, 'bandpass', 1400, 700, 1.2); nz(t + 0.32, 0.01, 0.08, 0.12, 0.3 * v, fx, 'bandpass', 1200, 600, 1.2); },
+      squawk: (t, v) => { for (const dt of [0, 0.32, 0.6]) tone('sawtooth', 1350, t + dt, 0.01, 0.12, 0.08, 0.06 * v, fx, { to: 880, glide: 0.2, lp: 4200 }); },
+      caw: (t, v) => { for (const dt of [0, 0.38, 0.76]) { tone('sawtooth', 720, t + dt, 0.01, 0.16, 0.1, 0.08 * v, fx, { to: 520, glide: 0.25, lp: 2300 }); nz(t + dt, 0.01, 0.14, 0.1, 0.12 * v, fx, 'bandpass', 1300, 0, 2); } },
+      screech: (t, v) => { tone('sawtooth', 2500, t, 0.02, 0.45, 0.35, 0.045 * v, fx, { to: 1600, glide: 0.8, lp: 6000 }); nz(t, 0.02, 0.4, 0.3, 0.06 * v, fx, 'highpass', 3000); },
+      tweet: (t, v) => { for (let k = 0; k < 6; k++) tone('sine', 3000 + ar() * 1600, t + k * 0.085, 0.004, 0.03, 0.02, 0.05 * v, fx, { to: 4300, glide: 0.04 }); },
+      coo: (t, v) => { for (const dt of [0, 0.5]) tone('sine', 430, t + dt, 0.05, 0.22, 0.2, 0.1 * v, fx, { to: 340, glide: 0.4 }); },
+      hoot: (t, v) => { for (const dt of [0, 0.55, 0.8]) tone('sine', 390, t + dt, 0.04, 0.16, 0.22, 0.14 * v, fx, { to: 360, glide: 0.4 }); },
+      quack: (t, v) => { for (const dt of [0, 0.3]) { nz(t + dt, 0.01, 0.08, 0.06, 0.25 * v, fx, 'bandpass', 1100, 0, 4); tone('sawtooth', 270, t + dt, 0.01, 0.08, 0.06, 0.08 * v, fx, { lp: 1300 }); } },
+      honk: (t, v) => { for (const dt of [0, 0.42]) tone('sawtooth', 335, t + dt, 0.02, 0.24, 0.12, 0.1 * v, fx, { lp: 1500 }); },
+      flap: (t, v, d = 1) => { for (let k = 0; k < d * 7; k++) nz(t + k / 7, 0.005, 0.03, 0.08, 0.26 * v, fx, 'lowpass', 900); },
+      chomp: (t, v) => { nz(t, 0.001, 0.02, 0.08, 0.6 * v, fx, 'bandpass', 620, 200, 1); tone('sine', 120, t, 0.001, 0.02, 0.16, 0.65 * v, fx, { to: 48, glide: 0.1 }); SFX.clang(t, 0.15 * v); ducks.push(t); },
+      click: (t, v) => { for (let k = 0; k < 16; k++) nz(t + k * 0.028, 0.001, 0.002, 0.01, 0.3 * v, fx, 'highpass', 3200); tone('sine', 6200, t + 0.5, 0.05, 0.3, 0.1, 0.04 * v, fx, { to: 9200, glide: 0.4 }); },
+      song: (t, v, d = 4) => { tone('sine', 180, t, 0.6, Math.max(0.2, d - 1.2), 0.6, 0.13 * v, fx, { to: 330, glide: d * 0.6 }); tone('triangle', 92, t + 0.3, 0.8, Math.max(0.2, d - 1.6), 0.8, 0.08 * v, fx, { to: 70, glide: d * 0.7, lp: 600 }); },
+      blow: (t, v) => { nz(t, 0.05, 0.45, 0.7, 0.42 * v, fx, 'bandpass', 900, 380, 0.8); nz(t, 0.02, 0.2, 0.4, 0.2 * v, fx, 'highpass', 2500); },
+      hooves: (t, v, d = 2, p = 1) => { const r = p === 2 ? 7.5 : 5.2; for (let k = 0; k < d * r; k++) { const tk = t + k / r + (k % 2) * 0.04 + ar() * 0.012; tone('sine', 210 + ar() * 50, tk, 0.001, 0.01, 0.05, 0.12 * v, fx, { to: 110, glide: 0.04 }); nz(tk, 0.001, 0.005, 0.03, 0.12 * v, fx, 'bandpass', 1800, 0, 1.5); } }
     });
     // ambience beds: AUDIO.amb = [[t0, t1, kind, vol], …] — background sound of the place, fades in/out 0.35 s (cuts between places)
     const amb = ctx.createGain(); amb.gain.value = A.ambVol ?? 0.7; const aduck = ctx.createGain(); amb.connect(aduck); aduck.connect(master);
