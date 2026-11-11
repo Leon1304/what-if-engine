@@ -2629,6 +2629,34 @@ function lensMask(win, o = {}) {   // round porthole in front of the camera duri
   return G;
 }
 function hideDuring(obj, win) { dyn(obj.root ?? obj); tick(t => { (obj.root ?? obj).visible = !win.some(([a, b]) => t >= a && t < b); }); return obj; }   // e.g. 'you' missing in the mirror view
+// ---- v2.39.1 city exits: toll booth, boom gate (closes with warning beeps), road bridge ----
+function tollBooth(p, x, z, o = {}) {   // small booth with windows, flat roof, lamp; front +z. → { g, roof: [x, y, z] (top of the roof, for a figure or Gerald) }
+  const g = stat(grp(p ?? world, x, groundH(x, z), z, o.ry ?? 0)), c = o.color ?? '#E8E4DA', NC = { cast: false }, gl = mat('#9FC4D8', { opacity: 0.45, rough: 0.1 });
+  box(g, 2.2, 0.25, 2.2, '#8E8A84', 0, 0, 0, { surf: 'concrete' }); box(g, 1.9, 2.3, 1.9, c, 0, 0.25, 0, { surf: 'plaster' });
+  for (const [sx, sz, ry] of [[0, 0.96, 0], [0.96, 0, Math.PI / 2], [-0.96, 0, Math.PI / 2]]) box(g, 1.3, 0.9, 0.04, '', sx, 1.25, sz, { mat: gl, ry, ...NC });
+  box(g, 2.5, 0.18, 2.5, '#C0392B', 0, 2.55, 0); box(g, 2.3, 0.06, 2.3, '#2A2D33', 0, 2.73, 0);
+  box(g, 0.9, 0.14, 0.04, '', 0, 2.62, 1.27, { mat: mat('#FFE9A8', { basic: true, glow: 1.2 }), ...NC });
+  return { g, roof: [x, groundH(x, z) + 2.79, z] };
+}
+function boomGate(p, x, z, o = {}) {   // barrier post + striped arm (length w) along local +x; open = arm up, close: t = arm comes down over dur s with beeps + blinking light; open: t2 = up again → { g, arm, closedAt }
+  const g = stat(grp(p ?? world, x, groundH(x, z), z, o.ry ?? 0)), w = o.w ?? 8, NC = { cast: false }, T = o.close ?? 1e9, D = o.dur ?? 2.2, T2 = o.open ?? 1e9;
+  box(g, 0.45, 1.15, 0.45, '#F2C230', 0, 0, 0); for (let i = 0; i < 3; i++) box(g, 0.46, 0.12, 0.46, '#1E1E1E', 0, 0.2 + i * 0.33, 0, NC);
+  const lamp = box(g, 0.16, 0.16, 0.16, '', 0, 1.15, 0, { mat: mat('#FF3A2A', { basic: true, glow: 2, own: true }), ...NC }); dyn(lamp);
+  const arm = dyn(grp(g, 0.1, 1.0, 0)); const seg = 0.6; for (let i = 0; i * seg < w; i++) box(arm, Math.min(seg, w - i * seg), 0.13, 0.1, i % 2 ? '#F4F4F2' : '#D8342A', i * seg + Math.min(seg, w - i * seg) / 2, -0.065, 0);
+  box(arm, 0.12, 0.6, 0.06, '#9AA0A6', w - 0.2, -0.6, 0);
+  for (let k = 0; k < D / 0.35; k++) sfx(T + k * 0.35, 'beep', 0.35);
+  tick(t => { const c = span(t, T, D, 'inOut') * (1 - span(t, T2, D, 'inOut')); arm.rotation.z = (1 - c) * Math.PI / 2 * 0.98; lamp.visible = t < T || t > T + D + 1.5 || Math.floor(t * 3) % 2 === 0; });
+  return { g, arm, closedAt: T + D };
+}
+function roadBridge(p, x0, x1, z, o = {}) {   // road deck from x0 to x1 (width w) with sidewalks, railings, two pylons and hanger cables
+  const w = o.w ?? 10, L = x1 - x0, cx = (x0 + x1) / 2, g = stat(grp(p ?? world, cx, o.y ?? 0, z)), c = o.color ?? '#7A8288', NC = { cast: false };
+  box(g, L, 0.6, w + 3, '#5E646A', 0, -0.6, 0, { surf: 'concrete' }); box(g, L, 0.06, w, '#3A3D42', 0, 0, 0, { surf: 'asphalt' });
+  for (let i = 0; i < L / 4; i++) box(g, 1.6, 0.012, 0.15, '#F2F2EE', -L / 2 + 2 + i * 4, 0.06, 0, NC);
+  for (const s of [-1, 1]) { box(g, L, 0.18, 1.5, '#9AA0A6', 0, 0, s * (w / 2 + 0.75)); for (let i = 0; i <= L / 2; i++) box(g, 0.08, 1.05, 0.08, c, -L / 2 + i * 2, 0.18, s * (w / 2 + 1.45)); box(g, L, 0.1, 0.12, c, 0, 1.2, s * (w / 2 + 1.45)); }
+  const py = o.pylonH ?? 22; for (const f of [0.25, 0.75]) { const px = -L / 2 + f * L; for (const s of [-1, 1]) box(g, 1.2, py, 1.2, c, px, -0.6, s * (w / 2 + 1.9), { surf: 'concrete' }); box(g, 1.2, 1.4, w + 5, c, px, py - 3, 0);
+    for (let k = 1; k <= 7; k++) for (const s of [-1, 1]) for (const d of [-1, 1]) { const hx = px + d * k * L * 0.032, hh = py - 3 - k * (py - 5) / 8; box(g, 0.05, Math.max(0.5, hh - 1.2), 0.05, '#C9CDD3', hx, 1.2, s * (w / 2 + 1.9), NC); } }
+  return g;
+}
 function busstop(p, x, z, ry = 0) {   // shelter (glass back and sides, roof, bench) + sign pole; local +z faces the road
   const g = stat(grp(p, x, groundH(x, z), z, ry)), gl = mat('#BFD8E8', { opacity: 0.35, rough: 0.1 }), NC = { cast: false };
   box(g, 2.6, 0.08, 1.3, '#3A3D44', 0, 2.4, 0.1); for (const s of [-1, 1]) box(g, 0.08, 2.4, 0.08, '#3A3D44', s * 1.25, 0, -0.45);

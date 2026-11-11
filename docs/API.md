@@ -818,3 +818,9 @@ Dinge zerbrechen so, wie sie gebaut sind. Alles ist echte Physik (einmal vorab s
 - `MYTH` zeigt keine Behauptungs-Karte mehr. Die Behauptung spricht der Erzähler; im Bild erscheint nur der Urteils-Stempel (False / True / Half true), und zwar ganz am Ende: 2,3 s vor der Endcard (`verdictAt: 'b9+0.4'` legt ihn woanders hin, `verdictDur`, `stamp: false` = gar kein Stempel). Bei mehreren Einträgen gibt es ein Urteil (das letzte).
 - Alte Darstellung: `CFG.questionCards: true` oder `card: true` am Eintrag. `assemble.py` weist darauf hin, wenn eine Story noch `GUESS`/`MYTH` enthält.
 - `FACTS`-Karte und Endcard bleiben.
+
+# Neu in v2.39.1 (Stadtausfahrt: Mauthäuschen, Schranke, Straßenbrücke)
+- `tollBooth(p, x, z, { ry, color })` → `{ g, roof }`: Mauthäuschen mit Fenstern, Flachdach und Leuchtschild; `roof` = Punkt auf dem Dach (z. B. für Gerald).
+- `boomGate(p, x, z, { w: 8, ry, close: t, dur: 2.2, open: t2 })` → `{ g, arm, closedAt }`: Schrankenpfosten mit rot-weißem Arm entlang lokal +x. Offen steht der Arm hoch; ab `close` senkt er sich in `dur` s, Warnlampe blinkt, Piepen kommt von selbst; `open` hebt ihn wieder.
+- `roadBridge(p, x0, x1, z, { w: 10, pylonH: 22, color, y })`: Straßenbrücke von x0 bis x1 mit Fahrbahn, Mittellinie, Gehwegen, Geländer, zwei Pylonen und Hängeseilen.
+- SFX `horn` (Auto- und Bushupe, `dur`).
