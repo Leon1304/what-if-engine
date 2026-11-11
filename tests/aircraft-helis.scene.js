@@ -1,0 +1,11 @@
+  ground({ color: '#8FA860', flat: 600, hills: 0 });
+  box(world, 500, 0.05, 45, '#4A4E52', 0, 0.02, -40); box(world, 500, 0.06, 1, '#F2F2F2', 0, 0.03, -40);
+  const al = aircraft({ kind: 'airliner' }); takeoff(al, { at: [-240, -40], dir: Math.PI / 2, t0: 0, roll: 220, speed: 62, alt: 120 }); track('al', al, 0);
+  const ce = aircraft({ kind: 'cessna' }); land(ce, { at: [-20, -30], dir: Math.PI / 2, t0: -11, speed: 30, alt: 15, glide: 0.12, roll: 90 }); track('ce', ce, 0);
+  const ft = aircraft({ kind: 'fighter' }); crashLand(ft, { at: [0, -150], dir: Math.PI / 2, t0: -2, speed: 50, alt: 30, skid: 100 }); track('ft', ft, 0);
+  heli(world, { kind: 'news', x: -100, y: 30, z: 200 });
+  heli(world, { kind: 'police', x: 0, y: 25, z: 200, spotPitch: -0.9 });
+  const rs = heli(world, { kind: 'rescue', x: 100, y: 20, z: 200 }); rs.winchDown(0.5, 14, 3); hang(figure({ shirt: '#F05A28' }), rs, 3.5, 12);
+  const tp = heli(world, { kind: 'transport', x: 200, y: 2.1, z: 200, ry: Math.PI }); tp.rampOpen(1);
+  const at = heli(world, { kind: 'attack' }); fly(at, [[-200, 30, 120], [0, 25, 120], [200, 35, 120]], { t0: 7, speed: 30 }); track('at', at, 0);
+  heliSound(rs, 0, 12, 0.6);

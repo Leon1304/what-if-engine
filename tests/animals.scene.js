@@ -1,0 +1,14 @@
+  ground({ color: '#8FA860', flat: 200, hills: 0 });
+  beast({ kind: 'elephant', x: 0, z: 0 }).do('trumpet', 0.0, { dur: 2, spray: true });
+  beast({ kind: 'croc', x: 20, z: 0 }).do('snap', 1.0, { dur: 0.9 });
+  const tg = beast({ kind: 'tiger', seed: 4 }); walk(tg, [[-30, -20], [40, -20]], { t0: 0, speed: 5 }); tg.do('pounce', 1.8, { h: 1.3 }); track('tg', tg, 0.8);
+  beast({ kind: 'deer', x: 60, z: 0 }).do('graze', 2.0, { dur: 3 });
+  beast({ kind: 'giraffe', x: 80, z: 0 }).do('drink', 2.0, { dur: 3 });
+  ['crow', 'owl', 'vulture'].forEach((k, i) => bird({ kind: k, x: 100 + i * 2, z: 0, ry: 0.5 }));
+  herd('zebra', 12, { at: [-40, 60], to: [80, 60], t0: 3.5, speed: 9, seed: 2 });
+  herd(['wolf'], 1, { at: [-20, 40], to: [10, 40], t0: 0, speed: 1.2 });
+  const lion = beast({ kind: 'lion', seed: 7 }); walk(lion, [[-40, 90], [60, 90]], { t0: 5.0, speed: 11 }); track('lion', lion, 0.8);
+  herd('zebra', 6, { at: [-25, 92], to: [80, 92], t0: 5.0, speed: 10, seed: 5 });
+  const gl = bird({ kind: 'gull', x: 0, y: 0, z: -10 }); gl.do('call', 1.5); fly(gl, [[0, 0, -10], [10, 8, -10], [30, 12, -10]], { t0: 2, speed: 8 });
+  const sh = sea({ kind: 'white', x: 0, y: -50, z: 0 }); sh.do('bite', 3); sea({ kind: 'humpback', x: 50, y: -60, z: 0 }).do('spout', 4).do('song', 5, { dur: 3 }); sea({ kind: 'dolphin', x: 0, y: -40, z: 30 }).do('click', 2);
+  beast({ kind: 'wolf', x: -80, z: 0 }).do('howl', 1); beast({ kind: 'horse', x: -90, z: 0 }).do('rear', 2); beast({ kind: 'cow', x: -100, z: 0 }).do('call', 3); beast({ kind: 'lion', x: -110, z: 0 }).do('roar', 4);

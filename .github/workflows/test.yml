@@ -1,0 +1,39 @@
+# Smoke test: every engine change builds the example story and the scenes in tests/ and renders a few frames.
+# Fails on page errors (syntax, missing functions, broken scenes). Contact sheets are attached as an artifact.
+name: test
+
+on:
+  push:
+    branches: [main]
+    paths: ['template.html', 'assemble.py', 'render.mjs', 'sfx/**', 'tests/**', '.github/workflows/test.yml']
+  pull_request:
+  workflow_dispatch:
+
+env:
+  PW_VERSION: 1.65.0
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: pw-${{ env.PW_VERSION }}
+      - name: deps
+        run: |
+          npm init -y >/dev/null && npm i --no-audit --no-fund three@0.170.0 @dimforge/rapier3d-deterministic-compat@0.21.0 playwright@$PW_VERSION >/dev/null
+          npx playwright install --with-deps chromium >/dev/null
+          command -v ffmpeg >/dev/null || { sudo apt-get update -qq && sudo apt-get install -y -qq --no-install-recommends ffmpeg >/dev/null; }
+      - name: smoke test
+        run: SMOKE_DIR="$RUNNER_TEMP/smoke" bash tests/run.sh
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: smoke-sheets
+          path: ${{ runner.temp }}/smoke/shots_*/sheet.jpg
+          retention-days: 7

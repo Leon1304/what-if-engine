@@ -6,6 +6,8 @@ Engine for the /what-if video skill (Claude): Three.js template, headless render
 - `render.mjs` – frame-exact renderer (shots, video, cover, audio, remux). Default 2K (1440×2560): `out.mp4` = YouTube master (CRF 18); `--ig` adds an Instagram copy (1080×1920), not used by default
 - `assemble.py` – builds `<slug>.html` from `<slug>.story.js` + `<slug>.scene.js`
 - `voice.py` – Kokoro TTS voice-over with word timings
+- `docs/API.md` – full scene API reference (the skill's SKILL.md keeps only the rules and a short overview)
+- `tests/` – smoke test: `bash tests/run.sh` builds the example story and every test scene and renders a few frames; runs on GitHub (workflow `test`) for every engine change
 
 ## Rendering on GitHub Actions
 Push an assembled page to `renders/<slug>.html` (output of `assemble.py`, voice embedded). The `render` workflow splits it into 12 frame blocks rendered in parallel, then encodes `<slug>.mp4` (YouTube master, 2K) and `<slug>-cover.jpg` and attaches them to the release `render-<slug>`:

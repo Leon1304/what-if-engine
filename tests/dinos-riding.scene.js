@@ -1,0 +1,11 @@
+  ground({ color: '#8FA860', flat: 300, hills: 0 });
+  beast({ kind: 'dragon', x: 0, z: 0 });
+  beast({ kind: 'brachio', x: -6, z: 14 });
+  const el = beast({ kind: 'elephant', x: 40, z: 0 }); ride(figure({}), el, { t0: 0 });
+  const mm = beast({ kind: 'mammoth', x: 80, z: 0 }); ride(warrior('caveman', { seed: 3 }), mm, { t0: 0 });
+  const cm = beast({ kind: 'camel', x: 120, z: 0 }); ride(warrior('bandit', { seed: 4 }), cm, { t0: 0 });
+  const rx0 = beast({ kind: 'trex', x: 160, z: 0 }); ride(warrior('caveman', { seed: 5 }), rx0, { t0: 0 });
+  const dg = beast({ kind: 'dragon', seed: 2 }); fly(dg, [[-60, 12, 60], [0, 14, 60], [80, 12, 60]], { t0: 4.2, speed: 16 }); ride(warrior('knight', { seed: 7 }), dg, { t0: 0 }); track('dg', dg, 1);
+  const rx = beast({ kind: 'trex', seed: 3 }); walk(rx, [[-60, -60], [120, -60]], { t0: 5, speed: 9 }); track('rx', rx, 3);
+  const rp = beast({ kind: 'raptor', seed: 5 }); walk(rp, [[-60, -90], [120, -90]], { t0: 6, speed: 14 }); track('rp', rp, 0.8);
+  const db = beast({ kind: 'dragon', x: 200, z: 0 }); db.do('breath', 8.3, { dur: 3, at: [200, 0, 18] });
