@@ -15,6 +15,13 @@ Push an assembled page to `renders/<slug>.html` (output of `assemble.py`, voice 
 `https://github.com/Leon1304/what-if-engine/releases/download/render-<slug>/<slug>.mp4`
 Manual run: Actions → render → Run workflow (page path, width 1440 / 2160 / 1080).
 
+## Engine v2.35 (Nov 2026): weather on the ground, streets, rooms, shores
+- Rain wets ground, roads, walls and roofs and leaves puddles that mirror the sky; snow settles on everything that faces up (`emit('rain' | 'snow')` drive it, `wetGround()` / `snowCover()` by hand, `CFG.weather: false` = off)
+- Roads: asphalt with grain, cracks and patches, gravel shoulders, optional curbs with drains and manholes; city sidewalks as paving, drains, leaf litter
+- Rooms: floorboards, tiles, carpet, wallpaper, brick cellar, sockets, vents, light switch, doormat, pictures on side walls (`{ surf, indoor: true }` for own rooms)
+- Shores: per-pixel foam bands on the waterline, wet sand, reeds and lily pads along rivers
+- Brighter dusk and dawn; detailed gas station, lab and prison
+
 ## Engine v2.34 (Nov 2026): detailed surroundings and buildings
 - Every outdoor scene: drifting clouds per sky preset, per-pixel ground texture (grass speckle, sand ripples, snow sparkle), hazy mountains / mesas / islands / skyline behind the terrain (`backdrop()`), butterflies, birds, fireflies and falling leaves (`ambientLife()`), denser grass near the camera. `biome()` and `city()` add all of it; city windows light up when the sky turns dark
 - Buildings: wall and roof surfaces drawn per pixel (`{ surf: 'brick' | 'stone' | 'plank' | 'siding' | 'tile' | 'plaster' | 'concrete' | 'metal' }`), `roofKit()` / `facadeKit()`, stepped stone pyramid, lighthouse with gallery, castle masonry, hospital helipad

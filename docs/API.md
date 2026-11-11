@@ -721,3 +721,36 @@ Alles hier läuft von selbst, sobald die Szene `biome()` oder `city()` nutzt. Ni
 - `lighthouse()`: Steinsockel, Tür, Fenster den Turm hinauf, Galerie mit Geländer, Laternenhaus mit Sprossen.
 - `castle()`: Quadermauerwerk an Mauern, Türmen und Bergfried, Ziegeldächer.
 - Test/Vorschau: `tests/environment.*` (Tag → Dämmerung → Nacht, alle Oberflächen, Dach-Kit).
+
+# Neu in v2.35 (Wetter am Boden, Straßen, Innenräume, Ufer, Dämmerung, Tankstelle/Labor/Gefängnis)
+
+## Wetter am Boden (läuft von selbst)
+- **Regen macht nass:** `emit('rain', { t0, t1 })` färbt Boden, Straßen, Wände und Dächer dunkler und glänzend (in ~5 s nass, ~25 s zum Trocknen). Auf Straßen, Gehwegen und flachen Bodenstellen bilden sich Pfützen, die den Himmel spiegeln.
+- **Schnee bleibt liegen:** `emit('snow', { t0, t1 })` lässt Schnee auf allem wachsen, was nach oben zeigt: Dächer, Mauerkronen, Boden, Straßen (dort dünner, Asphalt schaut durch). Erst Flecken, dann geschlossene Decke (~16 s). `biome('snow')` startet mit voller Decke (`{ cover: false }` = aus).
+- Von Hand: `wetGround(t0, t1, stärke, { rise, dry })` (z. B. „nach dem Regen“: `wetGround()` ohne Regen), `snowCover(t0, t1, stärke, { rise, melt })`. Ganzes Video: `CFG.wet: 0..1`, `CFG.snowCover: 0..1`. Alles aus: `CFG.weather: false`. Ein Emitter ohne Bodenwirkung: `emit('rain', { cover: false })`.
+- Schnee und Nässe liegen auf Boden, Straßen und allen Flächen mit `surf`. Bäume, Autos und Figuren bleiben, wie sie sind (Figuren: `wet(f, t)` wie bisher).
+
+## Straßen
+- `road()` hat jetzt Asphalt mit Körnung, Rissen und Flickstellen und einen Schotterstreifen am Rand (`shoulder: false` = ohne). Neu: `curb: true` (Bordsteine mit Gullys), `manholes: true`.
+- `city()`: Gehwegplatten per Oberfläche (`paving`), Gullys in der Rinne, Laub unter den Straßenbäumen (`leaves: false` = ohne).
+- Einzelteile: `drain(p, x, z, ry)`, `manhole(p, x, z)`, `leafLitter([[x, z, r, y?], …], { per, colors })` (Laubhaufen als ein Instanz-Mesh).
+- Neue Oberflächen für eigene Flächen: `surf: 'asphalt'` (Parkplatz, Hof), `surf: 'paving'` (Platz, Terrasse).
+
+## Innenräume
+- `interior()` zeichnet Böden und Wände mit Oberfläche: Dielen mit versetzten Stößen und Maserung (`boards`), Fliesen mit Fugen (`tiles`), Teppich (`carpet`), Tapete mit Streifen (`wallpaper`), Putz, Beton, Ziegel im Keller. Ändern: `interior(…, { floorSurf: 'tiles', wallSurf: 'brick' })`, `false` = glatt.
+- Dazu Steckdosen, Lüftungsgitter, Bilderleiste, Lichtschalter und Fußmatte an der Tür, Bilder an freien Seitenwänden (`fittings: false` = ohne).
+- Eigene Räume: `box(g, w, 0.06, d, '#B5834E', 0, 0, 0, { surf: 'boards', indoor: true })`. `indoor: true` hält Regen und Schnee draußen. **Regel:** Jede selbst gebaute Innenwand und jeder Boden bekommt `surf` und `indoor: true`.
+- Muster richten sich nach dem Raum (Dielen laufen mit der Raumachse, auch bei `ry`).
+
+## Ufer
+- `water()`: Schaumkante pro Pixel (saubere, laufende Bänder entlang der Wasserlinie), nasser Sand und auflaufender Schaum auf dem Strand. Aus: `water({ foam: false })`, `water({ shore: false })` oder `CFG.shore: false`.
+- `river()`: Schilf an beiden Ufern und Seerosen (`reeds: 0..1` Dichte oder `false`, `lilies: false`).
+
+## Licht
+- `dusk` und `dawn` lassen mehr Restlicht am Boden (Himmelslicht 0,95 statt 0,6/0,75, Belichtung 1,22/1,15). Stimmung bleibt, Figuren und Boden sind lesbar.
+
+## Gebäude
+- `gasstation()`: Dachunterseite mit Fugen, Säulenmanschetten, Schriftband, Dachaufbauten, Poller an den Zapfsäulen, Tankdeckel, Luft/Wasser-Säule, Mülltonnen; Shop mit Glastür, Fußmatte, Eistruhe, Plakaten, Gasflaschen, Sockel und Lampen.
+- `lab()`: Fliesenboden, Betonwände, Warnstreifen, Lüftungsrohr mit Lichtleisten, Warn- und Erste-Hilfe-Schild, Spüle, Hocker, Gasflaschen.
+- `prison()`: Ziegel-Trennwände, vergitterte Fenster, Zellennummern, Lampen, Regal, Kissen, Strichliste an der Wand, Dachaufbauten; Wachturm mit Umlauf, Geländer, Leiter und Streben.
+- Test/Vorschau: `tests/ground-weather.*` (Regen → Pfützen → Schnee), `tests/interiors.*`.

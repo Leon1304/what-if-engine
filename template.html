@@ -570,9 +570,9 @@ sky.frustumCulled = false; sky.renderOrder = -10; scene.add(sky);
 const SKIES = {
   day:        { top: '#3F86E0', bot: '#CDE9FF', fog: '#CFE6FA', near: 70, far: 320, sun: '#FFF3DC', si: 2.8, el: 52, hs: '#D8EBFF', hg: '#6F7F4F', hi: 1.15, stars: 0, orb: 0.0016, glow: 0.6, exp: 1, nk: 0, cl: [0.95, 0.53, '#FFFFFF', '#B4C6DE'] },
   golden:     { top: '#3C6CB4', bot: '#FFC07A', fog: '#EDB585', near: 55, far: 280, sun: '#FFB066', si: 2.4, el: 13, hs: '#FFD9B0', hg: '#5A5A3A', hi: 0.85, stars: 0, orb: 0.002, glow: 1.2, exp: 1, nk: 0.1, cl: [0.9, 0.5, '#FFE4BC', '#C58A7C'] },
-  dusk:       { top: '#1B2552', bot: '#E07A5F', fog: '#8C5468', near: 45, far: 240, sun: '#FF8C5A', si: 1.3, el: 5, hs: '#9A86B8', hg: '#3A2E3A', hi: 0.6, stars: 0.25, orb: 0.0022, glow: 1.4, exp: 1.05, nk: 0.65, cl: [0.85, 0.5, '#F0A088', '#463C66'] },
+  dusk:       { top: '#1B2552', bot: '#E07A5F', fog: '#8C5468', near: 45, far: 240, sun: '#FF8C5A', si: 1.45, el: 7, hs: '#A893C6', hg: '#4A3C4C', hi: 0.95, stars: 0.25, orb: 0.0022, glow: 1.4, exp: 1.22, nk: 0.65, cl: [0.85, 0.5, '#F0A088', '#463C66'] },
   night:      { top: '#03050C', bot: '#1A2547', fog: '#141C34', near: 35, far: 190, sun: '#B4C6FF', si: 1.6, el: 26, hs: '#6478B8', hg: '#1C1C24', hi: 0.65, stars: 1, orb: 0.0014, glow: 0.5, exp: 1.3, nk: 1, cl: [0.6, 0.52, '#2C385C', '#0B1124'] },
-  dawn:       { top: '#27407A', bot: '#F6AA80', fog: '#C69A9E', near: 50, far: 260, sun: '#FFC29A', si: 1.6, el: 7, hs: '#C7B7D8', hg: '#4A4038', hi: 0.75, stars: 0.06, orb: 0.0022, glow: 1.2, exp: 1.05, nk: 0.45, cl: [0.9, 0.5, '#FFD4B4', '#766A96'] },
+  dawn:       { top: '#27407A', bot: '#F6AA80', fog: '#C69A9E', near: 50, far: 260, sun: '#FFC29A', si: 1.6, el: 8, hs: '#C7B7D8', hg: '#514640', hi: 0.95, stars: 0.06, orb: 0.0022, glow: 1.2, exp: 1.15, nk: 0.45, cl: [0.9, 0.5, '#FFD4B4', '#766A96'] },
   storm:      { top: '#2B313B', bot: '#5C6573', fog: '#4F5866', near: 28, far: 160, sun: '#C9D2E2', si: 0.8, el: 40, hs: '#8A96A8', hg: '#2E3238', hi: 0.8, stars: 0, orb: 0, glow: 0, exp: 1.1, nk: 0.5, cl: [1, 0.3, '#7A8494', '#394150'] },
   apocalypse: { top: '#2A0905', bot: '#C8441B', fog: '#6C2412', near: 35, far: 200, sun: '#FF7034', si: 1.8, el: 10, hs: '#C8603A', hg: '#2A1610', hi: 0.6, stars: 0, orb: 0.003, glow: 1.6, exp: 1.05, nk: 0.6, cl: [0.9, 0.42, '#D65E38', '#38120C'] },
   underwater: { top: '#0E5A7A', bot: '#1E8AA8', fog: '#17607E', near: 4, far: 60, sun: '#D8F6FF', si: 0.9, el: 72, hs: '#6FD0EE', hg: '#0A3346', hi: 0.75, stars: 0, orb: 0, glow: 0.15, exp: 1.05, nk: 0.3, cl: [0, 0.5, '#000000', '#000000'] },
@@ -589,7 +589,7 @@ function applySky(t) {
   skyNow = k < 0.5 ? A : B;
   mixC(skyU.top.value, A.top, B.top, k); mixC(skyU.bot.value, A.bot, B.bot, k);
   skyU.stars.value = lerp(A.stars, B.stars, k);
-  NIGHTK = lerp(A.nk ?? 0, B.nk ?? 0, k); for (const m of NIGHTMATS) m.emissiveIntensity = m.userData.nightEi * clamp(0.1 + NIGHTK * 1.15);   // v2.34: how dark it is (0 day … 1 night) — city windows, fireflies, butterflies follow it
+  applyWeather(t); NIGHTK = lerp(A.nk ?? 0, B.nk ?? 0, k); for (const m of NIGHTMATS) m.emissiveIntensity = m.userData.nightEi * clamp(0.1 + NIGHTK * 1.15);   // v2.34: how dark it is (0 day … 1 night) — city windows, fireflies, butterflies follow it
   { const ca = A.cl ?? [0], cb = B.cl ?? [0], on = CFG.clouds === false ? 0 : 1, cv = typeof CFG.clouds === 'number' ? (CFG.clouds - 1) * 0.12 : 0;
     skyU.cT.value = t; skyU.cAmt.value = lerp(ca[0], cb[0], k) * on; skyU.cCov.value = lerp(ca[1] ?? 0.5, cb[1] ?? 0.5, k) - cv;
     mixC(skyU.cLit.value, ca[2] ?? '#000000', cb[2] ?? '#000000', k); mixC(skyU.cShd.value, ca[3] ?? '#000000', cb[3] ?? '#000000', k); }
@@ -616,18 +616,34 @@ function applySky(t) {
 const _mats = new Map(), _geo = new Map();
 // v2.34 surfaces: mat(hex, { surf }) / box(…, { surf }) draws a pattern on walls and roofs per pixel — no extra geometry, fades with distance:
 //   brick · stone (big blocks) · plank (upright boards) · siding (lapped boards) · tile (roof tiles, shingles) · plaster · concrete (panels) · metal (corrugated sheet)
-const SURF = { brick: 1, stone: 2, plank: 3, siding: 4, tile: 5, plaster: 6, concrete: 7, metal: 8 };
-function surfFx(m, kind) {
-  if (CFG.surfaces === false || !SURF[kind]) return m; m.userData.own = true; m.userData.surf = kind; const K = SURF[kind].toFixed(1);
+const SURF = { brick: 1, stone: 2, plank: 3, siding: 4, tile: 5, plaster: 6, concrete: 7, metal: 8, asphalt: 9, paving: 10, boards: 11, tiles: 12, carpet: 13, wallpaper: 14 };
+// v2.35 weather on the ground: rain makes surfaces dark and glossy and leaves puddles that mirror the sky, snow settles on everything that faces up.
+//   emit('rain') / emit('snow') drive it on their own (wet in ~5 s, dry in ~25 s; snow builds in ~16 s). By hand: wetGround(t0, t1, k) · snowCover(t0, t1, k),
+//   whole video: CFG.wet / CFG.snowCover 0..1. CFG.weather: false = off. Pure function of t.
+const WX = { wet: { value: 0 }, snow: { value: 0 }, sea: { value: -1e4 }, t: { value: 0 } }, WETWIN = [], SNOWWIN = [];
+function wetGround(t0 = -100, t1 = 1e9, k = 1, o = {}) { WETWIN.push([t0, t1, k, o.rise ?? 5, o.dry ?? 25]); }
+function snowCover(t0 = -100, t1 = 1e9, k = 1, o = {}) { SNOWWIN.push([t0, t1, k, o.rise ?? 16, o.melt ?? 60]); }
+const wxAt = (W, t) => W.reduce((a, [t0, t1, k, r, f]) => Math.max(a, k * clamp((Math.min(t, t1) - t0) / r) * (1 - clamp((t - t1) / f))), 0);
+function applyWeather(t) { const on = CFG.weather !== false; WX.t.value = t; WX.wet.value = on ? Math.max(CFG.wet ?? 0, wxAt(WETWIN, t)) : 0; WX.snow.value = on ? Math.max(CFG.snowCover ?? 0, wxAt(SNOWWIN, t)) : 0; }
+const WX_GLSL = {   // shared by walls, roads and the ground
+  head: 'uniform float uWet, uSnow; uniform vec3 uSkyT, uSkyB; float wxGloss = 0.0, wxPud = 0.0;\n',
+  rough: '#include <roughnessmap_fragment>\n  roughnessFactor = mix(roughnessFactor, 0.16, clamp(wxGloss, 0.0, 1.0));',
+  refl: `{ vec3 wV = normalize(vViewPosition), wN = normalize(normal); float wF = 0.22 + 0.78 * pow(1.0 - clamp(abs(dot(wN, wV)), 0.0, 1.0), 4.0); vec3 wR = (vec4(reflect(-wV, wN), 0.0) * viewMatrix).xyz;
+      outgoingLight = mix(outgoingLight, mix(uSkyB, uSkyT, smoothstep(0.0, 0.7, wR.y)), wxPud * wF * 0.75); }
+    #include <opaque_fragment>` };
+function surfFx(m, kind, o = {}) {   // o.indoor: no weather (rooms) · o.sp: pattern coordinates come from the vertex attribute sp (merged static geometry, see bake)
+  if (CFG.surfaces === false || !SURF[kind]) return m; m.userData.own = true; m.userData.surf = kind; m.userData.surfIn = !!o.indoor; const K = SURF[kind].toFixed(1);
+  m.defines = { ...(m.defines ?? {}) }; if (o.sp) m.defines.SURF_SP = ''; if (o.indoor || K > 10.5) m.defines.SURF_IN = '';
   m.onBeforeCompile = sh => {
-    sh.vertexShader = 'varying vec3 vSW, vSL;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n  vSW = (modelMatrix * vec4(transformed, 1.0)).xyz; vSL = transformed;');   // pattern in the part's own space: it travels with a building that is moved or flung
-    sh.fragmentShader = `varying vec3 vSW, vSL;
+    Object.assign(sh.uniforms, { uWet: WX.wet, uSnow: WX.snow, uSkyT: skyU.top, uSkyB: skyU.bot });
+    sh.vertexShader = '#ifdef SURF_SP\nattribute vec3 sp;\n#endif\nvarying vec3 vSW, vSL;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n  vSW = (modelMatrix * vec4(transformed, 1.0)).xyz;\n#ifdef SURF_SP\n  vSL = sp;\n#else\n  vSL = transformed;\n#endif');   // pattern in the part's own space: it travels with a building that is moved or flung
+    sh.fragmentShader = WX_GLSL.head + `varying vec3 vSW, vSL;
       float sfh(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
       float sfn(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f); return mix(mix(sfh(i), sfh(i + vec2(1.0, 0.0)), f.x), mix(sfh(i + vec2(0.0, 1.0)), sfh(i + vec2(1.0, 1.0)), f.x), f.y); }
       float sfBlock(vec2 uv, float bw, float bh, float joint, float jk, float var, float stag){ float row = floor(uv.y / bh), uu = uv.x / bw + stag * mod(row, 2.0); vec2 f = vec2(fract(uu), fract(uv.y / bh));
         float e = min(min(f.x, 1.0 - f.x) * bw, min(f.y, 1.0 - f.y) * bh); return mix(jk, (sfh(vec2(floor(uu), row)) - 0.5) * var, smoothstep(joint * 0.4, joint, e)); }
       ` + sh.fragmentShader.replace('#include <color_fragment>', `#include <color_fragment>
-      { vec3 fn = normalize(cross(dFdx(vSL), dFdy(vSL))); float sd = distance(cameraPosition, vSW), sf = 1.0 - smoothstep(35.0, 120.0, sd), fl = step(0.92, abs(fn.y));
+      { vec3 fn = normalize(cross(dFdx(vSL), dFdy(vSL))); float sd = distance(cameraPosition, vSW), sf = 1.0 - smoothstep(35.0, 120.0, sd), nf = 1.0 - smoothstep(7.0, 22.0, sd), fl = step(0.92, abs(fn.y));
         vec3 tg = fl > 0.5 ? vec3(1.0, 0.0, 0.0) : normalize(cross(vec3(0.0, 1.0, 0.0), fn)); vec2 uv = vec2(dot(vSL, tg), fl > 0.5 ? vSL.z : vSL.y / max(0.3, sqrt(1.0 - fn.y * fn.y)));
         float k = 0.0, K = ${K}, mo = (sfn(uv * 0.6) - 0.5) * 0.07 + (sfn(uv * 5.0 + 7.0) - 0.5) * 0.04;
         if (K < 1.5) k = sfBlock(uv, 0.62, 0.24, 0.022, 0.2, 0.24, 0.5) + mo * 0.6;
@@ -637,20 +653,38 @@ function surfFx(m, kind) {
         else if (K < 5.5) { float row = floor(uv.y / 0.34), uu = uv.x / 0.42 + 0.5 * mod(row, 2.0), fy = fract(uv.y / 0.34), fx = fract(uu); k = -0.3 * (1.0 - smoothstep(0.0, 0.16, fy)) - 0.16 * (1.0 - smoothstep(0.0, 0.05, min(fx, 1.0 - fx))) + (sfh(vec2(floor(uu), row)) - 0.5) * 0.2 + fy * 0.06; }
         else if (K < 6.5) k = mo * 1.4 + (sfn(vec2(uv.x * 2.6, uv.y * 0.22)) - 0.5) * 0.06;
         else if (K < 7.5) k = sfBlock(uv, 3.0, 3.1, 0.03, -0.16, 0.05, 0.0) + mo * 1.2 + (sfn(vec2(uv.x * 2.6, uv.y * 0.22)) - 0.5) * 0.07;
-        else k = sin(uv.x * 28.56) * 0.075 + sfBlock(uv, 40.0, 1.25, 0.02, -0.16, 0.05, 0.0) + mo * 0.5;
-        diffuseColor.rgb *= 1.0 + k * sf; }`);
+        else if (K < 8.5) k = sin(uv.x * 28.56) * 0.075 + sfBlock(uv, 40.0, 1.25, 0.02, -0.16, 0.05, 0.0) + mo * 0.5;
+        else if (K < 9.5) { float cr = (1.0 - smoothstep(0.0, 0.02, abs(sfn(uv * 0.55 + 3.0) - 0.5))) * smoothstep(0.42, 0.6, sfn(uv * 0.13 + 9.0)) + (1.0 - smoothstep(0.0, 0.03, abs(sfn(uv * 1.7 + 21.0) - 0.5))) * smoothstep(0.6, 0.72, sfn(uv * 0.21 + 4.0));
+          vec2 pc = floor(uv / vec2(3.4, 2.3)), pf = fract(uv / vec2(3.4, 2.3)); float pa = step(0.87, sfh(pc + 4.0)) * step(0.14, pf.x) * step(pf.x, 0.86) * step(0.2, pf.y) * step(pf.y, 0.8);   // asphalt: grain, cracks, repair patches
+          k = (sfh(floor(uv * 55.0)) - 0.5) * 0.16 * nf + mo * 1.3 + (sfn(uv * 0.09) - 0.5) * 0.12 - clamp(cr, 0.0, 1.0) * 0.4 * nf - pa * 0.16; }
+        else if (K < 10.5) k = sfBlock(uv, 0.8, 0.8, 0.02, -0.2, 0.1, 0.0) + mo + (sfh(floor(uv * 40.0)) - 0.5) * 0.07 * nf;   // paving slabs
+        else if (K < 11.5) { float bx = floor(uv.x / 0.16), off = sfh(vec2(bx, 7.0)) * 1.8, by = floor((uv.y + off) / 1.8), fx = fract(uv.x / 0.16), fy = fract((uv.y + off) / 1.8);   // floorboards: staggered ends, every board its own tone, grain along the board
+          float e = min(min(fx, 1.0 - fx) * 0.16, min(fy, 1.0 - fy) * 1.8); k = mix(-0.26 * (0.35 + 0.65 * nf), (sfh(vec2(bx, by)) - 0.5) * 0.17, smoothstep(0.003, 0.011, e)) + (sfn(vec2(uv.x * 55.0 + bx * 3.0, uv.y * 2.2)) - 0.5) * 0.09 * nf; }
+        else if (K < 12.5) { float ts = fl > 0.5 ? 0.4 : 0.15; vec2 tc = floor(uv / ts), tf = fract(uv / ts); float e = min(min(tf.x, 1.0 - tf.x), min(tf.y, 1.0 - tf.y)) * ts;   // tiles: grout, chequer on floors, slight tone per tile
+          k = mix(-0.22, (fl > 0.5 ? -0.1 * mod(tc.x + tc.y, 2.0) : 0.0) + (sfh(tc) - 0.5) * 0.05, smoothstep(0.004, 0.012, e)); }
+        else if (K < 13.5) k = (sfh(floor(uv * 90.0)) - 0.5) * 0.14 * nf + mo * 1.5 + (sfn(uv * 1.3) - 0.5) * 0.06;   // carpet
+        else { vec2 q = fract(uv / 0.26) - 0.5; k = (step(0.5, fract(uv.x / 0.26)) - 0.5) * 0.045 + (1.0 - smoothstep(0.07, 0.09, abs(q.x) + abs(q.y))) * 0.06 * (0.3 + 0.7 * nf) + mo * 0.4; }   // wallpaper: stripes with a small diamond
+        diffuseColor.rgb *= 1.0 + k * sf;
+      #ifndef SURF_IN
+        float up = smoothstep(0.35, 0.8, fn.y), sn = 0.0, road = step(8.5, K) * step(K, 10.5);
+        if (uSnow > 0.001) { float am = uSnow * (1.0 - 0.6 * road); sn = up * smoothstep(0.1, 0.3, am * 1.25 - 0.3 + (sfn(vSL.xz * 1.3 + 2.0) - 0.5) * 0.9 * (1.0 - am * 0.7));
+          diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.90, 0.94, 1.0) * (1.0 + mo * 0.6), sn); }
+        if (uWet > 0.001) { float w = uWet * (1.0 - sn); diffuseColor.rgb *= 1.0 - w * (0.2 + 0.16 * up); wxGloss = w * (0.3 + 0.5 * up);
+          if (road * fl > 0.5) { float pd = smoothstep(0.5, 0.58, sfn(vSL.xz * 0.3 + 5.0) * 0.7 + sfn(vSL.xz * 1.1) * 0.3) * smoothstep(0.25, 0.7, uWet) * (1.0 - sn); diffuseColor.rgb *= 1.0 - pd * 0.45; wxPud = pd; wxGloss = max(wxGloss, pd); } }
+      #endif
+      }`).replace('#include <roughnessmap_fragment>', WX_GLSL.rough).replace('#include <opaque_fragment>', WX_GLSL.refl);
   };
-  m.customProgramCacheKey = () => 'surf' + K; return m;
+  m.customProgramCacheKey = () => 'surf' + K + (o.sp ? 's' : '') + (o.indoor ? 'i' : ''); return m;
 }
 function mat(hex, o = {}) {   // o: rough, metal, em (emissive hex), ei, opacity, basic, flat(default true), own (unshared, e.g. to animate), surf (wall / roof pattern, see SURF)
-  const key = hex + (o.surf ? JSON.stringify([o.surf, o.rough, o.metal, o.em, o.ei, o.opacity, o.flat, o.side, o.glow, o.wind]) : JSON.stringify(o));
+  const key = hex + (o.surf ? JSON.stringify([o.surf, o.rough, o.metal, o.em, o.ei, o.opacity, o.flat, o.side, o.glow, o.wind, o.indoor]) : JSON.stringify(o));
   if (!o.own && _mats.has(key)) return _mats.get(key);
   const tr = o.opacity != null && o.opacity < 1;
   const m = o.basic
     ? new THREE.MeshBasicMaterial({ color: hex, transparent: tr, opacity: o.opacity ?? 1, depthWrite: !tr })
     : new THREE.MeshStandardMaterial({ color: hex, roughness: o.rough ?? 0.88, metalness: o.metal ?? 0, flatShading: o.flat ?? true, emissive: o.em ?? '#000000', emissiveIntensity: o.ei ?? 1, transparent: tr, opacity: o.opacity ?? 1, depthWrite: !tr });
   if (o.wind && !o.basic) windify(m, o.wind === 'local' ? 'local' : 'attr');
-  if (o.surf && !o.basic) surfFx(m, o.surf);
+  if (o.surf && !o.basic) surfFx(m, o.surf, { indoor: o.indoor });
   if (o.own) m.userData.own = true; if (o.side != null) m.side = o.side;
   if (o.glow) m.color.multiplyScalar(1 + o.glow);
   if (!o.own) _mats.set(key, m);
@@ -692,7 +726,8 @@ function groundFx(m, o = {}) {
   if (CFG.groundDetail === false || o.detail === false) return m; const amp = (typeof o.detail === 'number' ? o.detail : 1).toFixed(2); m.userData.own = true;
   m.onBeforeCompile = sh => {
     sh.vertexShader = 'varying vec3 vGW;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n  vGW = (modelMatrix * vec4(transformed, 1.0)).xyz;');
-    sh.fragmentShader = `varying vec3 vGW;
+    Object.assign(sh.uniforms, { uWet: WX.wet, uSnow: WX.snow, uSkyT: skyU.top, uSkyB: skyU.bot, uSea: WX.sea, uWxT: WX.t });
+    sh.fragmentShader = WX_GLSL.head + `uniform float uSea, uWxT; varying vec3 vGW;
       float gh(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
       float gvn(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f); return mix(mix(gh(i), gh(i + vec2(1.0, 0.0)), f.x), mix(gh(i + vec2(0.0, 1.0)), gh(i + vec2(1.0, 1.0)), f.x), f.y); }
       ` + sh.fragmentShader.replace('#include <color_fragment>', `#include <color_fragment>
@@ -703,7 +738,18 @@ function groundFx(m, o = {}) {
         if (sandy > 0.5) v = n1 * 0.07 * gm + (sin((gp.x * 0.86 + gp.y * 0.5) * 2.4 + n2 * 6.0 + n1 * 9.0) * 0.05 + n4 * 0.05) * gf;
         if (snowy > 0.5) { v = n1 * 0.04 * gm + n2 * 0.03 * gf; gc = mix(gc, gc * vec3(0.82, 0.89, 1.0), clamp(0.5 - n1 * 2.2, 0.0, 1.0) * 0.5 * gm); gc += step(0.988, gh(floor(gp * 24.0))) * gf * 0.3; }
         else if (sandy < 0.5 && gc.g > gc.r * 1.05) gc += vec3(0.035, 0.03, -0.01) * n3 * 1.1 * gf;   // grass: yellower and bluer blades
-        diffuseColor.rgb = gc * (1.0 + v * 1.7 * ${amp}); }`);
+        gc *= 1.0 + v * 1.7 * ${amp};
+        // v2.35 weather and shore: snow settles in patches that grow together, rain darkens the ground and fills flat spots with puddles, the sea leaves wet sand and a lapping foam line
+        float gup = smoothstep(0.75, 0.93, normalize(cross(dFdx(vGW), dFdy(vGW))).y), gsn = 0.0;
+        if (uSnow > 0.001 && snowy < 0.5) { gsn = gup * smoothstep(0.1, 0.3, uSnow * 1.25 - 0.3 + (n1 * 1.1 + n2 * 0.5) * (1.0 - uSnow * 0.7)); gc = mix(gc, vec3(0.90, 0.94, 1.0) * (1.0 + n2 * 0.05) + step(0.988, gh(floor(gp * 24.0))) * gf * 0.25, gsn); }
+        if (uWet > 0.001) { float w = uWet * (1.0 - gsn); gc *= 1.0 - w * 0.2; wxGloss = w * 0.5;
+          float pd = smoothstep(0.66, 0.71, gvn(gp * 0.4 + 5.0) * 0.7 + gvn(gp * 1.3 + 2.0) * 0.3) * smoothstep(0.3, 0.75, uWet) * smoothstep(0.985, 0.997, normalize(cross(dFdx(vGW), dFdy(vGW))).y) * (1.0 - gsn);
+          gc = mix(gc, gc * vec3(0.62, 0.58, 0.52), pd); wxPud = pd * 0.8; wxGloss = max(wxGloss, pd); }
+        if (uSea > -1000.0 && sandy > 0.5) { float hs = vGW.y - uSea, deep = smoothstep(-1.2, -0.3, hs), wb = (1.0 - smoothstep(0.08, 0.7 + n2 * 0.5, hs)) * deep;
+          gc *= 1.0 - 0.28 * wb; wxGloss = max(wxGloss, wb * 0.75);
+          float lap = 0.07 + 0.09 * (0.5 + 0.5 * sin(uWxT * 0.9 + n1 * 7.0 + gp.x * 0.05)), fo = smoothstep(-0.06, 0.0, hs) * (1.0 - smoothstep(lap * 0.6, lap, hs)) * (0.55 + 0.45 * gvn(gp * 3.0 + uWxT * 0.3));
+          gc = mix(gc, vec3(0.95, 0.98, 1.0), clamp(fo, 0.0, 1.0) * 0.8 * gf); }
+        diffuseColor.rgb = gc; }`).replace('#include <roughnessmap_fragment>', WX_GLSL.rough).replace('#include <opaque_fragment>', WX_GLSL.refl);
   };
   m.customProgramCacheKey = () => 'groundFx' + amp; return m;
 }
@@ -781,7 +827,7 @@ function barn(p, x, z, o = {}) {   // red barn: foundation, plank seams, white c
   for (const sx of [-1, 1]) for (const zz of [-d * 0.25, d * 0.25]) { const q = grp(g, sx * (w / 2 + 0.01), h * 0.55, zz, sx * Math.PI / 2); box(q, 0.9, 0.9, 0.05, trim, 0, -0.45, 0, NC); box(q, 0.7, 0.7, 0.06, '#2A2E36', 0, -0.35, 0.02, { ...NC, rough: 0.3 }); box(q, 0.05, 0.7, 0.03, trim, 0, -0.35, 0.06, NC); }
   const roof = grp(g, 0, h, 0, Math.PI / 2);
   box(roof, d + 0.5, 0.18, w + 0.5, roofC, 0, -0.05, 0);
-  prism(roof, d + 0.5, 2.6, w + 0.5, roofC, 0, 0.1, 0);
+  prism(roof, d + 0.5, 2.6, w + 0.5, roofC, 0, 0.1, 0, { surf: 'tile' });
   box(g, 0.26, 0.12, d + 0.56, shade(roofC, -0.08), 0, h + 2.64, 0, NC);
   box(g, w * 0.5, h * 0.78, 0.1, trim, 0, 0, d / 2 + 0.03); box(g, w * 0.44, h * 0.72, 0.02, '#120E0B', 0, 0.12, d / 2 + 0.085, NC);   // frame + dark inside
   const dg = dyn(grp(g, 0, 0, 0)); dg.userData.slide = w * 0.3;   // sliding door: openDoor(barn, t)
@@ -997,7 +1043,7 @@ const BIOMES = {
   moon:   { trees: [], near: { pebble: 10, rock: 0.5 }, ring: { rock: 1 }, rockColor: '#8E8E94', grass: [], flowers: [], craters: [0.12, 0.05] },
   reef:   { trees: [], near: { coral: 1.4, seaweed: 1.2, rock: 0.4, shell: 2, star: 1.2, pebble: 4 }, ring: { rock: 1.2, kelp: 0.5 }, rockColor: '#8A8070', grass: [], flowers: [] }
 };
-function biome(kind = 'farm', o = {}) { DEFER.push(() => runBiome(kind, o)); }
+function biome(kind = 'farm', o = {}) { if (kind === 'snow' && o.cover !== false) snowCover(-100, 1e9, o.cover ?? 1); DEFER.push(() => runBiome(kind, o)); }
 function runBiome(kind, o) {
   const B = BIOMES[kind] ?? BIOMES.farm, A = o.area ?? CFG.area ?? 30, D = o.density ?? 1, R1 = o.ring?.[1] ?? A * 2.5, R0 = o.ring?.[0] ?? A * 1.05;
   let bs = Math.floor(hash((CFG.seed ?? 7) * 7.77 + kind.length * 3.1) * 2147483646) + 1; const br = () => (bs = (bs * 48271) % 2147483647) / 2147483647, bp = arr => arr[Math.floor(br() * arr.length)];
@@ -2333,6 +2379,7 @@ const PART = {
 const emitters = []; let _eid = 1;
 function emit(kind, o = {}) {   // o: at:[x,y,z] or t => [x,y,z], t0, t1, plus any PART field; burst = all at once
   const e = { ...PART[kind], ...o, id: _eid++ }; e.t0 = e.t0 ?? 0; e.t1 = e.t1 ?? DUR;
+  if (o.cover !== false && !o.burst) { if (kind === 'rain') WETWIN.push([e.t0, e.t1, clamp((e.rate ?? 420) / 300, 0.4, 1), 5, 25]); else if (kind === 'snow' && !o.colors) SNOWWIN.push([e.t0, e.t1, clamp((e.rate ?? 140) / 160, 0.4, 1), 16, 60]); }   // v2.35: rain wets the ground, snow settles
   if (typeof e.at === 'function') { e.atFn = e.at; e.at = null; }   // moving source: at(t) → [x,y,z] at birth time
   e.lifeMax = e.life * 1.3; e.n = e.burst ?? Math.min(e.max ?? 2500, Math.ceil(e.rate * e.lifeMax) + 1);
   if (LONG && kind === 'spray' && o.soft == null && !o.geo) { e.soft = true; e.size = (o.size ?? e.size) * 2.6; }   // v2.30: soft mist instead of little boxes
@@ -2518,17 +2565,29 @@ function tower(p, x, z, o = {}) {   // city building with depth: style glass | b
   }
   return { g, h, style };
 }
-function road(p, pts, o = {}) {   // flat road along [[x,z],…] with centre dashes and edge lines (edges: false = none)
-  const w = o.w ?? 6, g = stat(grp(p));
+function road(p, pts, o = {}) {   // flat road along [[x,z],…] with centre dashes and edge lines (edges: false = none). v2.35: asphalt with grain, cracks and patches (wet: puddles),
+  const w = o.w ?? 6, g = stat(grp(p)), NC = { cast: false }, sc = o.color ?? '#3A3D44';   //   gravel shoulders (shoulder: false) or curb: true (raised curbs with drain grates), manholes: true
   for (let i = 0; i < pts.length - 1; i++) {
-    const [ax, az] = pts[i], [bx, bz] = pts[i + 1], L = Math.hypot(bx - ax, bz - az), ang = Math.atan2(-(bz - az), bx - ax), nx = -(bz - az) / L, nz = (bx - ax) / L;
-    box(g, L + w, 0.04, w, o.color ?? '#3A3D44', (ax + bx) / 2, 0.01, (az + bz) / 2, { ry: ang, cast: false });
+    const [ax, az] = pts[i], [bx, bz] = pts[i + 1], L = Math.hypot(bx - ax, bz - az), ang = Math.atan2(-(bz - az), bx - ax), nx = -(bz - az) / L, nz = (bx - ax) / L, mx = (ax + bx) / 2, mz = (az + bz) / 2;
+    box(g, L + w, 0.04, w, sc, mx, 0.01, mz, { ry: ang, cast: false, surf: 'asphalt' });
     if (o.dash !== false) for (let k = 1.5; k < L - 1; k += 4) box(g, 2, 0.02, 0.18, '#E8E2C8', lerp(ax, bx, k / L), 0.05, lerp(az, bz, k / L), { ry: ang, cast: false });
-    if (o.edges !== false && L > 3) for (const s of [-1, 1]) box(g, L - w * 0.3, 0.02, 0.12, '#D8D4C4', (ax + bx) / 2 + nx * s * (w / 2 - 0.3), 0.05, (az + bz) / 2 + nz * s * (w / 2 - 0.3), { ry: ang, cast: false });
+    if (o.edges !== false && L > 3) for (const s of [-1, 1]) box(g, L - w * 0.3, 0.02, 0.12, '#D8D4C4', mx + nx * s * (w / 2 - 0.3), 0.05, mz + nz * s * (w / 2 - 0.3), { ry: ang, cast: false });
+    if (o.curb) for (const s of [-1, 1]) { box(g, L, 0.16, 0.22, '#8A8C90', mx + nx * s * (w / 2 + 0.11), 0, mz + nz * s * (w / 2 + 0.11), { ry: ang, surf: 'concrete', ...NC });
+      for (let k = 6; k < L - 3; k += 14) { const u = (k + (s > 0 ? 5 : 0)) / L; if (u < 1) drain(g, lerp(ax, bx, u) + nx * s * (w / 2 - 0.2), lerp(az, bz, u) + nz * s * (w / 2 - 0.2), ang); } }
+    else if (o.shoulder !== false && CFG.surfaces !== false) for (const s of [-1, 1]) box(g, L + w, 0.03, 0.55, o.shoulderColor ?? '#8E877A', mx + nx * s * (w / 2 + 0.2), 0.005, mz + nz * s * (w / 2 + 0.2), { ry: ang, cast: false, surf: 'plaster' });
+    if (o.manholes) for (let k = 9; k < L - 4; k += 23) manhole(g, lerp(ax, bx, k / L) + nx * w * 0.2, lerp(az, bz, k / L) + nz * w * 0.2);
   }
   return g;
 }
-const NIGHTGLOW = [];   // street-light heads: off by day, glowing at night (applySky)
+function drain(p, x, z, ry = 0) { const g = grp(p, x, 0.052, z, ry), NC = { cast: false }; box(g, 0.6, 0.012, 0.34, '#1C1D20', 0, 0, 0, NC); for (let i = 0; i < 5; i++) box(g, 0.05, 0.016, 0.3, '#4A4D52', -0.22 + i * 0.11, 0, 0, NC); return g; }   // storm drain grate at the curb
+function manhole(p, x, z) { const g = grp(p, x, 0.052, z), NC = { cast: false }; cyl(g, 0.36, 0.36, 0.012, '#2A2C30', 0, 0, 0, { seg: 14, ...NC }); cyl(g, 0.3, 0.3, 0.016, '#3A3D42', 0, 0, 0, { seg: 14, ...NC }); for (const a of [0, Math.PI / 2]) box(g, 0.5, 0.02, 0.03, '#2A2C30', 0, 0, 0, { ry: a, ...NC }); return g; }
+function leafLitter(spots, o = {}) {   // fallen leaves on the ground: spots [[x, z, r, y?], …] → one instanced mesh (autumn colours by default)
+  const n = o.per ?? 14, im = new THREE.InstancedMesh(G('leafL', () => new THREE.PlaneGeometry(0.13, 0.085).rotateX(-Math.PI / 2)), new THREE.MeshStandardMaterial({ color: '#ffffff', side: THREE.DoubleSide, roughness: 1, flatShading: true }), spots.length * n), o3 = new THREE.Object3D(), c = new THREE.Color(), cs = o.colors ?? ['#C98A3A', '#B5642E', '#8FA64A', '#D9B24A', '#A6542A', '#6E8A3E'];
+  spots.forEach(([x, z, r = 1.2, y], si) => { for (let k = 0; k < n; k++) { const h1 = hash(x * 7.3 + z * 3.1 + k * 1.7), h2 = hash(x * 2.9 + z * 5.3 + k * 4.1), a = h1 * TAU, rr2 = r * Math.sqrt(h2), px = x + Math.cos(a) * rr2, pz = z + Math.sin(a) * rr2;
+    o3.position.set(px, (y ?? groundH(px, pz)) + 0.012 + h1 * 0.006, pz); o3.rotation.set((h2 - 0.5) * 0.5, h1 * 9, (h1 - 0.5) * 0.5); o3.scale.setScalar(0.7 + h2 * 0.7); o3.updateMatrix(); im.setMatrixAt(si * n + k, o3.matrix); im.setColorAt(si * n + k, c.set(cs[Math.floor(hash(k * 3.3 + x + z) * cs.length)])); } });
+  im.castShadow = false; im.receiveShadow = true; im.userData.cover = true; world.add(im); return im;
+}
+const NIGHTGLOW = [], LEAFSPOTS = [];   // street-light heads: off by day, glowing at night (applySky)
 function streetlight(p, x, z, ry = 0, o = {}) {   // tall pole, arm over the road (local +z), lamp head that lights up after dark
   const g = stat(grp(p, x, groundH(x, z), z, ry)), H = o.h ?? 6, NC = { cast: false };
   if (!NIGHTGLOW.length) NIGHTGLOW.push(mat('#FFF1C8', { em: '#FFE2A0', ei: 0, own: true }));
@@ -2589,14 +2648,14 @@ function city(o = {}) {   // nx × nz blocks of towers (taller in the centre), r
   }
   for (let i = 0; i < nx; i++) for (let j = 0; j < nz; j++) {
     const bx = x0 + i * P + P / 2, bz = z0 + j * P + P / 2, n = pick([1, 2, 4, 4]), c = 1 - 0.45 * Math.hypot(i - (nx - 1) / 2, j - (nz - 1) / 2) / Math.max(nx, nz);
-    box(world, B, 0.14, B, o.walk ?? '#9A9C9F', bx, 0, bz, { cast: false, stat: true });
-    box(world, B + 0.3, 0.16, B + 0.3, '#7E8084', bx, 0, bz, { cast: false, stat: true });   // curb
+    box(world, B, 0.14, B, o.walk ?? '#9A9C9F', bx, 0, bz, { cast: false, stat: true, surf: 'paving' });
+    box(world, B + 0.3, 0.16, B + 0.3, '#7E8084', bx, 0, bz, { cast: false, stat: true, surf: 'concrete' });   // curb
     const spots = n === 1 ? [[0, 0]] : n === 2 ? [[-1, 0], [1, 0]] : [[-1, -1], [1, -1], [-1, 1], [1, 1]];
     for (const [sx, sz] of spots) { const w = n === 1 ? B * 0.62 : B * 0.38; tower(world, bx + sx * B * 0.23, bz + sz * B * 0.23, { w, d: n === 2 ? B * 0.72 : w, h: rr(o.hmin ?? 10, o.hmax ?? 42) * c, lit: o.lit }); }
     const e = P / 2 - S / 4, ed = B / 2 - 0.45, hs = k => hash(bx * 3.7 + bz * 5.3 + k * 1.3);   // street furniture: hash only, the seeded layout stays the same
     if (o.props !== false) {
       const pv = shade(o.walk ?? '#9A9C9F', -0.08), ed2 = B / 2 - 0.55;
-      for (let k = 1; k < B / 1.6; k++) { box(world, 0.05, 0.01, B, pv, bx - B / 2 + k * 1.6, 0.14, bz, { cast: false, stat: true }); box(world, B, 0.01, 0.05, pv, bx, 0.14, bz - B / 2 + k * 1.6, { cast: false, stat: true }); }
+      if (CFG.surfaces === false) for (let k = 1; k < B / 1.6; k++) { box(world, 0.05, 0.01, B, pv, bx - B / 2 + k * 1.6, 0.14, bz, { cast: false, stat: true }); box(world, B, 0.01, 0.05, pv, bx, 0.14, bz - B / 2 + k * 1.6, { cast: false, stat: true }); }
       for (const [sx, sz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) streetlight(world, bx + sx * ed, bz + sz * ed, sx < 0 ? -Math.PI / 2 : Math.PI / 2);
       const ts = n === 4 ? 0.6 : 1;
       for (const [sx, sz] of [[0, 1], [0, -1], [1, 0], [-1, 0]]) for (const u of [-0.27, 0.27]) streetTree(bx + (sx ? sx * (B / 2 - 0.75) : u * B), bz + (sz ? sz * (B / 2 - 0.75) : u * B), ts);
@@ -2604,9 +2663,12 @@ function city(o = {}) {   // nx × nz blocks of towers (taller in the centre), r
       bench(world, bx + 0.1 * B, bz + B / 2 - 0.7, Math.PI); hydrant(world, bx + ed2, bz + 0.4 * B); trashcan(world, bx + 0.4 * B, bz + ed2);
       if (hs(7) < 0.45) busstop(world, bx, bz - B / 2 + 0.95, Math.PI); else planter(world, bx + 0.1 * B, bz - ed2, 0, { flowers: ['#FFD84A', '#FF8A3D'] });
       if (i > 0) trafficLight(world, bx - B / 2 + 0.35, bz - B / 2 + 0.35, { ry: -Math.PI / 2, state: hs(3) < 0.5 ? 'green' : 'red' });
+      for (const [sx, sz] of [[0, 1], [0, -1], [1, 0], [-1, 0]]) for (const u of [-0.3, 0.22]) { const dg = drain(world, bx + (sx ? sx * (B / 2 + 0.5) : u * B), bz + (sz ? sz * (B / 2 + 0.5) : u * B), sx ? Math.PI / 2 : 0); dg.userData.stat = true; }   // v2.35: storm drains in the gutter
+      if (o.leaves !== false) { for (const [sx, sz] of [[0, 1], [0, -1], [1, 0], [-1, 0]]) for (const u of [-0.27, 0.27]) { const lx = bx + (sx ? sx * (B / 2 - 0.75) : u * B), lz = bz + (sz ? sz * (B / 2 - 0.75) : u * B); LEAFSPOTS.push([lx, lz, 1.5 * ts, 0.14], [lx + sx * 1.6 + 0.4, lz + sz * 1.6 + 0.3, 0.9, 0.05]); } }
     }
     loops.push([[bx - e, bz - e], [bx + e, bz - e], [bx + e, bz + e], [bx - e, bz + e]]);
   }
+  if (LEAFSPOTS.length) leafLitter(LEAFSPOTS.splice(0), { per: 9 });
   if (o.backdrop !== false) DEFER.push(() => backdrop('skyline', { r0: Math.hypot(nx, nz) * P / 2 + 45 }));   // v2.34: far towers in the haze behind the last block
   return { loops, size: [nx * P, nz * P] };
 }
@@ -2635,8 +2697,15 @@ function water(o = {}) {   // animated low-poly sea; level: number or t => numbe
   const pos = geo.attributes.position, base = Float32Array.from(pos.array), lvl = typeof o.level === 'function' ? o.level : () => o.level ?? 0, n = pos.count;
   const col = new Float32Array(n * 3); geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
   const m = mat(o.color ?? '#2F6FA8', { rough: 0.22, metal: 0.05, opacity: o.opacity ?? 0.92, own: true }); m.vertexColors = true; m.color.set('#FFFFFF'); m.side = THREE.DoubleSide;
-  m.onBeforeCompile = sh => { Object.assign(sh.uniforms, { uTop: skyU.top, uBot: skyU.bot, uRefl: { value: o.reflect ?? 0.45 } });
-    sh.fragmentShader = 'uniform vec3 uTop, uBot; uniform float uRefl;\n' + sh.fragmentShader.replace('#include <opaque_fragment>', `
+  const pxFoam = o.foam !== false && CFG.shore !== false, uLvl = { value: 0 };   // v2.35: shore foam per pixel (a clean lapping band along the waterline instead of a few pale triangles)
+  m.onBeforeCompile = sh => { Object.assign(sh.uniforms, { uTop: skyU.top, uBot: skyU.bot, uRefl: { value: o.reflect ?? 0.45 }, uLvl, uWxT: WX.t });
+    sh.vertexShader = 'attribute float gh; varying float vGh; varying vec2 vWxz;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n  vGh = gh; vWxz = (modelMatrix * vec4(transformed, 1.0)).xz;');
+    sh.fragmentShader = `uniform vec3 uTop, uBot; uniform float uRefl, uLvl, uWxT; varying float vGh; varying vec2 vWxz;
+      float wfh(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+      float wfn(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f); return mix(mix(wfh(i), wfh(i + vec2(1.0, 0.0)), f.x), mix(wfh(i + vec2(0.0, 1.0)), wfh(i + vec2(1.0, 1.0)), f.x), f.y); }
+      ` + sh.fragmentShader.replace('#include <color_fragment>', `#include <color_fragment>
+      ${pxFoam ? `{ float d = uLvl - vGh; if (d > 0.0 && d < 2.2) { float nn = wfn(vWxz * 0.55), edge = 1.0 - smoothstep(0.0, 0.3 + nn * 0.25, d), band = smoothstep(0.6, 0.92, 0.5 + 0.5 * sin(d * 6.5 - uWxT * 1.6 + nn * 6.0)) * (1.0 - smoothstep(0.4, 2.2, d)) * (0.5 + 0.5 * wfn(vWxz * 2.3 + uWxT * 0.2));
+          float fo = clamp(edge * 0.9 + band * 0.75, 0.0, 1.0); diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.95, 0.98, 1.0), fo); diffuseColor.a = max(diffuseColor.a, fo); } }` : ''}`).replace('#include <opaque_fragment>', `
       { vec3 Vv = normalize(vViewPosition), Nn = normalize(normal); float fr = 0.03 + 0.97 * pow(1.0 - clamp(abs(dot(Nn, Vv)), 0.0, 1.0), 5.0);
         vec3 Rw = (vec4(reflect(-Vv, Nn), 0.0) * viewMatrix).xyz; vec3 sk = mix(uBot, uTop, smoothstep(0.0, 0.7, Rw.y));
         outgoingLight = mix(outgoingLight, sk, clamp(fr * uRefl, 0.0, 0.6)); }
@@ -2646,9 +2715,10 @@ function water(o = {}) {   // animated low-poly sea; level: number or t => numbe
   waterH = (x, z, t) => lvl(t) + H(x, z, t);
   const deep = new THREE.Color(o.color ?? '#2F6FA8'), shal = new THREE.Color(o.shallow ?? '#3FB8C0'), foam = new THREE.Color('#F2FAFF'), c = new THREE.Color(), gH = new Float32Array(n);
   for (let i = 0; i < n; i++) gH[i] = groundH(base[i * 3] + ox, base[i * 3 + 2] + oz);
-  tick(t => { const L = lvl(t), amp = ampF(t);
+  geo.setAttribute('gh', new THREE.BufferAttribute(gH, 1));
+  tick(t => { const L = lvl(t), amp = ampF(t); uLvl.value = L; if (o.shore !== false) WX.sea.value = L;
     for (let i = 0; i < n; i++) { const x = base[i * 3] + ox, z = base[i * 3 + 2] + oz, h = H(x, z, t), d = L - gH[i]; pos.setY(i, d < 0.12 ? gH[i] - 0.4 : L + h);   // dry land: tuck the water under the ground
-      const sh = clamp(1 - d / 3.5), cr = o.foam === false ? 0 : clamp((h / (amp * 1.5) - 0.78) * 4) * 0.65 * clamp((amp - 0.2) / 0.5), sf = o.foam === false || d < 0.12 ? 0 : clamp(1 - d / 0.6) * (0.45 + 0.4 * Math.sin(t * 2.2 - d * 6 + x * 0.3));
+      const sh = clamp(1 - d / 3.5), cr = o.foam === false ? 0 : clamp((h / (amp * 1.5) - 0.78) * 4) * 0.65 * clamp((amp - 0.2) / 0.5), sf = o.foam === false || pxFoam || d < 0.12 ? 0 : clamp(1 - d / 0.6) * (0.45 + 0.4 * Math.sin(t * 2.2 - d * 6 + x * 0.3));
       c.copy(deep).lerp(shal, sh * 0.6).lerp(foam, clamp(Math.max(cr, sf))); col[i * 3] = c.r; col[i * 3 + 1] = c.g; col[i * 3 + 2] = c.b; }
     pos.needsUpdate = true; geo.attributes.color.needsUpdate = true; });
   return me;
@@ -2678,7 +2748,7 @@ function underwater(o = {}) {   // with SKY 'underwater' | 'deepsea': moving cau
   CAUS.sc.value = o.scale ?? 3.2; POSTBAKE.push(() => scene.traverse(x => { if (x.isMesh) for (const m of [].concat(x.material)) causticPatch(m); }));
   tick(t => { CAUS.k.value = o.caustics ?? 0.9; CAUS.t.value = t * (o.speed ?? 0.5) + 23; });
   if (o.shafts !== false) lightShafts({ at: [ox, oz], n: o.shafts ?? 9, top: o.surface ?? 18, len: (o.surface ?? 18) + 4, color: '#BFF4FF', opacity: 0.09 });
-  if (o.plankton !== false) emit('snow', { at: [ox, 0, oz], area: [60, 60], height: 14, fall: 0.15, rate: 30, life: 14, size: 0.05, colors: ['#DFF6FF', '#A8E8F0'], opacity: 0.6, wind: [0.08, 0.02], t0: 0 });
+  if (o.plankton !== false) emit('snow', { cover: false, at: [ox, 0, oz], area: [60, 60], height: 14, fall: 0.15, rate: 30, life: 14, size: 0.05, colors: ['#DFF6FF', '#A8E8F0'], opacity: 0.6, wind: [0.08, 0.02], t0: 0 });
 }
 function lightShafts(o = {}) {   // god rays: soft additive beams slanting along the sun direction, swaying slowly (forest clearings, windows, dust, underwater)
   const [ax, az] = o.at ?? [0, 0], n = o.n ?? 7, top = o.top ?? 18, len = o.len ?? 24, g = dyn(grp(world, 0, 0, 0)), ms = [];
@@ -5109,14 +5179,20 @@ function interior(p, x, z, o = {}) {
   const wc = o.wall ?? K.wall, fl = o.floor ?? K.floor, NC = { cast: false }, R = { g, w, d, h, kind, seats: {}, anchors: {}, lamps: [] };
   // floor
   const fc = o.floorColor ?? { wood: '#B5834E', tiles: '#E8E4DC', carpet: '#7A8A9A', concrete: '#8E8A84', metal: '#5A605A' }[fl] ?? '#B5834E';
-  if (o.floor !== false) box(g, w, 0.06, d, fc, 0, -0.06, 0, { recv: true, cast: false });   // v2.21: floor: false → no floor (trapFloor, holes)
-  if (o.floor !== false && fl === 'wood') for (let i = 0; i < w / 0.22; i++) box(g, 0.008, 0.002, d, shade(fc, -0.12), -w / 2 + i * 0.22, 0, 0, NC);
-  if (fl === 'tiles') for (let i = 0; i < w / 0.4; i++) for (let j = 0; j < d / 0.4; j++) if ((i + j) % 2) box(g, 0.4, 0.003, 0.4, shade(fc, -0.1), -w / 2 + 0.2 + i * 0.4, 0, -d / 2 + 0.2 + j * 0.4, NC);
+  const SF = CFG.surfaces !== false, fs = o.floorSurf ?? { wood: 'boards', tiles: 'tiles', carpet: 'carpet', concrete: 'concrete', metal: 'metal' }[fl], ws = o.wallSurf ?? (kind === 'cellar' ? 'brick' : { wood: 'wallpaper', carpet: 'plaster', tiles: 'plaster', concrete: 'concrete', metal: 'concrete' }[fl]);   // v2.35: floors and walls get a surface (boards, tiles, carpet, wallpaper …)
+  if (o.floor !== false) box(g, w, 0.06, d, fc, 0, -0.06, 0, { recv: true, cast: false, surf: fs || undefined, indoor: true });   // v2.21: floor: false → no floor (trapFloor, holes)
+  if (!SF && o.floor !== false && fl === 'wood') for (let i = 0; i < w / 0.22; i++) box(g, 0.008, 0.002, d, shade(fc, -0.12), -w / 2 + i * 0.22, 0, 0, NC);
+  if (!SF && fl === 'tiles') for (let i = 0; i < w / 0.4; i++) for (let j = 0; j < d / 0.4; j++) if ((i + j) % 2) box(g, 0.4, 0.003, 0.4, shade(fc, -0.1), -w / 2 + 0.2 + i * 0.4, 0, -d / 2 + 0.2 + j * 0.4, NC);
   if (fl === 'concrete') for (let i = 0; i < 9; i++) box(g, 0.5 + _fh(x, i) * 1.4, 0.003, 0.3 + _fh(z, i) * 1.0, shade(fc, (_fh(i, x) - 0.5) * 0.12), (_fh(i, 3) - 0.5) * (w - 1.5), 0, (_fh(i, 7) - 0.5) * (d - 1.2), NC);
   if (fl === 'metal') for (let i = 0; i < w / 1.2; i++) box(g, 0.01, 0.003, d, shade(fc, -0.15), -w / 2 + i * 1.2, 0, 0, NC);
   // walls: back, left, right (front and ceiling open by default → the camera looks in)
-  const walls = { back: o.back !== false, left: o.left !== false, right: o.right !== false, front: !!o.front };
-  const wall = (W, cx, cz, rot, side) => { const q = grp(g, cx, 0, cz, rot); box(q, W, h, 0.14, wc, 0, 0, 0); box(q, W, 0.12, 0.03, shade(wc, -0.25), 0, 0, 0.085, NC); if (fl !== 'concrete' && fl !== 'metal') box(q, W, 0.05, 0.03, '#F2F2F0', 0, h - 0.08, 0.085, NC);
+  const walls = { back: o.back !== false, left: o.left !== false, right: o.right !== false, front: !!o.front }, ds0 = o.door ?? (kind === 'cellar' || kind === 'bunker' ? 'right' : 'left');
+  const wall = (W, cx, cz, rot, side) => { const q = grp(g, cx, 0, cz, rot); box(q, W, h, 0.14, wc, 0, 0, 0, { surf: ws || undefined, indoor: true }); box(q, W, 0.12, 0.03, shade(wc, -0.25), 0, 0, 0.085, NC); box(q, W, 0.015, 0.04, shade(wc, -0.32), 0, 0.12, 0.085, NC);
+    if (SF && o.fittings !== false && fl !== 'concrete' && fl !== 'metal') { const hw = k => _fh(cx * 3.1 + cz * 1.7 + W, k);   // v2.35: sockets near the floor, a vent grille up high, a picture rail in rooms with wallpaper
+      for (const sx of [-0.31, 0.27]) { const s = grp(q, sx * W, 0.3, 0.075); box(s, 0.08, 0.12, 0.012, '#F4F2EC', 0, 0, 0, NC); box(s, 0.012, 0.02, 0.014, '#3A3A3E', -0.014, 0.06, 0, NC); box(s, 0.012, 0.02, 0.014, '#3A3A3E', 0.014, 0.06, 0, NC); }
+      if (side === 'back' && hw(1) < 0.7) { const v = grp(q, (hw(2) < 0.5 ? -1 : 1) * (W / 2 - 0.5), h - 0.42, 0.075); box(v, 0.4, 0.22, 0.012, '#E4E2DC', 0, 0, 0, NC); for (let i = 0; i < 5; i++) box(v, 0.34, 0.012, 0.016, '#B8B6B0', 0, 0.03 + i * 0.038, 0, NC); }
+      if (ws === 'wallpaper') box(q, W, 0.03, 0.025, '#F2F2F0', 0, h - 0.5, 0.082, NC);
+      if (side !== 'back' && side !== 'front' && side !== ds0 && K.pics !== false && W > 3) { const pw = 0.45 + hw(3) * 0.35; FURN.picture(q, (hw(4) - 0.5) * (W - 2.4), 1.45 + hw(5) * 0.2, 0.08, 0, { w: pw, h: pw * (hw(6) < 0.5 ? 1.3 : 0.75) }); } } if (fl !== 'concrete' && fl !== 'metal') box(q, W, 0.05, 0.03, '#F2F2F0', 0, h - 0.08, 0.085, NC);
     if (fl === 'concrete') for (let i = 0; i < 5; i++) box(q, 0.6 + _fh(i, cx) * 1.2, 0.4 + _fh(cz, i) * 0.8, 0.01, shade(wc, -0.06 - _fh(i, 2) * 0.06), (_fh(i, 5) - 0.5) * (W - 1), 0.3 + _fh(i, 9) * (h - 1.2), 0.075, NC);
     if (kind === 'bunker') for (let i = 0; i < W / 0.6; i++) box(q, 0.012, h, 0.02, shade(wc, -0.12), -W / 2 + i * 0.6, 0, 0.075, NC);
     return q; };
@@ -5129,7 +5205,8 @@ function interior(p, x, z, o = {}) {
   if (ds && (ds === 'left' ? walls.left : walls.right)) { const sx = ds === 'left' ? -1 : 1, dz = d / 2 - 1.1, fr = grp(g, sx * (w / 2 + 0.02), 0, dz, -sx * Math.PI / 2);
     box(fr, 1.0, 2.15, 0.16, kind === 'bunker' ? '#3A3D44' : '#2A2018', 0, 0, 0, NC); for (const s2 of [-1, 1]) box(fr, 0.08, 2.2, 0.2, '#F2F2F0', s2 * 0.5, 0, 0.02); box(fr, 1.08, 0.08, 0.2, '#F2F2F0', 0, 2.15, 0.02);
     const pv = dyn(grp(fr, -0.46, 0, 0.06)); pv.userData.angle = 1.4; box(pv, 0.92, 2.1, 0.05, kind === 'bunker' ? '#5A605A' : '#9A6A44', 0.46, 0.02, 0); box(pv, 0.8, 0.85, 0.01, kind === 'bunker' ? '#4A504A' : '#8A5A38', 0.46, 1.1, 0.03, NC);
-    ball(pv, 0.035, '#C9A64A', 0.82, 1.0, 0.07, { detail: 0, ...NC }); R.door = pv; R.doors = [pv]; R.anchors.door = [sx * (w / 2 - 0.5), 0, dz]; }
+    ball(pv, 0.035, '#C9A64A', 0.82, 1.0, 0.07, { detail: 0, ...NC }); box(fr, 0.08, 0.12, 0.014, '#F4F2EC', 0.72, 1.1, 0.075, NC); box(fr, 0.03, 0.05, 0.02, '#D8D6D0', 0.72, 1.135, 0.075, NC); if (SF && fl !== 'concrete' && fl !== 'metal') box(g, 0.75, 0.012, 0.45, '#6A5A48', sx * (w / 2 - 0.5), 0, dz, { surf: 'carpet', indoor: true, ...NC });   // v2.35: light switch, doormat
+    R.door = pv; R.doors = [pv]; R.anchors.door = [sx * (w / 2 - 0.5), 0, dz]; }
   const wn = o.window ?? (kind === 'cellar' ? 'high' : kind === 'bunker' || kind === 'garage' ? false : 'back');
   if (wn && walls.back) { if (wn === 'high') FURN.window(R.backW, 1.6, h - 0.55, 0.08, 0, { w: 0.9, h: 0.35, curtains: false, night: o.night }); else FURN.window(R.backW, o.windowX ?? (w / 2 - 1.3), 1.0, 0.08, 0, { w: 1.3, h: 1.2, night: o.night, curtain: o.curtain }); R.anchors.window = [o.windowX ?? (w / 2 - 1.3), 1.5, -d / 2 + 0.4]; }
   // helpers used by the room recipes
@@ -8122,6 +8199,12 @@ function river(p, pts, o = {}) {
   const F = []; for (let i = 0; i < Math.ceil(L / 1.5); i++) F.push(box(g, 0.08, 0.02, 0.8 + hash(i) * 1.2, '', 0, 0, 0, { mat: mat('#FFFFFF', { basic: true, opacity: 0.7 }), cast: false }));
   tick(t => F.forEach((q, i) => { const s = (hash(i * 3) * L + t * (o.flow ?? 2.5)) % L, P = path.at(s), D = path.dir(s), lat = (hash(i * 7) - 0.5) * w * 0.8; q.position.set(P.x + D.z * lat, groundH(P.x, P.z) + (o.y ?? 0.08) + 0.02, P.z - D.x * lat); q.rotation.y = Math.atan2(D.x, D.z); }));
   for (let i = 0; i < n * 2; i++) { const s = hash(i) * L, P = path.at(s), D = path.dir(s), sd = i % 2 ? 1 : -1; _ell(world, shade('#8A847A', (hash(i * 3) - 0.5) * 0.2), P.x + D.z * sd * (w / 2 + 0.3), groundH(P.x, P.z) + 0.1, P.z - D.x * sd * (w / 2 + 0.3), 0.4 + hash(i * 5) * 0.4, 0.25, 0.35, { detail: 0 }); }
+  if (o.reeds !== false) { const it = [], cs = ['#6E8A44', '#7E9A4A', '#8A8A50', '#5E7A3A'];   // v2.35: reed clumps on both banks, lily pads in calm stretches
+    for (let i = 0; i < L / 2.2; i++) { const s = hash(i * 1.7 + 3) * L, P = path.at(s), D = path.dir(s), sd = hash(i * 5.1) < 0.5 ? 1 : -1; if (hash(i * 2.3 + 1) > (o.reeds ?? 0.7)) continue;
+      for (let k = 0; k < 5; k++) { const lat = w / 2 - 0.25 + hash(i * 9 + k) * 0.9, al = (hash(i * 4 + k * 3) - 0.5) * 1.6; it.push([P.x + D.z * sd * lat + D.x * al, P.z - D.x * sd * lat + D.z * al, 0.7 + hash(i + k * 7) * 0.7, hash(i * 3 + k) * TAU, cs[(i + k) % 4]]); } }
+    cover('reed', it);
+    if (o.lilies !== false) for (let i = 0; i < L / 7; i++) { const s = hash(i * 3.9 + 8) * L, P = path.at(s), D = path.dir(s), lat = (hash(i * 6.7) - 0.5) * w * 0.6, lx = P.x + D.z * lat, lz = P.z - D.x * lat, ly = groundH(P.x, P.z) + (o.y ?? 0.08) + 0.015;
+      for (let k = 0; k < 3; k++) cyl(world, 0.16 + hash(i + k) * 0.1, 0.16 + hash(i + k) * 0.1, 0.012, ['#4E8A44', '#5E9A4E', '#3F7A3C'][k], lx + (hash(i * 2 + k) - 0.5) * 0.9, ly, lz + (hash(i * 5 + k) - 0.5) * 0.9, { seg: 9, cast: false, stat: true }); if (hash(i * 8.1) < 0.5) ball(world, 0.06, '#F6D6E6', lx, ly + 0.05, lz, { detail: 0, cast: false, stat: true }); } }
   return { g, path };
 }
 // cave(p, x, z, { r, len, ry, crystals }) — rock arch and tunnel going −z, stalactites and stalagmites, optional glowing crystals
@@ -8259,10 +8342,21 @@ function supermarket(p, x, z, o = {}) {
 // gasstation(p, x, z, { ry, color }) — canopy with lights, pumps with hoses, small shop, price pylon (bars, no brand)
 function gasstation(p, x, z, o = {}) {
   const g = stat(grp(p ?? world, x, groundH(x, z), z, o.ry ?? 0)), c = o.color ?? '#D8342A', NC = { cast: false };
-  box(g, 16, 0.08, 12, '#8A8E94', 0, 0, 0); for (const [sx, sz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) box(g, 0.45, 5, 0.45, '#E8E6E2', sx * 5, 0, sz * 3); box(g, 14, 0.9, 9, '#F4F1E8', 0, 5, 0); box(g, 14.1, 0.4, 9.1, c, 0, 5.5, 0);
+  box(g, 16, 0.08, 12, '#8A8E94', 0, 0, 0, { surf: 'concrete' }); for (const [sx, sz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) { box(g, 0.45, 5, 0.45, '#E8E6E2', sx * 5, 0, sz * 3); box(g, 0.62, 0.9, 0.62, c, sx * 5, 0, sz * 3, NC); box(g, 0.7, 0.12, 0.7, '#C9CDD3', sx * 5, 4.88, sz * 3, NC); }
+  box(g, 14, 0.9, 9, '#F4F1E8', 0, 5, 0); box(g, 14.1, 0.4, 9.1, c, 0, 5.5, 0); box(g, 13.6, 0.06, 8.6, '#DCD8CE', 0, 4.95, 0, NC); for (let i = 0; i < 6; i++) box(g, 0.05, 0.03, 8.6, '#B8B4AA', -6 + i * 2.4, 4.93, 0, NC);   // v2.35: canopy underside with panel seams, column collars
+  box(g, 3.2, 0.3, 0.06, '#FFFFFF', 0, 5.3, 4.56, NC); for (const sx of [-1, 1]) box(g, 0.5, 0.3, 0.06, '#F2C531', sx * 2.2, 5.3, 4.56, NC); roofKit(g, 14, 9, 5.9, 11, { parapet: false, stair: false, tank: false });
+  for (const px of [-3, 3]) for (const sz of [-1, 1]) for (const bx of [-0.95, 0.95]) { cyl(g, 0.07, 0.07, 0.9, '#F2C531', px + bx, 0.08, sz * 2.2, { seg: 8, ...NC }); cyl(g, 0.075, 0.075, 0.12, '#2A2A2E', px + bx, 0.5, sz * 2.2, { seg: 8, ...NC }); }   // bollards
+  for (const [mx, mz] of [[-6.2, 3.6], [-5.1, 3.9]]) manhole(g, mx, mz); for (const sz of [-1.2, 1.2]) box(g, 9, 0.012, 0.1, '#F2C531', 0, 0.08, sz * 3.6, NC);
+  { const ar = grp(g, 6.9, 0.08, -3.2); box(ar, 0.5, 1.3, 0.4, '#3A6EA8', 0, 0, 0); box(ar, 0.3, 0.22, 0.02, '', 0, 0.9, 0.21, { mat: mat('#CFEFFF', { basic: true, glow: 0.3 }), cast: false }); _seg(ar, [0.25, 1.0, 0], [0.5, 0.2, 0.3], 0.02, 0.02, '#1E1E22'); box(ar, 0.46, 0.1, 0.36, '#F2F2F2', 0, 1.3, 0, NC);   // air and water
+    const tb = grp(g, -6.9, 0.08, -3.4); cyl(tb, 0.3, 0.26, 0.85, '#4A4E54', 0, 0, 0, { seg: 10 }); cyl(tb, 0.32, 0.32, 0.06, '#2A2A2E', 0, 0.85, 0, { seg: 10, ...NC }); box(tb, 0.5, 0.75, 0.35, '#5A8A4A', 0.75, 0, 0); box(tb, 0.52, 0.06, 0.37, '#3A5A30', 0.75, 0.75, 0, NC); }
   for (let i = 0; i < 8; i++) box(g, 0.8, 0.05, 0.8, '', -5.25 + (i % 4) * 3.5, 4.97, i < 4 ? -2 : 2, { mat: mat('#FFF8E8', { basic: true, glow: 1 }), cast: false });
   for (const px of [-3, 3]) { box(g, 1.6, 0.25, 4, '#C9CDD3', px, 0, 0); for (const sz of [-1, 1]) { const pm = grp(g, px, 0.25, sz * 0.9); box(pm, 0.8, 1.7, 0.5, '#F4F1E8', 0, 0, 0); box(pm, 0.82, 0.35, 0.52, c, 0, 1.5, 0, NC); box(pm, 0.5, 0.35, 0.02, '', 0, 1.0, sz * 0.26, { mat: mat('#7AE8A8', { basic: true, glow: 0.6 }), cast: false }); _seg(pm, [0.42, 1.2, 0], [0.6, 0.4, sz * 0.3], 0.025, 0.025, '#1E1E22'); box(pm, 0.08, 0.25, 0.1, '#2A2A2E', 0.45, 0.9, 0.1, NC); } }
-  const sh = grp(g, 0, 0, -10); box(sh, 10, 3.6, 6, '#E8E6E2', 0, 0, 0); box(sh, 10.1, 0.6, 6.1, c, 0, 3.3, 0); for (let i = 0; i < 4; i++) _win(sh, 1.9, 2.2, -3.6 + i * 2.4, 0.3, 3.01, 0, o.lit);
+  const sh = grp(g, 0, 0, -10); box(sh, 10, 3.6, 6, '#E8E6E2', 0, 0, 0, { surf: 'plaster' }); box(sh, 10.1, 0.6, 6.1, c, 0, 3.3, 0); for (let i = 0; i < 4; i++) if (i !== 2) _win(sh, 1.9, 2.2, -3.6 + i * 2.4, 0.3, 3.01, 0, o.lit);
+  roofKit(sh, 10, 6, 3.9, 13, { tank: false, stair: false }); facadeKit(sh, 10, 3.6, 6, { lamps: [-4.7, 4.7] });
+  { const dr = grp(sh, 1.2, 0, 3.02); box(dr, 1.9, 2.5, 0.06, '#2A2D33', 0, 0, 0, NC); for (const sx of [-1, 1]) box(dr, 0.86, 2.3, 0.04, '', sx * 0.46, 0.1, 0.03, { mat: mat('#26324A', { rough: 0.2, metal: 0.2, em: '#FFE9B8', ei: o.lit ? 0.7 : 0 }), cast: false }); for (const sx of [-1, 1]) box(dr, 0.04, 0.5, 0.05, '#C9CDD3', sx * 0.1, 1.0, 0.07, NC); box(dr, 1.7, 0.02, 0.9, '#3A3D44', 0, 0.005, 0.55, { surf: 'carpet', ...NC });   // double glass door with mat
+    const ice = grp(sh, -4.1, 0, 3.45); box(ice, 1.5, 1.7, 0.8, '#F4F6F8', 0, 0, 0); box(ice, 1.4, 0.4, 0.03, '#3A8AD8', 0, 1.2, 0.41, NC); for (const sx of [-1, 1]) box(ice, 0.66, 1.0, 0.03, '#DDE6EE', sx * 0.36, 0.12, 0.41, NC);   // ice box
+    for (let i = 0; i < 3; i++) box(sh, 0.9, 0.6, 0.02, ['#F2C531', '#E84A3A', '#3A8AD8'][i], -3.6 + [0, 2.4, 7.2][i], 1.1, 3.05, NC);   // window posters
+    for (let i = 0; i < 2; i++) { const pr = grp(sh, 3.9 + i * 0.75, 0, 3.5); cyl(pr, 0.28, 0.28, 0.6, ['#2E86AB', '#D8342A'][i], 0, 0, 0, { seg: 10 }); cyl(pr, 0.1, 0.1, 0.08, '#8A8E94', 0, 0.6, 0, { seg: 8, ...NC }); } }
   const py = grp(g, 9, 0, 5); box(py, 0.5, 6, 0.5, '#5A5E64', 0, 0, 0); box(py, 2, 3.2, 0.3, c, 0, 4, 0); for (let i = 0; i < 3; i++) { box(py, 1.6, 0.6, 0.32, '#1E1E22', 0, 4.3 + i * 0.95, 0, NC); for (let k = 0; k < 3; k++) box(py, 0.3, 0.4, 0.33, '', -0.5 + k * 0.42, 4.4 + i * 0.95, 0, { mat: mat('#FFB43A', { basic: true, glow: 1 }), cast: false }); }
   return g;
 }
@@ -8285,7 +8379,14 @@ function vault(p, x, z, o = {}) {
 // lab(p, x, z, { ry, w }) — open-front lab: benches with bubbling coloured flasks, microscope, screens, fume hood, glowing sample
 function lab(p, x, z, o = {}) {
   const W = o.w ?? 8, g = stat(grp(p ?? world, x, groundH(x, z), z, o.ry ?? 0)), NC = { cast: false };
-  box(g, W, 0.1, 6, '#D8DCE0', 0, 0, -1); box(g, W, 3.2, 0.2, '#E8ECEF', 0, 0, -4); for (const sx of [-1, 1]) box(g, 0.2, 3.2, 6, '#E8ECEF', sx * W / 2, 0, -1);
+  box(g, W, 0.1, 6, '#D8DCE0', 0, 0, -1, { surf: 'tiles', indoor: true }); box(g, W, 3.2, 0.2, '#E8ECEF', 0, 0, -4, { surf: 'concrete', indoor: true }); for (const sx of [-1, 1]) box(g, 0.2, 3.2, 6, '#E8ECEF', sx * W / 2, 0, -1, { surf: 'concrete', indoor: true });
+  box(g, W, 0.14, 0.04, '#9AA4AE', 0, 0.1, -3.88, NC); box(g, W, 0.1, 0.05, '#F2C531', 0, 1.05, -3.88, NC); for (let i = 0; i < W / 0.5; i++) if (i % 2) box(g, 0.25, 0.1, 0.052, '#2A2A2E', -W / 2 + 0.25 + i * 0.5, 1.05, -3.88, NC);   // v2.35: skirting, hazard stripe, ceiling duct with lights, signs, sink, stools, gas bottles
+  for (const sx of [-1, 1]) box(g, 0.04, 0.14, 6, '#9AA4AE', sx * (W / 2 - 0.11), 0.1, -1, NC);
+  cyl(g, 0.22, 0.22, W, '#B8BEC6', 0, 2.75, -3.5, { rz: Math.PI / 2, seg: 10, metal: 0.4 }); for (let i = 0; i < 3; i++) { box(g, 0.3, 0.3, 0.3, '#9AA0A8', -W / 3 + i * W / 3, 2.5, -3.5, NC); box(g, 1.5, 0.06, 0.22, '', -W / 3 + i * W / 3, 3.08, -2.2, { mat: mat('#F4FBFF', { basic: true, glow: 0.8 }), cast: false }); box(g, 1.6, 0.05, 0.3, '#C9CDD3', -W / 3 + i * W / 3, 3.14, -2.2, NC); }
+  { const sg = (lx, col, tri) => { const q = grp(g, lx, 2.25, -3.89); box(q, 0.42, 0.42, 0.02, col, 0, 0, 0, NC); if (tri) mesh(q, G('labTri', () => new THREE.CylinderGeometry(0.17, 0.17, 0.012, 3)), mat('#1E1E22'), 0, 0.2, 0.014, { rx: Math.PI / 2, cast: false }); else { box(q, 0.26, 0.07, 0.012, '#FFFFFF', 0, 0.17, 0.012, NC); box(q, 0.07, 0.26, 0.012, '#FFFFFF', 0, 0.08, 0.012, NC); } }; sg(W / 2 - 0.7, '#F2C531', true); sg(W / 2 - 1.25, '#2E9A5A', false); }
+  { const sk = grp(g, W / 2 - 1.9, 0.96, -2.8); box(sk, 0.6, 0.02, 0.45, '#8A9098', 0, 0, 0, NC); box(sk, 0.5, 0.012, 0.35, '#5E666E', 0, 0.012, 0, NC); _seg(sk, [0, 0.02, -0.18], [0, 0.3, -0.18], 0.02, 0.02, '#C9CDD3'); _seg(sk, [0, 0.3, -0.18], [0, 0.26, 0.0], 0.02, 0.02, '#C9CDD3');
+    for (const lx of [-1.6, 0.4, 2.0]) { const st = grp(g, lx, 0, 0.45); cyl(st, 0.2, 0.2, 0.06, '#3A3D44', 0, 0.62, 0, { seg: 12 }); cyl(st, 0.03, 0.03, 0.62, '#C9CDD3', 0, 0, 0, { seg: 6, ...NC }); cyl(st, 0.24, 0.24, 0.03, '#8A9098', 0, 0, 0, { seg: 12, ...NC }); cyl(st, 0.18, 0.18, 0.02, '#C9CDD3', 0, 0.22, 0, { seg: 10, ...NC }); }
+    for (let i = 0; i < 2; i++) { const gb = grp(g, W / 2 - 0.45, 0.1, -1.2 - i * 0.42); cyl(gb, 0.14, 0.14, 1.3, ['#3A6EA8', '#C8C8C8'][i], 0, 0, 0, { seg: 10 }); ball(gb, 0.14, ['#3A6EA8', '#C8C8C8'][i], 0, 1.3, 0, { detail: 1, ...NC }); cyl(gb, 0.04, 0.05, 0.14, '#C9A64A', 0, 1.42, 0, { seg: 6, ...NC }); box(gb, 0.05, 0.03, 0.34, '#5A5E64', -0.12, 0.8, 0, NC); } }
   for (const bz of [-2.8, -0.5]) { box(g, W - 1, 0.9, 1.0, '#F4F4F4', 0, 0, bz); box(g, W - 1, 0.06, 1.05, '#2A2A2E', 0, 0.9, bz);
     for (let i = 0; i < 6; i++) { const fx = -W / 2 + 1 + i * (W - 2) / 5, col = ['#4AE8A8', '#E84A8A', '#4AA8E8', '#F2C531', '#B87AFF', '#FF8A3A'][i], fl = grp(g, fx, 0.96, bz);
       if (i % 2) { cyl(fl, 0.06, 0.12, 0.18, '', 0, 0, 0, { mat: mat('#DDEEFF', { opacity: 0.4 }), seg: 10, cast: false }); cyl(fl, 0.025, 0.025, 0.12, '', 0, 0.18, 0, { mat: mat('#DDEEFF', { opacity: 0.4 }), seg: 8, cast: false }); cyl(fl, 0.055, 0.1, 0.1, '', 0, 0.01, 0, { mat: mat(col, { basic: true, glow: 0.6, opacity: 0.9 }), seg: 10, cast: false }); }
@@ -8300,13 +8401,19 @@ function lab(p, x, z, o = {}) {
 // prison(p, x, z, { cells, ry }) → P; P.openCell(i, t) — row of cells with bars and sliding doors, bunks, fence with barbed wire, watch tower with spotlight
 function prison(p, x, z, o = {}) {
   const n = o.cells ?? 4, g = stat(grp(p ?? world, x, groundH(x, z), z, o.ry ?? 0)), P = { doors: [] }, CW = 3, NC = { cast: false };
-  box(g, n * CW + 0.4, 0.1, 4, '#9A9A96', 0, 0, -2); box(g, n * CW + 0.4, 3.2, 0.3, '#B8B4AA', 0, 0, -4, { surf: 'concrete' }); box(g, n * CW + 0.4, 0.3, 4.3, '#A8A49A', 0, 3.2, -2);
-  for (let i = 0; i <= n; i++) box(g, 0.2, 3.2, 4, '#B8B4AA', -n * CW / 2 + i * CW, 0, -2);
+  box(g, n * CW + 0.4, 0.1, 4, '#9A9A96', 0, 0, -2, { surf: 'concrete' }); box(g, n * CW + 0.4, 3.2, 0.3, '#B8B4AA', 0, 0, -4, { surf: 'concrete' }); box(g, n * CW + 0.4, 0.3, 4.3, '#A8A49A', 0, 3.2, -2, { surf: 'concrete' });
+  for (let i = 0; i <= n; i++) box(g, 0.2, 3.2, 4, '#B8B4AA', -n * CW / 2 + i * CW, 0, -2, { surf: 'brick' });
+  roofKit(grp(g, 0, 0, -2), n * CW + 0.4, 4.3, 3.5, 17, { tank: false, stair: false }); box(g, n * CW + 0.6, 0.35, 0.14, '#7E7A70', 0, 2.85, 0.1, NC); box(g, n * CW + 0.5, 0.5, 0.2, '#8A867C', 0, 0, -4.16, NC);   // v2.35: roof plant, lintel over the bars, plinth
+  for (let i = 0; i < n; i++) { const cx = -n * CW / 2 + (i + 0.5) * CW; box(g, 0.7, 0.4, 0.06, '#1C2028', cx + 0.3, 2.35, -3.84, NC); for (let k = 0; k < 4; k++) box(g, 0.03, 0.4, 0.03, '#4A4E54', cx + 0.05 + k * 0.17, 2.35, -3.8, NC); box(g, 0.8, 0.06, 0.1, '#9A968C', cx + 0.3, 2.29, -3.82, NC);   // barred window, cell number, lamp, shelf, pillow, scratches
+    box(g, 0.42, 0.26, 0.03, '#2A2D33', cx, 2.9, 0.18, NC); for (let k = 0; k <= i % 4; k++) box(g, 0.035, 0.16, 0.012, '#F2F2F2', cx - 0.13 + k * 0.085, 2.95, 0.2, NC); box(g, 0.3, 0.1, 0.16, '#3A3D44', cx - 1.0, 3.02, 0.2, NC); box(g, 0.24, 0.03, 0.12, '', cx - 1.0, 3.0, 0.2, { mat: mat('#FFF1C8', { basic: true, glow: 0.8 }), cast: false });
+    box(g, 0.7, 0.04, 0.22, '#6A6E74', cx - 0.6, 1.7, -3.74, NC); box(g, 0.5, 0.1, 0.36, '#F2F2EE', cx - 0.95, 0.92, -3.45, NC); box(g, 1.9, 0.06, 0.8, '#7E8A9A', cx - 0.3, 0.86, -3.4, NC); for (let k = 0; k < 5; k++) box(g, 0.012, 0.14, 0.006, '#7A766C', cx + 0.75 + k * 0.045, 1.3, -3.846, { rz: k === 4 ? 0.9 : 0, ...NC }); }
   for (let i = 0; i < n; i++) { const cx = -n * CW / 2 + (i + 0.5) * CW; box(g, 1.9, 0.5, 0.8, '#5A5E64', cx - 0.3, 0.3, -3.4); box(g, 1.9, 0.12, 0.8, '#E8E6E2', cx - 0.3, 0.8, -3.4); box(g, 0.5, 0.5, 0.4, '#F4F4F4', cx + 1.0, 0, -3.6);
     for (let k = 0; k < 4; k++) box(g, 0.05, 3.1, 0.05, '#5A5E64', cx - 1.4 + k * 0.18, 0, 0, NC); const d = dyn(grp(g, cx + 0.15, 0, 0.08)); for (let k = 0; k < 7; k++) box(d, 0.05, 3.0, 0.05, '#4A4E54', -0.6 + k * 0.2, 0.05, 0, NC); for (const yy of [0.4, 1.6, 2.8]) box(d, 1.3, 0.08, 0.06, '#4A4E54', 0, yy, 0, NC); P.doors.push(d); }
   P.openCell = (i, t) => { const d = P.doors[i]; tick(tt => { d.position.x = -n * CW / 2 + (i + 0.5) * CW + 0.15 - 1.3 * sm01((tt - t) / 1.2); }); sfx(t, 'servo', 0.6); sfx(t + 1.2, 'clang', 0.6); return P; };
   const fz = 8; for (let i = 0; i <= 10; i++) box(g, 0.1, 4, 0.1, '#7A7E84', -15 + i * 3, 0, fz); for (let r = 0; r < 6; r++) box(g, 30, 0.03, 0.03, '#9A9EA4', 0, 0.6 + r * 0.6, fz, NC); for (let i = 0; i < 40; i++) mesh(g, G('barb', () => new THREE.TorusGeometry(0.25, 0.015, 3, 8)), mat('#C9CDD3', { metal: 0.6 }), -15 + i * 0.75, 4.2, fz, { ry: Math.PI / 2, cast: false });
-  const tw = grp(g, 15, 0, fz); for (const [sx, sz] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) box(tw, 0.25, 7, 0.25, '#7A7E84', sx * 1.2, 0, sz * 1.2); box(tw, 3.2, 2.2, 3.2, '#B8B4AA', 0, 7, 0); for (const r of [0, 1, 2, 3]) box(tw, 2.6, 0.9, 0.05, '#2A3A4A', 0, 8, 0, { ry: r * Math.PI / 2, cast: false }).position.set(Math.sin(r * Math.PI / 2) * 1.62, 8.45, Math.cos(r * Math.PI / 2) * 1.62); prism(tw, 3.6, 1, 3.6, '#5A5E64', 0, 9.2, 0);
+  const tw = grp(g, 15, 0, fz); for (const [sx, sz] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) box(tw, 0.25, 7, 0.25, '#7A7E84', sx * 1.2, 0, sz * 1.2); box(tw, 3.2, 2.2, 3.2, '#B8B4AA', 0, 7, 0, { surf: 'concrete' }); box(tw, 4.4, 0.12, 4.4, '#7A7E84', 0, 6.9, 0); for (const r of [0, 1, 2, 3]) { const rq = grp(tw, 0, 7, 0, r * Math.PI / 2); box(rq, 4.4, 0.05, 0.05, '#5A5E64', 0, 1.0, 2.17, NC); box(rq, 4.4, 0.05, 0.05, '#5A5E64', 0, 0.5, 2.17, NC); for (let k = 0; k < 5; k++) box(rq, 0.05, 1.0, 0.05, '#5A5E64', -2.17 + k * 1.085, 0, 2.17, NC); }
+  for (let k = 0; k < 14; k++) box(tw, 0.5, 0.04, 0.05, '#7A7E84', 0, 0.45 + k * 0.48, 1.33, NC); for (const sx of [-1, 1]) box(tw, 0.05, 7, 0.05, '#7A7E84', sx * 0.27, 0, 1.33, NC); for (const [a, b] of [[-1, 1], [1, -1]]) box(tw, 0.08, 3.6, 0.08, '#6A6E74', 0, 1.6, a * 1.2, { rz: b * 0.72, ...NC });   // ladder, cross braces
+  for (const r of [0, 1, 2, 3]) box(tw, 2.6, 0.9, 0.05, '#2A3A4A', 0, 8, 0, { ry: r * Math.PI / 2, cast: false }).position.set(Math.sin(r * Math.PI / 2) * 1.62, 8.45, Math.cos(r * Math.PI / 2) * 1.62); prism(tw, 3.6, 1, 3.6, '#5A5E64', 0, 9.2, 0);
   const sp = dyn(grp(world, x + 15, groundH(x, z) + 8.5, z + fz)); const bm = new THREE.Mesh(G('pbeam', () => new THREE.ConeGeometry(2.5, 18, 16, 1, true).translate(0, -9, 0)), new THREE.MeshBasicMaterial({ color: '#FFF4C8', transparent: true, opacity: 0.16, depthWrite: false, side: THREE.DoubleSide })); sp.add(bm);
   tick(t => { sp.rotation.set(-0.6 + 0.1 * Math.sin(t * 0.7), 0, 0.5 * Math.sin(t * 0.5)); bm.visible = o.night !== false; });
   return P;
@@ -9434,7 +9541,13 @@ function bake() {
       g.setAttribute('sway', new THREE.BufferAttribute(sw, 1));
     }
     const mt = o.material, plain = mt.isMeshStandardMaterial && !mt.vertexColors && !mt.transparent && !mt.map && !mt.userData.own && mt.emissive.getHex() === 0;
-    let bm = mt;   // plain colours become vertex colours: hundreds of props in a handful of draw calls
+    let bm = mt;
+    if (mt.userData.surf && CFG.surfaces !== false) {   // v2.35: patterns keep the part's own direction (floorboards along the room, slabs along the street) and stay continuous across the boxes of one building
+      const e = o.matrixWorld.elements, yaw = Math.atan2(e[8], e[10]), cs = Math.cos(yaw), sn = Math.sin(yaw), Pp = g.attributes.position, sp = new Float32Array(Pp.count * 3);
+      for (let k = 0; k < Pp.count; k++) { const X = Pp.getX(k), Z = Pp.getZ(k); sp[3 * k] = X * cs - Z * sn; sp[3 * k + 1] = Pp.getY(k); sp[3 * k + 2] = X * sn + Z * cs; }
+      g.setAttribute('sp', new THREE.BufferAttribute(sp, 3));
+      if (!mt.userData.spMat) { const c = mt.clone(); c.userData = { ...mt.userData, spMat: null }; mt.userData.spMat = surfFx(c, mt.userData.surf, { sp: true, indoor: mt.userData.surfIn }); if (mt.userData.nightEi) NIGHTMATS.push(c); }
+      bm = mt.userData.spMat; }   // plain colours become vertex colours: hundreds of props in a handful of draw calls
     if (plain) { const cc = mt.color, n = g.attributes.position.count, ca = new Float32Array(n * 3); for (let k = 0; k < n; k++) { ca[3 * k] = cc.r; ca[3 * k + 1] = cc.g; ca[3 * k + 2] = cc.b; } g.setAttribute('color', new THREE.BufferAttribute(ca, 3));
       const vk = [mt.flatShading, mt.roughness, mt.metalness, mt.side, mt.userData.wind ?? ''].join('|'); bm = _vcm.get(vk);
       if (!bm) { bm = new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: mt.flatShading, roughness: mt.roughness, metalness: mt.metalness, side: mt.side }); if (mt.userData.wind) windify(bm, mt.userData.wind); _vcm.set(vk, bm); } }
