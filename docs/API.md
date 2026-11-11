@@ -339,5 +339,38 @@ Zustände (`state`): fresh · steam · burnt (dunkel, raucht) · frozen (Eisbloc
 - Orte: `foodtruck(p, x, z, { ry, color, awning, vendor })` · `counter(p, x, z, { kind: 'fastfood' | 'bakery' | 'icecream' | 'cafe', w, ry, staff })` · `shelf(p, x, z, { kind: 'grocery' | 'drinks' | 'snacks' | 'produce' | 'cans', w, h, ry, sides })` · `buffet(p, x, z, { n, ry })`. Speisekarten zeigen Bilder statt Schrift.
 - Neue Partikel: steam · crumbs · grease · drip · splat; neue Sounds: clap · crunch · munch · slurp · gulp · fizz · sizzle · boil.
 
+# Neu in v2.18
+
+## Zweiräder
+`bike(p, { kind: 'bicycle' | 'motorcycle' | 'scooter' | 'skateboard', x, z, ry, color })` → V; bewegen mit `drive(V, pts, { speed, dust: false })` (Zweiräder legen sich in Kurven). `rideBike(rig, V, { t0, t1 })`: Fahrrad mit Tretbewegung passend zu den Rädern, Motorrad mit Händen am Lenker (Motor, Auspuffrauch), Tretroller mit Abstoßen, Skateboard seitlich stehend.
+
+## Bahn
+`rails(p, [[x,z], …])` (Schotter, Schwellen, Schienen) · `train(p, { kind: 'commuter' | 'subway' | 'steam' | 'freight', cars, x, z, ry })` → T · `run(T, { from, to, t0, speed, ramp, horn })` (fährt weich an und bremst, Dampflok raucht, Hupe) · `trainStation(p, x, z, { len, ry })` (Bahnsteig mit Kante, Dach, Bänken, Schildern, Uhr).
+
+## Einsatz- und Baufahrzeuge
+- `firetruck(p, x, z, { ry })` → F: `F.ladder(t0, t1, { yaw, pitch, extend })`, `F.spray(t0, t1, { at })` (Wasserstrahl aus dem Korb), Blaulicht, Sirene.
+- `ambulance(p, x, z, { ry })` → A: `A.open(t)` (Hecktüren), Blaulicht.
+- `excavator(p, x, z, { ry })` → E: `E.dig(t, { at, dump })` (graben, schwenken, auskippen mit Staub und Erde).
+- `crane(p, x, z, { h, jib, ry })` → C: `C.move(t0, t1, { yaw, trolley, hook })`, `C.hookAt(t)` (Hakenposition, z. B. um etwas daran hängen zu lassen).
+- `monstertruck(p, x, z, { color, ry })`: mit `drive` und `jumps`.
+- `balloon(p, { x, y, z, colors, burn: [t…], passengers })` → mit `fly` bewegen (Brennerflamme, Passagiere).
+- `stream(src, t0, t1, { dir, speed, n, size, color, glow })`: Strahl aus Tropfen auf echten Bahnen (Schlauch, Brunnen, Wasserpistole, Lava); `src`/`dir` dürfen Funktionen von t sein.
+
+## Naturgewalten
+`volcano(p, x, z, { r, h, erupt: t })` (Ausbruch: Explosion, Aschesäule, Lavabomben, Lavaströme, Leuchten, Beben) · `tornado(p, { x, z, path, t0, t1, speed, h, r })` (drehender Trichter mit Trümmern, Staub, Sturmgeräusch) · `avalanche(p, { from, to, t0, dur, w })` (Schneewalze mit Pulverwolke) · `earthquake(t0, t1, { at, amp, cracks })` (Kamerabeben, Risse öffnen sich, Staub) · `waterfall(p, x, z, { h, w, ry })` (Felswand, Wasser, Gischt, Becken) · `river(p, pts, { w, flow })` (Fluss mit treibendem Schaum, Ufersteine) · `cave(p, x, z, { r, len, ry, crystals })` (Höhle mit Tropfsteinen, leuchtende Kristalle).
+
+## Kleintiere
+`insects(kind, { at: [x,y,z] | rig, n, r, t0, t1, scatter })` mit bee · butterfly · fly · firefly · mosquito (folgt einem Rig, Summen) · `antTrail(pts, { n, speed })` · `spider(p, { x, z, size, web })` (mit `walk`) · `snake(p, { x, z, len, pattern: 'bands' | 'diamond' | 'plain' })` + `slither(S, pts, { t0, speed })`, `S.do('strike' | 'hiss' | 'rattle', t)` · `lizard(p, { x, z })` (mit `walk`) · `frog(p, { x, z })` + `hop(F, pts, { t0 })`, `F.do('croak' | 'tongue', t)`.
+
+## Gebäude
+`castle(p, x, z, { size, ry, flag, flag2 })` → `C.gate(t, open)` (Fallgitter und Zugbrücke) · `hospital(p, x, z, { floors, ry })` (blaues H-Schild, Liegendanfahrt) · `supermarket(p, x, z, { ry, color })` (Glasfront, Einkaufswagen, Regale innen) · `gasstation(p, x, z, { ry, color })` · `bank(p, x, z, { ry })` · `vault(p, x, z, { open: t })` (Tresortür schwingt auf, Goldbarren, Geldstapel) · `lab(p, x, z, { ry, w })` (blubbernde Kolben, Bildschirme, Leuchtprobe) · `prison(p, x, z, { cells })` → `P.openCell(i, t)` (Zellen mit Gittertüren, Zaun mit Stacheldraht, Wachturm mit Suchscheinwerfer) · `airport(p, x, z, { ry })` (Terminal, Fluggastbrücke, Tower).
+
+## Alltag
+- Bildschirme: `uiScreen(parent, w, h, kind, { t0, t1, from, to })` mit chat · notify · battery (leert sich, wird rot) · call · video · map · code · graph · dna · social; `phone(rig, { ui: 'chat' })` zeigt den Inhalt auf dem Handy, `laptop(p, x, y, z, { open: t, ui })`.
+- Geld: `money(p, kind, x, y, z)` mit bill · stack · coins · coin · case · gold; `moneyRain(t0, t1, { at })` (Scheine regnen, Kassenklingeln).
+- Sport: `sportsBall(p, kind, x, y, z)` mit soccer · basketball · football · tennis · volleyball · bowling · beach; `goal(p, x, z, { kind: 'soccer' | 'hoop' })`; `kickBall(rig, ball, t, { to })`, `throwBall(rig, ball, t, { to })`.
+- Party: `balloons(p, x, y, z, { n, release: t })`, `discoBall(p, x, y, z)` (farbige Lichtkegel), `djDesk(p, x, z, { ry, dj: true })` (Plattenteller, Pegellichter, DJ).
+- Musik: `instrument(rig, kind, t0, t1)` mit guitar · drums (Set mit Hocker) · keyboard · trumpet · mic; mit passendem Klang.
+
 # Tests
 `bash tests/run.sh [name …]` baut die Beispiel-Story aus `template.html` und alle Szenen in `tests/` und rendert je drei Bilder; Seitenfehler lassen den Test scheitern. Der Workflow `test` läuft bei jeder Engine-Änderung auf GitHub. Neue Funktionen bekommen eine kleine Testszene in `tests/<thema>.story.js` + `.scene.js`.

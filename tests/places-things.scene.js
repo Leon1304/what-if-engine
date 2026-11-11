@@ -1,0 +1,13 @@
+  ground({ color: '#8FA860', flat: 400, hills: 0 });
+  const P = (x, z, o = {}) => { const f = figure({ skin: '#F1C7A5', ...o }); world.add(f.root); f.root.position.set(x, 0, z); f.root.rotation.y = o.ry ?? 0; return f; };
+  const bz = P(0, 0, { shirt: '#3D7BD9', expr: 'scared' }); insects('bee', { at: bz }); insects('butterfly', { at: [3, 1.2, 0] }); insects('firefly', { at: [6, 1.2, 0], n: 30 });
+  antTrail([[-2, 3], [0, 3.3], [2, 3]], { n: 30 });
+  const sp = spider(world, { x: 10, z: 0, size: 0.3, web: true }); walk(sp, [[10, 0], [11, 1]], { t0: 1, speed: 0.4 });
+  const sn = snake(world, { x: 14, z: 0, len: 2.2, pattern: 'diamond' }); slither(sn, [[14, 0], [14, 3], [15, 6]], { t0: 0.5, speed: 0.6 }); sn.do('strike', 4.6);
+  const lz = lizard(world, { x: 18, z: 0 }); walk(lz, [[18, 0], [18.5, 3]], { t0: 1, speed: 0.6 }); const fr = frog(world, { x: 20, z: 0 }); hop(fr, [[20, 0], [20, 1], [20.5, 2], [21, 3]], { t0: 1 }); fr.do('croak', 4.4); fr.do('tongue', 5.2, { dur: 0.4 });
+  const cs = castle(world, 60, 0, {}); cs.gate(5); hospital(world, 100, 0); supermarket(world, 140, 0); gasstation(world, -60, 0); bank(world, -100, 0); vault(world, -100, 30, { open: 7 }); lab(world, -140, 0); const pr = prison(world, -180, 0, {}); pr.openCell(0, 9); airport(world, 0, -150);
+  const ph = P(30, 30, { shirt: '#D94F3D', expr: 'surprised' }); phone(ph, { t0: 0, ui: 'chat' });
+  const tb = stat(grp(world, 33, 0, 30)); box(tb, 1.2, 0.74, 0.7, '#8A5A34', 0, 0, 0); laptop(world, 33, 0.74, 30, { open: 2, ui: 'graph' }); money(world, 'case', 33.9, 0.74, 30.1); money(world, 'gold', 32.5, 0.74, 30.15); money(world, 'coins', 33.4, 0.74, 30.25); moneyRain(10.5, 14, { at: [33, 0, 31] });
+  const kk = P(40, 30, { shirt: '#3DA56A', ry: Math.PI }); const sb = sportsBall(world, 'soccer', 40, 0, 29.5); kickBall(kk, sb, 11.4, { to: [40, 22] }); goal(world, 40, 20, { ry: 0 }); goal(world, 44, 30, { kind: 'hoop', ry: Math.PI }); ['basketball', 'football', 'tennis', 'volleyball', 'bowling', 'beach'].forEach((k, i) => sportsBall(world, k, 42 + i * 0.5, 0, 31.5));
+  balloons(world, 50, 0, 30, { n: 6 }); discoBall(world, 53, 4, 30); djDesk(world, 53, 29, { dj: true });
+  ['guitar', 'drums', 'keyboard', 'trumpet', 'mic'].forEach((k, i) => { const f = P(60 + i * 1.6, 30, { shirt: ['#3D7BD9', '#D94F3D', '#3DA56A', '#E3B23C', '#8A4AD9'][i], expr: 'happy' }); instrument(f, k, 12.5, 15); });

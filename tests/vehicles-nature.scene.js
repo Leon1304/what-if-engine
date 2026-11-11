@@ -1,0 +1,16 @@
+  ground({ color: '#8FA860', flat: 1200, hills: 0 });
+  const R = (k, x, sp, sh) => { const B = bike(world, { kind: k, x, z: -10 }); drive(B, [[x, -10], [x, 40]], { t0: 0, speed: sp, dust: false }); const f = figure({ shirt: sh, expr: 'happy' }); world.add(f.root); f.root.position.set(x + 1, 0, -10); rideBike(f, B, { t0: 0 }); return B; };
+  const b1 = R('bicycle', 0, 5, '#3D7BD9'), b2 = R('motorcycle', 3, 9, '#1E1E22'), b3 = R('scooter', 6, 3, '#D94F3D'), b4 = R('skateboard', 9, 3.5, '#3DA56A');
+  track('b1', b1, 1); track('b2', b2, 1); track('b3', b3, 1); track('b4', b4, 0.9);
+  rails(world, [[-120, 40], [120, 40]]); rails(world, [[-120, 52], [120, 52]]); trainStation(world, 0, 45.2, { len: 50, ry: Math.PI / 2 });
+  const T1 = train(world, { kind: 'commuter', cars: 3, x: -100, z: 40, ry: Math.PI / 2 }); run(T1, { from: [-100, 40], to: [80, 40], t0: 0, speed: 15 });
+  const T2 = train(world, { kind: 'steam', cars: 1, x: 110, z: 52, ry: -Math.PI / 2 }); const T3 = train(world, { kind: 'freight', cars: 3, x: 130, z: 52, ry: -Math.PI / 2 }); run(T2, { from: [110, 52], to: [-60, 52], t0: 0, speed: 10 }); run(T3, { from: [130, 52], to: [-40, 52], t0: 0, speed: 10, horn: false });
+  const F = firetruck(world, 200, 0); F.ladder(8, 10, { yaw: 0.5, pitch: 0.8, extend: 5 }); F.spray(9.6, 14, {});
+  const A = ambulance(world, 215, 0); A.open(9.2);
+  const E = excavator(world, 230, 0, { ry: Math.PI / 2 }); E.dig(9.0, { at: [234, 0], dump: [230, 5] });
+  const C = crane(world, 250, -10, { h: 25, jib: 20 }); C.move(9, 12, { yaw: 1.2, trolley: 15, hook: 15 });
+  const M = monstertruck(world, 270, -10); drive(M, [[270, -10], [270, 40]], { t0: 10, speed: 10, jumps: [[12.3, 2, 1]] }); track('mt', M, 2);
+  const BL = balloon(world, { x: 290, y: 12, z: 0, burn: [12, 13.5] }); fly(BL, [[290, 12, 0], [300, 22, -10]], { t0: 10, speed: 2 });
+  volcano(world, 400, -80, { erupt: 12 }); tornado(world, { x: 500, z: -30, path: [[500, -30], [520, 0]], t0: 12, speed: 3 }); avalanche(world, { from: [600, -60], to: [600, 0], t0: 12, dur: 6 });
+  earthquake(13, 17, { at: [700, 0] }); const hs = stat(grp(world, 700, 0, -6)); box(hs, 6, 4, 4, '#C9B8A0', 0, 0, 0);
+  waterfall(world, 800, 0, { h: 12 }); river(world, [[840, -30], [850, 0], [845, 30]]); cave(world, 900, 0, {});
