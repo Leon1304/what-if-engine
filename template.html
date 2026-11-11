@@ -474,6 +474,7 @@ scene.add(hemi, sun, sun.target);
 if (CFG.env) { const pm = new THREE.PMREMGenerator(renderer); scene.environment = pm.fromScene(new RoomEnvironment(), 0.04).texture; pm.dispose(); }
 const ENVI = { underwater: 0.2, deepsea: 0.08, day: 0.3, golden: 0.24, dusk: 0.14, night: 0.06, dawn: 0.17, storm: 0.26, apocalypse: 0.12, space: 0.04 }, WINDY = { storm: 2.6, apocalypse: 1.7, dusk: 1.1, underwater: 1.8, deepsea: 1.2 };
 scene.fog = new THREE.Fog('#000000', 40, 260);
+var FOGK = CFG.fogScale ?? 1;   // fog distance × FOGK (ship() / aircraft() raise it for huge vessels so they don't vanish in the haze)
 const world = new THREE.Group(); scene.add(world);
 const tickers = [];
 const tick = f => (tickers.push(f), f);   // f(t) runs every frame; must be a pure function of t
@@ -519,7 +520,7 @@ function applySky(t) {
   skyNow = k < 0.5 ? A : B;
   mixC(skyU.top.value, A.top, B.top, k); mixC(skyU.bot.value, A.bot, B.bot, k);
   skyU.stars.value = lerp(A.stars, B.stars, k);
-  mixC(scene.fog.color, A.fog, B.fog, k); scene.fog.near = lerp(A.near, B.near, k); scene.fog.far = lerp(A.far, B.far, k);
+  mixC(scene.fog.color, A.fog, B.fog, k); scene.fog.near = lerp(A.near, B.near, k) * FOGK; scene.fog.far = lerp(A.far, B.far, k) * FOGK;
   mixC(hemi.color, A.hs, B.hs, k); mixC(hemi.groundColor, A.hg, B.hg, k); hemi.intensity = lerp(A.hi, B.hi, k);
   mixC(sun.color, A.sun, B.sun, k); sun.intensity = lerp(A.si, B.si, k);
   const el = THREE.MathUtils.degToRad(lerp(A.el, B.el, k)), az = THREE.MathUtils.degToRad(CFG.sunAz);
@@ -1019,6 +1020,7 @@ function vehicle(p, x, z, o = {}) {   // kind: car | sports | taxi | police | va
 // --- aircraft: plane(p, { kind: 'jet' | 'prop' | 'airliner', color, scale }) and heli(p, { color }) → { g, prop/rotor }; move them with fly() ---
 const rod = (p, rFront, rBack, len, c, x, y, z, o = {}) => cyl(p, rFront, rBack, len, c, x, y - len / 2, z, { ...o, rx: Math.PI / 2 });   // cylinder along z, centred at (x, y, z); rFront at +z
 function plane(p, o = {}) {
+  if (o.legacy !== true && typeof aircraft === 'function') { const kk = o.kind ?? 'prop', A = aircraft(p, { ...o, kind: { prop: 'cessna', jet: 'bizjet', airliner: 'airliner' }[kk] ?? kk, scale: (o.scale ?? 1) * ({ prop: 6.5 / 8.3, jet: 9 / 20, airliner: 22 / 38 }[kk] ?? 1), paint: o.color ? { c: o.color } : undefined }); A.prop = A.props[0]?.pr ?? null; return A; }
   const k = o.kind ?? 'prop', s = o.scale ?? 1, c = o.color ?? (k === 'airliner' ? '#F2F2F2' : k === 'jet' ? '#8A94A6' : '#D94F3D'), acc = o.accent ?? (k === 'airliner' ? '#2E86AB' : '#F2F2F2');
   const g = dyn(grp(p, o.x ?? 0, o.y ?? 0, o.z ?? 0)), b = grp(g); b.scale.setScalar(s); const NC = { cast: false }, R = Math.PI / 2;
   const L = k === 'airliner' ? 22 : k === 'jet' ? 9 : 6.5, r = k === 'airliner' ? 1.5 : k === 'jet' ? 0.55 : 0.5;
@@ -2415,6 +2417,7 @@ DEFER.push(() => {   // wading: figures whose walk goes through water splash wit
     emit('spray', { at: st => { const P = W.obj._posAt(st), wl = waterH(P.x, P.z, st); return wl - groundH(P.x, P.z) > 0.12 ? [P.x, wl + 0.05, P.z] : [0, -999, 0]; }, rate: 16, speed: 1.6, spread: 0.7, size: 0.07, life: 0.55 }); }
 });
 function boat(p, x, z, o = {}) {   // kind: boat | ship | yacht — then bob(b.g) to float it
+  if (o.legacy !== true && typeof ship === 'function') { const kk = o.kind ?? 'boat'; return ship(p, { boat: 'speedboat', ship: 'freighter', yacht: 'speedboat' }[kk] ?? kk, x, z, { ...o, len: o.len ?? { boat: 4.5, ship: 22, yacht: 10 }[kk], paint: o.color ? { top: o.color } : undefined }); }
   const g = dyn(grp(p, x, 0, z, o.ry ?? 0)), c = o.color ?? '#D94F3D', NC = { cast: false };
   if (o.kind === 'ship') {
     box(g, 6, 2.2, 22, '#2A2D33', 0, -1, 0); box(g, 6.1, 0.4, 22.1, c, 0, 0.9, 0); prism(g, 6, 3.5, 2.2, '#2A2D33', 0, 0.1, 11, { rx: Math.PI / 2, ...NC });
@@ -5554,6 +5557,319 @@ function _octo(S, o) {   // octopus: mantle, eyes, eight curling arms with sucke
     A.forEach((segs, i) => segs.forEach((sg, j) => { const w = Math.sin(ph * (0.8 + 0.1 * (i % 3)) - j * 0.7 + i * 1.3 + S.sd * 5); sg.rotation.x = j ? (0.12 + 0.18 * w) * (1 - jet) + 0.05 * w * jet : 0.25 * (1 - jet) + 1.3 * jet; sg.rotation.y = j ? 0.1 * Math.cos(ph - j * 0.5 + i) * (1 - jet) : 0; }));
     const pul = jet * Math.sin(ph * 2); S.b.scale.set(1 - 0.05 * pul, 1, 1 - 0.05 * pul); for (const f of S.fx) f(t, S); });
   return S;
+}
+
+/* ====================================================================== */
+/* SHIPS & AIRCRAFT (v2.15) — ship(): lofted hulls (bow, stern, sheer, waterline paint) + 15 kinds from rowboat to carrier,
+   naval gun turrets that aim and fire (cannon()), broadsides, VLS missiles, landing-craft ramp with seats, oars, sails;
+   aircraft(): 11 kinds (airliner, jumbo, bizjet, cargo, WWII fighter, heavy bomber, biplane, seaplane, cessna, stealth, glider)
+   with spinning props, retracting gear, bomb bay, cargo ramp, contrails — fly(), bomb(), strafe(), shotDown(), missile() work */
+/* ====================================================================== */
+const _vcol = (pos, col, cm, cc) => (A, B, C, hex) => { let q = cm.get(hex); if (!q) { cc.set(hex); q = [cc.r, cc.g, cc.b]; cm.set(hex, q); } pos.push(...A, ...B, ...C); col.push(...q, ...q, ...q); };
+const _vmesh = (p, pos, col, o = {}) => { const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3)); g.computeVertexNormals();
+  const me = new THREE.Mesh(g, new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: o.rough ?? 0.75, metalness: o.metal ?? 0.05, side: THREE.DoubleSide })); me.castShadow = o.cast ?? true; me.receiveShadow = true; p.add(me); return me; };
+function _hull(p, o) {   // lofted hull, waterline at y = 0, keel at −T, bow +z: { L, B, D, T, bow: sharp|round|flat|viking, stern: transom|round|viking, sheer, sheerAft, rake, top, bot, boot, deck, planks }
+  const { L, B, D, T } = o, NS = 30, pos = [], col = [], tri = _vcol(pos, col, new Map(), new THREE.Color()), fb = o.fb ?? 0.66, fs = o.fs ?? 0.18;
+  const W = u => { let w = 1; if (u > fb) { const k = (u - fb) / (1 - fb); w = o.bow === 'flat' ? 1 - 0.06 * k : o.bow === 'round' ? Math.sqrt(Math.max(0, 1 - k ** 2.2)) * 0.96 + 0.04 * (1 - k) : o.bow === 'viking' ? Math.pow(1 - k, 0.75) : Math.pow(Math.max(0, 1 - k ** 1.5), 0.9); }
+    if (u < fs) { const k = (fs - u) / fs; w = o.stern === 'transom' ? 1 - 0.22 * k * k : o.stern === 'viking' ? Math.pow(1 - k, 0.75) : Math.sqrt(Math.max(0, 1 - (0.92 * k) ** 2)); } return Math.max(w, 0.002); };
+  const deckY = u => D - T + (o.sheer ?? 0) * Math.max(0, (u - 0.45) / 0.55) ** 2 + (o.sheerAft ?? 0) * Math.max(0, (0.4 - u) / 0.4) ** 2;
+  const keelY = u => { let y = -T; if (u > 0.8) y += (o.bow === 'flat' ? 0.75 : o.bow === 'viking' ? 0.85 : o.planing ? 0.7 : 0.55) * T * ((u - 0.8) / 0.2) ** 1.6; if (u < 0.08 && o.stern !== 'transom') y += 0.5 * T * ((0.08 - u) / 0.08) ** 1.5; return y; };
+  const sec = u => { const w = W(u) * B / 2, dy = deckY(u), ky = keelY(u), z0 = L * (u - 0.5), rk = (o.rake ?? 0.3) * sm01((u - 0.88) / 0.12), rs = o.stern === 'transom' ? 0 : -0.3 * sm01((0.1 - u) / 0.1);
+    const P = [[w * (o.flare ?? 1.04), dy], [w, Math.min(dy, 0.25 * (dy - ky) + ky + (dy - ky) * 0.6)], [w * 0.98, lerp(ky, 0, 0.55)], [w * 0.86, lerp(ky, 0, 0.18)], [w * (o.flat ? 0.75 : 0.5), ky + (o.flat ? 0.02 : 0.08) * T], [0, ky]];
+    return P.map(([x, y]) => [x, y, z0 + (rk + rs) * (y - ky)]); };
+  const S = []; for (let j = 0; j <= NS; j++) S.push(sec(j / NS));
+  const colAt = (y, u) => { if (y < -0.02) return o.bot; if (y < (o.bootH ?? Math.max(0.15, T * 0.12))) return o.boot ?? o.bot; if (o.planks && Math.floor((y + 50) / o.planks) % 2) return shade(o.top, -0.07); if (o.band && y > deckY(u) - o.band[0]) return o.band[1]; return o.top; };
+  for (let j = 0; j < NS; j++) { const A = S[j], Bq = S[j + 1], u = (j + 0.5) / NS;
+    for (let i = 0; i < A.length - 1; i++) for (const s of [-1, 1]) { const a = [s * A[i][0], A[i][1], A[i][2]], b = [s * Bq[i][0], Bq[i][1], Bq[i][2]], c = [s * Bq[i + 1][0], Bq[i + 1][1], Bq[i + 1][2]], d = [s * A[i + 1][0], A[i + 1][1], A[i + 1][2]], hx = colAt((a[1] + b[1] + c[1] + d[1]) / 4, u); tri(a, b, c, hx); tri(a, c, d, hx); }
+    if (o.deck !== false) { const dc = o.deckC ?? o.deck ?? '#8A8E92', a = A[0], b = Bq[0]; tri([-a[0], a[1] - 0.02, a[2]], [a[0], a[1] - 0.02, a[2]], [b[0], b[1] - 0.02, b[2]], dc); tri([-a[0], a[1] - 0.02, a[2]], [b[0], b[1] - 0.02, b[2]], [-b[0], b[1] - 0.02, b[2]], dc); } }
+  for (const [j, cap] of [[0, o.stern === 'transom'], [NS, o.bow === 'flat' && !o.open]]) if (cap) { const A = S[j], cy = (A[0][1] + A[A.length - 1][1]) / 2, cz = A[0][2]; for (let i = 0; i < A.length - 1; i++) for (const s of [-1, 1]) tri([0, cy, cz], [s * A[i][0], A[i][1], A[i][2]], [s * A[i + 1][0], A[i + 1][1], A[i + 1][2]], colAt((A[i][1] + A[i + 1][1]) / 2, j / NS)); }
+  const me = _vmesh(p, pos, col, { rough: o.rough ?? 0.7 });
+  const edge = u => { const s = sec(u)[0]; return [s[0], s[1], s[2]]; };
+  if (o.rail) { const rh = o.rail, rp = []; for (let j = 0; j <= 20; j++) rp.push(edge(0.02 + 0.94 * j / 20)); for (const s of [-1, 1]) { for (let j = 0; j < 20; j++) _seg(p, [s * rp[j][0], rp[j][1] + rh, rp[j][2]], [s * rp[j + 1][0], rp[j + 1][1] + rh, rp[j + 1][2]], rh * 0.04, rh * 0.04, '#D8DCDE', { seg: 4, cast: false }); for (let j = 0; j <= 20; j += 2) _seg(p, [s * rp[j][0], rp[j][1], rp[j][2]], [s * rp[j][0], rp[j][1] + rh, rp[j][2]], rh * 0.03, rh * 0.03, '#D8DCDE', { seg: 4, cast: false }); } }
+  return { me, W, deckY, keelY, edge, sec };
+}
+const _wins = (p, list, c = '#26324A', o = {}) => list.length ? inst(p, list, mat(c, o.glow ? { basic: true, glow: o.glow } : { rough: 0.15, metal: 0.3 })) : null;
+const _winRow = (x, y, z0, z1, n, h, w, side) => [...Array(n)].map((_, i) => [x, y, lerp(z0, z1, n > 1 ? i / (n - 1) : 0.5), side ? 0.03 : w, h, side ? w : 0.03]);
+function _navGun(S, p, x, y, z, o = {}) {   // naval turret compatible with aimTurret() / cannon(): yaw ring, pitching gun, n barrels (muzzle at barrel local z 4.15)
+  const sz = o.size ?? 1, c = o.color ?? S.gray, n = o.n ?? 1, tur = dyn(grp(p, x, y, z)), gun = dyn(grp(tur, 0, sz * 0.9, sz * 0.6)), bar = dyn(grp(gun)), Lb = (o.len ?? 4.2) * sz, NC = { cast: false };
+  cyl(tur, sz * 1.9, sz * 2.05, sz * 0.35, shade(c, -0.08), 0, 0, 0, { seg: 14 });
+  if (o.style === 'modern') { box(tur, sz * 2.4, sz * 1.3, sz * 2.8, c, 0, sz * 0.3, -sz * 0.2); box(tur, sz * 2.0, sz * 0.7, sz * 1.1, c, 0, sz * 0.62, sz * 1.5, { rx: -0.55 }); }
+  else { box(tur, sz * 3.4, sz * 1.5, sz * 4.2, c, 0, sz * 0.3, -sz * 0.5); box(tur, sz * 3.1, sz * 0.6, sz * 1.2, c, 0, sz * 1.05, sz * 1.8, { rx: -0.35 }); box(tur, sz * 1.4, sz * 0.25, sz * 0.8, shade(c, -0.15), sz * 1.0, sz * 1.8, -sz * 1.4); }
+  bar.scale.z = Lb / 4.15; for (let i = 0; i < n; i++) { const bx = (i - (n - 1) / 2) * sz * 0.85; rod(bar, sz * 0.14, sz * 0.22, 4.15, shade(c, -0.12), bx, 0, 2.075, { seg: 8 }); rod(bar, sz * 0.25, sz * 0.25, 0.5, shade(c, -0.12), bx, 0, 0.2, { seg: 8 }); }
+  const T = { g: S.g, turret: tur, gun, barrel: bar, aims: [], shots: [], yaw0: o.ry ?? 0, s: sz, kind: 'naval', local: v3(x, y, z), sz };
+  const shipM = t => { const P = S._posAt ? S._posAt(t) : S.g.position, yw = S._yawAt ? S._yawAt(t) : S.g.rotation.y; return new THREE.Matrix4().compose(v3(P.x, S.g.position.y, P.z), new THREE.Quaternion().setFromAxisAngle(_AY, yw), v3(1, 1, 1)).multiply(p.matrix && p !== S.g ? new THREE.Matrix4().compose(p.position, p.quaternion, p.scale) : new THREE.Matrix4()); };
+  T.turretAt = t => { let yaw = T.yaw0, pit = 0; const M = shipM(t), hp = v3(x, y, z).applyMatrix4(M), hy = (S._yawAt ? S._yawAt(t) : S.g.rotation.y);
+    for (const a of T.aims) { const k = span(t, a.t, a.dur, 'inOut'); if (k <= 0) break; if (!a.T) { yaw = lerpA(yaw, T.yaw0, k); pit = lerp(pit, 0, k); continue; } const P = a.T.pos(t), dx = P.x - hp.x, dz = P.z - hp.z; yaw = lerpA(yaw, Math.atan2(dx, dz) - hy, k); pit = lerp(pit, clamp(Math.atan2(P.y - hp.y, Math.hypot(dx, dz)) + Math.hypot(dx, dz) * 0.0008, -0.05, 0.6), k); }
+    return [yaw, pit]; };
+  T.muzzleAt = t => { const [yaw, pit] = T.turretAt(t), m = shipM(t).multiply(new THREE.Matrix4().makeTranslation(x, y, z)).multiply(new THREE.Matrix4().makeRotationY(yaw)).multiply(new THREE.Matrix4().makeTranslation(0, sz * 0.9, sz * 0.6)).multiply(new THREE.Matrix4().makeRotationX(-pit)); return [v3(0, 0, Lb).applyMatrix4(m), v3(0, 0, 1).transformDirection(m)]; };
+  S.guns.push(T); return T;
+}
+const SHIPS = {
+  rowboat:    { L: 4, B: 1.5, D: 0.75, T: 0.28, bow: 'sharp', stern: 'transom', sheer: 0.2, rake: 0.4, top: '#8A5A34', bot: '#6A4428', deck: false, planks: 0.12 },
+  speedboat:  { L: 8, B: 2.6, D: 1.4, T: 0.45, bow: 'sharp', stern: 'transom', sheer: 0.35, rake: 0.9, planing: 1, top: '#F4F4F2', bot: '#1E2A4A', boot: '#C0392B', deck: '#E8E0D0' },
+  sailboat:   { L: 10, B: 3.4, D: 1.7, T: 0.6, bow: 'sharp', stern: 'transom', sheer: 0.35, rake: 0.6, top: '#F4F4F2', bot: '#1E3A6A', boot: '#2E6FD9', deck: '#D8C8A8', rail: 0.6 },
+  fishing:    { L: 22, B: 6.5, D: 4.0, T: 2.4, bow: 'sharp', stern: 'transom', sheer: 1.3, rake: 0.35, top: '#2E5E9E', bot: '#A8322A', boot: '#F2F2F2', deck: '#7E8288', band: [0.5, '#F2F2F2'], rail: 1.0 },
+  tug:        { L: 28, B: 10, D: 5, T: 3.6, bow: 'round', stern: 'round', sheer: 1.0, rake: 0.1, top: '#C0392B', bot: '#2A2A2A', boot: '#F2F2F2', deck: '#5A5E64', rail: 1.0 },
+  landing:    { L: 11, B: 3.3, D: 2.0, T: 0.9, bow: 'flat', stern: 'transom', sheer: 0, rake: 0, fb: 0.9, open: 1, deck: false, top: '#59654A', bot: '#3E4636', boot: '#2A2E26', deck: '#4A5040', flat: 1 },
+  viking:     { L: 22, B: 5, D: 2.0, T: 0.8, bow: 'viking', stern: 'viking', sheer: 1.6, sheerAft: 1.6, fb: 0.6, fs: 0.4, rake: 0.4, top: '#7A5434', bot: '#5A3A22', boot: '#5A3A22', deck: '#9A7A50', planks: 0.28 },
+  galleon:    { L: 38, B: 10, D: 6.5, T: 3.5, bow: 'round', stern: 'transom', sheer: 2.4, sheerAft: 3.0, rake: 0.5, fs: 0.12, top: '#6A4428', bot: '#3E2A1A', boot: '#2A1A10', deck: '#A88A5A', planks: 0.45, band: [1.2, '#C8A040'] },
+  ferry:      { L: 120, B: 22, D: 10, T: 5, bow: 'sharp', stern: 'transom', sheer: 2, rake: 0.4, top: '#F4F4F2', bot: '#1E3A6A', boot: '#C0392B', deck: '#8A8E92', band: [2, '#2E6FD9'] },
+  cruise:     { L: 250, B: 32, D: 14, T: 8, bow: 'sharp', stern: 'transom', sheer: 2.5, rake: 0.5, top: '#F6F6F4', bot: '#1E2A4A', boot: '#2E6FD9', deck: '#B8A07A' },
+  freighter:  { L: 200, B: 32, D: 18, T: 11, bow: 'round', stern: 'transom', sheer: 3, rake: 0.35, top: '#1E3A5A', bot: '#A8322A', boot: '#E8E8E8', deck: '#8A3A2A' },
+  tanker:     { L: 240, B: 42, D: 20, T: 13, bow: 'round', stern: 'transom', sheer: 2, rake: 0.25, top: '#2A2E34', bot: '#A8322A', boot: '#E8E8E8', deck: '#A0452E' },
+  destroyer:  { L: 150, B: 18, D: 12, T: 6, bow: 'sharp', stern: 'transom', sheer: 3.5, rake: 0.7, top: '#7E8890', bot: '#7A2A26', boot: '#1E2024', deck: '#5E666E', gray: '#8A949C', rail: 1.1 },
+  battleship: { L: 250, B: 34, D: 15, T: 9, bow: 'sharp', stern: 'round', sheer: 4, rake: 0.45, top: '#78828A', bot: '#6A2622', boot: '#1E2024', deck: '#A08C66', gray: '#7E8890' },
+  carrier:    { L: 320, B: 40, D: 22, T: 11, bow: 'sharp', stern: 'transom', sheer: 1.5, rake: 0.6, top: '#727C84', bot: '#6A2622', boot: '#1E2024', deck: '#4A4E52', gray: '#7A848C' }
+};
+function ship(p, kind = 'fishing', x = 0, z = 0, o = {}) {   // kind: see SHIPS (real size; o.len rescales) — sail(S, [[x,z], …], { speed }) or bob(S.g); returns { g, guns, ramp, seats, sails, oars, … }
+  if (p && !p.isObject3D) { o = z && typeof z === 'object' ? z : {}; z = x; x = kind; kind = p; p = world; }
+  if (typeof kind === 'object') { o = kind; kind = o.kind ?? 'fishing'; }
+  const D = { ...(SHIPS[kind] ?? SHIPS.fishing), ...(o.paint ?? {}) }, k = (o.len ?? D.L) / D.L, NC = { cast: false };
+  const g = dyn(grp(p ?? world, x, 0, z, o.ry ?? 0)), b = grp(g); b.scale.setScalar(k);
+  if (CFG.fogScale == null) FOGK = Math.max(FOGK, clamp(D.L * k / 90, 1, 3));
+  const S = { g, root: g, b, kind, D, k, len: D.L * k, guns: [], seats: [], sails: [], oars: [], lights: [], acts: [], gray: D.gray ?? '#8A949C' };
+  const H = _hull(b, D), dY = H.deckY, L = D.L, Bm = D.B, gl = '#26324A', W = '#F2F2F2', st = '#3A3D44', glow = mat('#FFE6A0', { basic: true, glow: 0.8 });
+  const dk = u => dY(u), zz = u => L * (u - 0.5);
+  switch (kind) {
+    case 'rowboat': for (const u of [0.3, 0.55, 0.78]) box(b, Bm * H.W(u) * 0.95, 0.06, 0.28, '#A8865A', 0, dk(u) - 0.3, zz(u));
+      for (const s of [-1, 1]) { const og = dyn(grp(b, s * Bm * 0.45, dk(0.55) - 0.05, zz(0.55))); _seg(og, [0, 0, 0], [s * 1.6, -0.5, 0], 0.03, 0.03, '#C8A878'); box(og, 0.04, 0.03, 0.18, '#C8A878', s * 1.6, -0.52, 0, { rz: s * 0.3 }); S.oars.push([og, s]); } break;
+    case 'speedboat': { const u = 0.5; box(b, Bm * 0.9, 0.05, 2.2, '#E8E0D0', 0, dk(u) - 0.35, zz(0.4)); mesh(b, G('wshield', () => new THREE.BoxGeometry(Bm * 0.8, 0.5, 0.04)), mat('#9FC8E0', { opacity: 0.5, rough: 0.05 }), 0, dk(0.62) + 0.2, zz(0.62), { rx: -0.6, cast: false });
+      for (const s of [-0.5, 0.5]) box(b, 0.55, 0.5, 0.55, '#C8C0B0', s * Bm * 0.5, dk(u) - 0.3, zz(0.45)); const mo = dyn(grp(b, 0, dk(0) - 0.1, zz(0) - 0.2)); box(mo, 0.45, 0.7, 0.5, '#2A2D33', 0, 0, -0.1); box(mo, 0.12, 0.9, 0.2, '#2A2D33', 0, -0.9, -0.1); S.motor = mo; break; }
+    case 'sailboat': { box(b, Bm * 0.5, 0.5, 3, W, 0, dk(0.5) - 0.05, zz(0.45)); _wins(b, [-1, 1].flatMap(s => _winRow(s * Bm * 0.25, dk(0.5) + 0.25, zz(0.35), zz(0.55), 3, 0.15, 0.4, true)), gl);
+      const fin = grp(b, 0, -D.T, zz(0.48)); finPlate(fin, [[0.6, 0], [0.4, -1.4], [-0.5, -1.4], [-0.6, 0]], 0.12, '#1E2A4A'); cyl(b, 0.08, 0.1, 13, '#D8DCDE', 0, dk(0.55), zz(0.58));
+      const sl = dyn(grp(b, 0, dk(0.55) + 0.9, zz(0.58))); finPlate(sl, [[0, 0], [0, 11.5], [-4.2, 0]], 0.03, '#F8F8F4'); box(sl, 0.08, 0.08, 4.4, '#D8DCDE', 0, -0.05, -2.2); S.sails.push(sl);
+      const jib = dyn(grp(b, 0, dk(0.6) + 0.6, zz(0.6))); finPlate(jib, [[0, 0], [0, 11.8], [3.6, 0]], 0.03, '#F2F2EE'); jib.rotation.y = 0; S.sails.push(jib); break; }
+    case 'fishing': { const u = 0.62; box(b, Bm * 0.62, 2.6, 5, W, 0, dk(u), zz(u)); box(b, Bm * 0.66, 0.2, 5.4, '#2A2D33', 0, dk(u) + 2.6, zz(u));
+      _wins(b, [..._winRow(0, dk(u) + 1.7, 0, 0, 1, 0.8, Bm * 0.5).map(w => [w[0], w[1], zz(u) + 2.52, Bm * 0.5, 0.8, 0.04]), ...[-1, 1].flatMap(s => _winRow(s * Bm * 0.31, dk(u) + 1.7, zz(u) - 1.8, zz(u) + 1.8, 3, 0.7, 0.9, true))], gl);
+      cyl(b, 0.1, 0.12, 6, W, 0, dk(u) + 2.8, zz(u) - 1); for (const yy of [5.5, 7.6]) box(b, 2.2, 0.08, 0.08, W, 0, dk(u) + yy, zz(u) - 1); S.lights.push(ball(b, 0.15, '', 0, dk(u) + 8.9, zz(u) - 1, { mat: glow, detail: 0, ...NC }));
+      const af = grp(b, 0, dk(0.05), zz(0.06)); for (const s of [-1, 1]) _seg(af, [s * Bm * 0.42, 0, 0], [s * Bm * 0.3, 5.5, -0.8], 0.16, 0.13, '#E3B23C'); _seg(af, [-Bm * 0.3, 5.5, -0.8], [Bm * 0.3, 5.5, -0.8], 0.15, 0.15, '#E3B23C');
+      cyl(b, 1.0, 1.0, Bm * 0.55, '#3A6A3A', -Bm * 0.27, dk(0.2) + 1.0, zz(0.22), { rz: Math.PI / 2, seg: 12 }); for (let i = 0; i < 5; i++) cyl(b, 1.05, 1.05, 0.1, '#2A4A2A', -Bm * 0.27 + i * Bm * 0.12, dk(0.2) + 1.0, zz(0.22), { rz: Math.PI / 2, seg: 12, ...NC });
+      plate(b, [[-Bm * 0.4, 0], [Bm * 0.4, 0], [Bm * 0.35, -6], [-Bm * 0.35, -6]], 0.05, '#2E4A3A', 0, dk(0.1) + 0.05, zz(0.15), NC);
+      for (const s of [-1, 1]) { const ob = dyn(grp(b, s * Bm * 0.3, dk(u) + 2.6, zz(u) - 1)); _seg(ob, [0, 0, 0], [s * 7, 4, 0], 0.09, 0.06, '#E3B23C'); _seg(ob, [s * 7, 4, 0], [s * 7, -4, 0], 0.02, 0.02, '#2A2D33', NC); ob.rotation.z = -s * 0.35; }
+      for (let i = 0; i < 6; i++) ball(b, 0.35, '#F07020', (i % 2 ? 1 : -1) * Bm * 0.43, dk(0.3 + i * 0.06) + 0.6, zz(0.3 + i * 0.06), { detail: 1 });
+      for (const s of [-1, 1]) mesh(b, G('lifering', () => new THREE.TorusGeometry(0.35, 0.09, 6, 12)), mat('#F05A28'), s * Bm * 0.335, dk(u) + 1.3, zz(u) - 1.6, { ry: Math.PI / 2 });
+      for (let i = 0; i < 6; i++) box(b, 0.6, 0.35, 0.45, i % 2 ? '#2E6FD9' : '#D8D8D4', Bm * (0.1 + (i % 3) * 0.1), dk(0.38), zz(0.3 + Math.floor(i / 3) * 0.05)); break; }
+    case 'tug': { const u = 0.6; box(b, Bm * 0.6, 2.4, 9, W, 0, dk(u), zz(u)); box(b, Bm * 0.48, 2.6, 5.2, W, 0, dk(u) + 2.4, zz(u) + 0.6); box(b, Bm * 0.52, 0.25, 5.6, '#2A2D33', 0, dk(u) + 5.0, zz(u) + 0.6);
+      _wins(b, [[0, dk(u) + 3.9, zz(u) + 3.22, Bm * 0.42, 1.0, 0.05], ...[-1, 1].flatMap(s => _winRow(s * Bm * 0.245, dk(u) + 3.9, zz(u) - 1.4, zz(u) + 2.6, 3, 0.9, 1.0, true)), ...[-1, 1].flatMap(s => _winRow(s * Bm * 0.305, dk(u) + 1.3, zz(u) - 3, zz(u) + 3, 6, 0.4, 0.4, true))], gl);
+      cyl(b, 0.9, 1.0, 4, '#E3B23C', 0, dk(u) + 2.4, zz(u) - 3.2, { seg: 12 }); cyl(b, 0.92, 0.92, 0.8, '#1A1A1A', 0, dk(u) + 5.6, zz(u) - 3.2, { seg: 12, ...NC });
+      for (let i = 0; i < 9; i++) for (const s of [-1, 1]) { const uu = 0.15 + i * 0.085, e = H.edge(uu); mesh(b, G('tire', () => new THREE.TorusGeometry(0.55, 0.22, 6, 12)), mat('#1E1E1E'), s * (e[0] + 0.15), e[1] - 1.2, e[2], { ry: Math.PI / 2 }); }
+      cyl(b, 0.35, 0.4, 1.2, '#2A2D33', 0, dk(0.25), zz(0.25), { seg: 8 }); break; }
+    case 'landing': { box(b, Bm * 0.86, 0.1, L * 0.86, '#4A5040', 0, -D.T + 0.2, zz(0.5)); const zf = zz(1), ramp = dyn(grp(b, 0, -D.T + 0.3, zf)); box(ramp, Bm * 0.88, D.D + 0.1, 0.12, D.top, 0, 0, 0); for (let i = 0; i < 5; i++) box(ramp, Bm * 0.8, 0.05, 0.05, shade(D.top, -0.12), 0, 0.3 + i * 0.35, 0.07, NC); ramp.rotation.x = -0.06; S.ramp = ramp;
+      for (const s of [-1, 1]) box(b, 0.12, 0.9, L * 0.75, D.top, s * Bm * 0.47, dk(0.5), zz(0.5));
+      box(b, Bm * 0.9, 1.2, 1.6, D.top, 0, dk(0.08), zz(0.08)); box(b, 1.0, 0.6, 0.8, '#3E4636', 0, dk(0.08) + 1.2, zz(0.08));
+      for (const s of [-1, 1]) { const mg = grp(b, s * Bm * 0.32, dk(0.12) + 1.3, zz(0.12)); cyl(mg, 0.04, 0.04, 0.6, st, 0, -0.6, 0, NC); rod(mg, 0.04, 0.05, 1.1, '#1E2024', 0, 0.05, 0.4, NC); box(mg, 0.2, 0.25, 0.3, '#1E2024', 0, 0, -0.05); }
+      for (let r = 0; r < 6; r++) for (let c = 0; c < 3; c++) S.seats.push([(c - 1) * 0.85, -D.T + 0.35, zz(0.82) - r * 0.9]); S.troop = 1; break; }
+    case 'viking': { const tip = (sgn, u) => { const e = H.edge(u); return [0, e[1], e[2]]; };
+      const hp = _walkP(tip(1, 1), [[0, 1.2, 0.3], [0, 0.8, 0.0], [0, 0.4, -0.3], [0, 0.05, -0.35]]); _chain(b, hp, 0.28, 0.12, '#6A4428'); _ell(b, '#6A4428', 0, hp[4][1] + 0.1, hp[4][2] + 0.25, 0.22, 0.25, 0.5); for (const s of [-1, 1]) { ball(b, 0.07, '#E8E0C0', s * 0.15, hp[4][1] + 0.2, hp[4][2] + 0.4, { detail: 0, ...NC }); cone(b, 0.08, 0.35, '#6A4428', s * 0.12, hp[4][1] + 0.3, hp[4][2] + 0.0, { rx: -0.6 }); }
+      _chain(b, _walkP(tip(-1, 0), [[0, 1.2, -0.3], [0, 0.8, 0.1], [0, 0.2, 0.4]]), 0.26, 0.08, '#6A4428');
+      for (let i = 0; i < 13; i++) for (const s of [-1, 1]) { const u = 0.2 + i * 0.05, e = H.edge(u); const sh = ball(b, 0.42, ['#C0392B', '#E3B23C', '#2E6FD9', '#F2F2F2', '#2A6A3A'][(i + (s > 0 ? 2 : 0)) % 5], s * (e[0] + 0.05), e[1] - 0.15, e[2], { detail: 1 }); sh.scale.set(0.12, 1, 1); ball(b, 0.09, '#8A8E92', s * (e[0] + 0.1), e[1] - 0.15, e[2], { detail: 0, ...NC });
+        if (i % 2 === 0) { const og = dyn(grp(b, s * (e[0] - 0.05), e[1] - 0.45, e[2])); _seg(og, [0, 0, 0], [s * 4.5, -1.8, 0], 0.05, 0.05, '#B89868'); box(og, 0.06, 0.04, 0.3, '#B89868', s * 4.5, -1.82, 0, { rz: s * 0.4, ...NC }); S.oars.push([og, s]); } }
+      cyl(b, 0.14, 0.18, 11, '#7A5434', 0, dk(0.5) - 0.6, zz(0.5)); box(b, 6.5, 0.18, 0.18, '#7A5434', 0, dk(0.5) + 9.4, zz(0.5) + 0.25);
+      const sl = dyn(grp(b, 0, dk(0.5) + 9.3, zz(0.5) + 0.3)); for (let i = 0; i < 6; i++) box(sl, 6.2 / 6, 5.4, 0.05, i % 2 ? '#C0392B' : '#F2EEE4', -3.1 + (i + 0.5) * 6.2 / 6, -5.4, 0, NC); S.sails.push(sl); break; }
+    case 'galleon': { const zs = zz(0.06), ys = dk(0.06);
+      box(b, Bm * 0.92, 2.6, 7, D.top, 0, ys - 0.2, zs + 3); box(b, Bm * 0.95, 0.25, 7.4, '#C8A040', 0, ys + 2.4, zs + 3);
+      _wins(b, [..._winRow(0, ys + 1.2, 0, 0, 1, 1, 1).flatMap(() => [-2.4, -0.8, 0.8, 2.4].map(x => [x, ys + 1.3, zz(0) - 0.35, 1.1, 1.3, 0.05])), ...[-1, 1].flatMap(s => _winRow(s * Bm * 0.47, ys + 1.3, zs + 1, zs + 5, 3, 1.0, 0.9, true))], '#FFD890', { glow: 0.6 });
+      box(b, Bm * 0.6, 1.8, 5, D.top, 0, dk(0.92) - 0.3, zz(0.9)); _seg(b, [0, dk(0.97) + 0.5, zz(0.98)], [0, dk(0.97) + 6, zz(0.98) + 11], 0.32, 0.12, '#5A3A22');
+      const ports = []; for (let i = 0; i < 9; i++) for (const s of [-1, 1]) { const u = 0.2 + i * 0.07, e = H.edge(u), py = e[1] - 1.7; box(b, 0.06, 0.75, 0.75, '#1A120C', s * (H.W(u) * Bm / 2 * 1.02), py, e[2], NC); rod(b, 0.14, 0.18, 1.2, '#2A2A2A', s * (H.W(u) * Bm / 2 * 1.02 + 0.2), py + 0.35, e[2], { ...NC }).rotation.set(0, Math.PI / 2, 0); ports.push([s * (H.W(u) * Bm / 2 + 0.9), py + 0.35, e[2], s]); }
+      S.ports = ports;
+      for (const [u, h, w] of [[0.78, 24, 14], [0.5, 28, 16], [0.22, 20, 11]]) { const mz = zz(u), my = dk(u); cyl(b, 0.3, 0.38, h, '#5A3A22', 0, my - 1, mz, { seg: 8 }); cyl(b, 1.0, 1.1, 0.5, '#5A3A22', 0, my + h * 0.62, mz, { seg: 8 });
+        for (let r = 0; r < 3; r++) { const yb = my + h * (0.18 + r * 0.28), sw = w * (1 - r * 0.2), sh = h * 0.24; box(b, sw, 0.22, 0.22, '#5A3A22', 0, yb + sh, mz + 0.4); const sl = dyn(grp(b, 0, yb + sh, mz + 0.55)); const sm = box(sl, sw * 0.92, sh, 0.06, '#F2EAD8', 0, -sh, 0.0); S.sails.push(sl); sl.userData.m = sm; }
+        for (const s of [-1, 1]) for (let i = 0; i < 4; i++) _seg(b, [s * Bm * 0.48, my + 0.2, mz - 2 + i * 1.3], [s * 0.3, my + h * 0.78, mz], 0.025, 0.025, '#2A2018', NC); }
+      const fl = dyn(grp(b, 0, dk(0.5) + 28 - 1, zz(0.5))); box(fl, 0.05, 1.6, 2.6, '#141414', 0, 0, -1.3); ball(fl, 0.35, '#F2F2EE', 0, 0.85, -1.2, { detail: 0, ...NC }).scale.set(0.2, 1, 1); S.flag = fl;
+      for (const zl of [zs - 0.3, zz(0.95)]) S.lights.push(ball(b, 0.25, '', 0, ys + 3.4, zl, { mat: glow, detail: 0, ...NC })); break; }
+    case 'ferry': case 'cruise': { const cr = kind === 'cruise', n = cr ? 7 : 3, u0 = cr ? 0.1 : 0.15, u1 = cr ? 0.86 : 0.8, hD = 3, wins = [], bal = [];
+      for (let d = 0; d < n; d++) { const uA = u0 + d * 0.012, uB = u1 - d * (cr ? 0.035 : 0.05), w = Bm * (cr ? 0.98 : 0.86) - d * (cr ? 0.6 : 1.2), y = dk(0.5) + d * hD, zc = (zz(uA) + zz(uB)) / 2, ln = zz(uB) - zz(uA);
+        box(b, w, hD, ln, W, 0, y, zc); box(b, w + 0.4, 0.2, ln + 0.4, cr && d % 2 ? '#2E6FD9' : '#D8DCDE', 0, y + hD - 0.1, zc, NC);
+        for (const s of [-1, 1]) wins.push(..._winRow(s * (w / 2 + 0.02), y + 1.5, zz(uA) + 2, zz(uB) - 2, Math.floor(ln / (cr ? 3.2 : 4)), 1.3, cr ? 2.2 : 3, true)); }
+      _wins(b, wins, '#26324A');
+      const by = dk(0.5) + n * hD; box(b, Bm * 0.5, 2.2, 6, W, 0, by, zz(u1 - 0.05)); _wins(b, [[0, by + 1.2, zz(u1 - 0.05) + 3.02, Bm * 0.46, 1.2, 0.05]], gl);
+      for (const zf of cr ? [zz(0.35)] : [zz(0.3)]) { box(b, Bm * 0.22, cr ? 9 : 7, cr ? 14 : 8, cr ? '#2E6FD9' : '#C0392B', 0, by - 0.5, zf, { rx: -0.08 }); box(b, Bm * 0.23, 1.2, cr ? 14.6 : 8.6, '#1A1A1A', 0, by + (cr ? 8 : 6), zf - 0.6, NC); }
+      for (const s of [-1, 1]) for (let i = 0; i < (cr ? 14 : 6); i++) { const zl = lerp(zz(u0 + 0.08), zz(u1 - 0.12), i / ((cr ? 14 : 6) - 1)); box(b, 2.2, 1.8, 7, '#F07020', s * (Bm * 0.5 + 0.6), dk(0.5) + (cr ? 2.2 : 1.4), zl); }
+      if (cr) { box(b, 12, 0.3, 18, '#5ACDE8', 0, by + 0.02, zz(0.55), NC); for (let i = 0; i < 6; i++) ball(b, 1.2, '#F07070', -8 + (i % 3) * 3, by + 0.6, zz(0.45) + Math.floor(i / 3) * 3, { detail: 0 }).scale.set(1, 0.15, 1); } break; }
+    case 'freighter': { const u = 0.08; box(b, Bm * 0.9, 16, 14, W, 0, dk(u), zz(u) + 2); box(b, Bm + 4, 2.4, 6, W, 0, dk(u) + 14, zz(u) + 4); _wins(b, [[0, dk(u) + 15.2, zz(u) + 7.02, Bm + 3, 1.4, 0.05], ...[-1, 1].flatMap(s => [2, 6, 10].flatMap(yy => _winRow(s * Bm * 0.452, dk(u) + yy, zz(u) - 4, zz(u) + 8, 6, 1.2, 1.4, true)))], gl);
+      cyl(b, 2.6, 3, 8, '#C0392B', 0, dk(u) + 14, zz(u) - 4, { seg: 12 }); const cols = ['#C0392B', '#2E6FD9', '#E3B23C', '#3DA56A', '#F2F2F2', '#E07A2E'], L2 = [...Array(6)].map(() => []);
+      for (let bay = 0; bay < 11; bay++) for (let row = 0; row < 11; row++) for (let tier = 0; tier < 4; tier++) { const uu = 0.2 + bay * 0.062, h = hash(bay * 31 + row * 7 + tier * 3); if (tier === 3 && h < 0.35) continue; L2[Math.floor(h * 6)].push([(row - 5) * 2.55, dk(uu) + tier * 2.6 + 1.3, zz(uu), 2.45, 2.5, 12]); }
+      L2.forEach((l, i) => { const im = _wins(b, l, cols[i]); if (im) { im.castShadow = true; im.material = mat(cols[i]); } }); break; }
+    case 'tanker': { const u = 0.07; box(b, Bm * 0.8, 15, 14, W, 0, dk(u), zz(u) + 2); box(b, Bm + 2, 2.4, 6, W, 0, dk(u) + 13, zz(u) + 4); _wins(b, [[0, dk(u) + 14.2, zz(u) + 7.02, Bm + 1, 1.4, 0.05], ...[-1, 1].flatMap(s => [2, 6, 10].flatMap(yy => _winRow(s * Bm * 0.402, dk(u) + yy, zz(u) - 4, zz(u) + 8, 6, 1.2, 1.4, true)))], gl);
+      cyl(b, 2.6, 3, 8, '#2A2E34', 0, dk(u) + 13, zz(u) - 4, { seg: 12 }); for (let i = 0; i < 5; i++) _seg(b, [(i - 2) * 1.6, dk(0.5) + 0.9, zz(0.15)], [(i - 2) * 1.6, dk(0.5) + 0.9, zz(0.92)], 0.35, 0.35, i === 2 ? '#3A6A3A' : '#E3B23C', { seg: 6 });
+      box(b, 4, 2.5, 3, '#E3B23C', 0, dk(0.5), zz(0.5)); _seg(b, [0, dk(0.5), zz(0.42)], [0, dk(0.5) + 3, zz(0.42)], 0.3, 0.3, st); break; }
+    case 'destroyer': case 'battleship': { const bb = kind === 'battleship', gr = S.gray;
+      if (bb) { box(b, 16, 6, 40, gr, 0, dk(0.45), zz(0.45)); box(b, 12, 6, 26, gr, 0, dk(0.45) + 6, zz(0.5)); const tw = grp(b, 0, dk(0.5) + 12, zz(0.55)); box(tw, 8, 10, 10, gr, 0, 0, 0); box(tw, 6, 6, 7, gr, 0, 10, 0.5); box(tw, 9, 1.8, 4, gr, 0, 16, 1.5); cyl(tw, 0.4, 0.5, 12, gr, 0, 16, 0, NC); _wins(tw, [[0, 17, 3.52, 8, 1, 0.05], [0, 4, 5.02, 7, 1, 0.05]], gl);
+        for (const zf of [zz(0.38), zz(0.3)]) { cyl(b, 2.6, 3, 12, gr, 0, dk(0.4) + 6, zf, { seg: 12 }); cyl(b, 2.62, 2.62, 1.2, '#1A1A1A', 0, dk(0.4) + 17.5, zf, { seg: 12, ...NC }); }
+        for (const [u, ry, up] of [[0.82, 0, 0], [0.72, 0, 1], [0.15, Math.PI, 0]]) _navGun(S, b, 0, dk(u) + up * 3.2, zz(u), { size: 2.6, n: 3, len: 6.5, ry, color: gr });
+        for (let i = 0; i < 4; i++) for (const s of [-1, 1]) _navGun(S, b, s * 11, dk(0.4 + i * 0.06) + 0.3, zz(0.4 + i * 0.06), { size: 0.8, n: 2, len: 2.6, ry: s * Math.PI / 2, color: gr });
+        for (let i = 0; i < 16; i++) for (const s of [-1, 1]) { const zq = zz(0.32 + i * 0.022); cyl(b, 0.05, 0.05, 1.6, st, s * 14.5, dk(0.45) + 0.5, zq, { rx: -0.8, ...NC }); }
+        const cat = grp(b, 0, dk(0.08), zz(0.08)); box(cat, 1.2, 0.6, 18, st, 0, 0, 0); }
+      else { box(b, 12, 6, 30, gr, 0, dk(0.6), zz(0.6)); box(b, 10, 4, 14, gr, 0, dk(0.6) + 6, zz(0.63)); box(b, 11, 0.4, 3, gr, 0, dk(0.6) + 9.6, zz(0.66), NC); _wins(b, [[0, dk(0.6) + 8, zz(0.63) + 7.02, 9, 1.2, 0.05], ...[-1, 1].flatMap(s => _winRow(s * 5.02, dk(0.6) + 8, zz(0.63) - 2, zz(0.63) + 5, 5, 1, 1, true))], gl);
+        for (const s of [-1, 1]) box(b, 0.1, 3.4, 3.4, '#6A747C', s * 5.05, dk(0.6) + 6.2, zz(0.6) + 3, NC);
+        const mast = grp(b, 0, dk(0.6) + 10, zz(0.6)); cyl(mast, 0.5, 1.2, 12, gr, 0, 0, 0, { seg: 6 }); box(mast, 6, 0.3, 0.4, gr, 0, 9, 0); ball(mast, 1.5, '#E8E8E4', 0, 13.5, 0, { detail: 1 }); const rad = dyn(grp(mast, 0, 11, 0)); box(rad, 5, 1, 0.2, st, 0, 0, 0); S.radar = rad;
+        box(b, 8, 5, 20, gr, 0, dk(0.35), zz(0.38)); for (const zf of [zz(0.48), zz(0.36)]) { box(b, 4, 7, 5, gr, 0, dk(0.42) + 4, zf, { rx: -0.08 }); box(b, 4.1, 0.8, 5.1, '#1A1A1A', 0, dk(0.42) + 10.8, zf - 0.5, NC); }
+        _navGun(S, b, 0, dk(0.85), zz(0.85), { size: 1.3, n: 1, len: 6, style: 'modern', color: gr });
+        const vls = []; for (let i = 0; i < 8; i++) for (let j = 0; j < 4; j++) vls.push([(j - 1.5) * 1.2, dk(0.76) + 0.05, zz(0.76) + (i - 3.5) * 1.2, 1.0, 0.1, 1.0]); _wins(b, vls, '#5A6168'); S.vls = [0, dk(0.76), zz(0.76)];
+        for (const [u, s] of [[0.7, 0], [0.22, 0]]) { const cw = grp(b, s, dk(u) + 6.5, zz(u)); cyl(cw, 1, 1.2, 1.6, gr, 0, 0, 0, NC); ball(cw, 1.1, '#E8E8E4', 0, 2.4, 0, { detail: 1 }).scale.set(1, 1.3, 1); rod(cw, 0.12, 0.12, 2, st, 0, 1.6, 1.4, NC); }
+        box(b, 9, 4, 14, gr, 0, dk(0.24), zz(0.26)); plate(b, [[-7, 0], [7, 0], [7, -24], [-7, -24]], 0.1, '#4E565E', 0, dk(0.1) + 0.06, zz(0.2), NC); mesh(b, G('heliH', () => new THREE.TorusGeometry(4, 0.15, 4, 24).rotateX(Math.PI / 2)), mat('#F2F2F2'), 0, dk(0.1) + 0.12, zz(0.12), NC);
+        _navGun(S, b, 0, dk(0.18) + 4, zz(0.2), { size: 0.5, n: 1, len: 2, style: 'modern', ry: Math.PI, color: gr }); }
+      break; }
+    case 'carrier': { const fdY = dk(0.5) + 5, fd = grp(b, 0, fdY, 0), gr = S.gray; slab(fd, [[-20, 160], [20, 165], [36, 60], [36, -150], [-24, -158], [-26, 40], [-40, 70], [-36, 140]], 1.2, '#4A4E52', 0);
+      for (let i = 0; i < 26; i++) box(fd, 0.8, 0.05, 5, '#F2F2F2', 0, 1.22, -140 + i * 11, NC); for (let i = 0; i < 18; i++) box(fd, 0.6, 0.05, 4, '#E3B23C', -12 + i * 1.6, 1.22, -60 + i * 10, { ry: -0.17, ...NC }); for (const x of [-6, 6]) box(fd, 0.4, 0.06, 90, '#7A7E82', x, 1.22, 100, NC);
+      box(fd, 12, 6, 50, gr, 0, -6, -40); const isl = grp(fd, 28, 1.2, -30); box(isl, 9, 16, 34, gr, 0, 0, 0); box(isl, 7, 6, 18, gr, 0, 16, 2); _wins(isl, [-1, 1].flatMap(s => [4, 8, 12, 18].flatMap(yy => _winRow(s * 4.52, yy, -14, 14, 8, 1, 1.5, true))), gl);
+      const mast = grp(isl, 0, 22, 2); cyl(mast, 0.6, 1.2, 14, gr, 0, 0, 0, { seg: 6 }); box(mast, 10, 0.4, 0.5, gr, 0, 9, 0); const rad = dyn(grp(mast, 0, 13, 0)); box(rad, 8, 1.6, 0.3, st, 0, 0, 0); S.radar = rad; ball(mast, 1.8, '#E8E8E4', 0, 15, 0, { detail: 1 });
+      S.deckY = fdY + 1.2; S.deck = fd; break; }
+  }
+  if (S.gray && kind !== 'carrier') for (const [u, s] of [[0.95, 1], [0.95, -1]]) { const e = H.edge(u); cyl(b, 0.05, 0.05, 2.5, st, s * e[0] * 0.5, e[1], e[2], NC); }
+  S.edge = H.edge; S.deckAt = u => dY(u) * k; _fuseDyn(g);
+  // live: radar spin, sails billow, oars row, flag flutter, guns aim + recoil, lights blink
+  const moveAt = t => S._posAt ? S._posAt(t + 0.1).distanceTo(S._posAt(t - 0.1)) * 5 : 0;
+  late(t => { const v = moveAt(t);
+    if (S.radar) S.radar.rotation.y = t * 1.6;
+    S.sails.forEach((sl, i) => { if (sl.userData.m) { sl.userData.m.scale.z = 1; sl.userData.m.position.z = 0.6 + 0.25 * Math.sin(t * 1.3 + i); sl.rotation.x = -0.12 - 0.04 * Math.sin(t * 1.1 + i * 0.7); } else sl.rotation.y = (i ? -1 : 1) * (0.12 + 0.03 * Math.sin(t * 0.9 + i)); });
+    const row = clamp(v / 1.5), ph = t * TAU * 0.45; S.oars.forEach(([og, s], i) => { const a = ph + (kind === 'viking' ? 0 : i * Math.PI); og.rotation.set(0, s * (0.45 * Math.sin(a)) * row, s * (0.12 * Math.cos(a)) * row + (1 - row) * s * 0.05); });
+    if (S.flag) S.flag.rotation.y = 0.25 * Math.sin(t * 3.1) + 0.1 * Math.sin(t * 7.3);
+    if (S.motor) S.motor.rotation.x = -0.25 * clamp(v / 8);
+    S.guns.forEach(T => { const [yaw, pit] = T.turretAt(t); T.turret.rotation.y = yaw; T.gun.rotation.x = -pit; let rec = 0; for (const s of T.shots) { const a = t - s; if (a >= 0 && a < 2) rec = Math.max(rec, a < 0.05 ? a / 0.05 : Math.exp(-(a - 0.05) * 3)); } T.barrel.position.z = -0.6 * T.sz * rec; });
+    S.lights.forEach((l, i) => { l.visible = (t * 0.8 + i * 0.3) % 1 < 0.9; });
+    if (S.ramp) { let r = 0; for (const A of S.acts) if (A.k === 'ramp') r = Math.max(r, A.down ? sm01((t - A.t) / 0.9) : 1 - sm01((t - A.t) / 0.9)); const bounce = S.acts.some(A => A.k === 'ramp' && A.down) ? 0.05 * Math.exp(-3 * Math.max(0, t - (S.acts.find(A => A.k === 'ramp').t + 0.9))) * Math.sin(Math.max(0, t - S.acts.find(A => A.k === 'ramp').t - 0.9) * 14) : 0; S.ramp.rotation.x = -0.06 + 1.42 * r + bounce; } });
+  // aims for idle turrets: keep them at rest
+  return S;
+}
+function salvo(S, t, o = {}) {   // fire the ship's turrets (o.guns: indices; default all main guns) at o.at, staggered
+  const list = o.guns ? o.guns.map(i => S.guns[i]).filter(Boolean) : S.guns.filter(T => T.sz >= 1.2); list.forEach((T, i) => { const r = cannon(T, t + i * (o.stagger ?? 0.18), { at: o.at, size: o.size ?? T.sz * 1.1, shake: o.shake ?? 0.25, vel: o.vel ?? 320 }); if (!o.at) splash(r.at.x, r.at.z, r.th, { size: 2 }); }); return S;
+}
+function broadside(S, t, o = {}) {   // galleon: every gun port on one side fires in a ripple: flash, smoke, cannonball → splash in the sea or explosion at o.at
+  const side = o.side ?? 1, ports = (S.ports ?? []).filter(p => Math.sign(p[3]) === side).slice(0, o.n ?? 9), k = S.k;
+  ports.forEach((pt, i) => { const tt = t + i * (o.stagger ?? 0.11), M = carrierPoint(S, tt, v3(pt[0] * k, pt[1] * k, pt[2] * k)), dir = v3(side, 0, 0).applyQuaternion(flyPose(S, tt).q);
+    cbFlash([M, dir], tt, { size: 1.4, dur: 0.1, light: 50, dist: 20 }); cbBurst('smoke', M, tt + 0.02, { n: 16, dir, cone: 0.7, speed: 4, size: 1.6, life: 4, opacity: 0.6, drag: 1.6, colors: ['#D8D4CC', '#B8B4AC'] }); cbBurst('flame', M, tt, { n: 8, dir, cone: 0.3, speed: 9, size: 0.7, life: 0.2 });
+    const tg = o.at ? cbTarget(o.at).pos(tt).add(v3((hash(i * 3.1) - 0.5) * 8, 0, (hash(i * 5.3) - 0.5) * 8)) : M.clone().addScaledVector(dir, 70 + hash(i * 2.2) * 50).setY(0), fl = M.distanceTo(tg) / 90, ball2 = dyn(ball(world, 0.18 * k * 1.5, '#1A1A1A', 0, -999, 0, { detail: 0 }));
+    tick(tq => { const u = (tq - tt) / fl; ball2.visible = u > 0 && u < 1; if (!ball2.visible) return; ball2.position.lerpVectors(M, tg, u); ball2.position.y += Math.sin(Math.PI * u) * fl * 4; });
+    if (o.at) explode(tg.x, Math.max(groundH(tg.x, tg.z), tg.y), tg.z, tt + fl, { size: 1 }); else splash(tg.x, tg.z, tt + fl, { size: 1.6 });
+    sfx(tt, 'cannon', 0.6); });
+  SHAKES.push({ t: VT(t), amp: 0.2, dur: 1.2 }); return S;
+}
+function launch(S, t, o = {}) {   // destroyer VLS: missiles leave the deck cells straight up, then turn to the target
+  const n = o.n ?? 1; for (let i = 0; i < n; i++) { const tt = t + i * (o.stagger ?? 0.6), P = carrierPoint(S, tt, v3(...(S.vls ?? [0, 5, 0])).multiplyScalar(1).multiplyScalar(S.k)); cbFlash([P, _AY], tt, { size: 2, dur: 0.15, light: 60 }); cbBurst('smoke', P, tt, { n: 30, dir: [0, 1, 0], cone: 0.5, speed: 6, size: 2, life: 4, opacity: 0.6, drag: 1.5 });
+    missile({ from: [P.x, P.y + 4, P.z], at: o.at, t0: tt + 0.1, arc: 0.6, size: o.size ?? 1.6, speed: o.speed ?? 90 }); } return S;
+}
+function rampDown(S, t, o = {}) { S.acts.push({ k: 'ramp', t, down: o.up ? false : true }); if (o.sfx !== false) { sfx(t, 'clang', 0.8); sfx(t + 0.85, 'splash', 0.7); } if (!o.up) { const P = carrierPoint(S, t + 0.9, v3(0, 0, S.len * 0.55)); splash(P.x, P.z, t + 0.9, { size: 1.4 }); } return S; }
+function board(S, f, i, o = {}) {   // figure rides in seat i (landing craft / any S.seats) until o.t1, then is free (walk it off: S.seatAt(i, t))
+  const st = S.seats[i % S.seats.length]; late(t => { if (t > (o.t1 ?? 1e9)) return; const P = carrierPoint(S, t, v3(st[0] * S.k, st[1] * S.k, st[2] * S.k)), q = flyPose(S, t).q; const r = f.root ?? f; r.position.copy(P); r.quaternion.copy(q); }); return f;
+}
+const seatAt = (S, i, t) => { const st = S.seats[i % S.seats.length], P = carrierPoint(S, t, v3(st[0] * S.k, st[1] * S.k, st[2] * S.k)); return [P.x, P.z]; };
+
+// ---------------- aircraft ----------------
+const AIRCRAFT = {
+  airliner: { L: 38, R: 2.0, c: '#F4F4F2', belly: '#C8CCD2', cheat: '#2E6FD9', tail: '#2E6FD9', prof: [[0, 0.12], [0.03, 0.55], [0.08, 0.86], [0.14, 1], [0.76, 1], [0.9, 0.62], [1, 0.2]], yo: [[0, -0.1], [0.12, 0], [0.78, 0], [1, 0.62]], wing: { span: 35, c0: 7, ct: 1.6, sweep: 0.5, dih: 0.09, u: 0.47, y: -0.55, th: 0.35 }, eng: [[5.8, 'fan', 1.15]], ht: [13, 3.6, 0.55], vt: [7.2, 5.6, 0.6], win: 1, gear: 'retract', winglet: 1 },
+  jumbo:    { L: 70, R: 3.3, c: '#F4F4F2', belly: '#C8CCD2', cheat: '#C0392B', tail: '#C0392B', prof: [[0, 0.12], [0.03, 0.55], [0.08, 0.86], [0.14, 1], [0.78, 1], [0.9, 0.62], [1, 0.2]], yo: [[0, -0.1], [0.12, 0], [0.78, 0], [1, 0.62]], wing: { span: 64, c0: 13, ct: 3, sweep: 0.62, dih: 0.08, u: 0.47, y: -0.55, th: 0.6 }, eng: [[11, 'fan', 1.5], [21, 'fan', 1.4]], ht: [22, 7, 0.55], vt: [11, 9, 0.6], win: 1, hump: 1, gear: 'retract', winglet: 1 },
+  bizjet:   { L: 20, R: 1.05, c: '#F4F4F2', belly: '#E0E2E6', cheat: '#2A2D33', tail: '#2A2D33', prof: [[0, 0.1], [0.05, 0.6], [0.12, 0.9], [0.2, 1], [0.7, 1], [0.88, 0.6], [1, 0.2]], yo: [[0, -0.15], [0.15, 0], [0.75, 0], [1, 0.5]], wing: { span: 17, c0: 3.4, ct: 1.0, sweep: 0.5, dih: 0.07, u: 0.5, y: -0.6, th: 0.2 }, eng: [[1.6, 'rear', 0.55]], ht: [6.4, 1.8, 0.6, 1], vt: [3.6, 3.2, 0.7], win: 1, gear: 'retract', winglet: 1 },
+  cargo:    { L: 30, R: 2.2, c: '#5E6A4E', belly: '#56624A', cheat: '#56624A', tail: '#56624A', prof: [[0, 0.3], [0.04, 0.7], [0.1, 0.95], [0.16, 1], [0.66, 1], [0.86, 0.75], [1, 0.25]], yo: [[0, -0.1], [0.15, 0], [0.62, 0], [1, 0.9]], wing: { span: 40, c0: 4.9, ct: 2.6, sweep: 0.05, dih: 0.0, u: 0.42, y: 0.95, th: 0.45 }, eng: [[5.2, 'tprop', 1.0], [10.4, 'tprop', 1.0]], ht: [15, 3.8, 0.2], vt: [7.6, 6.2, 0.35], gear: 'pods', ramp: 1, sponson: 1 },
+  fighter:  { L: 9.6, R: 0.62, c: '#6E7A5A', belly: '#A8B4B8', cheat: '#6E7A5A', tail: '#6E7A5A', prof: [[0, 0.42], [0.04, 0.75], [0.2, 1], [0.45, 0.95], [0.75, 0.55], [1, 0.18]], yo: [[0, 0], [0.5, 0], [1, 0.3]], wing: { span: 11.3, c0: 2.5, ct: 0.6, ell: 1, dih: 0.1, u: 0.33, y: -0.45, th: 0.22 }, eng: [[0, 'nose', 1.6, 3]], ht: [4.4, 1.3, 0.1], vt: [2.0, 1.6, 0.35], canopy: [0.42, 0.55], gear: 'retract', tailwheel: 1, guns: 1, roundel: '#2E4A8A', stripes: 0 },
+  bomber:   { L: 22.7, R: 1.2, c: '#5E6A4E', belly: '#7A8476', cheat: '#5E6A4E', tail: '#5E6A4E', prof: [[0, 0.5], [0.03, 0.8], [0.1, 1], [0.6, 1], [0.85, 0.6], [1, 0.25]], yo: [[0, -0.05], [0.12, 0], [0.6, 0], [1, 0.45]], wing: { span: 31.6, c0: 5.2, ct: 1.6, sweep: 0.08, dih: 0.06, u: 0.4, y: -0.25, th: 0.5 }, eng: [[3.5, 'radial', 1.1, 3], [7.4, 'radial', 1.1, 3]], ht: [13, 3.6, 0.15], vt: [5.6, 6.2, 0.5], glassNose: 1, turrets: 1, bay: 1, gear: 'retract', tailwheel: 1, roundel: '#2E4A8A' },
+  biplane:  { L: 7, R: 0.52, c: '#C0392B', belly: '#C0392B', cheat: '#C0392B', tail: '#C0392B', prof: [[0, 0.75], [0.08, 1], [0.35, 1], [0.7, 0.55], [1, 0.15]], yo: [[0, 0], [1, 0.25]], wing: { span: 9, c0: 1.6, ct: 1.5, sweep: 0, dih: 0.04, u: 0.28, y: -0.4, th: 0.12, bi: 1.6 }, eng: [[0, 'rotary', 1.3, 2]], ht: [3.2, 1.0, 0.1], vt: [1.3, 1.1, 0.2], cockpit: 1, gear: 'fixed', tailskid: 1, roundel: '#F2F2EE' },
+  cessna:   { L: 8.3, R: 0.62, c: '#F4F4F2', belly: '#F4F4F2', cheat: '#C0392B', tail: '#F4F4F2', prof: [[0, 0.4], [0.06, 0.8], [0.2, 1], [0.45, 0.95], [0.75, 0.45], [1, 0.15]], yo: [[0, -0.1], [0.3, 0.1], [0.6, 0.15], [1, 0.4]], wing: { span: 11, c0: 1.6, ct: 1.2, sweep: 0, dih: 0.03, u: 0.32, y: 0.85, th: 0.15, struts: 1 }, eng: [[0, 'nose', 1.9, 2]], ht: [3.4, 1.2, 0.15], vt: [1.6, 1.4, 0.5], canopy: [0.3, 0.6, 1], gear: 'fixed', tricycle: 1 },
+  seaplane: { base: 'cessna', c: '#E3B23C', cheat: '#2E4A8A', floats: 1, gear: 'none' },
+  glider:   { L: 8, R: 0.42, c: '#F8F8F6', belly: '#F8F8F6', cheat: '#C0392B', tail: '#F8F8F6', prof: [[0, 0.5], [0.08, 0.95], [0.25, 1], [0.45, 0.6], [1, 0.18]], yo: [[0, 0], [1, 0.3]], wing: { span: 18, c0: 1.1, ct: 0.45, sweep: 0.02, dih: 0.06, u: 0.42, y: 0.3, th: 0.1 }, eng: [], ht: [3, 0.8, 0.1, 1], vt: [1.5, 1.2, 0.3], canopy: [0.25, 0.75], gear: 'skid' },
+  stealth:  { L: 21, R: 1.4, c: '#2A2C30', belly: '#24262A', cheat: '#2A2C30', tail: '#2A2C30', flyingWing: 1, span: 52, eng: [], gear: 'retract' }
+};
+const _adef = k => { const d = AIRCRAFT[k]; if (!d.base) return d; const { base, ...rest } = d; return { ..._adef(base), ...rest }; };
+function aircraft(p, o = {}) {   // kind: see AIRCRAFT (real size; o.scale) — fly(A, pts, { speed }); A.gearUp(t) / gearDown(t) (default: down near the ground), A.drop(t, { n }) bombs, A.rampOpen(t), contrail(A, t0, t1)
+  if (p && !p.isObject3D) { o = p; p = world; }
+  const kind = AIRCRAFT[o.kind] ? o.kind : 'airliner', D = { ..._adef(kind), ...(o.paint ?? {}) }, s = o.scale ?? 1, NC = { cast: false };
+  const g = dyn(grp(p ?? world, o.x ?? 0, o.y ?? 0, o.z ?? 0)), B = grp(g); B.scale.setScalar(s); g.rotation.order = 'YXZ'; if (o.ry) g.rotation.y = o.ry;
+  if (CFG.fogScale == null) FOGK = Math.max(FOGK, clamp(D.L * s / 40, 1, 2.5));
+  const A = { g, B, s, kind: kind === 'fighter' ? 'fighter' : 'plane', type: kind, root: g, D, props: [], gears: [], hard: [], eng: [], acts: [], len: D.L * s };
+  const L = D.L, R = D.R, C = o.color ?? D.c, glass = mat('#1E2C40', { rough: 0.08, metal: 0.4 }), dark = '#2A2D33', metal = '#9AA0A6', glw = (c, gl = 1.5) => mat(c, { basic: true, glow: gl });
+  const zAt = u => L * (0.5 - u), ip = (P, u) => _interp(P, u);
+  if (D.flyingWing) { const hs = D.span / 2, pts = [[0, L * 0.5], [hs, -L * 0.05], [hs * 0.92, -L * 0.18], [hs * 0.62, -L * 0.1], [hs * 0.42, -L * 0.3], [hs * 0.22, -L * 0.2], [0, -L * 0.42]], full = [...pts, ...pts.slice(1, -1).reverse().map(([x, z]) => [-x, z])].map(([x, z]) => [+x.toFixed(3), +z.toFixed(3)]);
+    plate(B, full, 0.6, C); _ell(B, C, 0, 0.35, L * 0.08, R * 2.2, R * 0.9, L * 0.35, { detail: 2 }); for (const sx of [-1, 1]) { _ell(B, shade(C, -0.06), sx * 3.5, 0.45, -L * 0.05, 1.6, 0.6, 5, { detail: 1 }); box(B, 2.4, 0.3, 0.6, '#141618', sx * 3.5, 0.6, L * 0.1, NC); }
+    _ell(B, '', 0, 0.8, L * 0.28, 1.2, 0.35, 1.6, { mat: glass, detail: 1, ...NC }); A.eng = [[3.5, 0.5, -L * 0.3], [-3.5, 0.5, -L * 0.3]]; }
+  else {
+    // fuselage: lofted, painted (belly, cheat line, cockpit glazing, tail colour)
+    const NR = 28, NA = 14, pos = [], col = [], tri = _vcol(pos, col, new Map(), new THREE.Color());
+    const Pt = (u, a) => { const r = ip(D.prof, u) * R, y0 = ip(D.yo, u) * R; let y = Math.cos(a) * r; if (D.hump && u < 0.42 && Math.cos(a) > 0) y *= 1 + 0.45 * sm01((0.4 - u) / 0.3) * sm01(u / 0.08) * Math.cos(a); return [Math.sin(a) * r, y + y0, zAt(u)]; };
+    const paint = (u, a) => { const y = Math.cos(a), sd = Math.abs(Math.sin(a)); if (u < (kind === 'airliner' || kind === 'jumbo' || kind === 'bizjet' ? 0.07 : 0.03) && u > 0.025 && y > 0.15 && y < 0.62 && kind !== 'fighter') return '#1E2C40'; if (D.glassNose && u < 0.06) return '#3A5068'; if (y < -0.5) return D.belly;
+      if (Math.abs(y + 0.08) < 0.08 && u > 0.08 && u < 0.85) return D.cheat; if (u > 0.82 && y > 0.3) return D.tail; return C; };
+    for (let j = 0; j < NR; j++) for (let k = 0; k < NA; k++) { const u0 = j / NR, u1 = (j + 1) / NR, a0 = k / NA * TAU, a1 = (k + 1) / NA * TAU, hx = paint((u0 + u1) / 2, (a0 + a1) / 2), P00 = Pt(u0, a0), P10 = Pt(u1, a0), P11 = Pt(u1, a1), P01 = Pt(u0, a1); tri(P00, P11, P10, hx); tri(P00, P01, P11, hx);
+      if (j === 0) tri([0, ip(D.yo, 0) * R, L / 2 + R * 0.05], P01, P00, D.glassNose ? '#3A5068' : C); if (j === NR - 1) tri([0, ip(D.yo, 1) * R, -L / 2], P10, P11, C); }
+    _vmesh(B, pos, col, { rough: 0.45, metal: 0.15 });
+    if (D.win) { const wl = []; for (let z = zAt(0.13); z > zAt(0.8); z -= (kind === 'bizjet' ? 0.9 : 0.55)) for (const sx of [-1, 1]) wl.push([sx * R * 0.985, R * 0.28, z, 0.04, R * 0.16, R * 0.12]); if (D.hump) for (let z = zAt(0.06); z > zAt(0.32); z -= 0.55) for (const sx of [-1, 1]) wl.push([sx * R * 0.8, R * 1.1, z, 0.04, R * 0.1, R * 0.08]); _wins(B, wl, '#1E2C40'); box(B, R * 1.2, 0.04, 0.9, dark, 0, -R * 0.9, zAt(0.2), NC); for (const sx of [-1, 1]) box(B, 0.04, R * 0.6, R * 0.45, shade(C, -0.08), sx * R * 0.99, -R * 0.05, zAt(0.11), NC); }
+    // wings
+    const Wg = D.wing, hs = Wg.span / 2, wz = zAt(Wg.u), wy = Wg.y * R;
+    const wingSide = (sx, yy, sp, chordK = 1) => { const wgp = grp(B, 0, yy, wz); wgp.rotation.z = sx * Wg.dih; let pts;
+      if (Wg.ell) { pts = []; for (let i = 0; i <= 10; i++) { const th = i / 10 * Math.PI / 2, x = Math.sin(th) * sp, c = Math.max(Wg.ct, Wg.c0 * Math.cos(th)); pts.push([sx * x, c * 0.38]); } for (let i = 10; i >= 0; i--) { const th = i / 10 * Math.PI / 2, x = Math.sin(th) * sp, c = Math.max(Wg.ct, Wg.c0 * Math.cos(th)); pts.push([sx * x, -c * 0.62]); } }
+      else { const le = Wg.c0 * 0.5 * chordK, sw = sp * (Wg.sweep ?? 0); pts = [[0, le], [sx * sp, le - sw], [sx * sp, le - sw - Wg.ct * chordK], [0, le - Wg.c0 * chordK]]; }
+      plate(wgp, pts.map(([x, z]) => [+x.toFixed(3), +z.toFixed(3)]), Wg.th, C);
+      const tipZ = Wg.ell ? 0 : Wg.c0 * 0.5 - sp * (Wg.sweep ?? 0) - Wg.ct * 0.5; box(wgp, 0.12, 0.12, 0.2, '', sx * sp, 0, tipZ, { mat: glw(sx < 0 ? '#FF3030' : '#30FF60'), ...NC });
+      if (D.winglet && !Wg.bi) finPlate(wgp, [[Wg.ct * 0.5, 0], [-Wg.ct * 0.2, Wg.ct * 1.1], [-Wg.ct * 0.6, Wg.ct * 1.1], [-Wg.ct * 0.5, 0]].map(([z, y]) => [+(z + tipZ).toFixed(3), +y.toFixed(3)]), 0.12, D.tail, sx * sp, 0, 0);
+      if (D.roundel) { cyl(wgp, Wg.c0 * 0.28, Wg.c0 * 0.28, 0.02, D.roundel, sx * sp * 0.72, Wg.th / 2, Wg.ell ? -Wg.c0 * 0.12 : -sp * 0.72 * (Wg.sweep ?? 0), { seg: 14, ...NC }); cyl(wgp, Wg.c0 * 0.12, Wg.c0 * 0.12, 0.03, '#F2F2EE', sx * sp * 0.72, Wg.th / 2, Wg.ell ? -Wg.c0 * 0.12 : -sp * 0.72 * (Wg.sweep ?? 0), { seg: 12, ...NC }); }
+      return wgp; };
+    for (const sx of [-1, 1]) { wingSide(sx, wy, hs); if (Wg.bi) wingSide(sx, wy + Wg.bi, hs * 1.05); }
+    if (Wg.bi) for (const sx of [-1, 1]) for (const xx of [0.35, 0.85]) { for (const dz of [0.45, -0.45]) _seg(B, [sx * hs * xx, wy + Wg.th / 2, wz + dz * Wg.c0 * 0.6], [sx * hs * xx * 1.02, wy + Wg.bi - Wg.th / 2, wz + dz * Wg.c0 * 0.6], 0.035, 0.035, '#8A6A48'); _seg(B, [sx * hs * xx, wy, wz], [sx * hs * (xx - 0.3), wy + Wg.bi, wz], 0.008, 0.008, '#3A3A3A', NC); }
+    if (Wg.struts) for (const sx of [-1, 1]) _seg(B, [sx * R * 0.9, -R * 0.4, wz], [sx * hs * 0.45, wy, wz - 0.2], 0.04, 0.04, C);
+    if (D.sponson) for (const sx of [-1, 1]) _ell(B, C, sx * R * 0.95, -R * 0.7, zAt(0.45), R * 0.35, R * 0.4, L * 0.12);
+    // tail: fin + stabilisers (T-tail on bizjet / glider)
+    const [vh, vc, vsw] = D.vt, zt = zAt(0.92), yt = ip(D.yo, 0.92) * R + ip(D.prof, 0.92) * R * 0.6;
+    finPlate(B, [[vc * 0.45, 0], [vc * 0.45 - vh * vsw, vh], [vc * 0.45 - vh * vsw - vc * 0.4, vh], [-vc * 0.55, 0]].map(([z, y]) => [+z.toFixed(3), +y.toFixed(3)]), Math.max(0.08, R * 0.12), D.tail, 0, yt, zt);
+    if (D.roundel && kind !== 'biplane') { box(B, 0.05, vh * 0.3, vc * 0.15, '#C0392B', 0, yt + vh * 0.35, zt - vc * 0.05, NC); }
+    const [hspan, hc, hsw, tt] = D.ht, hy = tt ? yt + vh * 0.95 : ip(D.yo, 0.93) * R, hz = tt ? zt - vh * vsw : zAt(0.93);
+    for (const sx of [-1, 1]) { const hg = grp(B, 0, hy, hz); hg.rotation.z = sx * 0.05; plate(hg, [[0, hc * 0.5], [sx * hspan / 2, hc * 0.5 - hspan / 2 * hsw], [sx * hspan / 2, hc * 0.5 - hspan / 2 * hsw - hc * 0.45], [0, -hc * 0.5]].map(([x, z]) => [+x.toFixed(3), +z.toFixed(3)]), Math.max(0.08, hc * 0.06), D.tail); }
+    ball(B, 0.2, '', 0, yt + vh * 0.2, zt - vc * 0.3, { mat: glw('#FF3030'), detail: 0, ...NC }); A.beacon = ball(B, 0.25, '', 0, -R * 1.0, zAt(0.5), { mat: glw('#FF4030', 2.5), detail: 0, ...NC });
+    // canopy / cockpit, glass nose, turrets
+    if (D.canopy) { const [cu, ch, cab] = D.canopy; const cn = _ell(B, '', 0, R * (cab ? 0.55 : 0.75), zAt(cu), R * (cab ? 0.95 : 0.55), R * ch, L * (cab ? 0.1 : 0.08), { mat: mat('#2A3E58', { rough: 0.05, metal: 0.3, opacity: 0.82 }), detail: 2, ...NC }); if (!cab) { ball(B, R * 0.22, '#3A3A30', 0, R * 0.95, zAt(cu) - 0.1, { detail: 1, ...NC }); } }
+    if (D.cockpit) { box(B, R * 1.3, 0.2, 0.9, dark, 0, R * 0.92, zAt(0.4), NC); ball(B, R * 0.32, '#5A3A22', 0, R * 1.18, zAt(0.4), { detail: 1, ...NC }); box(B, R * 0.5, R * 0.12, R * 0.12, '#1E2C40', 0, R * 1.2, zAt(0.4) + R * 0.28, NC); mesh(B, G('wscr', () => new THREE.PlaneGeometry(1, 1)), mat('#BFE0F0', { opacity: 0.4 }), 0, R * 1.15, zAt(0.33), { rx: -0.5, cast: false }).scale.set(R * 1.2, R * 0.5, 1); }
+    if (D.turrets) { const tg = (y, z) => { const t2 = grp(B, 0, y, z); _ell(t2, '', 0, 0, 0, R * 0.55, R * 0.45, R * 0.55, { mat: mat('#3A5068', { rough: 0.05, metal: 0.3, opacity: 0.85 }), detail: 1, ...NC }); for (const sx of [-1, 1]) rod(t2, 0.05, 0.06, 1.5, dark, sx * 0.15, 0, R * 0.9, NC); return t2; };
+      tg(R * 1.05, zAt(0.2)); tg(-R * 1.0, zAt(0.55)).rotation.y = Math.PI * 0.8; const tl = tg(ip(D.yo, 1) * R, -L / 2); tl.rotation.y = Math.PI; for (const sx of [-1, 1]) rod(B, 0.05, 0.06, 1.4, dark, sx * R * 1.05, R * 0.25, zAt(0.62), { ry: sx * Math.PI / 2, ...NC }); }
+    // engines
+    for (const [ex, type, er, nb = 4] of D.eng) for (const sx of (ex ? [-1, 1] : [0])) {
+      const x = sx * ex, onW = type === 'fan' || type === 'tprop' || type === 'radial', dy0 = onW ? (Wg.sweep ?? 0) * 0 : 0, wTanY = wy + Math.abs(x) * Math.tan(Wg.dih), wTanZ = wz + Wg.c0 * 0.5 - Math.abs(x) * (Wg.sweep ?? 0);
+      if (type === 'fan') { const ey = wTanY - er * 1.25, ez = wTanZ + er * 0.6; rod(B, er, er * 0.85, er * 3.6, C, x, ey, ez, { seg: 14 }); cyl(B, er * 0.9, er * 0.9, 0.05, '#1E2024', x, ey - 0.025, ez + er * 1.8, { rx: Math.PI / 2, seg: 14, ...NC }); cone(B, er * 0.28, er * 0.5, '#D8DCDE', x, ey - er * 0.25, ez + er * 1.75, { rx: Math.PI / 2, ...NC }); rod(B, er * 0.55, er * 0.4, er * 0.8, '#4A4E54', x, ey, ez - er * 2.1, NC); box(B, er * 0.3, er * 0.9, er * 2.4, C, x, ey + er * 0.7, ez - er * 0.4); A.eng.push([x, ey, ez - er * 2.4]); }
+      else if (type === 'rear') { const ez = zAt(0.74), ey = R * 0.45; rod(B, er, er * 0.85, er * 4.2, C, sx * (R + er * 1.1), ey, ez, { seg: 12 }); cyl(B, er * 0.88, er * 0.88, 0.05, '#1E2024', sx * (R + er * 1.1), ey - 0.025, ez + er * 2.1, { rx: Math.PI / 2, seg: 12, ...NC }); box(B, er * 1.4, er * 0.3, er * 1.6, C, sx * (R + er * 0.3), ey, ez); A.eng.push([sx * (R + er * 1.1), ey, ez - er * 2.2]); }
+      else { const nose = type === 'nose' || type === 'rotary', ey = nose ? ip(D.yo, 0) * R : wTanY - er * 0.25, ez = nose ? L / 2 + 0.05 : wTanZ + er * 1.2, pr = dyn(grp(B, x, ey, ez + (nose ? 0.12 : er * 0.15)));
+        if (!nose) { rod(B, er, er * 0.8, er * 3.6, C, x, ey, ez - er * 1.5, { seg: 12 }); cyl(B, er * 0.95, er * 0.95, 0.05, type === 'radial' ? '#1E2024' : C, x, ey - 0.025, ez + er * 0.3, { rx: Math.PI / 2, seg: 12, ...NC }); A.eng.push([x, ey, ez - er * 3.3]); }
+        else if (type === 'rotary') { cyl(B, R * 1.05, R * 1.0, R * 0.5, '#8A8E92', 0, ey - R * 0.25, L / 2 - R * 0.2, { rx: Math.PI / 2, seg: 12 }); for (let i = 0; i < 9; i++) { const a = i / 9 * TAU; cyl(B, R * 0.12, R * 0.12, R * 0.4, '#5A5E64', Math.sin(a) * R * 0.75, ey + Math.cos(a) * R * 0.75, L / 2, { rx: Math.PI / 2, seg: 6, ...NC }); } }
+        const bl = er * (nose ? 1.0 : 1.15); cone(pr, er * 0.22, er * 0.5, kind === 'fighter' ? '#C0392B' : '#D8DCDE', 0, -er * 0.25, er * 0.25, { rx: Math.PI / 2 }); for (let i = 0; i < nb; i++) { const q = grp(pr); q.rotation.z = i * TAU / nb; box(q, er * 0.16, bl, 0.05, '#2A2A2A', 0, 0, 0, { ry: 0.3 }); box(q, er * 0.17, bl * 0.12, 0.052, '#E3B23C', 0, bl * 0.88, 0, { ry: 0.3, ...NC }); }
+        const disc = mesh(pr, G('pdisc', () => new THREE.CircleGeometry(1, 24)), mat('#2A2A2A', { opacity: 0.18 }), 0, 0, 0.03, NC); disc.scale.setScalar(bl); A.props.push({ pr, disc, rpm: o.rpm ?? (nose ? 46 : 34) * (sx >= 0 ? 1 : 1) }); }
+    }
+    if (D.guns) { for (const sx of [-1, 1]) for (const k2 of [0.32, 0.4]) rod(B, 0.04, 0.04, 0.8, dark, sx * hs * k2, wy, wz + Wg.c0 * 0.45, NC); A.gun = v3(hs * 0.36, wy, wz + Wg.c0 * 0.8); }
+    if (D.floats) for (const sx of [-1, 1]) { _ell(B, '#D8DCDE', sx * 1.4, -R * 2.6, zAt(0.4), 0.32, 0.3, 3.2, { detail: 1 }); for (const dz of [1.3, -1.0]) _seg(B, [sx * R * 0.6, -R * 0.7, zAt(0.4) + dz], [sx * 1.4, -R * 2.4, zAt(0.4) + dz], 0.04, 0.04, dark); }
+    // landing gear
+    const gearPt = (x, y, z, h, wr, nw = 1, o2 = {}) => { const gg = dyn(grp(B, x, y, z)); cyl(gg, wr * 0.18, wr * 0.18, h, '#B8BEC4', 0, -h, 0, { seg: 6, ...NC }); for (let i = 0; i < nw; i++) { const wx = (i - (nw - 1) / 2) * wr * 0.9; cyl(gg, wr, wr, wr * 0.6, '#1E1E1E', wx, -h - wr * 0.3 + 0 * wr, 0, { rz: Math.PI / 2, seg: 12 }); } if (o2.fair) _ell(gg, C, 0, -h - wr * 0.2, 0, wr * 0.55, wr * 1.1, wr * 1.6); A.gears.push({ gg, fold: o2.fold ?? 1 }); return gg; };
+    if (D.gear !== 'none' && D.gear !== 'skid') { const h = R * (kind === 'jumbo' || kind === 'airliner' ? 1.15 : kind === 'cargo' ? 0.45 : kind === 'bizjet' ? 0.9 : 1.0), wr = R * (kind === 'fighter' ? 0.38 : kind === 'biplane' ? 0.45 : 0.28);
+      if (D.tailwheel || D.tailskid) { for (const sx of [-1, 1]) gearPt(sx * (kind === 'bomber' ? 3.5 : R * 2.0), kind === 'bomber' ? wy - 0.6 : -R * 0.6, wz + (kind === 'bomber' ? 1 : 0.6), kind === 'bomber' ? h * 1.4 : h * 1.15, wr, 1, { fold: kind === 'biplane' ? 0 : 1 }); gearPt(0, ip(D.yo, 0.93) * R - R * 0.2, zAt(0.93), R * 0.3, wr * 0.4, 1, { fold: 0 }); }
+      else { const mainX = kind === 'cargo' ? R * 0.95 : R * (kind === 'cessna' || kind === 'seaplane' ? 1.4 : 1.2); for (const sx of [-1, 1]) gearPt(sx * mainX, -R * 0.75, zAt(Wg.u + 0.06), h, wr, kind === 'jumbo' ? 4 : 2, { fair: kind === 'cessna', fold: D.gear === 'fixed' ? 0 : 1 }); gearPt(0, -R * 0.75, zAt(0.08), h, wr * 0.8, 2, { fold: D.gear === 'fixed' ? 0 : 1 }); } }
+    if (D.gear === 'skid') box(B, 0.12, 0.15, L * 0.3, dark, 0, -R * 0.95, zAt(0.3), NC);
+    // bomb bay (doors + bombs) and cargo ramp
+    if (D.bay) { A.doors = [-1, 1].map(sx => { const dg = dyn(grp(B, sx * R * 0.55, -R * 0.82, zAt(0.47))); box(dg, R * 0.55, 0.06, 4.2, C, -sx * R * 0.27, 0, 0); return [dg, sx]; });
+      for (let i = 0; i < 12; i++) { const m = dyn(grp(B, (i % 2 ? 1 : -1) * R * 0.3, -R * (0.35 + (Math.floor(i / 2) % 2) * 0.35), zAt(0.47) + (Math.floor(i / 4) - 1) * 1.3)); rod(m, 0.17, 0.17, 1.0, '#4A5236', 0, 0, 0, { seg: 8 }); rod(m, 0, 0.17, 0.25, '#4A5236', 0, 0, 0.62, { seg: 8 }); A.hard.push({ node: m, kind: 'bomb', used: false }); } }
+    if (D.ramp) { const rg = dyn(grp(B, 0, -R * 0.85, zAt(0.7))); box(rg, R * 1.5, 0.12, L * 0.17, shade(C, -0.06), 0, 0, -L * 0.085); A.ramp = rg; }
+  }
+  _fuseDyn(g);
+  // live: props spin (blur disc), gear folds near the ground / on command, bay doors, ramp, beacon
+  const gearState = t => { let up = null; for (const a of A.acts) if (a.k === 'gear' && a.t <= t) up = a.up ? sm01((t - a.t) / 1.6) : 1 - sm01((t - a.t) / 1.6); if (up != null) return up; if (o.gear === 'up') return 1; if (o.gear === 'down' || !g._fly) return 0; const P = g._fly(t)[0]; return sm01((P[1] - groundH(P[0], P[2]) - 25) / 15); };
+  late(t => { A.props.forEach(({ pr, disc, rpm }, i) => { pr.rotation.z = t * rpm + i; disc.visible = o.engineOff !== true; });
+    const gu = gearState(t); A.gears.forEach(({ gg, fold }) => { if (!fold) return; gg.rotation.x = -1.5 * gu; gg.scale.setScalar(Math.max(0.001, 1 - 0.85 * sm01((gu - 0.6) / 0.4))); });
+    if (A.doors) { let d2 = 0; for (const a of A.acts) if (a.k === 'bay') d2 = Math.max(d2, _aw(t, a.t, a.t1, 0.6, 0.8)); A.doors.forEach(([dg, sx]) => { dg.rotation.z = sx * 1.4 * d2; }); }
+    if (A.ramp) { let r = 0; for (const a of A.acts) if (a.k === 'ramp') r = a.close ? 1 - sm01((t - a.t) / 1.5) : sm01((t - a.t) / 1.5); A.ramp.rotation.x = -0.55 * r; }
+    if (A.beacon) A.beacon.visible = (t * 1.1) % 1 < 0.12; });
+  A.gearUp = t => (A.acts.push({ k: 'gear', t, up: true }), sfx(t, 'servo', 0.6), A); A.gearDown = t => (A.acts.push({ k: 'gear', t, up: false }), sfx(t, 'servo', 0.6), A);
+  A.drop = (t, oo = {}) => { const n = oo.n ?? 6, iv = oo.interval ?? 0.25; A.acts.push({ k: 'bay', t: t - 0.9, t1: t + n * iv + 0.6 }); sfx(t - 0.9, 'servo', 0.7); const R2 = []; for (let i = 0; i < n; i++) R2.push(bomb(A, t + i * iv, { horde: oo.horde, r: oo.r, size: oo.size })); return R2; };
+  A.rampOpen = (t, close = false) => (A.acts.push({ k: 'ramp', t, close }), sfx(t, 'servo', 0.7), A);
+  if (o.sound !== false && D.eng.length) A.drone = true;
+  return A;
+}
+function contrail(A, t0, t1, o = {}) {   // white vapour trails from the engines (or wing tips: o.tips) — high-altitude look, or o.smoke for a damaged engine
+  const pts = o.tips ? [-1, 1].map(sx => [sx * (A.D.span ?? A.D.wing?.span ?? 10) / 2 * 0.98, 0, 0]) : A.eng.length ? A.eng : [[0, 0, -A.D.L / 2]];
+  for (const e of pts.slice(0, o.n ?? 4)) cbBurst('smoke', tt => carrierPoint(A, tt, v3(...e)), t0, { rate: o.rate ?? 30, n: Math.ceil((t1 - t0) * (o.rate ?? 30)), size: (o.size ?? 0.6) * A.s, speed: 0.1, grow: 3.5, life: o.life ?? 5, opacity: o.smoke ? 0.7 : 0.55, drag: 2, colors: o.smoke ? ['#3A3634', '#5A5450'] : ['#FFFFFF', '#F0F4F8'] });
+  return A;
+}
+function paradrop(A, t, n = 6, o = {}) {   // soldiers jump from the cargo ramp (or door), canopies open, they drift down and land
+  const R2 = []; for (let i = 0; i < n; i++) { const tj = t + i * (o.every ?? 0.5), P0 = carrierPoint(A, tj, v3(0, -A.D.R * 0.9, -A.D.L * 0.4)), V0 = carrierVel(A, tj).multiplyScalar(0.6), f = figure({ shirt: o.shirt ?? '#5E6A4E', pants: o.pants ?? '#4E5A3E', skin: o.skin, hat: '#4E5A3E', hatStyle: 'beanie', seed: i });
+    const ch = dyn(grp(world)); const cp = new THREE.Mesh(G('chute', () => new THREE.SphereGeometry(1, 12, 6, 0, TAU, 0, Math.PI / 2.6)), mat(o.chute ?? '#7A8A5A', { own: true })); cp.material.side = THREE.DoubleSide; cp.scale.set(3.4, 1.6, 3.4); cp.castShadow = true; ch.add(cp);
+    for (let k = 0; k < 8; k++) { const a = k / 8 * TAU; _seg(ch, [Math.sin(a) * 3.2, 0.4, Math.cos(a) * 3.2], [0, -3.6, 0], 0.012, 0.012, '#DDD', { cast: false }); }
+    const gy = groundH(P0.x + V0.x * 3, P0.z + V0.z * 3), vz = 5.5, topen = 1.4, td = topen + Math.max(0.5, (P0.y - V0.y * 0 - 9.8 * topen * topen / 2 - gy) / vz);
+    const pos = tt => { const u = tt - tj; if (u < topen) return v3(P0.x + V0.x * u, P0.y - 4.9 * u * u, P0.z + V0.z * u); const u2 = Math.min(u - topen, td - topen), drift = topen + u2 * 0.15; return v3(P0.x + V0.x * drift + Math.sin(u2 * 0.7 + i) * 0.8, Math.max(gy, P0.y - 4.9 * topen * topen - vz * u2), P0.z + V0.z * drift); };
+    f.fx.push((tt, S) => { const u = tt - tj; if (u < 0) return; if (u < td) { S.las = S.ras = -2.6; S.laz = -0.3; S.raz = 0.3; S.lt = S.rt = 0.25; S.lk = S.rk = 0.3; } });
+    late(tt => { const u = tt - tj, r = f.root; r.visible = u >= 0; ch.visible = u > topen - 0.3 && u < td + 1.2; if (u < 0) return; const p2 = pos(tt); r.position.copy(p2); r.rotation.set(u < topen ? u * 2 : 0, 0, 0); const k = sm01((u - topen + 0.3) / 0.5); ch.position.set(p2.x, p2.y + 2.0 + 3.6 * k, p2.z); ch.scale.set(k, k * (u > td ? Math.max(0.05, 1 - (u - td)) : 1), k); });
+    R2.push({ f, land: tj + td, at: () => pos(tj + td) }); }
+  return R2;
 }
 
 /* ====================================================================== */
