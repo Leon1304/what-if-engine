@@ -14,6 +14,14 @@ Push an assembled page to `renders/<slug>.html` (output of `assemble.py`, voice 
 `https://github.com/Leon1304/what-if-engine/releases/download/render-<slug>/<slug>.mp4`
 Manual run: Actions → render → Run workflow (page path, width 1440 / 2160 / 1080).
 
+## Engine v2.20 (Nov 2026): retention and sound
+- **Flash-forward:** `TEASE = [{ t, dur: 0.6, at, label }]` — for `dur` s the frame shows scene + camera at video time `at` (the climax) while HUD, voice and captions keep running; flash + whoosh in and out, optional label chip.
+- **Series recap chip:** `CFG.series.prev` now shows a small "You chose: Cellar ✓" chip next to the badge while the cold open plays (`mode: 'card'` = old full-screen recap).
+- **Endings:** lighter dim under end card and review (`CFG.endDim`, 0.38) so the scene keeps playing; `CFG.loop` is on by default.
+- **Music only when it fits:** `AUDIO.mood: 'none'` / `score: false` (or 'none' segments) = no music, ambience + SFX only.
+- **New ambience beds:** cabin, hum, people, stadium, underwater, forest, cave.
+- **assemble.py:** warns about story videos over 58 s, end card + review over 6.5 s, loop off, no flash-forward, full-screen recap, unknown moods or ambience kinds.
+
 ## Engine v2.8 (Nov 2026): polish for explainers and conspiracy videos
 - **Lens blur fix:** see-through x-ray bodies, skeletons and quicksand layers count as solid in the depth pass → they stay sharp in close-ups.
 - **planet():** smooth surface (soft coasts, deep water, desert belt, ice caps), soft cloud layer with per-vertex alpha, fresnel atmosphere rim; `smooth: false` keeps the old faceted look.

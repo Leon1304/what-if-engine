@@ -410,5 +410,25 @@ Sie wirken zusätzlich zu `CAM`:
 - `spreadFire([obj | [x,y,z], …], t0, { speed })`: Feuer springt von einem zum nächsten (Kisten, Vorhänge, Gras).
 - `crackGlass([x,y,z], t, { size, ry })`: Spinnennetz-Riss in einer Scheibe, mit Knack.
 
+# Neu in v2.20 (Zuschauerbindung und Ton)
+
+## Flash-Forward
+`TEASE = [{ t: 'b5', dur: 0.6, at: 'b11+0.4', label: 'Later tonight' }]` in der Story: Für `dur` s zeigt das Bild Szene und Kamera zur Videozeit `at` (meist der Höhepunkt). HUD, Zähler, Stimme und Captions laufen in Videozeit weiter; weißer Blitz und Whoosh beim Hinein- und Hinausspringen kommen automatisch, `label` erscheint als kleiner Chip über der Mitte. Einmal pro Story-Video in den Durchhänger bei ca. 40–55 % der Laufzeit legen, `at` mitten in einen Shot des Höhepunkts (nicht auf einen Schnitt). `rate` (1) verlangsamt oder beschleunigt den Ausschnitt.
+
+## Serien-Rückblick als Chip
+`CFG.series.prev = { q, opts, pick }` zeigt ab v2.20 standardmäßig (`mode: 'chip'`) nur einen kleinen Chip „You chose: Cellar ✓“ neben der Badge (`dur` 3,5 s); Captions und Action laufen ab Frame 0 normal. `mode: 'card'` = alte Vollbild-Endcard der Vorfolge (assemble.py warnt).
+
+## Ende über laufender Szene, Loop immer an
+- `CFG.endDim` (0,38, vorher fest 0,55): Abdunklung unter Endcard und Bewertung; Ende „dead“ mindestens 0,7. Die Kamera soll unter den Karten weiterfahren (kein Standbild).
+- `CFG.loop` ist jetzt standardmäßig an (alle Videos wischen in den letzten 0,3 s zurück in den Hook); `loop: false` schaltet es ab.
+
+## Musik nur, wenn sie passt
+- `AUDIO.mood: 'none'` oder `AUDIO.score: false` = keine Musik, nur Hintergrundgeräusche und SFX (die Geräusche werden dann etwas lauter gemischt). Einzelne Abschnitte gehen auch: `score: [[0, 'none'], [21, 'tense']]`.
+- Neue Hintergrundgeräusche (`AUDIO.amb`): `cabin` (Flugzeugkabine mit Anschnall-Gong) · `hum` (Neonröhren, Serverraum, Backrooms) · `people` (Stimmengewirr: Mall, Büro, Straße) · `stadium` (jubelnde Menge, Pfiffe) · `underwater` (dumpfer Druck, Blasen) · `forest` (Blätter, Vögel, Insekten, Specht) · `cave` (tiefer Raum, Tropfen mit Echo, Grollen). `crowd` bleibt das Zombie-Gemurmel.
+- Fehlt ein Geräusch: im Objekt `AMB` im Sound-Abschnitt von `template.html` als neue Art bauen (Bausteine `bed`, `every`, `tone`, `nz`) und mitcommitten. `assemble.py` warnt bei unbekannten Stimmungen und Geräuscharten.
+
+## assemble.py-Hinweise (v2.20)
+Story-Video über 58 s · Endcard + Bewertung über 6,5 s · `loop: false` · kein `TEASE` ab 40 s · Rückblick als Vollbild-Karte · unbekannte Musikstimmung oder Geräuschart.
+
 # Tests
 `bash tests/run.sh [name …]` baut die Beispiel-Story aus `template.html` und alle Szenen in `tests/` und rendert je drei Bilder; Seitenfehler lassen den Test scheitern. Der Workflow `test` läuft bei jeder Engine-Änderung auf GitHub. Neue Funktionen bekommen eine kleine Testszene in `tests/<thema>.story.js` + `.scene.js`.

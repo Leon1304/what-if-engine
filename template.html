@@ -23,6 +23,13 @@
   .badge { background: var(--accent); color: var(--ink); }
   #phase { background: rgba(8, 10, 14, .66); font-weight: 800; font-variant-numeric: tabular-nums; }
   #phase:empty { display: none; }
+  /* v2.20 series recap chip (CFG.series.prev, mode chip): "You chose: Cellar ✓" next to the badge while the cold open runs */
+  #recap { display: none; align-items: center; gap: 1.2cqw; font: 900 2.4cqw/1 var(--ui); letter-spacing: .12em; text-transform: uppercase; padding: .9cqw 1.3cqw .8cqw 1.6cqw; border-radius: 1.1cqw; white-space: nowrap; max-width: 46cqw; overflow: hidden; text-overflow: ellipsis; background: #fff; color: #111; transform-origin: 0 50%; opacity: 0; box-shadow: 0 .6cqw 1.6cqw rgba(0, 0, 0, .35); }
+  #recap b { color: var(--ink); background: var(--accent); padding: .45cqw .9cqw .35cqw; border-radius: .7cqw; overflow: hidden; text-overflow: ellipsis; }
+  #recap i { font-style: normal; display: grid; place-items: center; width: 3.4cqw; height: 3.4cqw; border-radius: 50%; background: #1E9E45; color: #fff; font-size: 2.2cqw; letter-spacing: 0; }
+  /* v2.20 flash-forward label (TEASE[].label) */
+  #tease { position: absolute; left: 7cqw; right: 0; top: 22cqh; text-align: center; opacity: 0; }
+  #tease span { display: inline-block; font: 900 2.8cqw/1 var(--ui); letter-spacing: .16em; text-transform: uppercase; background: rgba(8, 10, 14, .78); color: #fff; padding: 1.3cqw 2.1cqw 1.2cqw; border-radius: 1.2cqw; border: .45cqw solid var(--accent); }
   #stats { margin-top: 1.3cqw; display: flex; flex-direction: column; gap: .7cqw; align-items: flex-start; }
   .stat { display: flex; align-items: baseline; gap: 1.5cqw; background: rgba(8, 10, 14, .62); padding: .75cqw 1.5cqw .65cqw 1.3cqw; border-radius: .9cqw; border-left: .5cqw solid var(--accent); transform-origin: 0 50%; opacity: 0; }
   .stat.bad { border-left-color: var(--bad); }
@@ -228,9 +235,10 @@
   <div id="split"></div>
   <div id="hud">
     <div id="chan"></div>
-    <div class="top" id="top"><span class="badge" id="badge"></span><span id="phase"></span></div>
+    <div class="top" id="top"><span class="badge" id="badge"></span><span id="phase"></span><span id="recap"></span></div>
     <div id="stats"></div>
     <div id="cap"></div>
+    <div id="tease"></div>
     <div id="stamp"></div>
     <div id="xcard"></div>
     <div id="end"></div>
@@ -297,7 +305,7 @@ const CFG = {
   karaoke: true,           // words appear as if spoken, the current word gets a coloured box
   wordRate: 0.085,         // fastest seconds per word
   voice: 'deep',           // voice-over: deep | deep-uk | narrator | false — or { name, speed: 1.06, gap: 0.22 (pause after a sentence), pitch: -1.1, gain: 1 }
-  series: null,            // { name: 'What If Lab', handle: '@whatiflab', ep: 1, next: 'part 2', prev: { q, opts, pick, dur: 3.2 } } → series intro + outro; prev (ep 2+) = last end card with the chosen option, from frame 0
+  series: null,            // { name: 'What If Lab', handle: '@whatiflab', ep: 1, next: 'part 2', prev: { q, opts, pick, dur: 3.5, mode: 'chip' } } → series intro + outro; prev (ep 2+) = 'You chose: …' chip next to the badge while the cold open runs (mode 'card' = old full-screen card from frame 0)
   cast: {},                // extra name cards for BEATS[].who, e.g. { mayor: { name: 'The Mayor', role: 'Has a plan' } } (steve is built in)
   statStagger: 0.45,       // stats appear one after another (s between them); countUp: 0.7 = numbers count up when they appear
   transition: 'auto'       // cuts: auto (whip, whip, zoom …) | whip | zoom | dip | blur | cut — per key: tr, td, dir
@@ -349,7 +357,9 @@ const STATS = [
 // END.ending = { type: 'survived' | 'dead', n: 2, of: 4, title } → result card instead of a vote (q/opts not needed), then the review
 const END = { t: 18.3, q: 'Silo, cellar or tractor – where do *you* hide?', opts: ['Silo', 'Cellar', 'Tractor'], cta: 'Comment A, B or C' };
 // Sound: mood horror | epic | action | funny | science | chill | tense | party | triumph | sad — or score: [[t, mood], …] (music follows the scene).
-// sections [t, level 0..3]. amb: [[t0, t1, kind, vol]] ambience beds: night farm wind blizzard rain storm fire indoor crowd city ocean space engine. sfx kinds: see SND below.
+// mood 'none' (or score: false) = no music, only ambience + SFX — use it when no mood fits the topic; score segments may be 'none' too ([[0, 'none'], [21, 'tense']]).
+// sections [t, level 0..3]. amb: [[t0, t1, kind, vol]] ambience beds: night farm wind blizzard rain storm fire indoor crowd (zombies) city ocean space engine
+//   + v2.20: cabin (airliner) hum (fluorescent / electric buzz) people (human chatter) stadium (cheering crowd) underwater forest cave. sfx kinds: see SND below.
 const AUDIO = {
   mood: 'horror', music: 0.55, sfx: 0.95,
   sections: [[0, 1], [2.6, 1], [6.05, 2], [10.2, 3], [14.2, 2], [18.3, 1]],
@@ -379,7 +389,12 @@ const AUDIO = {
 // ---- v2.7 ----
 // Stats: type 'meter' = needle gauge 0–100 (left / right labels, e.g. Believability: left: 'Nope', right: 'Totally real'), type 'timeline' = year strip (from, to, marks: [[1969, 'Moon landing']], fmt 'year').
 // SPLIT = [{ t, dur, a: 'main' | { p, l, fov, p2, l2 }, b: { … }, labels: ['Myth', 'Reality'], kinds: ['bad', 'good'] }] — two cameras top / bottom, wipes in; no callouts, AO or lens blur meanwhile.
-// CFG.loop: true — the last 0.3 s whip out and the cards fade, so the restart lands on the hook; the last spoken line should lead into the title question.
+// CFG.loop (default true since v2.20) — the last 0.3 s whip out and the cards fade, so the restart lands on the hook; the last spoken line should lead into the title question. false = off.
+// ---- v2.20 retention ----
+// TEASE = [{ t: 'b5', dur: 0.6, at: 'b11+0.4', label: 'Later tonight' }] — flash-forward: for dur s the frame shows scene + camera at video time `at` (the climax), HUD, voice and captions keep
+//   running; white flash + whoosh in and out. One per video at the mid-video dip (~40–55 % of the runtime).
+// CFG.endDim (0.38) — how much the scene darkens under the end card; keep the scene moving underneath (no still frame). 'dead' endings use at least 0.7.
+// CFG.series.prev.mode: 'chip' (default) = small 'You chose: …' chip next to the badge, captions and action from frame 0 · 'card' = the old full-screen recap card.
 // THUMB extras (v2.8): stamp: 'False' | { text, color, x, y }, meter: 0–100 (+ meterLabel, meterX, meterY), big: '30,000 °C' (+ bigX, bigY).
 // focusShot(anchor, t, dur, { dist, az, el, center, fov, push, tr }) in the scene adds a push-in on any anchor to CAM (board item, globe pin with center: the planet's position, layer, lineup item).
 // Scene: conspiracyBoard(p, x, z, { items, links: [[i, j, snapT]], cross: [[i, t]], fall }) · globeMark(planet, lat, lon, o) · globeArc(planet, [lat, lon], [lat, lon], o) · globeArea(planet, [[lat, lon]…], o) · lineup(p, x, z, items, o) (+ .shot(t, dur) for CAM)
@@ -429,6 +444,11 @@ function clockText(t, t0, t1, from, to) {   // '23:47' → '05:52' across [t0, t
 const evT = k => { if (typeof k !== 'string') return k; const m = /^(b(\d+)|end)\s*([+-][\d.]+)?$/.exec(k.trim()); if (!m) return 0; return (m[2] != null ? BEATS[+m[2]].t : END ? END.t : DUR) + (m[3] ? +m[3] : 0); };
 // freeze frames: FREEZE = [{ t, dur, label, sub }] → the scene stops dead (rate 0, no catch-up); camera, HUD and sound keep video time
 const FREEZES = (typeof FREEZE === 'undefined' || !FREEZE ? [] : [].concat(FREEZE)).map(x => ({ ...x, t: evT(x.t), dur: x.dur ?? 2 }));
+// flash-forward (v2.20): TEASE = [{ t, dur: 0.6, at, label }] → the scene and camera jump to video time `at` for dur s (HUD, voice and captions stay); flash + whoosh in and out
+const TEASES = (typeof TEASE === 'undefined' || !TEASE ? [] : [].concat(TEASE)).map(x => ({ ...x, t: evT(x.t), at: evT(x.at), dur: x.dur ?? 0.6 }));
+const teaseV = t => { for (const x of TEASES) if (t >= x.t && t < x.t + x.dur) return x.at + (t - x.t) * (x.rate ?? 1); return t; };
+if (typeof FLASHES !== 'undefined') for (const x of TEASES) FLASHES.push({ t: x.t, dur: 0.2, a: 0.85 }, { t: x.t + x.dur, dur: 0.24, a: 0.7 });
+if (CFG.loop === undefined) CFG.loop = true;   // v2.20: every video loops back into its hook
 const SLOW = [...(typeof SLOWMO === 'undefined' ? [] : SLOWMO), ...FREEZES.map(x => ({ t: x.t, dur: x.dur, rate: 0, ramp: x.ramp ?? 0.06, catch: 0 }))];
 const _sr = (s, t) => { const rp = Math.min(s.ramp ?? 0.18, s.dur / 2), k = clamp(Math.min((t - s.t) / rp, (s.t + s.dur - t) / rp)); return 1 + ((s.rate ?? 0.3) - 1) * k * k * (3 - 2 * k); };
 SLOW.forEach(s => { let lost = 0; for (let x = s.t; x < s.t + s.dur; x += 0.001) lost += (1 - _sr(s, x)) * 0.001; s._c = s.catch ?? 0.6; s._a = s._c > 0 ? 2 * lost / s._c : 0; });
@@ -7722,13 +7742,16 @@ if (END) {
 }
 // series intro (episode 2+): last end card, the chosen option lights up — CFG.series.prev = { q, opts, pick, dur, label }
 const PREV = SERIES?.prev ?? null, prevEl = $('prev');
-if (PREV) {
-  PREV.dur = PREV.dur ?? 3.2;
+const recapEl = $('recap');
+if (PREV) { PREV.mode = PREV.mode ?? 'chip'; PREV.dur = PREV.dur ?? (PREV.mode === 'chip' ? 3.5 : 3.2); }
+if (PREV && PREV.mode === 'chip') recapEl.innerHTML = `${esc(tr('You chose'))}: <b>${esc(PREV.opts?.[PREV.pick] ?? '')}</b><i>✓</i>`;
+else if (PREV) {
   prevEl.innerHTML = `<div class="k">${esc(tr(PREV.label ?? ('Part ' + (SERIES.ep ?? 2) + ' · Last time')))}</div><div class="q">${esc(PREV.q).replace(/\*([^*]+)\*/g, '<em>$1</em>')}</div>`
     + `<div class="opts">${PREV.opts.map((o, i) => `<div class="o${i === PREV.pick ? ' pick' : ''}"><b>${'ABCD'[i]}</b><span>${esc(o)}</span>${i === PREV.pick ? '<i>✓</i>' : ''}</div>`).join('')}</div>`
     + `<div class="st">You chose: ${esc(PREV.opts[PREV.pick] ?? '')}</div>`;
 }
-const prevOpts = PREV ? [...prevEl.querySelectorAll('.o')] : [], prevSt = PREV ? prevEl.querySelector('.st') : null, prevOk = PREV ? prevEl.querySelector('.o i') : null;
+const PCARD = PREV?.mode === 'card' ? PREV : null, recapOk = recapEl.querySelector('i');
+const prevOpts = PCARD ? [...prevEl.querySelectorAll('.o')] : [], prevSt = PCARD ? prevEl.querySelector('.st') : null, prevOk = PCARD ? prevEl.querySelector('.o i') : null;
 let prevDim = 0;
 if (END?.ending) {
   const E2 = END.ending, dead = E2.type === 'dead';
@@ -7822,7 +7845,12 @@ function updateHud(t) {
   // caption
   // series intro card (frame 0 = the hook): options → others dim → chosen one pops + ✓ → 'You chose: …' → fades out
   prevDim = 0;
-  if (PREV) {
+  if (PREV && !PCARD) {   // v2.20 recap chip: pops in next to the badge, ✓ ticks, fades after dur — the cold open plays underneath
+    const on = t < PREV.dur + 0.05, k = span(t, 0.12, 0.3, 'back'), out = span(t, PREV.dur - 0.3, 0.3), ck = span(t, 0.6, 0.3, 'back');
+    recapEl.style.display = on ? 'inline-flex' : 'none';
+    if (on) { recapEl.style.opacity = (clamp(k * 1.4) * (1 - out)).toFixed(3); recapEl.style.transform = `scale(${(0.7 + 0.3 * k).toFixed(3)})`; if (recapOk) recapOk.style.transform = `scale(${clamp(ck * 1.2).toFixed(3)})`; }
+  }
+  if (PCARD) {
     const out = 1 - span(t, PREV.dur - 0.3, 0.3), dimK = span(t, 0.45, 0.35), pk = span(t, 0.55, 0.35, 'back');
     prevEl.style.opacity = (t < PREV.dur ? out : 0).toFixed(3);
     prevEl.style.transform = `translateY(-50%) scale(${(1 + 0.04 * (1 - out)).toFixed(4)})`;
@@ -7836,7 +7864,7 @@ function updateHud(t) {
       const k = span(t, st.t, 0.22, 'out'), out = span(t, st.t + 1.55, 0.35); stampEl.style.opacity = (k * (1 - out)).toFixed(3); stampEl.style.transform = `scale(${(1.8 - 0.8 * k).toFixed(3)})`; }
     else stampEl.style.opacity = '0'; }
   let idx = -1; BEATS.forEach((b, i) => { if (t >= b.t && t < b.t + b.dur && t < endT) idx = i; });
-  if (PREV && t < PREV.dur) idx = -1;   // the intro card speaks for itself (the beat underneath is still voiced)
+  if (PCARD && t < PREV.dur) idx = -1;   // the intro card speaks for itself (the beat underneath is still voiced)
   if (idx !== capIdx) {
     capIdx = idx;
     if (idx < 0) { capEl.innerHTML = ''; capWords = []; capKick = null; capWho = null; }
@@ -7864,7 +7892,7 @@ function updateHud(t) {
   // end card
   if (END) {
     const revK = REV ? span(t, REV.t, 0.45, 'back') : 0, revOut = REV ? span(t, REV.t - 0.3, 0.3) : 0;
-    endEl.style.opacity = (endK * (1 - revOut)).toFixed(3); dimEl.style.opacity = Math.max((END.ending?.type === 'dead' ? 0.85 : 0.55) * endK + 0.15 * revOut, prevDim).toFixed(3);
+    endEl.style.opacity = (endK * (1 - revOut)).toFixed(3); dimEl.style.opacity = Math.max((END.ending?.type === 'dead' ? Math.max(0.7, CFG.endDim ?? 0.38) : CFG.endDim ?? 0.38) * endK + 0.15 * revOut, prevDim).toFixed(3);   // v2.20: lighter dim, the scene keeps playing under the card
     if (REV) {
       revEl.style.opacity = clamp(revK * 1.4).toFixed(3); revEl.style.transform = `translateY(-50%) scale(${(0.86 + 0.14 * revK).toFixed(4)})`;
       revStars.forEach((s, i) => { const k = span(t, REV.t + 0.45 + i * 0.14, 0.26, 'back'); s.style.opacity = clamp(k * 2).toFixed(3); s.style.transform = `scale(${(0.3 + 0.7 * k).toFixed(3)})`; });
@@ -8085,6 +8113,15 @@ function updateSplit(t) {
 }
 // loop ending (CFG.loop): the last 0.3 s whip away and the cards fade, so YouTube's restart lands on the hook like the next shot
 if (CFG.loop) XHITS.push({ t: DUR - 0.34, k: 'whoosh', v: 0.8 });
+for (const x of TEASES) XHITS.push({ t: Math.max(0, x.t - 0.08), k: 'whoosh', v: 0.75 }, { t: x.t + x.dur - 0.06, k: 'whoosh', v: 0.55 });   // flash-forward in / out
+const teaseEl = $('tease');
+function updateTease(t) {
+  const x = TEASES.find(x => x.label && t >= x.t && t < x.t + x.dur);
+  if (!x) { teaseEl.style.opacity = '0'; return; }
+  if (teaseEl.dataset.k !== x.t + '') { teaseEl.innerHTML = `<span>${esc(tr(x.label))}</span>`; teaseEl.dataset.k = x.t + ''; }
+  const k = span(t, x.t + 0.04, 0.12, 'back') * (1 - span(t, x.t + x.dur - 0.1, 0.1));
+  teaseEl.style.opacity = clamp(k * 1.3).toFixed(3); teaseEl.style.transform = `scale(${(0.8 + 0.2 * k).toFixed(3)})`;
+}
 function updateLoop(t) {
   if (!CFG.loop) return;
   const kk = 1 - span(t, DUR - 0.3, 0.28);
@@ -8265,14 +8302,16 @@ const SND = (() => {
     tense:   { bpm: 96,  root: 40, scale: [0, 1, 3, 5, 7, 8, 10], prog: [0, 0, 1, 0], lead: 'arp',     drums: 'sparse', drone: true },   // creeping danger, waiting
     party:   { bpm: 124, root: 45, scale: [0, 2, 4, 5, 7, 9, 10], prog: [0, 3, 4, 3], lead: 'pluck',   drums: 'drive', bright: true },   // dancing, celebration
     triumph: { bpm: 100, root: 43, scale: [0, 2, 4, 5, 7, 9, 11], prog: [0, 4, 5, 3], lead: 'brass',   drums: 'toms', bright: true },    // rescue, survived
-    sad:     { bpm: 68,  root: 45, scale: [0, 2, 3, 5, 7, 8, 10], prog: [0, 5, 3, 4], lead: 'keys',    drums: 'none', sevenths: true }   // didn't make it
+    sad:     { bpm: 68,  root: 45, scale: [0, 2, 3, 5, 7, 8, 10], prog: [0, 5, 3, 4], lead: 'keys',    drums: 'none', sevenths: true },  // didn't make it
+    none:    { bpm: 100, root: 43, scale: [0, 2, 4, 5, 7, 9, 11], prog: [0], lead: 'keys', drums: 'none', none: true }   // v2.20: no music — ambience and SFX carry the scene (no mood fits the topic)
   };
   function build(ctx, vbuf, SB = {}) {
     let s = 987654321; const ar = () => (s = (s * 16807) % 2147483647) / 2147483647;
     const sr = ctx.sampleRate, A = AUDIO;
     // score: the music follows the scene. AUDIO.score = [[t, mood], …] (else AUDIO.mood for the whole video); an ending adds sad / triumph automatically
-    const SCORE = (A.score?.length ? A.score : [[0, A.mood ?? 'horror']]).map(x => [...x]).sort((a, b) => a[0] - b[0]);
-    if (END?.ending && !SCORE.some(x => x[0] >= END.t - 0.05)) SCORE.push([END.t, END.ending.type === 'dead' ? 'sad' : 'triumph']);
+    const SCORE = (A.score === false || A.mood === 'none' && !A.score?.length ? [[0, 'none']] : A.score?.length ? A.score : [[0, A.mood ?? 'horror']]).map(x => [...x]).sort((a, b) => a[0] - b[0]);
+    const NOMUSIC = SCORE.every(x => x[1] === 'none');
+    if (END?.ending && !NOMUSIC && !SCORE.some(x => x[0] >= END.t - 0.05)) SCORE.push([END.t, END.ending.type === 'dead' ? 'sad' : 'triumph']);
     const moodAt = t => { let m = SCORE[0][1]; for (const [ts, mm] of SCORE) if (ts <= t + 1e-6) m = mm; return MOODS[m] ?? MOODS.horror; };
     const Md = moodAt(0);
     const noise = ctx.createBuffer(1, sr * 2, sr); { const d = noise.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = ar() * 2 - 1; }
@@ -8319,12 +8358,13 @@ const SND = (() => {
     const chordM = (M, d, oct) => [degM(M, d, oct), degM(M, d + 2, oct), degM(M, d + 4, oct), ...(M.sevenths ? [degM(M, d + 6, oct)] : [])].map(mtof);
     const end = END ? END.t : DUR;
     SCORE.forEach(([ts, mm], i) => {   // drones per mood segment
-      const M = MOODS[mm] ?? MOODS.horror, te = i + 1 < SCORE.length ? SCORE[i + 1][0] : DUR, d0 = te - ts; if (!M.drone || d0 < 1.2) return;
+      const M = MOODS[mm] ?? MOODS.horror, te = i + 1 < SCORE.length ? SCORE[i + 1][0] : DUR, d0 = te - ts; if (M.none || !M.drone || d0 < 1.2) return;
       tone('sawtooth', mtof(M.root - 12), ts, 0.8, Math.max(0, d0 - 1.6), 0.8, 0.07, music, { lp: 220, q: 3 }); tone('sine', mtof(M.root - 12) * 1.5, ts, 1, Math.max(0, d0 - 2), 1, 0.04, music);
     });
     for (let b0 = 0, n = 0; b0 < DUR - 0.05; n++) {
       const Md = moodAt(b0 + 0.01), beat = 60 / (A.bpm ?? Md.bpm), barF = beat * 4;
       const nxt = SCORE.map(x => x[0]).find(ts => ts > b0 + 0.05 && ts < b0 + barF), bar = nxt ? nxt - b0 : barF;   // a mood change starts a new bar
+      if (Md.none) { b0 += bar; continue; }   // mood 'none': silence in the music bus
       const deg = (d, oct = 0) => degM(Md, d, oct), chord = (d, oct) => chordM(Md, d, oct);
       const lv = levelAt(b0 + 0.01), d = Md.prog[n % Md.prog.length], ch = chord(d, 1), cut = 500 + lv * 550;
       if (lv >= 0 && Md.lead !== 'marimba') pad(b0, ch, bar, Md.bright ? 0.6 : 1, cut);
@@ -8493,7 +8533,7 @@ const SND = (() => {
         if (loop && d) { s.loop = true; s.start(t); s.stop(t + d); } else s.start(t); if (syn) synth(t, v * syn, d); if (g * v > 1) ducks.push(t); }; }
     SFX.bray ??= SFX.neigh; SFX.wingflap ??= SFX.flap; SFX.trex ??= SFX.roar; SFX.raptor ??= SFX.squawk; SFX.monster ??= SFX.roar; SFX.heli ??= SFX.engine; SFX.sinking ??= SFX.rumble;
     // ambience beds: AUDIO.amb = [[t0, t1, kind, vol], …] — background sound of the place, fades in/out 0.35 s (cuts between places)
-    const amb = ctx.createGain(); amb.gain.value = A.ambVol ?? 0.7; const aduck = ctx.createGain(); amb.connect(aduck); aduck.connect(master);
+    const amb = ctx.createGain(); amb.gain.value = A.ambVol ?? (NOMUSIC ? 0.9 : 0.7); const aduck = ctx.createGain(); amb.connect(aduck); aduck.connect(master);
     const bed = (t0, t1, peak, type, f0, q = 0.7, f1) => nz(t0, 0.35, Math.max(0, t1 - t0 - 0.7), 0.35, peak, amb, type, f0, f1, q);
     const every = (t0, t1, gap, jit, fn) => { for (let t = t0 + ar() * gap; t < t1 - 0.2; t += gap + ar() * jit) fn(t); };
     const AMB = {
@@ -8510,7 +8550,25 @@ const SND = (() => {
       city: (a, b, v) => { bed(a, b, 0.1 * v, 'lowpass', 160); bed(a, b, 0.03 * v, 'bandpass', 900, 0.8); every(a, b, 4, 6, t => tone('square', ar() < 0.5 ? 440 : 554, t, 0.01, 0.25, 0.05, 0.02 * v, amb, { lp: 1600 })); },
       ocean: (a, b, v) => { bed(a, b, 0.05 * v, 'lowpass', 400); every(a, b, 4.5, 2, t => nz(t, 1.6, 0.4, 2.2, 0.16 * v, amb, 'lowpass', 900, 300)); },
       space: (a, b, v) => { tone('sine', 55, a, 0.6, Math.max(0, b - a - 1.2), 0.6, 0.04 * v, amb); tone('sine', 82.5, a, 0.8, Math.max(0, b - a - 1.6), 0.8, 0.02 * v, amb); bed(a, b, 0.02 * v, 'bandpass', 1200, 4); },
-      engine: (a, b, v) => SFX.engine(a, 0.6 * v, b - a)
+      engine: (a, b, v) => SFX.engine(a, 0.6 * v, b - a),
+      // v2.20 — more places
+      cabin: (a, b, v) => { bed(a, b, 0.15 * v, 'lowpass', 260); bed(a, b, 0.045 * v, 'bandpass', 1100, 0.6);   // airliner: engine roar + air hiss, now and then the seat-belt chime
+        every(a, b, 9, 6, t => { tone('sine', 988, t, 0.005, 0.05, 0.9, 0.03 * v, amb); tone('sine', 784, t + 0.45, 0.005, 0.05, 1.1, 0.03 * v, amb); }); },
+      hum: (a, b, v) => { const d = Math.max(0, b - a - 0.7); tone('sawtooth', 100, a, 0.35, d, 0.35, 0.02 * v, amb, { lp: 1400, q: 1.5 }); tone('sine', 120, a, 0.35, d, 0.35, 0.03 * v, amb); bed(a, b, 0.02 * v, 'highpass', 6000);   // fluorescent tubes / server room buzz, flicker clicks
+        every(a, b, 3, 4, t => { const n = 2 + Math.floor(ar() * 3); for (let k = 0; k < n; k++) nz(t + k * 0.06, 0.001, 0, 0.02, 0.06 * v, amb, 'bandpass', 3000, 0, 2); }); },
+      people: (a, b, v) => { bed(a, b, 0.05 * v, 'bandpass', 650, 0.9); every(a, b, 0.09, 0.14, t => nz(t, 0.04, 0.08 + ar() * 0.12, 0.12, (0.012 + ar() * 0.022) * v, amb, 'bandpass', 380 + ar() * 1500, 0, 6));   // human chatter (mall, office, street)
+        every(a, b, 6, 6, t => tone('sine', 520 + ar() * 200, t, 0.02, 0.12, 0.2, 0.012 * v, amb, { to: 380, glide: 0.3 })); },
+      stadium: (a, b, v) => { bed(a, b, 0.09 * v, 'bandpass', 800, 0.5); AMB.people(a, b, 0.6 * v); every(a, b, 4.5, 4, t => nz(t, 1.0, 0.6, 1.6, 0.13 * v, amb, 'bandpass', 600, 1500, 0.6));   // cheering crowd, swells, whistles
+        every(a, b, 5, 7, t => tone('sine', 2100, t, 0.02, 0.18, 0.12, 0.02 * v, amb, { to: 2700, glide: 0.25 })); },
+      underwater: (a, b, v) => { bed(a, b, 0.15 * v, 'lowpass', 180); tone('sine', 42, a, 0.6, Math.max(0, b - a - 1.2), 0.6, 0.03 * v, amb);   // muffled pressure + bubble trails
+        every(a, b, 0.6, 1.2, t => { const n = 3 + Math.floor(ar() * 4); for (let k = 0; k < n; k++) { const f = 280 + ar() * 600; tone('sine', f, t + k * (0.05 + ar() * 0.06), 0.004, 0.01, 0.05, 0.045 * v, amb, { to: f * 1.9, glide: 0.06 }); } }); },
+      forest: (a, b, v) => { bed(a, b, 0.035 * v, 'lowpass', 700); every(a, b, 3, 3, t => nz(t, 0.9, 0.3, 1.1, 0.04 * v, amb, 'bandpass', 2600, 4200, 0.8));   // leaves, songbirds, insects, a woodpecker
+        every(a, b, 0.7, 1.3, t => { const f = 2200 + ar() * 2600, n = 3 + Math.floor(ar() * 5); for (let k = 0; k < n; k++) tone('sine', f * (1 + 0.12 * Math.sin(k * 2.1)), t + k * 0.08, 0.004, 0.02, 0.04, 0.022 * v, amb, { to: f * 1.25, glide: 0.05 }); });
+        tone('sawtooth', 3900, a, 0.8, Math.max(0, b - a - 1.6), 0.8, 0.004 * v, amb, { lp: 5200, q: 4 });
+        every(a, b, 9, 8, t => { for (let k = 0; k < 7; k++) nz(t + k * 0.055, 0.001, 0, 0.03, 0.07 * v, amb, 'bandpass', 950, 0, 3); }); },
+      cave: (a, b, v) => { tone('sine', 45, a, 0.6, Math.max(0, b - a - 1.2), 0.6, 0.035 * v, amb); bed(a, b, 0.02 * v, 'lowpass', 160);   // deep room, drips with echoes, distant rumble
+        every(a, b, 1.6, 2.2, t => { const f = 1500 + ar() * 600; for (let e = 0; e < 3; e++) tone('sine', f, t + e * 0.19, 0.002, 0, 0.14, 0.035 * v * 0.45 ** e, amb, { to: f * 0.6, glide: 0.07 }); });
+        every(a, b, 8, 8, t => nz(t, 0.8, 0.6, 1.8, 0.06 * v, amb, 'lowpass', 140, 70)); }
     };
     for (const [t0, t1, k, v] of A.amb ?? []) (AMB[k] ?? (() => console.warn('amb: unknown kind ' + k)))(Math.max(0, t0), Math.min(DUR, t1), v ?? 1);
     function bellFx(t, f, v) { tone('sine', f, t, 0.002, 0, 1.8, 0.12 * v, fx); tone('sine', f * 2.76, t, 0.002, 0, 0.7, 0.05 * v, fx); }
@@ -8561,15 +8619,15 @@ function stepScene(t) {   // everything in the 3D scene at time t (no HUD) — a
 }
 function update(t) {
   FRAME++;
-  stepScene(t);
+  const tv = teaseV(t); stepScene(tv);   // flash-forward: scene + camera at the teased moment, HUD on video time
   const fa = updateHud(t), U = fin.uniforms;
-  updateExplain(t);
+  updateExplain(t); updateTease(t);
   scenePass.split = SPLIT_NOW; if (SPLIT_NOW) camFx.dof = 0; if (gtao) gtao.enabled = !SPLIT_NOW;   // split screen: no AO / lens blur (one camera each)
   if (!THUMB_ON) U.uSat.value = (CFG.saturation ?? 1.08) * (1 - 0.62 * frzK);
   U.uTime.value = t; U.uExp.value = renderer.toneMappingExposure; U.uAb.value = Math.min(1.5, shakeAmt * 2.5 + fa);
   U.uBlur.value = camFx.blur; U.uBlurDir.value.set(camFx.dx, 0); U.uZoom.value = camFx.zoom; U.uDip.value = camFx.dip; U.uDef.value = camFx.def;
   U.uDof.value = camFx.dof; U.uFocus.value.set(0.5, 1 - camFx.fy); U.uDofOn.value = dofPass.on || (CFG.dof !== false && camFx.dof > 0.01) ? 1 : 0; U.tDepth.value = dofRT.texture; U.uFocusD.value = camFx.focus ?? 5; U.uRain.value = THUMB_ON ? 0 : lensRainAt(t); U.uNear.value = camera.near; U.uFar.value = camera.far;
-  scenePass.t0 = t; scenePass.times = THUMB_ON || SPLIT_NOW ? null : mbTimes(t);
+  scenePass.t0 = tv; scenePass.times = THUMB_ON || SPLIT_NOW ? null : mbTimes(tv);   // tv: motion-blur samples (and the camera reset in needsMB) stay in the teased moment
   if (THUMB_ON) { U.uBlur.value = U.uZoom.value = U.uDip.value = U.uDef.value = U.uAb.value = 0; }
 }
 const draw = t => { update(t); composer.render(); };

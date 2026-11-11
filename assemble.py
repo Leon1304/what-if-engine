@@ -18,6 +18,27 @@ if re.search(r"kind:\s*'(explain|conspiracy|debunk)'", story) and re.search(r'wo
 _d = re.search(r"\bdur:\s*([\d.]+)", story)
 if re.search(r"kind:\s*'(explain|conspiracy|debunk)'", story) and _d and float(_d.group(1)) > 52:
     print(f'WARNING: explainer / conspiracy video is {float(_d.group(1)):.0f} s — target 40–50 s (max 52): 1–2 sentences per beat, exactly 3 steps of 5–6 s, GUESS or MYTH (not both), one FACTS card, endcard + review ~7 s')
+# v2.20 retention + sound checks (story videos: 50–56 s, short outro, loop, flash-forward; every mood / ambience must exist in the engine)
+_story = not re.search(r"kind:\s*'(explain|conspiracy|debunk)'", story)
+_e = re.search(r"const END\s*=\s*\{\s*t:\s*([\d.]+)", story)
+if _story and _d and float(_d.group(1)) > 58:
+    print(f'WARNING: story video is {float(_d.group(1)):.0f} s — target 50–56 s (max 58): cut card and intro seconds (one intro beat, end card + review ≤ 6 s), not narration')
+if _d and _e and float(_d.group(1)) - float(_e.group(1)) > 6.5:
+    print(f'WARNING: end card + review take {float(_d.group(1)) - float(_e.group(1)):.1f} s — keep them ≤ 6 s and let the scene keep moving underneath (viewers swipe on static cards)')
+if re.search(r"\bloop:\s*false", story):
+    print('NOTE: CFG.loop is off — every video should loop back into its hook (last spoken line leads into the title question)')
+if _story and _d and float(_d.group(1)) >= 40 and not re.search(r"\bconst TEASE\b", story):
+    print('NOTE: no TEASE flash-forward — add one 0.5–0.7 s glimpse of the climax at the mid-video dip (~40–55 % of the runtime)')
+if re.search(r"prev:\s*\{[^}]*mode:\s*'card'", story):
+    print("WARNING: series recap as full-screen card on frame 0 — use the default chip (mode 'chip') and open on action from this episode")
+_tpl = open('template.html', encoding='utf-8').read()
+_moods = set(re.findall(r"^\s{4}(\w+):\s+\{ bpm:", _tpl, re.M)); _ambs = set(re.findall(r"^\s{6}(\w+): \(a, b, v\) =>", _tpl, re.M))
+_au = re.search(r"const AUDIO\s*=\s*\{(.*?)\n\};", story, re.S); _au = _au.group(1) if _au else ''
+for m_ in sorted(set(re.findall(r"mood:\s*'(\w+)'", _au)) | set(re.findall(r"\[\s*[^\[\],]+,\s*'(\w+)'\s*\]", (re.search(r"score:\s*(\[\[.*?\]\])", _au, re.S) or re.search('()', '')).group(1)))):
+    if _moods and m_ not in _moods: print(f"WARNING: unknown music mood '{m_}' — use one of {', '.join(sorted(_moods))} or 'none' (no music, only sounds)")
+_am = re.search(r"amb:\s*(\[\[.*?\]\])", _au, re.S)
+for k_ in sorted(set(re.findall(r"\[\s*[^\[\],]+,\s*[^\[\],]+,\s*'(\w+)'", _am.group(1)) if _am else [])):
+    if _ambs and k_ not in _ambs: print(f"WARNING: ambience '{k_}' does not exist yet — build it in AMB (template.html, sound section) and commit it to the engine, so later videos can reuse it")
 def put(t, tag, body):
     a, b = f'/* @{tag}-BEGIN */', f'/* @{tag}-END */'
     i, j = t.index(a) + len(a), t.index(b)
