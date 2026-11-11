@@ -15,6 +15,9 @@ scene = open(f'{slug}.scene.js', encoding='utf-8').read().strip()
 
 if re.search(r"kind:\s*'(explain|conspiracy|debunk)'", story) and re.search(r'would you have done', story, re.I):
     print('WARNING: explainer / conspiracy videos end on a fitting question, not "What would you have done?" — change END.cta / say / review.say')
+_d = re.search(r"\bdur:\s*([\d.]+)", story)
+if re.search(r"kind:\s*'(explain|conspiracy|debunk)'", story) and _d and float(_d.group(1)) > 52:
+    print(f'WARNING: explainer / conspiracy video is {float(_d.group(1)):.0f} s — target 40–50 s (max 52): 1–2 sentences per beat, exactly 3 steps of 5–6 s, GUESS or MYTH (not both), one FACTS card, endcard + review ~7 s')
 def put(t, tag, body):
     a, b = f'/* @{tag}-BEGIN */', f'/* @{tag}-END */'
     i, j = t.index(a) + len(a), t.index(b)
