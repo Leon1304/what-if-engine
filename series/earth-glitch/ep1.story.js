@@ -82,6 +82,6 @@ const AUDIO = {
   ]
 };
 const THUMB = [
-  { t: 34.4, text: 'Gravity *OFF*', sub: 'Part 1', cam: { p: [4.5, 19.5, 12], l: [-3.2, 24.6, 1.8], fov: 50 }, expr: 'scared', lookCam: true, rays: true },
-  { t: 13, text: 'He *never* moved', sub: 'Part 1', cam: { p: [5.4, 0.75, 8.6], l: [2.6, 3.3, 3.2], fov: 52 }, glow: [42, 72, 40], focus: 'gerald', dof: 0.6 }
+  { t: 34.4, text: 'Gravity *OFF*', sub: 'Part 1', cam: { p: [-3.4, 28, 3.6], l: [-4.1, 22.0, 1.7], fov: 58 }, expr: 'scared', lookCam: true, rays: true },
+  { t: 13, text: 'He *never* moved', sub: 'Part 1', cam: { p: [1.9, 1.05, 8.4], l: [3.45, 1.1, 5.4], fov: 46 }, focus: 'gerald', dof: 0.7 }
 ];
