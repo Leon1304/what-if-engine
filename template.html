@@ -4759,7 +4759,7 @@ function trap(p, kind, x, z, o = {}) {
       Tr.land = land; break;
     }
     case 'trapdoor': {   // floor hatch: both halves swing down, the victim drops
-      const s = o.size ?? 1.6; box(g, s, 0.01, s, '#050505', 0, 0.003, 0, NC); for (const sx of [-1, 1]) box(g, 0.08, 0.04, s + 0.16, '#3A3D44', sx * (s / 2 + 0.04), 0, 0); for (const sz of [-1, 1]) box(g, s, 0.04, 0.08, '#3A3D44', 0, 0, sz * (s / 2 + 0.04));
+      const s = o.size ?? 1.6; if (!o.keep) box(g, s, 0.01, s, '#050505', 0, 0.003, 0, NC); for (const sx of [-1, 1]) box(g, 0.08, 0.04, s + 0.16, '#3A3D44', sx * (s / 2 + 0.04), 0, 0); for (const sz of [-1, 1]) box(g, s, 0.04, 0.08, '#3A3D44', 0, 0, sz * (s / 2 + 0.04));
       const halves = [-1, 1].map(sx => { const pv = dyn(grp(g, sx * s / 2, 0.02, 0)); box(pv, s / 2, 0.04, s, o.color ?? '#8A6A48', -sx * s / 4, 0, 0); for (let i = 0; i < 3; i++) box(pv, s / 2, 0.005, 0.02, '#5A4632', -sx * s / 4, 0.04, -s / 3 + i * s / 3, NC); return pv; });
       tick2(tt => { const a = tt - t, k = a < 0 ? 0 : Math.min(1.75, a * a * 18) - (a > 0.32 ? 0.15 * Math.exp(-(a - 0.32) * 6) * Math.abs(Math.sin((a - 0.32) * 14)) : 0); halves.forEach((h, i) => { h.rotation.z = (i ? -1 : 1) * -k; }); });
       sfx(t, 'door', 0.8); sfx(t + 0.6, 'impact', 0.4);
