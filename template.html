@@ -7836,6 +7836,24 @@ function seaDo(S, k, t, o = {}) {
     emit('spray', { at: st => { const P = _flyPose(S.g, st); return P.p.add(loc.clone().applyEuler(P.e)).toArray(); }, t0: t, t1: t + dur * 0.6, rate: 90, speed: Math.sqrt(L) * 2.2, spread: 0.18, size: 0.05 * Math.sqrt(L), life: 1.3, g: -6 }); }
   return S;
 }
+function petrify(obj, o = {}) {   // v2.43: turns an animal / figure / prop into a chalky "stone" statue (salt-crusted, matte); t0 + dur = turns over time (colour blends), crust: true = salt grains on top
+  const root = obj.root ?? obj.g ?? obj, col = new THREE.Color(o.color ?? '#E4DED2'), t0 = o.t0 ?? -1, dur = o.dur ?? 0, mats = [];
+  root.traverse(m => { if (!m.isMesh || !m.material || m.material.isShaderMaterial) return; const arr = Array.isArray(m.material) ? m.material : [m.material];
+    const nm = arr.map(a => { const c = a.clone(); c.userData.c0 = (a.color ?? new THREE.Color('#888')).clone(); c.roughness = 1; c.metalness = 0; if (c.vertexColors) { c.vertexColors = false; c.userData.c0 = new THREE.Color('#B0A8A0'); } if (c.map) c.map = null; c.needsUpdate = true; if (c.emissive) c.emissive.setRGB(0, 0, 0); mats.push(c); return c; }); m.material = Array.isArray(m.material) ? nm : nm[0]; });
+  const apply = k => { for (const c of mats) if (c.color) { c.color.copy(c.userData.c0).lerp(col, k); c.color.offsetHSL(0, 0, -0.04 * (1 - k)); } };
+  if (dur > 0) tick(t => apply(sm01((t - t0) / dur))); else apply(1);
+  if (o.crust !== false) { const b = new THREE.Box3().setFromObject(root), sz = b.getSize(new THREE.Vector3()), g = stat(grp(world)), n = o.grains ?? 26;
+    for (let i = 0; i < n; i++) ball(g, 0.012 + hash(i * 3.3) * 0.02 * Math.max(1, sz.y), '#F6F2EA', b.min.x + hash(i * 1.1) * sz.x, b.max.y - hash(i * 2.7) * sz.y * 0.35, b.min.z + hash(i * 4.9) * sz.z, { detail: 0, cast: false }); }
+  return obj;
+}
+function saltCrust(p, x, z, o = {}) {   // v2.43: flat white salt / soda crust islands on a lake or flat ground (cracked polygon plates with raised rims); y = surface height, r = spread, n = plates
+  const g = stat(grp(p ?? world, x, o.y ?? 0, z)), n = o.n ?? 9, R = o.r ?? 6, C = o.color ?? '#EEE8DC';
+  for (let i = 0; i < n; i++) { const a = hash(i * 2.3 + 1) * TAU, d = Math.sqrt(hash(i * 5.1)) * R, cx = Math.cos(a) * d, cz = Math.sin(a) * d, r = 0.6 + hash(i * 7.7) * (o.size ?? 1.6), k = 7 + Math.floor(hash(i * 9.1) * 4);
+    const pts = []; for (let j = 0; j < k; j++) { const aa = j / k * TAU, rr = r * (0.7 + 0.3 * hash(i * 13 + j)); pts.push([+(Math.cos(aa) * rr).toFixed(3), +(Math.sin(aa) * rr).toFixed(3)]); }
+    const m = new THREE.Mesh(_plateG(pts, 0.04, false), mat(shade(C, -0.04 * hash(i * 3.7)), { rough: 0.95 })); m.position.set(cx, 0.02, cz); m.receiveShadow = true; g.add(m);
+    for (let j = 0; j < k; j += 2) box(g, 0.05, 0.06, r * 0.5, shade(C, 0.05), cx + pts[j][0] * 0.9, 0.04, cz + pts[j][1] * 0.9, { ry: Math.atan2(pts[j][0], pts[j][1]) + Math.PI / 2, cast: false }); }
+  return g;
+}
 function innards(p, x, z, o = {}) {   // v2.42: inside a big animal. kind 'throat' = ribbed, wet, fleshy tunnel from z toward −z (len, r); 'stomach' = muscular chamber (r) with a pile of squid beaks, acid pool and green haze.
   // squeeze: [[t0, t1], …] = the walls contract in waves (amp). Returns { g, at(u) (throat: point along the axis, 0 = mouth end), floorY(t), center, r }
   const kind = o.kind ?? 'throat', y = o.y ?? 0, C = o.color ?? '#C25E6A', g = dyn(grp(p ?? world, x, y, z)), NC = { cast: false }, amp = o.amp ?? 0.2;
