@@ -2154,11 +2154,17 @@ function wobble(obj, t0, o = {}) { const node = dyn(obj.g ?? obj.root ?? obj), a
 // doors: openDoor(house | barn | vehicle | gate, t0, { i, close: t, angle, dur }) — swings (or slides) open with a small overshoot, closes with a thud
 function openDoor(target, t0, o = {}) {
   const h = (target.doors ?? [target.door ?? target])[o.i ?? 0]; if (!h) return console.warn('openDoor: nothing to open');
-  dyn(h); const ud = h.userData, ang = o.angle ?? ud.angle ?? 1.5, d = o.dur ?? 0.55, tc = o.close, base = ud.slide ? h.position.x : h.rotation.y;
+  dyn(h); const ud = h.userData, ang = o.angle ?? ud.angle ?? 1.5, d = o.dur ?? 0.55, tc = o.close;
   sfx(t0, 'tick', 0.5); if (tc != null) sfx(tc + 0.3, 'impact', 0.35);
-  return tick(t => {
-    let k = t < t0 ? 0 : EASE.back(clamp((t - t0) / d)); if (tc != null && t > tc) k *= 1 - EASE.in(clamp((t - tc) / 0.32));
-    if (ud.slide) h.position.x = base + ud.slide * clamp(k, 0, 1.05); else h.rotation.y = base + (ud.sign ?? 1) * ang * k;
+  // v2.40: several calls on one door chain up (open at 2, close with { angle: 0 } at 6, open again …): each eases from where the door is at its t0.
+  // Before, the tick of the last call won every frame, so an earlier openDoor() never showed.
+  const ev = { t0, ang: ud.slide ? (o.angle === 0 ? 0 : 1) : ang, d, tc };
+  if (ud._doorEv) { ud._doorEv.push(ev); ud._doorEv.sort((a, b) => a.t0 - b.t0); return ud._doorTick; }
+  const E = ud._doorEv = [ev], base = ud.slide ? h.position.x : h.rotation.y;
+  const val = (t, n) => { let v = 0; for (let i = 0; i < n && E[i].t0 <= t; i++) { const e = E[i], v0 = i ? val(e.t0, i) : 0;
+    v = v0 + (e.ang - v0) * EASE.back(clamp((t - e.t0) / e.d)); if (e.ang === 0 && v * v0 < 0) v *= -0.6;   /* shutting: bounces off the frame instead of swinging through it */ if (e.tc != null && t > e.tc) v *= 1 - EASE.in(clamp((t - e.tc) / 0.32)); } return v; };
+  return ud._doorTick = tick(t => { const v = val(t, E.length);
+    if (ud.slide) h.position.x = base + ud.slide * clamp(v, 0, 1.05); else h.rotation.y = base + (ud.sign ?? 1) * v;
   });
 }
 const openWindow = (house, t0, o = {}) => openDoor({ doors: house.windows }, t0, { angle: 1.2, ...o });
@@ -7420,7 +7426,8 @@ function ship(p, kind = 'fishing', x = 0, z = 0, o = {}) {   // kind: see SHIPS 
   if (!S.seats.length) { const SEATK = { rowboat: [[0, 0.38, 1], [0, 0.6, 1]], speedboat: [[-0.5, 0.45, 1], [0.5, 0.45, 1], [0, 0.3, 0]], sailboat: [[-0.6, 0.12, 1], [0.6, 0.12, 1], [0, 0.6, 0]], fishing: [[-1.5, 0.2, 0], [1.5, 0.3, 0], [0, 0.12, 0], [1.2, 0.45, 0]], viking: [...Array(12)].map((_, i) => [(i % 2 ? 1 : -1) * 0.9, 0.25 + Math.floor(i / 2) * 0.09, 1]).concat([[0, 0.9, 0]]), galleon: [[0, 0.3, 0], [-2.5, 0.42, 0], [2.5, 0.42, 0], [0, 0.88, 0], [-2, 0.72, 0], [2, 0.72, 0]] }[kind];
     if (SEATK) SEATK.forEach(([x, u, st]) => { const d0 = kind === 'rowboat' ? dk(u) - 0.38 : kind === 'viking' ? dk(u) - 0.55 : dk(u); S.seats.push([x, d0 + (st ? 0.0 : 0.02), zz(u), st]); });
     else for (let i = 0; i < 8; i++) { const u = 0.82 + (i % 4) * 0.025, x = (Math.floor(i / 4) ? 1 : -1) * Bm * 0.12; S.seats.push([x, dk(u), zz(u), 0]); } }
-  if (S.gray && kind !== 'carrier') for (const [u, s] of [[0.95, 1], [0.95, -1]]) { const e = H.edge(u); cyl(b, 0.05, 0.05, 2.5, st, s * e[0] * 0.5, e[1], e[2], NC); }
+  if (D.gray && kind !== 'carrier') for (const [u, s] of [[0.95, 1], [0.95, -1]]) {   // v2.40: warships only (S.gray always has a default, so every boat had two 2.5 m black poles on the bow)
+    const e = H.edge(u); cyl(b, 0.05, 0.05, 2.5, st, s * e[0] * 0.5, e[1], e[2], NC); }
   S.edge = H.edge; S.deckAt = u => dY(u) * k; _fuseDyn(g);
   // live: radar spin, sails billow, oars row, flag flutter, guns aim + recoil, lights blink
   const moveAt = t => S._posAt ? S._posAt(t + 0.1).distanceTo(S._posAt(t - 0.1)) * 5 : 0;
@@ -7485,7 +7492,7 @@ function aircraft(p, o = {}) {   // kind: see AIRCRAFT (real size; o.scale) — 
   const A = { g, B, s, kind: kind === 'fighter' ? 'fighter' : 'plane', type: kind, root: g, D, props: [], gears: [], hard: [], eng: [], acts: [], len: D.L * s };
   const L = D.L, R = D.R, C = o.color ?? D.c, glass = mat('#1E2C40', { rough: 0.08, metal: 0.4 }), dark = '#2A2D33', metal = '#9AA0A6', glw = (c, gl = 1.5) => mat(c, { basic: true, glow: gl });
   const zAt = u => L * (0.5 - u), ip = (P, u) => _interp(P, u);
-  A.gy = (D.R ?? 1.4) * 1.8 * s;
+  A.gy = (D.R ?? 1.4) * 1.8 * s; if (o.y == null || o.y === 0) g.position.y = groundH(g.position.x, g.position.z) + A.gy;   // v2.40: y left out or 0 = standing on its gear (it lay buried to the wings); fly(), takeoff() and land() still take over
   if (D.flyingWing) { const hs = D.span / 2, pts = [[0, L * 0.5], [hs, -L * 0.05], [hs * 0.92, -L * 0.18], [hs * 0.62, -L * 0.1], [hs * 0.42, -L * 0.3], [hs * 0.22, -L * 0.2], [0, -L * 0.42]], full = [...pts, ...pts.slice(1, -1).reverse().map(([x, z]) => [-x, z])].map(([x, z]) => [+x.toFixed(3), +z.toFixed(3)]);
     plate(B, full, 0.6, C); _ell(B, C, 0, 0.35, L * 0.08, R * 2.2, R * 0.9, L * 0.35, { detail: 2 }); for (const sx of [-1, 1]) { _ell(B, shade(C, -0.06), sx * 3.5, 0.45, -L * 0.05, 1.6, 0.6, 5, { detail: 1 }); box(B, 2.4, 0.3, 0.6, '#141618', sx * 3.5, 0.6, L * 0.1, NC); }
     _ell(B, '', 0, 0.8, L * 0.28, 1.2, 0.35, 1.6, { mat: glass, detail: 1, ...NC }); A.eng = [[3.5, 0.5, -L * 0.3], [-3.5, 0.5, -L * 0.3]]; }
@@ -7677,7 +7684,8 @@ function heli2(p, o = {}) {
   _fuseDyn(g);
   const winchLen = t => { let L2 = 0; for (const a of H.acts) if (a.k === 'winch') L2 = lerp(a.from ?? 0, a.len, sm01((t - a.t) / Math.max(0.1, a.dur))); return L2; };
   late(t => { const v = g._fly ? _spd(g, t) : 0; H.rotors.forEach(({ ro, disc, nb }, i) => { ro.rotation.y = (i ? -1 : 1) * t * (o.rpm ?? 22); disc.visible = true; }); H.props.forEach(({ pr, rpm }) => { pr.rotation.x = t * rpm; });
-    B.rotation.x = 0.14 * clamp(v / 30) + 0.02 * Math.sin(t * 0.9); B.position.y = 0.15 * Math.sin(t * 1.1) * (1 - clamp(v / 10)); bc.visible = (t * 1.1) % 1 < 0.12;
+    const air = clamp((g.position.y - groundH(g.position.x, g.position.z) - H.gy - 0.3) / 2);   // v2.40: hovering bob and sway only in the air (a parked heli bobbed 15 cm into the ground)
+    B.rotation.x = 0.14 * clamp(v / 30) + 0.02 * Math.sin(t * 0.9) * air; B.position.y = 0.15 * Math.sin(t * 1.1) * (1 - clamp(v / 10)) * air; bc.visible = (t * 1.1) % 1 < 0.12;
     if (H.winch) { const L2 = Math.max(0.3, winchLen(t)); H.cable.scale.y = L2; H.cable.position.y = -L2 / 2; H.hook.position.y = -L2; H.winch.rotation.set(-B.rotation.x, 0, 0); }
     if (H.ramp) { let r = 0; for (const a of H.acts) if (a.k === 'ramp') r = a.close ? 1 - sm01((t - a.t) / 1.5) : sm01((t - a.t) / 1.5); H.ramp.rotation.x = -0.5 * r; }
     if (H.spot) H.spot.rotation.set(o.spotPitch ?? -0.4, 0.4 * Math.sin(t * 0.7), 0); });
@@ -7686,6 +7694,7 @@ function heli2(p, o = {}) {
   H.hookAt = t => { H.g.updateWorldMatrix(true, true); return H.hook ? H.hook.getWorldPosition(new THREE.Vector3()) : H.g.position.clone(); };
   H.rampOpen = (t, close = false) => (H.acts.push({ k: 'ramp', t, close }), sfx(t, 'servo', 0.7), H);
   H.gearUp = () => H; H.rotor = H.rotors[0]?.ro; H.D = { R: 1.1, L: k === 'transport' ? 15 : 11 }; H.len = H.D.L * s; H.gy = k === 'transport' ? 2.1 * s : 1.5 * s;
+  if (o.y == null || o.y === 0) g.position.y = groundH(g.position.x, g.position.z) + H.gy;   // v2.40: y left out or 0 = standing on its skids (it sat sunk to the belly); fly() still takes over
   return H;
 }
 function hang(f, H, t0, t1, o = {}) {   // figure hangs on the rescue winch hook (arms up) between t0 and t1
@@ -8831,7 +8840,8 @@ function supermarket(p, x, z, o = {}) {
   box(g, W, 5.5, D, '#E8E6E2', 0, 0, 0, { surf: 'concrete' }); roofKit(g, W, D, 5.5, 5); facadeKit(g, W, 5.5, D, { lamps: [-3, 3] }); for (let i = 0; i < 10; i++) if (i < 4 || i > 5) box(g, 2.4, 0.1, 0.14, '#C9CDD3', -W / 2 + 2 + i * 2.45, 0.5, D / 2 + 0.05, NC);
   box(g, W + 0.3, 1.2, 0.3, c, 0, 4.5, D / 2 + 0.1); for (let i = 0; i < 12; i++) box(g, 1.4, 0.7, 0.05, i % 2 ? '#F7C531' : '#FFFFFF', -W / 2 + 1.4 + i * 2.1, 4.75, D / 2 + 0.28, NC);
   for (let i = 0; i < 10; i++) if (i < 4 || i > 5) _win(g, 2.2, 3.4, -W / 2 + 2 + i * 2.45, 0.6, D / 2 + 0.01, 0, o.lit); for (const sx of [-1, 1]) box(g, 1.1, 2.8, 0.05, '', sx * 0.6, 0.05, D / 2 + 0.03, { mat: mat('#CFEFFF', { opacity: 0.45 }), cast: false });
-  box(g, 0.1, 0.4, 2.4, '#5A5E64', 6, 0.5, D / 2 + 3); for (let i = 0; i < 5; i++) { const cg = grp(g, 6.4, 0, D / 2 + 2 + i * 0.4); box(cg, 0.55, 0.45, 0.8, '#C9CDD3', 0, 0.45, 0, { metal: 0.6, opacity: 1 }); for (const [a, b] of [[-0.22, -0.3], [0.22, -0.3], [-0.22, 0.3], [0.22, 0.3]]) cyl(cg, 0.05, 0.05, 0.04, '#1E1E22', a, 0.05, b, { rz: Math.PI / 2, seg: 8 }); box(cg, 0.55, 0.04, 0.04, '#D8342A', 0, 1.0, -0.45); }
+  box(g, 0.1, 0.4, 2.4, '#5A5E64', 6, 0.5, D / 2 + 3); for (let i = 0; i < 5; i++) { const cg = grp(g, 6.4, 0, D / 2 + 2 + i * 0.4); box(cg, 0.55, 0.45, 0.8, '#C9CDD3', 0, 0.45, 0, { metal: 0.6, opacity: 1 }); for (const [a, b] of [[-0.22, -0.3], [0.22, -0.3], [-0.22, 0.3], [0.22, 0.3]]) { cyl(cg, 0.05, 0.05, 0.04, '#1E1E22', a, 0.03, b, { rz: Math.PI / 2, seg: 8 }); box(cg, 0.03, 0.4, 0.03, '#8E949C', a, 0.07, b, NC); } box(cg, 0.55, 0.04, 0.04, '#D8342A', 0, 1.0, -0.45);   // v2.40: legs, tray, handle posts and wire bands (the basket floated over its wheels, the handle over the basket)
+    box(cg, 0.5, 0.03, 0.72, '#8E949C', 0, 0.2, 0, NC); for (const s of [-1, 1]) box(cg, 0.03, 0.3, 0.03, '#8E949C', s * 0.25, 0.73, -0.42, NC); for (const y of [0.6, 0.75]) box(cg, 0.57, 0.02, 0.82, '#9AA0A8', 0, y, 0, NC); }
   for (let i = 0; i < 3; i++) shelf(g, -6 + i * 5, -2, { kind: ['grocery', 'snacks', 'drinks'][i], w: 3.4, ry: Math.PI / 2 });
   return g;
 }

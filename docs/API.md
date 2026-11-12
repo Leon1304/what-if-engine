@@ -835,6 +835,9 @@ Dinge zerbrechen so, wie sie gebaut sind. Alles ist echte Physik (einmal vorab s
 - **Bauernhof:** Haus mit Giebeln in Wandfarbe samt Lüftung, Regenrinnen und Fallrohren, Sturz über der Tür, Türgriff, Wandlampe (leuchtet nachts), Rückfenster, Schornsteinaufsatz, Kellerlüftung; Scheune mit Giebeln in Wandfarbe, Laufschiene, Rollen und Griff am Schiebetor, Heuaufzug, Rampe; Silo mit Füllrohr über den Rand, Luke, Rückenbügeln an der Leiter, Dachluke; Heuballen mit Schnur, gewickelten Stirnseiten und Halmen.
 - **Stadt:** Ladenfenster mit Sprossen, Kämpfer und Sims, Glas-Doppeltür mit Griffen, Rahmen, Stufe und Wandlampe; Bahnsteig mit Bahnsteigkante, Dachträgern, Lampen unter dem Dach, Bänken aus Latten, Mülleimern und Fahrplantafel.
 - Alle Details sind statisch (in wenige Draw-Calls gebacken), kein Hindernis, und ändern weder Maße noch Türen, Fenster oder Hitboxen.
+- **Türen nacheinander:** Mehrere `openDoor()` auf dieselbe Tür bauen aufeinander auf: `openDoor(H, 2); openDoor(H, 6, { angle: 0 }); openDoor(H, 8)` = auf, zu (federt am Rahmen zurück statt durchzuschwingen), wieder auf. Vorher galt nur der letzte Aufruf, ein früheres Öffnen war unsichtbar.
+- **Flugzeuge und Hubschrauber am Boden:** Ohne `y` (oder mit `y: 0`) stehen `aircraft()` und `heli()` auf Fahrwerk bzw. Kufen (`A.gy` über dem Gelände) statt bis zu den Flügeln im Boden; `fly()`, `takeoff()`, `land()` übernehmen wie bisher. Ein geparkter Hubschrauber wippt nicht mehr (Schweben nur in der Luft).
+- **Behoben:** Jedes Boot hatte zwei 2,5 m hohe schwarze Stangen am Bug (nur Kriegsschiffe haben sie noch); Einkaufswagen am Supermarkt schwebten über ihren Rädern (jetzt mit Beinen, Ablage, Griffstangen).
 
 # Neu in v2.40 (Fehlerbehebung: Haare, Hut, Mantel, Räder; mehr Details)
 
