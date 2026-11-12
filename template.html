@@ -7677,7 +7677,8 @@ const SEAPROF = {   // body radius along the length (u: 0 nose … 1 tail base),
   tuna:  [[0, 0.15], [0.1, 0.6], [0.25, 0.9], [0.42, 1], [0.65, 0.75], [0.85, 0.3], [1, 0.08]],
   round: [[0, 0.42], [0.1, 0.8], [0.35, 1], [0.65, 0.85], [0.88, 0.4], [1, 0.22]],
   angler:[[0, 0.75], [0.08, 0.95], [0.25, 1], [0.5, 0.75], [0.8, 0.35], [1, 0.15]],
-  sword: [[0, 0.2], [0.1, 0.55], [0.25, 0.9], [0.4, 1], [0.65, 0.7], [0.85, 0.28], [1, 0.08]]
+  sword: [[0, 0.2], [0.1, 0.55], [0.25, 0.9], [0.4, 1], [0.65, 0.7], [0.85, 0.28], [1, 0.08]],
+  sperm: [[0, 0.8], [0.02, 0.94], [0.12, 1], [0.28, 0.99], [0.36, 0.86], [0.48, 0.78], [0.66, 0.55], [0.82, 0.32], [0.93, 0.2], [1, 0.14]]   // v2.42: block head
 };
 const SEA = {
   white:      { L: 4.5, R: 0.105, wx: 0.9, prof: 'shark', c: '#6C7C8A', b: '#F2F2EE', fam: 'shark', caud: 'lunate', dorsal: [0.13, 0.13, 0.36, 0.5], d2: [0.025, 0.025, 0.78], pect: [0.2, 0.08, 0.3, 0.35], pel: 1, anal: 1, teeth: 1, gills: 5, hz: 0.9, amp: 0.07, eye: [0.13, 0.009] },
@@ -7691,6 +7692,8 @@ const SEA = {
   orca:       { L: 7, R: 0.1, wx: 0.9, prof: 'orca', c: '#141619', b: '#F4F4F2', fam: 'cet', caud: 'fluke', dorsal: [0.24, 0.08, 0.45, 0.05], pect: [0.15, 0.08, 0.26, 0.6], marks: 'orca', hz: 0.9, amp: 0.045, eye: [0.13, 0.006], teeth: 1 },
   humpback:   { L: 14, R: 0.1, prof: 'whale', c: '#2A3644', b: '#C8D0D8', fam: 'cet', caud: 'fluke', dorsal: [0.025, 0.05, 0.62, 0.3], pect: [0.32, 0.06, 0.3, 0.9], pectC: '#E8ECEE', marks: 'groove', barn: 1, hz: 0.35, amp: 0.04, eye: [0.2, 0.004] },
   whale:      { base: 'humpback' },
+  spermwhale: { L: 16, R: 0.12, wx: 0.7, prof: 'sperm', c: '#56565E', b: '#686870', fam: 'cet', caud: 'fluke', dorsal: [0.022, 0.06, 0.64, 0.12], pect: [0.06, 0.03, 0.34, 0.7], marks: 'sperm', hz: 0.3, amp: 0.035, eye: [0.33, 0.0042], teeth: 1, upper: 0, mouth: [0.04, 0.34], jawW: 0.3, jawOpen: 1.15, spout: [-0.32, 0.92, 0.47], blowhole: 1, knuckles: 1, k: 0.7 },   // v2.42: block head, narrow lower jaw with teeth, blowhole front left (spout angled forward), wrinkled skin
+  sperm:      { base: 'spermwhale' },
   bluewhale:  { base: 'humpback', L: 25, R: 0.075, c: '#5A7090', b: '#7A90A8', pect: [0.12, 0.03, 0.27, 0.5], pectC: null, dorsal: [0.015, 0.03, 0.75, 0.4], marks: 'mottle', barn: 0 },
   tuna:       { L: 2, R: 0.14, wx: 0.72, prof: 'tuna', c: '#1E2E5A', b: '#DCE0E6', fam: 'fish', caud: 'lunate', dorsal: [0.12, 0.12, 0.33, 0.5], d2: [0.1, 0.05, 0.56], pect: [0.18, 0.04, 0.28, 0.2], finlets: '#F2C230', hz: 2, amp: 0.06, eye: [0.1, 0.022], stripe: '#9FB4CC' },
   swordfish:  { L: 3, R: 0.1, wx: 0.75, prof: 'sword', c: '#2E3E5E', b: '#D8D8D4', fam: 'fish', bill: 0.3, caud: 'lunate', dorsal: [0.16, 0.1, 0.25, 0.3], pect: [0.12, 0.03, 0.27, 0.3], hz: 1.4, amp: 0.06, eye: [0.08, 0.02] },
@@ -7723,6 +7726,7 @@ function seaColor(D, u, a, sd) {   // colour of the body at (u along, a around: 
     case 'puffer': if (y > line && hash(Math.round(u * 30) * 7.1 + Math.round(a * 5) * 3.3) > 0.78) c = '#5A4A2A'; break;
     case 'groove': if (u < 0.45 && y < -0.3 && Math.sin(a * 40) > 0) c = shade(B, -0.18); if (u < 0.12 && y > 0.3 && hash(Math.round(u * 80) + Math.round(a * 9) * 3.7) > 0.8) c = '#4A5462'; break;
     case 'mottle': if (hash(Math.round(u * 60) * 1.7 + Math.round(a * 7) * 9.1) > 0.82) c = shade(C, 0.12); break;
+    case 'sperm': if (u > 0.36 && Math.sin(u * 150 + Math.sin(a * 5) * 1.3) > 0.5) c = shade(C, -0.09); if (u > 0.04 && u < 0.34 && y < -0.86) c = '#E2DED6'; if (u < 0.36 && y > 0.2 && hash(Math.round(u * 70) * 2.3 + Math.round(a * 8) * 4.1) > 0.9) c = shade(C, 0.1); break;
     case 'speck': if (y > line && hash(Math.round(u * 50) * 3.1 + Math.round(a * 8) * 5.3) > 0.88) c = '#2A3440'; if (Math.abs(y - line) < 0.08) c = '#D88A8A'; break;
   }
   if (D.stripe && Math.abs(y - 0.0) < 0.07 && u > 0.2) c = D.stripe;
@@ -7768,14 +7772,16 @@ function sea(p, o = {}) {   // kind: see SEA — fly(S.g, [[x,y,z], …], { spee
   if (D.gills) for (const s of [-1, 1]) for (let i = 0; i < D.gills; i++) { const u = 0.19 + i * 0.018, P0 = Pt(u, s * 1.65), r = rad(u); add(boxG(1, 1, 1), shade(D.c, -0.25), P0[0] * 1.0, P0[1], P0[2], 0.15, 0, 0, L * 0.004, r * 0.75, L * 0.006); }
   if (D.smile) for (const s of [-1, 1]) add(boxG(1, 1, 1), shade(D.c, -0.3), s * rad(0.06) * 0.8, -rad(0.06) * 0.2, zAt(0.06), 0, s * 0.3, 0, L * 0.004, L * 0.003, L * 0.06);
   if (D.barn) for (let i = 0; i < 14; i++) { const u = 0.02 + hash(i * 3.1 + sd) * 0.15, a = (hash(i * 5.3 + sd) - 0.5) * 1.6, P0 = Pt(u, a); add(G('barn', () => new THREE.IcosahedronGeometry(1, 0)), '#C8C4BC', ...P0, 0, 0, 0, L * 0.008, L * 0.005, L * 0.008); }
+  if (D.blowhole) { const [bx, by, bz] = D.spout ?? [0, 1, 0.3]; add(boxG(1, 1, 1), '#24242A', bx * R, by * R * 1.02, bz * L - 0.5 * L + L * 0.5 - L * 0.0, 0, 0.5, 0, R * 0.12, R * 0.03, R * 0.05); }
+  if (D.knuckles) for (let i = 0; i < 6; i++) { const u = 0.7 + i * 0.035; add(G('barn', () => new THREE.IcosahedronGeometry(1, 0)), shade(D.c, -0.05), 0, topY(u) - 0.002 * L, zAt(u), 0, 0, 0, L * 0.012, L * 0.007, L * 0.016); }
   // mouth: palate + upper teeth (merged), lower jaw (separate, opens)
-  const um0 = D.jawFront ? 0.02 : D.fam === 'cet' ? 0.02 : 0.06, um1 = D.jawFront ? 0.2 : 0.16, mW = rad(um1) * wx * 0.85, mLen = (um1 - um0) * L, mz0 = zAt(um1), yb = botY((um0 + um1) / 2);
+  const um0 = D.mouth ? D.mouth[0] : D.jawFront ? 0.02 : D.fam === 'cet' ? 0.02 : 0.06, um1 = D.mouth ? D.mouth[1] : D.jawFront ? 0.2 : 0.16, mW = rad(um1) * wx * (D.jawW ?? 0.85), mLen = (um1 - um0) * L, mz0 = zAt(um1), yb = botY((um0 + um1) / 2);
   let jaw = null;
   if (D.teeth || D.fam === 'shark') {
     const kS = (botY(um0 + 0.01) - botY(um1)) / Math.max(1e-6, mLen), aS = Math.atan(kS);   // v2.40.x: the mouth follows the rising underside of the snout (the closed jaw stuck out under the chin as a slab)
     add(_plateG([[-mW, 0], [-mW * 0.8, mLen * 0.6], [0, mLen], [mW * 0.8, mLen * 0.6], [mW, 0]].map(([x, z]) => [+x.toFixed(4), +z.toFixed(4)]), +(L * 0.01).toFixed(4), false), '#5A1E22', 0, yb - L * 0.003, mz0, -aS);
     const tN = D.teeth === 2 ? 15 : 13, tL = L * (D.teeth === 3 ? 0.06 : D.teeth === 2 ? 0.018 : 0.012), cg = G('tooth', () => new THREE.ConeGeometry(0.5, 1, 4).rotateX(Math.PI).translate(0, -0.5, 0));
-    if (D.teeth) for (let i = 0; i < tN; i++) { const q = i / (tN - 1) * 2 - 1, x = q * mW * 0.92, z = mz0 + mLen * (1 - q * q) * 0.98; add(cg, '#F4F0E6', x, yb - L * 0.002 + (z - mz0) * kS, z, 0, 0, 0, tL * 0.45, tL, tL * 0.45); }
+    if (D.teeth && D.upper !== 0) for (let i = 0; i < tN; i++) { const q = i / (tN - 1) * 2 - 1, x = q * mW * 0.92, z = mz0 + mLen * (1 - q * q) * 0.98; add(cg, '#F4F0E6', x, yb - L * 0.002 + (z - mz0) * kS, z, 0, 0, 0, tL * 0.45, tL, tL * 0.45); }
     jaw = dyn(grp(b, 0, yb - L * 0.004, mz0)); jaw.rotation.x = -aS; jaw.userData.r0 = -aS; const jm = new THREE.Mesh(_plateG([[-mW, 0], [-mW * 0.8, mLen * 0.55], [0, mLen * 0.95], [mW * 0.8, mLen * 0.55], [mW, 0]].map(([x, z]) => [+x.toFixed(4), +z.toFixed(4)]), +(R * 0.12).toFixed(4), false), mat(D.b)); jm.position.y = -R * 0.06; jm.castShadow = true; jaw.add(jm);
     if (D.teeth) for (let i = 0; i < tN - 2; i++) { const q = i / (tN - 3) * 2 - 1; cone(jaw, tL * 0.22, tL * 0.85, '#F4F0E6', q * mW * 0.85, -R * 0.0, mLen * (1 - q * q) * 0.9, NC); }
     _ell(jaw, '#7A2A30', 0, R * 0.0, mLen * 0.4, mW * 0.6, R * 0.02, mLen * 0.35, NC);
@@ -7826,9 +7832,43 @@ function seaDo(S, k, t, o = {}) {
   if (k === 'inflate' && o.sfx !== false) sfx(t, 'pop', 0.6);
   if (k === 'click' && o.sfx !== false) sfx(t, 'click', o.vol ?? 1);
   if (k === 'song' && o.sfx !== false) { sfx(t, 'song', o.vol ?? 1); AUDIO.hits[AUDIO.hits.length - 1].dur = dur; }
-  if (k === 'spout') { if (o.sfx !== false) sfx(t, 'blow', o.vol ?? 1); const L = S.L, loc = new THREE.Vector3(0, S.R * 1.0, L * 0.3);
+  if (k === 'spout') { if (o.sfx !== false) sfx(t, 'blow', o.vol ?? 1); const L = S.L, D = S.D, loc = D.spout ? new THREE.Vector3(D.spout[0] * S.R, D.spout[1] * S.R, D.spout[2] * L) : new THREE.Vector3(0, S.R * 1.0, L * 0.3);
     emit('spray', { at: st => { const P = _flyPose(S.g, st); return P.p.add(loc.clone().applyEuler(P.e)).toArray(); }, t0: t, t1: t + dur * 0.6, rate: 90, speed: Math.sqrt(L) * 2.2, spread: 0.18, size: 0.05 * Math.sqrt(L), life: 1.3, g: -6 }); }
   return S;
+}
+function innards(p, x, z, o = {}) {   // v2.42: inside a big animal. kind 'throat' = ribbed, wet, fleshy tunnel from z toward −z (len, r); 'stomach' = muscular chamber (r) with a pile of squid beaks, acid pool and green haze.
+  // squeeze: [[t0, t1], …] = the walls contract in waves (amp). Returns { g, at(u) (throat: point along the axis, 0 = mouth end), floorY(t), center, r }
+  const kind = o.kind ?? 'throat', y = o.y ?? 0, C = o.color ?? '#C25E6A', g = dyn(grp(p ?? world, x, y, z)), NC = { cast: false }, amp = o.amp ?? 0.2;
+  const sq = t => { let s = 0; for (const [a, b] of o.squeeze ?? []) s = Math.max(s, env3(t, a, b, 0.5, 0.6) * (0.55 + 0.45 * Math.sin((t - a) * 3.4))); return s; };
+  const fleshM = () => { const m = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.28, metalness: 0.02, side: THREE.DoubleSide, flatShading: false }); m.emissive = new THREE.Color(o.glow ?? '#3A0A12'); m.emissiveIntensity = 0.45; return m; };
+  const dk = new THREE.Color(shade(C, -0.38)), lt = new THREE.Color(shade(C, 0.14)), cc = new THREE.Color();
+  if (kind === 'throat') {
+    const L = o.len ?? 14, r = o.r ?? 1.4, rib = o.rib ?? 0.85, NS = 22, NL = Math.max(8, Math.round(L * 3));
+    const geo = new THREE.CylinderGeometry(1, 1, L, NS, NL, true).rotateX(Math.PI / 2).translate(0, 0, -L / 2), P = geo.attributes.position, col = [];
+    for (let i = 0; i < P.count; i++) { const zz = P.getZ(i), ang = Math.atan2(P.getY(i), P.getX(i)), w = Math.sin(-zz / rib * TAU), n = noise1(ang * 2.3 + zz * 0.7 + 3) * 0.1;
+      const rr = r * (1 + 0.09 * w + n) * (1 - 0.18 * sm01(-zz / L)); P.setXYZ(i, Math.cos(ang) * rr * 1.1, Math.sin(ang) * rr, zz);
+      cc.copy(dk).lerp(lt, clamp(0.5 + 0.55 * w + n * 2)); col.push(cc.r, cc.g, cc.b); }
+    geo.setAttribute('color', new THREE.Float32BufferAttribute(col, 3)); geo.computeVertexNormals();
+    const tube = dyn(grp(g, 0, r, 0)), m = new THREE.Mesh(geo, fleshM()); m.receiveShadow = true; tube.add(m);
+    const cap = new THREE.Mesh(new THREE.CircleGeometry(r * 0.95, 18), mat('#14040A', { basic: true })); cap.position.set(0, 0, -L + 0.05); tube.add(cap);
+    const slime = mat(shade(C, 0.35), { rough: 0.05, opacity: 0.75 });
+    for (let i = 0; i < 10; i++) { const zz = -0.6 - hash(i * 3.1 + 1) * L * 0.9, a = (hash(i * 5.7) - 0.5) * 1.4, h = 0.25 + hash(i * 2.2) * 0.55; cyl(tube, 0.03, 0.012, h, '', Math.sin(a) * r * 0.75, Math.cos(a) * r * 0.75 - h, zz, { mat: slime, seg: 5, ...NC }); }
+    tick(t => { const k = 1 - amp * sq(t); tube.scale.set(k, k, 1); tube.position.y = r * k; });
+    return { g, L, r, kind, at: u => [x, y + r * 0.35, z - u * L], floorY: t => y + r * (1 - (1 - amp * sq(t))) * 0, center: [x, y + r, z - L / 2] };
+  }
+  const R = o.r ?? 4.2, sy = 0.78, cy = R * sy - 0.35, geo = new THREE.SphereGeometry(R, 30, 22), P = geo.attributes.position, col = [];
+  for (let i = 0; i < P.count; i++) { const vx = P.getX(i), vy = P.getY(i), vz = P.getZ(i), ang = Math.atan2(vz, vx), lat = Math.asin(clamp(vy / R, -1, 1)), f = Math.sin(ang * 7 + lat * 4) * 0.5 + 0.5, n = noise1(ang * 3 + lat * 5) * 0.06;
+    const k = 1 + 0.07 * f + n; P.setXYZ(i, vx * k * 1.12, vy * k * sy, vz * k * 1.32); cc.copy(dk).lerp(lt, clamp(f * 0.9 + n * 3)); col.push(cc.r, cc.g, cc.b); }
+  geo.setAttribute('color', new THREE.Float32BufferAttribute(col, 3)); geo.computeVertexNormals();
+  const wall = dyn(grp(g, 0, cy, 0)), m = new THREE.Mesh(geo, fleshM()); m.receiveShadow = true; wall.add(m);
+  const floor = stat(grp(g)); cyl(floor, R * 0.95, R * 0.95, 0.12, shade(C, -0.3), 0, -0.06, 0, { seg: 26, ...NC });
+  const acid = cyl(g, R * 0.42, R * 0.42, 0.04, '', R * 0.35, 0.07, -R * 0.4, { mat: mat(o.acid ?? '#9CC23C', { em: '#5E8A1A', ei: 0.9, rough: 0.05, opacity: 0.85 }), seg: 20, ...NC });
+  const nB = o.beaks ?? 160, bk = stat(grp(g));
+  for (let i = 0; i < nB; i++) { const a = hash(i * 1.37) * TAU, d = Math.sqrt(hash(i * 2.71 + 1)) * R * 0.75, px = Math.cos(a) * d - R * 0.15, pz = Math.sin(a) * d + R * 0.15, hh = (1 - d / (R * 0.75)) * (o.pile ?? 0.6);
+    cone(bk, 0.05 + hash(i * 4.1) * 0.05, 0.14 + hash(i * 5.3) * 0.12, hash(i * 6.7) > 0.5 ? '#2C1C14' : '#4A3020', px, Math.max(0.06, hh * hash(i * 7.9) + 0.06), pz, { rx: hash(i * 8.3) * 3, rz: hash(i * 9.1) * 3, seg: 4, ...NC }); }
+  if (o.haze !== false) emit('smoke', { at: [x + R * 0.35, y + 0.25, z - R * 0.4], t0: o.t0 ?? 0, t1: o.t1 ?? 120, rate: 3, colors: ['#7FA83A', '#A9C866'], opacity: 0.22, size: 1.1, grow: 2, speed: 0.25, g: 0.04, life: 5, wind: [0, 0] });
+  tick(t => { const k = 1 - amp * 0.7 * sq(t); wall.scale.set(k, 1 - amp * 0.5 * sq(t), k); acid.position.y = 0.07 + 0.03 * Math.sin(t * 1.3); });
+  return { g, r: R, kind, at: () => [x, y + 0.5, z], floorY: () => y, center: [x, y + cy, z] };
 }
 function _ray(S, o) {   // manta / stingray: flat wings that flap in a wave (bend shader), cephalic fins, whip tail
   const { D, L, b } = S, W = (D.span ?? L * 1.6) / 2, th = L * 0.035, NC = { cast: false };
