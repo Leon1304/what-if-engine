@@ -7851,6 +7851,43 @@ function petrify(obj, o = {}) {   // v2.43: turns an animal / figure / prop into
     for (let i = 0; i < n; i++) ball(g, 0.012 + hash(i * 3.3) * 0.02 * Math.max(1, sz.y), '#F6F2EA', b.min.x + hash(i * 1.1) * sz.x, b.max.y - hash(i * 2.7) * sz.y * 0.35, b.min.z + hash(i * 4.9) * sz.z, { detail: 0, cast: false }); }
   return obj;
 }
+function swimPool(p, x, z, o = {}) {   // v2.46: raised terrace with an infinity pool (villa on a slope): pool w × d (x × z), deck top at h, water up to level; infinity glass edge on the +z side (P.wall: breakApart it); drain: [t0, t1] empties the pool; returns { g, wall, level(t), top, w, d }
+  const w = o.w ?? 4.5, d = o.d ?? 10, H = o.h ?? 1.9, m = o.deck ?? 3, g = stat(grp(p ?? world, x, 0, z, o.ry ?? 0)), NC = { cast: false }, deck = o.deckColor ?? '#E8DCC8', stone = o.wallColor ?? '#CFC2AA', tile = '#8FD0E8';
+  const W = w + 2 * m, D = d + m + 0.6;
+  for (const [bw, bd, bx, bz] of [[m, D, -(w / 2 + m / 2), -m / 2 + 0.3], [m, D, w / 2 + m / 2, -m / 2 + 0.3], [w, m, 0, -d / 2 - m / 2]]) box(g, bw, H, bd, stone, bx, 0, bz).receiveShadow = true;
+  for (const [bw, bd, bx, bz] of [[m, D, -(w / 2 + m / 2), -m / 2 + 0.3], [m, D, w / 2 + m / 2, -m / 2 + 0.3], [w, m, 0, -d / 2 - m / 2]]) box(g, bw + 0.02, 0.06, bd + 0.02, deck, bx, H, bz, { surf: 'plank' });
+  box(g, w, 0.2, d, tile, 0, 0, 0); for (const sx of [-1, 1]) box(g, 0.08, H - 0.2, d, tile, sx * (w / 2 - 0.04), 0.2, 0, NC); box(g, w, H - 0.2, 0.08, tile, 0, 0.2, -d / 2 + 0.04, NC);
+  box(g, w, 0.2, 0.6, stone, 0, 0, d / 2 + 0.3);
+  const wall = dyn(grp(g, 0, 0, d / 2 + 0.05)); box(wall, w, H - 0.02, 0.1, '', 0, 0.2, 0, { mat: mat('#BFE8FF', { own: true, opacity: 0.35, rough: 0.05 }), ...NC });
+  const L0 = o.level ?? H - 0.08, dr = o.drain, level = t => !dr ? L0 : lerp(L0, 0.3, EASE.inOut(clamp((t - dr[0]) / (dr[1] - dr[0]))));
+  const wm = new THREE.MeshStandardMaterial({ color: '#38A8D8', transparent: true, opacity: 0.55, roughness: 0.08, metalness: 0.1, depthWrite: false });
+  const wat = dyn(mesh(g, new THREE.BoxGeometry(w - 0.18, 1, d - 0.18), wm, 0, 0.5, 0, NC)); wat.renderOrder = 3;
+  tick(t => { const L = level(t), hh = Math.max(0.02, L - 0.2); wat.scale.y = hh; wat.position.y = 0.2 + hh / 2; wat.visible = L > 0.32; });
+  if (o.ladder !== false) for (const sx of [-0.25, 0.25]) cyl(g, 0.025, 0.025, 1.0, '#D8D8DC', w / 2 - 0.3 + sx, H - 0.4, -d / 2 + 1.2, { seg: 6 });
+  return { g, wall, level: t => level(t), top: H, w, d };
+}
+function airbed(p, x, y, z, o = {}) {   // v2.46: inflatable air mattress (float) at water height y; deflate: [t0, t1] slowly flattens (leak, small bubbles), pop: t bursts (gone); returns { g }
+  const g = dyn(grp(p ?? world, x, y, z, o.ry ?? 0)), c = o.color ?? '#F2C230', b = grp(g);
+  for (let i = 0; i < 6; i++) { const tb = cyl(b, 0.14, 0.14, 0.68, i % 2 ? c : shade(c, -0.08), -0.35 + i * 0.14, 0, 0, { seg: 10 }); tb.rotation.x = Math.PI / 2; tb.position.set(-0.35 + i * 0.14, 0.08, 0); tb.scale.y = 2.6; }
+  const pil = ball(b, 0.2, shade(c, 0.1), 0, 0.18, -0.78); pil.scale.set(1.8, 0.6, 0.8);
+  tick(t => { let k = 1; if (o.deflate) k = 1 - 0.6 * clamp((t - o.deflate[0]) / (o.deflate[1] - o.deflate[0])); b.scale.set(1, k, 1); g.position.y = (typeof y === 'function' ? y(t) : y) - 0.04 * (1 - k) + 0.015 * Math.sin(t * 1.7); g.rotation.z = 0.03 * Math.sin(t * 1.3); g.visible = !(o.pop != null && t >= o.pop); });
+  if (o.pop != null) splash(x, z, o.pop, { size: 1.2 });
+  return { g };
+}
+function floatie(p, x, y, z, o = {}) {   // v2.46: inflatable pool toy: kind 'flamingo' (pink, long neck) or 'ring'; y = number or t => water height (rides the level, bobs); returns { g, seat } (seat: Object3D to add a rider)
+  const g = dyn(grp(p ?? world, x, 0, z, o.ry ?? 0)), kind = o.kind ?? 'flamingo', c = o.color ?? (kind === 'flamingo' ? '#FF7FB0' : '#FF5A4A');
+  const ring = mesh(g, new THREE.TorusGeometry(0.55, 0.22, 10, 24), mat(c, { rough: 0.35 }), 0, 0.1, 0); ring.rotation.x = Math.PI / 2;
+  if (kind === 'flamingo') { const nk = cyl(g, 0.09, 0.13, 0.95, c, 0, 0.2, -0.62, { seg: 8 }); nk.rotation.x = -0.25; const hd = ball(g, 0.16, c, 0, 1.15, -0.4); hd.scale.z = 1.3; const bk = cyl(g, 0.02, 0.06, 0.22, '#2A2A2E', 0, 1.1, -0.2, { seg: 6 }); bk.rotation.x = Math.PI / 2 + 0.4; ball(g, 0.03, '#111111', 0.12, 1.2, -0.38); ball(g, 0.03, '#111111', -0.12, 1.2, -0.38);
+    const tl = cyl(g, 0.02, 0.18, 0.3, c, 0, 0.15, 0.62, { seg: 6 }); tl.rotation.x = 1.0; }
+  const seat = grp(g, 0, 0.22, 0);
+  tick(t => { const yy = typeof y === 'function' ? y(t) : y; g.position.y = yy + 0.03 * Math.sin(t * 1.9 + x); g.rotation.z = 0.05 * Math.sin(t * 1.4 + z); g.rotation.y = (o.ry ?? 0) + 0.1 * Math.sin(t * 0.3); });
+  return { g, seat };
+}
+function divingBoard(p, x, y, z, o = {}) {   // v2.46: diving board on a stand at deck height y, pointing along +z (len); returns { g, tip } (tip: [x, y, z] of the board end)
+  const L = o.len ?? 2.4, g = stat(grp(p ?? world, x, y, z, o.ry ?? 0));
+  box(g, 0.5, 0.35, 0.6, '#D8D8DC', 0, 0, 0.2); const b = box(g, 0.48, 0.07, L, o.color ?? '#2E8BD8', 0, 0.38, L / 2); box(g, 0.5, 0.02, L, '#E8E8EC', 0, 0.45, L / 2, { cast: false });
+  return { g, tip: [x + Math.sin(o.ry ?? 0) * L, y + 0.45, z + Math.cos(o.ry ?? 0) * L] };
+}
 function portal(p, x, y, z, o = {}) {   // v2.45: glowing standing portal ring (r, color, ry) with a swirling disc; open: [t0, t1] or [[t0, t1], …] = disc visible (fades in/out), flicker: [t, …] short flickers; returns { g, ring, disc }
   const r = o.r ?? 1.3, c = o.color ?? '#FFD23A', g = stat(grp(p ?? world, x, y, z, o.ry ?? 0)), NC = { cast: false };
   const ring = mesh(g, new THREE.TorusGeometry(r, 0.11, 10, 40), mat(c, { em: c, ei: 1.6 }), 0, r + 0.05, 0, NC);
