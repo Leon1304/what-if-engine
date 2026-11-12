@@ -7851,6 +7851,26 @@ function petrify(obj, o = {}) {   // v2.43: turns an animal / figure / prop into
     for (let i = 0; i < n; i++) ball(g, 0.012 + hash(i * 3.3) * 0.02 * Math.max(1, sz.y), '#F6F2EA', b.min.x + hash(i * 1.1) * sz.x, b.max.y - hash(i * 2.7) * sz.y * 0.35, b.min.z + hash(i * 4.9) * sz.z, { detail: 0, cast: false }); }
   return obj;
 }
+function balance(p, x, y, z, o = {}) {   // v2.47: giant beam balance (for size / mass comparisons): pivot post, beam of length len, two pans; returns { g, left, right } (add objects to the pans); tilt: number or t => radians (+ = right side down)
+  const L = o.len ?? 12, g = stat(grp(p ?? world, x, y, z, o.ry ?? 0)), c = o.color ?? '#C9A24A';
+  cyl(g, 0.25, 0.5, L * 0.45, shade(c, -0.2), 0, -L * 0.45, 0, { seg: 10 }); const beam = dyn(grp(g, 0, 0, 0)); box(beam, L, 0.25, 0.3, c, 0, -0.12, 0); ball(beam, 0.4, c, 0, 0, 0);
+  const pan = sx => { const h = dyn(grp(beam, sx * L / 2, 0, 0)); for (const a of [0, 2.1, 4.2]) { const r = cyl(h, 0.03, 0.03, 2.6, '#8A8A90', Math.sin(a) * 0.9, -2.6, Math.cos(a) * 0.9, { seg: 4 }); } const pn = cyl(h, 1.6, 1.3, 0.25, c, 0, -2.8, 0, { seg: 20 }); const top = grp(h, 0, -2.55, 0); return { h, top }; };
+  const A = pan(-1), B = pan(1);
+  tick(t => { const k = typeof o.tilt === 'function' ? o.tilt(t) : (o.tilt ?? 0); beam.rotation.z = -k; A.h.rotation.z = k; B.h.rotation.z = k; });
+  return { g, left: A.top, right: B.top };
+}
+function archiveDesk(p, x, z, o = {}) {   // v2.47: 1950s archive corner: desk with typewriter, lamp, a thick file folder (opens at o.open), grey filing cabinets behind; returns { g, folder, page } (page: anchor on the open folder for callouts)
+  const g = stat(grp(p ?? world, x, typeof groundH === 'function' ? groundH(x, z) : 0, z, o.ry ?? 0)), wood = '#6A4A30', grey = '#7A8088';
+  box(g, 1.6, 0.05, 0.8, wood, 0, 0.74, 0); for (const sx of [-0.72, 0.72]) box(g, 0.08, 0.74, 0.7, shade(wood, -0.15), sx, 0, 0);
+  const tw = grp(g, -0.4, 0.79, -0.05); box(tw, 0.42, 0.14, 0.32, '#2A2C30', 0, 0, 0); box(tw, 0.46, 0.06, 0.06, '#1A1A1A', 0, 0.16, -0.12); box(tw, 0.3, 0.2, 0.01, '#F4F0E4', 0, 0.16, -0.08);
+  for (let i = 0; i < 12; i++) ball(tw, 0.012, '#D8D8D8', -0.15 + (i % 6) * 0.06, 0.15, 0.04 + Math.floor(i / 6) * 0.05);
+  cyl(g, 0.08, 0.1, 0.03, '#2E4A2E', 0.6, 0.79, -0.25); const arm = cyl(g, 0.015, 0.015, 0.4, '#2E4A2E', 0.6, 0.82, -0.25); const sh = cyl(g, 0.04, 0.12, 0.12, '#2E6A3E', 0.6, 1.16, -0.18, { open: true }); sh.rotation.x = 0.6;
+  const fo = grp(g, 0.25, 0.79, 0.05), base = box(fo, 0.36, 0.03, 0.48, '#C8A86A', 0, 0, 0), cover = dyn(grp(fo, -0.18, 0.03, 0)); box(cover, 0.36, 0.012, 0.48, '#D4B474', 0.18, 0, 0); box(cover, 0.2, 0.004, 0.08, '#B83A2A', 0.18, 0.008, -0.12);
+  const page = grp(fo, 0, 0.04, 0); box(page, 0.32, 0.004, 0.44, '#F4F0E4', 0, 0, 0); const circ = mesh(page, new THREE.RingGeometry(0.06, 0.075, 24), mat('#C83A2A'), 0.05, 0.004, 0.02); circ.rotation.x = -Math.PI / 2; const mn = mesh(page, new THREE.CircleGeometry(0.1, 24), mat('#9A9AA0'), 0.02, 0.003, 0.03); mn.rotation.x = -Math.PI / 2;
+  if (o.open != null) tick(t => { cover.rotation.z = Math.PI * 0.95 * EASE.inOut(clamp((t - o.open) / 0.6)); });
+  for (let i = 0; i < 3; i++) { const cb = grp(g, -1.2 + i * 0.6, 0, -1.0); box(cb, 0.5, 1.3, 0.6, grey, 0, 0, 0); for (let k = 0; k < 4; k++) { box(cb, 0.46, 0.28, 0.02, shade(grey, 0.08), 0, 0.06 + k * 0.31, 0.31); box(cb, 0.12, 0.03, 0.03, '#C8C8CC', 0, 0.2 + k * 0.31, 0.33); } }
+  return { g, folder: fo, page };
+}
 function swimPool(p, x, z, o = {}) {   // v2.46: raised terrace with an infinity pool (villa on a slope): pool w × d (x × z), deck top at h, water up to level; infinity glass edge on the +z side (P.wall: breakApart it); drain: [t0, t1] empties the pool; returns { g, wall, level(t), top, w, d }
   const w = o.w ?? 4.5, d = o.d ?? 10, H = o.h ?? 1.9, m = o.deck ?? 3, g = stat(grp(p ?? world, x, 0, z, o.ry ?? 0)), NC = { cast: false }, deck = o.deckColor ?? '#E8DCC8', stone = o.wallColor ?? '#CFC2AA', tile = '#8FD0E8';
   const W = w + 2 * m, D = d + m + 0.6;
@@ -7860,7 +7880,7 @@ function swimPool(p, x, z, o = {}) {   // v2.46: raised terrace with an infinity
   box(g, w, 0.2, 0.6, stone, 0, 0, d / 2 + 0.3);
   const wall = dyn(grp(g, 0, 0, d / 2 + 0.05)); box(wall, w, H - 0.02, 0.1, '', 0, 0.2, 0, { mat: mat('#BFE8FF', { own: true, opacity: 0.35, rough: 0.05 }), ...NC });
   const L0 = o.level ?? H - 0.08, dr = o.drain, level = t => !dr ? L0 : lerp(L0, 0.3, EASE.inOut(clamp((t - dr[0]) / (dr[1] - dr[0]))));
-  const wm = new THREE.MeshStandardMaterial({ color: '#38A8D8', transparent: true, opacity: 0.55, roughness: 0.08, metalness: 0.1, depthWrite: false });
+  const wm = new THREE.MeshStandardMaterial({ color: '#38A8D8', transparent: true, opacity: o.opacity ?? 0.4, roughness: 0.08, metalness: 0.1, depthWrite: false });
   const wat = dyn(mesh(g, new THREE.BoxGeometry(w - 0.18, 1, d - 0.18), wm, 0, 0.5, 0, NC)); wat.renderOrder = 3;
   tick(t => { const L = level(t), hh = Math.max(0.02, L - 0.2); wat.scale.y = hh; wat.position.y = 0.2 + hh / 2; wat.visible = L > 0.32; });
   if (o.ladder !== false) for (const sx of [-0.25, 0.25]) cyl(g, 0.025, 0.025, 1.0, '#D8D8DC', w / 2 - 0.3 + sx, H - 0.4, -d / 2 + 1.2, { seg: 6 });
@@ -7899,12 +7919,14 @@ function portal(p, x, y, z, o = {}) {   // v2.45: glowing standing portal ring (
     dm.opacity = 0.75 * k; sw.material.opacity = 0.45 * k; sw.rotation.z = -t * 4; disc.visible = sw.visible = k > 0.01; pl.intensity = 6 * k + 1.5; });
   return { g, ring, disc };
 }
-function planetSet(p, x, z, kind, o = {}) {   // v2.45: small planet surface set at (x, z), far away from the main world (x ≥ 1000): mercury (grey rock, glowing day side left, frost on the night side) · venus (cracked orange basalt, haze) · mars (red dust, rocks, wheel tracks) · jupiter / neptune (no ground: stacked cloud bands you fall through, top at y = 0); returns { g, floor } (floor = ground height, null for gas giants)
+function planetSet(p, x, z, kind, o = {}) {   // v2.45: small planet surface set at (x, z), far away from the main world (x ≥ 1000): mercury (grey rock, glowing day side left, frost on the night side) · moon (grey dust, rocks, craters) · venus (cracked orange basalt, haze) · mars (red dust, rocks, wheel tracks) · jupiter / neptune (no ground: stacked cloud bands you fall through, top at y = 0); returns { g, floor } (floor = ground height, null for gas giants)
   const g = stat(grp(p ?? world, x, 0, z)), R = o.r ?? 60, NC = { cast: false }, rnd2 = i => hash(i * 13.7 + x * 0.01);
   const disc = (c, y = 0, rr = R) => { const m = cyl(g, rr, rr, 0.3, c, 0, y - 0.3, 0, { seg: 40 }); m.receiveShadow = true; return m; };
   if (kind === 'mercury') { disc('#77777C'); for (let i = 0; i < 40; i++) { const px = (rnd2(i) - 0.5) * 70, pz = (rnd2(i + 99) - 0.5) * 70; rock(g, px, pz, 0.4 + rnd2(i + 7) * 1.4, px < 0 ? '#8A6A5A' : '#9AA0AC'); }
     for (let i = 0; i < 6; i++) crater(g, (rnd2(i + 3) - 0.5) * 50, (rnd2(i + 40) - 0.5) * 50, 2 + rnd2(i) * 3);
     box(g, 30, 0.04, 70, '#C8501E', -16, 0.01, 0, { em: '#FF5A1E', ei: 0.5, ...NC }); box(g, 30, 0.04, 70, '#DDE6F2', 16, 0.01, 0, NC); return { g, floor: 0 }; }
+  if (kind === 'moon') { disc('#8E8E94'); for (let i = 0; i < 50; i++) { const px = (rnd2(i) - 0.5) * 90, pz = (rnd2(i + 99) - 0.5) * 90; rock(g, px, pz, 0.3 + rnd2(i + 7) * 1.5, '#7A7A80'); }
+    for (let i = 0; i < 9; i++) crater(g, (rnd2(i + 3) - 0.5) * 70, (rnd2(i + 40) - 0.5) * 70, 2.5 + rnd2(i) * 6); return { g, floor: 0 }; }
   if (kind === 'venus') { disc('#A0602A'); for (let i = 0; i < 70; i++) { const px = (rnd2(i) - 0.5) * 60, pz = (rnd2(i + 99) - 0.5) * 60; box(g, 2 + rnd2(i + 1) * 3, 0.06, 2 + rnd2(i + 2) * 3, shade('#7A3E1A', (rnd2(i + 3) - 0.5) * 0.3), px, 0, pz, NC).rotation.y = rnd2(i) * 3; if (i % 3 === 0) rock(g, px, pz, 0.5 + rnd2(i + 5), '#6A3A1E'); } return { g, floor: 0 }; }
   if (kind === 'mars') { disc('#B8562E'); for (let i = 0; i < 60; i++) { const px = (rnd2(i) - 0.5) * 80, pz = (rnd2(i + 99) - 0.5) * 80; rock(g, px, pz, 0.3 + rnd2(i + 7) * 1.6, '#8A3E22'); }
     for (const sx of [-0.8, 0.8]) box(g, 0.35, 0.02, 60, '#93421F', 6 + sx, 0.005, 0, NC); for (let i = 0; i < 4; i++) { const h = mesh(g, new THREE.ConeGeometry(14 + i * 4, 6 + i * 2, 7), mat('#A04A28'), -40 + i * 26, 2.5 + i, -70 - i * 6); } return { g, floor: 0 }; }

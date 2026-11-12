@@ -23,9 +23,9 @@ const BEATS = [
 const SLOWMO = [{ t: 39.8, dur: 0.9, rate: 0.3, catch: 0.5 }];
 const TEASE = [{ t: 30.9, dur: 0.6, at: 43.0, label: 'Ten seconds later' }];
 const CAM = [
-  { t: 0, cut: true, tr: 'cut', p: [1.2, 0.75, -1.2], l: [0, 1.95, -3.0], fov: 62, dof: 0 }, { t: 2.6, p: [0.9, 0.85, -1.8], l: [0, 1.95, -3.0], fov: 58, dof: 0 },
+  { t: 0, cut: true, tr: 'cut', p: [1.2, 1.85, -1.2], l: [0, 3.05, -3.0], fov: 62, dof: 0 }, { t: 2.6, p: [0.9, 1.95, -1.8], l: [0, 3.05, -3.0], fov: 58, dof: 0 },
   ...shot('close', 2.6, 2.6, 'you', { az: -30, dist: 3.4 }),
-  ...shot('wide', 5.2, 3.4, [0, 1.5, 0], { az: 140, dist: 30, move: 'orbit' }),
+  ...shot('wide', 5.2, 3.4, [0, 2.4, 0], { az: 140, dist: 30, move: 'orbit' }),
   ...shot('close', 8.6, 2.6, 'bed', { az: 120, dist: 2.2 }),
   ...shot('mid', 11.2, 2.8, 'you', { az: 20, dist: 6 }),
   ...shot('wide', 14.0, 4.7, [0, 2, 4], { az: 70, dist: 22, h: 0.25, move: 'crane' }),
@@ -63,6 +63,6 @@ const AUDIO = {
     { t: 30.6, k: 'riser', dur: 1.2 }, { t: 38.0, k: 'pop' }, { t: 39.9, k: 'heartbeat', dur: 1.2 }, { t: 42.0, k: 'crack' }, { t: 42.3, k: 'splash' }, { t: 49.2, k: 'ding' }, { t: 51.6, k: 'stinger' }]
 };
 const THUMB = [
-  { t: 1.2, text: '_60 seconds_ of air', cam: { p: [1.4, 0.55, -0.4], l: [0, 2.0, -3.0], fov: 64 }, expr: 'panic', rays: true },
+  { t: 1.2, text: '_60 seconds_ of air', cam: { p: [1.4, 1.65, -0.4], l: [0, 3.1, -3.0], fov: 64 }, expr: 'panic', rays: true },
   { t: 16.5, text: 'It doesn’t *fit*', cam: { p: [16, 6, 12], l: [0, 1.5, 3], fov: 46 }, expr: 'panic', glow: true }
 ];
