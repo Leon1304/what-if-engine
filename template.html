@@ -2457,7 +2457,9 @@ function carry(f, obj, o = {}) {   // o.heavy: true | kg — leans back, knees s
     }
     if (th != null) { const w = (t - th + 0.32) / 0.32, ft = (t - th) / 0.4;
       if (w > 0 && w <= 1) { const k = sm01(w); S.ras = lerp(S.ras, 1.0, k); S.rae = lerp(S.rae, -1.2, k); S.cry += 0.35 * k; S.crx -= 0.1 * k; if (both) { S.las = lerp(S.las, 0.6, k); } }
-      if (ft > 0 && ft < 1) { const k = 1 - sm01(ft); S.ras = lerp(S.ras, -2.3, k); S.rae = lerp(S.rae, -0.15, k); S.cry -= 0.35 * k; S.crx += 0.18 * k; if (both) { S.las = lerp(S.las, -2.1, k); S.lae = lerp(S.lae, -0.15, k); } } }
+      if (ft > 0 && ft < 1) { const u = t - th, ki = sm01(clamp(u / 0.22)), kw = 1 - ki, k = ki * (1 - sm01(clamp((u - 0.22) / 0.3)));   // v2.40.27: the arm swings through over 0.22 s (was: wind-up → follow-through in one frame, 172°)
+        if (kw > 0) { S.ras = lerp(S.ras, 1.0, kw); S.rae = lerp(S.rae, -1.2, kw); S.cry += 0.35 * kw; S.crx -= 0.1 * kw; if (both) S.las = lerp(S.las, 0.6, kw); }
+        S.ras = lerp(S.ras, -2.3, k); S.rae = lerp(S.rae, -0.15, k); S.cry -= 0.35 * k; S.crx += 0.18 * k; if (both) { S.las = lerp(S.las, -2.1, k); S.lae = lerp(S.lae, -0.15, k); } } }
   });
   if (th != null) sfx(th, 'whoosh', 0.6);
   if (th != null) PRESNAP.push([th - 1e-4, () => { const h = node.position; P = tossPath([h.x, h.y, h.z], o.throw.to, th, o.throw); }]);   // v2.31: the throw starts exactly where the hand lets go (was: from wherever the figure stood in the first rendered frame)
@@ -3181,6 +3183,123 @@ function walkie(f, o = {}) {   // walkie-talkie clipped to the chest (left), LED
   const led = box(w, 0.018, 0.018, 0.01, '', 0.03, 0.135, 0.026, { mat: mat('#FF3A2A', { basic: true, glow: 2.4 }), ...NC }); dyn(led);
   tick(t => { led.visible = (o.talk ?? []).some(([a, b]) => t >= a && t < b) && Math.floor(t * 6) % 2 === 0; });
   return w;
+}
+// ---- v2.40.27 fight kit: arena hall, octagon cage (+ bell table), fight robot with a detachable head, boxing gloves ----
+function arenaHall(p, o = {}) {   // dark indoor arena around (x, z): floor, walls with exit signs, ceiling with trusses, aisle strip lights → { g }
+  const W = o.w ?? 80, D = o.d ?? 80, H = o.h ?? 20, x = o.x ?? 0, z = o.z ?? 0, g = stat(grp(p ?? world, x, 0, z)), NC = { cast: false }, wc = o.color ?? '#17181D';
+  box(g, W, 0.12, D, '#121317', 0, -0.12, 0, { surf: 'concrete', recv: true });
+  for (const [sx, sz, w, d] of [[0, -D / 2, W, 0.6], [0, D / 2, W, 0.6], [-W / 2, 0, 0.6, D], [W / 2, 0, 0.6, D]]) box(g, w, H, d, wc, sx, 0, sz, { surf: 'concrete', ...NC });
+  box(g, W, 0.4, D, '#0E0F12', 0, H, 0, NC);
+  for (let i = -3; i <= 3; i++) { box(g, 0.5, 0.9, D * 0.9, '#2A2C32', i * W / 8, H - 1.6, 0, NC); for (let k = -6; k <= 6; k++) box(g, 0.08, 0.9, 0.08, '#3A3D44', i * W / 8 + 0.2, H - 1.6, k * D / 14, NC); }
+  const ex = mat('#3AE07A', { basic: true, glow: 1.6 }); for (const [sx, sz, ry] of [[-W / 4, -D / 2 + 0.32, 0], [W / 4, -D / 2 + 0.32, 0], [-W / 2 + 0.32, D / 6, Math.PI / 2], [W / 2 - 0.32, D / 6, -Math.PI / 2]]) box(g, 1.2, 0.4, 0.06, '', sx, 3.2, sz, { mat: ex, ry, ...NC });
+  const st = mat(o.strip ?? '#4A6AFF', { basic: true, glow: 1.1 }); for (const s of [-1, 1]) for (const k of [-1, 1]) box(g, 0.08, 0.03, D * 0.36, '', s * (o.aisle ?? 9), 0.01, k * D * 0.28, { mat: st, ...NC });
+  return { g };
+}
+function fightCage(p, x, z, o = {}) {   // octagon fight cage: mat, padded posts, chain-link panels; open: [i…] panels left out for the camera (default the three facing +z), door on panel o.doorSide (default 2 = +x) bursts open at o.door (t);
+  // light truss above with a spotlight; bell table outside (o.table: [x, z] local, default left) → { g, R, door: [x, z] (world, just outside the door), table: [x, y, z], spot, inside(x, z) }
+  const R = o.r ?? 4.6, Hf = o.h ?? 2.1, g = stat(grp(p ?? world, x, groundH(x, z), z)), NC = { cast: false }, A = i => i * Math.PI / 4, open = o.open ?? [7, 0, 1], DS = o.doorSide ?? 2, Rc = R / Math.cos(Math.PI / 8);
+  const matTex = canvasTex(512, 512, (c, w, h) => { c.fillStyle = '#2B2D33'; c.fillRect(0, 0, w, h); c.strokeStyle = o.accent ?? '#C8322A'; c.lineWidth = 10; c.beginPath(); c.arc(w / 2, h / 2, w * 0.17, 0, TAU); c.stroke(); c.lineWidth = 4; c.strokeStyle = 'rgba(255,255,255,0.35)'; c.beginPath(); c.arc(w / 2, h / 2, w * 0.24, 0, TAU); c.stroke();
+    for (let i = 0; i < 900; i++) { c.fillStyle = hash(i * 1.7) > 0.5 ? 'rgba(255,255,255,0.025)' : 'rgba(0,0,0,0.05)'; c.fillRect(hash(i * 3.3) * w, hash(i * 5.1) * h, 3, 3); } });
+  const mt = new THREE.Mesh(new THREE.CylinderGeometry(Rc, Rc, 0.06, 8, 1), [new THREE.MeshStandardMaterial({ color: '#1E2026', roughness: 0.9 }), new THREE.MeshStandardMaterial({ map: matTex, roughness: 0.85 }), new THREE.MeshStandardMaterial({ color: '#1E2026' })]);
+  mt.rotation.y = Math.PI / 8; mt.position.y = -0.025; mt.receiveShadow = true; g.add(mt); dyn(mt);   // textured / multi-material meshes stay out of the static bake
+  const link = canvasTex(128, 128, (c, w, h) => { c.clearRect(0, 0, w, h); c.strokeStyle = 'rgba(200,205,212,0.9)'; c.lineWidth = 5; for (let k = -1; k <= 1; k++) { c.beginPath(); c.moveTo(k * w, 0); c.lineTo(k * w + w, h); c.stroke(); c.beginPath(); c.moveTo(k * w + w, 0); c.lineTo(k * w, h); c.stroke(); } });
+  link.wrapS = link.wrapT = THREE.RepeatWrapping; const side = 2 * R * Math.tan(Math.PI / 8); link.repeat.set(side / 0.1, Hf / 0.1);
+  const lm = new THREE.MeshStandardMaterial({ map: link, transparent: true, depthWrite: false, side: THREE.DoubleSide, metalness: 0.5, roughness: 0.5 });
+  let doorPanel = null;
+  for (let i = 0; i < 8; i++) {
+    const a = A(i) + Math.PI / 8, px = Math.sin(a) * Rc, pz = Math.cos(a) * Rc;   // post at the corner between panel i and i+1
+    cyl(g, 0.09, 0.09, Hf + 0.25, '#15161A', px, 0, pz, { seg: 10 }); cyl(g, 0.15, 0.15, Hf * 0.62, i % 2 ? '#1E2026' : (o.accent ?? '#C8322A'), px, 0.5, pz, { seg: 10 });
+    if (open.includes(i)) continue;
+    const pa = A(i), cx = Math.sin(pa) * R, cz = Math.cos(pa) * R, pg = grp(g, cx, 0, cz, pa);
+    if (i === DS) { doorPanel = dyn(grp(pg, -side / 2, 0, 0)); }
+    const host = i === DS ? doorPanel : pg, ox = i === DS ? side / 2 : 0;
+    for (const y of [0.0, Hf]) box(host, side, 0.07, 0.07, '#2A2C31', ox, y, 0, { metal: 0.5 });
+    const pl = new THREE.Mesh(new THREE.PlaneGeometry(side, Hf), lm); pl.position.set(ox, Hf / 2, 0); host.add(pl); dyn(pl);
+    box(host, side, 0.32, 0.12, '#15161A', ox, Hf - 0.05, 0, NC);
+  }
+  // light truss with a spotlight straight down
+  const TH = o.truss ?? 7.5, tr = grp(g, 0, TH, 0);
+  for (let i = 0; i < 8; i++) { const a = A(i), L = 2 * (Rc + 0.8) * Math.tan(Math.PI / 8); box(tr, L, 0.3, 0.3, '#2E3036', Math.sin(a) * (R + 0.75), 0, Math.cos(a) * (R + 0.75), { ry: a, ...NC }); box(tr, 0.32, 0.28, 0.32, '#111', Math.sin(a) * (R + 0.75), -0.3, Math.cos(a) * (R + 0.75), NC); box(tr, 0.22, 0.04, 0.22, '', Math.sin(a) * (R + 0.75), -0.33, Math.cos(a) * (R + 0.75), { mat: mat('#FFF4DC', { basic: true, glow: 2.2 }), ...NC }); }
+  for (let i = 0; i < 4; i++) cyl(g, 0.03, 0.03, 30 - TH, '#222', Math.sin(A(i * 2)) * (R + 0.75), TH, Math.cos(A(i * 2)) * (R + 0.75), { seg: 5, ...NC });
+  const spot = new THREE.SpotLight(o.light ?? '#FFF1DC', o.intensity ?? 520, 30, o.angle ?? 0.62, 0.45, 1.3); spot.position.set(x, groundH(x, z) + TH + 0.2, z); spot.target.position.set(x, 0, z); world.add(spot, spot.target);
+  // bell table
+  const [tx, tz] = o.table ?? [-(R + 1.6), 1.4], tb = grp(g, tx, 0, tz, Math.PI / 2);
+  box(tb, 1.6, 0.06, 0.7, '#3A2A22', 0, 0.78, 0); for (const s of [-1, 1]) for (const k of [-1, 1]) box(tb, 0.06, 0.78, 0.06, '#222', s * 0.72, 0, k * 0.28, NC);
+  box(tb, 1.62, 0.5, 0.02, o.accent ?? '#C8322A', 0, 0.3, 0.35, NC);
+  const bell = grp(tb, 0.3, 0.84, -0.1); cyl(bell, 0.03, 0.03, 0.28, '#222', 0, 0, 0, { seg: 6, ...NC }); const dome = new THREE.Mesh(new THREE.SphereGeometry(0.17, 18, 10, 0, TAU, 0, Math.PI / 2), mat('#C9A040', { metal: 0.8, rough: 0.3 })); dome.position.set(0, 0.26, 0.04); dome.rotation.x = Math.PI / 2 - 0.3; dome.castShadow = true; bell.add(dome);
+  const ham = dyn(grp(tb, -0.05, 0.84, -0.05)); cyl(ham, 0.015, 0.015, 0.32, '#6A4A32', 0.16, 0.02 - 0.16, 0, { rz: Math.PI / 2, seg: 5, ...NC }); ball(ham, 0.04, '#D8D2C2', 0.33, 0.02, 0, { detail: 0, ...NC });
+  g.updateMatrixWorld(true); const C = { g, R, side, rings: [], ham, table: tb.localToWorld(new THREE.Vector3(0.3, 1.1, -0.1)).toArray() };
+  const dw = A(DS), dT = o.door ?? 1e9; C.door = [x + Math.sin(dw) * (R + 1.2), z + Math.cos(dw) * (R + 1.2)];
+  if (doorPanel && dT < 1e8) { sfx(dT, 'clang', 1); sfx(dT + 0.02, 'impact', 0.7); tick(t => { const u = t - dT; doorPanel.rotation.y = u <= 0 ? 0 : -(1.75 - 0.18 * Math.exp(-u * 3) * Math.cos(u * 14)) * span(t, dT, 0.18, 'out'); }); }
+  tick(t => { let a = 0; for (const r of C.rings) for (let k = 0; k < r.n; k++) { const u = t - (r.t + k * 0.22); if (u > -0.12 && u < 0.18) a = Math.max(a, u < 0 ? (u + 0.12) / 0.12 : 1 - u / 0.18); } ham.rotation.z = 0.55 * a; });
+  C.inside = (px, pz) => { const dx = px - x, dz = pz - z, r = Math.hypot(dx, dz); return r < R - 0.3; };
+  C.spot = spot; return C;
+}
+function ringBell(C, t, o = {}) {   // the cage's bell: n quick strikes from t (hammer swings, 'bell' sound)
+  const n = o.n ?? 3; C.rings.push({ t, n }); for (let k = 0; k < n; k++) sfx(t + k * 0.22, 'bell', (o.v ?? 1) * (k ? 0.85 : 1));
+}
+function botHead(p, o = {}) {   // robot head (front +z, base at y): metal shell, glowing visor, red side stripes, ear discs, antenna stub → group (o.at: [x, y, z])
+  const [x, y, z] = o.at ?? [0, 0, 0], g = grp(p ?? world, x, y, z), NC = { cast: false }, c = o.color ?? '#B9C0C9', ac = o.accent ?? '#C8322A';
+  rbox(g, 0.36, 0.34, 0.36, c, 0, 0, 0, { rf: 0.2, mat: mat(c, { metal: 0.65, rough: 0.35, flat: false }) }); rbox(g, 0.3, 0.06, 0.3, shade(c, -0.25), 0, -0.04, 0, { rf: 0.3 });
+  box(g, 0.29, 0.1, 0.03, '', 0, 0.16, 0.175, { mat: mat(o.visor ?? '#3AE6D8', { basic: true, glow: 2.4 }), ...NC });
+  box(g, 0.31, 0.13, 0.02, '#14161A', 0, 0.145, 0.168, NC);
+  for (const s of [-1, 1]) { cyl(g, 0.06, 0.06, 0.04, shade(c, -0.15), s * 0.2 - 0.02, 0.17 - 0.02, 0, { rz: Math.PI / 2, seg: 12, ...NC }); box(g, 0.012, 0.22, 0.2, ac, s * 0.181, 0.06, -0.02, NC); }
+  cyl(g, 0.015, 0.015, 0.1, '#2A2C31', 0.08, 0.34, -0.06, { seg: 5, ...NC }); ball(g, 0.025, '', 0.08, 0.45, -0.06, { mat: mat(ac, { basic: true, glow: 1.8 }), detail: 0, ...NC });
+  return g;
+}
+function fightBot(o = {}) {   // humanoid fight robot on the figure rig (walk, punch, kick, dance … work): metal shell, chest plate with a glowing core, red accents, visor head (rig.botHead) → rig
+  const c = o.color ?? '#B9C0C9', ac = o.accent ?? '#C8322A', dk = '#3A3E46', f = figure({ kind: 'human', shirt: c, pants: shade(c, -0.18), skin: shade(c, -0.08), shoes: dk, hairStyle: 'buzz', hair: shade(c, -0.08), autoFace: false, scale: o.scale ?? 1.04 });
+  const NC = { cast: false }, M = mat(c, { metal: 0.65, rough: 0.35, flat: false }), MD = mat(dk, { metal: 0.6, rough: 0.4, flat: false });
+  f.root.traverse(m => { if (m.isMesh && m.material && !m.material.map) { m.material = m.userData.hand ? MD : M; } });
+  f.head.scale.setScalar(0.001); f.head.visible = false;   // the human head is replaced by the visor head on the neck
+  f.botHead = botHead(f.neck, { at: [0, 0.02, 0], color: c, accent: ac, visor: o.visor });
+  rbox(f.chest, 0.56, 0.36, 0.08, shade(c, 0.06), 0, 0.2, 0.13, { rf: 0.3, mat: mat(shade(c, 0.06), { metal: 0.7, rough: 0.3, flat: false }) });
+  f.core = ball(f.chest, 0.07, '', 0, 0.36, 0.18, { mat: mat(o.core ?? '#3AE6D8', { basic: true, glow: 2.6 }), ...NC }); cyl(f.chest, 0.095, 0.095, 0.03, dk, 0, 0.36 - 0.015, 0.165, { rx: Math.PI / 2, seg: 16, ...NC });
+  for (const s of [-1, 1]) { rbox(f.chest, 0.2, 0.12, 0.22, ac, s * 0.36, 0.52, 0, { rf: 0.4 }); box(f.chest, 0.04, 0.4, 0.31, dk, s * 0.24, -0.02, 0, NC); }
+  for (const j of [f.foreL, f.foreR, f.shinL, f.shinR]) ball(j, 0.1, dk, 0, 0, 0.02, { detail: 1, ...NC });
+  for (const j of [f.shinL, f.shinR]) box(j, 0.2, 0.22, 0.04, ac, 0, -0.32, 0.1, NC);
+  f.kind = 'robot'; f.robot = true; f.neckAt = t => fromRig(rigF(f, t), new THREE.Vector3(0, 1.5, 0));
+  return f;
+}
+function headOff(f, t, o = {}) {   // fightBot: the head flies off at t (sparks, clang, buzz), bounces and stays where it lands (visor still glowing); sparks keep spitting from the neck. o: to [x, z], h, spin, until (loose head hides) → { head, land, stop }
+  const NC = { cast: false }, P0 = f.neckAt(t).add(new THREE.Vector3(0, 0.02 * f.root.scale.x, 0)), to = o.to ?? [P0.x - 3, P0.z - 2];
+  const H = dyn(botHead(world, { at: [P0.x, P0.y, P0.z], color: o.color, accent: o.accent, visor: o.visor })), P1 = tossPath([P0.x, P0.y, P0.z], to, t, { h: o.h ?? 1.6, bounces: o.bounces ?? 2, spin: 1, r: 0.04 }), turns = Math.max(1, Math.round((o.spin ?? 10) * P1.rot(P1.stop) / TAU)), face = o.face ?? 0, sp = (turns * TAU + face) / P1.rot(P1.stop);
+  H.scale.setScalar(f.root.scale.x); const P = toss(H, t, { from: [P0.x, P0.y, P0.z], to, h: o.h ?? 1.6, bounces: o.bounces ?? 2, spin: sp, r: 0.04, axis: 'y' });   // spins like a top and lands upright, visor toward o.face (yaw, 0 = +z)
+  const U = o.until ?? 1e9; tick(tt => { f.botHead.visible = tt < t; H.visible = tt >= t && tt < U; });
+  sfx(t, 'clang', 1); sfx(t + 0.03, 'buzz', 0.6); MBAUTO.push([t - 0.05, t + 0.2]);
+  emit('spark', { at: tt => f.neckAt(tt).toArray(), t0: t, burst: 26, size: 0.07, speed: 4.5, jitter: 0.1 });
+  emit('spark', { at: tt => f.neckAt(tt).toArray(), t0: t + 0.2, t1: o.sparkEnd ?? t + 30, rate: 7, size: 0.05, speed: 2.2, jitter: 0.06 });
+  emit('smoke', { at: tt => f.neckAt(tt).toArray(), t0: t + 0.1, t1: t + 1.6, rate: 6, size: 0.25 });
+  return { head: H, land: P.end, stop: P.stop };
+}
+function gloves(f, o = {}) {   // boxing gloves on both hands (fingers hidden), white cuffs
+  const c = o.color ?? '#C8322A', NC = { cast: false };
+  for (const H of f.hands) { H.hd.traverse(m => { if (m.isMesh && m.userData.hand) m.visible = false; }); const gb = grp(H.hd, 0, -0.1, 0.02); const b = ball(gb, 0.105, c, 0, 0, 0, { detail: 2, rough: 0.35 }); b.scale.set(0.95, 1.05, 1.3); ball(gb, 0.05, c, -H.sx * 0.08, 0.02, 0.06, { detail: 1, ...NC }); cyl(H.hd, 0.07, 0.075, 0.09, o.cuff ?? '#F2F2EE', 0, -0.03, 0, { seg: 10, ...NC }); }
+}
+// ---- v2.40.27 sky kit: orrery (solar-system model that swings into a line), telescope ----
+const ORRERY_DEF = [   // name, orbit (model units), radius, planet() kind, colours
+  ['Mercury', 7, 0.32, 'moon', '#9C948A', '#6E675E'], ['Venus', 9.5, 0.62, 'gas', '#E8D2A0', '#D8BE88'], ['Earth', 12.5, 0.66, 'earth'], ['Mars', 15.5, 0.45, 'mars'],
+  ['Jupiter', 23, 1.9, 'gas', '#D2A878', '#F0DCC0'], ['Saturn', 30, 1.6, 'gas', '#E2C892', '#F2E2BE'], ['Uranus', 36, 1.05, 'ice', '#A8E0E8', '#8CCCD8'], ['Neptune', 41, 1.0, 'ice', '#4A78D8', '#3A5EC0']];
+function orrery(p, x, y, z, o = {}) {   // sun + 8 planets on faint orbit rings (front +z); angles: deg per planet (0 = +z, ccw seen from above); align: [t0, dur] swings all to o.line (deg) → { g, pos(i, t) world [x,y,z], sun, names }
+  const s = o.scale ?? 1, g = dyn(grp(p ?? world, x, y, z)), NC = { cast: false }, ang = o.angles ?? [200, 140, 0, 300, 60, 250, 120, 330], line = o.line ?? 0, [a0, ad] = o.align ?? [1e9, 1];
+  const sun = ball(g, 3.2 * s, '', 0, 0, 0, { mat: mat('#FFC46A', { basic: true, glow: 3.2 }), detail: 3, ...NC }); ball(g, 4.4 * s, '', 0, 0, 0, { mat: mat('#FF9A3A', { basic: true, glow: 1.2, opacity: 0.22 }), detail: 3, ...NC });
+  const P = ORRERY_DEF.map(([name, R, r, kind, c1, c2], i) => {
+    if (o.orbits !== false) { const rg = new THREE.Mesh(new THREE.RingGeometry(R * s - 0.035 * s, R * s + 0.035 * s, 160), mat('#AFC4FF', { basic: true, opacity: o.orbitOpacity ?? 0.35 })); rg.rotation.x = -Math.PI / 2; g.add(rg); }
+    const pg = planet(g, 0, 0, 0, { kind, r: r * s, color: c1, color2: c2, ring: name === 'Saturn' ? { inner: r * s * 1.35, outer: r * s * 2.2 } : undefined, clouds: kind === 'earth', axis: 0.3, spin: 0.15 });
+    return { name, R: R * s, g: pg };
+  });
+  const angAt = (i, t) => { const a = ang[i], k = span(t, a0, ad, 'inOut'); let d = ((line - a) % 360 + 540) % 360 - 180; return (a + d * k) * Math.PI / 180; };
+  tick(t => P.forEach((q, i) => { const a = angAt(i, t); q.g.position.set(Math.sin(a) * q.R, 0, Math.cos(a) * q.R); }));
+  return { g, sun, names: P.map(q => q.name), pos: (i, t) => { const a = angAt(i, t ?? 0); return [x + Math.sin(a) * P[i].R, y, z + Math.cos(a) * P[i].R]; } };
+}
+function telescope(p, x, z, o = {}) {   // amateur refractor on a tripod; ry = heading, pitch = tube elevation (rad) → { g, eye: [x, y, z] (eyepiece, world) }
+  const g = stat(grp(p ?? world, x, groundH(x, z), z, o.ry ?? 0)), NC = { cast: false }, h = o.h ?? 1.25, pt = o.pitch ?? 0.55, c = o.color ?? '#F2F2EE';
+  for (let i = 0; i < 3; i++) { const a = i * TAU / 3 + 0.3, lg = grp(g, Math.sin(a) * 0.36, 0, Math.cos(a) * 0.36); lg.rotation.set(Math.cos(a) * 0.3, 0, -Math.sin(a) * 0.3); cyl(lg, 0.022, 0.026, h + 0.05, '#2A2C31', 0, 0, 0, { seg: 6 }); }
+  cyl(g, 0.07, 0.07, 0.14, '#2A2C31', 0, h, 0, { seg: 10 }); const tub = grp(g, 0, h + 0.18, 0); tub.rotation.x = -pt;
+  cyl(tub, 0.07, 0.07, 1.0, c, 0, -0.5, 0.1, { rx: Math.PI / 2, seg: 16 }); cyl(tub, 0.085, 0.085, 0.24, '#1E1F22', 0, -0.12, 0.72, { rx: Math.PI / 2, seg: 16, ...NC });
+  cyl(tub, 0.03, 0.03, 0.14, '#1E1F22', 0, -0.07, -0.47, { rx: Math.PI / 2, seg: 8, ...NC }); cyl(tub, 0.02, 0.02, 0.3, '#2A2C31', 0, 0.115 - 0.15, 0.05, { rx: Math.PI / 2, seg: 6, ...NC });
+  box(tub, 0.05, 0.05, 0.06, '#2A2C31', 0, 0.065, 0.05, NC); g.updateMatrixWorld(true);
+  return { g, eye: tub.localToWorld(new THREE.Vector3(0, 0, -0.54)).toArray() };
 }
 function busstop(p, x, z, ry = 0) {   // shelter (glass back and sides, roof, bench) + sign pole; local +z faces the road
   const g = stat(grp(p, x, groundH(x, z), z, ry)), gl = mat('#BFD8E8', { opacity: 0.35, rough: 0.1 }), NC = { cast: false };
@@ -11662,7 +11781,8 @@ const SND = (() => {
       fire: (t, v, d = 4) => { nz(t, 0.6, Math.max(0, d - 1.4), 0.8, 0.16 * v, fx, 'lowpass', 520); for (let x = 0; x < d * 9; x++) nz(t + ar() * d, 0.001, 0, 0.015, (0.08 + ar() * 0.14) * v, fx, 'bandpass', 1400 + ar() * 2200, 0, 1.2); },
       ticks: (t, v, d = 1) => { for (let x = 0; x < d * 14; x++) tone('square', 1900, t + x / 14, 0.001, 0, 0.025, 0.08 * v, fx); },
       tick: (t, v) => tone('square', 1900, t, 0.001, 0, 0.03, 0.1 * v, fx),
-      chime: (t, v) => { bellFx(t, 659, v * 0.8); bellFx(t + 0.34, 523, v * 0.8); },   // v2.33.3 shop door chime (ding-dong)
+      chime: (t, v) => { bellFx(t, 659, v * 0.8); bellFx(t + 0.34, 523, v * 0.8); },
+      bell: (t, v) => { bellFx(t, 1245, v * 0.95); bellFx(t + 0.004, 1870, v * 0.55); bellFx(t + 0.008, 2960, v * 0.3); nz(t, 0.001, 0.002, 0.03, 0.45 * v, fx, 'highpass', 4200); ducks.push(t); },   // v2.40.27 fight-cage bell (ringBell: three quick strikes)   // v2.33.3 shop door chime (ding-dong)
       knock: (t, v, d = 0.6) => { const n = Math.max(1, Math.round(d / 0.2)); for (let k = 0; k < n; k++) { const tt = t + k * 0.2 + ar() * 0.02; nz(tt, 0.001, 0.01, 0.08, 0.55 * v, fx, 'bandpass', 210, 0, 1.4); tone('sine', 92, tt, 0.001, 0.02, 0.13, 0.4 * v, fx, { to: 70, glide: 0.1 }); } },   // knuckles on a wooden door, d = length (one knock per 0.2 s)
       static: (t, v, d = 0.6) => { tone('square', 2300, t, 0.001, 0.012, 0.01, 0.05 * v, fx, { lp: 5000 }); nz(t + 0.02, 0.02, Math.max(0, d - 0.12), 0.08, 0.1 * v, fx, 'bandpass', 2100, 0, 0.7); for (let k = 0; k < d * 22; k++) nz(t + ar() * d, 0.001, 0.003, 0.01, 0.1 * v, fx, 'highpass', 3600); tone('square', 2300, t + d, 0.001, 0.012, 0.01, 0.04 * v, fx, { lp: 5000 }); },   // walkie-talkie: click, hiss, click
       caralarm: (t, v, d = 2) => { const os = tone('square', 720, t, 0.01, Math.max(0, d - 0.03), 0.02, 0.032 * v, fx, { lp: 2600 }); for (let x = 0; x < d * 6; x++) { os.frequency.setValueAtTime(x % 2 ? 1180 : 720, t + x / 6); } },
