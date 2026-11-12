@@ -7692,7 +7692,7 @@ const SEA = {
   orca:       { L: 7, R: 0.1, wx: 0.9, prof: 'orca', c: '#141619', b: '#F4F4F2', fam: 'cet', caud: 'fluke', dorsal: [0.24, 0.08, 0.45, 0.05], pect: [0.15, 0.08, 0.26, 0.6], marks: 'orca', hz: 0.9, amp: 0.045, eye: [0.13, 0.006], teeth: 1 },
   humpback:   { L: 14, R: 0.1, prof: 'whale', c: '#2A3644', b: '#C8D0D8', fam: 'cet', caud: 'fluke', dorsal: [0.025, 0.05, 0.62, 0.3], pect: [0.32, 0.06, 0.3, 0.9], pectC: '#E8ECEE', marks: 'groove', barn: 1, hz: 0.35, amp: 0.04, eye: [0.2, 0.004] },
   whale:      { base: 'humpback' },
-  spermwhale: { L: 16, R: 0.12, wx: 0.7, prof: 'sperm', c: '#56565E', b: '#686870', fam: 'cet', caud: 'fluke', dorsal: [0.022, 0.06, 0.64, 0.12], pect: [0.06, 0.03, 0.34, 0.7], marks: 'sperm', hz: 0.3, amp: 0.035, eye: [0.33, 0.0042], teeth: 1, upper: 0, mouth: [0.04, 0.34], jawW: 0.3, jawOpen: 1.15, spout: [-0.32, 0.92, 0.47], blowhole: 1, knuckles: 1, k: 0.7 },   // v2.42: block head, narrow lower jaw with teeth, blowhole front left (spout angled forward), wrinkled skin
+  spermwhale: { L: 16, R: 0.12, wx: 0.7, prof: 'sperm', c: '#6C6C76', b: '#7E7E88', fam: 'cet', caud: 'fluke', dorsal: [0.022, 0.06, 0.64, 0.12], pect: [0.06, 0.03, 0.34, 0.7], marks: 'sperm', hz: 0.3, amp: 0.035, eye: [0.33, 0.0042], teeth: 1, upper: 0, mouth: [0.04, 0.34], jawW: 0.3, jawOpen: 1.15, spout: [-0.32, 0.92, 0.47], blowhole: 1, knuckles: 1, k: 0.7 },   // v2.42: block head, narrow lower jaw with teeth, blowhole front left (spout angled forward), wrinkled skin
   sperm:      { base: 'spermwhale' },
   bluewhale:  { base: 'humpback', L: 25, R: 0.075, c: '#5A7090', b: '#7A90A8', pect: [0.12, 0.03, 0.27, 0.5], pectC: null, dorsal: [0.015, 0.03, 0.75, 0.4], marks: 'mottle', barn: 0 },
   tuna:       { L: 2, R: 0.14, wx: 0.72, prof: 'tuna', c: '#1E2E5A', b: '#DCE0E6', fam: 'fish', caud: 'lunate', dorsal: [0.12, 0.12, 0.33, 0.5], d2: [0.1, 0.05, 0.56], pect: [0.18, 0.04, 0.28, 0.2], finlets: '#F2C230', hz: 2, amp: 0.06, eye: [0.1, 0.022], stripe: '#9FB4CC' },
@@ -7850,7 +7850,7 @@ function innards(p, x, z, o = {}) {   // v2.42: inside a big animal. kind 'throa
       cc.copy(dk).lerp(lt, clamp(0.5 + 0.55 * w + n * 2)); col.push(cc.r, cc.g, cc.b); }
     geo.setAttribute('color', new THREE.Float32BufferAttribute(col, 3)); geo.computeVertexNormals();
     const tube = dyn(grp(g, 0, r, 0)), m = new THREE.Mesh(geo, fleshM()); m.receiveShadow = true; tube.add(m);
-    const cap = new THREE.Mesh(new THREE.CircleGeometry(r * 0.95, 18), mat('#14040A', { basic: true })); cap.position.set(0, 0, -L + 0.05); tube.add(cap);
+    const cap = new THREE.Mesh(new THREE.CircleGeometry(r * 0.95, 18), mat('#14040A', { basic: true })); cap.position.set(0, 0, -L + 0.05); tube.add(cap); if (o.closed) { const c0 = cap.clone(); c0.position.set(0, 0, -0.05); c0.rotation.y = Math.PI; tube.add(c0); }   // closed: the mouth end is dark too (camera inside)
     const slime = mat(shade(C, 0.35), { rough: 0.05, opacity: 0.75 });
     for (let i = 0; i < 10; i++) { const zz = -0.6 - hash(i * 3.1 + 1) * L * 0.9, a = (hash(i * 5.7) - 0.5) * 1.4, h = 0.25 + hash(i * 2.2) * 0.55; cyl(tube, 0.03, 0.012, h, '', Math.sin(a) * r * 0.75, Math.cos(a) * r * 0.75 - h, zz, { mat: slime, seg: 5, ...NC }); }
     tick(t => { const k = 1 - amp * sq(t); tube.scale.set(k, k, 1); tube.position.y = r * k; });
