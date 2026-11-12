@@ -2168,7 +2168,7 @@ const OUTFITS = {   // char('you', { outfit: 'cap' | ['capBack', 'shades'] … }
 function char(name, o = {}) {   // look keys (shirt, pants, hat, skin, kind) can't be overridden here: change them in cast.json, then they change everywhere
   const base = { ...(CHARS[name] ?? {}), ...(SERIES_CAST[name] ?? {}) };
   if (!CHARS[name] && !SERIES_CAST[name]) console.warn('char: unknown character ' + name + ' – add it to the series cast.json');
-  const rest = Object.fromEntries(Object.entries(o).filter(([k]) => !['shirt', 'pants', 'hat', 'skin', 'kind'].includes(k)));
+  const rest = Object.fromEntries(Object.entries(o).filter(([k]) => !['shirt', 'pants', 'hat', 'skin', 'kind', 'build'].includes(k)));   // v2.41: build too (cast.json)
   for (const k of [].concat(rest.outfit ?? [])) Object.assign(base, OUTFITS[k] ?? {});
   if (base.model) return model(base.model, { ...base, ...rest });
   rest.who ??= name;   // lip sync: beats with who: name move this character's lips to the voice
@@ -2685,6 +2685,7 @@ function horde(o = {}) {
     if (o.wait) [q.wx, q.wz] = o.wait.line ? lineTarget(x0, z0, o.wait.line, o.wait.stop ?? 0.6, o.wait.pile ?? 2.5) : target(x0, z0, o.wait.at[0], o.wait.at[1], o.wait.stop ?? 1, o.wait.pile ?? 2.5);
     const hv = k => hash(i * 13.7 + hid * 101.3 + k * 7.1);   // quirks from hash(): the seeded layout (rnd) stays exactly as before
     q.o = { v: q.v, sd: hv(1), zb: !human, dangle: !human && hv(2) < 0.18, armOff: (hv(3) - 0.5) * 0.3, tilt: human ? 0 : (hv(4) - 0.5) * 0.6, lean: human ? 0 : (hv(5) - 0.3) * 0.15 };
+    q.bw = human ? 0.9 + 0.26 * hv(8) ** 1.6 : 0.94 + 0.12 * hv(8); q.bd = 0.92 + 0.3 * (q.bw - 0.9) + 0.06 * hv(9);   // v2.41 build: slim … heavy (torso width / depth)
     q.stP = 5 + hv(6) * 6; q.cl = cycleLen(mode, q.v * (run ? 1.4 : 1)) * q.sc; q.o.cl = q.cl / q.sc;
     M.push(q);
     const sk = col.set(pick(skins)).clone();
@@ -2778,7 +2779,7 @@ function horde(o = {}) {
           if (GZ.arms !== 'up') { S.las = lerp(S.las, -0.3 - 0.06 * Math.sin(t * 1.3 + q.ph), gk); S.ras = lerp(S.ras, -0.25, gk); S.lae = lerp(S.lae, -0.3, gk); S.rae = lerp(S.rae, -0.3, gk); } }
         if (rise && em < 1) { S.las = lerp(-2.6, S.las, em); S.ras = lerp(-2.4, S.ras, em); }   // claw out of the ground
         j(Mh, base, S.hx, S.H + S.by, 0, S.hrx, S.hry, S.hrz);
-        j(Mc, Mh, 0, 0.02, 0, S.crx, S.cry, S.crz); put(torso, i, Mc, 0, 0.29, 0);
+        j(Mc, Mh, 0, 0.02, 0, S.crx, S.cry, S.crz); torso.setMatrixAt(i, out.multiplyMatrices(Mc, T.compose(V.set(0, 0.29, 0), Q.identity(), SC.set(q.bw, 1, q.bd))));   // v2.41: everyone a little different in build
         j(Mn, Mc, 0, 0.63, 0, S.nrx, S.nry, S.nrz); put(head, i, Mn, 0, 0.19, 0); put(eyes, i, Mn, 0, 0.23, 0.2); put(mouths, i, Mn, 0, 0.085, 0.2);
         const comp = -S.hx / 0.78 - S.hrz;
         for (const [k, s, th, kn, fp, as, az, ae] of [[0, -1, S.lt, S.lk, S.lf, S.las, S.laz, S.lae], [1, 1, S.rt, S.rk, S.rf, S.ras, S.raz, S.rae]]) {
@@ -4948,13 +4949,15 @@ function qLook(fwd, up, out = new THREE.Quaternion()) {   // rotation mapping +z
 function segBox(m, a, b, w, h) { m.position.addVectors(a, b).multiplyScalar(0.5); const L = a.distanceTo(b); m.scale.set(w, h, Math.max(1e-3, L)); if (L > 1e-5) qLook(_k4.subVectors(b, a), _AY, m.quaternion); }
 
 // --- rig math: two-bone arm IK / FK in the chest frame (shoulders at ±0.34, 0.54) ---
+// v2.41: _SHO = shoulder offset of the rig being posed (body build: wider / narrower shoulders · shoulders raised) — set by poseFin, 0 otherwise
+const _SHO = { x: 0, yL: 0, yR: 0 }, _ikz = (side, T) => { const s = [_SHO.x, _SHO.yL, _SHO.yR]; _SHO.x = _SHO.yL = _SHO.yR = 0; try { return armIK(side, T); } finally { [_SHO.x, _SHO.yL, _SHO.yR] = s; } }, _shX = side => side === 'L' ? -0.34 - _SHO.x : 0.34 + _SHO.x, _shY = side => 0.54 + (side === 'L' ? _SHO.yL : _SHO.yR);
 const UA = 0.29, FA = 0.36;
 function armIK(side, T) {   // v2.29: near the sideways singularity the pitch blends to a stable solution (no 180° elbow flip mid-swing)
   const r = armIK0(side, T), g = sm01((Math.abs(r[1]) - 1.0) / 0.4); if (g <= 0) return r;
   const r2 = armIK0(side, { x: T.x, y: T.y, z: T.z + 0.32 }), d = Math.atan2(Math.sin(r2[0] - r[0]), Math.cos(r2[0] - r[0])); r[0] += d * g; return r;
 }
 function armIK0(side, T) {   // chest-frame hand target → [shoulder pitch, shoulder roll, elbow]
-  const dx = T.x - (side === 'L' ? -0.34 : 0.34), dy = T.y - 0.54, dz = T.z, D = Math.hypot(dx, dy, dz) || 1e-3, Dc = clamp(D, 0.16, (UA + FA) * 0.995);
+  const dx = T.x - _shX(side), dy = T.y - _shY(side), dz = T.z, D = Math.hypot(dx, dy, dz) || 1e-3, Dc = clamp(D, 0.16, (UA + FA) * 0.995);
   const e = -Math.acos(clamp((Dc * Dc - UA * UA - FA * FA) / (2 * UA * FA), -1, 1));
   const hy = -UA - FA * Math.cos(e) - 0.05 * Math.sin(e), hz = -FA * Math.sin(e) + 0.05 * Math.cos(e), k = Math.hypot(hy, hz) / D;
   const az = Math.asin(clamp(-dx * k / Math.min(hy, -0.06), -1, 1)); let as = Math.atan2(dz * k, dy * k) - Math.atan2(hz, hy * Math.cos(az));   // v2.29: hand close to the shoulder (elbow folded, hy → 0) keeps the sign → no 180° sideways flip of the upper arm
@@ -4964,7 +4967,7 @@ function armIK0(side, T) {   // chest-frame hand target → [shoulder pitch, sho
 function armQ(as, az, ae, out) { _ke.set(as, 0, az, 'XYZ'); out.setFromEuler(_ke); return out.multiply(_kq3.setFromAxisAngle(_AX, ae)); }   // forearm orientation (chest frame)
 function armFK(side, r, out = new THREE.Vector3()) {   // inverse of armIK: [pitch, roll, elbow] → hand position (chest frame)
   const [as, az, e] = r, hy = -UA - FA * Math.cos(e) - 0.05 * Math.sin(e), hz = -FA * Math.sin(e) + 0.05 * Math.cos(e), y1 = hy * Math.cos(az);
-  return out.set((side === 'L' ? -0.34 : 0.34) - hy * Math.sin(az), 0.54 + y1 * Math.cos(as) - hz * Math.sin(as), y1 * Math.sin(as) + hz * Math.cos(as));
+  return out.set(_shX(side) - hy * Math.sin(az), _shY(side) + y1 * Math.cos(as) - hz * Math.sin(as), y1 * Math.sin(as) + hz * Math.cos(as));
 }
 const angLerp = (A, B, w) => [A[0] + Math.atan2(Math.sin(B[0] - A[0]), Math.cos(B[0] - A[0])) * w, lerp(A[1], B[1], w), lerp(A[2], B[2], w)];
 function setArm(S, side, ik, w) {
@@ -5306,7 +5309,7 @@ const catmull = (p0, p1, p2, p3, u, out = new THREE.Vector3()) => { const u2 = u
 const _swIK = {}, _cm = (p0, p1, p2, p3, u) => { const u2 = u * u; return 0.5 * (2 * p1 + (p2 - p0) * u + (2 * p0 - 5 * p1 + 4 * p2 - p3) * u2 + (3 * p1 - p0 - 3 * p2 + p3) * u2 * u); };
 function swingArm(a, t) {   // v2.29: the sword arm moves between the key poses in joint space (natural arcs; was: hand path + IK, which flipped the arm when the path passed close to the shoulder)
   const K = SWINGS[a.kind] ?? SWINGS.slash, T = [a.s0, a.t - 0.12, a.t, a.t + 0.13, a.s4];
-  const Q = _swIK[a.kind] ??= (() => { const L = [MGUARD, ...K.k, MGUARD].map(k => armIK('R', k.h)); for (let j = 1; j < L.length; j++) L[j][0] = L[j - 1][0] + Math.atan2(Math.sin(L[j][0] - L[j - 1][0]), Math.cos(L[j][0] - L[j - 1][0])); return L; })();
+  const Q = _swIK[a.kind] ??= (() => { const L = [MGUARD, ...K.k, MGUARD].map(k => _ikz('R', k.h)); for (let j = 1; j < L.length; j++) L[j][0] = L[j - 1][0] + Math.atan2(Math.sin(L[j][0] - L[j - 1][0]), Math.cos(L[j][0] - L[j - 1][0])); return L; })();
   let i = 0; while (i < 3 && t > T[i + 1]) i++;
   const u = clamp((t - T[i]) / (T[i + 1] - T[i])), e = i === 0 ? EASE.inOut(u) : i === 1 ? u * u : i === 2 ? EASE.out(u) : EASE.inOut(u), A = Q[Math.max(0, i - 1)], B = Q[i], C = Q[i + 1], D = Q[Math.min(4, i + 2)];
   const r = [0, 1, 2].map(c => _cm(A[c], B[c], C[c], D[c], e)); r[1] = clamp(r[1], -Math.PI / 2, Math.PI / 2); r[2] = clamp(r[2], -Math.PI * 0.97, 0); return r;
@@ -5365,7 +5368,7 @@ function cbPose(f, t, S) {
   }
   // --- one-handed guns: raise and aim (two-handed grip unless oneHand)
   if (gun && gun.cls === 'one' && aim) {
-    const W = gun, w = aim.w, sh = v3(0.34, 0.54, 0), d = toC(aim.a.at(t)).sub(sh).normalize(); if (d.z < 0.25) { d.z = 0.25; d.normalize(); }
+    const W = gun, w = aim.w, sh = v3(_shX('R'), _shY('R'), 0), d = toC(aim.a.at(t)).sub(sh).normalize(); if (d.z < 0.25) { d.z = 0.25; d.normalize(); }
     const r = recoil(W, t), H = sh.clone().addScaledVector(d, 0.6); H.y += 0.05 * r * W.kick; H.addScaledVector(d, -0.03 * r);
     setArm(S, 'R', armIK('R', H), w); if (!W.o.oneHand) setArm(S, 'L', armIK('L', H.clone().add(v3(-0.05, -0.07, -0.03))), 0.95 * w);
     look(d, w); const gd = d.clone(); gd.y += 0.35 * r * W.kick; W._want = { d: gd.normalize(), up: _AY, w };
@@ -5373,12 +5376,12 @@ function cbPose(f, t, S) {
   // --- melee: guard, swings, blocks
   if (mel) {
     const W = mel; let w = W.guard ? 1 : 0; for (const a of C.A) if ((a.type === 'swing' || a.type === 'block') && a.W === W) w = Math.max(w, env3(t, a.s0 - 0.2, a.s4 + 0.9, 0.3, 0.5));
-    let K = { hand: MGUARD.h.clone(), blade: MGUARD.b.clone(), edge: MGUARD.e.clone() }, AR = (cbPose.g ??= armIK('R', MGUARD.h));
+    let K = { hand: MGUARD.h.clone(), blade: MGUARD.b.clone(), edge: MGUARD.e.clone() }, AR = (cbPose.g ??= _ikz('R', MGUARD.h));
     const bd = { cry: 0, crx: 0, hry: 0, dip: 0 };   // v2.31: swings that overlap (combos) are layered in order — each blends in over the one before (was: switched in one frame)
     for (const a of C.A) { if (a.type !== 'swing' || a.W !== W) continue; const ws = a.wt(t); if (ws <= 0) continue; const k = swingAt(a, t); K = { hand: K.hand.lerp(k.hand, ws), blade: nlerp(K.blade, k.blade, ws), edge: nlerp(K.edge, k.edge, ws) }; AR = angLerp(AR, swingArm(a, t), ws);
       for (const q in bd) bd[q] = lerp(bd[q], k[q], ws); w = Math.max(w, ws); }
     S.cry += bd.cry; S.crx += bd.crx; S.hry += bd.hry; S.H -= bd.dip;
-    if (bl && bl.a.W === W) { const wb = bl.w; K.hand.lerp(MBLOCK.h, wb); nlerp(K.blade, MBLOCK.b, wb, K.blade); nlerp(K.edge, MBLOCK.e, wb, K.edge); AR = angLerp(AR, cbPose.b ??= armIK('R', MBLOCK.h), wb); w = Math.max(w, wb); S.crx -= 0.06 * wb; S.nrx += 0.05 * wb; }
+    if (bl && bl.a.W === W) { const wb = bl.w; K.hand.lerp(MBLOCK.h, wb); nlerp(K.blade, MBLOCK.b, wb, K.blade); nlerp(K.edge, MBLOCK.e, wb, K.edge); AR = angLerp(AR, cbPose.b ??= _ikz('R', MBLOCK.h), wb); w = Math.max(w, wb); S.crx -= 0.06 * wb; S.nrx += 0.05 * wb; }
     if (w > 0) { setArm(S, 'R', AR, w); if (W.both) setArm(S, 'L', armIK('L', armFK('R', AR).addScaledVector(K.blade, W.pole ? 0.42 : -0.15)), w);
       W._want = { d: K.blade, up: K.edge, w }; }
     const tg = (sw ?? bl)?.a.T; if (tg && w > 0) { const d = toC(tg.pos(t)).sub(v3(0, 0.72, 0)).normalize(); look(d, w * 0.8); }
@@ -8773,7 +8776,7 @@ function _reach(f, side, getP, tg, tr, o = {}) {
   (f.fx ??= []).push((t, S) => {
     let w = 0; for (const tk of K) { const k = t - tk; if (k > -pre && k < post) w = Math.max(w, k < 0 ? sm01((k + pre) / pre) : 1 - sm01(k / post)); }
     if (w <= 0) return; const P = getP(); if (_parked(P)) return;
-    const F = rigF(f, t), sh = v3(side === 'L' ? -0.34 : 0.34, 0.54, 0), Tc = () => toRig(F, P, _rT).applyMatrix4(_kmi.copy(chestM(S, _km3)).invert());
+    const F = rigF(f, t), sh = v3(_shX(side), _shY(side), 0), Tc = () => toRig(F, P, _rT).applyMatrix4(_kmi.copy(chestM(S, _km3)).invert());
     let d = Tc().distanceTo(sh); if (d > 1.6) return;   // far away: no reach (the item just blends into the hand)
     if (d > 0.6) { const c0 = S.cry, tw = Math.min(0.6, (d - 0.6) * 1.6) * w; S.cry = c0 + tw; const d1 = Tc().distanceTo(sh); S.cry = c0 - tw; const d2 = Tc().distanceTo(sh); S.cry = d1 < d2 ? c0 + tw : c0 - tw; d = Math.min(d1, d2); }   // turn the shoulder toward it
     for (let k = 0; k < 2 && d > 0.6; k++) { Tc(); const low = Math.max(0, -0.3 - _rT.y); S.crx += Math.min(0.45, (d - 0.58) * 1.4) * w; if (low > 0) _crouch(S, Math.min(0.3, low * 0.6) * w); d = Tc().distanceTo(sh); }   // lean in, crouch for low things
@@ -10568,6 +10571,283 @@ function fallDown(f, t, o = {}) {
   return { land: tl, at: L.toArray() };
 }
 
+// ====================================================================================================================================
+// v2.41 bodies — build (woman · kid · teen · old · heavy · slim · tall · short · muscular), shoulders that rise and drop, body language that
+// follows the face, gait moods, a little wind-up before walking off, a free leg in the stance, fingers with two joints, grab(), everyday clothes
+// (beard, ponytail, bald, hoodie, short sleeves, skirt / dress, backpack, watch, belt, shoe soles), secondary motion (ponytail, backpack,
+// hood strings, belly), rim light + warm skin on figures, contact shadows under the feet, background extras who fidget.
+// Everything stays a pure function of t (same picture in the preview, in every render worker and CI block).
+// ====================================================================================================================================
+const BUILDS = {   // h height · sw shoulder/chest width · wa waist · cd chest depth · hp hips · aw arm · lw leg thickness · hd head · shx shoulder joints (m, IK follows)
+  //   belly 0–1 · post posture { c chest, n neck } · knee bent knees (m) · sway hips · swing arms · stance feet apart (− = on a line) · armOut · hair default style · hairC default colour
+  man:      {},
+  woman:    { h: 0.94, sw: 0.9, wa: 0.8, cd: 0.94, hp: 1.12, aw: 0.84, lw: 0.95, shx: -0.024, sway: 1.8, swing: 0.85, stance: -0.014, hair: ['long', 'ponytail', 'bun', 'long'] },
+  kid:      { h: 0.64, hd: 1.3, sw: 0.94, wa: 0.96, aw: 0.92, lw: 0.95, sway: 1.1, swing: 1.2 },
+  teen:     { h: 0.89, hd: 1.07, sw: 0.94, wa: 0.9, aw: 0.88, lw: 0.92, shx: -0.012, swing: 1.05 },
+  old:      { h: 0.95, cd: 1.04, belly: 0.35, post: { c: 0.17, n: -0.14 }, knee: 0.035, sway: 0.7, swing: 0.55, hairC: '#B9B7B0' },
+  heavy:    { sw: 1.12, wa: 1.14, cd: 1.22, hp: 1.16, aw: 1.14, lw: 1.16, shx: 0.03, belly: 1, sway: 1.5, swing: 0.8, stance: 0.03, armOut: 0.1 },
+  slim:     { h: 1.03, sw: 0.92, wa: 0.88, cd: 0.86, hp: 0.94, aw: 0.84, lw: 0.86, shx: -0.018 },
+  tall:     { h: 1.1, lw: 0.96, aw: 0.96 },
+  short:    { h: 0.9 },
+  muscular: { sw: 1.16, wa: 0.92, cd: 1.12, aw: 1.3, lw: 1.12, shx: 0.04, post: { c: -0.03 }, stance: 0.025, armOut: 0.12, swing: 0.9 }
+};
+// body language per expression (also gaits): c chest forward · n head down · nz head tilt · sh shoulders up (− dropped) · ai arms in · ae elbows bent · fist · hang (arms hang) · sw arm swing
+const MOODB = {
+  calm: {}, scared: { c: 0.08, n: 0.05, sh: 0.55, ai: 0.07, ae: -0.3, sw: 0.75 }, panic: { c: 0.1, n: 0.04, sh: 0.75, ai: 0.05, ae: -0.35 },
+  nervous: { c: 0.04, n: 0.03, sh: 0.38, ai: 0.06, ae: -0.25 }, sweat: { c: 0.03, sh: 0.22, ai: 0.03 }, worried: { c: 0.05, n: 0.06, sh: 0.35, ai: 0.05, ae: -0.15 },
+  sad: { c: 0.13, n: 0.22, sh: -0.28, hang: 1, sw: 0.45 }, cry: { c: 0.16, n: 0.26, sh: 0.12, hang: 0.6, sw: 0.4, ae: -0.2 },
+  happy: { c: -0.04, n: -0.06, sh: -0.08, sw: 1.2 }, relieved: { c: 0.02, n: 0.06, sh: -0.32, hang: 0.5 }, blush: { c: 0.03, n: 0.12, nz: 0.07, sh: 0.22, ai: 0.04 },
+  angry: { c: 0.06, n: 0.07, sh: 0.25, ai: -0.08, fist: 0.8, sw: 1.1 }, shout: { c: 0.08, n: -0.03, sh: 0.3, ai: -0.05, fist: 0.6 }, determined: { c: 0.05, n: 0.03, sh: 0.05, fist: 0.5, sw: 1.1 },
+  smug: { c: -0.06, n: -0.05, nz: 0.08, sh: -0.05 }, deadpan: { c: -0.01, sh: -0.12, hang: 0.4 }, annoyed: { c: -0.02, nz: 0.06, sh: 0.1, ai: 0.03 },
+  confused: { nz: 0.14, sh: 0.2 }, disgust: { c: -0.07, n: -0.04, sh: 0.18, ai: 0.04 }, surprised: { c: -0.05, n: -0.06, sh: 0.32 },
+  // gaits: figure({ gait }) or rig.gait = name | t => name — walking (and, weaker, standing) in that mood
+  tired: { c: 0.16, n: 0.18, sh: -0.22, sw: 0.45, hang: 0.4 }, proud: { c: -0.07, n: -0.07, sh: -0.14, sw: 1.3 }, cool: { c: -0.04, n: -0.02, nz: 0.05, sh: -0.1, sw: 0.7, ai: -0.03 },
+  sneaky: { c: 0.12, n: -0.05, sh: 0.3, sw: 0.5, ae: -0.4 }
+};
+const _MK = ['c', 'n', 'nz', 'sh', 'ai', 'ae', 'fist', 'hang', 'sw'], _mDef = { sw: 1 };
+const _mood = (name, out, w = 1) => { const M = MOODB[name] ?? MOODB.calm; for (const k of _MK) out[k] += ((M[k] ?? _mDef[k] ?? 0) - (_mDef[k] ?? 0)) * w; return out; };
+const _mz = () => ({ c: 0, n: 0, nz: 0, sh: 0, ai: 0, ae: 0, fist: 0, hang: 0, sw: 0 });
+function moodAt(f, t, src, out) {   // body language of the expression (src 'expr') or gait at t — a change blends over 0.45 s (the face takes 0.25 s: the body follows it)
+  const nm = s => { const v = src === 'gait' ? (typeof f.gait === 'function' ? f.gait(s) : f.gait) : _exprN(f, s, 'calm'); return String(v ?? 'calm').split('+')[0]; };
+  const cur = nm(t), H = 0.05; _mood(cur, out);
+  for (let k = 1; k <= 9; k++) { const e = nm(t - k * H); if (e === cur) continue;
+    let a = t - k * H, b = t - (k - 1) * H; for (let j = 0; j < 6; j++) { const m = (a + b) / 2; if (nm(m) === cur) b = m; else a = m; }
+    const u = 1 - sm01((t - b) / 0.45); if (u > 0) { _mood(cur, out, -u); _mood(e, out, u); } break; }
+  return out;
+}
+const _MW = { idle: 1, hold: 0.8, point: 0.8, sit: 0.6, walk: 0.65, limp: 0.5, tiptoe: 0.4, run: 0.35 };   // how much body language shows in each mode (acting modes keep their own)
+function bodyStyle(f, S, m, t) {   // posture (build) + body language (face, gait) + free leg + wind-up — runs before the acting layers (react, gesture, reach …)
+  if (f.kind === 'zombie' || f.isModel || f._seated && m !== 'sit') return;
+  const B = f.B ?? {}, idle = m === 'idle' || m === 'hold' || m === 'point', walkish = m === 'walk' || m === 'run' || m === 'limp' || m === 'tiptoe';
+  if (walkish) { const sw = B.sway ?? 1; if (sw !== 1) { S.hrz *= sw; S.hx *= sw; S.hry *= lerp(1, sw, 0.4); } }
+  if (B.stance) { S.lz -= B.stance; S.rz += B.stance; }
+  if (B.armOut) { S.laz -= B.armOut; S.raz += B.armOut; }
+  if (B.post) { S.crx += B.post.c ?? 0; S.nrx += B.post.n ?? 0; }
+  if (B.knee && (idle || m === 'walk')) _crouch(S, B.knee);
+  // the free leg (contrapposto): when the weight is on one leg, the other knee gives and its heel lifts a little
+  if (m === 'idle' && f.legL) { const w1 = S.hx / 0.025, k = sm01((Math.abs(w1) - 0.35) / 0.5) * (f.freeLeg ?? 1); if (k > 0.01) { const s = w1 > 0 ? 'l' : 'r';
+    const z = -(LEG1 * Math.sin(S[s + 't']) + LEG2 * Math.sin(S[s + 't'] + S[s + 'k'])), y = -(LEG1 * Math.cos(S[s + 't']) + LEG2 * Math.cos(S[s + 't'] + S[s + 'k']));
+    [S[s + 't'], S[s + 'k']] = legIK(z + 0.035 * k, y + 0.03 * k); S[s + 'f'] += 0.28 * k; S[s === 'l' ? 'lz' : 'rz'] += (s === 'l' ? 0.02 : -0.02) * k; } }
+  // body language: from the expression and the gait, weighted by the mode
+  const wm = _MW[m] ?? 0, U = _mz(), L = (k, v, e) => { S[k] = lerp(S[k], v, clamp(e)); };
+  if (wm > 0 && f.bodyLang !== false && CFG.bodyLang !== false) { moodAt(f, t, 'expr', U); for (const k of _MK) U[k] *= wm; }
+  if (f.gait && wm > 0) { const G = moodAt(f, t, 'gait', _mz()), wg = walkish ? 1 : 0.6; for (const k of _MK) U[k] += G[k] * wg; }
+  const w = 1;
+  if (wm > 0) {
+    S.crx += U.c * w; S.nrx += U.n * w - U.c * w * 0.45; S.nrz += U.nz * w; S.lsh += U.sh * w; S.rsh += U.sh * w;
+    if (m !== 'hold' && m !== 'point') { S.laz += U.ai * w; S.raz -= U.ai * w; }
+    if (idle && m !== 'hold' && m !== 'point') { S.lae += U.ae * w; S.rae += U.ae * w; if (U.hang > 0) { L('las', 0.03, U.hang * w); L('ras', 0.03, U.hang * w); L('lae', -0.06, U.hang * w); L('rae', -0.06, U.hang * w); } }
+    if (U.fist > 0) { _hset(S, 'L', HANDP.fist, U.fist * w); if (m !== 'hold' && m !== 'point') _hset(S, 'R', HANDP.fist, U.fist * w); }
+  }
+  const swing = (B.swing ?? 1) * (1 + U.sw * (walkish ? 1 : 0)); if (walkish && Math.abs(swing - 1) > 0.01) { const mid = m === 'run' ? -0.2 : 0.05; S.las = mid + (S.las - mid) * swing; S.ras = mid + (S.ras - mid) * swing; }
+  // breathing lifts the shoulders a little
+  S.lsh += 0.035 * (S.br - 1) / 0.012; S.rsh += 0.035 * (S.br - 1) / 0.012;
+  // wind-up before walking off (knees give, a lean back) and an extra lean into the first steps — read from the walk path, so it is there in every frame
+  if (f._walks && f._posAt && CFG.windup !== false) for (const [t0, v] of f._walks) { const d = t0 - t; if (d < -0.1 || d > 0.3) continue;
+    const a = f._posAt(t0 - 0.12), b = f._posAt(t0 - 0.04); if (Math.hypot(b.x - a.x, b.z - a.z) / 0.08 > 0.3) continue;   // only from standing (not between chained walks)
+    const e = Math.sin(Math.PI * (0.3 - d) / 0.4) * clamp(0.45 + v / 4); _crouch(S, 0.045 * e); S.crx -= 0.06 * e; S.nrx += 0.03 * e; S.las += 0.2 * e; S.ras += 0.2 * e; }
+}
+{ const _w = walk; walk = function (obj, pts, o = {}) { const r = _w(obj, pts, o); if (obj?.legL && !obj.isModel) (obj._walks ??= []).push([o.t0 ?? 0, o.speed ?? 1.4]); return r; }; }   // wind-up: when each walk starts
+// ---- rig layers: shoulder channels, IK shoulder offset, finger joints ----
+{ const _rs = rigState; rigState = function (mode, u, t, o = {}) { const S = _rs(mode, u, t, o); S.lsh ??= 0; S.rsh ??= 0; return S; }; }
+{ const _pf = poseFin; poseFin = function (f, S, m, t, o) {
+    if (f.isModel || !f.legL) return _pf(f, S, m, t, o);
+    S.lsh ??= 0; S.rsh ??= 0; f._mNow = m; bodyStyle(f, S, m, t);
+    _SHO.x = f.shx ?? 0; _SHO.yL = 0.06 * clamp(S.lsh, -0.5, 1); _SHO.yR = 0.06 * clamp(S.rsh, -0.5, 1);
+    try { _pf(f, S, m, t, o); } finally { _SHO.x = _SHO.yL = _SHO.yR = 0; } }; }
+{ const _ar = applyRig; applyRig = function (f, S) { _ar(f, S); if (!f.legL || f.isModel) return;
+    const sx = 0.34 + (f.shx ?? 0), l = clamp(S.lsh ?? 0, -0.5, 1), r = clamp(S.rsh ?? 0, -0.5, 1);
+    f.armL.position.set(-sx + 0.012 * l, 0.54 + 0.06 * l, 0); f.armR.position.set(sx - 0.012 * r, 0.54 + 0.06 * r, 0);
+    if (f.hands) for (const h of f.hands) { if (h.d) for (const d of h.d) d.rotation.z = h.fg.rotation.z * 0.9; if (h.di) h.di.rotation.z = h.ix.rotation.z * 0.9; if (h.dt) h.dt.rotation.z = h.th.rotation.z * 0.6 - h.sx * 0.12; } }; }
+{ const _rx = react; react = function (f, t0, kind = 'startle', o = {}) { const r = _rx(f, t0, kind, o);
+    if (f?.legL && (kind === 'shrug' || kind === 'startle' || kind === 'flinch' || kind === 'sigh')) { const d = o.dur ?? { shrug: 1.1, startle: 0.7, flinch: 0.45, sigh: 1.5 }[kind], a = { shrug: 1, startle: 0.6, flinch: 0.8, sigh: -0.35 }[kind] * (o.amp ?? 1);
+      (f.fx ??= []).push((t, S) => { const k = (t - t0) / d; if (k < 0 || k > 1) return; const e = sm01(k / 0.15) * (1 - sm01((k - 0.72) / 0.28)); S.lsh += a * e; S.rsh += a * e; }); }
+    return r; }; }
+// ---- new idle actions: 'neck' (rubs the neck) · 'think' (hand to the chin) · 'look' (glance over the shoulder) ----
+{ const _id = idle; idle = function (f, t0, t1, kind = 'shift') {
+    if (kind !== 'neck' && kind !== 'think' && kind !== 'look') return _id(f, t0, t1, kind);
+    (f.fx ??= []).push((t, S) => { const e = env3(t, t0, t1, 0.35, 0.35); if (!e) return; const u = t - t0, L = (k, v) => { S[k] = lerp(S[k], v, e); };
+      if (kind === 'neck') { L('ras', -2.3); L('raz', -0.45); L('rae', -2.1 + 0.1 * Math.sin(TAU * 1.6 * u)); S.nrx += 0.12 * e; S.nrz -= 0.08 * e; S.rsh += 0.3 * e; _hset(S, 'R', HANDP.loose, e); }
+      else if (kind === 'think') { L('ras', -0.75); L('raz', -0.2); L('rae', -2.35); L('las', -0.35); L('laz', 0.35); L('lae', -1.6); S.nrx += 0.1 * e; S.nrz += 0.06 * e; _hset(S, 'R', HANDP.loose, e); }
+      else { const k = Math.sin(Math.PI * clamp(u / Math.max(0.6, t1 - t0))); S.nry += 0.95 * k * e * (hash(t0 * 3.1 + f.sd) < 0.5 ? 1 : -1); S.cry += 0.25 * k * e; } });
+    return f; }; }
+// ---- grab(rig, at, t0, t1, { side, gap, fade }) — holds on to a point for a while (rail, door handle, steering wheel, ladder, another person's shoulder):
+//      at = [x,y,z] | object (its world position) | t => [x,y,z]; the arm reaches there by IK, leans in when it is a bit far, the hand closes round it ----
+function grab(f, at, t0, t1 = t0 + 2, o = {}) {
+  if (!f?.legL) return f; const sides = (o.side ?? 'R') === 'both' ? ['L', 'R'] : [o.side ?? 'R'], fi = o.fade ?? 0.35, gap = o.gap ?? 0.36;
+  const get = typeof at === 'function' ? t => v3(...at(t)) : Array.isArray(at) ? () => v3(...at) : () => (at.root ?? at.g ?? at).getWorldPosition(v3());
+  hands(f, o.hand ?? 'grip', t0 + fi * 0.7, t1 - fi * 0.3, { side: sides.length > 1 ? 'both' : sides[0] });
+  const T = v3(), K = v3();
+  (f.fx ??= []).push((t, S) => { const w = env3(t, t0, t1, fi, fi); if (!w) return; const P = get(t); if (_parked(P)) return; const F = rigF(f, t), Ci = _kmi.copy(chestM(S, _km3)).invert();
+    for (const s of sides) { K.copy(P); if (sides.length > 1) K.add(v3((s === 'L' ? -gap : gap) / 2, 0, 0).applyAxisAngle(_AY, F.y).multiplyScalar(F.s));
+      const sh = v3(_shX(s), _shY(s), 0); toRig(F, K, T).applyMatrix4(Ci); let d = T.distanceTo(sh); if (d > 1.7) continue;
+      if (d > 0.62) { S.crx += Math.min(0.4, (d - 0.6) * 1.2) * w; const low = Math.max(0, -0.3 - T.y); if (low > 0) _crouch(S, Math.min(0.3, low * 0.6) * w); toRig(F, K, T).applyMatrix4(_kmi.copy(chestM(S, _km3)).invert()); d = T.distanceTo(sh); }
+      setArm(S, s, armIK(s, T), w * clamp(1 - (d - 0.74) / 0.3)); } });
+  return f;
+}
+// ---- builds and clothes, laid onto the finished figure ----
+const _taperG = (src, sw, wa, cd) => G(`tpr${src.uuid}|${sw}|${wa}|${cd}`, () => { const g = src.clone(), P = g.attributes.position, N = g.attributes.normal;
+  for (let i = 0; i < P.count; i++) { const y = P.getY(i), k = sm01((0.12 - y) / 0.4), sx = lerp(sw, wa, k); P.setX(i, P.getX(i) * sx); P.setZ(i, P.getZ(i) * cd);
+    const nx = N.getX(i) / sx, ny = N.getY(i), nz = N.getZ(i) / cd, l = Math.hypot(nx, ny, nz) || 1; N.setXYZ(i, nx / l, ny / l, nz / l); }
+  g.computeBoundingBox(); g.computeBoundingSphere(); return g; });
+const _hexOf = m => m?.material?.color ? '#' + m.material.color.getHexString() : null;
+function bodyBuild(f, B, o) {
+  const h = (B.h ?? 1) * (o.height ?? 1); if (h !== 1) f.root.scale.multiplyScalar(h);
+  const sw = B.sw ?? 1, wa = B.wa ?? sw, cd = B.cd ?? 1, hp = B.hp ?? 1, aw = B.aw ?? 1, lw = B.lw ?? 1, hd = B.hd ?? 1;
+  f.B = B; f.shx = B.shx ?? 0;
+  const torso = f.chest.children.find(n => n.isMesh);
+  if (torso && (sw !== 1 || wa !== 1 || cd !== 1)) { torso.geometry = _taperG(torso.geometry, sw, wa, cd);
+    for (const n of f.chest.children) { if (n === torso || n === f.armL || n === f.armR || n === f.neck) continue;   // jacket, coat lapels, pockets, long hair on the back: onto the new surface
+      const fx = lerp(sw, wa, sm01((0.12 - (n.position.y - 0.29)) / 0.4)); n.position.x *= fx; n.position.z *= cd; if (n.isMesh && n.geometry?.parameters?.width > 0.3) n.scale.x *= fx;
+      if (!n.isMesh) n.traverse(c => { if (c !== n && c.isMesh && c.parent === n) { c.position.z *= cd; c.position.x *= fx; } }); } }
+  const hipM = f.hips.children.find(n => n.isMesh); if (hipM) { hipM.scale.x *= hp; hipM.scale.z *= Math.sqrt(cd * hp); }
+  if (f.coat && (hp !== 1 || cd !== 1)) f.coat.scale.set(Math.max(hp, wa), 1, Math.max(1, Math.sqrt(cd * hp)));
+  for (const [th, sh] of [[f.legL, f.shinL], [f.legR, f.shinR]]) { const a = th.children.find(n => n.isMesh), b = sh.children.find(n => n.isMesh); for (const m of [a, b]) if (m) { m.scale.x *= lw; m.scale.z *= lw; } }
+  for (const [ua, fa] of [[f.armL, f.foreL], [f.armR, f.foreR]]) { const a = ua.children.find(n => n.isMesh), b = fa.children.find(n => n.isMesh); if (a) { a.scale.x *= aw; a.scale.z *= aw; } if (b) { const k = Math.pow(aw, 0.8); b.scale.x *= k; b.scale.z *= k; } }
+  f.armL.position.x = -0.34 - f.shx; f.armR.position.x = 0.34 + f.shx;
+  if (hd !== 1) { f.head.scale.setScalar(hd); if (f.hairFall) { f.hairFall.position.z -= 0.19 * (hd - 1); f.hairFall.position.y += 0.05 * (hd - 1); f.hairFall.scale.x = hd; } }
+  if (B.belly) { const c = _hexOf(torso) ?? '#888888', bm = mesh(f.chest, G('belly', () => new THREE.SphereGeometry(1, 16, 12)), mat(c, { flat: false }), 0, 0.1, 0.15 * cd - 0.07);
+    bm.scale.set(0.235 * wa, 0.2, 0.06 + 0.1 * B.belly); bm.castShadow = true; f.belly = bm; f._bellyY = bm.position.y; }
+}
+function fingers(f) {   // v2.41: four fingers and a thumb, two joints each (the second joint follows the first: hands(), gestures, grips all just work)
+  const skin = _hexOf(f.FC?.skull) ?? '#E8B892', M = mat(skin, { flat: false });
+  for (const h of f.hands ?? []) {
+    const old = h.fg.children.find(n => n.isMesh); if (old) h.fg.remove(old);
+    h.d = [];
+    for (const [z, L] of [[0.03, 0.094], [-0.002, 0.088], [-0.034, 0.072]]) {   // middle · ring · little finger
+      const p = grp(h.fg, 0, 0, z); rbox(p, 0.072, L * 0.55, 0.027, '', 0, -L * 0.55, 0, { mat: M, rf: 0.35 }).userData.hand = true;
+      const d = grp(p, 0, -L * 0.52, 0); rbox(d, 0.066, L * 0.5, 0.025, '', 0, -L * 0.5, 0, { mat: M, rf: 0.4 }).userData.hand = true; h.d.push(d); }
+    const io = h.ix.children.find(n => n.isMesh); if (io) h.ix.remove(io);
+    rbox(h.ix, 0.068, 0.048, 0.03, '', 0, -0.048, 0, { mat: M, rf: 0.35 }).userData.hand = true; h.di = grp(h.ix, 0, -0.046, 0); rbox(h.di, 0.062, 0.044, 0.028, '', 0, -0.044, 0, { mat: M, rf: 0.4 }).userData.hand = true;
+    const to = h.th.children.find(n => n.isMesh); if (to) h.th.remove(to);
+    rbox(h.th, 0.048, 0.042, 0.04, '', 0, -0.042, 0, { mat: M, rf: 0.4 }).userData.hand = true; h.dt = grp(h.th, 0, -0.04, 0); rbox(h.dt, 0.042, 0.036, 0.036, '', 0, -0.036, 0, { mat: M, rf: 0.45 }).userData.hand = true;
+  }
+}
+function wear(f, o) {
+  const zb = f.kind === 'zombie', skin = _hexOf(f.FC?.skull) ?? '#E8B892', shirt = _hexOf(f.chest.children.find(n => n.isMesh)) ?? '#888888', B = f.B ?? {}, cd = B.cd ?? 1, NC = { cast: false };
+  const hairC = o.beardColor ?? o.hair ?? (() => { const c = f.hair?.children.find(n => n.isMesh); return _hexOf(c); })() ?? '#3A2A1E';
+  // shoes: sole and laces (soles: false = off, or a colour)
+  if (o.soles !== false && !zb) { const shoe = _hexOf(f.footL.children.find(n => n.isMesh)) ?? '#2B2622', dark = new THREE.Color(shoe).getHSL({}).l < 0.2, sc = typeof o.soles === 'string' ? o.soles : dark ? '#DAD4C8' : shade(shoe, -0.25);
+    for (const ft of [f.footL, f.footR]) { box(ft, 0.18, 0.026, 0.292, sc, 0, -ANK - 0.001, 0.05, NC); if (dark) { box(ft, 0.08, 0.012, 0.075, '#E6E0D4', 0, -ANK + 0.086, 0.085, NC); box(ft, 0.172, 0.03, 0.05, sc, 0, -ANK + 0.02, 0.172, NC); } } }
+  // sleeves: 'short' = T-shirt (bare forearms)
+  if (o.sleeves === 'short' && !zb) for (const [ua, fa] of [[f.armL, f.foreL], [f.armR, f.foreR]]) { const a = ua.children.find(n => n.isMesh), b = fa.children.find(n => n.isMesh), aw = a?.scale.x ?? 1;
+    if (a) { a.scale.y = 0.17 / 0.34; a.position.y = -0.15 + 0.085; } rbox(ua, 0.142 * aw, 0.2, 0.142 * aw, skin, 0, -0.32, 0); box(ua, 0.168 * aw, 0.03, 0.168 * aw, shade(shirt, -0.06), 0, -0.155, 0, NC);
+    if (b) b.material = mat(skin, { flat: false }); }
+  // hoodie: hood bunched behind the neck, kangaroo pocket, drawstrings, ribbed hem and cuffs
+  if (o.top === 'hoodie' || o.hoodie) { const hc = shade(shirt, -0.07);
+    rbox(f.chest, 0.36 * (B.sw ?? 1), 0.14, 0.16, hc, 0, 0.5, -0.15 * cd - 0.03, { rf: 0.45 }); box(f.chest, 0.3 * (B.wa ?? 1), 0.13, 0.012, hc, 0, 0.02, 0.151 * cd, NC); box(f.chest, 0.535 * (B.wa ?? 1), 0.05, 0.31 * cd, shade(shirt, -0.12), 0, -0.035, 0, NC);
+    f.strings = [-1, 1].map(s => { const g = grp(f.chest, s * 0.045, 0.56, 0.153 * cd); box(g, 0.012, 0.15, 0.008, '#EDE8DE', 0, -0.15, 0, NC); box(g, 0.018, 0.022, 0.012, '#C9C3B8', 0, -0.17, 0, NC); return g; });
+    for (const fa of [f.foreL, f.foreR]) box(fa, 0.158, 0.04, 0.158, shade(shirt, -0.12), 0, -0.27, 0, NC); }
+  // skirt / dress: panels that hang from the hips (pushed by the thighs, never through a leg), bare legs (legs: colour = tights)
+  if ((o.skirt || o.dress) && !zb) { const c = o.dress ?? o.skirt, L = o.skirtLen ?? (o.dress ? 0.47 : 0.37), hp = B.hp ?? 1, lc = o.legs ?? skin;
+    rbox(f.hips, 0.48 * hp, 0.24, 0.3 * Math.max(1, cd), c, 0, -0.1, 0, { rf: 0.15 }); hemPanels(f.hips, f.flaps = f.flaps ?? [], c, 0.06, L, { hw: 0.255 * hp, hd: 0.16 * Math.max(1, cd) });
+    for (const g of [f.legL, f.shinL, f.legR, f.shinR]) { const m = g.children.find(n => n.isMesh); if (m) m.material = mat(lc, { flat: false }); } }
+  // belt (true or a colour) with a buckle
+  if (o.belt && !zb) { const c = typeof o.belt === 'string' ? o.belt : '#3A2A1E', hp = B.hp ?? 1; box(f.hips, 0.452 * hp, 0.045, 0.29 * Math.sqrt(cd * hp), c, 0, 0.07, 0, NC); box(f.hips, 0.055, 0.04, 0.012, '#C9B26A', 0, 0.072, 0.145 * Math.sqrt(cd * hp), NC); }
+  // watch (true or a band colour) on the left wrist
+  if (o.watch && !zb) { const c = typeof o.watch === 'string' ? o.watch : '#2A2A2E'; box(f.foreL, 0.158, 0.034, 0.158, c, 0, -0.262, 0, NC); box(f.foreL, 0.012, 0.03, 0.055, '#D8E2EA', -0.08, -0.26, 0, NC); }
+  // backpack (true or a colour): pack on the back, straps over the shoulders — swings a little (dressPass)
+  if (o.backpack) { const c = typeof o.backpack === 'string' ? o.backpack : '#3E5C76', sc = shade(c, -0.2), g = grp(f.chest, 0, 0.56, -0.15 * cd);
+    rbox(g, 0.34, 0.42, 0.15, c, 0, -0.46, -0.075, { rf: 0.25 }); rbox(g, 0.35, 0.09, 0.165, sc, 0, -0.1, -0.08, { rf: 0.4 }); rbox(g, 0.24, 0.16, 0.05, sc, 0, -0.42, -0.165, { rf: 0.3 });
+    for (const s of [-1, 1]) { box(f.chest, 0.05, 0.4, 0.014, sc, s * 0.12, 0.17, 0.151 * cd, NC); box(f.chest, 0.052, 0.014, 0.3 * cd, sc, s * 0.12, 0.6, 0, NC); }
+    f.pack = g; }
+  // bald (hairStyle 'bald'): a ring of hair round the back and over the ears
+  if (o.hairStyle === 'bald' && f.hair && !zb) { for (const n of f.hair.children) n.visible = false; const c = hairC;
+    rbox(f.hair, 0.392, 0.12, 0.13, c, 0, 0.1, -0.137, { rf: 0.35 }); for (const s of [-1, 1]) rbox(f.hair, 0.024, 0.1, 0.17, c, s * 0.194, 0.12, -0.05, { rf: 0.4 }); }
+  // beard: 'full' | 'stubble' | 'goatee' | 'mustache' (true = full) — under the hair group: it moves with the head and never hides the mouth from faceCover
+  if (o.beard && !zb && f.hair) { const st = o.beard === true ? 'full' : o.beard, hg = f.hair, c = st === 'stubble' ? '#' + new THREE.Color(skin).lerp(new THREE.Color(hairC), 0.4).getHexString() : hairC;
+    const stache = () => rbox(hg, 0.13, 0.026, 0.026, c, 0, 0.104, 0.193, { rf: 0.45 });
+    if (st === 'full') { rbox(hg, 0.37, 0.085, 0.07, c, 0, -0.022, 0.16, { rf: 0.45 }); rbox(hg, 0.22, 0.05, 0.06, c, 0, -0.045, 0.165, { rf: 0.5 }); rbox(hg, 0.3, 0.035, 0.03, c, 0, 0.05, 0.18, { rf: 0.45 });
+      for (const s of [-1, 1]) rbox(hg, 0.03, 0.18, 0.21, c, s * 0.186, -0.02, 0.07, { rf: 0.45 }); stache(); }
+    else if (st === 'stubble') { rbox(hg, 0.35, 0.075, 0.03, c, 0, -0.005, 0.176, { rf: 0.45 }); for (const s of [-1, 1]) rbox(hg, 0.022, 0.15, 0.17, c, s * 0.185, 0.0, 0.07, { rf: 0.45 }); rbox(hg, 0.12, 0.018, 0.016, c, 0, 0.106, 0.19, { rf: 0.45 }); }
+    else if (st === 'goatee') { rbox(hg, 0.11, 0.07, 0.04, c, 0, -0.01, 0.178, { rf: 0.5 }); for (const s of [-1, 1]) rbox(hg, 0.02, 0.05, 0.018, c, s * 0.06, 0.055, 0.192, { rf: 0.4 }); stache(); }
+    else stache(); }
+  // ponytail (hairStyle 'ponytail'): tied at the back of the head, hangs and swings (dressPass)
+  if (o.hairStyle === 'ponytail' && f.hair && !zb) { const c = hairC, g = grp(f.hair, 0, 0.27, -0.205); ball(g, 0.034, shade(c, -0.25), 0, 0, -0.005, { detail: 0, cast: false });
+    const s1 = grp(g, 0, 0, -0.02); rbox(s1, 0.09, 0.16, 0.08, c, 0, -0.16, 0, { rf: 0.45 }); const s2 = grp(s1, 0, -0.15, 0); rbox(s2, 0.07, 0.14, 0.062, c, 0, -0.14, 0, { rf: 0.5 }); f.pony = [s1, s2]; }
+}
+// ---- look: rim light (a thin edge of sky light — figures stand out from the background, more at night) and warm skin (light scatters a little under it) ----
+const FIGRIM = { c: { value: new THREE.Color('#BFD4FF') }, k: { value: 0.12 } }, _figM = new Map();
+function figMat(m, skin) {
+  if (!m?.isMeshStandardMaterial || m.transparent || m.userData.fig || m.userData.surf || m.userData.own) return m;
+  const key = m.uuid + (skin ? 's' : 'r'); let n = _figM.get(key); if (n) return n;
+  n = m.clone(); n.userData = { ...m.userData, fig: true }; if (skin) n.roughness = Math.min(n.roughness, 0.64);
+  const prev = m.onBeforeCompile !== THREE.Material.prototype.onBeforeCompile ? m.onBeforeCompile : null, pk = m.customProgramCacheKey();
+  n.onBeforeCompile = (sh, r) => { if (prev) prev.call(n, sh, r); sh.uniforms.uRimC = FIGRIM.c; sh.uniforms.uRimK = FIGRIM.k;
+    sh.fragmentShader = 'uniform vec3 uRimC; uniform float uRimK;\n' + sh.fragmentShader.replace('#include <opaque_fragment>', `{ float fr = pow(1.0 - clamp(dot(normalize(normal), normalize(vViewPosition)), 0.0, 1.0), 3.0);
+      outgoingLight += uRimC * fr * uRimK;${skin ? '\n      outgoingLight += diffuseColor.rgb * vec3(0.3, 0.09, 0.05) * (0.06 + 0.3 * fr);' : ''} }
+    #include <opaque_fragment>`); };
+  n.customProgramCacheKey = () => pk + (skin ? '|figS' : '|figR'); _figM.set(key, n); return n;
+}
+function figLook(f) {
+  const own = new Set(); for (const x of f.FC?.own ?? []) x.traverse(c => own.add(c));
+  const sk = f.FC?.skull?.material?.color?.getHex();
+  f.root.traverse(m => { if (!m.isMesh || own.has(m) || Array.isArray(m.material)) return; m.material = figMat(m.material, m.material?.color?.getHex() === sk); });
+}
+// ---- figure(): the base rig, then build, fingers, clothes and look ----
+{ const _fig = figure; figure = function (o = {}) {
+    const zb = o.kind === 'zombie', B = BUILDS[o.build] ?? null, oo = { ...o };
+    if (B && !zb) { if (B.hair && oo.hairStyle == null && !oo.hat && !oo.hatStyle) { const L = [].concat(B.hair); oo.hairStyle = L[Math.floor(hash((o.seed ?? _rigN + 1) * 3.17 + 0.4) * L.length) % L.length]; }
+      if (B.hairC && oo.hair == null) oo.hair = B.hairC; }
+    if (o.dress && oo.shirt == null) oo.shirt = o.dress;
+    const hs = oo.hairStyle; if (hs === 'ponytail') oo.hairStyle = 'short'; if (hs === 'bald') oo.hairStyle = 'buzz';
+    const f = _fig(oo); if (!f || f.isModel || !f.legL) return f;
+    bodyBuild(f, B ?? {}, o); f.build = o.build ?? 'man';
+    if (CFG.fingers !== false) fingers(f);
+    wear(f, { ...oo, hairStyle: hs });
+    if (CFG.figLook !== false) figLook(f);
+    f.gait = o.gait; f.bodyLang = o.bodyLang; f.freeLeg = o.freeLeg;
+    f._fidget = !zb && o.fidget !== false && (o.fidget || !o.who) && CFG.fidget !== false;
+    return f; }; }
+// ---- background extras fidget on their own (figure() without who, never walked): small idle actions every few seconds while they stand ----
+let _fidgetOn = false;
+function _fidgetSetup() {
+  _fidgetOn = true;
+  const C = new Set(RIGS.filter(f => f._fidget && !f._posAt && !f.isModel && f.legL && !f.fx?.length && !f._seated)); if (!C.size) return;
+  // only extras that no scene tick ever poses: ask every tick (as a probe, pose() only records) across the video
+  const T = tickers.filter(k => !k._idle), n = Math.max(1, Math.min(Math.ceil(DUR / 0.2), Math.floor(30000 / Math.max(1, T.length))));
+  for (let i = 0; i <= n && C.size; i++) { const tt = DUR * i / n, M = { mode: new Map(), look: new Map() }; TKP = M;
+    try { for (const k of T) { try { k(tt); } catch (e) { } } } finally { TKP = null; } for (const r of M.mode.keys()) C.delete(r); }
+  for (const f of RIGS) { if (!C.has(f)) continue; if (!f._fidget || f._posAt || f.isModel || !f.legL || f.fx?.length || f._seated) continue; const n0 = (f.fx ??= []).length;   // only extras nobody directs (no acting layers yet)
+    idleMix(f, 0.5, DUR, { kinds: ['shift', 'scratch', 'watch', 'pocket', 'hips', 'neck', 'look', 'shift', 'cross', 'think'], every: 3 });
+    for (let i = n0; i < f.fx.length; i++) { const g = f.fx[i]; f.fx[i] = (t, S) => { if (f._mNow === 'idle') g(t, S); }; } }
+}
+// ---- contact shadows: a soft dark spot under each foot (fades as the foot lifts) — figures stand on the ground instead of above it ----
+let _cs = null;
+function contactShadows() {
+  if (CFG.contactShadows === false) return;
+  if (!_cs) { const cv = document.createElement('canvas'); cv.width = cv.height = 64; const x = cv.getContext('2d'), gr = x.createRadialGradient(32, 32, 0, 32, 32, 32); gr.addColorStop(0, 'rgba(0,0,0,0.85)'); gr.addColorStop(0.55, 'rgba(0,0,0,0.35)'); gr.addColorStop(1, 'rgba(0,0,0,0)'); x.fillStyle = gr; x.fillRect(0, 0, 64, 64);
+    const tex = new THREE.CanvasTexture(cv), m = new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false, opacity: CFG.contactShadows ?? 0.55, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
+    const n = Math.max(2, RIGS.length * 2); _cs = new THREE.InstancedMesh(G('csq', () => new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2)), m, n); _cs.frustumCulled = false; _cs.castShadow = _cs.receiveShadow = false; _cs.renderOrder = 1;
+    _cs.userData.noHit = _cs.userData.crowd = true; world.add(_cs); }
+  const Z = _csZ, M = _csM; let i = 0;
+  for (const f of RIGS) { if (i >= _cs.count - 1) break; if (!f.legL || f.isModel || !f.root.parent || !f.root.visible || f.diver || f._mNow === 'swim' || f._mNow === 'tread' || f._mNow === 'float') continue;
+    let vis = true; for (let p = f.root; p; p = p.parent) if (!p.visible) { vis = false; break; } if (!vis) continue;
+    f.root.getWorldPosition(_csR); const gh = groundH(_csR.x, _csR.z), base = Math.abs(_csR.y - gh) < 0.35 ? gh : _csR.y, s = f.root.scale.x;
+    for (const ft of [f.footL, f.footR]) { ft.getWorldPosition(_csF); const up = _csF.y - ANK * s - base, k = 1 - sm01(up / (0.35 * s)); if (k <= 0.02) continue;
+      _csQ.setFromAxisAngle(_AY, Math.atan2(_csD.set(0, 0, 1).transformDirection(ft.matrixWorld).x, _csD.z)); M.compose(_csP.set(_csF.x, base + 0.012, _csF.z), _csQ, _csS.set(0.3 * s * (0.6 + 0.4 * k), 1, 0.44 * s * (0.6 + 0.4 * k)));
+      _cs.setMatrixAt(i++, M); } }
+  for (let j = i; j < _cs.count; j++) _cs.setMatrixAt(j, Z); _cs.instanceMatrix.needsUpdate = true;
+}
+const _csZ = new THREE.Matrix4().makeScale(0, 0, 0), _csM = new THREE.Matrix4(), _csR = new THREE.Vector3(), _csF = new THREE.Vector3(), _csP = new THREE.Vector3(), _csS = new THREE.Vector3(), _csD = new THREE.Vector3(), _csQ = new THREE.Quaternion();
+// ---- secondary motion (end of the frame, from the finished body): ponytail and hood strings hang toward the ground and swing back when running,
+//      the backpack lags and bounces, the belly bounces with the steps; plus the rim light colour from the sky ----
+const _dD = new THREE.Vector3(), _dQ = new THREE.Quaternion();
+function _hang(g, out) { g.parent.updateWorldMatrix(true, false); g.parent.getWorldQuaternion(_dQ); return out.set(0, -1, 0).applyQuaternion(_dQ.invert()); }   // world down in the parent's frame
+{ const _ss = stepScene; stepScene = function (t) { if (!_fidgetOn) _fidgetSetup(); return _ss(t); }; }
+{ const _dp = dressPass; dressPass = function () { _dp();
+    FIGRIM.c.value.copy(hemi.color).lerp(_rimW, 0.25); FIGRIM.k.value = (CFG.rim ?? 1) * (0.08 + 0.2 * NIGHTK);
+    for (const f of RIGS) { if (f.isModel || !f.legL || !f.root.visible) continue;
+      const fly = f._fly ?? 0, ix = clamp(f._inx ?? 0, -10, 10), bob = clamp((HIP - f.hips.position.y) / 0.06, -1, 1.5);
+      if (f.pony) { const [s1, s2] = f.pony, d = _hang(s1, _dD); let a = Math.atan2(-d.z, -d.y); a = clamp(a + 0.5 * fly + 0.035 * ix + 0.12 * bob, 0.06, 1.7);
+        s1.rotation.set(a, 0, clamp(Math.atan2(d.x, -d.y), -0.5, 0.5)); s2.rotation.set(clamp(0.25 * fly + 0.1 * bob + 0.08, 0, 0.6), 0, 0); }
+      if (f.strings) for (const g of f.strings) { const d = _hang(g, _dD); g.rotation.set(clamp(Math.atan2(-d.z, -d.y) + 0.2 * fly, -0.05, 1.2), 0, clamp(Math.atan2(d.x, -d.y), -0.6, 0.6)); }
+      if (f.pack) { f.pack.rotation.x = clamp(-0.12 * fly - 0.012 * ix + 0.05 * bob, -0.3, 0.12); f.pack.position.y -= 0.012 * bob; }
+      if (f.belly) { f.belly.position.y = f._bellyY - 0.01 * bob; f.belly.scale.y = 0.2 * (1 - 0.05 * bob); }
+    }
+    contactShadows(); }; }
+const _rimW = new THREE.Color('#FFFFFF');
+
 /* ====================================================================== */
 /* SCENE — written per video between the markers (wrapped in a block: names are free) */
 /* ====================================================================== */
@@ -11620,7 +11900,7 @@ function lookPass(t) {   // figure.look = 'cam' | [x,y,z] | t => [x,y,z] | objec
   for (const f of RIGS) {
     const L = f.look, B = f._lookFrom; if (!L && !B) continue;
     f.chest.updateWorldMatrix(true, false);
-    const me = f.chest.matrixWorld.elements, up = me[5] / (Math.hypot(me[4], me[5], me[6]) || 1), wu = sm01((up - 0.35) / 0.4); if (wu <= 0) continue;   // v2.40.x: falling, lying, ragdoll: the look lets go (was: the neck snapped round toward the target while the body tumbled)
+    const me = f.chest.matrixWorld.elements, up = me[5] / (Math.hypot(me[4], me[5], me[6]) || 1), R0 = f._rag, rw = R0 && ST(t) >= R0.t ? (R0.o?.getUp != null ? sm01((ST(t) - R0.o.getUp) / 1.2) : 0) : 1, wu = sm01((up - 0.35) / 0.4) * rw; if (wu <= 0) continue;   // v2.41: a ragdoll's head is the physics' (looking in on it flipped the neck when its angles wrapped); back with getUp   // v2.40.x: falling, lying, ragdoll: the look lets go (was: the neck snapped round toward the target while the body tumbled)
     const y0 = f.neck.rotation.y, x0 = f.neck.rotation.x, w = (f.lookW ?? 1) * wu, A = L ? lookAng(f, L, t) : null; if (L && !A && !B) continue;
     let ty = A ? lerp(y0, A[0], w) : y0, tx = A ? lerp(x0, A[1], w) : x0;
     if (B && B.w < 1) { const A0 = B.from ? lookAng(f, B.from, t) : null, k = EASE.inOut(B.w); ty = lerp(A0 ? lerp(y0, A0[0], w) : y0, ty, k); tx = lerp(A0 ? lerp(x0, A0[1], w) : x0, tx, k); }   // v2.31: a new target set in a tick → the head turns over POSEFADE s

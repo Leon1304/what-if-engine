@@ -15,6 +15,13 @@ Push an assembled page to `renders/<slug>.html` (output of `assemble.py`, voice 
 `https://github.com/Leon1304/what-if-engine/releases/download/render-<slug>/<slug>.mp4`
 Manual run: Actions → render → Run workflow (page path, width 1440 / 2160 / 1080).
 
+## Engine v2.41 (Nov 2026): bodies, body language, hands, everyday clothes
+- `figure({ build })`: man · woman · kid · teen · old · heavy · slim · tall · short · muscular (proportions, posture, gait; shoulder joints move and arm IK follows), `height`; crowds mix slim to heavy torsos
+- Body language follows the face (shoulders, chest, head, arms, fists, arm swing), gait moods `gait: tired | proud | scared | sad | happy | angry | cool | sneaky`, shoulder channels (`S.lsh/rsh`), free leg in the stance, wind-up before walking off
+- Fingers with two joints, `grab(rig, at, t0, t1)` holds on to rails, handles, wheels; new idle actions neck · think · look; background extras fidget on their own
+- Everyday clothes: beards, ponytail, bald, hoodie, short sleeves, skirt / dress, backpack, watch, belt, shoe soles; secondary motion for ponytail, hood strings, backpack, belly
+- Look: rim light in the sky colour (stronger at night), warm skin, contact shadows under the feet. Switches: `CFG.bodyLang`, `CFG.fidget`, `CFG.windup`, `CFG.fingers`, `CFG.figLook`, `CFG.rim`, `CFG.contactShadows`. Test: `tests/bodies.*`
+
 ## Engine v2.39 (Nov 2026): no question cards mid-video
 - `GUESS` shows no card and `MYTH` no claim card any more: the narrator asks, the answer comes at the very end (MYTH: only its verdict stamp right before the end card). `CFG.questionCards: true` / `card: true` = as before
 - v2.38.1–3: reaction words are acted (own melody and length), spoken slowly; no `[hm]`
