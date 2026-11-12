@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 # voice.py — voice-over for a video: one spoken line per caption beat + the end-card question
+#   v2.50: ElevenLabs speaks one take per beat (sentences flow, tags inline), re-timing stretches the cached take (no new request)
 #   v2.48: narrator via ElevenLabs when ELEVENLABS_API_KEY is set (voice by category: story Denzel · series JM · explain Adam · conspiracy Declan · horror Storm),
 #   otherwise offline Kokoro TTS. --which prints category + voice without synthesizing; --kokoro forces Kokoro.
 #   python3 voice.py <slug> [--voice deep|deep-uk|narrator|<kokoro voice>] [--speed 1.06] [--pitch -1.1]   CFG.voice: { gap: 0.22 } = pause after a sentence
@@ -80,6 +81,7 @@ if USE_EL:
     EL_ID, EL_NAME = EL_VOICES.get(pick, (pick, pick))
     EL_MODELS = [vc.get('model', 'eleven_v4'), 'eleven_v3', 'eleven_multilingual_v2']   # first that the account accepts; tags only on v3/v4
     EL_SPEED = float(vc.get('el_speed', 1.05))   # brisk, as the channel wants it
+    EL_BEAT = vc.get('el_beat', True)   # v2.50: one take per beat (the sentences flow into each other), tone tags inline per sentence; false = one take per sentence
     name = f'elevenlabs:{EL_NAME}'
 elif name in ('auto', 'denzel', 'jm', 'adam', 'declan', 'storm') or re.fullmatch(r'[A-Za-z0-9]{20}', name or ''):   # ElevenLabs names without a key → Kokoro default
     name = 'narrator' if CFG.get('kind') in ('explain', 'conspiracy', 'debunk') else 'deep'   # American only
@@ -214,14 +216,18 @@ EL_TAG = {'calm': 'calm', 'tense': 'tense', 'worried': 'worried', 'excited': 'ex
           'deadpan': 'deadpan', 'curious': 'curious', 'relieved': 'relieved'}
 EL_REACT_TAG = {'whoa': 'excited', 'wow': 'excited', 'ugh': 'annoyed', 'great': 'sarcastic', 'seriously': 'annoyed', 'comeon': 'annoyed', 'oh': 'worried', 'yikes': 'worried', 'noway': 'surprised', 'ha': 'laughs'}
 EL_STATE = {'model': None, 'calls': 0, 'chars': 0}
+def _el_tempo(a, r):   # pitch-true time stretch (ffmpeg atempo) of a cached take
+    if abs(r - 1) < 0.01: return a
+    p = subprocess.run(['ffmpeg', '-v', 'error', '-f', 'f32le', '-ar', str(SR), '-ac', '1', '-i', '-', '-af', f'atempo={r:.4f}', '-f', 'f32le', '-'], input=a.astype(np.float32).tobytes(), capture_output=True, check=True)
+    return np.frombuffer(p.stdout, np.float32).copy()
 def el_synth(text, sp, tag=None):
     import requests
-    spd = float(np.clip(sp / 1.06 * EL_SPEED, 0.7, 1.2))
+    spd = float(np.clip(sp / 1.06 * EL_SPEED, 0.7, 1.35)); want = spd; spd = float(np.clip(EL_SPEED, 0.7, 1.2))   # v2.50: always the same take, faster/slower is stretched here
     for model in [EL_STATE['model']] if EL_STATE['model'] else EL_MODELS:
         tagged = f'[{tag}] {text}' if tag and model in ('eleven_v3', 'eleven_v4') else text
         key = hashlib.md5(json.dumps([tagged, EL_ID, model, round(spd, 2), LANG]).encode()).hexdigest()[:16]
         f = f'.voice/el-{key}.npy'
-        if os.path.exists(f): EL_STATE['model'] = model; return np.load(f)
+        if os.path.exists(f): EL_STATE['model'] = model; return _el_tempo(np.load(f), want / spd)
         vs = {'stability': 0.5, 'similarity_boost': 0.8, 'speed': spd} | ({'style': 0.35, 'use_speaker_boost': True} if model == 'eleven_multilingual_v2' else {})
         body = {'text': tagged, 'model_id': model, 'voice_settings': vs} | ({'language_code': LANG} if LANG != 'en' else {})
         r = requests.post(f'https://api.elevenlabs.io/v1/text-to-speech/{EL_ID}', params={'output_format': 'pcm_24000'}, headers={'xi-api-key': EL_KEY}, json=body, timeout=120)
@@ -231,7 +237,7 @@ def el_synth(text, sp, tag=None):
         a = np.frombuffer(r.content, '<i2').astype(np.float32) / 32768
         on = np.nonzero(np.abs(a) > 0.01)[0]
         if len(on): a = a[max(0, on[0] - int(0.02 * SR)):on[-1] + int(0.06 * SR)]   # trim like Kokoro does
-        np.save(f, a); return a
+        np.save(f, a); return _el_tempo(a, want / spd)
     raise RuntimeError('ElevenLabs: no usable model (tried ' + ', '.join(EL_MODELS) + ')')
 def synth(text, sp, v=None, tag=None):
     global USE_EL, name
@@ -309,6 +315,7 @@ NOTES, AUTO_RE = {}, []
 _TAG = re.compile(r'^\s*\[(\w+)\]\s*')
 def speak(say, sp, vo, gap, ctx=None):   # sentence by sentence: own tempo and tone each, short pause after full stops, a breath before long sentences; ' | ' = deliberate pause (0.32 s)
     out, lead, t_est, first, notes = [], 0.0, (ctx or {}).get('t0', 0.0), True, []
+    beat = USE_EL and EL_BEAT and (vo is None or not HAVE_KOKORO); parts = []   # v2.50: ElevenLabs gets the whole beat in one request
     for chunk in say.split('|'):
         for k, p in enumerate(q for q in re.split(r'(?<=[.!?…])\s+', chunk.strip()) if q.strip()):
             tone, why, strength, rc = (ctx or {}).get('tone'), 'set in the story', 1.0, []
@@ -322,9 +329,11 @@ def speak(say, sp, vo, gap, ctx=None):   # sentence by sentence: own tempo and t
             if tone is None and ctx and VAUTO and vo is None and p.strip():
                 tone, strength, why, auto_rc = scene_tone(p, t_est, t_est + est, first)
                 if auto_rc and ctx.get('react', True) and not rc and len(AUTO_RE) < 3 and all(abs(t_est - x) > 6 for x in AUTO_RE): rc.append(auto_rc); AUTO_RE.append(t_est)
-            if out: out.append(np.zeros(int((gap if k else 0.32) * SR), np.float32))
+            if out and not beat: out.append(np.zeros(int((gap if k else 0.32) * SR), np.float32))
+            if beat and parts and not k: parts.append('…')   # ' | ' = a deliberate pause inside the take
             el = USE_EL and (vo is None or not HAVE_KOKORO)
             for r_ in rc:
+                if beat and REACTS[r_] is not None: parts.append((f'[{EL_REACT_TAG[r_]}] ' if EL_REACT_TAG.get(r_) else '') + REACTS[r_][0]); notes.append(f'[{r_}]'); continue
                 if REACTS[r_] is None: a_ = react_sound(r_)
                 elif el: tx, rs, pts, stz, lg = REACTS[r_]; a_ = level(synth(tx, rs, vo, EL_REACT_TAG.get(r_)), lg)   # ElevenLabs acts the reaction itself
                 else: tx, rs, pts, stz, lg = REACTS[r_]; a_ = level(act(synth(tx, rs, vo), pts, stz, max(0.4, EMO_K)), lg)
@@ -337,8 +346,10 @@ def speak(say, sp, vo, gap, ctx=None):   # sentence by sentence: own tempo and t
             else: tempo, loud, sh, rg, fx = 1, 1, 0, 1, None
             if el:   # ElevenLabs breathes and acts by itself: the tone goes in as a tag (only when it is clearly there), tempo per sentence stays
                 tg_ = EL_TAG.get(tone) if e and (why in ('set in the story', 'tag') or strength >= 0.6) else None
-                a_ = synth(p, min(1.35, sp * pace_of(p) * tempo), vo, tg_)
-                out.append(level(a_, 1 + (loud - 1) * 0.5)); t_est += len(a_) / SR + gap; first = False
+                if beat: parts.append((f'[{tg_}] ' if tg_ else '') + p); t_est += est + gap; first = False
+                else:
+                  a_ = synth(p, min(1.35, sp * pace_of(p) * tempo), vo, tg_)
+                  out.append(level(a_, 1 + (loud - 1) * 0.5)); t_est += len(a_) / SR + gap; first = False
             else:
                 if BREATH and len(p.split()) >= 6 and vo is None and tone not in ('shout', 'excited'): out += [breath(), np.zeros(int(0.03 * SR), np.float32)]
                 a_ = prosody(synth(p, min(1.35, sp * pace_of(p) * tempo), vo), sh, max(0.4, rg))
@@ -347,6 +358,9 @@ def speak(say, sp, vo, gap, ctx=None):   # sentence by sentence: own tempo and t
                 out.append(level(a_, loud)); t_est += len(a_) / SR + gap; first = False
             if e and why != 'set in the story': notes.append(f'{tone} ← {why}')
             elif e: notes.append(tone)
+    if beat and parts:   # one take for the whole beat, tempo of the line
+        txt = re.sub(r'(?:^|\s)…(?=\s|$)', ' …', ' '.join(parts)).strip(); out = [a for a in out if a is not None]
+        out.append(level(synth(txt, min(1.35, sp), vo), 1.0))
     if ctx is not None: NOTES[ctx.get('key')] = notes
     a = np.concatenate(out) if out else np.zeros(1, np.float32); speak.lead = lead
     return a

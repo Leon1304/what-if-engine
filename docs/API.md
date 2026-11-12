@@ -969,6 +969,10 @@ Dinge zerbrechen so, wie sie gebaut sind. Alles ist echte Physik (einmal vorab s
 - `grinder()` (Trennschleifer, für `holdItem`), `grindSparks(at, t0, t1, { rate })` (Funkenfächer + Kreischen), `hivis(figur, { color })` (Warnweste), Outfit `char('you', { outfit: 'guard' })` (dunkelblaue Wachdienst-Jacke).
 - `CFG.kind: 'truecrime'`: Badge „True Crime“, sonst wie eine Story (du als Zeuge, Ende „What would you have done?“); Erzähler Declan Sage (ElevenLabs).
 
+## Eine Aufnahme pro Beat (v2.50)
+- Mit ElevenLabs spricht der Erzähler jeden Beat in **einer** Aufnahme: die Sätze fließen ineinander, der Ton jedes Satzes steht als Tag mitten im Text (`[worried] … [deadpan] …`), ` | ` wird zu einer Pause „…“. Ein Video braucht so ca. 10 statt 25 Anfragen. `CFG.voice: { el_beat: false }` = wieder eine Aufnahme pro Satz.
+- Jede Aufnahme wird einmal im Grundtempo (`el_speed`, 1.05) geholt und gecacht; passt ein Beat nicht ins Fenster, streckt `voice.py` die vorhandene Aufnahme tonhöhentreu (ffmpeg `atempo`) statt neu anzufragen — Neu-Timing kostet keine Credits.
+
 ## Stimme ohne API-Key: ElevenLabs über den Connector (v2.49)
 Ist in der Sitzung kein `ELEVENLABS_API_KEY` gesetzt, aber der ElevenLabs-Connector verbunden, spricht der Erzähler trotzdem mit ElevenLabs: `elmcp/requests.py` ersetzt für `voice.py` das Paket `requests`.
 1. Planen: `EL_LOG=el_log.jsonl ELEVENLABS_API_KEY=via-mcp PYTHONPATH=.engine/elmcp python3 assemble.py <slug>` → `el_log.jsonl` enthält jede Zeile (Text mit Ton-Tag, Modell, Tempo); nichts wird bezahlt.
