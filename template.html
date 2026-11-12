@@ -2404,6 +2404,7 @@ const PRESNAP = [];   // v2.31: [t, fn] — the scene is evaluated once at t bef
 const HITPAIR = [];   // v2.29 hitboxes: [a, b, t0, t1] — two figures that may touch then (hug, piggyback, pull …); see HITBOXES
 // noHit(figure | object) — never pushed / never blocks · noHit(a, b, t0, t1) — these two may overlap in that window
 function noHit(a, b, t0 = -1e9, t1 = 1e9) { if (b && (b.legL || b.root)) { HITPAIR.push([a, b, t0, t1]); return a; } if (a?.legL) a.hit = false; else (a?.g ?? a?.root ?? a).userData.noHit = true; return a; }
+const SHAKY = [];   // v2.40.x: [node, t0, t1] — a wanted tremor (electric shock …): the audit does not report it as jitter, it renders with motion blur
 const MBAUTO = [];   // v2.29: [t0, t1] windows of fast actions (swings, punches, kicks, throws, cuts, hard landings) — rendered with motion blur in 'auto' mode
 const _thru = (k, w = 0.1) => sm01((k + w / 2) / w);   // v2.29: a swing that passes the hit/release moment (k = 0) in ~3 frames instead of switching poses in one
 const env3 = (t, a, b, fi = 0.25, fo = 0.25) => t < a || t > b ? 0 : Math.min(sm01((t - a) / fi), 1 - sm01((t - b + fo) / fo));
@@ -6244,7 +6245,7 @@ function trap(p, kind, x, z, o = {}) {
           for (let k = 0; k < 8 && c < 40; k++) { const Q = P.clone().add(v3((hash(fr + k + a * 13) - 0.5) * 0.4, 0.02 + hash(fr * 2 + k) * 0.25 * (k < 4 ? 1 : -1), (hash(fr * 3 + k + a) - 0.5) * 0.4)); Q.y = Math.max(0.06, Q.y); segBox(_o3, P, Q, 0.018, 0.018); _o3.updateMatrix(); arcs.setMatrixAt(c++, _o3.matrix); P = Q; } } } arcs.count = c; arcs.instanceMatrix.needsUpdate = true; });
       sfx(t0, 'buzz', 0.35); AUDIO.hits[AUDIO.hits.length - 1].dur = Math.min(t1, DUR) - t0;
       if (V && t < 1e8) { cbBurst('spark', () => cbTarget(V).pos(t).toArray(), t, { n: 30, speed: 5, colors: ['#BFEFFF', '#FFFFFF'] }); sfx(t, 'buzz', 1); AUDIO.hits[AUDIO.hits.length - 1].dur = 0.8; FLASHES.push({ t: VT(t), dur: 0.15, a: 0.35, color: '#BFEFFF' });
-        if (vf) { if (typeof xray === 'function') xray(vf, { t0: t, t1: t + 0.9, path: 'bolt' }); holdRig(vf, t, tt => { const p = rigPos(vf, t); return [p.x, p.y + 0.04 * Math.sin(tt * 70), p.z]; }, { t1: t + 0.9, pose: (tt, S) => { const k = Math.sin(tt * 60); S.las = -2.5 + 0.2 * k; S.ras = -2.5 - 0.2 * k; S.laz = -0.6; S.raz = 0.6; S.by += 0.03 * k; } }); shoutFace(vf, t, t + 2); fall(vf, t + 0.9, { dazed: vf.kind !== 'zombie' }); } else trapVictim(V, t, 'kill', { at: [x, z] }); }
+        if (vf) { SHAKY.push([vf.root, t, t + 0.9]); MBAUTO.push([t, t + 0.9]); if (typeof xray === 'function') xray(vf, { t0: t, t1: t + 0.9, path: 'bolt' }); holdRig(vf, t, tt => { const p = rigPos(vf, t); return [p.x, p.y + 0.04 * Math.sin(tt * 70), p.z]; }, { t1: t + 0.9, pose: (tt, S) => { const k = Math.sin(tt * 60); S.las = -2.5 + 0.2 * k; S.ras = -2.5 - 0.2 * k; S.laz = -0.6; S.raz = 0.6; S.by += 0.03 * k; } }); shoutFace(vf, t, t + 2); fall(vf, t + 0.9, { dazed: vf.kind !== 'zombie' }); } else trapVictim(V, t, 'kill', { at: [x, z] }); }
       break;
     }
     case 'banana': {   // the classic: step on it, feet fly up, land on the back
@@ -11903,6 +11904,24 @@ async function renderAudio(sr) {
 }
 
 // --- frame update, sizing, playback, export API ---
+function sceneSnap() {   // v2.40.x: snapshot of everything a tick can change → a function that puts it all back (used around the start-up probe of the ticks)
+  const N = [], M = new Map(), V = (m, k) => { const v = m[k]; return v?.isTexture ? v : Array.isArray(v) ? v.slice() : v?.clone ? v.clone() : v; }, put = (o, k, v) => { if (!v?.isTexture && v?.copy && o[k]?.copy && o[k] !== v) o[k].copy(v); else o[k] = v; };
+  const MK = ['color', 'emissive', 'emissiveIntensity', 'opacity', 'transparent', 'visible', 'depthWrite', 'roughness', 'metalness', 'side'];
+  scene.traverse(n => { N.push([n, n.position.clone(), n.quaternion.clone(), n.scale.clone(), n.visible, n.children.slice(), n.isLight ? [n.intensity, n.color.clone(), n.distance] : null,
+      n.isInstancedMesh ? [n.count, n.instanceMatrix.array.slice(), n.instanceColor?.array.slice()] : null, n.material]);
+    for (const m of [].concat(n.material ?? [])) if (m && !M.has(m)) M.set(m, [MK.map(k => V(m, k)), m.uniforms ? Object.fromEntries(Object.entries(m.uniforms).map(([k, u]) => [k, V(u, 'value')])) : null]); });
+  const fog = scene.fog ? [scene.fog.color.clone(), scene.fog.near, scene.fog.far] : null, bg = scene.background?.clone?.() ?? scene.background;
+  const L = [tickers, LATE, PRESNAP, MBAUTO, AUDIO.hits ??= [], SHAKES, FLASHES].map(a => [a, a.length]);
+  return () => {
+    for (const [n, p, q, s, v, ch, li, im, mt] of N) { n.position.copy(p); n.quaternion.copy(q); n.scale.copy(s); n.visible = v; n.material = mt;
+      if (n.children.length !== ch.length || n.children.some((c, i) => c !== ch[i])) { for (const c of n.children.slice()) if (!ch.includes(c)) n.remove(c); for (const c of ch) if (c.parent !== n) n.add(c); }
+      if (li) { n.intensity = li[0]; n.color.copy(li[1]); n.distance = li[2]; }
+      if (im) { n.count = im[0]; n.instanceMatrix.array.set(im[1]); n.instanceMatrix.needsUpdate = true; if (im[2] && n.instanceColor) { n.instanceColor.array.set(im[2]); n.instanceColor.needsUpdate = true; } } }
+    for (const [m, [vals, U]] of M) { MK.forEach((k, i) => { if (vals[i] !== undefined) put(m, k, vals[i]); }); if (U) for (const k in U) if (m.uniforms[k]) put(m.uniforms[k], 'value', U[k]); }
+    if (fog) { scene.fog.color.copy(fog[0]); scene.fog.near = fog[1]; scene.fog.far = fog[2]; } if (bg?.isColor && scene.background?.isColor) scene.background.copy(bg); else scene.background = bg;
+    for (const [a, n] of L) a.length = n;
+  };
+}
 let RESTS = null;   // v2.31: built transform + visibility of everything that moves (dyn) — every frame starts from the scene as built, so a tick that only sets something
 //   "while it moves" or "from 5 s on" gives the same picture in the preview, in every render worker and in every CI block (was: whatever the last frame left behind)
 function stepScene(t) {   // everything in the 3D scene at time t (no HUD) — also used for motion-blur sub-frames
@@ -12034,10 +12053,13 @@ function thumbOn() {
 if (PENDING.length) await Promise.all(PENDING);
 { // v2.40.x purity: which scene ticks pose figures or set a look is found once here (probe runs over the whole video, every 0.1 s) — was: learned on the first frame
   // a tick posed, so a page opened right after a tick stopped posing (fade back to idle) showed the idle pose at once while the played video was still fading
-  const _ps = performance.now(), T1 = (DUR ?? CFG.dur ?? 60) + 1;
-  for (const f of tickers) { if (f._idle || f._poser) continue; const M = { mode: new Map(), look: new Map() }; TKP = M;
+  // The scan runs on a snapshot: whatever the probed ticks change (transforms, visibility, children, materials, uniforms, lights, instances, fog, sounds, registries) is put back
+  // afterwards, so no tick can leave the scene in a later state (v2.40.x: towers that a tick only reset from its t0 on stood collapsed in every frame before it).
+  const _ps = performance.now(), T1 = (DUR ?? CFG.dur ?? 60) + 1, back = sceneSnap(), list = tickers.slice();
+  for (const f of list) { if (f._idle || f._poser) continue; const M = { mode: new Map(), look: new Map() }; TKP = M;
     try { for (let v = -0.5; v <= T1 && !M.mode.size && !M.look.size; v += 0.1) f(ST(v)); } catch (e) {} finally { TKP = null; }
     if (M.mode.size || M.look.size) f._poser = true; }
+  back();
   if (performance.now() - _ps > 1500) console.warn('pose scan ' + Math.round(performance.now() - _ps) + ' ms'); }
 for (const [tt, fn] of PRESNAP.sort((a, b) => a[0] - b[0])) { stepScene(tt); world.updateMatrixWorld(true); fn(); }
 await physicsBake();   // simulate once, then every frame plays it back
@@ -12132,7 +12154,7 @@ function motionAudit(o = {}) {
         const app = jerk * Math.max(a.on, b.on) / it.r, wrap = el > 0.01 && dl > 20 * el && d[0] * e[0] + d[1] * e[1] + d[2] * e[2] < 0 && Math.min(a.on, b.on) < 0.08;   // app: the jump as a share of the frame height · wrap: a looping prop sent back to the far end
         if (jerk > (mbw ? 1.5 : 0.6) && jerk > 0.35 * Math.max(dl, el) && app > 0.012 && !wrap && dl > 0.12 && dl > 0.5 * el && !hitNow(it.n, ST(tv))) warn(it.name + ':jump', jerk, `${it.name} jumps ${dl.toFixed(2)} m in one frame at ${t.toFixed(2)} s ${at(it.n, a.p)}`);
         if (dl > 0.02 && el > 0.02 && d[0] * e[0] + d[1] * e[1] + d[2] * e[2] < -0.5 * dl * el) { const F = flips[j]; F.push(i); while (F.length && F[0] < i - 12) F.shift();
-          if (F.length >= 4) warn(it.name + ':jitter', F.length, `${it.name} jitters back and forth around ${t.toFixed(2)} s ${at(it.n, a.p)}`); } }
+          if (F.length >= 4 && !SHAKY.some(([n, x, y]) => n === it.n && t >= x - 0.1 && t <= y + 0.1)) warn(it.name + ':jitter', F.length, `${it.name} jitters back and forth around ${t.toFixed(2)} s ${at(it.n, a.p)}`); } }
       if (a.wq && c?.vis && dl < 0.3 && !physN.has(it.n)) { const ang = audAng(a.wq, b.wq), angPrev = audAng(b.wq, c.wq); if (ang > (mbw ? 1.6 : 0.6) && ang > 3 * angPrev + 0.15) warn(it.name + ':turn', ang, `${it.name} turns ${(ang * 57.3).toFixed(0)}° in one frame at ${t.toFixed(2)} s ${at(it.n, a.p)}`); }
       a.q.forEach((q, k) => { if ((dl > 0.05 && /^(leg|shin)/.test(it.JN[k])) || (dl > 0.1 && /^(arm|fore)/.test(it.JN[k]))) return;   // legs of a figure running > 2.4 m/s: gait at motion-blur speed, not a pose switch
         const ang = audAng(q, b.q[k]), angPrev = c?.vis ? audAng(b.q[k], c.q[k]) : ang;
