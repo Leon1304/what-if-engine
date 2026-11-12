@@ -13081,7 +13081,7 @@ await physicsBake();   // simulate once, then every frame plays it back
 document.querySelectorAll('.err').forEach(n => n.remove());
 // --- motion audit (v2.29) — render.mjs --shots (and --audit) runs it: whatif.audit() → list of warnings ---
 //   1) pops: every figure, animal and moving object at 30 fps — sudden jumps, joints that snap in one frame, jitter (back and forth every frame)
-//   2) purity: a frame must not depend on the frames drawn before it. The video is rendered in blocks (12 on GitHub, each in a fresh page) and inside a block by
+//   2) purity: a frame must not depend on the frames drawn before it. The video is rendered in blocks (12 shards on GitHub, each in a fresh page; v3.1: each shard takes interleaved chunks of 10–30 frames) and inside a block by
 //      workers that draw every 3rd frame — whatever a frame inherits from earlier ones pops at block borders or flickers. Checked at every border of 12 and 20 blocks
 //      and 12 more moments: jumped to straight from 0 s · played frame by frame · only every 3rd frame · after jumping back — and (render.mjs) in a second, freshly
 //      opened page. Compared: EVERY part below every figure, animal and moving object (hair, hat, coat, hands, face, held things …: place, rotation, size, visible),

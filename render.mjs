@@ -79,7 +79,7 @@ if (opt('probe')) {   // v2.29 debugging: evaluate code inside the engine (after
   report(errors); await browser.close(); process.exit(0);
 }
 if (flag('audit') && !opt('shots')) {   // v2.29: node render.mjs page.html --audit → motion + gore check of the whole video, no images
-  const t0 = Date.now(), fresh = await freshPrints(), { browser, page, errors } = await openPage(135);
+  const t0 = Date.now(), [fresh, { browser, page, errors }] = await Promise.all([freshPrints(), openPage(135)]);   // v3.1: both pages load at once
   const A = await page.evaluate(fresh => window.whatif.audit({ fresh }), fresh);
   for (const m of A.motion) console.log('MOTION: ' + m); for (const m of A.hit ?? []) console.log('HITBOX: ' + m); for (const g of A.gore) console.log('GORE: ' + g);
   if (!A.motion.length) console.log('motion: ok (no pops, jitter or left-over state)');
@@ -89,6 +89,7 @@ if (flag('audit') && !opt('shots')) {   // v2.29: node render.mjs page.html --au
 }
 if (opt('shots')) {
   const out = opt('out', 'shots'); mkdirSync(out, { recursive: true });
+  const freshP = flag('no-audit') ? null : freshPrints();   // v3.1: second (audit) page loads while the shots are taken
   const { browser, page, errors } = await openPage();
   const ts = opt('shots').split(',').map(Number), files = [];
   for (const [k, t] of ts.entries()) {
@@ -100,7 +101,7 @@ if (opt('shots')) {
   }
   const info = await page.evaluate(() => window.whatif.info()), { gore: G0, ...rest } = info;
   console.log('scene:', JSON.stringify(rest));
-  const fresh = flag('no-audit') ? null : await freshPrints();
+  const fresh = await freshP;
   const A = flag('no-audit') ? { motion: [], gore: G0 ?? [] } : await page.evaluate(fresh => window.whatif.audit?.({ fresh }) ?? { motion: [], gore: [] }, fresh);   // v2.29 motion + gore audit
   for (const m of A.motion) console.log('MOTION: ' + m);
   for (const m of A.hit ?? []) console.log('HITBOX: ' + m);
@@ -161,9 +162,12 @@ if (opt('video')) {
   if (opt('redo')) { const [a, b] = opt('redo').split('-').map(Number); for (let i = Math.floor(a * fps); i <= Math.ceil(b * fps); i++) rmSync(path.join(dir, `f${String(i).padStart(5, '0')}.jpg`), { force: true }); }
   const probe = await openPage(); const dur = await probe.page.evaluate(() => window.whatif.dur); await probe.browser.close();
   const total = Math.round(dur * fps), fr = i => path.join(dir, `f${String(i).padStart(5, '0')}.jpg`);
-  const [si, sn] = (opt('shard') || '0/1').split('/').map(Number);   // --shard i/N : contiguous frame block i of N (0-based)
-  const lo = Math.floor(si * total / sn), hi = Math.floor((si + 1) * total / sn);
-  const todo = [...Array(total).keys()].filter(i => i >= lo && i < hi && !(existsSync(fr(i)) && statSync(fr(i)).size > 0));
+  // --shard i/N : share i of N (0-based). v3.1: interleaved chunks of 10–30 frames (chunk c goes to shard c % N) instead of one
+  // contiguous block, so heavy moments (explosions, crowds) are spread over all shards and no shard takes 3–4× longer than the rest.
+  // Safe because every frame is a pure function of t (each chunk start is a jump forward, like a block start).
+  const [si, sn] = (opt('shard') || '0/1').split('/').map(Number);
+  const chunk = Math.max(10, Math.min(30, Math.floor(total / (sn * 4)))), mine = i => sn === 1 || Math.floor(i / chunk) % sn === si;
+  const todo = [...Array(total).keys()].filter(i => mine(i) && !(existsSync(fr(i)) && statSync(fr(i)).size > 0));
   console.log(`${total} frames at ${W}px, ${fps} fps · ${total - todo.length} already done · ${workers} worker(s)`);
   const started = Date.now(); let done = 0;
   await Promise.all([...Array(Math.min(workers, todo.length || 1)).keys()].map(async w => {
@@ -181,7 +185,7 @@ if (opt('video')) {
     }
     report(errors); await browser.close();
   }));
-  if (framesOnly) { console.log(`frames ${lo}-${hi - 1} done in ${Math.round((Date.now() - started) / 60000)} min`); process.exit(0); }
+  if (framesOnly) { console.log(`shard ${si}/${sn} (chunks of ${chunk} frames) done in ${Math.round((Date.now() - started) / 60000)} min`); process.exit(0); }
   const missing = [...Array(total).keys()].filter(i => !existsSync(fr(i)));
   if (missing.length) { console.log(`failed: ${missing.length} frames missing (first ${missing[0]})`); process.exit(1); }
   const tmpMp4 = video.replace(/\.mp4$/, '') + '.part.mp4';

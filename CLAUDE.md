@@ -23,7 +23,7 @@ Der Skill wurde für claude.ai geschrieben. Lokal gilt diese Übersetzung:
 - Neue Funktionen in `docs/API.md` beschreiben und mit einer kleinen Testszene in `tests/` absichern.
 - Jedes Bild ist eine reine Funktion von t (kein aufaddierter Zustand zwischen Bildern).
 - Tests: `bash tests/run.sh` muss grün sein. Auf macOS die GNU-Tools vorn in den PATH nur für den Testlauf:
-  `PATH="/opt/homebrew/opt/coreutils/libexec/gnubin:/opt/homebrew/opt/gnu-sed/libexec/gnubin:/opt/homebrew/bin:$PATH" bash tests/run.sh` (dauert ca. 30–40 Min.; Referenzbild-Vergleich `tests/golden.py` macht CI)
+  `PATH="/opt/homebrew/opt/coreutils/libexec/gnubin:/opt/homebrew/opt/gnu-sed/libexec/gnubin:/opt/homebrew/bin:$PATH" bash tests/run.sh` (läuft parallel, ca. 4–5 Min. auf dem M4; `SMOKE_JOBS=n` ändert die Zahl gleichzeitiger Szenen; Referenzbild-Vergleich `tests/golden.py` macht CI)
 - Vor dem Commit: `git fetch -q origin main && git rebase origin/main`, dann die nächste freie Versionsnummer nach `git log -1 origin/main` vergeben.
 - Änderungen an Engine und Skill immer direkt nach `main` pushen (Leons Vorgabe).
 
