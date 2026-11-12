@@ -21,6 +21,11 @@ export -f one
 echo "smoke: $(echo $names | wc -w) scenes, $J at a time"
 rm -f *.res; printf '%s\n' $names | xargs -P "$J" -I{} bash -c 'one "$1"; head -1 "$1.res"' _ {}
 fail=0; for s in $names; do [ -f "$s.res" ] || echo "FAIL $s (no result)" > "$s.res"; case "$(head -1 "$s.res")" in ok*) ;; *) cat "$s.res"; fail=1;; esac; done
+# v3.2 render plan: interleaved chunks of 10–30 frames by default, one block per shard with CFG.shard: 'block'
+ck() { node render.mjs "$1.html" --probe 'window.whatif.plan(12).chunk' 2>&1 | tail -1; }
+sed "s#^const CFG = {#const CFG = { shard: 'block',#" example.story.js > plan_block.story.js; cp example.scene.js plan_block.scene.js
+python3 assemble.py plan_block --title "Plan" --no-voice > plan_block.log 2>&1; c1=$(ck example); c2=$(ck plan_block)
+if [ "$c1" -ge 10 ] 2>/dev/null && [ "$c1" -le 30 ] && [ "$c2" -gt 30 ] 2>/dev/null; then echo "ok   render plan  chunk $c1 · block $c2"; else echo "FAIL render plan: chunk '$c1' · block '$c2'"; fail=1; fi
 # v2.48 narrator voice by category (no synthesis, no API call)
 cp "$R/voice.py" .
 for c in "story:Denzel" "explain:Adam" "conspiracy:Declan Sage" "horror:Storm Styles" "series:JM" "truecrime:Declan Sage"; do

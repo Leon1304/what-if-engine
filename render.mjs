@@ -1,6 +1,6 @@
 // render.mjs — headless renderer for /what-if pages (frame-exact, deterministic)
 //   node render.mjs page.html --shots 0.5,3,8,12 [--out shots] [--w 540]   → PNGs + <out>/sheet.jpg (contact sheet)
-//   node render.mjs page.html --video out.mp4 [--w 1440 (2K, default)|1080|2160] [--fps 30] [--workers 2] [--draft] [--redo 10.2-14.2] [--clean] [--ig] [--shard i/N --frames-only]
+//   node render.mjs page.html --video out.mp4 [--w 1440 (2K, default)|1080|2160] [--fps 30] [--workers 2] [--draft] [--redo 10.2-14.2] [--clean] [--ig] [--shard i/N --frames-only] [--seams N]
 //     → out.mp4 (master, YouTube: CRF 18); with --ig also out-ig.mp4 (Instagram: 1080x1920, ~12 Mbps)
 //   node render.mjs page.html --cover cover.jpg [--t 1.2]   (THUMB = [A, B] → also cover-b.jpg: A/B test thumbnails)
 //   node render.mjs page.html --audio out.wav
@@ -154,19 +154,41 @@ if (opt('remux')) {   // --remux out.mp4 : render audio again and swap it into t
   }
 }
 
+// v3.2 seam check (render workflow, encode job: --seams N): at every border between two render chunks, compare the change from the frame before
+// with the change between the neighbouring frames (qa_seams.py). Each suspect border is rendered again the way a single page plays it (the frame
+// before, then the border frame) and compared with the stored frame: if they differ, that frame depends on earlier frames → "SEAM: …".
+async function seamCheck(dir, chunk, total, fr) {
+  const qs = path.join(HERE, 'qa_seams.py'); if (!existsSync(qs)) return;
+  const borders = []; for (let i = chunk; i < total; i += chunk) borders.push(i);
+  const r = spawnSync('python3', [qs, dir, '--borders', borders.join(',')], { encoding: 'utf8' }); if (r.stderr) process.stdout.write(r.stderr);
+  const cand = (r.stdout || '').split('\n').filter(l => l.startsWith('CAND ')).map(l => +l.split(' ')[1]).slice(0, 12);
+  if (!cand.length) { console.log(`seams: ok (${borders.length} chunk borders)`); return; }
+  const { browser, page, errors } = await openPage(); let bad = 0;
+  for (const i of cand) {
+    const tmp = path.join(dir, `seam_${i}.jpg`);
+    await page.evaluate(([i, f]) => { for (const k of [i - 2, i - 1, i]) window.whatif.seek(Math.max(0, k) / f); }, [i, fps]);   // played up to it, frame by frame
+    await page.screenshot({ path: tmp, type: 'jpeg', quality: 92 });
+    const d = spawnSync('python3', [qs, '--diff', fr(i), tmp], { encoding: 'utf8' }).stdout.trim(); rmSync(tmp, { force: true });
+    if (d.startsWith('DIFF ') && ++bad <= 5) { console.log(`SEAM: the frame at ${(i / fps).toFixed(2)} s (render chunk border) looks different when the page plays up to it (${d.slice(5)}) – something depends on earlier frames; fix it (compute it from t) or set CFG.shard: 'block'`); }
+  }
+  if (bad > 5) console.log(`SEAM: … and ${bad - 5} more chunk borders like that`);
+  console.log(`seams: ${cand.length} suspect of ${borders.length} chunk borders checked, ${bad} confirmed`); report(errors); await browser.close();
+}
 if (opt('video')) {
   const video = opt('video'), dir = video + '.frames', wav = video + '.wav';
   mkdirSync(dir, { recursive: true });
   const framesOnly = flag('frames-only');                       // CI shard: frames only, no audio / encode
   if (!framesOnly) await renderAudio(wav);
   if (opt('redo')) { const [a, b] = opt('redo').split('-').map(Number); for (let i = Math.floor(a * fps); i <= Math.ceil(b * fps); i++) rmSync(path.join(dir, `f${String(i).padStart(5, '0')}.jpg`), { force: true }); }
-  const probe = await openPage(); const dur = await probe.page.evaluate(() => window.whatif.dur); await probe.browser.close();
+  // --shard i/N : share i of N (0-based). v3.1: interleaved chunks (chunk c goes to shard c % N; v3.2: size from the page: whatif.plan, 10–30 frames;
+  // CFG.shard: 'block' = one contiguous block) so heavy moments (explosions, crowds) spread over all shards. Every frame is a pure function of t,
+  // the audit checks each chunk start, and --seams N (encode job) checks the finished frames at the chunk borders.
+  const [si, sn] = (opt('shard') || '0/1').split('/').map(Number), seamN = +opt('seams', 0);
+  const probe = await openPage(); const dur = await probe.page.evaluate(() => window.whatif.dur);
+  const planOf = async n => (await probe.page.evaluate(([n, f]) => window.whatif.plan?.(n, f), [n, fps])) ?? { n, chunk: Math.max(10, Math.min(30, Math.floor(Math.round(dur * fps) / (n * 4)))) };
+  const { chunk } = await planOf(sn), seamPlan = seamN > 1 ? await planOf(seamN) : null; await probe.browser.close();
   const total = Math.round(dur * fps), fr = i => path.join(dir, `f${String(i).padStart(5, '0')}.jpg`);
-  // --shard i/N : share i of N (0-based). v3.1: interleaved chunks of 10–30 frames (chunk c goes to shard c % N) instead of one
-  // contiguous block, so heavy moments (explosions, crowds) are spread over all shards and no shard takes 3–4× longer than the rest.
-  // Safe because every frame is a pure function of t (each chunk start is a jump forward, like a block start).
-  const [si, sn] = (opt('shard') || '0/1').split('/').map(Number);
-  const chunk = Math.max(10, Math.min(30, Math.floor(total / (sn * 4)))), mine = i => sn === 1 || Math.floor(i / chunk) % sn === si;
+  const mine = i => sn === 1 || Math.floor(i / chunk) % sn === si;
   const todo = [...Array(total).keys()].filter(i => mine(i) && !(existsSync(fr(i)) && statSync(fr(i)).size > 0));
   console.log(`${total} frames at ${W}px, ${fps} fps · ${total - todo.length} already done · ${workers} worker(s)`);
   const started = Date.now(); let done = 0;
@@ -209,4 +231,5 @@ if (opt('video')) {
   console.log('wrote', video, `${(statSync(video).size / 1e6).toFixed(1)} MB`, `in ${Math.round((Date.now() - started) / 60000)} min`);
   { const ql = path.join(path.dirname(new URL(import.meta.url).pathname), 'qa_lines.py');   // v3.0: stray 1–3 px lines through the picture (every 15th frame)
     if (existsSync(ql)) { const r = spawnSync('python3', [ql, dir, '--every', '15'], { encoding: 'utf8' }); if (r.stdout) process.stdout.write(r.stdout); } }
+  if (seamPlan) await seamCheck(dir, seamPlan.chunk, total, fr);
 }

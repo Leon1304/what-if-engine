@@ -113,7 +113,7 @@ jobs:
         run: |
           S=${{ steps.s.outputs.slug }}
           ls out/$S.mp4.frames | wc -l
-          node render.mjs "${{ matrix.page }}" --video out/$S.mp4 --w $WIDTH | tee out/$S-render.log
+          node render.mjs "${{ matrix.page }}" --video out/$S.mp4 --w $WIDTH --seams ${{ needs.plan.outputs.n }} | tee out/$S-render.log
           node render.mjs "${{ matrix.page }}" --cover out/$S-cover.jpg --w $WIDTH
           node render.mjs "${{ matrix.page }}" --srt out/$S.srt || true
           ffprobe -v error -show_entries format=duration:stream=codec_type,width,height -of csv=p=0 out/$S.mp4
@@ -121,8 +121,8 @@ jobs:
         run: |
           S=${{ steps.s.outputs.slug }}
           node render.mjs "${{ matrix.page }}" --audit > out/$S-audit.log 2>&1 || true
-          cat out/$S-audit.log out/$S-render.log 2>/dev/null | grep -E '^(MOTION|HITBOX|QA|GORE|LINES):' > out/$S-qa.txt || true
-          { echo "### Quality check: $S"; if [ -s out/$S-qa.txt ]; then head -40 out/$S-qa.txt | sed 's/^/- /'; else echo "No warnings (motion, hitboxes, crowds, feet, skin, stray lines)."; fi; } >> "$GITHUB_STEP_SUMMARY"
+          cat out/$S-audit.log out/$S-render.log 2>/dev/null | grep -E '^(MOTION|HITBOX|QA|GORE|LINES|SEAM):' > out/$S-qa.txt || true
+          { echo "### Quality check: $S"; if [ -s out/$S-qa.txt ]; then head -40 out/$S-qa.txt | sed 's/^/- /'; else echo "No warnings (motion, hitboxes, crowds, feet, skin, stray lines, chunk seams)."; fi; } >> "$GITHUB_STEP_SUMMARY"
           [ -s out/$S-qa.txt ] || echo "no warnings" > out/$S-qa.txt
       - name: publish release
         env:
