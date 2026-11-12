@@ -3492,6 +3492,23 @@ function traffic(loops, o = {}) {   // cars driving around closed loops; until: 
 // --- sea & coast ---
 let waterH = () => -999;
 // --- sea: water (sky reflection by fresnel, sun glint, whitecaps, shore foam), underwater (caustics, light shafts, bubbles, plankton), reef (coral, seaweed, kelp), fish schools, shark, jellyfish, diver + swim(), submarine ---
+// v3.2 water look: per-pixel ripples (a sum of travelling waves with real dispersion — a pure function of t, finer waves fade out with distance), a sharp sun glint
+// and fresnel sky reflection. Shared by water() (sea, lakes, salt lakes) and waterSurfaceMat() (pools, ponds). water({ ripples: false }) = the old flat facets.
+const WATU = { t: { value: 0 }, sunC: { value: new THREE.Color() } };
+tick(t => { WATU.t.value = t; WATU.sunC.value.copy(sun.color).multiplyScalar(sun.intensity * 0.5 * clamp(skyU.orbDir.value.y * 6)); });
+const WATER_GLSL = {
+  head: `uniform float uRipT, uRipA, uRipS, uGlint; uniform vec3 uSunD, uSunC;
+    vec2 ripGrad(vec2 p, float dist) { vec2 g = vec2(0.0); float lam = uRipS;
+      for (int i = 0; i < 8; i++) { float fi = float(i), a = fi * 2.39996 + 0.4, k = 6.2832 / lam; vec2 d = vec2(cos(a), sin(a));
+        g += d * cos(dot(d, p) * k - sqrt(9.81 * k) * uRipT + fi * 1.93) * (1.0 - smoothstep(lam * 22.0, lam * 60.0, dist)); lam *= 0.7; }
+      return g * uRipA * 0.045; }
+    `,
+  normal: wp => `#include <normal_fragment_maps>
+    if (uRipA > 0.0) { vec2 rg = ripGrad(${wp}.xz, distance(cameraPosition, ${wp})); float ny = (vec4(normal, 0.0) * viewMatrix).y >= 0.0 ? 1.0 : -1.0;
+      normal = normalize(normal + ny * (viewMatrix * vec4(-rg.x, 0.0, -rg.y, 0.0)).xyz); }`,
+  glint: `if (uGlint > 0.0) { vec3 gV = normalize(vViewPosition), gR = normalize((vec4(reflect(-gV, normalize(normal)), 0.0) * viewMatrix).xyz); float gs = max(dot(gR, normalize(uSunD)), 0.0);
+      outgoingLight += uSunC * uGlint * (pow(gs, 900.0) * 4.0 + pow(gs, 110.0) * 0.16); }`
+};
 function water(o = {}) {   // animated low-poly sea; level: number or t => number (floods, tsunamis); reflects the sky at grazing angles, foam on crests and along the shore
   const size = o.size ?? 600, seg = o.seg ?? 110, ampF = typeof o.waves === 'function' ? o.waves : (w => () => w)(o.waves ?? 0.35), ox = o.x ?? 0, oz = o.z ?? 0;   // v2.25: waves may be t => height (storm builds up)
   const geo = new THREE.PlaneGeometry(size, size, seg, seg); geo.rotateX(-Math.PI / 2);
@@ -3499,18 +3516,23 @@ function water(o = {}) {   // animated low-poly sea; level: number or t => numbe
   const col = new Float32Array(n * 3); geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
   const m = mat(o.color ?? '#2F6FA8', { rough: 0.22, metal: 0.05, opacity: o.opacity ?? 0.92, own: true }); m.vertexColors = true; m.color.set('#FFFFFF'); m.side = THREE.DoubleSide;
   const pxFoam = o.foam !== false && CFG.shore !== false, uLvl = { value: 0 };   // v2.35: shore foam per pixel (a clean lapping band along the waterline instead of a few pale triangles)
-  m.onBeforeCompile = sh => { Object.assign(sh.uniforms, { uTop: skyU.top, uBot: skyU.bot, uRefl: { value: o.reflect ?? 0.45 }, uLvl, uWxT: WX.t });
-    sh.vertexShader = 'attribute float gh; varying float vGh; varying vec2 vWxz;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n  vGh = gh; vWxz = (modelMatrix * vec4(transformed, 1.0)).xz;');
-    sh.fragmentShader = `uniform vec3 uTop, uBot; uniform float uRefl, uLvl, uWxT; varying float vGh; varying vec2 vWxz;
+  const calm = ampF(0) < 0.15, rip = o.ripples !== false && CFG.ripples !== false;   // v3.2: calm water (lakes, salt pans) gets finer, stronger ripples than the open sea
+  const RU = { uRipT: WATU.t, uRipA: { value: typeof o.ripples === 'number' ? o.ripples : calm ? 1 : 0.7 }, uRipS: { value: o.rippleScale ?? (calm ? 1.3 : 2.6) }, uGlint: { value: o.glint ?? 1 }, uSunD: skyU.orbDir, uSunC: WATU.sunC };
+  m.onBeforeCompile = sh => { Object.assign(sh.uniforms, { uTop: skyU.top, uBot: skyU.bot, uRefl: { value: o.reflect ?? 0.45 }, uLvl, uWxT: WX.t }, rip ? RU : {});
+    sh.vertexShader = 'attribute float gh; varying float vGh; varying vec2 vWxz; varying vec3 vWp3;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n  vGh = gh; vWp3 = (modelMatrix * vec4(transformed, 1.0)).xyz; vWxz = vWp3.xz;');
+    sh.fragmentShader = `uniform vec3 uTop, uBot; uniform float uRefl, uLvl, uWxT; varying float vGh; varying vec2 vWxz; varying vec3 vWp3;
       float wfh(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
       float wfn(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f); return mix(mix(wfh(i), wfh(i + vec2(1.0, 0.0)), f.x), mix(wfh(i + vec2(0.0, 1.0)), wfh(i + vec2(1.0, 1.0)), f.x), f.y); }
-      ` + sh.fragmentShader.replace('#include <color_fragment>', `#include <color_fragment>
+      ` + (rip ? WATER_GLSL.head : '') + sh.fragmentShader.replace('#include <normal_fragment_maps>', rip ? WATER_GLSL.normal('vWp3') : '#include <normal_fragment_maps>').replace('#include <color_fragment>', `#include <color_fragment>
       ${pxFoam ? `{ float d = uLvl - vGh; if (d > 0.0 && d < 2.2) { float nn = wfn(vWxz * 0.55), edge = 1.0 - smoothstep(0.0, 0.3 + nn * 0.25, d), band = smoothstep(0.6, 0.92, 0.5 + 0.5 * sin(d * 6.5 - uWxT * 1.6 + nn * 6.0)) * (1.0 - smoothstep(0.4, 2.2, d)) * (0.5 + 0.5 * wfn(vWxz * 2.3 + uWxT * 0.2));
           float fo = clamp(edge * 0.9 + band * 0.75, 0.0, 1.0); diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.95, 0.98, 1.0), fo); diffuseColor.a = max(diffuseColor.a, fo); } }` : ''}`).replace('#include <opaque_fragment>', `
       { vec3 Vv = normalize(vViewPosition), Nn = normalize(normal); float fr = 0.03 + 0.97 * pow(1.0 - clamp(abs(dot(Nn, Vv)), 0.0, 1.0), 5.0);
         vec3 Rw = (vec4(reflect(-Vv, Nn), 0.0) * viewMatrix).xyz; vec3 sk = mix(uBot, uTop, smoothstep(0.0, 0.7, Rw.y));
-        outgoingLight = mix(outgoingLight, sk, clamp(fr * uRefl, 0.0, 0.6)); }
+        outgoingLight = mix(outgoingLight, sk, clamp(fr * uRefl, 0.0, 0.6)); ${rip ? WATER_GLSL.glint : ''}
+        if (!gl_FrontFacing) { float uwin = smoothstep(0.55, 0.75, clamp(abs(dot(Nn, Vv)), 0.0, 1.0));   // v3.2 seen from under water: the bright window to the sky overhead, the water colour around it
+          outgoingLight = mix(outgoingLight * 0.8, mix(uBot, uTop, 0.5) * 1.35 + vec3(0.04, 0.07, 0.08), uwin * 0.85); } }
       #include <opaque_fragment>`); };
+  m.customProgramCacheKey = () => 'water' + (pxFoam ? 'f' : '') + (rip ? 'r' : '');   // the template above differs per option (toString alone would share one program)
   const me = dyn(mesh(world, geo, m, ox, 0, oz, { cast: false }));
   const H = (x, z, t) => ampF(t) * (0.6 * Math.sin(x * 0.18 + t * 1.3) + 0.4 * Math.sin(z * 0.23 - t * 1.1) + 0.5 * Math.sin((x + z) * 0.09 + t * 0.7));
   waterH = (x, z, t) => lvl(t) + H(x, z, t);
@@ -3524,41 +3546,197 @@ function water(o = {}) {   // animated low-poly sea; level: number or t => numbe
     pos.needsUpdate = true; geo.attributes.color.needsUpdate = true; });
   return me;
 }
-const CAUS = { k: { value: 0 }, t: { value: 0 }, sc: { value: 3.2 } }, POSTBAKE = [];
+// v3.2 waterSurfaceMat({ color, opacity, reflect, ripples, scale, glint, under, rough }) — material for a flat water surface (pool, pond, tank, puddle): rippling normals,
+//   fresnel sky reflection, sun glint; seen straight down it is see-through (opacity, default 0.22), at grazing angles a mirror. From below (camera under water):
+//   the bright sky window overhead, the water colour (under) outside it. Put it on a horizontal plane (PlaneGeometry rotated −90° about x).
+//   Returns a MeshStandardMaterial; m.userData.water holds the uniforms (ripples, scale, glint, reflect, opacity can be animated).
+function waterSurfaceMat(o = {}) {
+  const u = { uRipT: WATU.t, uRipA: { value: o.ripples === false ? 0 : o.ripples ?? 1.8 }, uRipS: { value: o.scale ?? 0.9 }, uGlint: { value: o.glint ?? 1 }, uSunD: skyU.orbDir, uSunC: WATU.sunC,
+    uTop: skyU.top, uBot: skyU.bot, uRefl: { value: o.reflect ?? 0.9 }, uOp: { value: o.opacity ?? 0.22 }, uUnder: { value: new THREE.Color(o.under ?? o.color ?? '#2FA6CF') } };
+  const m = new THREE.MeshStandardMaterial({ color: o.color ?? '#2FA6CF', roughness: o.rough ?? 0.08, metalness: 0, transparent: true, depthWrite: false, side: THREE.DoubleSide });
+  m.userData.own = true; m.userData.noPool = true; m.userData.water = u;
+  m.onBeforeCompile = sh => { Object.assign(sh.uniforms, u);
+    sh.vertexShader = 'varying vec3 vWsW;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n  vWsW = (modelMatrix * vec4(transformed, 1.0)).xyz;');
+    sh.fragmentShader = WATER_GLSL.head + 'uniform vec3 uTop, uBot, uUnder; uniform float uRefl, uOp; varying vec3 vWsW;\n' + sh.fragmentShader
+      .replace('#include <normal_fragment_maps>', WATER_GLSL.normal('vWsW'))
+      .replace('#include <opaque_fragment>', `{ vec3 V = normalize(vViewPosition), N = normalize(normal); float cv = clamp(abs(dot(N, V)), 0.0, 1.0), fr = 0.02 + 0.98 * pow(1.0 - cv, 5.0);
+        vec3 Rw = (vec4(reflect(-V, N), 0.0) * viewMatrix).xyz, sk = mix(uBot, uTop, smoothstep(0.0, 0.7, Rw.y));
+        if (gl_FrontFacing) { float rf = clamp((0.1 + fr) * uRefl, 0.0, 0.95); sk *= 1.0 + 1.4 * (1.0 - smoothstep(0.05, 0.6, Rw.y));   // a little sky even straight down: the ripples read as a moving surface
+          outgoingLight = mix(outgoingLight, sk, rf); diffuseColor.a = mix(uOp, 0.96, clamp(rf * 1.15, 0.0, 1.0)); ${WATER_GLSL.glint} }
+        else { float win = smoothstep(0.62, 0.72, cv); outgoingLight = mix(uUnder * (0.35 + 0.4 * length(uSunC)), mix(uBot, uTop, 0.4) * 1.25, win); diffuseColor.a = mix(0.85, 0.45, win); } }
+      #include <opaque_fragment>`); };
+  m.customProgramCacheKey = () => 'waterSurf'; return m;
+}
+// v3.2 pools: everything under a pool's water is seen through the water — tinted (tint) and fading into the deep colour with the length of the way through the water
+//   (exact ray–box test against the pool basin: straight down, through the glass edge or from under water), caustics dance on the floor, the walls and anything in the
+//   water (only below the level), a bright wobbling waterline where the surface meets a wall or a body, walls left wet after a drain. One shader patch on the
+//   materials after bake (POSTBAKE, like underwater caustics), up to 4 pools. Registered by swimPool(); poolWater(g, { lo, hi, level, … }) for other basins.
+const POOLU = { n: { value: 0 }, inv: { value: [0, 1, 2, 3].map(() => new THREE.Matrix4()) }, lo: { value: [0, 1, 2, 3].map(() => new THREE.Vector4()) }, hi: { value: [0, 1, 2, 3].map(() => new THREE.Vector4()) },
+  deep: { value: [0, 1, 2, 3].map(() => new THREE.Color()) }, tint: { value: [0, 1, 2, 3].map(() => new THREE.Color()) }, t: { value: 0 }, ck: { value: 0 }, lit: { value: 1 } }, POOLS = [];
+function poolWater(g, o) {   // g: the basin's group (local frame), o.lo / o.hi: [x, y, z] corners of the water body (inside the walls), o.level: t => local water height (≤ lo.y = dry)
+  if (POOLS.length >= 4 || CFG.poolWater === false) return null;
+  const P = { g, lo: o.lo, hi: o.hi, level: o.level, top: o.top ?? o.level(0), dens: o.dens ?? 0.16, deep: new THREE.Color(o.deep ?? '#0B5E8E'), tint: new THREE.Color(o.tint ?? '#A6EEF6'), caus: o.caustics ?? 1 };
+  if (!POOLS.length) {
+    POSTBAKE.push(() => { scene.updateMatrixWorld(true); POOLS.forEach((Q, i) => POOLU.inv.value[i].copy(Q.g.matrixWorld).invert()); POOLU.n.value = POOLS.length;
+      scene.traverse(x => { if (x.isMesh && !x.isPoints) for (const m of [].concat(x.material)) poolPatch(m); }); });
+    tick(t => { POOLU.t.value = t * 0.55 + 7; POOLU.lit.value = clamp((hemi.intensity * 0.55 + sun.intensity * 0.2) / (1.15 * 0.55 + 2.8 * 0.2), 0.12, 1.1);
+      POOLU.ck.value = (CFG.caustics ?? 1) * 0.75 * clamp(sun.intensity / 2.2, 0.15, 1.2) * clamp(skyU.orbDir.value.y * 4);
+      POOLS.forEach((Q, i) => { const L = Q.level(t), on = L > Q.lo[1] + 0.06; POOLU.lo.value[i].set(Q.lo[0], Q.lo[1], Q.lo[2], Q.dens); POOLU.hi.value[i].set(Q.hi[0], on ? L : -1e4, Q.hi[2], Q.top); }); });
+  }
+  const i = POOLS.push(P) - 1; POOLU.deep.value[i].copy(P.deep); POOLU.tint.value[i].copy(P.tint); return P;
+}
+function poolPatch(m) {
+  if (!m || !m.isMeshStandardMaterial || m.userData.pool || m.userData.noPool) return; m.userData.pool = true;
+  const prev = m.onBeforeCompile, pk = m.customProgramCacheKey?.() ?? '', ps = prev ? prev.toString() : '';
+  m.onBeforeCompile = (sh, r) => { if (prev) prev.call(m, sh, r);
+    Object.assign(sh.uniforms, { uPoolN: POOLU.n, uPoolInv: POOLU.inv, uPoolLo: POOLU.lo, uPoolHi: POOLU.hi, uPoolDeep: POOLU.deep, uPoolTint: POOLU.tint, uPoolT: POOLU.t, uPoolCK: POOLU.ck, uPoolLit: POOLU.lit, uPoolSun: skyU.orbDir });
+    sh.vertexShader = 'varying vec3 vPWP;\n' + sh.vertexShader.replace('#include <project_vertex>', `#include <project_vertex>
+      vec4 pwp = vec4(transformed, 1.0);
+      #ifdef USE_INSTANCING
+        pwp = instanceMatrix * pwp;
+      #endif
+      vPWP = (modelMatrix * pwp).xyz;`);
+    sh.fragmentShader = `uniform int uPoolN; uniform mat4 uPoolInv[4]; uniform vec4 uPoolLo[4], uPoolHi[4]; uniform vec3 uPoolDeep[4], uPoolTint[4], uPoolSun; uniform float uPoolT, uPoolCK, uPoolLit; varying vec3 vPWP;
+      float pqPath = -1.0, pqDepth = 0.0, pqWl = 0.0, pqDens = 0.0; vec3 pqDeep = vec3(0.0), pqTint = vec3(1.0);
+      float poolCausP(vec2 uv, float t){ vec2 p = mod(uv * 6.2832, 6.2832) - 250.0, i = p; float c = 1.0;
+        for (int n = 0; n < 4; n++) { float tt = t * (1.0 - 3.5 / float(n + 1)); i = p + vec2(cos(tt - i.x) + sin(tt + i.y), sin(tt - i.y) + cos(tt + i.x)); c += 1.0 / length(vec2(p.x / (sin(i.x + tt) / 0.005), p.y / (cos(i.y + tt) / 0.005))); }
+        c /= 4.0; c = 1.17 - pow(c, 1.4); return pow(abs(c), 8.0); }
+      ` + sh.fragmentShader.replace('#include <color_fragment>', `#include <color_fragment>
+      for (int i = 0; i < 4; i++) { if (i >= uPoolN) break;
+        vec3 lp = (uPoolInv[i] * vec4(vPWP, 1.0)).xyz; vec4 lo = uPoolLo[i], hi = uPoolHi[i];
+        if (lp.x < lo.x - 0.03 || lp.x > hi.x + 0.03 || lp.z < lo.z - 0.03 || lp.z > hi.z + 0.03 || lp.y < lo.y - 0.05) continue;
+        float dy = hi.y - lp.y, shell = step(min(min(min(lp.x - lo.x, hi.x - lp.x), min(lp.z - lo.z, hi.z - lp.z)), lp.y - lo.y), 0.04);
+        if (dy < 0.0 && lp.y < hi.w) diffuseColor.rgb *= 1.0 - 0.16 * shell;   // wet walls after a drain
+        float wob = 0.012 * sin(lp.x * 5.3 + lp.z * 4.1 + uPoolT * 3.3) + 0.008 * sin(lp.x * 11.0 - lp.z * 9.0 - uPoolT * 4.7);
+        pqWl = (1.0 - smoothstep(0.006, 0.03, abs(dy + wob))) * step(-100.0, dy);
+        if (dy > 0.0) { vec3 lc = (uPoolInv[i] * vec4(cameraPosition, 1.0)).xyz, rd = lc - lp; float L = length(rd); rd /= max(L, 1e-4);
+          vec3 sr = vec3(rd.x >= 0.0 ? 1.0 : -1.0, rd.y >= 0.0 ? 1.0 : -1.0, rd.z >= 0.0 ? 1.0 : -1.0), iv = sr / max(abs(rd), vec3(1e-4));
+          vec3 tf = max((vec3(lo.x, lo.y - 1.0, lo.z) - lp) * iv, (vec3(hi.x, hi.y, hi.z) - lp) * iv);
+          pqPath = clamp(min(min(min(tf.x, tf.y), tf.z), L), 0.0, 200.0); pqDepth = dy; pqDens = lo.w; pqDeep = uPoolDeep[i]; pqTint = uPoolTint[i]; }
+        break; }`).replace('#include <lights_fragment_end>', `#include <lights_fragment_end>
+      if (pqPath >= 0.0 && uPoolCK > 0.0) { vec3 pn = normalize((vec4(normal, 0.0) * viewMatrix).xyz), sd = normalize(uPoolSun); vec2 cuv = vPWP.xz + sd.xz / max(sd.y, 0.35) * pqDepth;
+        float cf = uPoolCK * exp(-pqDepth * 0.22) * (0.3 + 0.7 * max(pn.y, 0.0)) * smoothstep(0.0, 0.1, pqDepth);
+        reflectedLight.directDiffuse += diffuseColor.rgb * min(poolCausP(cuv / 1.25, uPoolT), 1.4) * cf * 1.5; }`).replace('#include <opaque_fragment>', `
+      if (pqPath >= 0.0) { float pk = 1.0 - exp(-pqPath * pqDens); outgoingLight = mix(outgoingLight * mix(vec3(1.0), pqTint, 1.0 - exp(-pqPath * 1.5)), pqDeep * uPoolLit, pk); }
+      if (pqWl > 0.0) outgoingLight = mix(outgoingLight, vec3(0.9, 0.97, 1.0) * uPoolLit, pqWl * 0.5);
+      #include <opaque_fragment>`); };
+  m.customProgramCacheKey = () => pk + ps + '|pool'; m.needsUpdate = true;
+}
+const CAUS = { k: { value: 0 }, t: { value: 0 }, sc: { value: 3.2 }, y: { value: 18 }, dk: { value: 0 } }, POSTBAKE = [];
 function causticPatch(m) {   // adds moving caustics to a standard material (world-space pattern on surfaces that face up), keeps earlier shader patches
   if (!m || !m.isMeshStandardMaterial || m.userData.caus) return; m.userData.caus = true;
   const prev = m.onBeforeCompile, pk = m.customProgramCacheKey?.() ?? '', ps = prev ? prev.toString() : '';
   m.onBeforeCompile = (sh, r) => { if (prev) prev.call(m, sh, r);
-    Object.assign(sh.uniforms, { uCausK: CAUS.k, uCausT: CAUS.t, uCausS: CAUS.sc });
+    Object.assign(sh.uniforms, { uCausK: CAUS.k, uCausT: CAUS.t, uCausS: CAUS.sc, uCausY: CAUS.y, uCausD: CAUS.dk });
     sh.vertexShader = 'varying vec3 vCWP;\n' + sh.vertexShader.replace('#include <project_vertex>', `#include <project_vertex>
       vec4 cwp = vec4(transformed, 1.0);
       #ifdef USE_INSTANCING
         cwp = instanceMatrix * cwp;
       #endif
       vCWP = (modelMatrix * cwp).xyz;`);
-    sh.fragmentShader = `uniform float uCausK, uCausT, uCausS; varying vec3 vCWP;
+    sh.fragmentShader = `uniform float uCausK, uCausT, uCausS, uCausY, uCausD; varying vec3 vCWP;
       float causP(vec2 uv, float t){ vec2 p = mod(uv * 6.2832, 6.2832) - 250.0, i = p; float c = 1.0;
         for (int n = 0; n < 4; n++) { float tt = t * (1.0 - 3.5 / float(n + 1)); i = p + vec2(cos(tt - i.x) + sin(tt + i.y), sin(tt - i.y) + cos(tt + i.x)); c += 1.0 / length(vec2(p.x / (sin(i.x + tt) / 0.005), p.y / (cos(i.y + tt) / 0.005))); }
         c /= 4.0; c = 1.17 - pow(c, 1.4); return pow(abs(c), 8.0); }
       ` + sh.fragmentShader.replace('#include <lights_fragment_end>', `#include <lights_fragment_end>
-      if (uCausK > 0.0) { float up = clamp((vec4(normal, 0.0) * viewMatrix).y * 0.7 + 0.3, 0.0, 1.0); reflectedLight.directDiffuse += diffuseColor.rgb * uCausK * up * min(causP(vCWP.xz / uCausS, uCausT), 1.4) * 1.6; }`); };
+      if (uCausK > 0.0) { float up = clamp((vec4(normal, 0.0) * viewMatrix).y * 0.7 + 0.3, 0.0, 1.0), cd = max(uCausY - vCWP.y, 0.0), cdk = 1.0 - uCausD * smoothstep(3.0, 45.0, cd);   // v3.2: deeper = darker, weaker caustics
+        reflectedLight.directDiffuse = reflectedLight.directDiffuse * cdk + diffuseColor.rgb * uCausK * up * min(causP(vCWP.xz / uCausS, uCausT), 1.4) * 1.6 * mix(1.0, 0.35, smoothstep(4.0, 50.0, cd) * step(0.001, uCausD));
+        reflectedLight.indirectDiffuse *= mix(1.0, cdk, 0.7); }`); };
   m.customProgramCacheKey = () => pk + ps + '|caus'; m.needsUpdate = true;
 }
+// v3.2 underwater by itself: SKY 'underwater' | 'deepsea' (at any key) without an underwater() call → added at bake with defaults (CFG.autoUnderwater: false = off):
+//   caustics, light shafts and marine snow around the camera, a depth gradient behind everything (bright towards the surface, dark below), deeper = darker,
+//   and a sandy seabed under the scene when there is no ground(). Everything fades with the sky: shots above water (SKY switching to 'day') stay dry.
+let UW = null; const _GROUND0 = GROUND, _uwV = new THREE.Vector2();
+const uwSky = n => n === 'underwater' || n === 'deepsea';
+function uwK(t, only) {   // how much of the sky at video time t is underwater (0 … 1, follows the SKY blend); only: 'underwater' | 'deepsea' counts just that one
+  if (!Array.isArray(SKY) || !SKY.length) return 0; let i = 0; for (let j = 0; j < SKY.length; j++) if (SKY[j][0] <= t) i = j;
+  const u = n => (only ? n === only : uwSky(n)) ? 1 : 0, A = SKY[i], B = SKY[i + 1]; if (!B) return u(A[1]);
+  return lerp(u(A[1]), u(B[1]), EASE.soft(clamp((t - A[0]) / (B[0] - A[0]))));
+}
+const uwLight = t => uwK(t, 'underwater') + 0.25 * uwK(t, 'deepsea');   // sunlight below the surface: full in shallow 'underwater', faint in the 'deepsea'
 function underwater(o = {}) {   // with SKY 'underwater' | 'deepsea': moving caustics on everything below (seabed, divers, fish, wrecks), light shafts, drifting plankton
-  const [ox, oz] = o.at ?? [0, 0];
-  CAUS.sc.value = o.scale ?? 3.2; POSTBAKE.push(() => scene.traverse(x => { if (x.isMesh) for (const m of [].concat(x.material)) causticPatch(m); }));
+  if (UW && o.auto) return UW; const [ox, oz] = o.at ?? [0, 0], surf = o.surface ?? 18; UW = { o };
+  CAUS.sc.value = o.scale ?? 3.2; CAUS.y.value = surf; POSTBAKE.push(() => scene.traverse(x => { if (x.isMesh) for (const m of [].concat(x.material)) causticPatch(m); }));
   tick(t => { CAUS.k.value = o.caustics ?? 0.9; CAUS.t.value = t * (o.speed ?? 0.5) + 23; });
-  if (o.shafts !== false) lightShafts({ at: [ox, oz], n: o.shafts ?? 9, top: o.surface ?? 18, len: (o.surface ?? 18) + 4, color: '#BFF4FF', opacity: 0.09 });
-  if (o.plankton !== false) emit('snow', { cover: false, at: [ox, 0, oz], area: [60, 60], height: 14, fall: 0.15, rate: 30, life: 14, size: 0.05, colors: ['#DFF6FF', '#A8E8F0'], opacity: 0.6, wind: [0.08, 0.02], t0: 0 });
+  if (o.auto || o.depthDark != null) POSTCAM.push(t => { const w = o.auto ? uwK(t) : 1; CAUS.k.value *= o.auto ? uwLight(t) : 1; CAUS.dk.value = (o.depthDark ?? 0.4) * w; });
+  if (o.shafts !== false) lightShafts({ at: [ox, oz], n: o.shafts ?? 9, top: surf, len: surf + 4 - (o.floor ?? 0), color: '#BFF4FF', opacity: 0.09, follow: !!o.auto, k: o.auto ? t => uwK(t, 'underwater') : null });
+  if (o.plankton !== false && !o.auto) emit('snow', { cover: false, at: [ox, 0, oz], area: [60, 60], height: 14, fall: 0.15, rate: 30, life: 14, size: 0.05, colors: ['#DFF6FF', '#A8E8F0'], opacity: 0.6, wind: [0.08, 0.02], t0: 0 });
+  if (o.snow !== false) marineSnow({ k: uwK });
+  if (o.gradient !== false) depthGradient({ k: uwK, surface: surf });
+  return UW;
+}
+POSTBAKE.unshift(() => {   // auto underwater (runs first after bake: the scene, its DEFERs and any underwater() call are done)
+  if (UW || CFG.autoUnderwater === false || !Array.isArray(SKY) || !SKY.some(s => uwSky(s[1]))) return;
+  world.updateMatrixWorld(true); const bb = new THREE.Box3(), b2 = new THREE.Box3(); let y0 = 1e9, yc = -1e9;
+  world.traverse(x => { if (!x.isMesh || !x.visible || !x.geometry) return; if (!x.geometry.boundingBox) x.geometry.computeBoundingBox(); b2.copy(x.geometry.boundingBox).applyMatrix4(x.matrixWorld);
+    if (b2.max.x - b2.min.x > 150 || b2.max.z - b2.min.z > 150 || b2.min.y < -400) return; bb.union(b2); });
+  if (!bb.isEmpty()) y0 = bb.min.y;
+  for (const k of CAM) { const py = Array.isArray(k.p) ? k.p[1] : k.follow && TRACK[k.follow] ? TRACK[k.follow].obj.position.y + (k.off?.[1] ?? 0) : null; if (py != null) { y0 = Math.min(y0, py - 1.5); yc = Math.max(yc, py); } }
+  if (y0 > 1e8) y0 = 0; const lv = waterH(0, 0, 0), surface = lv > -900 ? lv : Math.max(yc, bb.isEmpty() ? 0 : bb.max.y) + 12, deep = SKY.find(s => uwSky(s[1]))[1] === 'deepsea';
+  if (GROUND === _GROUND0) seabed({ y: y0 - 0.8, color: deep ? '#5E6A66' : '#C8B78A', at: bb.isEmpty() ? [0, 0] : [(bb.min.x + bb.max.x) / 2, (bb.min.z + bb.max.z) / 2] });
+  underwater({ auto: true, surface, floor: y0, at: bb.isEmpty() ? [0, 0] : [(bb.min.x + bb.max.x) / 2, (bb.min.z + bb.max.z) / 2], plankton: false });
+});
+// seabed({ y, color, size, at, rocks }) — v3.2: sandy sea floor at height y (gentle dunes, ripples, mottling, scattered rocks); auto-underwater adds one when there is no ground()
+function seabed(o = {}) {
+  const y = o.y ?? 0, size = o.size ?? 420, [cx, cz] = o.at ?? [0, 0], geo = new THREE.PlaneGeometry(size, size, 150, 150); geo.rotateX(-Math.PI / 2);
+  const p = geo.attributes.position, cols = [], c = new THREE.Color(), base = new THREE.Color(o.color ?? '#C8B78A');
+  for (let i = 0; i < p.count; i++) { const x = p.getX(i) + cx, z = p.getZ(i) + cz, r = Math.hypot(x - cx, z - cz);
+    p.setXYZ(i, x, y + 0.7 * noise2(x * 0.035, z * 0.035) + 0.22 * noise2(x * 0.14 + 7, z * 0.14 - 3) + 6 * clamp((r - 70) / 140) ** 2 * (0.6 + 0.4 * noise2(x * 0.02, z * 0.02)), z);
+    c.copy(base).offsetHSL(0.01 * noise2(x * 0.05 + 3, z * 0.05), 0, 0.05 * noise2(x * 0.06, z * 0.06 + 9) + 0.025 * noise2(x * 0.3, z * 0.3)); cols.push(c.r, c.g, c.b); }
+  geo.setAttribute('color', new THREE.Float32BufferAttribute(cols, 3)); geo.computeVertexNormals();
+  const me = mesh(world, geo, groundFx(new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 1 })), 0, 0, 0, { cast: false });
+  const R = o.rocks ?? 26; for (let i = 0; i < R; i++) { const a = hash(i * 3.3) * TAU, d = 4 + hash(i * 5.1) * 60, x = cx + Math.cos(a) * d, z = cz + Math.sin(a) * d, s = 0.25 + hash(i * 7.7) ** 2 * 1.4;
+    const b = ball(world, s, shade(o.rock ?? '#6F6A60', (hash(i * 9.1) - 0.5) * 0.2), x, y + 0.25 * noise2(x * 0.14 + 7, z * 0.14 - 3) + 0.7 * noise2(x * 0.035, z * 0.035) + s * 0.25, z, { detail: 0, cast: false }); b.scale.set(1.2, 0.6, 1); b.rotation.y = hash(i) * TAU; }
+  return me;
+}
+// marineSnow({ n, box, size, color, opacity, k }) — v3.2: drifting specks around the camera (box m wide, wraps seamlessly, fades at the edges) — always where the shot is.
+//   Pure function of t and the camera. k: t => 0 … 1 (fade, e.g. with the sky).
+function marineSnow(o = {}) {
+  const n = o.n ?? 1400, B = o.box ?? 20, pos = new Float32Array(n * 3), sd = new Float32Array(n);
+  for (let i = 0; i < n; i++) { pos[i * 3] = hash(i * 1.31 + 0.2) * B; pos[i * 3 + 1] = hash(i * 2.17 + 5.1) * B; pos[i * 3 + 2] = hash(i * 3.71 + 9.7) * B; sd[i] = hash(i * 4.3 + 1.9); }
+  const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.BufferAttribute(pos, 3)); geo.setAttribute('seed', new THREE.BufferAttribute(sd, 1));
+  const U = { uT: { value: 0 }, uB: { value: B }, uK: { value: 0 }, uSize: { value: o.size ?? 0.045 }, uScale: { value: 400 }, uCol: { value: new THREE.Color(o.color ?? '#E4F6FF') }, uOp: { value: o.opacity ?? 0.75 } };
+  const m = new THREE.ShaderMaterial({ uniforms: U, transparent: true, depthWrite: false,
+    vertexShader: `attribute float seed; uniform float uT, uB, uK, uSize, uScale, uOp; varying float vA;
+      void main() { vec3 p = position + vec3(0.07, -0.12 - 0.1 * seed, 0.04) * uT + 0.25 * vec3(sin(uT * 0.37 + seed * 40.0), 0.0, cos(uT * 0.29 + seed * 31.0));
+        vec3 r = mod(p - cameraPosition + uB * 0.5, uB) - uB * 0.5; vec4 mv = viewMatrix * vec4(cameraPosition + r, 1.0); gl_Position = projectionMatrix * mv;
+        float d = length(r); vA = uK * uOp * (1.0 - smoothstep(uB * 0.3, uB * 0.5, d)) * smoothstep(0.3, 0.9, d) * (0.45 + 0.55 * seed);
+        gl_PointSize = clamp(uSize * (0.5 + seed) * uScale * projectionMatrix[1][1] / max(-mv.z, 0.05), 1.0, uScale * 0.012); }`,
+    fragmentShader: `uniform vec3 uCol; varying float vA; void main() { float r = length(gl_PointCoord - 0.5); if (r > 0.5 || vA < 0.004) discard; gl_FragColor = vec4(uCol, vA * (1.0 - smoothstep(0.2, 0.5, r))); }` });
+  const pts = new THREE.Points(geo, m); pts.frustumCulled = false; pts.renderOrder = 6; scene.add(pts);
+  pts.onBeforeRender = r => { const rt = r.getRenderTarget(); U.uScale.value = 0.5 * (rt ? rt.height : r.getDrawingBufferSize(_uwV).y); };
+  POSTCAM.push(t => { const k = o.k ? o.k(t) : 1; U.uK.value = k; U.uT.value = t; pts.visible = k > 0.002; });
+  return pts;
+}
+// depthGradient({ k, surface }) — v3.2: underwater backdrop around the camera: the fog colour at the horizon, brighter and greener towards the surface, a soft
+//   bright window straight up (shallow water), dark below — replaces the flat one-colour frame. Things far away still fade into the fog colour (same horizon).
+function depthGradient(o = {}) {
+  const U = { uFog: { value: new THREE.Color() }, uK: { value: 0 }, uWin: { value: 1 } };
+  const m = new THREE.ShaderMaterial({ uniforms: U, side: THREE.BackSide, depthWrite: false, transparent: true,
+    vertexShader: 'varying vec3 vD; void main() { vD = position; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+    fragmentShader: `uniform vec3 uFog; uniform float uK, uWin; varying vec3 vD;
+      void main() { vec3 d = normalize(vD); float y = d.y; vec3 up = uFog * 1.75 + vec3(0.015, 0.05, 0.05), dn = uFog * 0.3;
+        vec3 c = y > 0.0 ? mix(uFog, up, pow(y, 0.75)) : mix(uFog, dn, smoothstep(0.0, 0.7, -y));
+        c += (uFog * 1.3 + vec3(0.04, 0.08, 0.08)) * smoothstep(0.82, 0.99, y) * uWin;
+        gl_FragColor = vec4(c, uK); }` });
+  const dome = new THREE.Mesh(new THREE.SphereGeometry(700, 32, 16), m); dome.frustumCulled = false; dome.renderOrder = -9; scene.add(dome);
+  POSTCAM.push(t => { const k = o.k ? o.k(t) : 1; U.uK.value = k; dome.visible = k > 0.002; dome.position.copy(camera.position); U.uFog.value.copy(scene.fog.color);
+    U.uWin.value = clamp(1 - (o.surface != null ? (o.surface - camera.position.y) / 40 : 0.5)) * (skyNow === SKIES.deepsea ? 0.25 : 1); });
+  return dome;
 }
 function lightShafts(o = {}) {   // god rays: soft additive beams slanting along the sun direction, swaying slowly (forest clearings, windows, dust, underwater)
   const [ax, az] = o.at ?? [0, 0], n = o.n ?? 7, top = o.top ?? 18, len = o.len ?? 24, g = dyn(grp(world, 0, 0, 0)), ms = [];
   const geo = G('shaft', () => { const c = new THREE.CylinderGeometry(1, 1, 1, 10, 1, true), p = c.attributes.position, cl = []; for (let i = 0; i < p.count; i++) { const k = p.getY(i) + 0.5; cl.push(k, k, k); } c.setAttribute('color', new THREE.Float32BufferAttribute(cl, 3)); return c.translate(0, -0.5, 0); });
   for (let i = 0; i < n; i++) { const m = new THREE.MeshBasicMaterial({ color: new THREE.Color(o.color ?? '#FFF2D0'), vertexColors: true, transparent: true, opacity: o.opacity ?? 0.08, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, fog: false });
     const s = new THREE.Mesh(geo, m), r = (o.width ?? 1.2) * (0.5 + hash(i * 3.1) * 1.2); s.position.set(ax + (hash(i * 1.7) - 0.5) * (o.spread ?? 30), top, az + (hash(i * 2.3) - 0.5) * (o.spread ?? 30)); s.scale.set(r, len * (0.7 + 0.5 * hash(i * 4.4)), r * 0.35); s.rotation.y = hash(i * 5.5) * TAU;
-    g.add(s); ms.push([s, m, hash(i * 6.6) * 10]); }
+    g.add(s); ms.push([s, m, hash(i * 6.6) * 10, s.position.x, s.position.z]); }
   tick(t => { const d = skyU.orbDir.value, tl = Math.min(0.6, Math.acos(clamp(d.y, -1, 1)) * 0.6), az2 = Math.atan2(d.x, d.z);
     for (const [s, m, ph] of ms) { s.rotation.set(0, 0, 0); s.rotateY(az2); s.rotateX(-tl + 0.05 * Math.sin(t * 0.4 + ph)); m.opacity = (o.opacity ?? 0.08) * (0.6 + 0.4 * Math.sin(t * 0.7 + ph)); } });
+  if (o.follow || o.k) { const sp = o.spread ?? 30;   // v3.2: k: t => 0 … 1 fade (video time) · follow: the beams repeat every spread m around the camera (fading out before they wrap)
+    POSTCAM.push(t => { const k = o.k ? o.k(t) : 1; g.visible = k > 0.002; if (!g.visible) return; const cp = camera.position;
+      for (const [s, m, , bx, bz] of ms) { let f = k; if (o.follow) { const rx = (((bx - cp.x + sp / 2) % sp) + sp) % sp - sp / 2, rz = (((bz - cp.z + sp / 2) % sp) + sp) % sp - sp / 2;
+          s.position.x = cp.x + rx; s.position.z = cp.z + rz; f *= (1 - sm01((Math.max(Math.abs(rx), Math.abs(rz)) / sp - 0.3) / 0.2)) * sm01((Math.hypot(rx, rz) - 3) / 6); } m.opacity *= f; } }); }
   return g;
 }
 function coral(p, x, z, o = {}) {   // kind: branch | brain | fan | tube — bright reef colours
@@ -7985,20 +8163,38 @@ function archiveDesk(p, x, z, o = {}) {   // v2.47: 1950s archive corner: desk w
   for (let i = 0; i < 3; i++) { const cb = grp(g, -1.2 + i * 0.6, 0, -1.0); box(cb, 0.5, 1.3, 0.6, grey, 0, 0, 0); for (let k = 0; k < 4; k++) { box(cb, 0.46, 0.28, 0.02, shade(grey, 0.08), 0, 0.06 + k * 0.31, 0.31); box(cb, 0.12, 0.03, 0.03, '#C8C8CC', 0, 0.2 + k * 0.31, 0.33); } }
   return { g, folder: fo, page };
 }
-function swimPool(p, x, z, o = {}) {   // v2.46: raised terrace with an infinity pool (villa on a slope): pool w × d (x × z), deck top at h, water up to level; infinity glass edge on the +z side (P.wall: breakApart it); drain: [t0, t1] empties the pool; returns { g, wall, level(t), top, w, d }
-  const w = o.w ?? 4.5, d = o.d ?? 10, H = o.h ?? 1.9, m = o.deck ?? 3, g = stat(grp(p ?? world, x, 0, z, o.ry ?? 0)), NC = { cast: false }, deck = o.deckColor ?? '#E8DCC8', stone = o.wallColor ?? '#CFC2AA', tile = '#8FD0E8';
+function swimPool(p, x, z, o = {}) {   // v2.46: raised terrace with an infinity pool (villa on a slope): pool w × d (x × z), deck top at h, water up to level; infinity glass edge on the +z side (P.wall: breakApart it); drain: [t0, t1] empties the pool; returns { g, wall, level(t), top, w, d, surface }
+  // v3.2: real water — rippling surface with sky reflection and sun glint (waterSurfaceMat), everything under water tinted by the depth it is seen through, caustics on
+  //   floor, walls and swimmers (poolWater), tiled basin (lane line, drain grate) with a dark mosaic waterline band, stone coping, ladder with steps.
+  //   o.water: { color, deep, tint, opacity, ripples, scale, dens } | false (no water) · o.tiles: false = plain colours · o.lanes: false · tileColor, bandColor, copingColor
+  const w = o.w ?? 4.5, d = o.d ?? 10, H = o.h ?? 1.9, m = o.deck ?? 3, g = stat(grp(p ?? world, x, 0, z, o.ry ?? 0)), NC = { cast: false }, deck = o.deckColor ?? '#E8DCC8', stone = o.wallColor ?? '#CFC2AA';
+  const tile = o.tileColor ?? '#A4DCEA', band = o.bandColor ?? '#2A78A8', cop = o.copingColor ?? '#ECE6DA', TS = o.tiles === false || CFG.surfaces === false ? NC : { ...NC, surf: 'tiles' }, bh = Math.min(0.24, (H - 0.2) * 0.2), iw = w - 0.16;
   const W = w + 2 * m, D = d + m + 0.6;
   for (const [bw, bd, bx, bz] of [[m, D, -(w / 2 + m / 2), -m / 2 + 0.3], [m, D, w / 2 + m / 2, -m / 2 + 0.3], [w, m, 0, -d / 2 - m / 2]]) box(g, bw, H, bd, stone, bx, 0, bz).receiveShadow = true;
   for (const [bw, bd, bx, bz] of [[m, D, -(w / 2 + m / 2), -m / 2 + 0.3], [m, D, w / 2 + m / 2, -m / 2 + 0.3], [w, m, 0, -d / 2 - m / 2]]) box(g, bw + 0.02, 0.06, bd + 0.02, deck, bx, H, bz, { surf: 'plank' });
-  box(g, w, 0.2, d, tile, 0, 0, 0); for (const sx of [-1, 1]) box(g, 0.08, H - 0.2, d, tile, sx * (w / 2 - 0.04), 0.2, 0, NC); box(g, w, H - 0.2, 0.08, tile, 0, 0.2, -d / 2 + 0.04, NC);
+  box(g, w, 0.2, d, tile, 0, 0, 0, TS);   // floor, side walls (lower tiles + mosaic band), back wall between them (no overlapping faces)
+  for (const sx of [-1, 1]) { box(g, 0.08, H - 0.2 - bh, d, tile, sx * (w / 2 - 0.04), 0.2, 0, TS); box(g, 0.08, bh, d, band, sx * (w / 2 - 0.04), H - bh, 0, TS); }
+  box(g, iw, H - 0.2 - bh, 0.08, tile, 0, 0.2, -d / 2 + 0.04, TS); box(g, iw, bh, 0.08, band, 0, H - bh, -d / 2 + 0.04, TS);
+  for (const sx of [-1, 1]) box(g, 0.42, 0.105, d + 0.3, cop, sx * (w / 2 + 0.09), H - 0.03, -0.15, NC);   // coping: 4 cm over the water, on top of the deck edge
+  box(g, w - 0.24, 0.105, 0.42, cop, 0, H - 0.03, -d / 2 - 0.09, NC);
+  if (o.lanes !== false && w >= 2.6 && d >= 5) { const ll = d - 2.42; box(g, 0.22, 0.012, ll, band, 0, 0.2, 0, NC); for (const sz of [-1, 1]) box(g, 0.9, 0.012, 0.22, band, 0, 0.2, sz * (d / 2 - 1.1), NC); }
+  box(g, 0.36, 0.012, 0.36, '#4E6470', w / 4, 0.2, -d / 6, NC); for (let i = 0; i < 4; i++) box(g, 0.3, 0.014, 0.025, '#2E3E46', w / 4, 0.2, -d / 6 - 0.12 + i * 0.08, NC);   // drain grate
   box(g, w, 0.2, 0.6, stone, 0, 0, d / 2 + 0.3);
-  const wall = dyn(grp(g, 0, 0, d / 2 + 0.05)); box(wall, w, H - 0.02, 0.1, '', 0, 0.2, 0, { mat: mat('#BFE8FF', { own: true, opacity: 0.35, rough: 0.05 }), ...NC });
+  const wall = dyn(grp(g, 0, 0, d / 2 + 0.05)); box(wall, w, H - 0.02, 0.1, '', 0, 0.2, 0, { mat: mat('#BFE8FF', { own: true, opacity: 0.3, rough: 0.05 }), ...NC });
   const L0 = o.level ?? H - 0.08, dr = o.drain, level = t => !dr ? L0 : lerp(L0, 0.3, EASE.inOut(clamp((t - dr[0]) / (dr[1] - dr[0]))));
-  const wm = new THREE.MeshStandardMaterial({ color: '#38A8D8', transparent: true, opacity: o.opacity ?? 0.4, roughness: 0.08, metalness: 0.1, depthWrite: false });
-  const wat = dyn(mesh(g, new THREE.BoxGeometry(w - 0.18, 1, d - 0.18), wm, 0, 0.5, 0, NC)); wat.renderOrder = 3;
-  tick(t => { const L = level(t), hh = Math.max(0.02, L - 0.2); wat.scale.y = hh; wat.position.y = 0.2 + hh / 2; wat.visible = L > 0.32; });
-  if (o.ladder !== false) for (const sx of [-0.25, 0.25]) cyl(g, 0.025, 0.025, 1.0, '#D8D8DC', w / 2 - 0.3 + sx, H - 0.4, -d / 2 + 1.2, { seg: 6 });
-  return { g, wall, level: t => level(t), top: H, w, d };
+  let surface = null;
+  if (o.water !== false) {   // the surface sits at level(t); the basin (inside the walls, up to the glass) is registered for the under-water look
+    const wo = o.water ?? {}, wm = waterSurfaceMat({ color: wo.color ?? '#2FA6CF', opacity: wo.opacity, ripples: wo.ripples, scale: wo.scale ?? 0.8 }), z0 = -(d / 2 - 0.06), z1 = d / 2 - 0.004;
+    const sg = new THREE.PlaneGeometry(w - 0.12, z1 - z0); sg.rotateX(-Math.PI / 2);
+    surface = dyn(mesh(g, sg, wm, 0, L0, (z0 + z1) / 2, { cast: false, recv: false })); surface.renderOrder = -1;   // first of the see-through things: spray and splashes above the water stay in front
+    tick(t => { const L = level(t); surface.position.y = L; surface.visible = L > 0.32; });
+    poolWater(g, { lo: [-iw / 2, 0.2, -(d / 2 - 0.08)], hi: [iw / 2, H, d / 2], level, top: L0, deep: wo.deep, tint: wo.tint, dens: wo.dens });
+  }
+  if (o.ladder !== false) { const lx = w / 2 - 0.25, lz = -d / 2 + 1.2, ly = Math.max(0.25, H - 1.3), RC = '#D8D8DC';   // steel ladder against the side wall: rails bend over the coping onto the deck
+    for (const sz of [-0.25, 0.25]) { cyl(g, 0.025, 0.025, H + 0.55 - ly, RC, lx, ly, lz + sz, { seg: 8 }); const bar = cyl(g, 0.025, 0.025, 0.45, RC, lx + 0.225, 0, lz + sz, { seg: 8 }); bar.rotation.z = Math.PI / 2; bar.position.y = H + 0.55;
+      cyl(g, 0.025, 0.025, 0.49, RC, lx + 0.45, H + 0.06, lz + sz, { seg: 8 }); }
+    for (let k = 0; k < 3; k++) { const yy = H - 0.35 - k * 0.3; if (yy > ly + 0.05) box(g, 0.12, 0.03, 0.5, '#C8CCD0', lx, yy, lz, NC); } }
+  return { g, wall, level: t => level(t), top: H, w, d, surface };
 }
 function airbed(p, x, y, z, o = {}) {   // v2.46: inflatable air mattress (float) at water height y; deflate: [t0, t1] slowly flattens (leak, small bubbles), pop: t bursts (gone); returns { g }
   const g = dyn(grp(p ?? world, x, y, z, o.ry ?? 0)), c = o.color ?? '#F2C230', b = grp(g);
