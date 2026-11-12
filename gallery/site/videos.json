@@ -1,5 +1,5 @@
 {
- "updated": "2026-11-12T18:12:25Z",
+ "updated": "2026-11-12T19:25:59Z",
  "videos": [
   {
    "slug": "dday",
@@ -190,6 +190,83 @@
     ]
    },
    "auto": true
+  },
+  {
+   "slug": "louvre-heist-guard",
+   "title": "What if you were the guard during the Louvre heist?",
+   "kind": "story",
+   "dur": 56.3,
+   "aspect": "9:16",
+   "accent": "red",
+   "series": null,
+   "ending": null,
+   "date": "2026-11-12T19:25:59Z",
+   "status": "ready",
+   "files": {
+    "mp4": {
+     "url": "https://github.com/Leon1304/what-if-engine/releases/download/render-louvre-heist-guard/louvre-heist-guard.mp4",
+     "size": 206163191
+    },
+    "coverA": {
+     "url": "https://github.com/Leon1304/what-if-engine/releases/download/render-louvre-heist-guard/louvre-heist-guard-cover.jpg",
+     "size": 433353,
+     "thumb": "covers/louvre-heist-guard.jpg"
+    },
+    "coverB": {
+     "url": "https://github.com/Leon1304/what-if-engine/releases/download/render-louvre-heist-guard/louvre-heist-guard-cover-b.jpg",
+     "size": 270377,
+     "thumb": "covers/louvre-heist-guard-b.jpg"
+    },
+    "srt": {
+     "url": "https://github.com/Leon1304/what-if-engine/releases/download/render-louvre-heist-guard/louvre-heist-guard.srt",
+     "size": 1325
+    }
+   },
+   "preview": "https://claude.ai/artifact/F6oFgg7neaQoPwhgULSAKS",
+   "captions": {
+    "youtube": {
+     "title": "What if you were the guard during the Louvre heist?",
+     "description": "Paris, October 19, 2025. Two \"workers\" ride a furniture lift up to the Apollo Gallery — and in under 8 minutes, nine crown jewels are gone. One crown was dropped on the way. The other eight are still missing.\nYou're the guard. What do you do? Comment A, B or C 👇\nSources: AFP (Oct 20, 2026 – jewels still missing, suspects await trial) · Paris prosecutor via AFP (about €88M / $102M, under 8 minutes) · ABC News (Empress Eugénie's crown recovered, gallery reopened July 2026)\n#shorts #viral #trending #youtubeshorts #fyp",
+     "tags": [
+      "louvre heist",
+      "what if you were the guard during the louvre heist",
+      "louvre robbery",
+      "louvre jewel heist",
+      "crown jewels stolen",
+      "louvre heist explained",
+      "apollo gallery",
+      "paris museum heist",
+      "french crown jewels",
+      "louvre jewels missing",
+      "museum heist",
+      "true crime",
+      "true crime shorts",
+      "heist",
+      "louvre",
+      "furniture lift heist",
+      "lovre heist",
+      "louvre hiest",
+      "museum guard",
+      "what if",
+      "what if scenarios",
+      "shorts",
+      "3d animation",
+      "whatifthishappenedscenarios",
+      "viral",
+      "trending",
+      "fyp"
+     ],
+     "tagChars": 463
+    },
+    "instagram": "You're the museum guard. A disc cutter screams through the window — 8 minutes later, the crown jewels are gone. 💎\nWhat do YOU do? Comment A, B or C 👇\n\n#reels #viral #explore #reelsinstagram #trending",
+    "tiktok": "POV: you're the guard during the Louvre heist 💎\n9 jewels. Under 8 minutes. 8 still missing. What do you do? Comment A, B or C 👇\n\n#fyp #foryou #foryoupage #viral #trending",
+    "hooks": [
+     "Two 'workers' rode a furniture lift into the Louvre. Nobody looked twice.",
+     "Eight minutes. Nine crown jewels. One dropped crown.",
+     "A year later, the Louvre's jewels are still missing — and you were on shift."
+    ]
+   },
+   "auto": false
   },
   {
    "slug": "megalodon-pool",
