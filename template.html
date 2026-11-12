@@ -503,6 +503,7 @@ function VT(s) { if (!SLOW.length || s <= 0) return s; let a = 0, b = _stT.lengt
 // --- shot helper for CAM: two keys (start with cut + transition, end with a slow move). kind: wide | mid | close | macro
 //   ...shot('close', 6.05, 2, [x, y, z] | 'name from track()', { az, dist, h, fov, fy, dof, move: push|pull|orbit|crane|static, tr, td, dir, dy })
 function shot(kind, t, dur, at, o = {}) {
+  dur = Math.round((t + dur) * 1e6) / 1e6 - t;   // v2.40.27: 8.3 + 1.9 = 10.200000000000001 sorted the end key after a hand cut at 10.2 (the cut was lost)
   if (kind === 'pov') { const base = { pov: at, look: o.look, pitch: o.pitch, free: o.free, fov: o.fov ?? 66, fy: 0.5, dof: o.dof ?? 0, hand: o.hand ?? 0.5 };   // first person: through the eyes of a track()ed figure
     return [{ t, ...base, cut: true, tr: o.tr, td: o.td, dir: o.dir }, { t: t + dur, ...base, e: 'lin' }]; }
   const [D, H, F, FY, DF] = { wide: [48, 26, 44, 0.5, 0], mid: [13, 3.5, 46, 0.5, 0], close: [4.2, 0.3, 34, 0.36, 0.5], macro: [1.7, 0.1, 28, 0.3, 0.9] }[kind] ?? [13, 3.5, 46, 0.5, 0];
@@ -3280,12 +3281,13 @@ function gloves(f, o = {}) {   // boxing gloves on both hands (fingers hidden), 
 const ORRERY_DEF = [   // name, orbit (model units), radius, planet() kind, colours
   ['Mercury', 7, 0.32, 'moon', '#9C948A', '#6E675E'], ['Venus', 9.5, 0.62, 'gas', '#E8D2A0', '#D8BE88'], ['Earth', 12.5, 0.66, 'earth'], ['Mars', 15.5, 0.45, 'mars'],
   ['Jupiter', 23, 1.9, 'gas', '#D2A878', '#F0DCC0'], ['Saturn', 30, 1.6, 'gas', '#E2C892', '#F2E2BE'], ['Uranus', 36, 1.05, 'ice', '#A8E0E8', '#8CCCD8'], ['Neptune', 41, 1.0, 'ice', '#4A78D8', '#3A5EC0']];
-function orrery(p, x, y, z, o = {}) {   // sun + 8 planets on faint orbit rings (front +z); angles: deg per planet (0 = +z, ccw seen from above); align: [t0, dur] swings all to o.line (deg) → { g, pos(i, t) world [x,y,z], sun, names }
+function orrery(p, x, y, z, o = {}) {   // sun + 8 planets on faint orbit rings (front +z); angles: deg per planet (0 = +z, ccw seen from above); align: [t0, dur] swings all to o.line (deg); planetScale / ringW: bigger planets / thicker rings for views from far above → { g, pos(i, t) world [x,y,z], sun, names }
   const s = o.scale ?? 1, g = dyn(grp(p ?? world, x, y, z)), NC = { cast: false }, ang = o.angles ?? [200, 140, 0, 300, 60, 250, 120, 330], line = o.line ?? 0, [a0, ad] = o.align ?? [1e9, 1];
-  const sun = ball(g, 3.2 * s, '', 0, 0, 0, { mat: mat('#FFC46A', { basic: true, glow: 3.2 }), detail: 3, ...NC }); ball(g, 4.4 * s, '', 0, 0, 0, { mat: mat('#FF9A3A', { basic: true, glow: 1.2, opacity: 0.22 }), detail: 3, ...NC });
+  const nf = m => { m.fog = false; return m; }, ps = o.planetScale ?? 1, rw = 0.035 * s * (o.ringW ?? 1);   // models float in space: no fog on the sun and the orbit rings
+  const sun = ball(g, 3.2 * s, '', 0, 0, 0, { mat: nf(mat('#FFC46A', { basic: true, glow: 3.2, own: true })), detail: 3, ...NC }); ball(g, 4.4 * s, '', 0, 0, 0, { mat: nf(mat('#FF9A3A', { basic: true, glow: 1.2, opacity: 0.22, own: true })), detail: 3, ...NC });
   const P = ORRERY_DEF.map(([name, R, r, kind, c1, c2], i) => {
-    if (o.orbits !== false) { const rg = new THREE.Mesh(new THREE.RingGeometry(R * s - 0.035 * s, R * s + 0.035 * s, 160), mat('#AFC4FF', { basic: true, opacity: o.orbitOpacity ?? 0.35 })); rg.rotation.x = -Math.PI / 2; g.add(rg); }
-    const pg = planet(g, 0, 0, 0, { kind, r: r * s, color: c1, color2: c2, ring: name === 'Saturn' ? { inner: r * s * 1.35, outer: r * s * 2.2 } : undefined, clouds: kind === 'earth', axis: 0.3, spin: 0.15 });
+    if (o.orbits !== false) { const rg = new THREE.Mesh(new THREE.RingGeometry(R * s - rw, R * s + rw, 160), nf(mat('#AFC4FF', { basic: true, opacity: o.orbitOpacity ?? 0.35, own: true }))); rg.rotation.x = -Math.PI / 2; g.add(rg); }
+    const pg = planet(g, 0, 0, 0, { kind, r: r * s * ps, color: c1, color2: c2, ring: name === 'Saturn' ? { inner: r * s * ps * 1.35, outer: r * s * ps * 2.2 } : undefined, clouds: kind === 'earth', axis: 0.3, spin: 0.15 });
     return { name, R: R * s, g: pg };
   });
   const angAt = (i, t) => { const a = ang[i], k = span(t, a0, ad, 'inOut'); let d = ((line - a) % 360 + 540) % 360 - 180; return (a + d * k) * Math.PI / 180; };
