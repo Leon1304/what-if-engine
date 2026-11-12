@@ -830,3 +830,11 @@ Dinge zerbrechen so, wie sie gebaut sind. Alles ist echte Physik (einmal vorab s
 - `mineCage(p, x, z, { h: 40, close: t, up: t, dur: 3, ry })` → `{ g, cage, y(t) }`: Schachtgerüst mit Förderkorb (Gitterkorb, Licht); das Scherengitter vorne (+z) schließt bei `close`, der Korb fährt ab `up` in `dur` s `h` m hoch, mit Geräusch `lift`.
 - `headlamp(rig, { color, battery: t => 0..1, flicker: [[t0, t1]], intensity: 90, dist, angle })` → `{ helmet, light }`: Schutzhelm mit Stirnlampe und Lichtkegel in Blickrichtung (Hut und Haare werden ausgeblendet).
 - `walkie(rig, { talk: [[t0, t1], …] })`: Funkgerät an der Brust, rote LED blinkt, solange gesprochen wird.
+
+# Neu in v2.40 (Fehlerbehebung: Haare, Hut, Mantel, Räder; mehr Details)
+
+- **Haare, Hut, Umhang springen nicht mehr:** Jedes Teil einer Figur startet in jedem Bild aus seiner gebauten Lage; das Nachschwingen addiert sich nicht mehr von Bild zu Bild auf (vorher: Haare wanderten vom Kopf weg und sprangen an den Grenzen der Render-Blöcke zurück, die ganze Figur ruckte).
+- **Prüfung (`--audit`, läuft bei `--shots` mit):** vergleicht an allen Grenzen der 12 bzw. 20 Render-Blöcke und 12 weiteren Momenten jedes Einzelteil jeder Figur, jedes Tiers und jedes bewegten Objekts (Lage, Drehung, Größe, sichtbar), Materialien, Lichter und Kamera: direkt angesprungen, durchgespielt, jedes 3. Bild, zurückgesprungen, dazu eine zweite frische Seite. Abweichungen kommen als `MOTION:`-Zeile mit Figur, Teil und Zeit.
+- **Tiere:** `beast()` mit geformten, bemalten Körpern (Rumpf, Hals, Kopf, Kiefer, Beine, Schwanz), Augenlidern, Paarhufen und Zehen.
+- **Fahrzeuge und Züge:** Karosserien mit Radkästen, Felgen, schrägen Scheiben, Türen mit dunklem Innenraum; jedes Rad rollt nach seinem eigenen Radius, Vorderräder lenken, auch im `traffic()`.
+- **Behoben:** Heuballen schwebte 0,55 m über dem Boden, Burgfahnen wurden von der Turmwand abgeschnitten (`cloth({ wall: true })`), schwarze Türflächen am Bauernhaus.
