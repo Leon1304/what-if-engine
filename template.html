@@ -7846,6 +7846,16 @@ function petrify(obj, o = {}) {   // v2.43: turns an animal / figure / prop into
     for (let i = 0; i < n; i++) ball(g, 0.012 + hash(i * 3.3) * 0.02 * Math.max(1, sz.y), '#F6F2EA', b.min.x + hash(i * 1.1) * sz.x, b.max.y - hash(i * 2.7) * sz.y * 0.35, b.min.z + hash(i * 4.9) * sz.z, { detail: 0, cast: false }); }
   return obj;
 }
+function tripodCam(p, x, z, o = {}) {   // v2.43.2: photo camera on a tripod (3 splayed legs, body, lens, hood); ry = direction the lens points (0 = +z); flash: [t, …] = flash fires (white burst); returns { g, head }
+  const H = o.h ?? 1.2, gy = typeof groundH === 'function' ? groundH(x, z) : 0, g = stat(grp(p ?? world, x, gy, z, o.ry ?? 0));
+  for (let i = 0; i < 3; i++) { const a = i * 2.094 + 0.5, L = cyl(g, 0.012, 0.016, H * 1.04, '#2A2A2E', 0, 0, 0, { seg: 5 }); L.position.set(Math.sin(a) * 0.17, H * 0.5, Math.cos(a) * 0.17); L.rotation.set(Math.cos(a) * 0.17, 0, -Math.sin(a) * 0.17); }
+  const head = grp(g, 0, H, 0); box(head, 0.16, 0.11, 0.08, '#1E1E22', 0, 0, 0); box(head, 0.05, 0.03, 0.04, '#2E2E34', -0.04, 0.11, 0);
+  const lens = cyl(head, 0.038, 0.042, 0.11, '#141416', 0, 0.055, 0.04, { seg: 12 }); lens.rotation.x = Math.PI / 2; lens.position.set(0, 0.055, 0.09);
+  const fl = dyn(box(head, 0.06, 0.03, 0.03, '#FFFFFF', 0.045, 0.12, 0.02, { emissive: '#FFFFFF' }));
+  if (o.flash?.length) tick(t => { const k = Math.max(0, ...o.flash.map(f => t >= f && t < f + 0.18 ? 1 - (t - f) / 0.18 : 0)); fl.scale.setScalar(1 + k * 3); fl.visible = k > 0; });
+  else fl.visible = false;
+  return { g, head };
+}
 function jetty(p, x, z, o = {}) {   // v2.43.1: wooden jetty / boardwalk from (x, z) toward +z over water (len, w, h = deck height, ry): plank deck in sections, posts down to the bed, optional rails; returns { g, sections, end } (end = last section, e.g. for breakApart)
   const g = stat(grp(p ?? world, x, 0, z, o.ry ?? 0)), L = o.len ?? 10, W = o.w ?? 1.4, H = o.h ?? 0.55, seg = o.seg ?? 2.5, n = Math.max(1, Math.round(L / seg)), sl = L / n, wood = o.color ?? '#9A7650', sections = [];
   for (let i = 0; i < n; i++) { const s0 = (i === n - 1 && o.breakable !== false) ? dyn(grp(g, 0, 0, i * sl)) : grp(g, 0, 0, i * sl); sections.push(s0);
