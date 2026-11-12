@@ -2250,7 +2250,7 @@ function walk(obj, pts, o = {}) {
     const a0 = ra ? v / ra : 0, tr = Math.min(ra, Te / 2), vp = a0 * tr, s1 = 0.5 * a0 * tr * tr, sE = ra ? vp * (Te - tr) : v * Te;
     Object.assign(me, { Te, bl, sE, dist, wS: q => { if (q <= 0 || q >= sE) return 0; const tau = !ra ? q / v : q < s1 ? Math.sqrt(2 * q / a0) : q < sE - s1 ? tr + (q - s1) / vp : Te - Math.sqrt(2 * (sE - q) / a0); return clamp(Math.min(tau, Te - tau) / bl); } }); }
   const pick = t => { let w = rt._walks[0]; for (const x of rt._walks) if (x.t0 <= t) w = x; return w; };
-  obj._posAt = t => pick(t).pos(t); obj._yawAt = t => pick(t).yaw(t);
+  obj._posAt = t => pick(t).pos(t); obj._yawAt = t => pick(t).yaw(t); me.sAt = t => dist(t - t0); obj._sAt = t => pick(t).sAt(t);   // distance walked on the current walk (stepping legs of spiders etc.)
   if (o.prints && obj.legL) {   // footprints (snow, sand, mud): o.prints = true | hex colour; o.printLife (s)
     const g0 = GAIT[mode] ?? GAIT.walk, Sd = g0.b * Cl, items = [], fwd = s => yawAt(s) ?? y0;
     for (let k = 0; k < 600; k++) { const sk = k * Cl / 2, s = sk + Sd / 2; if (s > path.len && !o.loop) break; if (sk > dist(Te)) break;
@@ -9120,7 +9120,11 @@ function spider(p, o = {}) {
   _ell(b, c, 0, 0, -s * 0.35, s * 0.42, s * 0.34, s * 0.5); _ell(b, c, 0, 0, s * 0.22, s * 0.24, s * 0.2, s * 0.24); for (const sx of [-1, 1]) for (const k of [0, 1]) ball(b, s * 0.035, '', sx * s * (0.05 + k * 0.08), s * 0.08, s * 0.42, { mat: mat('#FF3A2A', { basic: true, glow: 0.6 }), detail: 0, ...NC });
   if (o.marks !== false) _ell(b, '#B8302A', 0, s * 0.3, -s * 0.38, s * 0.15, s * 0.05, s * 0.2, NC);
   for (let i = 0; i < 8; i++) { const sx = i < 4 ? -1 : 1, k = i % 4, L = dyn(grp(b, sx * s * 0.15, 0, s * (0.3 - k * 0.12))); L.rotation.y = sx * (0.6 - k * 0.4) + (sx < 0 ? Math.PI : 0) * 0; _seg(L, [0, 0, 0], [sx * s * 0.55, s * 0.35, 0], s * 0.03, s * 0.025, c); _seg(L, [sx * s * 0.55, s * 0.35, 0], [sx * s * 1.0, -s * 0.35, 0], s * 0.025, s * 0.015, c); S.legsS.push([L, k, sx]); }
-  tick(t => { const v = S._posAt ? S._posAt(t + 0.05).distanceTo(S._posAt(t - 0.05)) / 0.1 : 0; S.legsS.forEach(([L, k, sx]) => { const ph = t * 14 + k * 1.6 + (sx > 0 ? Math.PI : 0); L.rotation.z = Math.min(1, v * 3) * 0.25 * Math.sin(ph); L.rotation.x = Math.min(1, v * 3) * 0.2 * Math.cos(ph); }); });
+  // v2.40.x alternating tetrapod gait stepped by the distance walked: planted tips swing back exactly as far as the body moves, the other four lift and reach forward (were waving with time and skating)
+  tick(t => { const v = S._posAt ? S._posAt(t + 0.05).distanceTo(S._posAt(t - 0.05)) / 0.1 : 0, m = clamp(v * 3), d = S._sAt ? S._sAt(t) / (g.scale.x || 1) : 0, st = s * 0.55, hf = st * 0.5 / 2, Rr = s * 0.95;
+    S.legsS.forEach(([L, k, sx]) => { const b0 = sx * (0.6 - k * 0.4), u = ((d / st + ((k + (sx > 0 ? 1 : 0)) % 2) * 0.5) % 1 + 1) % 1; let f, q = 0;
+      if (u < 0.5) f = hf * (1 - 4 * u); else { q = (u - 0.5) / 0.5; f = -hf + 2 * hf * sm01(q); }
+      L.rotation.y = b0 - sx * m * f / (Rr * Math.max(0.35, Math.cos(b0))); L.rotation.z = sx * m * 0.32 * Math.sin(Math.PI * q); L.rotation.x = 0; }); });
   if (o.web) { const w = stat(grp(p ?? world, (o.x ?? 0), 0, (o.z ?? 0) - 0.3)); const R = s * 6, Y = R + 0.3; for (let i = 0; i < 10; i++) { const a = i / 10 * TAU; _seg(w, [0, Y, 0], [Math.cos(a) * R, Y + Math.sin(a) * R, 0], 0.004, 0.004, '#F4F4F4', NC); } for (let r = 1; r <= 5; r++) for (let i = 0; i < 10; i++) { const a = i / 10 * TAU, b2 = (i + 1) / 10 * TAU, rr = R * r / 5.5; _seg(w, [Math.cos(a) * rr, Y + Math.sin(a) * rr, 0], [Math.cos(b2) * rr, Y + Math.sin(b2) * rr, 0], 0.003, 0.003, '#F4F4F4', NC); } }
   return S;
 }
