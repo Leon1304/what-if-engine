@@ -7319,6 +7319,9 @@ function bird(o = {}) {   // kind: see BIRDS — fly(b, [[x,y,z], …], { speed 
     const sh = dyn(grp(bod, s * bw * 0.75, bh * 0.38, bl * 0.06)), hn = dyn(grp(sh, s * Li, 0, 0)), X = x => s * x; sh.rotation.order = 'ZYX';
     plate(sh, [[0, Cw * 0.5], [X(Li), Cw * 0.45], [X(Li), -Cw * 0.5], [0, -Cw * 0.45]], th, D.w);
     plate(sh, [[0, Cw * 0.52], [X(Li), Cw * 0.47], [X(Li), Cw * 0.0], [0, -Cw * 0.05]], th, D.cov ?? (D.flightless ? D.w : C), 0, th * 0.9, 0);
+    if (!D.flightless) { const fc = shade(D.w, -0.045), nf = 5; for (let f = 0; f < nf; f++) { const x0 = Li * f / nf, x1 = Li * (f + 1) / nf; plate(sh, [[X(x0), -Cw * 0.42], [X(x1), -Cw * 0.44], [X(x1 - Li * 0.08 / nf * nf * 0.2), -Cw * 0.66], [X((x0 + x1) / 2), -Cw * 0.6]], th * 0.8, fc, 0, -th * 0.3, 0, NC); }   // v2.40.x trailing feather row (secondaries) and a scalloped covert edge
+      for (let f = 0; f < 4; f++) { const x0 = Li * (0.05 + 0.24 * f), x1 = x0 + Li * 0.24; plate(sh, [[X(x0), Cw * 0.02], [X(x1), Cw * 0.0], [X((x0 + x1) / 2), -Cw * 0.1]], th * 0.6, D.cov ?? C, 0, th * 1.3, 0, NC); }
+      if (!D.fingers) for (let f = 0; f < 4; f++) { const x0 = Lo * (0.2 + 0.2 * f), x1 = x0 + Lo * 0.2; plate(hn, [[X(x0), -Cw * 0.38 + f * Cw * 0.06], [X(x1), -Cw * 0.32 + f * Cw * 0.08], [X(x1 + Lo * 0.04), -Cw * 0.52 + f * Cw * 0.1]], th * 0.8, f > 1 ? D.tip : fc, 0, -th * 0.3, 0, NC); } }
     if (D.bars) for (const zb of [-0.02, -0.18]) plate(sh, [[X(Li * 0.12), Cw * zb], [X(Li), Cw * (zb + 0.03)], [X(Li), Cw * (zb - 0.08)], [X(Li * 0.12), Cw * (zb - 0.11)]], th, D.bars, 0, th * 1.6, 0, NC);
     plate(hn, [[0, Cw * 0.45], [X(Lo * 0.7), Cw * 0.32], [X(Lo), Cw * 0.02], [X(Lo * 0.9), -Cw * 0.28], [X(Lo * 0.4), -Cw * 0.45], [0, -Cw * 0.5]], th, D.w);
     if (D.fingers) for (let f = 0; f < 5; f++) { const zc = Cw * (0.24 - 0.15 * f), tx = Lo * (1.12 - 0.05 * Math.abs(f - 1.5)); plate(hn, [[X(Lo * 0.5), zc + Cw * 0.06], [X(tx), zc + Cw * 0.02 - f * Cw * 0.03], [X(tx * 0.97), zc - Cw * 0.06 - f * Cw * 0.03], [X(Lo * 0.5), zc - Cw * 0.06]], th, D.tip, 0, th * 0.4, 0); }
@@ -9124,9 +9127,20 @@ function spider(p, o = {}) {
 // snake(p, { x, z, len, color, pattern: 'bands' | 'diamond' | 'plain', ry }) → S; slither(S, pts, { t0, speed }) — body follows the path in S-curves; S.do('strike' | 'hiss' | 'rattle', t)
 function snake(p, o = {}) {
   const L = o.len ?? 2, n = 26, r = L * 0.03, c = o.color ?? '#5A7A2A', c2 = o.color2 ?? '#2A3A1A', g = dyn(grp(p ?? world)), SEG = [], NC = { cast: false }, S = { root: g, len: L, acts: [], snake: true };
-  for (let i = 0; i < n; i++) { const u = i / (n - 1), rr = r * (u < 0.1 ? 0.7 + u * 3 : 1 - 0.85 * ((u - 0.1) / 0.9) ** 1.6), q = dyn(grp(g)); _ell(q, (o.pattern ?? 'bands') === 'bands' && i % 3 === 0 ? c2 : c, 0, rr, 0, rr * 1.1, rr * 0.85, L / n * 0.85);
-    if (o.pattern === 'diamond' && i % 2) _ell(q, c2, 0, rr * 1.75, 0, rr * 0.5, rr * 0.12, L / n * 0.4, NC); SEG.push(q); }
-  const H = SEG[0]; _ell(H, c, 0, r * 0.9, r * 0.7, r * 1.35, r * 0.75, r * 1.6); for (const sx of [-1, 1]) ball(H, r * 0.25, '', sx * r * 0.8, r * 1.3, r * 1.4, { mat: mat('#F2C531', { basic: true }), detail: 0, ...NC });
+  // v2.40.x one continuous scaly body (was a chain of beads): a low-poly tube through the segment frames, rebuilt every frame from t alone; belly scales lighter, bands / diamonds painted
+  const RR = [], pat = o.pattern ?? 'bands'; for (let i = 0; i < n; i++) { const u = i / (n - 1); RR.push(r * (u < 0.1 ? 0.78 + u * 2.2 : 1 - 0.9 * ((u - 0.1) / 0.9) ** 1.5)); SEG.push(dyn(grp(g))); }
+  const NA = 8, belly = shade(c, 0.28), FC = []; for (let i = 0; i < n; i++) for (let k = 0; k < NA; k++) { const top = k === 0 || k === NA - 1, side = k === 1 || k === NA - 2, low = k >= 3 && k <= 4;
+    let col = low ? belly : c; if (pat === 'bands' && i % 3 === 0 && !low) col = c2; if (pat === 'diamond' && !low && ((top && i % 4 !== 0) || (side && i % 4 === 2))) col = c2; if (i === n - 1) col = c; FC.push(_rgb(col)); }
+  const TV = new Float32Array((n - 1) * NA * 18), TC = new Float32Array((n - 1) * NA * 18); for (let i = 0; i < n - 1; i++) for (let k = 0; k < NA; k++) { const q = FC[i * NA + k], o2 = (i * NA + k) * 18; for (let j = 0; j < 6; j++) TC.set(q, o2 + j * 3); }
+  const tg0 = new THREE.BufferGeometry(); tg0.setAttribute('position', new THREE.BufferAttribute(TV, 3)); tg0.setAttribute('color', new THREE.BufferAttribute(TC, 3));
+  const tube = new THREE.Mesh(tg0, _skinM(0.6)); tube.castShadow = true; tube.receiveShadow = true; tube.frustumCulled = false; g.add(dyn(tube));
+  const ringP = [], RP = () => { for (let i = 0; i < n; i++) { const q = SEG[i], yw = q.rotation.y, cx = Math.cos(yw), sx = -Math.sin(yw), rr = RR[i], P = ringP[i] ?? (ringP[i] = []);
+      for (let k = 0; k < NA; k++) { const a = (k + 0.5) / NA * TAU, ox = Math.sin(a) * rr * 1.12, oy = Math.cos(a) * rr * (Math.cos(a) < 0 ? 0.62 : 0.9); P[k] = [q.position.x + cx * ox, q.position.y + rr * 0.9 + oy, q.position.z + sx * ox]; } }
+    let w = 0; const put = A => { TV[w++] = A[0]; TV[w++] = A[1]; TV[w++] = A[2]; };
+    for (let i = 0; i < n - 1; i++) for (let k = 0; k < NA; k++) { const A = ringP[i][k], B = ringP[i + 1][k], C = ringP[i + 1][(k + 1) % NA], D = ringP[i][(k + 1) % NA]; put(A); put(C); put(B); put(A); put(D); put(C); }
+    tg0.attributes.position.needsUpdate = true; tg0.computeVertexNormals(); tg0.computeBoundingSphere(); };
+  const H = SEG[0]; _ell(H, c, 0, r * 0.88, r * 0.75, r * 1.3, r * 0.68, r * 1.65); _ell(H, belly, 0, r * 0.62, r * 0.85, r * 1.0, r * 0.32, r * 1.3, NC);
+  for (const sx of [-1, 1]) { ball(H, r * 0.25, '', sx * r * 0.85, r * 1.22, r * 1.45, { mat: mat('#F2C531', { basic: true }), detail: 0, ...NC }); ball(H, r * 0.12, '#0E0C0B', sx * r * 0.98, r * 1.22, r * 1.55, { detail: 0, ...NC }).scale.set(0.5, 1.6, 0.8); _ell(H, shade(c, -0.25), sx * r * 0.32, r * 1.0, r * 2.25, r * 0.08, r * 0.06, r * 0.06, NC); }
   const tg = dyn(grp(H, 0, r * 0.8, r * 2.2)); box(tg, r * 0.15, r * 0.06, r * 1.4, '#D8283A', 0, 0, r * 0.7, NC); S.tongue = tg; S.segs = SEG; S.r = r;
   S.do = (k, t, q = {}) => { S.acts.push({ k, t, dur: q.dur ?? (k === 'strike' ? 0.7 : 1.4) }); sfx(t, k === 'strike' ? 'hiss' : k === 'rattle' ? 'buzz' : 'hiss', 0.6); return S; };
   S.x = o.x ?? 0; S.z = o.z ?? 0; S.ry = o.ry ?? 0;
@@ -9135,7 +9149,7 @@ function snake(p, o = {}) {
     SEG.forEach((q, i) => { let P, yaw; if (path) { const s = s0 - i * W, wig = Math.sin(s * 5 - t * 2) * 0.12 * Math.min(1, i / 3); const sc = clamp(s, 0, path.len), Pp = path.at(sc), D = path.dir(sc); P = v3(Pp.x + D.z * wig, 0, Pp.z - D.x * wig); yaw = Math.atan2(D.x, D.z) + Math.cos(s * 5 - t * 2) * 0.5; }
       else { const a = i * 0.35 + t * 0.6, wig = Math.sin(a) * 0.15 * Math.min(1, i / 2); const lz = -i * W * 0.9 + (i < 6 ? str * (6 - i) * 0.08 : 0); P = v3(S.x + Math.cos(S.ry) * wig + Math.sin(S.ry) * lz, 0, S.z - Math.sin(S.ry) * wig + Math.cos(S.ry) * lz); yaw = S.ry + Math.cos(a) * 0.4; }
       q.position.set(P.x, groundH(P.x, P.z) + (i < 4 ? str * (4 - i) * 0.04 : 0), P.z); q.rotation.y = yaw; });
-    const fl = Math.sin(t * 9) > 0.6 ? 1 : 0; tg.scale.set(1, 1, 0.3 + fl * 0.9 + str); tg.rotation.x = 0.2 * Math.sin(t * 40); });
+    RP(); const fl = Math.sin(t * 9) > 0.6 ? 1 : 0; tg.scale.set(1, 1, 0.3 + fl * 0.9 + str); tg.rotation.x = 0.2 * Math.sin(t * 40); });
   return S;
 }
 function slither(S, pts, o = {}) { const path = new Path(pts), t0 = o.t0 ?? 0, v = o.speed ?? 0.8; S._path = path; S._dist = t => clamp(S.len + Math.max(0, t - t0) * v, 0, path.len); S._posAt = t => { const P = path.at(S._dist(t)); return v3(P.x, 0, P.z); }; return S; }
@@ -9151,8 +9165,10 @@ function lizard(p, o = {}) {
 function frog(p, o = {}) {
   const g = dyn(grp(p ?? world, o.x ?? 0, 0, o.z ?? 0, o.ry ?? 0)), c = o.color ?? '#4A9A2A', F = { root: g, acts: [], hops: [] }, NC = { cast: false }, s = o.scale ?? 1, b = dyn(grp(g)); b.scale.setScalar(s);
   _ell(b, c, 0, 0.05, 0, 0.055, 0.04, 0.07); _ell(b, '#E8E0A8', 0, 0.035, 0.02, 0.045, 0.025, 0.05, NC); for (const sx of [-1, 1]) { ball(b, 0.02, c, sx * 0.03, 0.09, 0.04, { detail: 1 }); ball(b, 0.012, '#1E1E1E', sx * 0.033, 0.098, 0.052, { detail: 0, ...NC }); }
-  const th = cyl(b, 0.035, 0.035, 0.004, '#E8E0A8', 0, 0.06, 0.065, { rx: Math.PI / 2, seg: 10, ...NC }); const bl = dyn(grp(b, 0, 0.04, 0.06)); ball(bl, 0.03, '#F2E8C0', 0, 0, 0, { detail: 1, ...NC }); bl.scale.setScalar(0.01); void th;
-  const legs = [-1, 1].map(sx => { const l = dyn(grp(b, sx * 0.045, 0.035, -0.04)); _ell(l, c, sx * 0.02, 0, -0.02, 0.025, 0.015, 0.045); return l; }); const tg = dyn(grp(b, 0, 0.045, 0.07)); box(tg, 0.01, 0.006, 0.2, '#E85A7A', 0, 0, 0.1, NC); tg.scale.z = 0.01;
+  const bl = dyn(grp(b, 0, 0.04, 0.06)); ball(bl, 0.03, '#F2E8C0', 0, 0, 0, { detail: 1, ...NC }); bl.scale.setScalar(0.01);
+  _ell(b, shade(c, -0.3), 0, 0.05, 0.047, 0.046, 0.0022, 0.03, NC); for (const sx of [-1, 1]) _ell(b, shade(c, -0.2), sx * 0.012, 0.075, 0.068, 0.004, 0.003, 0.003, NC);   // v2.40.x mouth line, nostrils, front legs, folded hind legs with webbed feet (was: a white disc on the face)
+  for (const sx of [-1, 1]) { _seg(b, [sx * 0.035, 0.035, 0.035], [sx * 0.05, 0.004, 0.05], 0.009, 0.007, c, NC); _ell(b, shade(c, 0.05), sx * 0.052, 0.003, 0.058, 0.014, 0.003, 0.012, NC); }
+  const legs = [-1, 1].map(sx => { const l = dyn(grp(b, sx * 0.045, 0.035, -0.04)); _ell(l, c, sx * 0.02, 0, 0.0, 0.022, 0.018, 0.04); _ell(l, shade(c, -0.06), sx * 0.032, -0.02, 0.01, 0.012, 0.01, 0.035, NC); _ell(l, shade(c, 0.05), sx * 0.036, -0.03, 0.045, 0.02, 0.003, 0.022, NC); return l; }); const tg = dyn(grp(b, 0, 0.045, 0.07)); box(tg, 0.01, 0.006, 0.2, '#E85A7A', 0, 0, 0.1, NC); tg.scale.z = 0.01;
   F.do = (k, t, q = {}) => (F.acts.push({ k, t, dur: q.dur ?? 0.9 }), sfx(t, k === 'croak' ? 'croak' : 'pop', 0.5), F);
   tick(t => { let cr = 0, to = 0; for (const a of F.acts) { const e = bump(t, a.t, a.dur) ?? 0; if (a.k === 'croak') cr = Math.max(cr, Math.abs(Math.sin((t - a.t) * 9)) * e); else to = Math.max(to, e); } bl.scale.setScalar(0.01 + cr); tg.scale.z = 0.01 + to;
     let jy = 0, lk = 0; for (const [ta, d, h] of F.hops) { const u = (t - ta) / d; if (u >= 0 && u <= 1) { jy = 4 * h * u * (1 - u); lk = Math.sin(Math.PI * u); } } b.position.y = jy; legs.forEach(l => l.rotation.x = -1.2 * lk); });
