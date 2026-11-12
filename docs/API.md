@@ -84,7 +84,7 @@ Als letzte Zeile der Szene `biome(kind, {density, trees, keep: [[x, z, r]], area
 
 - `house(p,x,z,{w,d,h,wall,roof,lit,ry,porch,chimney,smoke,backWindows,shutters,flowers})` → `{g, winMat, door, windows}`; `smoke: true | t0` lässt den Schornstein rauchen, `backWindows: false` spart die Rückfenster
 - `barn(…)`, `silo(…)` → `{g, top}`, `windmill(…)` → `{rotor}`
-- `fence(p,[[x,z],…],{h,color})` → `spans[]`; einzelne Felder mit `knock(span.g, t)` umwerfen
+- `fence(p,[[x,z],…],{h,color,kind})` → `spans[]`; `kind`: `rail` (Standard, Pfosten mit Kappe) · `picket` (Lattenzaun mit Spitzen) · `boards` (Bretterzaun) · `wire` (Weidezaun mit Stacheldraht); einzelne Felder mit `knock(span.g, t)` umwerfen
 - `tree(p,x,z,{kind:'round'|'pine'|'dead',size})`, `rock(p,x,z,s)`
 - `field(p,x,z,w,d,{crop:'wheat'|'corn'|'cabbage'})`, `haybale(p,x,z,ry)`
 - `vehicle(p,x,z,{kind:'car'|'tractor'|'truck',color,ry})` → `{g, wheels}`
@@ -849,6 +849,12 @@ Dinge zerbrechen so, wie sie gebaut sind. Alles ist echte Physik (einmal vorab s
 - **Schnellboot:** Zierstreifen am Rumpf, Steuerkonsole mit Armaturen und Lenkrad, Bugreling, Klampen, Positionslichter (rot/grün), Badeplattform, Streifen am Motor.
 - **Kran:** Der drehende Ausleger ist zu wenigen Meshes verschmolzen (vorher rund 60 bewegte Teile im Budget). Der Haken pendelt am Seil nach, wenn Laufkatze oder Ausleger anfahren und bremsen (gedämpft, `C.hookAt(t)` liefert die pendelnde Position, daran Gehängtes schwingt mit).
 - **Rakete:** Triebwerksglocke unter dem Rumpf (stand vorher auf den Flossen über einer Lücke), Farbringe, Bullauge, Luke, Flossenspitzen, Spitze; zu wenigen Meshes verschmolzen.
+- **Zaun:** Pfosten mit Pyramidenkappe und dunklem Fuß, Stoßfugen an den Latten; der Zaun endet jetzt auf einem Pfosten (vorher ragten die Latten am Ende frei in die Luft). Neue Arten `picket`, `boards`, `wire`.
+- **Büsche und Felsen:** Büsche mit dichtem dunklem Kern und kleinen Blattbüscheln am Rand; große Felsen teils geschichtet (hellere Platte oben) oder mit angelehntem Spaltblock, gewählt per Hash (alte Szenen behalten Lage und Größe).
+- **Glastürme:** echte Vorhangfassade (getöntes Brüstungsglas zwischen den Fensterbändern, Sprossen), Dachschienen mit Fassadenkran, Lichtband an der Krone (nachts an); ein Teil der beleuchteten Büros leuchtet kühlweiß statt warm, in der Dämmerung wie in der Nacht.
+- **Krankenhaus:** Fensterreihen mit Bänken und Sprossen auch an Seiten und Rückseite, Geschossbänder, verglastes Treppenhaus, Sockel, Poller an der Vorfahrt.
+- **Supermarkt:** Vordach über den Schiebetüren, Wandpaneele und Attika, Laderampe mit Rolltor und Puffern, Poller, Bank, Mülleimer.
+- Neue Teile an Häusern und Plätzen sind kein Hindernis (`noHit`), die Hitboxen bleiben so groß wie vorher.
 - Alle Details sind statisch (in wenige Draw-Calls gebacken), kein Hindernis, und ändern weder Maße noch Türen, Fenster oder Hitboxen.
 - **Türen nacheinander:** Mehrere `openDoor()` auf dieselbe Tür bauen aufeinander auf: `openDoor(H, 2); openDoor(H, 6, { angle: 0 }); openDoor(H, 8)` = auf, zu (federt am Rahmen zurück statt durchzuschwingen), wieder auf. Vorher galt nur der letzte Aufruf, ein früheres Öffnen war unsichtbar.
 - **Flugzeuge und Hubschrauber am Boden:** Ohne `y` (oder mit `y: 0`) stehen `aircraft()` und `heli()` auf Fahrwerk bzw. Kufen (`A.gy` über dem Gelände) statt bis zu den Flügeln im Boden; `fly()`, `takeoff()`, `land()` übernehmen wie bisher. Ein geparkter Hubschrauber wippt nicht mehr (Schweben nur in der Luft).

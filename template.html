@@ -895,15 +895,34 @@ function windmill(p, x, z, o = {}) {   // farm windmill: braced lattice tower, m
   tick(t => { rotor.rotation.z = t * (o.speed ?? 1.4); });
   return { g, rotor };
 }
-function fence(p, pts, o = {}) {   // returns spans [{ g, x, z, ang }] — knock(span.g, t) to break one. Posts with caps, two rails, slight colour variation
+function _fenceSpan(g, kind, s, h, col, c2, hk, last) {   // posts and rails stay their own boxes (they are the obstacle), the rest goes into one shared vc geometry
+  const r2 = v => +v.toFixed(3), NC = { cast: false };
+  if (kind === 'wire') { for (const px of last ? [-s / 2, s / 2] : [-s / 2]) cyl(g, 0.06, 0.075, h + 0.1, col, px, 0, 0, { seg: 6 }); }
+  else { for (const px of last ? [-s / 2, s / 2] : [-s / 2]) box(g, 0.16, h + 0.15, 0.16, col, px, 0, 0);
+    if (kind === 'picket' || kind === 'boards') { box(g, s, 0.09, 0.06, c2, 0, h * 0.25, 0.05); box(g, s, 0.09, 0.06, c2, 0, h * 0.75, 0.05); }
+    else { box(g, s, 0.12, 0.08, c2, 0, h * 0.42, 0); box(g, s, 0.12, 0.08, c2, 0, h * 0.85, 0); } }
+  const key = ['fence', kind, r2(s), r2(h), col, c2, last ? 1 : 0, kind === 'rail' ? 0 : r2(hk)].join('|');
+  const det = mesh(g, _vcGeo(key, t => {
+    for (const px of last ? [-s / 2, s / 2] : [-s / 2]) {
+      if (kind === 'wire') { cone(t, 0.065, 0.08, shade(col, -0.08), px, h + 0.1, 0, { seg: 6 }); continue; }
+      box(t, 0.2, 0.05, 0.2, shade(col, -0.08), px, h + 0.15, 0); cone(t, 0.13, 0.1, shade(col, -0.04), px, h + 0.2, 0, { seg: 4, ry: Math.PI / 4 }); box(t, 0.18, 0.12, 0.18, shade(col, -0.14), px, 0, 0); }
+    if (kind === 'wire') { for (const y of [0.35, 0.65, 0.95]) { const sag = 0.03 + hk * 0.03; _seg(t, [-s / 2, y * h, 0.07], [0, y * h - sag, 0.07], 0.008, 0.008, '#6A6E74'); _seg(t, [0, y * h - sag, 0.07], [s / 2, y * h, 0.07], 0.008, 0.008, '#6A6E74'); }
+      for (let j = 1; j < 4; j++) box(t, 0.05, 0.05, 0.05, '#5A5E64', -s / 2 + j * s / 4, h * 0.95 - 0.03, 0.07, { ry: 0.785 }); }
+    else if (kind === 'picket' || kind === 'boards') { const pk = kind === 'picket', nb = Math.max(2, Math.round(s / (pk ? 0.2 : 0.16)));
+      for (let j = 0; j < nb; j++) { const bx2 = -s / 2 + 0.12 + (j + 0.5) * (s - 0.16) / nb, bh = h * (pk ? 0.92 : 1) - 0.06 + (hash(j + hk * 31) - 0.5) * 0.04, bc = shade(c2, (hash(j * 3.1 + hk * 17) - 0.5) * 0.05);
+        box(t, pk ? 0.11 : 0.15, bh, 0.025, bc, bx2, 0.06, 0.095); if (pk) cone(t, 0.078, 0.1, bc, bx2, 0.06 + bh, 0.095, { seg: 4, ry: Math.PI / 4 }).scale.z = 0.25; } }
+    else for (const y of [0.42, 0.85]) { box(t, 0.012, 0.13, 0.09, shade(c2, -0.12), -s / 2 + 0.11, h * y - 0.005, 0); box(t, 0.012, 0.13, 0.09, shade(c2, -0.12), s / 2 - 0.11, h * y - 0.005, 0); }
+  }), _vcMat(), 0, 0, 0, NC); det.userData.noHit = true; return det;
+}
+function fence(p, pts, o = {}) {   // returns spans [{ g, x, z, ang }] — knock(span.g, t) to break one. Posts with caps, two rails, slight colour variation; kind: rail (default) | picket | boards | wire
   const h = o.h ?? 1.2, col = o.color ?? '#8C6A48', gap = o.gap ?? 1.8, spans = [];
   for (let i = 0; i < pts.length - 1; i++) {
     const [ax, az] = pts[i], [bx, bz] = pts[i + 1], L = Math.hypot(bx - ax, bz - az), n = Math.max(1, Math.round(L / gap)), ang = Math.atan2(-(bz - az), bx - ax);
     for (let k = 0; k < n; k++) {
       const u = (k + 0.5) / n, cx = lerp(ax, bx, u), cz = lerp(az, bz, u), s = L / n, c2 = shade(col, (hash(cx * 3.1 + cz * 7.7) - 0.5) * 0.06);
-      const g = stat(grp(p, cx, 0, cz, ang));
-      box(g, 0.16, h + 0.15, 0.16, col, -s / 2, 0, 0); box(g, 0.2, 0.05, 0.2, shade(col, -0.08), -s / 2, h + 0.15, 0, { cast: false });
-      box(g, s, 0.12, 0.08, c2, 0, h * 0.42, 0); box(g, s, 0.12, 0.08, c2, 0, h * 0.85, 0);
+      const g0 = stat(grp(p, cx, 0, cz, ang)), NC = { cast: false }, hk = hash(cx * 5.3 + cz * 2.9), kind = o.kind ?? 'rail', last = i === pts.length - 2 && k === n - 1;
+      // v2.40: the small parts of a span (caps, feet, seams, pickets, wire) are one vertex-coloured mesh, so a knocked (moving) span costs one extra mesh, not ten
+      _fenceSpan(g0, kind, s, h, col, c2, hk, last); const g = g0;
       spans.push({ g, x: cx, z: cz, ang });
     }
   }
@@ -1000,6 +1019,9 @@ const rock = (p, x, z, s = 1, c = '#7D7F86') => {   // boulder plus a few smalle
   const ry = rnd() * TAU, hv = k => hash(x * 31.7 + z * 17.3 + k * 5.1), y = groundH(x, z);
   const m = mesh(p, _rockG(Math.floor(hv(1) * 6)), mat(shade(c, (hv(2) - 0.5) * 0.08)), x, y + 0.1 * s, z, { stat: true });
   m.scale.set(0.62 * s * (0.85 + hv(3) * 0.35), 0.42 * s * (0.8 + hv(6) * 0.4), 0.62 * s * (0.85 + hv(4) * 0.35)); m.rotation.y = ry;
+  if (s > 0.7) { const k = Math.floor(hv(20) * 3), sx = m.scale.x, sy = m.scale.y, sz = m.scale.z;   // v2.40: layered boulders — a second, paler slab on top (k 1), a split block leaning on it (k 2) or a plain one (k 0)
+    if (k === 1) { const q = mesh(p, _rockG(Math.floor(hv(21) * 6)), mat(shade(c, 0.05 + (hv(22) - 0.5) * 0.04)), x + (hv(23) - 0.5) * sx * 0.3, y + 0.1 * s + sy * 0.78, z + (hv(24) - 0.5) * sz * 0.3, { stat: true }); q.scale.set(sx * 0.62, sy * 0.45, sz * 0.66); q.rotation.y = hv(25) * TAU; }
+    if (k === 2) { const a = hv(26) * TAU, q = mesh(p, _rockG(Math.floor(hv(27) * 6)), mat(shade(c, -0.04)), x + Math.cos(a) * sx * 0.8, y + sy * 0.45, z + Math.sin(a) * sz * 0.8, { stat: true }); q.scale.set(sx * 0.45, sy * 0.85, sz * 0.4); q.rotation.set(0.3 * Math.sin(a), a, 0.3 * Math.cos(a)); } }
   if (s > 0.45) for (let i = 0; i < 1 + Math.floor(hv(5) * 2.5); i++) {
     const a = hv(i + 7) * TAU, d = 0.75 * s + hv(i + 8) * 0.4 * s, rs = (0.16 + hv(i + 9) * 0.18) * s, xx = x + Math.cos(a) * d, zz = z + Math.sin(a) * d;
     const q = mesh(p, _rockG(Math.floor(hv(i + 10) * 6)), mat(shade(c, (hv(i + 11) - 0.5) * 0.1)), xx, groundH(xx, zz) + rs * 0.2, zz, { stat: true });
@@ -1026,6 +1048,8 @@ function bush(p, x, z, o = {}) {   // round shrub of a few blobs; o: size, color
   const c = o.color ?? (o.kind === 'fern' ? '#3E6E32' : pick2(['#4F7F3A', '#5C8C42', '#46753A'], hv(3))), n = 3 + Math.floor(hv(4) * 3), fl = o.kind === 'fern' ? 0.55 : 1;
   for (let i = 0; i < n; i++) { const a = i * TAU / n, r = (0.32 + hv(i + 5) * 0.2) * s, cc = shade(c, (hv(i + 9) - 0.4) * 0.09); ball(g, r, cc, Math.cos(a) * 0.3 * s, r * 0.8 * fl, Math.sin(a) * 0.3 * s, { mat: wmat(cc), detail: 1 }).scale.y = fl; }
   ball(g, 0.38 * s, shade(c, 0.05), 0, 0.45 * s * fl, 0, { mat: wmat(shade(c, 0.05)), detail: 1 }).scale.y = fl;
+  { const nd = shade(c, -0.1); ball(g, 0.42 * s, nd, 0, 0.12 * s * fl, 0, { mat: wmat(nd), detail: 0, cast: false }).scale.set(1.15, 0.45 * fl, 1.15);   // v2.40: dark, dense base and small leafy tufts that break the round outline
+    for (let i = 0; i < 6; i++) { const a = (i + hv(i + 40)) * TAU / 6, r = (0.5 + hv(i + 50) * 0.15) * s, cc = shade(c, (hv(i + 60) - 0.3) * 0.12); ball(g, (0.1 + hv(i + 70) * 0.07) * s, cc, Math.cos(a) * r, (0.25 + hv(i + 80) * 0.45) * s * fl, Math.sin(a) * r, { mat: wmat(cc), detail: 0, cast: false }); } }
   if (o.flowers) for (let i = 0; i < 6; i++) { const a = hv(i + 20) * TAU; ball(g, 0.05 * s, o.flowers, Math.cos(a) * 0.42 * s, (0.5 + hv(i + 30) * 0.3) * s * fl, Math.sin(a) * 0.42 * s, { mat: wmat(o.flowers), detail: 0, cast: false }); }
   g.userData.wb = { y0, h: 1.0 * s }; return g;
 }
@@ -2961,20 +2985,25 @@ function facadeKit(g, w, h, d, o = {}) {
   for (const sx of [-1, 1]) { cyl(g, 0.07, 0.07, h, '#6E747C', sx * (w / 2 + 0.09), 0, -d / 2 + 0.3, { seg: 6, ...NC }); box(g, 0.2, 0.12, 0.2, '#6E747C', sx * (w / 2 + 0.09), h - 0.12, -d / 2 + 0.3, NC); }
   for (const lx of o.lamps ?? []) { box(g, 0.14, 0.3, 0.12, '#2A2D33', lx, 2.5, d / 2 + 0.07, NC); box(g, 0.12, 0.18, 0.04, '', lx, 2.52, d / 2 + 0.14, { mat: mat('#FFE9B8', { em: '#FFD88A', ei: 1.2 }), ...NC }); }
 }
+const _spandrel = c => mat(new THREE.Color(c).lerp(new THREE.Color('#1E2836'), 0.75).getHexString().replace(/^/, '#'), { rough: 0.45, metal: 0.1 });
 const _shopMs = new Map(), _shopM = share => { const k = share > 0 ? 1 : 0; if (!_shopMs.has(k)) { const m = mat('#33465C', { em: '#FFE3A8', ei: k ? 0.9 : 0, rough: 0.25, own: true }); if (k) { m.userData.nightEi = 0.9; m.userData.dayEi = 0.2; NIGHTMATS.push(m); } _shopMs.set(k, m); } return _shopMs.get(k); };
 function tower(p, x, z, o = {}) {   // city building with depth: style glass | brick | deco (default: varies by position); lit 0..2 = share of lit windows at night
   const w = o.w ?? 6, d = o.d ?? 6, h = o.h ?? 24, g = stat(grp(p, x, 0, z, o.ry ?? 0)), c0 = o.color ?? pick(['#8A94A6', '#A7B0BE', '#6F7A8C', '#C9C1B3', '#5E6B7D', '#B5A48C']), NC = { cast: false };
   const hv = k => hash(x * 13.1 + z * 7.7 + k * 1.9), style = o.style ?? (h < 18 && hv(5) < 0.55 ? 'brick' : ['glass', 'deco', 'brick', 'glass', 'deco'][Math.floor(hv(4) * 5)]);
   const c = style === 'brick' && !o.color ? pick2(['#9C4A36', '#A8583E', '#8A3E30', '#B7704E', '#7E5A48'], hv(6)) : c0, trim = style === 'brick' ? '#D9D2C4' : shade(c, 0.08), deep = shade(c, -0.1);
   const share = clamp((o.lit ?? (SKY.some(([, n]) => (SKIES[n]?.nk ?? 0) >= 0.5) ? 0.8 : 0)) * 0.6), dark = mat(o.glass ?? '#26324A', { rough: 0.3, metal: 0.2 }), lit = mat(o.glass ?? '#26324A', { em: '#FFD27A', ei: 1.1, rough: 0.3 });   // v2.34: windows light up by themselves when the video has a dusk or night, and follow the darkness
-  if (!lit.userData.nightEi) { lit.userData.nightEi = 1.1; lit.userData.dayEi = 0.03; NIGHTMATS.push(lit); }   // v2.40: by day a lit window is only a hint (0.1 made them look like brown boards)
+  if (!lit.userData.nightEi) { lit.userData.nightEi = 1.1; lit.userData.dayEi = 0.03; NIGHTMATS.push(lit); }
+  const lit2 = mat(o.glass ?? '#26324A', { em: '#D6E4FF', ei: 0.95, rough: 0.3 }); if (!lit2.userData.nightEi) { lit2.userData.nightEi = 0.95; lit2.userData.dayEi = 0.02; NIGHTMATS.push(lit2); }   // v2.40: some offices are lit cool white, most warm   // v2.40: by day a lit window is only a hint (0.1 made them look like brown boards)
   box(g, w, h, d, c, 0, 0, 0, style === 'glass' ? {} : { surf: style === 'brick' ? 'brick' : 'concrete' });
   const floors = []; for (let y = 2.0; y < h - 1.6; y += 3.1) floors.push([y, rnd() < share]);   // one rnd per floor, as before (layout of old episodes unchanged)
-  const nx = Math.max(2, Math.round(w / 2.2)), nz = Math.max(2, Math.round(d / 2.2)), win = (f, i, on) => on || (share > 0 && hv(f * 31 + i * 3 + 7) < share * 0.45) ? lit : dark;
+  const nx = Math.max(2, Math.round(w / 2.2)), nz = Math.max(2, Math.round(d / 2.2)), win = (f, i, on) => on || (share > 0 && hv(f * 31 + i * 3 + 7) < share * 0.45) ? (hv(f * 7 + i * 13 + 3) < 0.28 ? lit2 : lit) : dark;
   [[0, d / 2, 0, w, nx], [0, -d / 2, Math.PI, w, nx], [w / 2, 0, Math.PI / 2, d, nz], [-w / 2, 0, -Math.PI / 2, d, nz]].forEach(([fx, fz, ry, W, n], fi) => {
     const q = grp(g, fx, 0, fz, ry), col = i => -W / 2 + (i + 0.5) * W / n;   // facade frame: x along the face, +z out of the wall
     if (style === 'glass') {
-      floors.forEach(([y, on], f) => { for (let i = 0; i < n; i++) box(q, W / n - 0.02, 1.5, 0.08, '', col(i), y, 0, { mat: win(f + fi * 50, i, on), ...NC }); box(q, W + 0.3, 0.14, 0.32, trim, 0, y - 0.18, 0.1, NC); });
+      floors.forEach(([y, on], f) => { for (let i = 0; i < n; i++) box(q, W / n - 0.02, 1.5, 0.08, '', col(i), y, 0, { mat: win(f + fi * 50, i, on), ...NC }); box(q, W + 0.3, 0.14, 0.32, trim, 0, y - 0.18, 0.1, NC);
+      });
+      { const top = floors.length ? floors[floors.length - 1][0] + 2.9 : h; box(q, W, Math.min(h, top) - 2, 0.04, '', 0, 2, 0, { mat: _spandrel(c), ...NC });   // v2.40: curtain wall — one tinted spandrel pane behind the window bands, a mullion grid as one mesh per face (collapse() keeps the mesh count low)
+        if (W / n > 1.5 && floors.length) mesh(q, _boxesG(floors.flatMap(([y]) => [...Array(n)].map((_, i) => [0.05, 1.5, 0.05, +col(i).toFixed(3), +(y + 0.75).toFixed(3), 0.06]))), mat(shade(c, -0.18)), 0, 0, 0, NC); }
       for (let i = 1; i < n; i++) box(q, 0.26, h - 2, 0.24, c, -W / 2 + i * W / n, 2, 0.06, NC);
     } else if (style === 'brick') {
       floors.forEach(([y, on], f) => { for (let i = 0; i < n; i++) { const ww = W / n * 0.52, cx = col(i);
@@ -3010,6 +3039,9 @@ function tower(p, x, z, o = {}) {   // city building with depth: style glass | b
     if (w >= 5.5 && hv(2) < 0.5) { const tx = -w * 0.3, tz = -d * 0.3; for (const [lx, lz] of [[-0.5, -0.5], [0.5, -0.5], [-0.5, 0.5], [0.5, 0.5]]) box(g, 0.08, 1.2, 0.08, '#4A3A2E', tx + lx, h, tz + lz, NC);
       cyl(g, 0.85, 0.85, 1.6, '#7A5A3E', tx, h + 1.2, tz, { seg: 10 }); cone(g, 0.95, 0.6, '#5A4430', tx, h + 2.8, tz, { seg: 10, ...NC }); }
     if (o.antenna ?? h > 30) cyl(g, 0.08, 0.12, h * 0.15, '#6A707C', 0, h + 1.4, 0);
+    if (style === 'glass') { for (const sz of [-1, 1]) box(g, w - 0.6, 0.08, 0.1, '#8A9099', 0, h, sz * (d / 2 - 0.25), NC);   // v2.40: window-cleaning gantry rails, davit, crown light strip (glows at night)
+      const dv = grp(g, w / 2 - 0.5, h, d / 2 - 0.4); box(dv, 0.16, 1.4, 0.16, '#B8BEC6', 0, 0, 0, NC); box(dv, 0.12, 0.12, 1.1, '#B8BEC6', 0, 1.3, 0.4, NC);
+      for (const [a, b2, ww, dd] of [[0, d / 2 + 0.06, w, 0.04], [0, -d / 2 - 0.06, w, 0.04], [w / 2 + 0.06, 0, 0.04, d], [-w / 2 - 0.06, 0, 0.04, d]]) box(g, ww, 0.1, dd, '', a, h - 0.25, b2, { mat: nightGlowMat(), ...NC }); }
   }
   return { g, h, style };
 }
@@ -9253,6 +9285,14 @@ function hospital(p, x, z, o = {}) {
   const sg = grp(g, 0, F * 3.4 + 0.4, D / 2 - 1); box(sg, 3.2, 3.2, 0.3, '#2E6ACB', 0, 0, 0); box(sg, 0.45, 2.2, 0.32, '#FFFFFF', -0.7, 0.5, 0, NC); box(sg, 0.45, 2.2, 0.32, '#FFFFFF', 0.7, 0.5, 0, NC); box(sg, 1.0, 0.4, 0.32, '#FFFFFF', 0, 1.4, 0, NC);
   box(g, 8, 0.3, 5, '#C9CDD3', -4, 3.2, D / 2 + 2.5); for (const sx of [-1, 1]) box(g, 0.25, 3.2, 0.25, '#9A9EA4', -4 + sx * 3.7, 0, D / 2 + 4.8); for (const sx of [-1, 1]) _win(g, 1.5, 2.6, -4 + sx * 0.8, 0.05, D / 2 + 0.02);
   box(g, 4.5, 0.6, 0.15, '#D8342A', 5, 2.6, D / 2 + 0.05, NC); for (let i = 0; i < 4; i++) _win(g, 1.5, 2.2, 3 + i * 1.6, 0.2, D / 2 + 0.01);
+  const dt = grp(g); dt.userData.noHit = true;
+  for (const sx of [-1, 1]) { const q = grp(dt, sx * (W / 2 + 0.01), 0, 0, sx * Math.PI / 2);   // v2.40: side facades — window rows with sills and mullions, floor bands, a glazed stair core, plinth
+    for (let f = 0; f < F; f++) { for (let i = 0; i < 4; i++) { const wx = -D / 2 + 1.6 + i * 2.6; if (i === 3 && sx > 0) continue; _win(q, 1.8, 1.6, wx, f * 3.4 + 0.8, 0, 0, o.lit); box(q, 2.0, 0.1, 0.16, '#D8DCE0', wx, f * 3.4 + 0.7, 0.06, NC); box(q, 0.06, 1.6, 0.08, '#E8ECEF', wx, f * 3.4 + 0.8, 0.05, NC); }
+      if (f) box(q, D + 0.1, 0.25, 0.1, '#7AB8D8', 0, f * 3.4 + 0.3, 0.02, NC); }
+    if (sx > 0) { _win(q, 1.6, F * 3.4 - 1.2, D / 2 - 1.6, 0.6, 0.03, 0, o.lit); for (let f = 1; f < F; f++) box(q, 1.8, 0.12, 0.1, '#C9CDD3', D / 2 - 1.6, f * 3.4 + 0.1, 0.08, NC); }
+    box(q, D + 0.2, 0.5, 0.12, '#B8BCC2', 0, 0, 0.04, NC); }
+  box(dt, W + 0.2, 0.5, 0.12, '#B8BCC2', 0, 0, -D / 2 - 0.05, NC); for (let f = 1; f < F; f++) for (let i = 0; i < 6; i++) _win(dt, 1.8, 1.6, -W / 2 + 2.5 + i * 3.4, f * 3.4 + 0.8, -D / 2 - 0.01, Math.PI, o.lit);   // back windows
+  for (const sx of [-1, 1]) { box(dt, 0.3, 1.0, 0.3, '#E8C531', -4 + sx * 2.2, 0, D / 2 + 5.4, NC); }   // bollards at the drop-off
   return g;
 }
 // supermarket(p, x, z, { ry, color }) — wide hall with glass front, sliding doors, banner stripe, cart corral, shelves inside
@@ -9264,6 +9304,14 @@ function supermarket(p, x, z, o = {}) {
   box(g, 0.1, 0.4, 2.4, '#5A5E64', 6, 0.5, D / 2 + 3); for (let i = 0; i < 5; i++) { const cg = grp(g, 6.4, 0, D / 2 + 2 + i * 0.4); box(cg, 0.55, 0.45, 0.8, '#C9CDD3', 0, 0.45, 0, { metal: 0.6, opacity: 1 }); for (const [a, b] of [[-0.22, -0.3], [0.22, -0.3], [-0.22, 0.3], [0.22, 0.3]]) { cyl(cg, 0.05, 0.05, 0.04, '#1E1E22', a, 0.03, b, { rz: Math.PI / 2, seg: 8 }); box(cg, 0.03, 0.4, 0.03, '#8E949C', a, 0.07, b, NC); } box(cg, 0.55, 0.04, 0.04, '#D8342A', 0, 1.0, -0.45);   // v2.40: legs, tray, handle posts and wire bands (the basket floated over its wheels, the handle over the basket)
     box(cg, 0.5, 0.03, 0.72, '#8E949C', 0, 0.2, 0, NC); for (const s of [-1, 1]) box(cg, 0.03, 0.3, 0.03, '#8E949C', s * 0.25, 0.73, -0.42, NC); for (const y of [0.6, 0.75]) box(cg, 0.57, 0.02, 0.82, '#9AA0A8', 0, y, 0, NC); }
   for (let i = 0; i < 3; i++) shelf(g, -6 + i * 5, -2, { kind: ['grocery', 'snacks', 'drinks'][i], w: 3.4, ry: Math.PI / 2 });
+  { const pc = '#C9CDD3', dt = grp(g); dt.userData.noHit = true;   // v2.40: entrance canopy over the sliding doors, side wall panels and coping, loading dock with roller door and bumpers, bollards, bench, bins
+    box(dt, 4.2, 0.25, 2.2, '#3A3D44', 0, 3.3, D / 2 + 1.1); for (const sx of [-1, 1]) box(dt, 0.14, 3.3, 0.14, '#5A5E64', sx * 1.9, 0, D / 2 + 2.05);
+    for (const sx of [-1, 1]) { for (let zz = -D / 2 + 2; zz < D / 2 - 0.5; zz += 2.4) box(dt, 0.06, 5.3, 0.08, pc, sx * (W / 2 + 0.03), 0.1, zz, NC); box(dt, 0.2, 0.2, D + 0.2, '#8A8E94', sx * (W / 2 + 0.05), 5.4, 0, NC); }
+    const ld = grp(dt, W / 2 + 0.01, 0, -D / 2 + 4, Math.PI / 2); box(ld, 3.4, 3.4, 0.06, '#9AA0A8', 0, 0.3, 0.02, NC); for (let i = 0; i < 12; i++) box(ld, 3.3, 0.04, 0.08, '#7E848C', 0, 0.45 + i * 0.27, 0.04, NC);
+    box(ld, 4.4, 1.0, 1.6, '#8A8478', 0, 0, 0.8); for (const s2 of [-1, 1]) box(ld, 0.4, 0.5, 0.18, '#1E1E22', s2 * 1.3, 0.3, 1.65, NC); box(ld, 4.0, 0.3, 1.4, '#5A5E64', 0, 3.8, 0.7, NC);
+    for (let i = 0; i < 4; i++) cyl(dt, 0.14, 0.14, 0.9, '#E8C531', -4 + i * 2.7 - (i > 1 ? 0 : 0), 0, D / 2 + 1.6, { seg: 8 });
+    const bn = grp(dt, -8, 0, D / 2 + 1.2); for (const s2 of [-1, 1]) box(bn, 0.08, 0.42, 0.45, '#2A2D33', s2 * 0.75, 0, 0, NC); box(bn, 1.6, 0.06, 0.45, '#8A6A48', 0, 0.42, 0); box(bn, 1.6, 0.35, 0.06, '#8A6A48', 0, 0.6, -0.2, NC);
+    for (const s2 of [0, 1]) cyl(dt, 0.3, 0.27, 0.9, s2 ? '#3A6A44' : '#5A5E64', -10 + s2 * 0.7, 0, D / 2 + 1.0, { seg: 10 }); }
   return g;
 }
 // gasstation(p, x, z, { ry, color }) — canopy with lights, pumps with hoses, small shop, price pylon (bars, no brand)
