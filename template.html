@@ -535,6 +535,11 @@ Object.assign(sun.shadow.camera, { left: -CFG.area, right: CFG.area, top: CFG.ar
 sun.shadow.camera.updateProjectionMatrix();
 sun.shadow.bias = -0.0006; sun.shadow.normalBias = 0.04;
 scene.add(hemi, sun, sun.target);
+// v3.2 rim light: a second, shadowless sun behind the subject as seen from the camera (placed every frame by rimFit(), a pure function of camera + sky) —
+// edges, shoulders and tops catch light and figures separate from the background. Colour and strength per sky (LOOK): strong cool moonlight at night,
+// warm at golden / dusk, subtle by day. CFG.rim: number = × strength, false = off
+const RIMK = CFG.rim === false ? 0 : typeof CFG.rim === 'number' ? CFG.rim : 1;
+const rim = new THREE.DirectionalLight('#ffffff', 0); rim.visible = RIMK > 0; rim.castShadow = false; scene.add(rim, rim.target);
 if (CFG.env === true || CFG.env === 'studio') { const pm = new THREE.PMREMGenerator(renderer); scene.environment = pm.fromScene(new RoomEnvironment(), 0.04).texture; pm.dispose(); }
 // v3.0 sky light: the environment (soft fill light and reflections on every PBR surface) is the current sky — its zenith, horizon and ground colours and a sun glow —
 // instead of a grey studio room. Rebuilt only when the sky's colours change by a visible step (quantised: the same t always gives the same light). CFG.env: false = off,
@@ -610,6 +615,69 @@ const SKIES = {
   neptune:    { top: '#06124A', bot: '#2E5EC8', fog: '#2448A8', near: 8, far: 80, sun: '#CFE0FF', si: 1.2, el: 50, hs: '#6A8AE0', hg: '#0A1440', hi: 0.9, stars: 0, orb: 0, glow: 0.2, exp: 1.1, nk: 0, cl: [0, 0.5, '#3A6AD8', '#1A3A90'] },
   space:      { top: '#000004', bot: '#04071A', fog: '#04071A', near: 600, far: 1100, sun: '#FFFFFF', si: 3.2, el: 20, hs: '#334455', hg: '#000000', hi: 0.15, stars: 1, orb: 0.0016, glow: 0.8, exp: 1, nk: 0, cl: [0, 0.5, '#000000', '#000000'] }
 };
+// v3.2 night & storm: a moonlit key, cooler fill and a lifted ground colour of the hemisphere → shadowed sides stay readable (CFG.nightLook: false = the old, darker values)
+if (CFG.nightLook !== false) { Object.assign(SKIES.night, { sun: '#A9C1FF', si: 1.85, hs: '#7088CC', hg: '#2C3550', hi: 0.8 }); Object.assign(SKIES.storm, { si: 0.95, hs: '#93A0B4', hg: '#3C434E', hi: 0.9 }); }
+// v3.2 look per sky, blended along the SKY keys like every other sky value:
+//   rim [colour, strength] · grade: sh / hl = [colour, amount] split toning (shadows / highlights), sat, con = × CFG.saturation / CFG.contrast,
+//   lift [colour, amount] = shadow floor (dark areas never go pure black, tinted), open = shadow gain (detail in the dark parts)
+//   rays = god rays from the sun / moon · haze = low ground fog · dust = motes floating in the light near the camera
+const LOOK = {
+  day:        { rim: ['#FFF2DC', 0.35], sh: ['#4E74C4', 0.03], hl: ['#FFE0B0', 0.02], sat: 1.02, con: 1.02, lift: ['#3A4A60', 0.006], open: 0.05, rays: 0.25, haze: 0.3, dust: 0.12 },
+  golden:     { rim: ['#FFC48A', 1.0], sh: ['#4A5EA8', 0.045], hl: ['#FFB060', 0.05], sat: 1.05, con: 1.03, lift: ['#4A3A50', 0.014], open: 0.18, rays: 1, haze: 0.7, dust: 1 },
+  dusk:       { rim: ['#FF9C80', 0.95], sh: ['#4A3C9C', 0.06], hl: ['#FFA088', 0.04], sat: 1.03, con: 1.01, lift: ['#3A3270', 0.03], open: 0.3, rays: 0.85, haze: 0.9, dust: 0.7 },
+  night:      { rim: ['#9CB8FF', 1.5], sh: ['#2E56B8', 0.06], hl: ['#C8DAFF', 0.025], sat: 0.95, con: 0.98, lift: ['#2A3C78', 0.04], open: 0.45, rays: 0.3, haze: 0.9, dust: 0 },
+  dawn:       { rim: ['#FFC4A4', 0.95], sh: ['#5A4CA4', 0.05], hl: ['#FFC4A0', 0.045], sat: 1.03, con: 1.02, lift: ['#40385E', 0.022], open: 0.25, rays: 1, haze: 1.25, dust: 1 },
+  storm:      { rim: ['#C4D0E4', 0.6], sh: ['#3A5A72', 0.05], hl: ['#D4E0EC', 0.015], sat: 0.9, con: 1.04, lift: ['#34465A', 0.035], open: 0.35, rays: 0, haze: 1.1, dust: 0 },
+  apocalypse: { rim: ['#FF8A50', 1.0], sh: ['#5A2414', 0.05], hl: ['#FF8A40', 0.04], sat: 1.03, con: 1.05, lift: ['#4A2414', 0.03], open: 0.3, rays: 0.8, haze: 1, dust: 1 },
+  underwater: { rim: ['#BFF4FF', 0.6], sh: ['#0A4A70', 0.04], hl: ['#A0F0FF', 0.025], sat: 1, con: 1, lift: ['#0A3A50', 0.02], open: 0.2, rays: 0.9, haze: 0, dust: 0.8 },
+  deepsea:    { rim: ['#7FD8FF', 0.8], sh: ['#062A50', 0.05], hl: ['#80DCFF', 0.02], sat: 1, con: 1, lift: ['#0A3050', 0.03], open: 0.35, rays: 0.5, haze: 0, dust: 0.8 },
+  space:      { rim: ['#DDE6FF', 0.6], rays: 0, haze: 0, dust: 0 }
+};
+const LOOK0 = { rim: ['#FFFFFF', 0.4], sh: ['#808080', 0], hl: ['#808080', 0], sat: 1, con: 1, lift: ['#000000', 0], open: 0, rays: 0.2, haze: 0, dust: 0 };   // planets
+const hx3 = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16) / 255);   // '#RRGGBB' → display-space rgb
+const LOOKV = {};   // per sky name: the look as plain numbers (tints as zero-mean chroma, lift as a colour of the given brightness)
+for (const n of Object.keys(SKIES)) { const L = { ...LOOK0, ...(LOOK[n] ?? {}) }, tint = ([h, a]) => { const c = hx3(h), l = 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2], d = c.map(v => v - l), m = Math.max(...d.map(Math.abs)) || 1; return d.map(v => v / m * a); };
+  const lc = hx3(L.lift[0]), lm = Math.max(...lc) || 1;
+  LOOKV[n] = { rimC: hx3(L.rim[0]), rimI: L.rim[1], sh: tint(L.sh), hl: tint(L.hl), sat: L.sat, con: L.con, lift: lc.map(v => v / lm * L.lift[1]), open: L.open, rays: L.rays, haze: L.haze, dust: L.dust }; }
+const LOOKNOW = { rimC: new THREE.Color(), rimI: 0, sh: [0, 0, 0], hl: [0, 0, 0], sat: 1, con: 1, lift: [0, 0, 0], open: 0, rays: 0, haze: 0, dust: 0, st: 0 };
+const _lk = (a, b, k) => Array.isArray(a) ? a.map((v, i) => lerp(v, b[i], k)) : lerp(a, b, k);
+// v3.2 ground haze: the distance fog gets a low layer that sits on the ground and in hollows (world height, exponential falloff) and glows toward the sun.
+//   Patched into three's fog chunks once → every built-in material (and every ShaderMaterial with fog: true) gets it. Shared uniforms (plain objects,
+//   not cloned by three): HAZE = density, height falloff (m), start distance (m), base height · HAZES = sun glow colour, glow · HAZED = sun direction.
+//   CFG.groundFog: number = × amount, false = off
+const HAZE = { value: { x: 0, y: 5, z: 12, w: 0 } }, HAZES = { value: { x: 0, y: 0, z: 0, w: 0 } }, HAZED = { value: { x: 0, y: 1, z: 0, w: 0 } };
+if (CFG.groundFog !== false) {
+  const SC = THREE.ShaderChunk;
+  SC.fog_pars_vertex = '#ifdef USE_FOG\n  varying float vFogDepth;\n  varying vec3 vFogW;\n#endif';
+  SC.fog_vertex = '#ifdef USE_FOG\n  vFogDepth = - mvPosition.z;\n  vFogW = transpose(mat3(viewMatrix)) * (mvPosition.xyz - viewMatrix[3].xyz);\n#endif';
+  SC.fog_pars_fragment = `#ifdef USE_FOG
+  uniform vec3 fogColor; varying float vFogDepth; varying vec3 vFogW; uniform vec4 uHaze, uHazeS, uHazeD;
+  #ifdef FOG_EXP2
+    uniform float fogDensity;
+  #else
+    uniform float fogNear; uniform float fogFar;
+  #endif
+#endif`;
+  SC.fog_fragment = `#ifdef USE_FOG
+  #ifdef FOG_EXP2
+    float fogFactor = 1.0 - exp( - fogDensity * fogDensity * vFogDepth * vFogDepth );
+  #else
+    float fogFactor = smoothstep( fogNear, fogFar, vFogDepth );
+  #endif
+  vec3 fogC = fogColor;
+  if (uHaze.x > 0.0) {   // ground haze: optical depth of an exponential layer along the view ray (exact integral), from uHaze.z metres on
+    vec3 hv = vFogW - cameraPosition; float hL = length(hv), hH = max(uHaze.y, 0.1), yc = max(cameraPosition.y - uHaze.w, 0.0), yp = max(vFogW.y - uHaze.w, 0.0), dy = yp - yc;
+    float ec = exp(-yc / hH), ep = exp(-yp / hH), avg = abs(dy) > 0.02 ? hH * (ec - ep) / dy : ec;
+    float hz = (1.0 - exp(-uHaze.x * max(hL - uHaze.z, 0.0) * avg)) * 0.75;
+    float sg = pow(max(dot(hv / max(hL, 1e-3), uHazeD.xyz), 0.0), 6.0) * uHazeS.w;
+    fogC = mix(fogColor, fogColor + uHazeS.rgb * sg, hz / max(1.0 - (1.0 - fogFactor) * (1.0 - hz), 1e-3));
+    fogFactor = 1.0 - (1.0 - fogFactor) * (1.0 - hz);
+  }
+  gl_FragColor.rgb = mix( gl_FragColor.rgb, fogC, fogFactor );
+#endif`;
+  const add = U => { if (U && 'fogColor' in U) Object.assign(U, { uHaze: HAZE, uHazeS: HAZES, uHazeD: HAZED }); };
+  add(THREE.UniformsLib.fog); for (const k in THREE.ShaderLib) add(THREE.ShaderLib[k].uniforms);
+}
 const _ca = new THREE.Color(), _cb = new THREE.Color();
 const mixC = (out, a, b, k) => out.copy(_ca.set(a)).lerp(_cb.set(b), k);
 let skyNow = SKIES.day, NIGHTK = 0; const NIGHTMATS = [];   // materials whose glow follows the darkness (lit windows)
@@ -640,8 +708,64 @@ function applySky(t) {
     if (lw) { hemi.intensity *= 1 + 1.1 * lw; sun.intensity *= 1 + 0.6 * lw; renderer.toneMappingExposure *= 1 + 0.28 * lw;
       skyU.bot.value.lerp(_cb.set('#4A5F8E'), 0.4 * lw); skyU.top.value.lerp(_cb.set('#16244A'), 0.35 * lw); scene.fog.color.lerp(_cb.set('#3A4A6E'), 0.4 * lw); }
     scene.fog.near *= CFG.haze ?? 0.6; }
+  { const A2 = LOOKV[na] ?? LOOKV.day, B2 = LOOKV[nb] ?? LOOKV.day, L = LOOKNOW;   // v3.2 look of this moment (rim, grade, rays, haze, dust)
+    for (const q of ['sh', 'hl', 'lift', 'sat', 'con', 'open', 'rays', 'haze', 'dust', 'rimI']) L[q] = _lk(A2[q], B2[q], k);
+    const rc = _lk(A2.rimC, B2.rimC, k); L.rimC.setRGB(rc[0], rc[1], rc[2], THREE.SRGBColorSpace); L.st = ST(t);
+    rim.color.copy(L.rimC); rim.intensity = L.rimI * RIMK * (LONG ? 1 + 0.4 * lerp(NLIFT[na] ?? 0, NLIFT[nb] ?? 0, k) : 1);
+    const H = HAZE.value, hz = CFG.groundFog === false ? 0 : (typeof CFG.groundFog === 'number' ? CFG.groundFog : 1) * L.haze, o = skyU.orbDir.value;
+    H.x = 0.0046 * hz / FOGK; H.y = 5.5; H.z = 12 * FOGK; H.w = 0;
+    HAZED.value.x = o.x; HAZED.value.y = o.y; HAZED.value.z = o.z;
+    const sg = clamp((o.y + 0.05) / 0.12) * (1 - clamp((o.y - 0.25) / 0.5)) * Math.min(1, sun.intensity / 1.5);   // the haze glows toward a low sun
+    HAZES.value.x = sun.color.r * 0.55; HAZES.value.y = sun.color.g * 0.55; HAZES.value.z = sun.color.b * 0.55; HAZES.value.w = sg; }
   for (const m of NIGHTGLOW) m.emissiveIntensity = 2.6 * skyU.stars.value;
   const lk = strikeK(t); if (lk) { hemi.intensity += 3 * lk; sun.intensity += 2 * lk; }
+}
+// v3.2 dust in the air: faint motes floating near the camera, lit by the sun (brighter looking into the light) — positions are a pure function of t, wrapped
+//   into a box around the camera in the vertex shader (world-fixed, they don't travel with the lens). On by sky (golden, dawn, dusk, apocalypse, under water;
+//   a trace by day) and in rooms built with interior(). CFG.dust: number = × amount, true = also in every other sky, false = off
+const DUSTROOMS = [];   // interior() adds [x, y, z, w, d, h, ry] → dust indoors when the camera is inside
+const DUSTK = CFG.dust === false ? 0 : typeof CFG.dust === 'number' ? CFG.dust : 1, DUSTU = { uT: { value: 0 }, uAmt: { value: 0 }, uCol: { value: new THREE.Color() }, uSun: { value: new THREE.Vector3(0, 1, 0) }, uScale: { value: 800 }, uBox: { value: 8 } };
+if (DUSTK > 0) {
+  const N = 480, g = new THREE.BufferGeometry(), P = new Float32Array(N * 3), S = new Float32Array(N * 4); let s = 918273;
+  const R = () => (s = (s * 48271) % 2147483647) / 2147483647;
+  for (let i = 0; i < N; i++) { P[i * 3] = R(); P[i * 3 + 1] = R(); P[i * 3 + 2] = R(); for (let j = 0; j < 4; j++) S[i * 4 + j] = R(); }
+  g.setAttribute('position', new THREE.BufferAttribute(P, 3)); g.setAttribute('seed', new THREE.BufferAttribute(S, 4));
+  const pts = new THREE.Points(g, new THREE.ShaderMaterial({ uniforms: DUSTU, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, fog: false, toneMapped: false,
+    vertexShader: `uniform float uT, uScale, uBox, uAmt; uniform vec3 uSun; attribute vec4 seed; varying float vA, vPx;
+      void main() {
+        float sp = 0.5 + seed.w, T = uT;
+        vec3 drift = vec3(sin(T * 0.13 + seed.x * 6.283) * 0.5 + T * 0.04, sin(T * 0.19 + seed.y * 6.283) * 0.3 + T * 0.01, cos(T * 0.11 + seed.z * 6.283) * 0.5 + T * 0.025) * sp;
+        vec3 rel = mod(position * uBox * 2.0 + drift - cameraPosition + uBox, 2.0 * uBox) - uBox;
+        vec4 mv = viewMatrix * vec4(cameraPosition + rel, 1.0); float d = -mv.z;
+        float edge = 1.0 - smoothstep(0.6, 1.0, max(max(abs(rel.x), abs(rel.y)), abs(rel.z)) / uBox);
+        float fw = 0.35 + 2.4 * pow(max(dot(normalize(rel), uSun), 0.0), 5.0);   // forward scattering
+        float px = uScale * (0.0035 + 0.0045 * seed.x) / max(d, 0.05);
+        vA = uAmt * edge * smoothstep(0.35, 1.2, d) * fw * (0.4 + 0.6 * seed.y) * min(1.0, px * px / 2.25);   // tiny far motes: same light, less flicker
+        gl_PointSize = clamp(px, 1.5, 9.0); vPx = gl_PointSize;
+        gl_Position = vA < 0.002 ? vec4(2.0, 2.0, 2.0, 1.0) : projectionMatrix * mv; }`,
+    fragmentShader: `uniform vec3 uCol; varying float vA, vPx; void main() { float r = length(gl_PointCoord - 0.5);   // soft disc; points of 1–3 px stay flat (a falloff would erase them)
+      gl_FragColor = vec4(uCol, mix(1.0 - smoothstep(0.5, 0.72, r), 1.0 - smoothstep(0.12, 0.5, r), clamp((vPx - 1.5) / 3.0, 0.0, 1.0)) * vA); }` }));
+  pts.frustumCulled = false; pts.renderOrder = 6; pts.castShadow = pts.receiveShadow = false; pts.userData.dyn = pts.userData.noHit = pts.userData.cover = true; scene.add(pts);
+}
+// rimFit(): rim light behind the subject as seen from the camera (swung toward the side the sun does not light), dust amount + colour — after the camera of the frame is set
+const _rv = new THREE.Vector3(), _rv2 = new THREE.Vector2(), _rq = new THREE.Vector3();
+function rimFit() {
+  const L = LOOKNOW;
+  if (RIMK > 0) {
+    camera.getWorldDirection(_rv); _rv.y = 0; if (_rv.lengthSq() < 1e-6) _rv.set(0, 0, -1); _rv.normalize();
+    const o = skyU.orbDir.value, cr = _rv.x * o.z - _rv.z * o.x, a = 0.6 * clamp(-cr * 4, -1, 1), c = Math.cos(a), s = Math.sin(a);
+    rim.target.position.copy(_l); rim.position.set(_l.x + (_rv.x * c - _rv.z * s) * 60, _l.y + 34, _l.z + (_rv.x * s + _rv.z * c) * 60);
+    rim.target.updateMatrixWorld(); rim.updateMatrixWorld();
+  }
+  if (DUSTK > 0) {
+    let room = 0; const p = camera.position;
+    for (const [x, y, z, w, d, h, ry] of DUSTROOMS) { const dx = p.x - x, dz = p.z - z, lx = dx * Math.cos(ry) - dz * Math.sin(ry), lz = dx * Math.sin(ry) + dz * Math.cos(ry);
+      if (Math.abs(lx) < w / 2 && Math.abs(lz) < d / 2 && p.y > y && p.y < y + h) room = 1; }
+    const o = skyU.orbDir.value, up = clamp((o.y + 0.04) / 0.1), sky = (CFG.dust === true ? Math.max(L.dust, 0.6) : L.dust) * up * Math.min(1.2, sun.intensity / 2);
+    DUSTU.uAmt.value = Math.max(sky, room * 0.55) * DUSTK * 0.9; DUSTU.uT.value = L.st; DUSTU.uSun.value.copy(o);
+    DUSTU.uCol.value.copy(sun.color).lerp(_ca.set('#FFE2BC'), room * 0.6);
+    renderer.getDrawingBufferSize(_rv2); DUSTU.uScale.value = _rv2.y / (2 * Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2));
+  }
 }
 
 // --- materials & primitives (y = bottom of the shape; ball is centred) ---
@@ -6152,6 +6276,7 @@ const ROOMS = {
 function interior(p, x, z, o = {}) {
   const kind = o.kind ?? 'living', K = ROOMS[kind] ?? ROOMS.living, w = o.w ?? 7, d = o.d ?? 6, h = o.h ?? 2.8, ry = o.ry ?? 0, g = stat(grp(p, x, groundH(x, z) + (o.y ?? 0), z, ry));
   const wc = o.wall ?? K.wall, fl = o.floor ?? K.floor, NC = { cast: false }, R = { g, w, d, h, kind, seats: {}, anchors: {}, lamps: [] };
+  if (p === world) DUSTROOMS.push([x, groundH(x, z) + (o.y ?? 0), z, w, d, h, ry]);   // v3.2: dust in the air while the camera is in this room
   // floor
   const fc = o.floorColor ?? { wood: '#B5834E', tiles: '#E8E4DC', carpet: '#7A8A9A', concrete: '#8E8A84', metal: '#5A605A' }[fl] ?? '#B5834E';
   const SF = CFG.surfaces !== false, fs = o.floorSurf ?? { wood: 'boards', tiles: 'tiles', carpet: 'carpet', concrete: 'concrete', metal: 'metal' }[fl], ws = o.wallSurf ?? (kind === 'cellar' ? 'brick' : { wood: 'wallpaper', carpet: 'plaster', tiles: 'plaster', concrete: 'concrete', metal: 'concrete' }[fl]);   // v2.35: floors and walls get a surface (boards, tiles, carpet, wallpaper …)
@@ -11768,7 +11893,7 @@ function updateCamera(t) {
   if (yaw) camera.rotateY(yaw);
   const fdist = f => f == null ? null : typeof f === 'number' ? f : Array.isArray(f) ? _p.distanceTo(_tp.fromArray(f)) : TRACK[f] ? _p.distanceTo(TRACK[f].obj.getWorldPosition(_tp).add(_tp2.set(0, TRACK[f].dy ?? 1.55, 0))) : null;
   const fd0 = _p.distanceTo(_l), focus = lerp(fdist(a.focus) ?? fd0, b && !b.cut ? fdist(b.focus) ?? fd0 : fdist(a.focus) ?? fd0, kf);   // rack focus: different focus on two keys
-  if (a.dof == null && (!b || b.cut || b.dof == null) && CFG.dof !== false) dof = (CFG.dofAuto ?? 1) * sm01((10 - Math.min(fd0, focus)) / 7);   // auto: close shots get a soft background
+  if (a.dof == null && (!b || b.cut || b.dof == null) && CFG.dof !== false) dof = (CFG.dofAuto ?? 0.65) * sm01((10 - Math.min(fd0, focus)) / 7);   // auto: close shots get a soft background (v3.2: softer, 0.65 — the background stays readable)
   camFx.dof = dof; camFx.fy = fy; camFx.focus = focus;
   sky.position.copy(camera.position);
 }
@@ -12355,20 +12480,26 @@ function updateLoop(t) {
 // --- post FX: grade, vignette, grain, chromatic kick on impacts; optional CRT look ---
 const FinalShader = {
   uniforms: { tDiffuse: { value: null }, uRes: { value: new THREE.Vector2(1, 1) }, uTime: { value: 0 }, uExp: { value: 1 }, uMode: { value: 1 }, uGrain: { value: 0.05 }, uVig: { value: 0.4 }, uAb: { value: 0 }, uSat: { value: 1.05 }, uCon: { value: 1.05 },
-    uBlur: { value: 0 }, uBlurDir: { value: new THREE.Vector2(1, 0) }, uZoom: { value: 0 }, uDip: { value: 0 }, uDef: { value: 0 }, uDof: { value: 0 }, uFocus: { value: new THREE.Vector2(0.5, 0.5) }, tDepth: { value: null }, uDofOn: { value: 0 }, uRain: { value: 0 }, uFocusD: { value: 5 }, uNear: { value: 0.1 }, uFar: { value: 1200 } },
+    uBlur: { value: 0 }, uBlurDir: { value: new THREE.Vector2(1, 0) }, uZoom: { value: 0 }, uDip: { value: 0 }, uDef: { value: 0 }, uDof: { value: 0 }, uFocus: { value: new THREE.Vector2(0.5, 0.5) }, tDepth: { value: null }, uDofOn: { value: 0 }, uRain: { value: 0 }, uFocusD: { value: 5 }, uNear: { value: 0.1 }, uFar: { value: 1200 },
+    tRays: { value: null }, uRays: { value: 0 }, uSh: { value: new THREE.Vector3() }, uHl: { value: new THREE.Vector3() }, uLift: { value: new THREE.Vector3() }, uOpen: { value: 0 }, uGSat: { value: 1 }, uGCon: { value: 1 } },
   vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
   fragmentShader: `#include <packing>
-    uniform sampler2D tDiffuse, tDepth; uniform vec2 uRes, uBlurDir, uFocus; uniform float uTime, uExp, uMode, uGrain, uVig, uAb, uSat, uCon, uBlur, uZoom, uDip, uDef, uDof, uDofOn, uFocusD, uNear, uFar, uRain; varying vec2 vUv;
+    uniform sampler2D tDiffuse, tDepth, tRays; uniform vec2 uRes, uBlurDir, uFocus; uniform float uTime, uExp, uMode, uGrain, uVig, uAb, uSat, uCon, uBlur, uZoom, uDip, uDef, uDof, uDofOn, uFocusD, uNear, uFar, uRain, uRays, uOpen, uGSat, uGCon;
+    uniform vec3 uSh, uHl, uLift; varying vec2 vUv;
     float hr(vec2 p){ return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
     vec3 drops(vec2 uv, float t, float sc){ vec2 a = vec2(uv.x * 0.5625, uv.y) * sc, id = floor(a), f = fract(a) - 0.5; float n = hr(id), n2 = hr(id + 17.3), n3 = hr(id + 41.7), life = fract(t * (0.1 + 0.12 * n) + n2);
       vec2 c = vec2(n - 0.5, n2 - 0.5) * 0.45; c.y -= step(0.72, n) * life * life * 0.7; float r = (0.1 + 0.16 * n3) * smoothstep(0.0, 0.06, life) * (1.0 - smoothstep(0.82, 1.0, life)) * step(0.3, n3);
       vec2 d = f - c; float m = r > 0.002 ? 1.0 - smoothstep(r * 0.65, r, length(d * vec2(1.0, 0.85))) : 0.0; return vec3(-d * m * 1.3 / sc, m); }
-    float coc(vec2 p){ float d = unpackRGBAToDepth(texture2D(tDepth, p)), z = -(uNear * uFar) / ((uFar - uNear) * d - uFar); return min(uDof * 0.0105 * abs(z - uFocusD) / max(z, 0.05), 0.013); }   // circle of confusion (uv)
+    float coc(vec2 p){ float d = unpackRGBAToDepth(texture2D(tDepth, p)), z = -(uNear * uFar) / ((uFar - uNear) * d - uFar); return min(uDof * 0.0105 * abs(z - uFocusD) / max(z, 0.05), 0.009); }   // circle of confusion (uv) — v3.2: capped lower, a far background stays readable
     float h(vec2 p){ return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
     vec3 neutral(vec3 c){ c *= uExp; float x = min(c.r, min(c.g, c.b)), off = x < 0.08 ? x - 6.25 * x * x : 0.04; c -= off; float pk = max(c.r, max(c.g, c.b)); if (pk < 0.76) return c;
       float np = 1.0 - 0.0576 / (pk - 0.52); c *= np / pk; return mix(c, vec3(np), 1.0 - 1.0 / (0.15 * (pk - np) + 1.0)); }
     vec3 srgb(vec3 c){ c = clamp(c, 0.0, 1.0); return mix(c * 12.92, 1.055 * pow(c, vec3(1.0 / 2.4)) - 0.055, step(0.0031308, c)); }
-    vec3 grade(vec3 c){ float l = dot(c, vec3(0.2126, 0.7152, 0.0722)); c = mix(vec3(l), c, uSat); return clamp((c - 0.5) * uCon + 0.5, 0.0, 1.0); }
+    vec3 grade(vec3 c){ float l = dot(c, vec3(0.2126, 0.7152, 0.0722)), so = 1.0 - clamp(l / 0.42, 0.0, 1.0);
+      c *= 1.0 + uOpen * so * so;   // v3.2 per-sky look: shadow detail opened up, split toning (shadow / highlight tint), saturation, contrast, then a tinted black floor
+      c += uSh * (1.0 - smoothstep(0.0, 0.5, l)) * smoothstep(0.0, 0.06, l) + uHl * smoothstep(0.4, 1.0, l);
+      l = dot(c, vec3(0.2126, 0.7152, 0.0722)); c = mix(vec3(l), c, uSat * uGSat); c = clamp((c - 0.5) * uCon * uGCon + 0.5, 0.0, 1.0);
+      return uLift + c * (1.0 - uLift); }
     void main(){
       vec2 uv = vUv; vec3 c; float rmk = 0.0;
       if (uRain > 0.001) { vec3 d1 = drops(uv, uTime, 6.0), d2 = drops(uv * 1.3 + 0.37, uTime * 1.2 + 3.0, 10.0); uv += (d1.xy + d2.xy) * uRain; rmk = max(d1.z, d2.z) * uRain; }
@@ -12383,6 +12514,7 @@ const FinalShader = {
           acc += texture2D(tDiffuse, su).rgb * w; ws += w; }
         c = acc / ws;
       } else c = vec3(texture2D(tDiffuse, uv + dir * ab).r, texture2D(tDiffuse, uv).g, texture2D(tDiffuse, uv - dir * ab).b);
+      if (uRays > 0.0) c += texture2D(tRays, vUv).rgb * uRays;   // v3.2 god rays (LookPass)
       c = grade(srgb(neutral(c * (1.0 + rmk * 0.12))));   // tone map + sRGB here: one full-screen pass less
       if (uMode > 2.5) c *= 0.8 + 0.2 * sin(uv.y * uRes.y * 1.5708);
       c *= mix(1.0 - uVig, 1.0, smoothstep(0.9, 0.25, length((vUv - 0.5) * vec2(1.0, 1.2))));
@@ -12525,14 +12657,59 @@ function dressPass() {
         q.rotation.x = q.fz > 0 ? Math.min(a, cg - q.flare) : Math.max(a, cg) + sit * Math.min(0, a); q.rotation.z = zr + q.sx * 0.03; } }
   }
 }
-const _sc = new THREE.Vector3();
+// v3.2 far shadows: a camera far from what it looks at (wide shots, city from above, beach landings) gets a bigger box — up to CFG.shadowFar (120 m half size,
+//   false = the old CFG.area limit) — moved ahead into the view, with depth range and bias scaled along. Same 2048 map: wide shots show the scene small anyway.
+const _sc = new THREE.Vector3(), _sf = new THREE.Vector3(), SHFAR = CFG.shadowFar === false ? 0 : CFG.shadowFar ?? 120;
 function fitShadow() {   // the sun's shadow map follows the shot: a tight box around what the camera looks at → crisp shadows in close-ups (CFG.shadowFit: false = fixed CFG.area box)
+  rimFit();   // v3.2: rim light + dust follow the camera of this frame (also for each half of a split screen)
   if (!CFG.shadows || CFG.shadowFit === false) return;
-  const half = Math.round(clamp(camera.position.distanceTo(_l) * 1.3 + 5, 9, CFG.area ?? 36)), tx = 2 * half / sun.shadow.mapSize.x, C = sun.shadow.camera;
-  _sc.set(Math.round(_l.x / tx) * tx, 0, Math.round(_l.z / tx) * tx);   // snapped to shadow texels: no shimmering while the camera drifts
-  if (C.right !== half) { Object.assign(C, { left: -half, right: half, top: half, bottom: -half }); C.updateProjectionMatrix(); }
-  sun.target.position.copy(_sc); sun.target.updateMatrixWorld(); sun.position.copy(skyU.orbDir.value).multiplyScalar(160).add(_sc);
+  const A = CFG.area ?? 36, want = camera.position.distanceTo(_l) * 1.3 + 5, half = Math.round(clamp(want, 9, Math.max(A, SHFAR))), tx = 2 * half / sun.shadow.mapSize.x, C = sun.shadow.camera;
+  _sf.copy(_l); if (half > A) { camera.getWorldDirection(_rq); _rq.y = 0; if (_rq.lengthSq() > 1e-6) _sf.addScaledVector(_rq.normalize(), (half - A) * 0.35); }   // wide: the box reaches further into the view
+  _sc.set(Math.round(_sf.x / tx) * tx, 0, Math.round(_sf.z / tx) * tx);   // snapped to shadow texels: no shimmering while the camera drifts
+  const D = clamp(half * 2.2, 160, 420), far = Math.max(320, D * 2);
+  if (C.right !== half || C.far !== far) { Object.assign(C, { left: -half, right: half, top: half, bottom: -half, far }); C.updateProjectionMatrix();
+    sun.shadow.bias = -0.0006 * 320 / far; sun.shadow.normalBias = 0.04 * Math.max(1, tx / 0.035); }
+  sun.target.position.copy(_sc); sun.target.updateMatrixWorld(); sun.position.copy(skyU.orbDir.value).multiplyScalar(D).add(_sc);
 }
+// v3.2 god rays + per-sky grade: LookPass runs right before the final pass. Rays: a quarter-size mask of what is as bright as the sky round the sun (anything darker
+//   in front cuts the shafts), smeared toward the sun in three radial passes (8 taps each ≈ 512 taps, no banding), added before tone mapping. Only when the sun / moon
+//   is above the horizon and on or near the screen; strength per sky (LOOK.rays: strongest golden, dawn, dusk). CFG.godrays: number = × strength, false = off.
+//   Grade: CFG.grade: false = no per-sky tint / saturation / contrast · CFG.lift: number = × shadow floor and shadow opening, false = off
+const RAYK = CFG.godrays === false ? 0 : typeof CFG.godrays === 'number' ? CFG.godrays : 1, GRADEK = CFG.grade === false ? 0 : 1, LIFTK = CFG.lift === false ? 0 : typeof CFG.lift === 'number' ? CFG.lift : 1;
+class LookPass extends Pass {
+  constructor() {
+    super(); this.needsSwap = false; const o = { type: THREE.HalfFloatType, depthBuffer: false };
+    this.a = new THREE.WebGLRenderTarget(4, 4, o); this.b = new THREE.WebGLRenderTarget(4, 4, o);
+    const vs = 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }';
+    this.mask = new FullScreenQuad(new THREE.ShaderMaterial({ uniforms: { tex: { value: null }, uSun: { value: new THREE.Vector2() }, uAsp: { value: 0.5625 }, uThr: { value: 1 }, uPx: { value: new THREE.Vector2() } }, vertexShader: vs, depthTest: false, depthWrite: false,
+      fragmentShader: `uniform sampler2D tex; uniform vec2 uSun, uPx; uniform float uAsp, uThr; varying vec2 vUv;
+        void main(){ vec3 c = (texture2D(tex, vUv + uPx * vec2(-1.0, -1.0)).rgb + texture2D(tex, vUv + uPx * vec2(1.0, -1.0)).rgb + texture2D(tex, vUv + uPx * vec2(-1.0, 1.0)).rgb + texture2D(tex, vUv + uPx).rgb) * 0.25;
+          float l = dot(c, vec3(0.2126, 0.7152, 0.0722)); vec2 d = (vUv - uSun) * vec2(uAsp, 1.0);
+          gl_FragColor = vec4(min(c, vec3(4.0)) * smoothstep(uThr, uThr * 1.5, l) * exp(-dot(d, d) * 3.5), 1.0); }` }));
+    this.blur = new FullScreenQuad(new THREE.ShaderMaterial({ uniforms: { tex: { value: null }, uSun: { value: new THREE.Vector2() }, uLen: { value: 1 }, uDec: { value: 1 } }, vertexShader: vs, depthTest: false, depthWrite: false,
+      fragmentShader: `uniform sampler2D tex; uniform vec2 uSun; uniform float uLen, uDec; varying vec2 vUv;
+        void main(){ vec2 d = (uSun - vUv) * uLen / 8.0, p = vUv; vec3 s = vec3(0.0); float w = 1.0, ws = 0.0;
+          for (int i = 0; i < 8; i++) { s += texture2D(tex, p).rgb * w; ws += w; w *= uDec; p += d; } gl_FragColor = vec4(s / ws, 1.0); }` }));
+  }
+  setSize(w, h) { this.a.setSize(Math.max(1, w >> 2), Math.max(1, h >> 2)); this.b.setSize(Math.max(1, w >> 2), Math.max(1, h >> 2)); this.w = w; this.h = h; }
+  render(r, wb, rb) {
+    const U = fin.uniforms, L = LOOKNOW;
+    U.uSh.value.fromArray(L.sh).multiplyScalar(GRADEK); U.uHl.value.fromArray(L.hl).multiplyScalar(GRADEK); U.uGSat.value = lerp(1, L.sat, GRADEK); U.uGCon.value = lerp(1, L.con, GRADEK);
+    U.uLift.value.fromArray(L.lift).multiplyScalar(LIFTK); U.uOpen.value = L.open * LIFTK;
+    U.uRays.value = 0; if (!RAYK || scenePass.split || L.rays <= 0) return;
+    const o = skyU.orbDir.value; camera.getWorldDirection(_rq); const fw = _rq.dot(o), up = clamp((o.y + 0.03) / 0.08); if (fw < 0.05 || up <= 0) return;
+    _rq.copy(camera.position).addScaledVector(o, 600).project(camera); const sx = _rq.x * 0.5 + 0.5, sy = _rq.y * 0.5 + 0.5;
+    const out = Math.max(0, -sx, sx - 1, -sy, sy - 1), vis = up * clamp((fw - 0.05) / 0.2) * (1 - clamp(out / 0.45)), k = L.rays * RAYK * vis * 0.45; if (k < 0.004) return;
+    const M = this.mask.material.uniforms, B = this.blur.material.uniforms;
+    M.tex.value = rb.texture; M.uSun.value.set(sx, sy); M.uAsp.value = this.w / Math.max(1, this.h); M.uPx.value.set(1 / Math.max(1, this.w), 1 / Math.max(1, this.h));
+    M.uThr.value = Math.max(0.02, (0.2126 * skyU.bot.value.r + 0.7152 * skyU.bot.value.g + 0.0722 * skyU.bot.value.b) * 0.92);   // as bright as the horizon sky or brighter
+    r.setRenderTarget(this.a); this.mask.render(r);
+    B.uSun.value.set(sx, sy); let src = this.a, dst = this.b;
+    for (const [len, dec] of [[0.92, 0.9], [0.92 / 8, 0.985], [0.92 / 64, 1]]) { B.tex.value = src.texture; B.uLen.value = len; B.uDec.value = dec; r.setRenderTarget(dst); this.blur.render(r); [src, dst] = [dst, src]; }
+    U.tRays.value = src.texture; U.uRays.value = k;
+  }
+}
+const lookFx = new LookPass(); composer.addPass(lookFx);
 const fin = new ShaderPass(FinalShader); composer.addPass(fin);
 Object.assign(fin.uniforms.uMode, { value: { none: 0, film: 1, crt: 3 }[CFG.filter] ?? 1 });
 fin.uniforms.uGrain.value = CFG.filter === 'none' ? 0 : CFG.grain;

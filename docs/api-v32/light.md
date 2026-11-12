@@ -1,0 +1,20 @@
+## Licht & Nachbearbeitung (v3.2)
+
+Alles ist ab v3.2 automatisch an und verbessert jedes Video ohne Änderung an der Szene. Jeder Teil lässt sich einzeln abschalten. Alle Werte folgen den `SKY`-Schlüsseln und werden zwischen zwei Himmeln genauso überblendet wie Farbe, Nebel und Sonne (Tabelle `LOOK` in `template.html`, eine Zeile pro Himmel). Jedes Bild bleibt eine reine Funktion von t.
+
+| Wirkung | Was passiert | Abschalten / Stärke |
+|---|---|---|
+| **Gegenlicht (Rim)** | Zweites, schattenloses Richtungslicht hinter dem Motiv, aus Sicht der Kamera (jedes Bild neu aus der Kamera berechnet, leicht zur sonnenabgewandten Seite gedreht). Kanten, Schultern und Oberseiten fangen Licht, Figuren lösen sich vom Hintergrund. Nachts starkes kühles Mondlicht, golden/dusk warm, am Tag dezent. | `CFG.rim: false` · Zahl = × Stärke |
+| **Nacht & Sturm lesbar** | Mond als Hauptlicht (heller, kühler), kühleres Fülllicht, angehobene Bodenfarbe der Hemisphäre (Nacht `#2C3550` statt `#1C1C24`). Schattenseiten werden nicht mehr schwarz. | `CFG.nightLook: false` = alte Werte |
+| **Schattenboden** | Dunkle Bereiche werden in der Nachbearbeitung leicht geöffnet (`open`) und bekommen einen getönten Boden (`lift`): nie große, rein schwarze Flächen. Nachts blau, Dämmerung violett, Apokalypse rotbraun, im All aus. | `CFG.lift: false` · Zahl = × Stärke |
+| **Farblook je Tageszeit** | Split-Toning (Tönung der Schatten und der Lichter) plus kleine Sättigungs-/Kontrast-Korrektur je Himmel: Tag kühle Schatten/warme Lichter, golden Teal-Orange, Nacht blau, Sturm entsättigt, Apokalypse Rot-Orange. Wirkt zusätzlich zu `CFG.saturation`/`CFG.contrast`. | `CFG.grade: false` |
+| **Lichtstrahlen (God Rays)** | Strahlen von Sonne oder Mond, nur wenn sie über dem Horizont und im oder nahe am Bild stehen. Alles, was dunkler als der Himmel ist (Häuser, Bäume, Figuren), schneidet die Strahlen. Am stärksten golden, dawn, dusk; schwach am Tag und nachts; Sturm aus. Viertelauflösung, drei radiale Durchgänge: kaum Kosten. Aus bei Split-Screen. | `CFG.godrays: false` · Zahl = × Stärke |
+| **Bodennebel** | Zusätzlich zum Entfernungsnebel liegt eine niedrige Dunstschicht über dem Boden und in Senken (Höhe in Weltkoordinaten, fällt nach oben exponentiell ab, ab 12 m vor der Kamera). Leuchtet in Richtung einer tiefen Sonne. Viel bei dawn/dusk/Nacht/Sturm, wenig am Tag, unter Wasser aus. Gilt für alle eingebauten Materialien (Patch der Three.js-Fog-Chunks). | `CFG.groundFog: false` · Zahl = × Menge |
+| **Staub in der Luft** | Feine, schwebende Partikel um die Kamera (in einer Box um die Kamera umgebrochen, bleiben in der Welt stehen), im Gegenlicht heller. An bei golden/dawn/dusk/Apokalypse/unter Wasser, ein Hauch am Tag, nachts aus. In Räumen aus `interior()` automatisch an, sobald die Kamera drin ist. | `CFG.dust: false` · Zahl = × Menge · `true` = in jedem Himmel |
+| **Schatten in der Weite** | Bei weiten Einstellungen wächst die Schattenbox mit dem Abstand der Kamera bis 120 m halbe Kantenlänge (vorher fest `CFG.area`, meist 36 m) und rückt in Blickrichtung vor. Gleiche 2048er Schattenkarte; Tiefenbereich und Bias wachsen mit. Nahe Einstellungen bleiben wie bisher scharf. | `CFG.shadowFar: false` = alte Grenze · Zahl = maximale halbe Kantenlänge |
+| **Weichere Tiefenunschärfe** | Automatische Unschärfe in Nahaufnahmen schwächer (`CFG.dofAuto` Standard 0,65 statt 1), maximaler Unschärfekreis 0,009 statt 0,013: Hintergrund bleibt erkennbar, aber getrennt. Explizites `dof` in Kamera-Keys wirkt wie bisher, nur mit der neuen Obergrenze. | `CFG.dofAuto: 1` = alte Stärke |
+
+Hinweise:
+- Eigene `ShaderMaterial` mit `fog: true` bekommen den Bodennebel nur, wenn ihre Uniforms aus `THREE.UniformsLib.fog` stammen; der Vertex-Shader muss dann `#include <fog_vertex>` nach `mvPosition` enthalten (wie bei Three.js üblich).
+- Die Werte je Himmel stehen in `LOOK` (rim, sh/hl Tönung, sat, con, lift, open, rays, haze, dust); Planeten-Himmel nutzen neutrale Werte (`LOOK0`).
+- Test: `tests/v32-light` (Tag → golden → Nacht, weit und nah).
