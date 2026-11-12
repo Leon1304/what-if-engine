@@ -1955,6 +1955,9 @@ function walk(obj, pts, o = {}) {
   const gW = (s, P) => { if (!rig || !STAIRS.length) return groundH(P.x, P.z); let h = 0; for (let k = -2; k <= 2; k++) { const Q = path.at(s + k * 0.075); h += groundH(Q.x, Q.z); } return h / 5; };   // v2.29: on stairs the body rises smoothly (was: 18 cm jump per step); the feet still find the steps (foot IK)
   const rt = obj.root ?? obj; const me = { t0, v, pos: t => { const s = dist(t - t0), P = path.at(s); return new THREE.Vector3(P.x, gW(s, P) + (o.y ?? 0), P.z); }, yaw: t => { let y = o.face ?? (yawAt(dist(t - t0)) ?? y0); const i = rt._walks.indexOf(me), u = t - t0;   // v2.31: a walk that follows another one turns into its new heading over 0.45 s (was: spun round in one frame)
       if (i > 0 && o.face == null && u < 0.45) { const yp = rt._walks[i - 1].yaw(t0); y = yp + Math.atan2(Math.sin(y - yp), Math.cos(y - yp)) * sm01(Math.max(0, u) / 0.45); } return y; } }; (rt._walks ??= []).push(me);
+  if (obj.beast) {   // v2.40.x beast feet: stride amplitude as a function of the distance walked (w at the moment a foot touched down) → feet stay planted while starting and stopping
+    const a0 = ra ? v / ra : 0, tr = Math.min(ra, Te / 2), vp = a0 * tr, s1 = 0.5 * a0 * tr * tr, sE = ra ? vp * (Te - tr) : v * Te;
+    Object.assign(me, { Te, bl, sE, dist, wS: q => { if (q <= 0 || q >= sE) return 0; const tau = !ra ? q / v : q < s1 ? Math.sqrt(2 * q / a0) : q < sE - s1 ? tr + (q - s1) / vp : Te - Math.sqrt(2 * (sE - q) / a0); return clamp(Math.min(tau, Te - tau) / bl); } }); }
   const pick = t => { let w = rt._walks[0]; for (const x of rt._walks) if (x.t0 <= t) w = x; return w; };
   obj._posAt = t => pick(t).pos(t); obj._yawAt = t => pick(t).yaw(t);
   if (o.prints && obj.legL) {   // footprints (snow, sand, mud): o.prints = true | hex colour; o.printLife (s)
@@ -1974,6 +1977,7 @@ function walk(obj, pts, o = {}) {
     const w = moving ? clamp(Math.min(tau, Te - tau) / bl) : 0, vn = moving ? (dist(tau + 0.02) - dist(tau - 0.02)) / 0.04 : 0;
     const from = tau < Te / 2 ? (o.startMode ?? 'idle') : (o.endMode ?? 'idle');
     let turn = (yawAt(s + 0.5) ?? yw) - (yawAt(s - 0.5) ?? yw); turn = Math.atan2(Math.sin(turn), Math.cos(turn));
+    if (obj.beast) obj._wk = me;
     if (obj.quad) animalPose(obj, moving, s * stride / sc, t, o.graze ?? 0.6, w, s);
     else if (obj.isModel) obj.pose(mode, s / ((obj.stride[mode] ?? 1.3) * sc), t, { w, from, v: vn });
     else if (obj.legL) pose(obj, mode, TAU * s / Cl, t, { v, w, from, turn: mode === 'run' ? turn : 0 });
@@ -6782,6 +6786,40 @@ function _ik2(hy, hz, ty, tz, l1, l2, back) {   // two-bone IK in the sagittal p
   const aT = Math.atan2(-dz, -dy), al = Math.acos(clamp((l1 * l1 + d * d - l2 * l2) / (2 * l1 * d), -1, 1)), a1 = back ? aT + al : aT - al;
   const ky = hy - l1 * Math.cos(a1), kz = hz - l1 * Math.sin(a1); return [a1, Math.atan2(-(hz + dz - kz), -(hy + dy - ky))];
 }
+// v2.40.x planted feet for beasts on a walk(): a foot in stance stays where it touched down (offset = touch-down offset − distance walked since),
+// a swing goes from the lift-off point to the next touch-down, whose stride is scaled by the walk's ramp at that distance (short first and last steps).
+// After the stop the feet that are still apart (or in the air) step under the body one after another; the next walk starts from where they are.
+const _bGaits = (a, mx) => { const D = a.D; return [D.pace ? _GAITS.pace : _GAITS.walk, D.pace ? _GAITS.pace : _GAITS.trot, mx === 'hop' ? _GAITS.hop : D.biped ? _GAITS.brun : D.gal === 'tra' ? _GAITS.tra : _GAITS.rot]; };
+const _bSw = (a, vc) => { const lhW = a.lh * a.sc, Frc = Math.max(0.02, vc * vc / (9.81 * lhW)); return Math.max(0.55 * lhW, lhW * 2.3 * Math.pow(Frc, 0.3), vc / 3.2); };
+const _bGw = (mx, F) => { if (mx === 'hop') return [0, 0, 1]; if (mx === 'walk') return [1, 0, 0]; const k1 = sm01((F - 0.3) / 0.3), k2 = mx === 'gallop' ? sm01((F - 1.9) / 1.0) : 0; return [1 - k1, k1 * (1 - k2), k1 * k2]; };   // gait weights [walk, trot, gallop] from the Froude number
+const _bGw0 = (a, wk) => { const lhW = a.lh * a.sc; return _bGw(a.D.maxG ?? 'gallop', Math.max(0.02, wk.v * wk.v / (9.81 * lhW))); };
+function _bFoot(a, G, d, off, s, Sw, W, z0) {   // one foot, one gait → [z offset, lift, swing 0‥1] (local units); z0: where the foot stood when the walk began
+  const sc = a.sc, half = Sw / sc * d / 2, uu = ((s / Sw - off) % 1 + 1) % 1, sc0 = s - uu * Sw, swL = (1 - d) * Sw, ex = sN => sN >= 0.4 * swL;   // ex: a swing cut by the start is still taken if ≥ 40 % of it is left
+  const base = () => (sc0 < 0 || (sc0 - swL < 0 && !ex(sc0)) ? [z0, 0] : [half * W(sc0), sc0]);   // [touch-down offset, distance] of this stance (planted since the start: z0 at 0)
+  if (uu < d) { const [b0, s0] = base(); return [b0 - (s - s0) / sc, 0, 0]; }
+  const sl = sc0 + d * Sw, sn = sc0 + Sw, fN = half * W(sn); let fL, q;
+  if (sl < 0) { if (!ex(sn)) return [z0 - s / sc, 0, 0]; fL = z0; q = clamp(s / sn); } else { const [b0, s0] = base(); fL = b0 - (sl - s0) / sc; q = (uu - d) / (1 - d); }
+  const k = Math.sin(Math.PI * q) * clamp(Math.abs(fN - fL) / Math.max(1e-6, 2 * half) * 1.6, 0.2, 1);
+  return [lerp(fL, fN, sm01(q)), G.lift * a.lh * k * (a.D.sprawl ? 0.5 : 1), k];
+}
+function _bMove(a, wk, s, gw) {   // all four feet while walking (gait weights gw = [walk, trot, gallop])
+  const D = a.D, GS = _bGaits(a, D.maxG ?? 'gallop'), Sw = _bSw(a, wk.v), Z0 = _bStart(a, wk), R = [];
+  for (let i = 0; i < 4; i++) { const r = [0, 0, 0]; if (a.LG[i]) for (let gi = 0; gi < 3; gi++) { if (gw[gi] < 1e-3) continue; const G = GS[gi], d = gi === 2 && D.duty ? D.duty : G.d, f = _bFoot(a, G, d, G.off[i], s, Sw, wk.wS, Z0[i]); r[0] += gw[gi] * f[0]; r[1] += gw[gi] * f[1]; r[2] += gw[gi] * f[2]; } R.push(r); }
+  return R;
+}
+function _bStart(a, wk) {   // feet offsets when this walk starts = where the previous walk left them
+  if (wk._z0) return wk._z0; wk._z0 = [0, 0, 0, 0]; const W = a.root._walks ?? [], i = W.indexOf(wk); let pv = null; for (const x of W) if (x !== wk && x.wS && x.t0 < wk.t0 && (!pv || x.t0 >= pv.t0)) pv = x;
+  if (pv && i >= 0) wk._z0 = _bFeet(a, pv, wk.t0, Math.min(pv.sE, pv.dist(wk.t0 - pv.t0)), _bGw0(a, pv)).map(f => f[0]);
+  return wk._z0;
+}
+function _bFeet(a, wk, t, s, gw) {   // feet of a beast on walk wk at time t (s = distance walked)
+  if (t < wk.t0 + wk.Te) return _bMove(a, wk, s, gw);
+  const st = wk._stop ?? (wk._stop = _bMove(a, wk, wk.sE, _bGw0(a, wk))), dt = t - wk.t0 - wk.Te, lh = a.lh, du = 0.16 + 0.1 * Math.sqrt(lh * a.sc);
+  const ord = wk._ord ?? (wk._ord = [0, 1, 2, 3].filter(i => a.LG[i]).sort((i, j) => (st[j][1] > 1e-4) - (st[i][1] > 1e-4) || Math.abs(st[j][0]) - Math.abs(st[i][0])));
+  return st.map((f, i) => { const j = ord.indexOf(i); if (j < 0) return [0, 0, 0]; const air = f[1] > 1e-4, big = air || Math.abs(f[0]) > 0.06 * lh; if (!big) return [f[0], 0, 0];
+    const t0 = air ? 0 : 0.06 + 0.13 * j, k = clamp((dt - t0) / du), lift = (air ? 0.5 * f[1] : _GAITS.walk.lift * lh * clamp(Math.abs(f[0]) / (0.4 * lh), 0.3, 1)) * Math.sin(Math.PI * k);
+    return [lerp(f[0], 0, sm01(k)), (air ? f[1] * (1 - sm01(k)) : 0) + lift, Math.sin(Math.PI * k) * 0.6]; });
+}
 function beastPose(a, t, w = 0, s = 0, graze = 0) {
   const D = a.D, lh = a.lh, lhW = lh * a.sc, sd = a.sd, mx = D.maxG ?? 'gallop';
   let v = 0, vc = 0.6;
@@ -6791,12 +6829,14 @@ function beastPose(a, t, w = 0, s = 0, graze = 0) {
   if (a._posAt && D.pant) { const p0 = a._posAt(t - 1.3), p1 = a._posAt(t - 1.2); vPast = Math.hypot(p1.x - p0.x, p1.z - p0.z) / 0.1; }
   const bend = clamp(yr * 0.2, -0.4, 0.4) * w, cad = vc / Sw, flick = clamp(30 * 0.6 / Math.max(cad, 0.1) / 9, 0.35, 1);   // paw flick shrinks when a swing lasts only a few frames
   let ww = 1, wt = 0, wg = 0;
-  if (mx === 'hop') { ww = 0; wg = 1; } else if (mx !== 'walk') { const k1 = sm01((Fr - 0.3) / 0.3), k2 = mx === 'gallop' ? sm01((Fr - 1.9) / 1.0) : 0; ww = 1 - k1; wt = k1 * (1 - k2); wg = k1 * k2; }
+  [ww, wt, wg] = _bGw(mx, a._wk?.wS ? Frc : Fr);   // v2.40.x: gait from the walk's cruise speed (one gait per walk, started and stopped with short steps; blending gaits while braking dragged the feet)
   const GW = D.pace ? _GAITS.pace : _GAITS.walk, GT = D.pace ? _GAITS.pace : _GAITS.trot, GG = mx === 'hop' ? _GAITS.hop : D.biped ? _GAITS.brun : D.gal === 'tra' ? _GAITS.tra : _GAITS.rot;
   let by = 0, bz = 0, bp = 0, br = 0, fx = 0, np = 0, ny = 0, hp = 0, hy = 0, hr = 0, jaw = 0, jawY = 0, tl = 0, tsA = 0.08, tsF = 2.2, ear = 0, earB = 0, trk = 0, lat = 0, rig = 0, rest = 0, lid = 0, swy = 0;
   const T = a._T ?? (a._T = [[0, 0, 0], [0, 0, 0], [0, 0, 0], [0, 0, 0]]), A3 = a._A3 ?? (a._A3 = [0, 0, 0, 0]);
+  const wk = a._wk && a._wk.wS && t >= a._wk.t0 ? a._wk : null, FT = wk ? _bFeet(a, wk, t, s, [ww, wt, wg]) : null;
   for (let i = 0; i < 4; i++) { let z = 0, y = 0, lk = 0; if (!a.LG[i]) { T[i][0] = T[i][1] = T[i][2] = 0; continue; }
-    if (w > 0) { for (let gi = 0; gi < 3; gi++) { const G = gi === 0 ? GW : gi === 1 ? GT : GG, gw = gi === 0 ? ww : gi === 1 ? wt : wg; if (gw < 1e-3) continue;
+    if (FT) { z = FT[i][0]; y = FT[i][1]; lk = FT[i][2]; }
+    else if (w > 0) { for (let gi = 0; gi < 3; gi++) { const G = gi === 0 ? GW : gi === 1 ? GT : GG, gw = gi === 0 ? ww : gi === 1 ? wt : wg; if (gw < 1e-3) continue;
         const d = gi === 2 && D.duty ? D.duty : G.d, uu = ((U - G.off[i]) % 1 + 1) % 1, half = S * d / 2; let fz, fy = 0, k = 0;
         if (uu < d) fz = half * (1 - 2 * uu / d); else { const q = (uu - d) / (1 - d); fz = -half + 2 * half * sm01(q); k = Math.sin(Math.PI * q); fy = G.lift * lh * k * (D.sprawl ? 0.5 : 1); }
         z += gw * fz; y += gw * fy; lk += gw * k; } z *= w; y *= w; lk *= w; }
@@ -6864,7 +6904,8 @@ function beastPose(a, t, w = 0, s = 0, graze = 0) {
   a.jaw.rotation.x = jaw; a.jaw.rotation.y = jawY; if (a.lids) for (const l of a.lids) l.rotation.x = lerp(a.lid0, 1.35, clamp(lid));
   // legs: IK to the foot targets
   for (let i = 0; i < 4; i++) { const g = a.LG[i]; if (!g) continue; const th = bpT + (g.front ? fx : -fx), lk = T[i][2];
-    if (D.sprawl) { g.u.rotation.set(0, g.s * (T[i][0] - g.zN) / (g.l1 + 0.2) * -1.2, g.s * (1.32 + 0.6 * lk)); g.m.rotation.set(0, 0, -g.s * (1.45 + 0.3 * lk)); g.n.rotation.set(0, 0, 0); g.f.rotation.set(0, 0, 0); continue; }
+    if (D.sprawl) { if (g.R == null) { g.u.rotation.set(0, 0, g.s * 1.32); g.m.rotation.set(0, 0, -g.s * 1.45); g.n.rotation.set(0, 0, 0); g.f.rotation.set(0, 0, 0); g.u.updateMatrix(); g.m.updateMatrix(); g.n.updateMatrix(); g.f.updateMatrix(); const q = _bv1.set(0, 0, 0).applyMatrix4(g.f.matrix).applyMatrix4(g.n.matrix).applyMatrix4(g.m.matrix).applyMatrix4(g.u.matrix); g.R = Math.max(0.05, Math.abs(q.x - g.hx)); g.Xr = q.x; }   // v2.40.x: the yaw that puts the foot exactly on its planted spot (was a rough factor: croc feet skated)
+      g.u.rotation.set(0, -g.s * Math.asin(clamp((T[i][0] - g.zN) / g.R, -0.95, 0.95)), g.s * (1.32 + 0.6 * lk)); g.m.rotation.set(0, 0, -g.s * (1.45 + 0.3 * lk)); g.n.rotation.set(0, 0, 0); g.f.rotation.set(0, 0, 0); for (let it = 0; it < 3; it++) { const P = _inRoot(g.f, a.root, _bv2), e = P.z - T[i][0], ex = P.x - g.Xr; g.u.rotation.y = clamp(g.u.rotation.y + e / (g.s * g.R * Math.max(0.3, Math.cos(g.u.rotation.y))), -1.3, 1.3); g.m.rotation.z = clamp(g.m.rotation.z - ex / Math.max(0.05, g.l2 + g.l3), -2.6, 2.6); } continue; }
     let [y1, z1] = _rotYZ(g.hy, g.hz, g.front ? fx : -fx); [y1, z1] = _rotYZ(y1, z1, bpT); y1 += a.by0 + by; z1 += bz;
     const a3 = g.A[2] + (g.front ? 1.3 : -0.45) * lk * (D.z === 'plant' ? 0.4 : 1) * flick + A3[i], ty = T[i][1] + g.hf, tz = T[i][0];
     const [a1, a2] = _ik2(y1, z1, ty + g.l3 * Math.cos(a3), tz + g.l3 * Math.sin(a3), g.l1, g.l2, g.front);
@@ -6872,6 +6913,9 @@ function beastPose(a, t, w = 0, s = 0, graze = 0) {
     if (rig > 0) { r1 = _LQ(r1, g.A[0] - a.slope + 0.15 * Math.sin(t * 3 + i), rig); r2 = _LQ(r2, g.A[1] - g.A[0], rig); r3 = _LQ(r3, g.A[2] - g.A[1], rig); r4 = _LQ(r4, -g.A[2], rig); }
     g.u.rotation.set(r1, 0, lat * (g.front ? g.s : 0)); g.m.rotation.x = r2; g.n.rotation.x = r3; g.f.rotation.x = r4;
   }
+  // v2.40.x: feet stay in their track sideways — body roll, spine sway and 'shake' swung the planted feet sideways (they skated ~0.3 m/s in a walk)
+  { const kl = (1 - rig) * (lat ? 0 : 1) * (D.sprawl ? 0 : 1); if (kl > 1e-3) { const P = _bv1, H = _bv2;
+    for (const g of a.LG) { if (!g) continue; let th = 0; for (let it = 0; it < 2; it++) { _inRoot(g.f, a.root, P); _inRoot(g.u, a.root, H); const h = Math.max(1e-3, Math.hypot(P.y - H.y, P.z - H.z)); th -= Math.asin(clamp((P.x - g.hx) / h, -0.6, 0.6)); g.u.rotation.z = th * kl; } } } }
   // ears, tail, trunk
   a.ears.forEach((e, i) => { const r = e.userData.r0, s2 = i ? 1 : -1, fl = 0.35 * bump((t * 0.23 + sd * 5 + i * 0.37) % 1.7, 0, 0.12) * (0.35 + 0.65 * iw);
     if (e.userData.big) e.rotation.set(r[0], r[1] - s2 * (0.2 * Math.sin(t * 1.3 + i) * (1 - earB) + 0.75 * clamp(earB)), r[2]); else e.rotation.set(r[0] - 0.55 * earB + fl, r[1], r[2] + s2 * fl * 0.5); });
@@ -6887,6 +6931,7 @@ function beastPose(a, t, w = 0, s = 0, graze = 0) {
   for (const f of a.fx) f(t, a);
 }
 const kind_ok = (a, k) => a.kind === k;
+const _bv1 = new THREE.Vector3(), _bv2 = new THREE.Vector3(), _inRoot = (o, root, v) => { v.set(0, 0, 0); while (o && o !== root) { o.updateMatrix(); v.applyMatrix4(o.matrix); o = o.parent; } return v; };   // position of o's origin in root's frame (this frame's local transforms only — pure)
 function beastDo(a, k, t, o = {}) {   // a.do('roar' | 'call' | 'howl' | 'trumpet' | 'snap' | 'yawn' | 'sit' | 'lie' | 'sleep' | 'rear' | 'stand' | 'buck' | 'pounce' | 'swipe' | 'graze' | 'drink' | 'shake' | 'stalk' | 'charge' | 'wag' | 'look' | 'down', t, { dur, at, h, getUp, sfx })
   const dur = o.dur ?? { roar: 2, call: 1.2, howl: 3.2, trumpet: 2, snap: 0.9, yawn: 2, sit: 4, lie: 5, sleep: 6, rear: 1.8, stand: 3, buck: 0.9, kick: 0.9, pounce: 1.1, leap: 1.1, swipe: 0.8, graze: 4, eat: 4, drink: 4, shake: 1.2, stalk: 4, charge: 3, wag: 3, look: 2, down: 3 }[k] ?? 2;
   const A = { ri: { pounce: 0.06, leap: 0.06, snap: 0.05, swipe: 0.08, buck: 0.1, kick: 0.1, shake: 0.1, down: 0.35 }[k] ?? 0.3, ro: { pounce: 0.12, leap: 0.12, snap: 0.08, swipe: 0.15 }[k] ?? 0.35, ...o, k, t0: t, t1: t + dur };
