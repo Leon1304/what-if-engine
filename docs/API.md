@@ -82,13 +82,13 @@ Als letzte Zeile der Szene `biome(kind, {density, trees, keep: [[x, z, r]], area
 
 ## Props
 
-- `house(p,x,z,{w,d,h,wall,roof,lit,ry,porch})` → `{g, winMat}`
+- `house(p,x,z,{w,d,h,wall,roof,lit,ry,porch,chimney,smoke,backWindows,shutters,flowers})` → `{g, winMat, door, windows}`; `smoke: true | t0` lässt den Schornstein rauchen, `backWindows: false` spart die Rückfenster
 - `barn(…)`, `silo(…)` → `{g, top}`, `windmill(…)` → `{rotor}`
 - `fence(p,[[x,z],…],{h,color})` → `spans[]`; einzelne Felder mit `knock(span.g, t)` umwerfen
 - `tree(p,x,z,{kind:'round'|'pine'|'dead',size})`, `rock(p,x,z,s)`
 - `field(p,x,z,w,d,{crop:'wheat'|'corn'|'cabbage'})`, `haybale(p,x,z,ry)`
 - `vehicle(p,x,z,{kind:'car'|'tractor'|'truck',color,ry})` → `{g, wheels}`
-- `lamp(p,x,z,{intensity})`
+- `lamp(p,x,z,{intensity, flicker})` – das Licht flackert leicht (`flicker: 0` = ruhig, Standard 0.05)
 - Stoff, der im Wind weht (bei Sturm stärker): `flagpole(p,x,z,{h, colors})`, `laundry(p,[[x,z],[x,z]])` (Wäscheleine), `cloth(p,{w, h, color, stripes, x, y, z, ry, pin:'left'|'top'})` (Banner, Vorhang)
 
 ## Innenräume (v2.10)
@@ -830,6 +830,11 @@ Dinge zerbrechen so, wie sie gebaut sind. Alles ist echte Physik (einmal vorab s
 - `mineCage(p, x, z, { h: 40, close: t, up: t, dur: 3, ry })` → `{ g, cage, y(t) }`: Schachtgerüst mit Förderkorb (Gitterkorb, Licht); das Scherengitter vorne (+z) schließt bei `close`, der Korb fährt ab `up` in `dur` s `h` m hoch, mit Geräusch `lift`.
 - `headlamp(rig, { color, battery: t => 0..1, flicker: [[t0, t1]], intensity: 90, dist, angle })` → `{ helmet, light }`: Schutzhelm mit Stirnlampe und Lichtkegel in Blickrichtung (Hut und Haare werden ausgeblendet).
 - `walkie(rig, { talk: [[t0, t1], …] })`: Funkgerät an der Brust, rote LED blinkt, solange gesprochen wird.
+
+# Objekte in v2.40.x (Gebäude, Props, Fahrzeuge, Natur)
+- **Bauernhof:** Haus mit Giebeln in Wandfarbe samt Lüftung, Regenrinnen und Fallrohren, Sturz über der Tür, Türgriff, Wandlampe (leuchtet nachts), Rückfenster, Schornsteinaufsatz, Kellerlüftung; Scheune mit Giebeln in Wandfarbe, Laufschiene, Rollen und Griff am Schiebetor, Heuaufzug, Rampe; Silo mit Füllrohr über den Rand, Luke, Rückenbügeln an der Leiter, Dachluke; Heuballen mit Schnur, gewickelten Stirnseiten und Halmen.
+- **Stadt:** Ladenfenster mit Sprossen, Kämpfer und Sims, Glas-Doppeltür mit Griffen, Rahmen, Stufe und Wandlampe; Bahnsteig mit Bahnsteigkante, Dachträgern, Lampen unter dem Dach, Bänken aus Latten, Mülleimern und Fahrplantafel.
+- Alle Details sind statisch (in wenige Draw-Calls gebacken), kein Hindernis, und ändern weder Maße noch Türen, Fenster oder Hitboxen.
 
 # Neu in v2.40 (Fehlerbehebung: Haare, Hut, Mantel, Räder; mehr Details)
 

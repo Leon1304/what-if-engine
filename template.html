@@ -799,8 +799,8 @@ function house(p, x, z, o = {}) {   // farmhouse: stone plinth, corner boards, f
   ball(door, 0.045, '#D9B65C', 0.8, 0.9, 0.06, { detail: 0, ...NC });   // v2.40: the handle had slipped into the comment above (doors had none)
   const windows = [];
   const winMat = mat(o.win ?? '#FFE2A0', { em: o.win ?? '#FFC060', ei: o.lit ?? 0, own: true });
-  const win = (cx, cy, cz, ry, front) => {   // local +z points out of the wall
-    const q = grp(g, cx, cy, cz, ry);
+  const win = (cx, cy, cz, ry, front, par = g) => {   // local +z points out of the wall
+    const q = grp(par, cx, cy, cz, ry);
     box(q, 1.05, 1.05, 0.06, trim, 0, -0.525, 0, NC);
     box(q, 0.85, 0.85, 0.02, '#1A140F', 0, -0.425, 0.0, NC);   // room behind the glass (seen when the window is open)
     const sh2 = front ? dyn(grp(q, -0.425, 0, 0.02)) : q, ox = front ? 0.425 : 0, oz = front ? 0 : 0.02; if (front) { sh2.userData.sign = -1; windows.push(sh2); }
@@ -818,6 +818,18 @@ function house(p, x, z, o = {}) {   // farmhouse: stone plinth, corner boards, f
       box(g, rl, 0.06, 0.06, trim, sx * (0.65 + rl / 2), 0.95, d / 2 + 1.33, NC); for (let i = 0; i <= Math.floor(rl / 0.25); i++) box(g, 0.04, 0.75, 0.04, trim, sx * (0.65 + i * 0.25), 0.18, d / 2 + 1.33, NC); }
     box(g, w * 0.76, 0.14, 1.6, roofC, 0, 2.3, d / 2 + 0.75); box(g, w * 0.76, 0.06, 0.06, trim, 0, 2.27, d / 2 + 1.55, NC);
   }
+  const dt = grp(g); dt.userData.noHit = true;   // v2.40 detail (no obstacle, baked with the house): gables in the wall colour with a vent, gutters and downpipes, lintel, porch lamp, back windows, chimney pot, cellar vents
+  for (const sx of [-1, 1]) { prism(dt, 0.05, rh * 0.84, D * 0.84, wall, sx * (w / 2 + 0.25), h + 0.002, 0, { surf: o.surf ?? 'siding', ...NC });
+    const q = grp(dt, sx * (w / 2 + 0.278), h + rh * 0.3, 0, sx * Math.PI / 2); box(q, 0.62, 0.52, 0.04, trim, 0, 0, 0, NC); box(q, 0.48, 0.38, 0.05, '#3A332C', 0, 0.07, 0, NC); box(q, 0.48, 0.05, 0.07, trim, 0, 0.235, 0, NC);
+    box(dt, 0.03, 0.14, 0.3, '#3A332C', sx * (w / 2 + 0.045), 0.03, -d * 0.22, NC); }
+  for (const sz of [-1, 1]) { box(dt, w + 0.62, 0.07, 0.11, '#C4C8CE', 0, h - 0.1, sz * (D / 2 + 0.05), NC); const px = sz * (w / 2 + 0.11), pz = sz * (d / 2 + 0.11);
+    cyl(dt, 0.04, 0.04, h - 0.44, '#C4C8CE', px, 0.2, pz, { seg: 6, ...NC }); _seg(dt, [px, h - 0.25, pz], [px, h - 0.08, sz * (D / 2 + 0.03)], 0.04, 0.04, '#C4C8CE', NC); box(dt, 0.12, 0.05, 0.12, '#8C8478', px, 0.2, pz, NC); }
+  box(dt, 1.31, 0.1, 0.1, trim, 0, 2.12, d / 2 + 0.05, NC);
+  if (!NIGHTGLOW.length) NIGHTGLOW.push(mat('#FFF1C8', { em: '#FFE2A0', ei: 0, own: true }));
+  { const lx = 0.76, ly = Math.max(1.99, h * 0.38 + 0.56); box(dt, 0.04, 0.12, 0.1, '#2A2D33', lx, ly + 0.08, d / 2 + 0.05, NC); box(dt, 0.14, 0.04, 0.15, '#2A2D33', lx, ly + 0.22, d / 2 + 0.115, NC); box(dt, 0.1, 0.16, 0.1, '', lx, ly + 0.06, d / 2 + 0.115, { mat: NIGHTGLOW[0], ...NC }); box(dt, 0.12, 0.03, 0.12, '#2A2D33', lx, ly + 0.03, d / 2 + 0.115, NC); }
+  if (o.backWindows !== false) for (const sx of [-1, 1]) win(sx * w * 0.3, h * 0.38 + 0.425, -(d / 2 + 0.005), Math.PI, false, dt);
+  if (o.chimney !== false) { cyl(dt, 0.11, 0.13, 0.24, '#B5654A', w * 0.26, h + 1.8, -d * 0.16, { seg: 6, ...NC }); }
+  if (o.smoke) { g.updateWorldMatrix(true, false); const cp = g.localToWorld(new THREE.Vector3(w * 0.26, h + 2.1, -d * 0.16)); emit('smoke', { at: [cp.x, cp.y, cp.z], t0: o.smoke === true ? 0 : o.smoke, t1: DUR, rate: 3, size: 0.45, opacity: 0.4 }); }   // house(…, { smoke: true | t0 }): a thin plume from the chimney
   return { g, winMat, w, d, h, door, doors: [door], windows };
 }
 function barn(p, x, z, o = {}) {   // red barn: foundation, plank seams, white corner trims, side windows, X door, hayloft, ridge cap and a cupola with weathervane
@@ -844,6 +856,12 @@ function barn(p, x, z, o = {}) {   // red barn: foundation, plank seams, white c
   const cu = grp(g, 0, h + 2.55, 0);   // cupola + weathervane on the ridge
   box(cu, 0.9, 0.8, 0.9, trim); box(cu, 0.6, 0.5, 0.94, '#3A3E46', 0, 0.15, 0, NC); box(cu, 0.94, 0.5, 0.6, '#3A3E46', 0, 0.15, 0, NC);
   prism(cu, 1.1, 0.5, 1.1, roofC, 0, 0.8, 0); box(cu, 0.04, 0.9, 0.04, '#2A2A2A', 0, 1.25, 0, NC); box(cu, 0.7, 0.04, 0.04, '#2A2A2A', 0, 1.9, 0, NC); prism(cu, 0.04, 0.2, 0.18, '#2A2A2A', 0.38, 1.82, 0, { rz: -Math.PI / 2, ...NC });
+  const dt = grp(g); dt.userData.noHit = true;   // v2.40 detail: gables in the wall colour, door rail and handle, hay hoist, back vent, ramp
+  for (const sz of [-1, 1]) { const gq = grp(dt, 0, h + 0.102, sz * (d / 2 + 0.25), Math.PI / 2); prism(gq, 0.05, 2.6 * 0.87, (w + 0.5) * 0.87, col, 0, 0, 0, { surf: 'plank', ...NC }); }
+  box(dt, 0.9, 0.7, 0.06, trim, 0, h + 0.5, -(d / 2 + 0.27), NC); box(dt, 0.7, 0.5, 0.08, '#2A2E36', 0, h + 0.6, -(d / 2 + 0.27), NC);
+  box(dt, w * 0.92, 0.07, 0.07, '#3A3D44', 0, h * 0.72 + 0.14, d / 2 + 0.13, NC); mesh(dg, _boxesG([[0.1, 0.12, 0.06, -w * 0.16, h * 0.72 + 0.16, d / 2 + 0.13], [0.1, 0.12, 0.06, w * 0.16, h * 0.72 + 0.16, d / 2 + 0.13], [0.06, 0.36, 0.06, w * 0.19, h * 0.3 + 0.18, d / 2 + 0.15]]), mat('#3A3D44'), 0, 0, 0, NC);   // rollers + handle: one mesh (the door moves)
+  box(dt, 0.14, 0.14, 1.0, '#5A4632', 0, h + 1.5, d / 2 + 0.6, NC); box(dt, 0.03, 0.35, 0.03, '#2A2D33', 0, h + 1.15, d / 2 + 1.0, NC);
+  box(dt, w * 0.5, 0.07, 0.6, '#8A7A66', 0, 0.02, d / 2 + 0.36, { rx: 0.1, ...NC });
   return { g, w, d, h, door: dg, doors: [dg] };
 }
 function silo(p, x, z, o = {}) {   // steel silo: concrete footing, rusty foot band, rings, railing and ladder
@@ -857,6 +875,11 @@ function silo(p, x, z, o = {}) {   // steel silo: concrete footing, rusty foot b
   cyl(g, r + 0.2, r + 0.2, 0.06, '#5E6672', 0, h + 1.05, 0, { seg: 14, ...NC });
   for (const sx of [-0.25, 0.25]) box(g, 0.07, h, 0.07, '#5E6672', sx, 0, r + 0.12);
   for (let y = 0.4; y < h; y += 0.45) box(g, 0.5, 0.05, 0.05, '#5E6672', 0, y, r + 0.12, { cast: false });
+  const dt = grp(g); dt.userData.noHit = true;   // v2.40 detail: filler pipe up the back, hatch at the foot, safety hoops round the ladder, roof hatch
+  cyl(dt, 0.11, 0.11, h + 0.15, '#8D97A5', 0, 0.45, -(r + 0.15), { seg: 6, ...NC }); ball(dt, 0.11, '#8D97A5', 0, h + 0.6, -(r + 0.15), { detail: 0, ...NC }); _seg(dt, [0, h + 0.6, -(r + 0.15)], [0, h + 0.6, -(r - 0.45)], 0.11, 0.11, '#8D97A5', NC); ball(dt, 0.11, '#8D97A5', 0, h + 0.6, -(r - 0.45), { detail: 0, ...NC }); cyl(dt, 0.11, 0.11, 0.42, '#8D97A5', 0, h + 0.18, -(r - 0.45), { seg: 6, ...NC }); box(dt, 0.6, 0.1, 0.6, '#7D8794', r * 0.45, h + 0.18, 0, NC); box(dt, 0.44, 0.05, 0.44, '#5E6672', r * 0.45, h + 0.28, 0, NC); box(dt, 0.3, 0.3, 0.3, '#5E6672', 0, 0.45, -(r + 0.15), NC);
+  for (let y = 0.45 + 1.5; y < h; y += 2.2) box(dt, 0.3, 0.08, 0.1, '#5E6672', 0, y, -(r + 0.04), NC);
+  { const q = grp(dt, r * Math.cos(Math.PI / 14) + 0.02, 0.5, 0, Math.PI / 2); box(q, 0.7, 0.9, 0.06, '#8D97A5', 0, 0, 0, NC); box(q, 0.08, 0.2, 0.05, '#3A3D44', 0.24, 0.4, 0.04, NC); }
+  for (let y = Math.max(2.4, h - 4.5); y < h + 0.1; y += 1.1) mesh(dt, G('siloHoop', () => new THREE.TorusGeometry(0.38, 0.022, 4, 10, Math.PI)), mat('#5E6672'), 0, y, r + 0.08, { rx: Math.PI / 2, cast: false });
   return { g, top: h + 0.18, r };
 }
 function windmill(p, x, z, o = {}) {   // farm windmill: braced lattice tower, multi-blade wheel with hub, tail vane
@@ -1217,7 +1240,11 @@ function field(p, x, z, w, d, o = {}) {   // crop rows (instanced); crop: corn |
   im.castShadow = false; im.receiveShadow = true; g.add(im);   // crops cast no shadow: much cheaper, hardly visible
   return { g, im };
 }
-const haybale = (p, x, z, ry = 0) => { const g = stat(grp(p, x, 0, z, ry)); cyl(g, 0.6, 0.6, 1.1, '#D9B65C', 0, 0.6 - 0.55, 0, { rx: Math.PI / 2, seg: 10 }); return g; };   // lies on the ground at (x, z): cyl() + rx had lifted it 0.55 m and pushed it 0.55 m back
+const haybale = (p, x, z, ry = 0) => { const g = stat(grp(p, x, groundH(x, z), z, ry)), NC = { cast: false };   // v2.40: lies on the ground at (x, z) (cyl() + rx had lifted it 0.55 m and pushed it 0.55 m back), twine, rolled ends, loose straw
+  rod(g, 0.6, 0.6, 1.1, '#D9B65C', 0, 0.6, 0, { seg: 12 }); for (const zz of [-0.3, 0.3]) rod(g, 0.612, 0.612, 0.05, '#B58E3A', 0, 0.6, zz, { seg: 12, ...NC });
+  for (const s of [-1, 1]) { rod(g, 0.46, 0.46, 0.02, '#C9A548', 0, 0.6, s * 0.552, { seg: 10, ...NC }); rod(g, 0.2, 0.2, 0.02, '#B58E3A', 0, 0.6, s * 0.556, { seg: 8, ...NC }); }
+  const hs = hash(x * 3.7 + z * 1.3); for (let i = 0; i < 5; i++) box(g, 0.03, 0.02, 0.3, '#E0C068', (hash(i + hs) - 0.5) * 1.5, 0.01, (hash(i * 2.3 + hs) - 0.5) * 1.6, { ry: hash(i * 5.1 + hs) * 3, ...NC });
+  return g; };
 // v2.40 vehicle parts: bodies from side profiles with real wheel arches, wheels with rims and tread, lamp pairs as one mesh; fuse() merges the paint work of one vehicle into a few draw calls
 const _vcM = new Map(), _vcMat = (rough = 0.88, metal = 0) => { const k = rough + '|' + metal; if (!_vcM.has(k)) _vcM.set(k, new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: rough, metalness: metal })); return _vcM.get(k); };
 const _vcGeo = (key, build) => G('vc' + key, () => { const t = new THREE.Group(), gs = []; build(t); t.updateMatrixWorld(true);   // a small model built from primitives once → one vertex-coloured geometry (shared by every copy)
@@ -1429,8 +1456,11 @@ function lamp(p, x, z, o = {}) {   // post lamp with base, lantern housing and o
   box(g, 0.24, 0.3, 0.24, '#2A2D33'); box(g, 0.12, H, 0.12, '#2A2D33');
   box(g, 0.34, 0.06, 0.34, '#2A2D33', 0, H - 0.18, 0, { cast: false }); box(g, 0.4, 0.08, 0.4, '#2A2D33', 0, H + 0.34, 0, { cast: false });
   ball(g, 0.22, '', 0, H + 0.1, 0, { mat: mat(o.color ?? '#FFD9A0', { basic: true, glow: 1.5 }), cast: false });
+  for (const [sx, sz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) box(g, 0.025, 0.46, 0.025, '#2A2D33', sx * 0.17, H - 0.12, sz * 0.17, { cast: false });   // v2.40: lantern cage, finial, collar; the light flickers a little (flicker: 0 = steady)
+  cone(g, 0.2, 0.2, '#2A2D33', 0, H + 0.42, 0, { seg: 4, ry: Math.PI / 4, cast: false }); box(g, 0.18, 0.06, 0.18, '#3A3D44', 0, H * 0.55, 0, { cast: false }); box(g, 0.3, 0.05, 0.3, '#3A3D44', 0, 0.3, 0, { cast: false });
   let light = null;
-  if (o.light !== false) { light = new THREE.PointLight(o.color ?? '#FFC880', o.intensity ?? 22, o.dist ?? 14, 1.8); light.position.set(0, H + 0.1, 0); g.add(light); }
+  if (o.light !== false) { light = new THREE.PointLight(o.color ?? '#FFC880', o.intensity ?? 22, o.dist ?? 14, 1.8); light.position.set(0, H + 0.1, 0); g.add(light);
+    const I0 = light.intensity, fl = o.flicker ?? 0.05, ph = hash(x * 1.7 + z * 3.1) * 50; if (fl > 0) tick(t => { light.intensity = I0 * (1 + fl * (noise1(t * 7 + ph) + 0.5 * noise1(t * 19 + ph * 2))); }); }
   return { g, light };
 }
 
@@ -2632,9 +2662,14 @@ function tower(p, x, z, o = {}) {   // city building with depth: style glass | b
       floors.forEach(([y, on], f) => { for (let i = 0; i < n; i++) { box(q, W / n - 0.5, 1.8, 0.05, '', col(i), y - 0.15, 0.005, { mat: win(f + fi * 50, i, on), ...NC }); box(q, W / n - 0.48, 0.85, 0.1, deep, col(i), y + 1.75, 0.03, NC); }
         if (f % 4 === 3) box(q, W + 0.5, 0.3, 0.38, trim, 0, y + 2.6, 0.12, NC); });
     }
-    box(q, W * 0.72, 1.25, 0.05, '', 0, 0.35, 0.1, { mat: _shopM(share), ...NC });   // shop window (v2.40: follows the darkness instead of glowing cream all day)
+    box(q, W * 0.72, 1.25, 0.05, '', 0, 0.35, 0.1, { mat: _shopM(share), ...NC });   // shop window (v2.40: follows the darkness instead of glowing cream all day; mullions, sill, transom)
+    { const x0 = -W * 0.36, x1 = fi === 0 ? Math.min(W * 0.36, W * 0.3 - 0.78) : W * 0.36, sw = x1 - x0, nm = Math.max(1, Math.round(sw / 1.3)), fc = shade(c, -0.3);   // left of the door on the front
+      if (sw > 0.5) { for (let i = 1; i < nm; i++) box(q, 0.06, 1.25, 0.04, fc, x0 + i * sw / nm, 0.35, 0.14, NC); box(q, sw, 0.06, 0.04, fc, (x0 + x1) / 2, 1.3, 0.14, NC); box(q, sw + 0.08, 0.1, 0.16, shade(c, -0.22), (x0 + x1) / 2, 0.25, 0.14, NC); } }
     if (fi === 0 || hv(fi + 20) < 0.5) { const ac = pick2(['#C0392B', '#2E86AB', '#3DA56A', '#E3B23C', '#8E5BD9', '#E07A3A'], hv(fi + 10)); box(q, W * 0.74, 0.08, 1.0, ac, 0, 1.95, 0.6, { rx: 0.25, ...NC }); box(q, W * 0.74, 0.22, 0.04, ac, 0, 1.78, 1.08, NC); }
-    if (fi === 0) { box(q, 1.3, 1.8, 0.06, '#1E2024', W * 0.3, 0.14, 0.12, NC); box(q, 1.6, 0.14, 0.4, trim, W * 0.3, 2.0, 0.2, NC); }
+    if (fi === 0) { box(q, 1.3, 1.8, 0.06, '#1E2024', W * 0.3, 0.14, 0.12, NC); box(q, 1.6, 0.14, 0.4, trim, W * 0.3, 2.0, 0.2, NC);
+      for (const s of [-1, 1]) { box(q, 0.54, 1.5, 0.03, '#3E5670', W * 0.3 + s * 0.3, 0.3, 0.155, { rough: 0.25, ...NC }); box(q, 0.035, 0.4, 0.05, '#C9CED6', W * 0.3 + s * 0.07, 0.85, 0.185, NC); box(q, 0.1, 1.86, 0.1, trim, W * 0.3 + s * 0.7, 0.14, 0.14, NC); }   // v2.40: glass double door with handles, frame, step, lamps that glow at night
+      box(q, 1.5, 0.08, 0.3, shade(c, -0.25), W * 0.3, 0.06, 0.26, NC);
+      if (!NIGHTGLOW.length) NIGHTGLOW.push(mat('#FFF1C8', { em: '#FFE2A0', ei: 0, own: true })); { const lx = W * 0.3 - 0.86; box(q, 0.12, 0.24, 0.1, '#2A2D33', lx, 1.62, 0.15, NC); box(q, 0.08, 0.15, 0.06, '', lx, 1.66, 0.2, { mat: NIGHTGLOW[0], ...NC }); } }
   });
   for (const [sx, sz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) box(g, 0.5, h, 0.5, style === 'brick' ? deep : c, sx * w / 2, 0, sz * d / 2, { cast: false });
   box(g, w + 0.16, 1.95, d + 0.16, shade(c, -0.14), 0, 0, 0);   // street level
@@ -8490,8 +8525,15 @@ function run(T, o = {}) {   // drive the train straight from → to (soft start/
 function trainStation(p, x, z, o = {}) {
   const L = o.len ?? 40, g = stat(grp(p ?? world, x, groundH(x, z), z, o.ry ?? 0)), NC = { cast: false };
   box(g, 5, 1.1, L, '#B8B4AA', 0, 0, 0); box(g, 0.35, 0.012, L, '#F7C531', -2.3, 1.1, 0, NC); for (let zz = -L / 2 + 3; zz < L / 2; zz += 6) { box(g, 0.2, 3.2, 0.2, '#5A5E64', 0.8, 1.1, zz); } box(g, 3.6, 0.15, L, '#2E3A4A', 0.6, 4.3, 0);
-  for (let zz = -L / 2 + 6; zz < L / 2; zz += 12) { const b = grp(g, 1.8, 1.1, zz); box(b, 0.5, 0.45, 1.6, '#5A4632', 0, 0, 0); box(b, 0.08, 0.5, 1.6, '#5A4632', 0.22, 0.45, 0); const s = grp(g, 0.8, 3.3, zz + 3); box(s, 0.06, 0.6, 1.4, '#1E3A6A', 0, 0, 0); box(s, 0.07, 0.3, 0.3, '#FFFFFF', 0, 0.15, -0.4, NC); box(s, 0.07, 0.05, 0.6, '#FFFFFF', 0, 0.27, 0.2, NC); }
+  for (let zz = -L / 2 + 6; zz < L / 2; zz += 12) { const b = grp(g, 1.8, 1.1, zz); for (const s of [-1, 1]) box(b, 0.5, 0.42, 0.07, '#2A2D33', 0, 0, s * 0.765); for (let i = 0; i < 4; i++) box(b, 0.11, 0.04, 1.6, '#6E563C', -0.19 + i * 0.125, 0.42, 0, { cast: i === 1 }); for (let i = 0; i < 3; i++) box(b, 0.04, 0.12, 1.6, '#6E563C', 0.22, 0.55 + i * 0.15, 0); for (const s of [-1, 1]) box(b, 0.05, 0.55, 0.06, '#2A2D33', 0.25, 0.42, s * 0.7, { cast: false }); const s = grp(g, 0.8, 3.3, zz + 3); box(s, 0.06, 0.6, 1.4, '#1E3A6A', 0, 0, 0); box(s, 0.07, 0.3, 0.3, '#FFFFFF', 0, 0.15, -0.4, NC); box(s, 0.07, 0.05, 0.6, '#FFFFFF', 0, 0.27, 0.2, NC); }
   const ck = grp(g, 0.8, 3.6, 0); cyl(ck, 0.35, 0.35, 0.08, '#F4F1E8', 0, 0, 0, { rz: Math.PI / 2, seg: 18 }); box(ck, 0.1, 0.25, 0.03, '#1E1E22', 0.05, 0, 0, NC); box(ck, 0.1, 0.03, 0.2, '#1E1E22', 0.05, 0, 0, NC);
+  if (!NIGHTGLOW.length) NIGHTGLOW.push(mat('#FFF1C8', { em: '#FFE2A0', ei: 0, own: true }));   // v2.40: canopy beams and fascia, lamps under the roof (glow at night), platform coping, bench legs and slats, bins, timetable board
+  box(g, 0.12, 0.12, L, '#D9D5CB', -2.535, 1.0, 0, NC); box(g, 4.55, 0.02, L - 0.3, '#A8A49A', 0.175, 1.092, 0, NC); box(g, 3.7, 0.2, 0.1, '#232C38', 0.6, 4.22, L / 2, NC); box(g, 3.7, 0.2, 0.1, '#232C38', 0.6, 4.22, -L / 2, NC); for (const sx of [-1.2, 2.4]) box(g, 0.1, 0.2, L, '#232C38', sx, 4.22, 0, NC);
+  for (let zz = -L / 2 + 3; zz < L / 2; zz += 6) { box(g, 3.4, 0.12, 0.12, '#5A5E64', 0.6, 4.18, zz, NC); box(g, 0.12, 0.7, 0.12, '#5A5E64', 0.42, 3.6, zz, { rz: 0.8, ...NC }); box(g, 0.36, 0.1, 0.36, '#4A4E56', 0.8, 1.1, zz, NC);
+    box(g, 0.3, 0.07, 0.9, '#2A2D33', -0.5, 4.08, zz + 3, NC); box(g, 0.22, 0.03, 0.8, '', -0.5, 4.06, zz + 3, { mat: NIGHTGLOW[0], ...NC }); }
+  for (let zz = -L / 2 + 6; zz < L / 2; zz += 12) {
+    cyl(g, 0.2, 0.17, 0.75, '#3A5A44', 1.9, 1.1, zz + 1.5, { seg: 8 }); cyl(g, 0.22, 0.22, 0.05, '#2A2D33', 1.9, 1.85, zz + 1.5, { seg: 8, ...NC }); }
+  { const tb = grp(g, 2.2, 1.1, -3); for (const s of [-1, 1]) box(tb, 0.08, 2.0, 0.08, '#3A3D44', 0, 0, s * 0.7); box(tb, 0.06, 1.1, 1.5, '#1E3A6A', 0, 0.85, 0); box(tb, 0.02, 0.9, 0.55, '#F4F1E8', -0.04, 0.95, -0.36, NC); box(tb, 0.02, 0.9, 0.55, '#F4F1E8', -0.04, 0.95, 0.36, NC); }
   return g;
 }
 // ---- service vehicles ----
