@@ -1,5 +1,5 @@
 {
- "updated": "2026-11-12T17:11:57Z",
+ "updated": "2026-11-12T17:24:22Z",
  "videos": [
   {
    "slug": "dday",
@@ -57,69 +57,6 @@
     "instagram": "D-Day: Why It Happened and What Happened\nWhat surprised you most about D-Day? A) The rubber army · B) The one-day delay · C) The night jump — Comment A, B or C 👇\n\n#reels #viral #explore #reelsinstagram #trending",
     "tiktok": "D-Day: Why It Happened and What Happened\nWhat surprised you most about D-Day? A) The rubber army · B) The one-day delay · C) The night jump — Comment A, B or C 👇\n\n#fyp #foryou #foryoupage #viral #trending",
     "hooks": []
-   },
-   "auto": true
-  },
-  {
-   "slug": "every-planet",
-   "title": "What if you stood on every planet without a suit?",
-   "kind": "explain",
-   "dur": 50.4,
-   "aspect": "9:16",
-   "accent": "yellow",
-   "series": null,
-   "ending": null,
-   "date": null,
-   "status": "pending",
-   "files": {},
-   "preview": "https://claude.ai/artifact/EfJbrHVVkxfr9EVEjV4LN8",
-   "captions": {
-    "youtube": {
-     "title": "What if you stood on every planet without a suit?",
-     "description": "Quick question: is there any planet where you’d last more than two minutes?\nDid you guess right? A) Yes, Mars · B) Yes, a gas giant · C) Nowhere — Comment A, B or C 👇\n\n#shorts #viral #trending #youtubeshorts #fyp",
-     "tags": [
-      "what if you stood on every planet without a suit",
-      "you stood on every planet without a suit",
-      "every planet",
-      "explained",
-      "how it works",
-      "science explained",
-      "what happens if",
-      "what if",
-      "what if scenarios",
-      "what if shorts",
-      "shorts",
-      "3d animation",
-      "animation",
-      "whatifthishappenedscenarios",
-      "hypothetical",
-      "viral",
-      "trending",
-      "fyp",
-      "youtube shorts",
-      "storytime",
-      "every",
-      "planet",
-      "what if every",
-      "what if planet",
-      "what would you do",
-      "would you survive",
-      "animated short",
-      "what if video",
-      "what if animation",
-      "scenario",
-      "cartoon",
-      "foryou"
-     ],
-     "tagChars": 500
-    },
-    "instagram": "What if you stood on every planet without a suit?\nDid you guess right? A) Yes, Mars · B) Yes, a gas giant · C) Nowhere — Comment A, B or C 👇\n\n#reels #viral #explore #reelsinstagram #trending",
-    "tiktok": "What if you stood on every planet without a suit?\nDid you guess right? A) Yes, Mars · B) Yes, a gas giant · C) Nowhere — Comment A, B or C 👇\n\n#fyp #foryou #foryoupage #viral #trending",
-    "hooks": [
-     "Quick question: is there any planet where you’d last more than two minutes?",
-     "First, Mercury, right on the day-night line: about two minutes. Venus? Lead-melting heat. Under a second.",
-     "Mars looks friendly. But the air is thin, with almost no oxygen. Again: about two minutes."
-    ]
    },
    "auto": true
   },
@@ -190,29 +127,35 @@
    "auto": true
   },
   {
-   "slug": "heart-stops",
-   "title": "What happens when your heart stops?",
-   "kind": "explain",
-   "dur": 48.1,
+   "slug": "megalodon-pool",
+   "title": "What if a Megalodon was in your pool?",
+   "kind": "story",
+   "dur": 58.0,
    "aspect": "9:16",
-   "accent": "lime",
-   "series": null,
+   "accent": "green",
+   "series": {
+    "name": "Monsters Are Back",
+    "ep": 1
+   },
    "ending": null,
    "date": null,
    "status": "pending",
    "files": {},
-   "preview": "https://claude.ai/artifact/1WuTqksPR6baRoxS9xYxG9",
+   "preview": null,
    "captions": {
     "youtube": {
-     "title": "What happens when your heart stops?",
-     "description": "The internet says: doctors can shock a flatline back to life.\nCould you do CPR? A) Yes · B) No — Comment A or B 👇\n\n#shorts #viral #trending #youtubeshorts #fyp",
+     "title": "What if a Megalodon was in your pool?",
+     "description": "Holiday. Pool villa. One extra guest.\nWhich monster comes back next? A) A T. rex in the city · B) Mammoths at the mall · C) A kraken in the harbor — Comment A, B or C 👇\nPart 1 of Monsters Are Back.\n\n#shorts #viral #trending #youtubeshorts #fyp",
      "tags": [
-      "what happens when your heart stops",
-      "heart stops",
-      "explained",
-      "how it works",
-      "science explained",
-      "what happens if",
+      "what if a megalodon was in your pool",
+      "a megalodon was in your pool",
+      "megalodon pool",
+      "monsters are back",
+      "monsters are back part 1",
+      "monsters are back series",
+      "what if story",
+      "survival",
+      "animated story",
       "what if",
       "what if scenarios",
       "what if shorts",
@@ -226,30 +169,24 @@
       "fyp",
       "youtube shorts",
       "storytime",
-      "heart",
-      "stops",
-      "what if heart",
-      "what if stops",
+      "megalodon",
+      "pool",
+      "what if megalodon",
+      "what if pool",
       "what would you do",
       "would you survive",
       "animated short",
       "what if video",
-      "what if animation",
-      "scenario",
-      "cartoon",
-      "funny animation",
-      "shorts video",
-      "viral shorts",
-      "trending shorts"
+      "scenario"
      ],
-     "tagChars": 499
+     "tagChars": 500
     },
-    "instagram": "What happens when your heart stops?\nCould you do CPR? A) Yes · B) No — Comment A or B 👇\n\n#reels #viral #explore #reelsinstagram #trending",
-    "tiktok": "What happens when your heart stops?\nCould you do CPR? A) Yes · B) No — Comment A or B 👇\n\n#fyp #foryou #foryoupage #viral #trending",
+    "instagram": "What if a Megalodon was in your pool?\nWhich monster comes back next? A) A T. rex in the city · B) Mammoths at the mall · C) A kraken in the harbor — Comment A, B or C 👇 Follow for part 2.\n\n#reels #viral #explore #reelsinstagram #trending",
+    "tiktok": "What if a Megalodon was in your pool?\nWhich monster comes back next? A) A T. rex in the city · B) Mammoths at the mall · C) A kraken in the harbor — Comment A, B or C 👇\n\n#fyp #foryou #foryoupage #viral #trending",
     "hooks": [
-     "The internet says: doctors can shock a flatline back to life.",
-     "First, seconds: your brain runs out of fresh blood. You drop.",
-     "After four to six minutes without oxygen, brain cells start to die."
+     "Holiday. Pool villa. One extra guest.",
+     "Rule one: don’t touch the water. Rule two: your float is leaking.",
+     "It’s bigger than the pool. The tail hangs out the back."
     ]
    },
    "auto": true
@@ -318,6 +255,161 @@
     ]
    },
    "auto": true
+  },
+  {
+   "slug": "every-planet",
+   "title": "What if you stood on every planet without a suit?",
+   "kind": "explain",
+   "dur": 50.4,
+   "aspect": "9:16",
+   "accent": "yellow",
+   "series": null,
+   "ending": null,
+   "date": "2026-11-12T17:24:22Z",
+   "status": "ready",
+   "files": {
+    "mp4": {
+     "url": "https://github.com/Leon1304/what-if-engine/releases/download/render-every-planet/every-planet.mp4",
+     "size": 186781864
+    },
+    "coverA": {
+     "url": "https://github.com/Leon1304/what-if-engine/releases/download/render-every-planet/every-planet-cover.jpg",
+     "size": 403020,
+     "thumb": "covers/every-planet.jpg"
+    },
+    "coverB": {
+     "url": "https://github.com/Leon1304/what-if-engine/releases/download/render-every-planet/every-planet-cover-b.jpg",
+     "size": 214073,
+     "thumb": "covers/every-planet-b.jpg"
+    },
+    "srt": {
+     "url": "https://github.com/Leon1304/what-if-engine/releases/download/render-every-planet/every-planet.srt",
+     "size": 1150
+    }
+   },
+   "preview": "https://claude.ai/artifact/EfJbrHVVkxfr9EVEjV4LN8",
+   "captions": {
+    "youtube": {
+     "title": "What if you stood on every planet without a suit? 🪐",
+     "description": "A portal, an ice cream and five very bad vacation spots.\nDid you guess right? Comment A, B or C 👇\n\nSources: WorldAtlas (survival times per planet) · NASA Solar System Exploration\n\n#shorts #youtubeshorts #viral #trending #fyp",
+     "tags": [
+      "what if you stood on every planet",
+      "every planet without a spacesuit",
+      "how long would you survive on every planet",
+      "how long would you last on every planet",
+      "planets without a suit",
+      "space without a suit",
+      "survive on mars",
+      "survive on venus",
+      "survive on jupiter",
+      "mercury",
+      "venus",
+      "mars",
+      "jupiter",
+      "neptune",
+      "solar system",
+      "which planet kills you fastest",
+      "planet survival",
+      "planits",
+      "what if",
+      "what if scenarios",
+      "explained",
+      "3d animation",
+      "shorts",
+      "whatifthishappenedscenarios",
+      "viral",
+      "trending",
+      "fyp"
+     ],
+     "tagChars": 481
+    },
+    "instagram": "How long would you last on every planet? 🪐\n\nIs there a planet where you'd last more than 2 minutes? A) Yes, Mars B) Yes, a gas giant C) Nowhere – comment your pick 👇\n\n#reels #reelsinstagram #explore #viral #trending",
+    "tiktok": "How long would you last on every planet without a suit? 🪐\nComment A, B or C 👇\n\n#fyp #foryou #foryoupage #viral #trending",
+    "hooks": [
+     "How long would you last on every planet?",
+     "Which planet kills you fastest?",
+     "One portal. Five planets. One ice cream."
+    ]
+   },
+   "auto": false
+  },
+  {
+   "slug": "heart-stops",
+   "title": "What happens when your heart stops?",
+   "kind": "explain",
+   "dur": 48.1,
+   "aspect": "9:16",
+   "accent": "lime",
+   "series": null,
+   "ending": null,
+   "date": "2026-11-12T17:19:18Z",
+   "status": "ready",
+   "files": {
+    "mp4": {
+     "url": "https://github.com/Leon1304/what-if-engine/releases/download/render-heart-stops/heart-stops.mp4",
+     "size": 177918270
+    },
+    "coverA": {
+     "url": "https://github.com/Leon1304/what-if-engine/releases/download/render-heart-stops/heart-stops-cover.jpg",
+     "size": 389251,
+     "thumb": "covers/heart-stops.jpg"
+    },
+    "coverB": {
+     "url": "https://github.com/Leon1304/what-if-engine/releases/download/render-heart-stops/heart-stops-cover-b.jpg",
+     "size": 197646,
+     "thumb": "covers/heart-stops-b.jpg"
+    },
+    "srt": {
+     "url": "https://github.com/Leon1304/what-if-engine/releases/download/render-heart-stops/heart-stops.srt",
+     "size": 1060
+    }
+   },
+   "preview": "https://claude.ai/artifact/1WuTqksPR6baRoxS9xYxG9",
+   "captions": {
+    "youtube": {
+     "title": "What happens when your heart stops? 💔",
+     "description": "Seconds, minutes, and the one thing that keeps you alive: someone who pushes hard and fast.\nCould you do CPR? Comment A or B 👇\n\nCardiac arrest: call your emergency number (112 in Europe, 911 in the US), push hard and fast in the center of the chest, use an AED if there is one. Learn CPR in a local first-aid course.\n\nSources: American Heart Association · The Conversation (why flatlines aren't shocked) · ProTrainings\n\n#shorts #youtubeshorts #viral #trending #fyp",
+     "tags": [
+      "what happens when your heart stops",
+      "heart stops",
+      "cardiac arrest",
+      "sudden cardiac arrest",
+      "what happens when your heart stops beating",
+      "flatline",
+      "can you shock a flatline",
+      "defibrillator",
+      "aed",
+      "how to do cpr",
+      "cpr",
+      "hands only cpr",
+      "first aid",
+      "heart attack vs cardiac arrest",
+      "brain without oxygen",
+      "cpr saves lives",
+      "heart stopped",
+      "defibrilator",
+      "cardiac arest",
+      "what if",
+      "what if scenarios",
+      "explained",
+      "3d animation",
+      "shorts",
+      "whatifthishappenedscenarios",
+      "viral",
+      "trending",
+      "fyp"
+     ],
+     "tagChars": 467
+    },
+    "instagram": "Your heart stops. The clock starts. 💔\n\nCould you do CPR? A) Yes B) No – comment your pick 👇\nEmergency: call 112 / 911, push hard and fast, use an AED.\n\n#reels #reelsinstagram #explore #viral #trending",
+    "tiktok": "What happens when your heart stops 💔\nCould you do CPR? Comment A or B 👇\n\n#fyp #foryou #foryoupage #viral #trending",
+    "hooks": [
+     "What if your heart stopped at a bus stop?",
+     "Why doctors don’t shock a flatline",
+     "You have about 4 minutes. Here's what happens."
+    ]
+   },
+   "auto": false
   },
   {
    "slug": "lake-natron",
