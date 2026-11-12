@@ -1,5 +1,5 @@
 {
- "updated": "2026-11-12T15:29:14Z",
+ "updated": "2026-11-12T16:50:10Z",
  "videos": [
   {
    "slug": "dday",
@@ -127,6 +127,71 @@
    "auto": true
   },
   {
+   "slug": "lake-natron",
+   "title": "Lake Natron: does it really turn you to stone?",
+   "kind": "explain",
+   "dur": 44.9,
+   "aspect": "9:16",
+   "accent": "red",
+   "series": null,
+   "ending": null,
+   "date": null,
+   "status": "pending",
+   "files": {},
+   "preview": null,
+   "captions": {
+    "youtube": {
+     "title": "Lake Natron: does it really turn you to stone?",
+     "description": "Lake Natron, Tanzania. The internet says: touch it, and you turn to stone.\nDid the myth fool you? A) Yes, totally · B) Nope — Comment A or B 👇\n\n#shorts #viral #trending #youtubeshorts #fyp",
+     "tags": [
+      "lake natron does it really turn you to stone",
+      "lake natron",
+      "explained",
+      "how it works",
+      "science explained",
+      "what happens if",
+      "what if",
+      "what if scenarios",
+      "what if shorts",
+      "shorts",
+      "3d animation",
+      "animation",
+      "whatifthishappenedscenarios",
+      "hypothetical",
+      "viral",
+      "trending",
+      "fyp",
+      "youtube shorts",
+      "storytime",
+      "lake",
+      "natron",
+      "what if lake",
+      "what if natron",
+      "what would you do",
+      "would you survive",
+      "animated short",
+      "what if video",
+      "what if animation",
+      "scenario",
+      "cartoon",
+      "funny animation",
+      "shorts video",
+      "viral shorts",
+      "foryou"
+     ],
+     "tagChars": 498
+    },
+    "instagram": "Lake Natron: does it really turn you to stone?\nDid the myth fool you? A) Yes, totally · B) Nope — Comment A or B 👇\n\n#reels #viral #explore #reelsinstagram #trending",
+    "tiktok": "Lake Natron: does it really turn you to stone?\nDid the myth fool you? A) Yes, totally · B) Nope — Comment A or B 👇\n\n#fyp #foryou #foryoupage #viral #trending",
+    "hooks": [
+     "Lake Natron, Tanzania. The internet says: touch it, and you turn to stone.",
+     "The water is almost as harsh as ammonia. So yes, it stings.",
+     "In the shallows it gets hotter than a hot tub. Not the relaxing kind."
+    ]
+   },
+   "auto": true
+  },
+  {
    "slug": "zombie-farm-ending",
    "title": "What if zombies attacked your farm?",
    "kind": "story",
@@ -190,6 +255,85 @@
     ]
    },
    "auto": true
+  },
+  {
+   "slug": "sperm-whale",
+   "title": "What if a sperm whale swallowed you?",
+   "kind": "story",
+   "dur": 57.9,
+   "aspect": "9:16",
+   "accent": "cyan",
+   "series": {
+    "name": "Swallowed Alive",
+    "ep": 1
+   },
+   "ending": null,
+   "date": "2026-11-12T16:50:10Z",
+   "status": "ready",
+   "files": {
+    "mp4": {
+     "url": "https://github.com/Leon1304/what-if-engine/releases/download/render-sperm-whale/sperm-whale.mp4",
+     "size": 216281884
+    },
+    "coverA": {
+     "url": "https://github.com/Leon1304/what-if-engine/releases/download/render-sperm-whale/sperm-whale-cover.jpg",
+     "size": 404225,
+     "thumb": "covers/sperm-whale.jpg"
+    },
+    "coverB": {
+     "url": "https://github.com/Leon1304/what-if-engine/releases/download/render-sperm-whale/sperm-whale-cover-b.jpg",
+     "size": 339577,
+     "thumb": "covers/sperm-whale-b.jpg"
+    },
+    "srt": {
+     "url": "https://github.com/Leon1304/what-if-engine/releases/download/render-sperm-whale/sperm-whale.srt",
+     "size": 1400
+    }
+   },
+   "preview": "https://claude.ai/artifact/FEHJ6ukxiXP7mbZ6Y8TKXv",
+   "captions": {
+    "youtube": {
+     "title": "What if a sperm whale swallowed you? 🐋",
+     "description": "90 seconds of air. One very confused whale. And Gerald is still eating popcorn.\nWhat swallows you next? Comment A, B or C 👇 Most votes decides part 2.\nPart 1 of Swallowed Alive.\n\n#shorts #youtubeshorts #viral #trending #fyp",
+     "tags": [
+      "what if a sperm whale swallowed you",
+      "swallowed by a whale",
+      "sperm whale",
+      "swallowed alive",
+      "inside a whale",
+      "whale swallowed man",
+      "swallowed by sperm whale",
+      "whale stomach",
+      "inside a whale stomach",
+      "can a whale swallow a human",
+      "sperm whale swallow human",
+      "whale vomit",
+      "whale watching gone wrong",
+      "sperm wale",
+      "spern whale",
+      "whale swallowing",
+      "what if",
+      "what if scenarios",
+      "what if animation",
+      "3d animation",
+      "funny animation",
+      "shorts",
+      "whatifthishappenedscenarios",
+      "swallowed alive part 1",
+      "viral",
+      "fyp"
+     ],
+     "tagChars": 498
+    },
+    "instagram": "Swallowed alive. 90 seconds of air. 🐋\n\nWhat swallows you next? A) A T. rex B) A giant frog C) A washing machine – comment your pick, most votes decides part 2 👇\n\n#reels #reelsinstagram #explore #viral #trending",
+    "tiktok": "A sperm whale swallowed you… and you have 90 seconds of air 🐋\nWhat swallows you next? Comment A, B or C 👇 Follow for part 2\n\n#fyp #foryou #foryoupage #viral #trending",
+    "hooks": [
+     "You went whale watching. The whale went people watching.",
+     "What if you had 90 seconds to escape a whale's stomach?",
+     "Steve said: climb out the blowhole. Steve was wrong."
+    ]
+   },
+   "auto": false
   },
   {
    "slug": "robot-fight",
