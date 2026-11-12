@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>WhatIf – Videos</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#0b0b0f;--panel:#15151c;--panel2:#1d1d26;--line:#2a2a36;--text:#f2f2f5;--mute:#9a9aab;--acc:#FFD23F;--ok:#3ddc84;--warn:#ffb020}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--text);font:15px/1.45 Inter,system-ui,sans-serif}
+a{color:inherit}
+header{position:sticky;top:0;z-index:5;background:rgba(11,11,15,.92);backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
+.bar{max-width:1400px;margin:0 auto;padding:16px 20px 12px;display:flex;flex-wrap:wrap;gap:12px 18px;align-items:center}
+h1{font:400 30px/1 Anton,Impact,sans-serif;letter-spacing:.5px;margin:0;text-transform:uppercase}
+h1 span{background:var(--acc);color:#111;padding:0 8px;margin-left:6px;display:inline-block;transform:rotate(-2deg)}
+.meta{color:var(--mute);font-size:13px}
+.grow{flex:1}
+input[type=search]{background:var(--panel);border:1px solid var(--line);color:var(--text);border-radius:10px;padding:9px 12px;min-width:220px;font:inherit}
+.chips{max-width:1400px;margin:0 auto;padding:0 20px 14px;display:flex;gap:8px;flex-wrap:wrap}
+.chip{background:var(--panel);border:1px solid var(--line);color:var(--text);border-radius:99px;padding:6px 13px;font:600 13px Inter,sans-serif;cursor:pointer}
+.chip[aria-pressed=true]{background:var(--text);color:#111;border-color:var(--text)}
+.chip .n{opacity:.55;margin-left:4px}
+select{background:var(--panel);border:1px solid var(--line);color:var(--text);border-radius:10px;padding:8px 10px;font:inherit}
+main{max-width:1400px;margin:0 auto;padding:20px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:22px 16px}
+.card{cursor:pointer;border:0;background:none;color:inherit;padding:0;text-align:left;font:inherit}
+.thumb{position:relative;aspect-ratio:9/16;border-radius:14px;overflow:hidden;background:var(--panel2);outline:2px solid transparent;transition:transform .15s,outline-color .15s}
+.card:hover .thumb,.card:focus-visible .thumb{transform:translateY(-3px);outline-color:var(--a)}
+.thumb img{width:100%;height:100%;object-fit:cover;display:block}
+.thumb.wide img{object-fit:contain;background:#000}
+.badge{position:absolute;top:8px;left:8px;background:var(--a);color:var(--on);font:700 11px Inter;letter-spacing:.4px;text-transform:uppercase;padding:3px 7px;border-radius:6px}
+.dur{position:absolute;bottom:8px;right:8px;background:rgba(0,0,0,.75);font:600 12px Inter;padding:2px 6px;border-radius:5px}
+.part{position:absolute;bottom:8px;left:8px;background:rgba(0,0,0,.75);font:600 12px Inter;padding:2px 6px;border-radius:5px}
+.pending{position:absolute;inset:0;display:grid;place-items:center;text-align:center;color:var(--mute);font-size:13px;padding:14px;background:repeating-linear-gradient(45deg,#16161d 0 12px,#1b1b23 12px 24px)}
+.posted{position:absolute;top:8px;right:8px;display:flex;gap:3px}
+.posted i{font-style:normal;font:700 10px Inter;background:var(--ok);color:#06210f;border-radius:4px;padding:2px 4px}
+.ct{margin-top:9px;font-weight:600;font-size:14px;line-height:1.3;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.cd{color:var(--mute);font-size:12px;margin-top:3px}
+.empty{color:var(--mute);padding:60px 0;text-align:center}
+/* detail */
+dialog{border:0;padding:0;background:var(--panel);color:var(--text);border-radius:18px;width:min(1080px,96vw);max-height:94vh;overflow:auto}
+dialog::backdrop{background:rgba(0,0,0,.72)}
+.dl{display:grid;grid-template-columns:330px 1fr;gap:0}
+.left{padding:20px;border-right:1px solid var(--line);background:var(--panel2)}
+.right{padding:20px 22px 24px;min-width:0}
+.big{position:relative;aspect-ratio:9/16;border-radius:12px;overflow:hidden;background:#000}
+.big.wide{aspect-ratio:16/9}
+.big img{width:100%;height:100%;object-fit:cover;display:block}
+.seg{display:flex;gap:6px;margin:10px 0 14px}
+.seg button{flex:1}
+.btn{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;border-radius:10px;padding:10px 12px;font:600 14px Inter;text-decoration:none;border:1px solid var(--line);background:var(--panel);color:var(--text);cursor:pointer;margin-top:8px}
+.btn.primary{background:var(--a);color:var(--on);border-color:var(--a)}
+.btn small{opacity:.7;font-weight:500}
+.btn[aria-pressed=true]{background:var(--text);color:#111}
+.hint{color:var(--mute);font-size:12px;margin-top:8px}
+.x{position:sticky;top:0;float:right;background:var(--panel2);border:1px solid var(--line);color:var(--text);border-radius:99px;width:34px;height:34px;font-size:18px;cursor:pointer}
+h2{font:400 26px/1.1 Anton,Impact,sans-serif;margin:0 40px 6px 0;letter-spacing:.3px}
+.sub{color:var(--mute);font-size:13px;margin-bottom:14px}
+.tabs{display:flex;gap:6px;border-bottom:1px solid var(--line);margin-bottom:14px;flex-wrap:wrap}
+.tab{background:none;border:0;color:var(--mute);font:600 14px Inter;padding:9px 12px;border-bottom:2px solid transparent;cursor:pointer}
+.tab[aria-selected=true]{color:var(--text);border-color:var(--a)}
+.field{margin-bottom:14px}
+.fh{display:flex;align-items:center;gap:8px;margin-bottom:5px;font:600 12px Inter;text-transform:uppercase;letter-spacing:.5px;color:var(--mute)}
+.fh .grow{flex:1}
+.cnt{font:500 12px Inter;text-transform:none;letter-spacing:0}
+.cnt.ok{color:var(--ok)}.cnt.bad{color:var(--warn)}
+pre{margin:0;white-space:pre-wrap;word-break:break-word;background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:11px 12px;font:14px/1.5 Inter,sans-serif}
+.copy{background:var(--panel2);border:1px solid var(--line);color:var(--text);border-radius:8px;padding:4px 10px;font:600 12px Inter;cursor:pointer;text-transform:none;letter-spacing:0}
+.copy.done{background:var(--ok);color:#06210f;border-color:var(--ok)}
+.note{background:#2a2412;border:1px solid #5a4a16;color:#f3d98a;border-radius:10px;padding:9px 12px;font-size:13px;margin-bottom:14px}
+.chk{display:flex;align-items:center;gap:8px;font-size:14px;margin:4px 0 14px;cursor:pointer}
+.chk input{width:18px;height:18px;accent-color:var(--ok)}
+.toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%);background:var(--text);color:#111;padding:9px 16px;border-radius:99px;font:600 14px Inter;opacity:0;transition:opacity .2s;pointer-events:none;z-index:20}
+.toast.on{opacity:1}
+@media (max-width:760px){.dl{grid-template-columns:1fr}.left{border-right:0;border-bottom:1px solid var(--line)}.big{max-width:260px;margin:0 auto}.grid{grid-template-columns:repeat(auto-fill,minmax(150px,1fr))}h1{font-size:24px}input[type=search]{min-width:0;width:100%}}
+</style>
+</head>
+<body>
+<header>
+  <div class="bar">
+    <h1>WhatIf<span>Videos</span></h1>
+    <div class="meta" id="meta">lädt …</div>
+    <div class="grow"></div>
+    <input type="search" id="q" placeholder="Suchen: Titel, Serie, Caption …" aria-label="Suchen">
+    <select id="sort" aria-label="Sortierung"><option value="new">Neueste zuerst</option><option value="old">Älteste zuerst</option><option value="title">Titel A–Z</option></select>
+  </div>
+  <div class="chips" id="chips"></div>
+</header>
+<main><div class="grid" id="grid"></div><div class="empty" id="empty" hidden>Keine Videos für diesen Filter.</div></main>
+
+<dialog id="dlg" aria-labelledby="dTitle"><div id="dBody"></div></dialog>
+<div class="toast" id="toast"></div>
+
+<script>
+const ACC = {yellow:'#FFD23F',blue:'#3D8BFF',red:'#FF3B3B',green:'#2ECC71',orange:'#FF8A1F',pink:'#FF4FA3',purple:'#9B5CFF',lime:'#B6F23A',cyan:'#22D3EE'};
+const KIND = {story:'What if',explain:'Explaining',conspiracy:'Conspiracy',history:'History'};
+const store = {
+  get(k){try{return JSON.parse(localStorage.getItem(k)||'null')}catch(e){return null}},
+  set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}
+};
+let DATA = [], filter = store.get('wf-filter') || 'all';
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const accent = v => { const a = ACC[v.accent] || (/^#/.test(v.accent||'') ? v.accent : '#FFD23F'); return a; };
+const onColor = hex => { const h = hex.replace('#',''); const r=parseInt(h.slice(0,2),16),g=parseInt(h.slice(2,4),16),b=parseInt(h.slice(4,6),16); return (r*299+g*587+b*114)/1000 > 150 ? '#111' : '#fff'; };
+const mb = n => n ? (n > 1e6 ? (n/1e6).toFixed(0)+' MB' : Math.max(1,Math.round(n/1e3))+' KB') : '';
+const dur = s => { s = Math.round(s||0); return Math.floor(s/60)+':'+String(s%60).padStart(2,'0'); };
+const date = d => d ? new Date(d).toLocaleDateString('de-DE',{day:'2-digit',month:'2-digit',year:'numeric'}) + ', ' + new Date(d).toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'}) : 'noch nicht gerendert';
+const posted = slug => store.get('wf-posted-'+slug) || {};
+const group = v => v.series ? 'series' : v.kind;
+
+function toast(t){ const el=$('#toast'); el.textContent=t; el.classList.add('on'); clearTimeout(toast.h); toast.h=setTimeout(()=>el.classList.remove('on'),1500); }
+async function copy(text, btn){
+  let ok = false;
+  try { await navigator.clipboard.writeText(text); ok = true; } catch(e) {
+    const ta = document.createElement('textarea'); ta.value = text; document.body.appendChild(ta); ta.select();
+    try { ok = document.execCommand('copy'); } catch(e2) {} ta.remove();
+  }
+  if (btn) { btn.classList.add('done'); btn.textContent = ok ? 'Kopiert ✓' : 'Markiert'; setTimeout(()=>{btn.classList.remove('done'); btn.textContent='Kopieren';},1400); }
+  toast(ok ? 'In die Zwischenablage kopiert' : 'Kopieren nicht möglich – Text markieren');
+}
+
+function chips(){
+  const counts = {all: DATA.length, story:0, series:0, explain:0, conspiracy:0, history:0, pending:0};
+  DATA.forEach(v => { counts[group(v)] = (counts[group(v)]||0)+1; if (v.status!=='ready') counts.pending++; });
+  const list = [['all','Alle'],['story','Story'],['series','Serien'],['explain','Explaining'],['conspiracy','Conspiracy'],['history','History'],['pending','Ohne MP4']]
+    .filter(([k]) => k==='all' || counts[k]);
+  $('#chips').innerHTML = list.map(([k,l]) => `<button class="chip" data-f="${k}" aria-pressed="${filter===k}">${l}<span class="n">${counts[k]}</span></button>`).join('');
+}
+
+function render(){
+  const q = $('#q').value.trim().toLowerCase(), sort = $('#sort').value;
+  let list = DATA.filter(v => filter==='all' || (filter==='pending' ? v.status!=='ready' : group(v)===filter));
+  if (q) list = list.filter(v => [v.title, v.slug, v.series?.name, v.captions?.instagram, v.captions?.youtube?.description].join(' ').toLowerCase().includes(q));
+  list = list.slice().sort((a,b) => sort==='title' ? a.title.localeCompare(b.title)
+    : (!a.date - !b.date) || (a.date < b.date ? 1 : a.date > b.date ? -1 : 0) * (sort==='old' ? -1 : 1));
+  $('#empty').hidden = list.length > 0;
+  $('#grid').innerHTML = list.map(v => {
+    const a = accent(v), p = posted(v.slug), wide = v.aspect==='16:9';
+    const img = v.files.coverA?.thumb ? `<img src="${esc(v.files.coverA.thumb)}" alt="" loading="lazy">` : `<div class="pending">${v.status==='ready'?'kein Cover':'Wird gerendert<br>oder noch kein MP4'}</div>`;
+    const marks = ['yt','ig','tt'].filter(k=>p[k]).map(k=>`<i>${k.toUpperCase()}</i>`).join('');
+    return `<button class="card" data-slug="${esc(v.slug)}" style="--a:${a};--on:${onColor(a)}">
+      <div class="thumb${wide?' wide':''}">${img}
+        <span class="badge">${KIND[v.kind]||'What if'}</span>${marks?`<span class="posted">${marks}</span>`:''}
+        ${v.series?`<span class="part">${esc(v.series.name)} · Teil ${v.series.ep}</span>`:''}
+        <span class="dur">${wide?'16:9 · ':''}${dur(v.dur)}</span></div>
+      <div class="ct">${esc(v.title)}</div><div class="cd">${date(v.date)}</div></button>`;
+  }).join('');
+}
+
+function field(label, text, extra=''){
+  return `<div class="field"><div class="fh">${label}<span class="grow"></span>${extra}<button class="copy" data-copy>Kopieren</button></div><pre>${esc(text)}</pre></div>`;
+}
+
+function open(slug){
+  const v = DATA.find(x => x.slug===slug); if (!v) return;
+  const a = accent(v), c = v.captions || {}, yt = c.youtube || {}, f = v.files, wide = v.aspect==='16:9';
+  const tags = (yt.tags||[]).join(', '), tc = yt.tagChars ?? tags.length;
+  const p = posted(slug);
+  const dlBtn = (k, label) => f[k] ? `<a class="btn${k==='mp4'?' primary':''}" href="${esc(f[k].url)}" target="_blank" rel="noopener">${label} <small>${mb(f[k].size)}</small></a>` : '';
+  $('#dBody').innerHTML = `<div class="dl" style="--a:${a};--on:${onColor(a)}">
+    <div class="left">
+      <div class="big${wide?' wide':''}" id="bigImg">${f.coverA?.thumb?`<img src="${esc(f.coverA.thumb)}" alt="Thumbnail">`:'<div class="pending">Noch kein Cover</div>'}</div>
+      ${f.coverB?.thumb?`<div class="seg"><button class="btn" data-cov="coverA" aria-pressed="true">Cover A</button><button class="btn" data-cov="coverB" aria-pressed="false">Cover B</button></div>`:'<div style="height:6px"></div>'}
+      ${v.status==='ready' ? dlBtn('mp4','⬇ Video (MP4, '+(wide?'2560×1440':'2K')+')') : '<div class="note">Für dieses Video gibt es noch kein MP4 (Render läuft oder ist fehlgeschlagen).</div>'}
+      ${dlBtn('coverA','⬇ Thumbnail A')}${dlBtn('coverB','⬇ Thumbnail B')}${dlBtn('srt','⬇ Untertitel (.srt)')}
+      ${v.preview?`<a class="btn" href="${esc(v.preview)}" target="_blank" rel="noopener">▶ Live-Vorschau</a>`:''}
+      <div class="hint">Downloads öffnen GitHub im Browser und starten dort.</div>
+    </div>
+    <div class="right">
+      <button class="x" data-close aria-label="Schließen">×</button>
+      <h2 id="dTitle">${esc(v.title)}</h2>
+      <div class="sub">${KIND[v.kind]||'What if'}${v.series?' · '+esc(v.series.name)+' Teil '+v.series.ep:''} · ${dur(v.dur)} · ${date(v.date)}</div>
+      ${v.auto?'<div class="note">Texte automatisch aus der Story erzeugt (vor diesem Überblick entstanden). Neue Videos zeigen hier die gelieferten Posting-Texte.</div>':''}
+      <div class="tabs" role="tablist">
+        <button class="tab" role="tab" data-tab="yt" aria-selected="true">YouTube Shorts</button>
+        <button class="tab" role="tab" data-tab="ig" aria-selected="false">Instagram Reels</button>
+        <button class="tab" role="tab" data-tab="tt" aria-selected="false">TikTok</button>
+        ${c.hooks?.length?'<button class="tab" role="tab" data-tab="hk" aria-selected="false">Hooks</button>':''}
+      </div>
+      <section data-pane="yt">
+        <label class="chk"><input type="checkbox" data-post="yt" ${p.yt?'checked':''}> Auf YouTube gepostet</label>
+        ${field('Titel', yt.title||v.title, `<span class="cnt ${(yt.title||'').length<=70?'ok':'bad'}">${(yt.title||'').length}/70</span>`)}
+        ${field('Beschreibung', yt.description||'')}
+        ${field('Tags', tags, `<span class="cnt ${tc<=500&&tc>=440?'ok':'bad'}">${tc}/500</span>`)}
+      </section>
+      <section data-pane="ig" hidden>
+        <label class="chk"><input type="checkbox" data-post="ig" ${p.ig?'checked':''}> Auf Instagram gepostet</label>
+        ${field('Caption', c.instagram||'')}
+      </section>
+      <section data-pane="tt" hidden>
+        <label class="chk"><input type="checkbox" data-post="tt" ${p.tt?'checked':''}> Auf TikTok gepostet</label>
+        ${field('Caption', c.tiktok||'')}
+      </section>
+      <section data-pane="hk" hidden>${(c.hooks||[]).map((h,i)=>field('Hook '+(i+1), h)).join('')}</section>
+    </div></div>`;
+  const d = $('#dlg'); if (!d.open) d.showModal();
+  if (location.hash !== '#'+slug) history.replaceState(null,'','#'+slug);
+  d.onclick = e => {
+    const t = e.target;
+    if (t === d || t.closest('[data-close]')) return close();
+    if (t.matches('[data-copy]')) return copy(t.closest('.field').querySelector('pre').textContent, t);
+    if (t.matches('[data-tab]')) { d.querySelectorAll('[data-tab]').forEach(b=>b.setAttribute('aria-selected', b===t)); d.querySelectorAll('[data-pane]').forEach(s=>s.hidden = s.dataset.pane!==t.dataset.tab); }
+    if (t.matches('[data-cov]')) { d.querySelectorAll('[data-cov]').forEach(b=>b.setAttribute('aria-pressed', b===t)); $('#bigImg').innerHTML = `<img src="${esc(f[t.dataset.cov].thumb)}" alt="Thumbnail">`; }
+  };
+  d.onchange = e => { if (e.target.matches('[data-post]')) { const q = posted(slug); q[e.target.dataset.post] = e.target.checked; store.set('wf-posted-'+slug, q); render(); } };
+}
+function close(){ $('#dlg').close(); }
+$('#dlg').addEventListener('close', () => { if (location.hash) history.replaceState(null,'',location.pathname); });
+
+$('#grid').onclick = e => { const c = e.target.closest('.card'); if (c) open(c.dataset.slug); };
+$('#chips').onclick = e => { const c = e.target.closest('.chip'); if (!c) return; filter = c.dataset.f; store.set('wf-filter', filter); chips(); render(); };
+$('#q').oninput = render; $('#sort').onchange = render;
+window.addEventListener('hashchange', () => { const s = location.hash.slice(1); if (s) open(s); });
+
+fetch('videos.json', {cache:'no-store'}).then(r => r.json()).then(j => {
+  DATA = j.videos || [];
+  if (!['all','pending'].includes(filter) && !DATA.some(v => group(v)===filter)) filter = 'all';
+  const ready = DATA.filter(v=>v.status==='ready').length;
+  $('#meta').textContent = `${DATA.length} Videos · ${ready} mit MP4 · Stand ${date(j.updated)}`;
+  chips(); render();
+  const s = location.hash.slice(1); if (s) open(s);
+}).catch(() => { $('#meta').textContent = 'videos.json konnte nicht geladen werden'; });
+</script>
+</body>
+</html>
