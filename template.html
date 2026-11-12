@@ -709,15 +709,32 @@ function surfFx(m, kind, o = {}) {   // o.indoor: no weather (rooms) · o.sp: pa
   };
   m.customProgramCacheKey = () => 'surf' + K + (o.sp ? 's' : '') + (o.indoor ? 'i' : ''); return m;
 }
-function mat(hex, o = {}) {   // o: rough, metal, em (emissive hex), ei, opacity, basic, flat(default true), own (unshared, e.g. to animate), surf (wall / roof pattern, see SURF)
-  const key = hex + (o.surf ? JSON.stringify([o.surf, o.rough, o.metal, o.em, o.ei, o.opacity, o.flat, o.side, o.glow, o.wind, o.indoor]) : JSON.stringify(o));
+// v3.2 material presets: mat(hex, { kind }) — paint (car lacquer) · glass · metal · chrome · wood · fabric · plastic · rubber · stone · ceramic.
+//   A kind sets roughness, metalness and how strongly the surface mirrors the sky environment (env, 1 = engine default); glossy kinds are smooth-shaded on curved parts
+//   (spheres, cylinders — boxes and outlines stay crisp). rough / metal / flat / env given alongside still win. CFG.materials: false = every kind falls back to the old matte look.
+const MATK = { paint: { rough: 0.24, metal: 0.12, env: 3.6, smooth: 1 }, glass: { rough: 0.05, metal: 0.15, env: 3.2, smooth: 1 }, metal: { rough: 0.34, metal: 0.82, env: 2.4, smooth: 1 },
+  chrome: { rough: 0.1, metal: 1, env: 3.4, smooth: 1 }, ceramic: { rough: 0.18, metal: 0, env: 2.2, smooth: 1 }, plastic: { rough: 0.4, metal: 0, env: 1.5, smooth: 1 },
+  wood: { rough: 0.74, metal: 0, env: 0.8 }, fabric: { rough: 0.97, metal: 0, env: 0.5 }, rubber: { rough: 0.9, metal: 0, env: 0.7 }, stone: { rough: 0.93, metal: 0, env: 0.8 } };
+const _ENVU = new WeakMap();
+function envK(m, k) {   // how strongly a standard material mirrors the sky environment (scene.environment); a shader patch that keeps earlier patches. k = 1 = engine default
+  if (!m?.isMeshStandardMaterial || !(k >= 0) || Math.abs(k - 1) < 1e-3) return m;
+  m.userData.envK = +k.toFixed(3); if (_ENVU.has(m)) { _ENVU.get(m).value = k; return m; }
+  const U = { value: k }, prev = m.onBeforeCompile !== THREE.Material.prototype.onBeforeCompile ? m.onBeforeCompile : null, pk = m.customProgramCacheKey(); _ENVU.set(m, U);
+  m.onBeforeCompile = (sh, r) => { if (prev) prev.call(m, sh, r); sh.uniforms.uEnvK = U;
+    sh.fragmentShader = 'uniform float uEnvK;\n' + sh.fragmentShader.replace('#include <lights_fragment_maps>', '#include <lights_fragment_maps>\n#if defined( USE_ENVMAP ) && defined( RE_IndirectSpecular )\n  radiance *= uEnvK;\n#endif'); };
+  m.customProgramCacheKey = () => pk + '|envK'; return m;
+}
+function mat(hex, o = {}) {   // o: rough, metal, em (emissive hex), ei, opacity, basic, flat(default true), own (unshared, e.g. to animate), surf (wall / roof pattern, see SURF), kind (preset, see MATK), env
+  const key = hex + (o.surf ? JSON.stringify([o.surf, o.rough, o.metal, o.em, o.ei, o.opacity, o.flat, o.side, o.glow, o.wind, o.indoor, o.kind]) : JSON.stringify(o));
   if (!o.own && _mats.has(key)) return _mats.get(key);
-  const tr = o.opacity != null && o.opacity < 1;
+  const tr = o.opacity != null && o.opacity < 1, K = CFG.materials !== false && o.kind ? MATK[o.kind] ?? {} : {};
   const m = o.basic
     ? new THREE.MeshBasicMaterial({ color: hex, transparent: tr, opacity: o.opacity ?? 1, depthWrite: !tr })
-    : new THREE.MeshStandardMaterial({ color: hex, roughness: o.rough ?? 0.88, metalness: o.metal ?? 0, flatShading: o.flat ?? true, emissive: o.em ?? '#000000', emissiveIntensity: o.ei ?? 1, transparent: tr, opacity: o.opacity ?? 1, depthWrite: !tr });
+    : new THREE.MeshStandardMaterial({ color: hex, roughness: o.rough ?? K.rough ?? 0.88, metalness: o.metal ?? K.metal ?? 0, flatShading: o.flat ?? !K.smooth, emissive: o.em ?? '#000000', emissiveIntensity: o.ei ?? 1, transparent: tr, opacity: o.opacity ?? 1, depthWrite: !tr });
   if (o.wind && !o.basic) windify(m, o.wind === 'local' ? 'local' : 'attr');
   if (o.surf && !o.basic) surfFx(m, o.surf, { indoor: o.indoor });
+  else if (!o.basic && (o.env ?? K.env) != null) envK(m, o.env ?? K.env);
+  if (o.kind && !o.basic) m.userData.kind = o.kind;
   if (o.own) m.userData.own = true; if (o.side != null) m.side = o.side;
   if (o.glow) m.color.multiplyScalar(1 + o.glow);
   if (!o.own) _mats.set(key, m);
@@ -733,7 +750,7 @@ function mesh(p, geo, m, x, y, z, o = {}) {
 const box = (p, w, h, d, c, x = 0, y = 0, z = 0, o = {}) => mesh(p, boxG(w, h, d), o.mat ?? mat(c, o), x, y + h / 2, z, o);
 const cyl = (p, rt, rb, h, c, x = 0, y = 0, z = 0, o = {}) => { const s = o.seg ?? 8; return mesh(p, G(`c${rt}|${rb}|${h}|${s}`, () => new THREE.CylinderGeometry(rt, rb, h, s)), o.mat ?? mat(c, o), x, y + h / 2, z, o); };
 const cone = (p, r, h, c, x = 0, y = 0, z = 0, o = {}) => cyl(p, 0, r, h, c, x, y, z, o);
-const ball = (p, r, c, x = 0, y = 0, z = 0, o = {}) => { const d = o.detail ?? 1; return mesh(p, G(`s${r}|${d}`, () => new THREE.IcosahedronGeometry(r, d)), o.mat ?? mat(c, o), x, y, z, o); };
+const ball = (p, r, c, x = 0, y = 0, z = 0, o = {}) => { const d = o.detail ?? (r <= 0.35 || MATK[o.kind]?.smooth ? 2 : 1); return mesh(p, G(`s${r}|${d}`, () => new THREE.IcosahedronGeometry(r, d)), o.mat ?? mat(c, o), x, y, z, o); };   // v3.2: small props (fruit, knobs, bulbs) and glossy balls default to detail 2 — big crowns and rocks stay faceted
 function prism(p, w, h, d, c, x = 0, y = 0, z = 0, o = {}) {   // gable roof: ridge along x (length w), base depth d, height h
   const geo = G(`p${w}|${h}|${d}`, () => { const s = new THREE.Shape(); s.moveTo(-d / 2, 0); s.lineTo(d / 2, 0); s.lineTo(0, h); s.closePath(); const g = new THREE.ExtrudeGeometry(s, { depth: w, bevelEnabled: false }); g.translate(0, 0, -w / 2); g.rotateY(Math.PI / 2); return g; });
   return mesh(p, geo, o.mat ?? mat(c, o), x, y, z, o);
@@ -1303,7 +1320,8 @@ const haybale = (p, x, z, ry = 0) => { const g = stat(grp(p, x, groundH(x, z), z
   const hs = hash(x * 3.7 + z * 1.3); for (let i = 0; i < 5; i++) box(g, 0.03, 0.02, 0.3, '#E0C068', (hash(i + hs) - 0.5) * 1.5, 0.01, (hash(i * 2.3 + hs) - 0.5) * 1.6, { ry: hash(i * 5.1 + hs) * 3, ...NC });
   return g; };
 // v2.40 vehicle parts: bodies from side profiles with real wheel arches, wheels with rims and tread, lamp pairs as one mesh; fuse() merges the paint work of one vehicle into a few draw calls
-const _vcM = new Map(), _vcMat = (rough = 0.88, metal = 0) => { const k = rough + '|' + metal; if (!_vcM.has(k)) _vcM.set(k, new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: rough, metalness: metal })); return _vcM.get(k); };
+const _vcM = new Map(), _vcMat = (rough = 0.88, metal = 0, env = 1, flat = true) => { const k = [rough, metal, env, flat].join('|'); if (!_vcM.has(k)) _vcM.set(k, envK(new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: flat, roughness: rough, metalness: metal }), env)); return _vcM.get(k); };
+const _vcKind = kind => { const K = CFG.materials !== false ? MATK[kind] ?? {} : {}; return _vcMat(K.rough ?? 0.82, K.metal ?? 0, K.env ?? 1, !K.smooth); };   // v3.2: vertex-coloured part with a material preset
 const _vcGeo = (key, build) => G('vc' + key, () => { const t = new THREE.Group(), gs = []; build(t); t.updateMatrixWorld(true);   // a small model built from primitives once → one vertex-coloured geometry (shared by every copy)
   t.traverse(o => { if (!o.isMesh) return; const g = o.geometry.index ? o.geometry.toNonIndexed() : o.geometry.clone(); for (const k of Object.keys(g.attributes)) if (k !== 'position' && k !== 'normal') g.deleteAttribute(k); g.applyMatrix4(o.matrixWorld);
     const n = g.attributes.position.count, ca = new Float32Array(n * 3), c = o.material.color; for (let i = 0; i < n; i++) { ca[3 * i] = c.r; ca[3 * i + 1] = c.g; ca[3 * i + 2] = c.b; } g.setAttribute('color', new THREE.BufferAttribute(ca, 3)); gs.push(g); });
@@ -1311,19 +1329,32 @@ const _vcGeo = (key, build) => G('vc' + key, () => { const t = new THREE.Group()
 const _boxesG = list => G('bx' + JSON.stringify(list), () => mergeGeometries(list.map(([w, h, d, x, y, z]) => new THREE.BoxGeometry(w, h, d).translate(x, y, z))));   // several boxes as one geometry (a pair of lamps = one mesh, one material)
 function _vWheel(p, x, z, r, w, o = {}) {   // road wheel in a pivot that spins about x (rotation order YXZ: rotation.y steers); style: alloy | steel | lug (tractor, off-road)
   const pv = grp(p, x, r, z), st = o.style ?? 'alloy', rim = o.rim ?? '#C4CAD2'; pv.rotation.order = 'YXZ'; pv.userData.r = r; pv.userData.keep = true; pv.userData.steer = !!o.steer;
-  const geo = _vcGeo(`wheel|${r}|${w}|${st}|${rim}`, t => { const X = { rz: Math.PI / 2 }, ax = (rr, len, c, seg) => cyl(t, rr, rr, len, c, 0, -len / 2, 0, { ...X, seg });
-    ax(r, w, '#1F2125', 14); ax(r * 0.985, w * 0.5, '#2B2E33', 14).scale.set(1.012, 1, 1.012);   // tyre + a slightly proud tread band
-    if (st === 'lug') { const n = Math.max(8, Math.round(TAU * r / 0.3)); for (let i = 0; i < n; i++) { const q = grp(t); q.rotation.x = i / n * TAU; box(q, w * 0.56, 0.07, 0.1, '#17181B', (i % 2 ? 1 : -1) * w * 0.23, r - 0.03, 0, { ry: (i % 2 ? 1 : -1) * 0.5 }); }
-      ax(r * 0.6, w + 0.02, rim, 10); ax(r * 0.42, w + 0.05, shade(rim, -0.12), 8); ax(r * 0.16, w + 0.09, '#3A3D44', 6); return; }
-    if (st === 'steel') { ax(r * 0.62, w + 0.02, rim, 10); ax(r * 0.4, w + 0.035, '#2A2D33', 8); ax(r * 0.2, w + 0.06, rim, 6); return; }
-    ax(r * 0.66, w + 0.016, '#2A2D33', 10); ax(r * 0.17, w + 0.05, rim, 6);
+  const ax = (t, rr, len, c, seg) => cyl(t, rr, rr, len, c, 0, -len / 2, 0, { rz: Math.PI / 2, seg });   // v3.2: rubber tyre and metal rim are two meshes (matte rubber, glossy rim)
+  const tyre = _vcGeo(`tyre|${r}|${w}|${st}`, t => { ax(t, r, w, '#1F2125', 14); ax(t, r * 0.985, w * 0.5, '#2B2E33', 14).scale.set(1.012, 1, 1.012);   // tyre + a slightly proud tread band
+    if (st === 'lug') { const n = Math.max(8, Math.round(TAU * r / 0.3)); for (let i = 0; i < n; i++) { const q = grp(t); q.rotation.x = i / n * TAU; box(q, w * 0.56, 0.07, 0.1, '#17181B', (i % 2 ? 1 : -1) * w * 0.23, r - 0.03, 0, { ry: (i % 2 ? 1 : -1) * 0.5 }); } } });
+  const geo = _vcGeo(`rim|${r}|${w}|${st}|${rim}`, t => {
+    if (st === 'lug') { ax(t, r * 0.6, w + 0.02, rim, 10); ax(t, r * 0.42, w + 0.05, shade(rim, -0.12), 8); ax(t, r * 0.16, w + 0.09, '#3A3D44', 6); return; }
+    if (st === 'steel') { ax(t, r * 0.62, w + 0.02, rim, 10); ax(t, r * 0.4, w + 0.035, '#2A2D33', 8); ax(t, r * 0.2, w + 0.06, rim, 6); return; }
+    ax(t, r * 0.66, w + 0.016, '#2A2D33', 10); ax(t, r * 0.17, w + 0.05, rim, 6);
     for (let i = 0; i < 5; i++) { const q = grp(t); q.rotation.x = i / 5 * TAU + 0.3; box(q, w + 0.034, r * 0.58, r * 0.17, rim, 0, r * 0.08, 0); } });
-  mesh(pv, geo, _vcMat(0.82), 0, 0, 0); return pv;
+  mesh(pv, tyre, _vcKind('rubber'), 0, 0, 0); mesh(pv, geo, st === 'lug' ? _vcKind('paint') : _vcKind('metal'), 0, 0, 0); return pv;
+}
+// v3.2 _vFinish: before a vehicle is fused, its plain parts get material presets — body colours → lacquer (paint), chrome trim → chrome, grey trim → metal, black trim → plastic.
+//   Only parts still on the engine's default matte material are touched (anything given its own rough / metal keeps it). vehicle({ finish: false }) = old matte look.
+const _vNorm = c => '#' + new THREE.Color(c).getHexString().toUpperCase();
+function _vFinish(root, paints, o = {}) {
+  if (o.finish === false || CFG.materials === false) return root;
+  const P = new Set(paints.filter(Boolean).map(_vNorm)), CH = new Set(['#C9CED6', '#C4CAD2']), ME = new Set(['#C9CDD3', '#9AA0A8', '#8E949C', '#D4D7DC', '#55595F', '#34363B', '#4A4E56']), PL = new Set(['#24272D', '#15171A', '#2A2A2A', '#1A1A1A', '#222222', '#3A3D44']);
+  root.traverse(me => { if (!me.isMesh || me.isInstancedMesh) return; for (let q = me; q && q !== root; q = q.parent) if (q.userData.dyn || q.userData.keep) return;
+    const m = me.material; if (!m?.isMeshStandardMaterial || m.vertexColors || m.userData.own || m.userData.kind || m.userData.surf || m.transparent || m.emissive.getHex() !== 0 || m.roughness !== 0.88 || m.metalness !== 0) return;
+    const hx = '#' + m.color.getHexString().toUpperCase(), kind = P.has(hx) ? 'paint' : CH.has(hx) ? 'chrome' : ME.has(hx) ? 'metal' : PL.has(hx) ? 'plastic' : null;
+    if (kind) me.material = mat(hx, m.side !== THREE.FrontSide ? { kind, side: m.side } : { kind }); });
+  return root;
 }
 function vehicle(p, x, z, o = {}) {   // kind: car | sports | taxi | police | van | pickup | bus | truck | tractor — returns { g, wheels, doors, headMat, … } (police: { siren } light bar)
   const kind = o.kind ?? 'car', g = grp(p, x, 0, z, o.ry ?? 0), wheels = [], NC = { cast: false };
   const c = o.color ?? (kind === 'taxi' ? '#F2C230' : kind === 'police' ? '#F2F2F2' : kind === 'bus' ? '#E3B23C' : '#3A7BD5'), c2 = shade(c, -0.09);
-  const head = mat('#FFF6D8', { em: '#FFF2C0', ei: o.lights ?? 0.6, own: true }), tail = mat('#C8202A', { em: '#FF2020', ei: o.lights ?? 0.5 }), dark = '#24272D', glass = '#9FC3D9', under = '#1B1D21', chrome = '#C9CED6', amber = '#F29A1F', GL = { rough: 0.25, cast: false };
+  const head = mat('#FFF6D8', { em: '#FFF2C0', ei: o.lights ?? 0.6, own: true }), tail = mat('#C8202A', { em: '#FF2020', ei: o.lights ?? 0.5 }), dark = '#24272D', fin = o.finish !== false && CFG.materials !== false, glass = fin ? '#7FA3BA' : '#9FC3D9', under = '#1B1D21', chrome = '#C9CED6', amber = '#F29A1F', GL = fin ? { kind: 'glass', cast: false } : { rough: 0.25, cast: false };   // v3.2: glass mirrors the sky
   const wheel = (wx, wz, r, w, style, rim) => { const pv = _vWheel(g, wx, wz, r, w, { style, rim, steer: wz > 0 }); wheels.push(pv); return pv; };
   const lamps = (m, list) => mesh(g, _boxesG(list), m, 0, 0, 0, NC), pair = (w, h, d, hx, y, zz) => [[w, h, d, -hx, y, zz], [w, h, d, hx, y, zz]];
   const ears = list => { const m = mesh(g, _boxesG(list), mat(dark), 0, 0, 0, NC); m.userData.keep = true; m.userData.noHit = true; return m; };   // mirrors: stick out, but are no obstacle and not part of the crash box
@@ -1415,7 +1446,7 @@ function vehicle(p, x, z, o = {}) {   // kind: car | sports | taxi | police | va
       box(hg, 0.04, yB - 0.34, dl, doorC, 0, 0.02, -dl / 2, NC); finPlate(hg, wF(0).map(([a, b]) => [a - zh, b - 0.32]), 0.03, glass, -sx * 0.11, 0, 0, GL);
       box(hg, 0.03, 0.035, 0.14, dark, sx * 0.03, yB - 0.47, -dl + 0.12, NC); box(hg, 0.12, 0.09, 0.07, doorC, -sx * 0.035, yB - 0.3, -0.1, NC);
       if (kind === 'taxi') for (let k = 0; k < 4; k++) box(hg, 0.02, 0.1, dl / 4, k % 2 ? '#1A1A1A' : '#F2F2F2', sx * 0.022, 0.2, -dl / 8 - k * dl / 4, NC);
-      fuse(hg);
+      fuse(_vFinish(hg, [c, c2, doorC], o));
       box(g, 0.08, 0.1, 0.03, amber, sx * 0.76, 0.64, hl + 0.005, NC);
     }
     for (const sz of [-1, 1]) box(g, 1.74, 0.16, 0.12, dark, 0, 0.28, sz * hl, NC);
@@ -1438,7 +1469,7 @@ function vehicle(p, x, z, o = {}) {   // kind: car | sports | taxi | police | va
   if (kind === 'bus') Object.assign(meta, { len: 10, front: 5.02, lampX: 0.85, lampY: 0.82, trackW: 2.1 });
   if (kind === 'truck') Object.assign(meta, { len: 6.6, front: 3.32, lampX: 0.78, lampY: 0.78, trackW: 1.82 });
   if (kind === 'tractor') Object.assign(meta, { len: 2.4, front: 1.41, lampX: 0.3, lampY: 1.34, trackW: 1.7 });
-  fuse(g);
+  fuse(_vFinish(g, [c, c2, kind === 'police' ? '#1E2A44' : null], o));
   return { g, wheels, siren, kind, headMat: head, doors, _steer: true, ...meta };
 }
 // --- aircraft: plane(p, { kind: 'jet' | 'prop' | 'airliner', color, scale }) and heli(p, { color }) → { g, prop/rotor }; move them with fly() ---
@@ -1500,25 +1531,155 @@ function fly(obj, pts, o = {}) {
 // --- street furniture ---
 function trafficLight(p, x, z, o = {}) {   // pole with arm and a three-lamp head (state: 'green' | 'yellow' | 'red' or t => state)
   const g = stat(grp(p, x, 0, z, o.ry ?? 0)), NC = { cast: false };
-  box(g, 0.14, 4.6, 0.14, '#2A2D33'); box(g, 0.1, 0.1, 2.2, '#2A2D33', 0, 4.4, 1.1, NC); box(g, 0.36, 1.05, 0.3, '#1E2024', 0, 3.4, 2.1);
+  box(g, 0.14, 4.6, 0.14, '#2A2D33', 0, 0, 0, { kind: 'metal' }); box(g, 0.1, 0.1, 2.2, '#2A2D33', 0, 4.4, 1.1, { kind: 'metal', ...NC }); box(g, 0.36, 1.05, 0.3, '#1E2024', 0, 3.4, 2.1, { kind: 'plastic' });   // v3.2 presets
   const on = { red: '#FF3030', yellow: '#FFC020', green: '#30E060' }, st = o.state ?? 'green';
   ['red', 'yellow', 'green'].forEach((k, i) => ball(g, 0.1, '', 0, 4.25 - i * 0.32, 2.27, { detail: 0, mat: mat(st === k ? on[k] : '#3A3A3A', st === k ? { basic: true, glow: 1.2 } : {}), ...NC }));
   return g;
 }
 const bench = (p, x, z, ry = 0) => { const g = stat(grp(p, x, groundH(x, z), z, ry)); box(g, 1.6, 0.08, 0.45, '#8A6A48', 0, 0.45, 0); box(g, 1.6, 0.35, 0.06, '#8A6A48', 0, 0.62, -0.2); for (const sx of [-0.65, 0.65]) box(g, 0.08, 0.45, 0.4, '#2A2D33', sx, 0, 0); return g; };
-const hydrant = (p, x, z) => { const g = stat(grp(p, x, groundH(x, z), z)); cyl(g, 0.14, 0.16, 0.55, '#D9342B', 0, 0, 0, { seg: 8 }); ball(g, 0.15, '#D9342B', 0, 0.58, 0, { detail: 0 }); cyl(g, 0.06, 0.06, 0.4, '#C02A22', 0, 0.38, 0, { rz: Math.PI / 2, seg: 6, cast: false }); return g; };
-const trashcan = (p, x, z) => { const g = stat(grp(p, x, groundH(x, z), z)); cyl(g, 0.25, 0.22, 0.85, '#3A5A44', 0, 0, 0, { seg: 10 }); cyl(g, 0.28, 0.28, 0.06, '#2A2D33', 0, 0.85, 0, { seg: 10, cast: false }); return g; };
-function lamp(p, x, z, o = {}) {   // post lamp with base, lantern housing and optional point light
-  const g = stat(grp(p, x, groundH(x, z), z)), H = o.h ?? 2.6;
-  box(g, 0.24, 0.3, 0.24, '#2A2D33'); box(g, 0.12, H, 0.12, '#2A2D33');
-  box(g, 0.34, 0.06, 0.34, '#2A2D33', 0, H - 0.18, 0, { cast: false }); box(g, 0.4, 0.08, 0.4, '#2A2D33', 0, H + 0.34, 0, { cast: false });
+const hydrant = (p, x, z) => { const g = stat(grp(p, x, groundH(x, z), z)), P = { kind: 'paint' }; cyl(g, 0.14, 0.16, 0.55, '#D9342B', 0, 0, 0, { seg: 10, ...P }); ball(g, 0.15, '#D9342B', 0, 0.58, 0, { detail: 1, ...P }); cyl(g, 0.06, 0.06, 0.4, '#C02A22', 0, 0.38, 0, { rz: Math.PI / 2, seg: 8, cast: false, ...P }); return g; };   // v3.2 lacquered
+const trashcan = (p, x, z) => { const g = stat(grp(p, x, groundH(x, z), z)); cyl(g, 0.25, 0.22, 0.85, '#3A5A44', 0, 0, 0, { seg: 10, kind: 'paint', rough: 0.5 }); cyl(g, 0.28, 0.28, 0.06, '#2A2D33', 0, 0.85, 0, { seg: 10, cast: false, kind: 'metal' }); return g; };
+// --- v3.2 light without lights: soft beams (beamMat, beamSpot), light pools on the floor (lightPool) and halos round bulbs (bulbHalo) ---
+// Every look is a pure function of t: dust drifts with BEAMT, pools and halos follow the darkness (NIGHTK, set by applySky before the ticks run). CFG.pools: false = no pools / halos.
+const BEAMT = { value: 0 }, POOLK = { value: 0 }, POOLON = { value: 1 };
+tick(t => { BEAMT.value = t; POOLK.value = CFG.pools === false ? 0 : clamp((NIGHTK - 0.12) / 0.6) ** 1.3; });
+const _FOGU = () => THREE.UniformsUtils.clone(THREE.UniformsLib.fog), _TONE = '#include <tonemapping_fragment>\n  #include <colorspace_fragment>';
+// beamMat({ color, k, soft, dust, dustScale, len, floor }) — shared material for every light cone (searchlight, flashlight, headlights, UFO tractor beam, lighthouse, spot lights):
+//   additive and without depth write; brightest at the lamp and fading along the cone (cone uv: apex = start), soft at the silhouette and brightest through the core (view angle),
+//   with slow drifting dust in world space; fades out above the floor (world y; no hard line where a cone dips into the ground) and into the fog.
+//   k ≈ 2 × the old opacity. m.uniforms.uK.value animates the strength (e.g. switching on).
+function beamMat(o = {}) {
+  const m = new THREE.ShaderMaterial({ transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, fog: true,
+    uniforms: { ..._FOGU(), uC: { value: new THREE.Color(o.color ?? '#FFF2CF') }, uK: { value: o.k ?? 0.2 }, uSoft: { value: o.soft ?? 1.6 }, uDust: { value: o.dust ?? 0.45 }, uDS: { value: o.dustScale ?? 0.6 },
+      uPow: { value: o.len ?? 1.3 }, uFloor: { value: o.floor ?? -1e5 }, uFB: { value: o.floorBand ?? 0.5 }, uT: BEAMT },
+    vertexShader: `varying vec3 vBN, vBV, vBW; varying float vBS;
+      void main() { vBS = 1.0 - uv.y; vec4 wp = modelMatrix * vec4(position, 1.0); vBW = wp.xyz; vec4 mv = viewMatrix * wp; vBV = -mv.xyz; vBN = normalize(normalMatrix * normal); gl_Position = projectionMatrix * mv; }`,
+    fragmentShader: `uniform vec3 uC; uniform float uK, uSoft, uDust, uDS, uPow, uFloor, uFB, uT, fogNear, fogFar; varying vec3 vBN, vBV, vBW; varying float vBS;
+      float bh(vec3 p) { return fract(sin(dot(p, vec3(127.1, 311.7, 74.7))) * 43758.5453); }
+      float bn(vec3 p) { vec3 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
+        return mix(mix(mix(bh(i), bh(i + vec3(1.0, 0.0, 0.0)), f.x), mix(bh(i + vec3(0.0, 1.0, 0.0)), bh(i + vec3(1.0, 1.0, 0.0)), f.x), f.y),
+                   mix(mix(bh(i + vec3(0.0, 0.0, 1.0)), bh(i + vec3(1.0, 0.0, 1.0)), f.x), mix(bh(i + vec3(0.0, 1.0, 1.0)), bh(i + vec3(1.0, 1.0, 1.0)), f.x), f.y), f.z); }
+      void main() {
+        float e1 = clamp(abs(dot(normalize(vBN), normalize(vBV))), 0.0, 1.0), e = e1 * 0.22 + pow(e1, uSoft) * 0.78;   // bright core, faint wide edge … 0 at the silhouette
+        float a = pow(clamp(1.0 - vBS, 0.0, 1.0), uPow) * smoothstep(0.0, 0.02, vBS);        // strongest at the lamp, gone at the end
+        vec3 q = vBW * uDS; float d = bn(q + vec3(0.0, -uT * 0.35, uT * 0.2)) * 0.65 + bn(q * 3.1 + vec3(uT * 0.5, 0.0, -uT * 0.3)) * 0.35;
+        float k = uK * e * a * mix(1.0, 0.25 + 1.5 * smoothstep(0.22, 0.78, d), uDust) * smoothstep(uFloor, uFloor + uFB, vBW.y);
+        #ifdef USE_FOG
+          k *= 1.0 - smoothstep(fogNear, fogFar * 1.15, length(vBV));
+        #endif
+        gl_FragColor = vec4(uC * k, 1.0);
+        ${_TONE}
+      }` });
+  m.userData.beam = true; return m;
+}
+// soft round glow decal (light pool, beam spot): uv-radial falloff, additive, fog fade; uK: shared strength uniform ({ value }), uC colour
+function _glowMat(uK, color, o = {}) {
+  return new THREE.ShaderMaterial({ transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, fog: true, vertexColors: !!o.vc, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2,
+    uniforms: { ..._FOGU(), uK, uC: { value: new THREE.Color(color ?? '#FFFFFF') } },
+    vertexShader: `varying vec2 vGU; varying vec3 vGC; varying float vGD;
+      void main() { vGU = ${o.vc ? 'vec2(0.0)' : 'uv * 2.0 - 1.0'}; ${o.vc ? 'vGC = color;' : 'vGC = vec3(1.0);'} vec4 mv = modelViewMatrix * vec4(position, 1.0); vGD = -mv.z; gl_Position = projectionMatrix * mv; }`,
+    fragmentShader: `uniform float uK, fogNear, fogFar; uniform vec3 uC; varying vec2 vGU; varying vec3 vGC; varying float vGD;
+      void main() { ${o.vc ? 'float f = 1.0;' : 'float r = length(vGU); if (r > 1.0) discard; float f = pow(1.0 - r * r, 2.0) * 0.8 + exp(-r * r * 9.0) * 0.35;'}
+        float k = uK * f;
+        #ifdef USE_FOG
+          k *= 1.0 - smoothstep(fogNear, fogFar, vGD);
+        #endif
+        gl_FragColor = vec4(uC * vGC * k, 1.0);
+        ${_TONE}
+      }` });
+}
+// beamSpot(beam, { axis: [x,y,z] (local, apex → end), len, tan (radius / length of the cone), color, k, floor }) — where a cone meets the floor: a soft elliptic spot,
+//   placed after the figures are posed (late), hidden with the beam. Returns the spot mesh.
+function beamSpot(beam, o = {}) {
+  if (CFG.pools === false || o.spot === false) return null;
+  const U = { value: 0 }, sp = new THREE.Mesh(G('bspot', () => new THREE.PlaneGeometry(2, 2).rotateX(-Math.PI / 2)), _glowMat(U, o.color ?? '#FFF2CF')); sp.castShadow = sp.receiveShadow = false; sp.renderOrder = 2; sp.frustumCulled = false; world.add(dyn(sp));
+  const ax = new THREE.Vector3(...(o.axis ?? [0, -1, 0])), A = new THREE.Vector3(), B = new THREE.Vector3(), L = o.len ?? 1, tn = o.tan ?? 0.35, fl = o.floor;
+  late(() => { let vis = true; for (let q = beam; q; q = q.parent) if (!q.visible) { vis = false; break; } sp.visible = false; if (!vis) return;
+    beam.updateWorldMatrix(true, false); beam.localToWorld(A.set(0, 0, 0)); beam.localToWorld(B.copy(ax).multiplyScalar(L)); const len = B.distanceTo(A); B.sub(A).normalize();
+    const fy = fl ?? groundH(A.x, A.z) + 0.03; if (beam.material?.uniforms?.uFloor && o.floor == null) beam.material.uniforms.uFloor.value = fy - 0.03; if (B.y > -0.05 || A.y <= fy) return; const d = (A.y - fy) / -B.y; if (d > len * 1.15) return;
+    const r = Math.max(0.15, d * tn), st = Math.min(3.5, 1 / Math.max(0.28, -B.y)), fade = clamp((len * 1.15 - d) / (len * 0.4)) / (1 + d * d * 0.004);
+    sp.position.set(A.x + B.x * d, fy, A.z + B.z * d); sp.rotation.set(0, Math.atan2(B.x, B.z), 0); sp.scale.set(r, 1, r * st); U.value = (o.k ?? 0.35) * fade * (o.strength?.() ?? 1); sp.visible = U.value > 0.002; });
+  return sp;
+}
+// lightPool(p, x, y, z, { r, color, k, night, wall, ry, ignore }) — soft glow of a lamp on the floor below it (local to p): draped over curbs, steps and paving (built just before bake,
+//   so it follows whatever lies under the lamp; anything higher than 0.28 m — benches, cars, the lamp's own base (ignore: its group) — stays out), merged with all other static pools into one draw call. Follows the darkness
+//   (NIGHTK; night: false = always on, e.g. indoor lamps). wall: true = a vertical glow on a wall (local +z out of the wall). No real light.
+const POOLS = [], _poolMats = {};
+function lightPool(p, x, y, z, o = {}) {
+  if (CFG.pools === false || o.pool === false) return null;
+  const g = grp(p, x, y, z, o.ry ?? 0); POOLS.push({ g, r: o.r ?? 3, c: new THREE.Color(o.color ?? '#FFC880').multiplyScalar(o.k ?? 0.45), night: o.night !== false, wall: !!o.wall, ign: o.ignore });
+  if (POOLS.length === 1) DEFER.push(_buildPools); return g;
+}
+function _buildPools() {
+  world.updateMatrixWorld(true);
+  const cands = [], bb = new THREE.Box3(), rc = new THREE.Raycaster(), dn = new THREE.Vector3(0, -1, 0), P = new THREE.Vector3(), C = new THREE.Vector3(), inv = new THREE.Matrix4();
+  world.traverse(m => { if (!m.isMesh || m.isInstancedMesh || !m.visible || m.userData.pool) return; const mt = m.material; if (!mt || Array.isArray(mt) || mt.transparent || mt.isMeshBasicMaterial || mt.isShaderMaterial) return;
+    let st = false; for (let q = m; q && q !== world; q = q.parent) { if (q.userData.dyn || !q.visible) return; if (q.userData.stat) st = true; } if (!st) return;
+    const gm = m.geometry; if (!gm.boundingBox) gm.computeBoundingBox(); cands.push([m, gm.boundingBox.clone().applyMatrix4(m.matrixWorld)]); });
+  const RINGS = [0, 0.1, 0.22, 0.36, 0.52, 0.68, 0.84, 1], SEG = 28;
+  for (const L of POOLS) {
+    L.g.updateWorldMatrix(true, false); L.g.getWorldPosition(C); inv.copy(L.g.matrixWorld).invert(); const R = L.r, pos = [], col = [], uv = [], idx = [];
+    const fall = u => Math.pow(1 - u * u, 2.2) * 0.85 + Math.exp(-u * u * 10) * 0.25;
+    if (L.wall) { for (let i = 0; i < RINGS.length; i++) for (let j = 0; j < SEG; j++) { const u = RINGS[i], a = j / SEG * TAU, f = fall(u); pos.push(Math.cos(a) * u * R, Math.sin(a) * u * R, 0.02); col.push(L.c.r * f, L.c.g * f, L.c.b * f); } }
+    else { bb.min.set(C.x - R, C.y - 1.5, C.z - R); bb.max.set(C.x + R, C.y + 0.28, C.z + R); const own = m => { for (let q = m; q; q = q.parent) if (q === L.ign) return true; return false; }, list = cands.filter(([m, b]) => b.intersectsBox(bb) && !own(m)).map(([m]) => m);
+      for (let i = 0; i < RINGS.length; i++) for (let j = 0; j < SEG; j++) { const u = RINGS[i], a = j / SEG * TAU, wx = C.x + Math.cos(a) * u * R, wz = C.z + Math.sin(a) * u * R;
+        rc.set(P.set(wx, C.y + 0.28, wz), dn); rc.far = 1.8; const h = list.length ? rc.intersectObjects(list, false).find(q => q.face && q.face.normal.clone().transformDirection(q.object.matrixWorld).y > 0.5) : null;
+        const wy = Math.max(h ? h.point.y : -1e9, groundH(wx, wz)) + 0.018, f = fall(u); P.set(wx, wy, wz).applyMatrix4(inv); pos.push(P.x, P.y, P.z); col.push(L.c.r * f, L.c.g * f, L.c.b * f); } }
+    for (let i = 0; i < RINGS.length; i++) for (let j = 0; j < SEG; j++) uv.push(0.5 + 0.5 * RINGS[i] * Math.cos(j / SEG * TAU), 0.5 + 0.5 * RINGS[i] * Math.sin(j / SEG * TAU));
+    for (let i = 0; i < RINGS.length - 1; i++) for (let j = 0; j < SEG; j++) { const a = i * SEG + j, b = i * SEG + (j + 1) % SEG, c = a + SEG, d = b + SEG; if (L.wall) idx.push(a, d, b, a, c, d); else idx.push(a, b, d, a, d, c); }
+    const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); geo.setAttribute('color', new THREE.Float32BufferAttribute(col, 3)); geo.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2)); geo.setIndex(idx); geo.computeVertexNormals();
+    const mk = L.night ? 'n' : 'a', m = _poolMats[mk] ??= _glowMat(L.night ? POOLK : POOLON, '#FFFFFF', { vc: true });
+    const me = new THREE.Mesh(geo, m); me.castShadow = me.receiveShadow = false; me.renderOrder = 2; me.userData.pool = true; L.g.add(me); }
+}
+// bulbHalo(p, x, y, z, { size, color, k, night }) — small soft halo round a glowing bulb (camera-facing, drawn slightly in front of the bulb so lamp housings don't cut it);
+//   all static halos share one instanced draw call. Follows the darkness like the pools (night: false = always).
+const HALOS = [], _haloMats = {};
+function bulbHalo(p, x, y, z, o = {}) {
+  if (CFG.pools === false || o.halo === false) return null;
+  const a = grp(p, x, y, z); HALOS.push({ a, s: o.size ?? 0.6, c: new THREE.Color(o.color ?? '#FFD9A0').multiplyScalar(o.k ?? 0.55), night: o.night !== false });
+  if (HALOS.length === 1) DEFER.push(_buildHalos); return a;
+}
+function _haloMat(night) {
+  return _haloMats[night ? 'n' : 'a'] ??= new THREE.ShaderMaterial({ transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, fog: true, uniforms: { ..._FOGU(), uK: night ? POOLK : POOLON },
+    vertexShader: `varying vec2 vHU; varying vec3 vHC; varying float vHD;
+      void main() { vHU = position.xy * 2.0; vec3 c = instanceMatrix[3].xyz; float s = length(instanceMatrix[0].xyz);
+        vec4 mv = modelViewMatrix * vec4(c, 1.0); mv.xyz += normalize(-mv.xyz) * min(s * 0.5, max(0.0, -mv.z - 0.3)); mv.xy += position.xy * s * 2.0;
+        #ifdef USE_INSTANCING_COLOR
+          vHC = instanceColor;
+        #else
+          vHC = vec3(1.0);
+        #endif
+        vHD = -mv.z; gl_Position = projectionMatrix * mv; }`,
+    fragmentShader: `uniform float uK, fogNear, fogFar; varying vec2 vHU; varying vec3 vHC; varying float vHD;
+      void main() { float r = length(vHU); if (r > 1.0) discard; float k = uK * (pow(1.0 - r, 2.6) * 0.75 + exp(-r * r * 26.0) * 0.4);
+        #ifdef USE_FOG
+          k *= 1.0 - smoothstep(fogNear, fogFar, vHD);
+        #endif
+        gl_FragColor = vec4(vHC * k, 1.0);
+        ${_TONE}
+      }` });
+}
+function _buildHalos() {
+  world.updateMatrixWorld(true); const geo = G('halo', () => new THREE.PlaneGeometry(1, 1)), o3 = new THREE.Object3D(), P = new THREE.Vector3(), groups = new Map();
+  const isDyn = a => { for (let q = a; q && q !== world; q = q.parent) if (q.userData.dyn) return true; return false; };
+  const mk = (list, parent, local) => { const im = new THREE.InstancedMesh(geo, _haloMat(list[0].night), list.length); im.frustumCulled = false; im.castShadow = im.receiveShadow = false; im.renderOrder = 3;
+    list.forEach((h, i) => { if (local) P.set(0, 0, 0); else h.a.getWorldPosition(P); o3.position.copy(P); o3.scale.setScalar(h.s); o3.updateMatrix(); im.setMatrixAt(i, o3.matrix); im.setColorAt(i, h.c); });
+    parent.add(dyn(im)); };
+  for (const h of HALOS) { if (isDyn(h.a)) { mk([h], h.a, true); continue; } const k = h.night ? 'n' : 'a'; if (!groups.has(k)) groups.set(k, []); groups.get(k).push(h); }
+  for (const list of groups.values()) mk(list, world, false);
+}
+function lamp(p, x, z, o = {}) {   // post lamp with base, lantern housing and optional point light; v3.2: light pool on the ground + halo round the bulb at dusk / night (pool: false, halo: false)
+  const g = stat(grp(p, x, groundH(x, z), z)), H = o.h ?? 2.6, MT = { kind: 'metal' };
+  box(g, 0.24, 0.3, 0.24, '#2A2D33', 0, 0, 0, MT); box(g, 0.12, H, 0.12, '#2A2D33', 0, 0, 0, MT);
+  box(g, 0.34, 0.06, 0.34, '#2A2D33', 0, H - 0.18, 0, { cast: false, ...MT }); box(g, 0.4, 0.08, 0.4, '#2A2D33', 0, H + 0.34, 0, { cast: false, ...MT });
   ball(g, 0.22, '', 0, H + 0.1, 0, { mat: mat(o.color ?? '#FFD9A0', { basic: true, glow: 1.5 }), cast: false });
   for (const [sx, sz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) box(g, 0.025, 0.46, 0.025, '#2A2D33', sx * 0.17, H - 0.12, sz * 0.17, { cast: false });   // v2.40: lantern cage, finial, collar; the light flickers a little (flicker: 0 = steady)
   cone(g, 0.2, 0.2, '#2A2D33', 0, H + 0.42, 0, { seg: 4, ry: Math.PI / 4, cast: false }); box(g, 0.18, 0.06, 0.18, '#3A3D44', 0, H * 0.55, 0, { cast: false }); box(g, 0.3, 0.05, 0.3, '#3A3D44', 0, 0.3, 0, { cast: false });
   let light = null;
   if (o.light !== false) { light = new THREE.PointLight(o.color ?? '#FFC880', o.intensity ?? 22, o.dist ?? 14, 1.8); light.position.set(0, H + 0.1, 0); g.add(light);
     const I0 = light.intensity, fl = o.flicker ?? 0.05, ph = hash(x * 1.7 + z * 3.1) * 50; if (fl > 0) tick(t => { light.intensity = I0 * (1 + fl * (noise1(t * 7 + ph) + 0.5 * noise1(t * 19 + ph * 2))); }); }
-  return { g, light };
+  const pool = lightPool(g, 0, 0, 0, { r: o.poolR ?? H * 1.25, color: o.color ?? '#FFC880', k: light ? 0.3 : 0.5, pool: o.pool, ignore: g }), halo = bulbHalo(g, 0, H + 0.1, 0, { size: 0.55, color: o.color ?? '#FFD9A0', halo: o.halo });
+  return { g, light, pool, halo };
 }
 
 // --- cloth: flags, banners, laundry, curtains and capes that wave in the wind (vertex shader, flat-shaded folds; stronger in storms) ---
@@ -2593,15 +2754,17 @@ function flashlight(f, o = {}) {
   const t0 = o.t0 ?? 0, t1 = o.t1 ?? 1e9, fa = f.foreR, NC = { cast: false };
   const torch = dyn(grp(fa, 0, -0.42, 0.06)); cyl(torch, 0.05, 0.045, 0.28, '#2A2D33', 0, -0.14, 0, { seg: 8, ...NC }); ball(torch, 0.05, '', 0, -0.17, 0, { mat: mat('#FFF6D0', { basic: true, glow: 2 }), detail: 0, ...NC });
   const sp = new THREE.SpotLight(o.color ?? '#FFF1D0', 0, o.dist ?? 26, o.angle ?? 0.38, 0.55, 1.3); sp.position.set(0, -0.2, 0); torch.add(sp, sp.target); sp.target.position.set(0, -6, 0);
-  const beam = new THREE.Mesh(G('beam', () => new THREE.ConeGeometry(1, 1, 18, 1, true).translate(0, -0.5, 0)), mat('#FFF3C4', { basic: true, opacity: 0.08 })); beam.scale.set(2.2, 6, 2.2); beam.position.y = -0.2; torch.add(beam);
+  const beam = new THREE.Mesh(G('beam', () => new THREE.ConeGeometry(1, 1, 18, 1, true).translate(0, -0.5, 0)), beamMat({ color: '#FFF3C4', k: 0.24, dustScale: 1.6, len: 1.1 })); beam.scale.set(2.2, 6, 2.2); beam.position.y = -0.2; torch.add(beam);   // v3.2 beamMat + spot on the ground
+  beamSpot(beam, { axis: [0, -1, 0], tan: 0.36, color: '#FFF3C4', k: 0.5, spot: o.spot });
   f.fx.push((t, S) => { const e = env3(t, t0, t1, 0.3, 0.3); if (!e) return; S.ras = lerp(S.ras, -1.4, e); S.rae = lerp(S.rae, -0.12, e); S.raz = lerp(S.raz, -0.05, e); });
   tick(t => { const on = t >= t0 && t <= t1; torch.visible = on; sp.intensity = on ? (o.intensity ?? 80) * (o.flicker ? 0.85 + 0.15 * noise1(t * 20) : 1) : 0; beam.visible = on; });
   return { torch, light: sp };
 }
 function headlights(v, o = {}) {   // light cones (+ one real spot light unless light: false) and glowing lamps
   const g = v.g ?? v, t0 = o.t0 ?? 0, t1 = o.t1 ?? 1e9, L = v.len ?? 3.8, y = v.lampY ?? 0.62, NC = { cast: false }, cones = [];
-  for (const sx of [-1, 1]) { const c = new THREE.Mesh(G('hbeam', () => new THREE.ConeGeometry(1, 1, 14, 1, true).rotateX(Math.PI / 2).translate(0, 0, 0.5)), mat('#FFF6D8', { basic: true, opacity: 0.07 }));
-    c.position.set(sx * (v.lampX ?? 0.55), y, (v.front ?? L / 2) + 0.05); c.scale.set(1.6, 1.0, 9); c.rotation.x = 0.06; g.add(c); cones.push(c); }
+  const bm = beamMat({ color: '#FFF6D8', k: 0.22, dustScale: 1.2, len: 1.0, floorBand: 0.22 });   // v3.2: cones start narrow at the lamp (they were the wrong way round), beamMat, a spot on the road (spot: false = none)
+  for (const sx of [-1, 1]) { const c = new THREE.Mesh(G('hbeam2', () => new THREE.ConeGeometry(1, 1, 18, 1, true).rotateX(-Math.PI / 2).translate(0, 0, 0.5)), bm);
+    c.position.set(sx * (v.lampX ?? 0.55), y, (v.front ?? L / 2) + 0.05); c.scale.set(1.6, 1.0, 9); c.rotation.x = 0.09; g.add(c); cones.push(c); beamSpot(c, { axis: [0, 0, 1], tan: 0.16, color: '#FFEFCF', k: 0.2, spot: o.spot }); }
   let sp = null; if (o.light !== false) { sp = new THREE.SpotLight('#FFF1D0', 0, 32, 0.5, 0.6, 1.2); sp.position.set(0, y + 0.05, (v.front ?? L / 2) + 0.2); sp.target.position.set(0, 0, (v.front ?? L / 2) + 12); g.add(sp, sp.target); }
   tick(t => { const on = t >= t0 && t <= t1; cones.forEach(c => { c.visible = on; }); if (sp) sp.intensity = on ? (o.intensity ?? 140) : 0; if (v.headMat) v.headMat.emissiveIntensity = on ? 3 : 0.6; });
   return v;
@@ -3117,14 +3280,14 @@ function facadeKit(g, w, h, d, o = {}) {
 }
 const _crownM = () => { if (!_crownM.m) { const m = _crownM.m = mat('#2C3644', { em: '#FFE2A0', ei: 0, rough: 0.35, own: true }); m.userData.nightEi = 1.8; m.userData.dayEi = 0; NIGHTMATS.push(m); } return _crownM.m; };   // v2.40: crown strip: dark glass by day, glows with the darkness
 const _spandrel = c => mat(new THREE.Color(c).lerp(new THREE.Color('#1E2836'), 0.75).getHexString().replace(/^/, '#'), { rough: 0.45, metal: 0.1 });
-const _shopMs = new Map(), _shopM = share => { const k = share > 0 ? 1 : 0; if (!_shopMs.has(k)) { const m = mat('#33465C', { em: '#FFE3A8', ei: k ? 0.9 : 0, rough: 0.25, own: true }); if (k) { m.userData.nightEi = 0.9; m.userData.dayEi = 0.2; NIGHTMATS.push(m); } _shopMs.set(k, m); } return _shopMs.get(k); };
+const _shopMs = new Map(), _shopM = share => { const k = share > 0 ? 1 : 0; if (!_shopMs.has(k)) { const m = mat('#33465C', { em: '#FFE3A8', ei: k ? 0.9 : 0, rough: 0.25, own: true, kind: 'glass' }); if (k) { m.userData.nightEi = 0.9; m.userData.dayEi = 0.2; NIGHTMATS.push(m); } _shopMs.set(k, m); } return _shopMs.get(k); };
 function tower(p, x, z, o = {}) {   // city building with depth: style glass | brick | deco (default: varies by position); lit 0..2 = share of lit windows at night
   const w = o.w ?? 6, d = o.d ?? 6, h = o.h ?? 24, g = stat(grp(p, x, 0, z, o.ry ?? 0)), c0 = o.color ?? pick(['#8A94A6', '#A7B0BE', '#6F7A8C', '#C9C1B3', '#5E6B7D', '#B5A48C']), NC = { cast: false };
   const hv = k => hash(x * 13.1 + z * 7.7 + k * 1.9), style = o.style ?? (h < 18 && hv(5) < 0.55 ? 'brick' : ['glass', 'deco', 'brick', 'glass', 'deco'][Math.floor(hv(4) * 5)]);
   const c = style === 'brick' && !o.color ? pick2(['#9C4A36', '#A8583E', '#8A3E30', '#B7704E', '#7E5A48'], hv(6)) : c0, trim = style === 'brick' ? '#D9D2C4' : shade(c, 0.08), deep = shade(c, -0.1);
-  const share = clamp((o.lit ?? (SKY.some(([, n]) => (SKIES[n]?.nk ?? 0) >= 0.5) ? 0.8 : 0)) * 0.6), dark = mat(o.glass ?? '#26324A', { rough: 0.3, metal: 0.2 }), lit = mat(o.glass ?? '#26324A', { em: '#FFD27A', ei: 1.1, rough: 0.3 });   // v2.34: windows light up by themselves when the video has a dusk or night, and follow the darkness
+  const share = clamp((o.lit ?? (SKY.some(([, n]) => (SKIES[n]?.nk ?? 0) >= 0.5) ? 0.8 : 0)) * 0.6), dark = mat(o.glass ?? '#26324A', { rough: CFG.materials === false ? 0.3 : 0.14, metal: 0.2, kind: 'glass' }), lit = mat(o.glass ?? '#26324A', { em: '#FFD27A', ei: 1.1, rough: CFG.materials === false ? 0.3 : 0.14, kind: 'glass' });   // v3.2 kind glass: panes mirror the sky   // v2.34: windows light up by themselves when the video has a dusk or night, and follow the darkness
   if (!lit.userData.nightEi) { lit.userData.nightEi = 1.1; lit.userData.dayEi = 0.03; NIGHTMATS.push(lit); }
-  const lit2 = mat(o.glass ?? '#26324A', { em: '#D6E4FF', ei: 0.95, rough: 0.3 }); if (!lit2.userData.nightEi) { lit2.userData.nightEi = 0.95; lit2.userData.dayEi = 0.02; NIGHTMATS.push(lit2); }   // v2.40: some offices are lit cool white, most warm   // v2.40: by day a lit window is only a hint (0.1 made them look like brown boards)
+  const lit2 = mat(o.glass ?? '#26324A', { em: '#D6E4FF', ei: 0.95, rough: CFG.materials === false ? 0.3 : 0.14, kind: 'glass' }); if (!lit2.userData.nightEi) { lit2.userData.nightEi = 0.95; lit2.userData.dayEi = 0.02; NIGHTMATS.push(lit2); }   // v2.40: some offices are lit cool white, most warm   // v2.40: by day a lit window is only a hint (0.1 made them look like brown boards)
   box(g, w, h, d, c, 0, 0, 0, style === 'glass' ? {} : { surf: style === 'brick' ? 'brick' : 'concrete' });
   const floors = []; for (let y = 2.0; y < h - 1.6; y += 3.1) floors.push([y, rnd() < share]);   // one rnd per floor, as before (layout of old episodes unchanged)
   const nx = Math.max(2, Math.round(w / 2.2)), nz = Math.max(2, Math.round(d / 2.2)), win = (f, i, on) => on || (share > 0 && hv(f * 31 + i * 3 + 7) < share * 0.45) ? (hv(f * 7 + i * 13 + 3) < 0.28 ? lit2 : lit) : dark;
@@ -3155,7 +3318,7 @@ function tower(p, x, z, o = {}) {   // city building with depth: style glass | b
       if (sw > 0.5) { for (let i = 1; i < nm; i++) box(q, 0.06, 1.25, 0.04, fc, x0 + i * sw / nm, 0.35, 0.14, NC); box(q, sw, 0.06, 0.04, fc, (x0 + x1) / 2, 1.3, 0.14, NC); box(q, sw + 0.08, 0.1, 0.16, shade(c, -0.22), (x0 + x1) / 2, 0.25, 0.14, NC); } }
     if (fi === 0 || hv(fi + 20) < 0.5) { const ac = pick2(['#C0392B', '#2E86AB', '#3DA56A', '#E3B23C', '#8E5BD9', '#E07A3A'], hv(fi + 10)); box(q, W * 0.74, 0.08, 1.0, ac, 0, 1.95, 0.6, { rx: 0.25, ...NC }); box(q, W * 0.74, 0.22, 0.04, ac, 0, 1.78, 1.08, NC); }
     if (fi === 0) { box(q, 1.3, 1.8, 0.06, '#1E2024', W * 0.3, 0.14, 0.12, NC); box(q, 1.6, 0.14, 0.4, trim, W * 0.3, 2.0, 0.2, NC);
-      for (const s of [-1, 1]) { box(q, 0.54, 1.5, 0.03, '#3E5670', W * 0.3 + s * 0.3, 0.3, 0.155, { rough: 0.25, ...NC }); box(q, 0.035, 0.4, 0.05, '#C9CED6', W * 0.3 + s * 0.07, 0.85, 0.185, NC); box(q, 0.1, 1.86, 0.1, trim, W * 0.3 + s * 0.7, 0.14, 0.14, NC); }   // v2.40: glass double door with handles, frame, step, lamps that glow at night
+      for (const s of [-1, 1]) { box(q, 0.54, 1.5, 0.03, '#3E5670', W * 0.3 + s * 0.3, 0.3, 0.155, { rough: 0.25, kind: 'glass', ...NC }); box(q, 0.035, 0.4, 0.05, '#C9CED6', W * 0.3 + s * 0.07, 0.85, 0.185, NC); box(q, 0.1, 1.86, 0.1, trim, W * 0.3 + s * 0.7, 0.14, 0.14, NC); }   // v2.40: glass double door with handles, frame, step, lamps that glow at night
       box(q, 1.5, 0.08, 0.3, shade(c, -0.25), W * 0.3, 0.06, 0.26, NC);
       if (!NIGHTGLOW.length) NIGHTGLOW.push(mat('#FFF1C8', { em: '#FFE2A0', ei: 0, own: true })); { const lx = W * 0.3 - 0.86; box(q, 0.12, 0.24, 0.1, '#2A2D33', lx, 1.62, 0.15, NC); box(q, 0.08, 0.15, 0.06, '', lx, 1.66, 0.2, { mat: NIGHTGLOW[0], ...NC }); } }
   });
@@ -3202,8 +3365,10 @@ const NIGHTGLOW = [], LEAFSPOTS = [], nightGlowMat = () => NIGHTGLOW[0] ?? (NIGH
 function streetlight(p, x, z, ry = 0, o = {}) {   // tall pole, arm over the road (local +z), lamp head that lights up after dark
   const g = stat(grp(p, x, groundH(x, z), z, ry)), H = o.h ?? 6, NC = { cast: false };
   if (!NIGHTGLOW.length) NIGHTGLOW.push(mat('#FFF1C8', { em: '#FFE2A0', ei: 0, own: true }));
-  box(g, 0.3, 0.4, 0.3, '#2A2D33'); cyl(g, 0.07, 0.1, H, '#3A3D44', 0, 0, 0, { seg: 8 }); box(g, 0.08, 0.08, 1.9, '#3A3D44', 0, H - 0.1, 0.9, NC);
-  box(g, 0.34, 0.14, 0.7, '#2A2D33', 0, H - 0.2, 1.8, NC); box(g, 0.26, 0.04, 0.58, '', 0, H - 0.23, 1.8, { mat: NIGHTGLOW[0], ...NC });
+  const MT = { kind: 'metal' };   // v3.2: metal pole and head; a light pool on the street and a halo under the head after dark (o.pool / o.halo: false = off)
+  box(g, 0.3, 0.4, 0.3, '#2A2D33', 0, 0, 0, MT); cyl(g, 0.07, 0.1, H, '#3A3D44', 0, 0, 0, { seg: 8, ...MT }); box(g, 0.08, 0.08, 1.9, '#3A3D44', 0, H - 0.1, 0.9, { ...NC, ...MT });
+  box(g, 0.34, 0.14, 0.7, '#2A2D33', 0, H - 0.2, 1.8, { ...NC, ...MT }); box(g, 0.26, 0.04, 0.58, '', 0, H - 0.23, 1.8, { mat: NIGHTGLOW[0], ...NC });
+  lightPool(g, 0, 0, 1.8, { r: o.poolR ?? H * 0.85, color: '#FFD9A0', k: 0.5, pool: o.pool, ignore: g }); bulbHalo(g, 0, H - 0.3, 1.8, { size: 0.75, color: '#FFE2A8', k: 0.5, halo: o.halo });
   return g;
 }
 function planter(p, x, z, ry = 0, o = {}) {   // concrete flower trough with blooms and greenery
@@ -3454,7 +3619,7 @@ function city(o = {}) {   // nx × nz blocks of towers (taller in the centre), r
     if (o.props !== false) {
       const pv = shade(o.walk ?? '#9A9C9F', -0.08), ed2 = B / 2 - 0.55;
       if (CFG.surfaces === false) for (let k = 1; k < B / 1.6; k++) { box(world, 0.05, 0.01, B, pv, bx - B / 2 + k * 1.6, 0.14, bz, { cast: false, stat: true }); box(world, B, 0.01, 0.05, pv, bx, 0.14, bz - B / 2 + k * 1.6, { cast: false, stat: true }); }
-      for (const [sx, sz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) streetlight(world, bx + sx * ed, bz + sz * ed, sx < 0 ? -Math.PI / 2 : Math.PI / 2);
+      for (const [sx, sz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) streetlight(world, bx + sx * ed, bz + sz * ed, sx < 0 ? -Math.PI / 2 : Math.PI / 2, { pool: o.pools, halo: o.pools });   // v3.2 city({ pools: false }) = no light pools / halos
       const ts = n === 4 ? 0.6 : 1;
       for (const [sx, sz] of [[0, 1], [0, -1], [1, 0], [-1, 0]]) for (const u of [-0.27, 0.27]) streetTree(bx + (sx ? sx * (B / 2 - 0.75) : u * B), bz + (sz ? sz * (B / 2 - 0.75) : u * B), ts);
       planter(world, bx - 0.1 * B, bz + ed2, 0); planter(world, bx + ed2, bz, Math.PI / 2); planter(world, bx - ed2, bz + 0.1 * B, Math.PI / 2);
@@ -3672,7 +3837,7 @@ function submarine(p, o = {}) {   // submarine: hull with rounded ends, sail wit
   const prop = dyn(grp(b, 0, 0, -6.3)); for (let i = 0; i < 5; i++) { const bl = grp(prop); bl.rotation.z = i * TAU / 5; box(bl, 0.18, 0.7, 0.05, '#8A6A3A', 0, 0, 0, { rx: 0.4 }); } cyl(prop, 0.12, 0.12, 0.3, '#55595F', 0, -0.15, 0, { rx: Math.PI / 2, seg: 8 });
   const wins = []; for (const sx of [-1, 1]) for (let i = 0; i < 5; i++) wins.push([sx * 1.18, 0.15, 2.0 - i * 0.9, 0.06, 0.3, 0.3]);
   inst(b, wins, mat('#FFE6A0', { basic: true, glow: 1.0 }), G('porthole', () => new THREE.CylinderGeometry(0.5, 0.5, 1, 10).rotateZ(Math.PI / 2)));
-  if (o.light !== false) { const bm = new THREE.Mesh(G('subbeam', () => new THREE.ConeGeometry(1.1, 9, 18, 1, true).rotateX(-Math.PI / 2).translate(0, 0, 4.5)), new THREE.MeshBasicMaterial({ color: new THREE.Color('#FFF4C8'), transparent: true, opacity: 0.05, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide })); bm.position.set(0, -0.6, 4.4); bm.rotation.x = 0.12; b.add(bm); ball(b, 0.22, '', 0, -0.6, 4.35, { mat: mat('#FFF4C8', { basic: true, glow: 2 }), detail: 1, ...NC }); }
+  if (o.light !== false) { const bm = new THREE.Mesh(G('subbeam', () => new THREE.ConeGeometry(1.1, 9, 18, 1, true).rotateX(-Math.PI / 2).translate(0, 0, 4.5)), beamMat({ color: '#FFF4C8', k: 0.14, dustScale: 1.2, dust: 0.6 })); bm.position.set(0, -0.6, 4.4); bm.rotation.x = 0.12; b.add(bm); ball(b, 0.22, '', 0, -0.6, 4.35, { mat: mat('#FFF4C8', { basic: true, glow: 2 }), detail: 1, ...NC }); }
   fuse(b);
   tick(t => { prop.rotation.z = t * (o.spin ?? 6); });
   return { g };
@@ -3740,7 +3905,7 @@ function lighthouse(p, x, z, o = {}) {   // striped tower with a rotating light 
     cyl(g, 1.75, 1.75, 0.12, '#2A2D33', 0, h - 0.06, 0, { seg: 12 }); for (let i = 0; i < 12; i++) { const a = i / 12 * TAU; box(g, 0.05, 0.8, 0.05, '#2A2D33', Math.sin(a) * 1.68, h + 0.06, Math.cos(a) * 1.68, NC); }
     cyl(g, 1.72, 1.72, 0.05, '#2A2D33', 0, h + 0.84, 0, { seg: 12, ...NC }); for (let i = 0; i < 6; i++) { const a = i / 6 * TAU; box(g, 0.06, 1.6, 0.06, '#2A2D33', Math.sin(a) * 1.1, h, Math.cos(a) * 1.1, NC); } ball(g, 0.16, '#D9B65C', 0, h + 2.9, 0, { detail: 0, ...NC }); }
   cyl(g, 1.1, 1.1, 1.6, '#FFE9A8', 0, h, 0, { seg: 12, em: '#FFD27A', ei: 1.5 }); cone(g, 1.4, 1.2, '#2A2D33', 0, h + 1.6, 0, { seg: 12 });
-  const beam = dyn(grp(g, 0, h + 0.8, 0)), bm = new THREE.Mesh(new THREE.ConeGeometry(2.4, 36, 12, 1, true), new THREE.MeshBasicMaterial({ color: '#FFE9A8', transparent: true, opacity: o.beam ?? 0.05, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }));
+  const beam = dyn(grp(g, 0, h + 0.8, 0)), bm = new THREE.Mesh(G('lhbeam', () => new THREE.CylinderGeometry(0.6, 2.4, 36, 24, 1, true)), beamMat({ color: '#FFE9A8', k: (o.beam ?? 0.05) * 2.6, dustScale: 0.25, len: 1.1 }));   // v3.2 beamMat
   bm.rotation.z = Math.PI / 2; bm.position.x = 20; beam.add(bm); tick(t => { beam.rotation.y = t * 1.2; });
   return { g };
 }
@@ -3853,11 +4018,11 @@ function fuse(root) {   // merge every plain-coloured static mesh below root (no
     g.applyMatrix4(M4.multiplyMatrices(inv, o.matrixWorld));
     const n = g.attributes.position.count, ca = new Float32Array(n * 3), cc = mt.color; for (let i = 0; i < n; i++) { ca[3 * i] = cc.r; ca[3 * i + 1] = cc.g; ca[3 * i + 2] = cc.b; }
     g.setAttribute('color', new THREE.BufferAttribute(ca, 3));
-    const vk = [mt.flatShading, mt.roughness, mt.metalness, mt.side, o.castShadow].join('|'); g.computeBoundingBox(); const bs = g.boundingBox.getSize(new THREE.Vector3());
+    const vk = [mt.flatShading, mt.roughness, mt.metalness, mt.side, mt.userData.envK ?? 1, o.castShadow].join('|'); g.computeBoundingBox(); const bs = g.boundingBox.getSize(new THREE.Vector3());
     if (!B.has(vk)) B.set(vk, { mt, cast: o.castShadow, gs: [], ms: [] }); B.get(vk).gs.push(g); B.get(vk).ms.push([mt, bs.x * bs.y + bs.y * bs.z + bs.x * bs.z]); done.push(o);
   });
   for (const o of done) o.removeFromParent();
-  for (const [vk, b] of B) { const mk = vk.split('|').slice(0, 4).join('|'); let m = _fuseM.get(mk); if (!m) { m = new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: b.mt.flatShading, roughness: b.mt.roughness, metalness: b.mt.metalness, side: b.mt.side }); _fuseM.set(mk, m); }
+  for (const [vk, b] of B) { const mk = vk.split('|').slice(0, 5).join('|'); let m = _fuseM.get(mk); if (!m) { m = envK(new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: b.mt.flatShading, roughness: b.mt.roughness, metalness: b.mt.metalness, side: b.mt.side }), b.mt.userData.envK ?? 1); _fuseM.set(mk, m); }   // v3.2: env = material preset (kind)
     const me = new THREE.Mesh(mergeGeometries(b.gs), m); me.castShadow = b.cast; me.receiveShadow = true; me.userData.fmats = b.ms; root.add(me); }   // fmats: the paints that went into this mesh (debris and rubble take their colours from them)
   return root;
 }
@@ -3940,10 +4105,11 @@ function spaceship(p, o = {}) {   // kind: shuttle | capsule | fighter | ufo | c
     dyn(b); dyn(al);
     if (o.beam) { const B0 = o.beam.t0 ?? 0, B1 = o.beam.t1 ?? 1e9, L = o.beam.len ?? 8, bw = new THREE.Group(); bw.position.y = -1.1; g.add(bw);
       const cone = (r, m) => { const me = new THREE.Mesh(G('ufobeam' + r, () => new THREE.ConeGeometry(r, 1, 24, 1, true).translate(0, -0.5, 0)), m); bw.add(me); return me; };
-      const bm = new THREE.MeshBasicMaterial({ color: new THREE.Color('#8FFFE8').multiplyScalar(1.2), transparent: true, opacity: 0.2, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }), bc = bm.clone(); bc.opacity = 0.28; bc.color.set('#FFFFFF');
-      const c1 = cone(2.4 * s, bm), c2 = cone(0.9 * s, bc), rings = [0, 1, 2].map(() => { const r = new THREE.Mesh(G('beamring', () => new THREE.TorusGeometry(1, 0.05, 4, 32).rotateX(PI2)), bm); bw.add(r); return r; });
+      const bm = new THREE.MeshBasicMaterial({ color: new THREE.Color('#8FFFE8').multiplyScalar(1.2), transparent: true, opacity: 0.2, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide });   // rings
+      const c1 = cone(2.4 * s, beamMat({ color: '#9FFFEA', k: 0.55, soft: 1.1, len: 0.45, dust: 0.5, dustScale: 1.1, floorBand: 0.3 })), c2 = cone(0.9 * s, beamMat({ color: '#FFFFFF', k: 0.42, soft: 1.8, len: 0.7, dust: 0.3, dustScale: 1.6, floorBand: 0.3 })), rings = [0, 1, 2].map(() => { const r = new THREE.Mesh(G('beamring', () => new THREE.TorusGeometry(1, 0.05, 4, 32).rotateX(PI2)), bm); bw.add(r); return r; });
       tick(t => { const on = t >= B0 && t <= B1, e = on ? Math.min(1, (t - B0) / 0.4, (B1 - t) / 0.3) : 0; bw.visible = e > 0.01; const len = L * e; c1.scale.set(1, len, 1); c2.scale.set(1, len, 1);
-        rings.forEach((r, j) => { const q = ((t * 0.6 + j / 3) % 1), d = q * len; r.position.y = -d; r.scale.setScalar(Math.max(0.05, 2.4 * s * q)); r.material.opacity = 0.2; }); }); }
+        rings.forEach((r, j) => { const q = ((t * 0.6 + j / 3) % 1), d = q * len; r.position.y = -d; r.scale.setScalar(Math.max(0.05, 2.4 * s * q)); r.material.opacity = 0.2; }); });
+      beamSpot(c1, { axis: [0, -1, 0], tan: 2.4 * s / L, color: '#9FFFEA', k: 0.6 }); }   // v3.2: soft beam (beamMat) and a glow where it reaches the ground
   } else if (k === 'cruiser') {   // capital ship: wedge bow, plated hull with spine and trenches, side pods with window rows, turrets, greebles, bridge tower with domes and antennas, hangar glow, engine block with main + manoeuvring engines
     box(b, 3.6, 2.4, 16, c, 0, -1.2, -2); prism(b, 3.6, 9, 2.4, c, 0, 0, 6, { rx: PI2 }); box(b, 2.4, 0.5, 13, lt, 0, 1.2, 0);
     for (let i = 0; i < 12; i++) for (const sx of [-1, 1]) box(b, 0.52, 0.05, 1.2, shade(c, (hash(i * 3.7 + sx) - 0.5) * 0.1), sx * 1.5, 1.2, 5.2 - i * 1.25, NC);
@@ -6043,7 +6209,7 @@ FURN.microwave = (p, x, z, ry = 0) => { const g = fg(p, x, z, ry); box(g, 0.5, 0
 FURN.appliances = (p, x, z, ry = 0) => { const g = fg(p, x, z, ry);   // kettle, toaster, coffee maker, fruit bowl, cutting board + knife, utensil jar
   cyl(g, 0.08, 0.1, 0.22, '#C9CED4', -0.6, 0.96, 0, { seg: 10, metal: 0.5 }); box(g, 0.02, 0.1, 0.1, '#2A2A2A', -0.5, 1.04, 0, NCs);
   box(g, 0.26, 0.17, 0.16, '#C0392B', -0.25, 0.96, 0.02); box(g, 0.2, 0.01, 0.03, '#2A2A2A', -0.25, 1.13, 0.0, NCs); box(g, 0.24, 0.36, 0.26, '#2A2D33', 0.1, 0.96, -0.05); cyl(g, 0.06, 0.06, 0.1, '#E8E8E8', 0.1, 0.98, 0.07, { seg: 8, ...NCs });
-  cyl(g, 0.17, 0.11, 0.08, '#E8E2D4', 0.45, 0.96, 0.02, { seg: 12 }); for (let i = 0; i < 5; i++) ball(g, 0.055, ['#C0392B', '#E8C66A', '#7AB84A', '#F28A2A', '#C0392B'][i], 0.45 + Math.cos(i * 1.3) * 0.08, 1.05 + (i > 2 ? 0.04 : 0), 0.02 + Math.sin(i * 1.3) * 0.06, { detail: 0, ...NCs });
+  fruitBowl(g, 0.45, 0.96, 0.02, { fruit: ['apple', 'orange', 'apple', 'banana', 'apple'] });   // v3.2: real fruit in a glazed bowl (were five faceted balls)
   box(g, 0.36, 0.025, 0.24, '#C9A06A', 0.85, 0.96, 0.05); box(g, 0.22, 0.012, 0.035, '#C9CED4', 0.85, 0.99, 0.08, { ry: 0.3, ...NCs }); cyl(g, 0.06, 0.05, 0.14, '#E8E2D4', 1.1, 0.96, -0.1, { seg: 8 }); for (let i = 0; i < 3; i++) cyl(g, 0.01, 0.01, 0.18, '#5A3A22', 1.1 + (i - 1) * 0.02, 1.06, -0.1, { rz: (i - 1) * 0.15, seg: 4, ...NCs });
   return g; };
 FURN.chair = (p, x, z, ry = 0, o = {}) => { const g = fg(p, x, z, ry), c = o.color ?? '#8A5A34'; box(g, 0.44, 0.04, 0.42, c, 0, 0.44, 0); for (const sx of [-1, 1]) for (const sz of [-1, 1]) box(g, 0.04, 0.44, 0.04, shade(c, -0.1), sx * 0.19, 0, sz * 0.18);
@@ -8649,7 +8815,7 @@ function heli2(p, o = {}) {
     rotor(0, 1.6, 0.2, atk ? 6.2 : 5.4, atk ? 4 : 4); const tr = dyn(grp(B, 0.22, 1.0, -5.8)); for (let i = 0; i < 3; i++) { const q = grp(tr); q.rotation.x = i * TAU / 3; box(q, 0.04, 1.0, 0.16, '#2A2D33', 0, 0, 0, NC); } H.props.push({ pr: tr, rpm: 48, axis: 'x' });
     if (!atk) { for (const sx of [-1, 1]) { box(B, 0.08, 0.08, 3.2, '#2A2D33', sx * 0.9, -1.4, 0.3, NC); for (const zz of [-0.4, 1.0]) _seg(B, [sx * 0.65, -0.8, zz], [sx * 0.9, -1.38, zz], 0.04, 0.04, '#2A2D33', NC); } box(B, 0.04, 0.5, 0.9, '#1E2C40', 1.13, 0.1, 0.0, NC); box(B, 0.04, 0.5, 0.9, '#1E2C40', -1.13, 0.1, 0.0, NC); }
     else for (const [x, z] of [[-0.7, 1.0], [0.7, 1.0], [0, -4.9]]) { cyl(B, 0.04, 0.04, 0.6, metal, x, -1.3, z, NC); cyl(B, 0.22, 0.22, 0.18, '#1E1E1E', x, -1.3, z, { rz: Math.PI / 2, seg: 10 }); }
-    if (k === 'police') { box(B, 2.25, 0.18, 1.2, '#F2F2F2', 0, -0.15, 0.4, NC); const sp2 = dyn(grp(B, 0.6, -0.95, 1.2)); cyl(sp2, 0.18, 0.22, 0.3, metal, 0, 0, 0, { rx: Math.PI / 2, ...NC }); H.spot = sp2; const bm = new THREE.Mesh(G('hbeam', () => new THREE.ConeGeometry(3, 30, 16, 1, true).translate(0, -15, 0)), new THREE.MeshBasicMaterial({ color: '#FFF4C8', transparent: true, opacity: o.beam ?? 0.06, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide })); sp2.add(bm); }
+    if (k === 'police') { box(B, 2.25, 0.18, 1.2, '#F2F2F2', 0, -0.15, 0.4, NC); const sp2 = dyn(grp(B, 0.6, -0.95, 1.2)); cyl(sp2, 0.18, 0.22, 0.3, metal, 0, 0, 0, { rx: Math.PI / 2, ...NC }); H.spot = sp2; const bm = new THREE.Mesh(G('hlbeam', () => new THREE.ConeGeometry(3, 30, 20, 1, true).translate(0, -15, 0)), beamMat({ color: '#FFF4C8', k: (o.beam ?? 0.06) * 2.6, dustScale: 0.5 })); sp2.add(bm); beamSpot(bm, { axis: [0, -1, 0], len: 30, tan: 0.1, color: '#FFF4C8', k: 0.35 }); }   // v3.2 beamMat + spot
     if (k === 'news') box(B, 2.32, 0.4, 0.8, '#F2F2F2', 0, 0.0, -0.3, NC);
     if (k === 'rescue') { box(B, 2.32, 0.25, 2.0, '#F2F2F2', 0, -0.1, 0.2, NC); box(B, 0.4, 0.3, 0.6, metal, 1.2, 0.9, 0.6); const wn = dyn(grp(B, 1.45, 0.85, 0.6)); H.winch = wn; const cab = box(wn, 0.03, 1, 0.03, '#141414', 0, -1, 0, NC); H.cable = cab; cab.userData.keep = true; const hook = ball(wn, 0.12, '#E3B23C', 0, -1, 0, { detail: 0, ...NC }); H.hook = hook; hook.userData.keep = true; } }
   box(B, 0.08, 0.08, 0.08, '', 1.3, 0, 0, { mat: mat('#30FF60', { basic: true, glow: 1 }), ...NC }); box(B, 0.08, 0.08, 0.08, '', -1.3, 0, 0, { mat: mat('#FF3030', { basic: true, glow: 1 }), ...NC }); const bc = ball(B, 0.1, '', 0, k === 'transport' ? 2.2 : 1.1, -1, { mat: mat('#FF4030', { basic: true, glow: 2.5 }), detail: 0, ...NC });
@@ -9154,13 +9320,13 @@ const FD = (() => {
       return { r: 0.05, w: 0.1, h: 0.18 + cols.length * 0.07, inner: cols[0], drips: cols[0], top: 0.165 + (cols.length - 1) * 0.07 + 0.05 }; },
     popcorn: (b) => { cyl(b, 0.09, 0.065, 0.2, '#F4F1E8', 0, 0, 0, { seg: 16 }); for (let i = 0; i < 8; i++) { const a = i / 8 * TAU, q = box(b, 0.035, 0.2, 0.004, '#D8342A', Math.cos(a) * 0.079, 0, Math.sin(a) * 0.079, NC); q.rotation.y = -a + Math.PI / 2; q.rotation.z = 0.12 * 0; }
       for (let i = 0; i < 30; i++) { const a = hash(i) * TAU, r = 0.08 * Math.sqrt(hash(i * 3.1)); ball(b, 0.018, hash(i * 7) > 0.3 ? '#FFF6D8' : '#F7D27A', Math.cos(a) * r, 0.205 + 0.03 * hash(i * 5) * (1 - r / 0.09), Math.sin(a) * r, { detail: 0, ...NC }); } return { r: 0.09, w: 0.18, h: 0.24, inner: '#FFF6D8' }; },
-    apple: (b, o) => { _ell(b, o.color ?? '#D8283A', 0, 0.04, 0, 0.042, 0.04, 0.042, { detail: 2 }); cyl(b, 0.003, 0.004, 0.025, '#5A3A1E', 0, 0.075, 0, { rz: 0.2, seg: 5 }); box(b, 0.025, 0.003, 0.012, '#3E8E3A', 0.01, 0.092, 0, { rz: 0.5, ...NC }); return { r: 0.042, w: 0.084, h: 0.08, inner: '#F7EDC8' }; },
-    orange: (b) => { _ell(b, '#F28A1A', 0, 0.038, 0, 0.038, 0.037, 0.038, { detail: 2 }); box(b, 0.008, 0.004, 0.008, '#3E6A2A', 0, 0.074, 0, NC); return { r: 0.038, w: 0.076, h: 0.075, inner: '#F7B03A' }; },
+    apple: (b, o) => { mesh(b, G('appleL', () => new THREE.LatheGeometry([[0, 0.007], [0.012, 0.003], [0.026, 0.004], [0.037, 0.014], [0.043, 0.03], [0.044, 0.045], [0.04, 0.06], [0.031, 0.072], [0.019, 0.078], [0.009, 0.075], [0.002, 0.068], [0, 0.067]].map(([r, y]) => new THREE.Vector2(r, y)), 22)), mat(o.color ?? '#D8283A', FD.WAX), 0, 0, 0); /* v3.2: lathe apple with dimples, smooth and waxy (was a faceted ball) */ cyl(b, 0.003, 0.004, 0.025, '#5A3A1E', 0, 0.075, 0, { rz: 0.2, seg: 5 }); box(b, 0.025, 0.003, 0.012, '#3E8E3A', 0.01, 0.092, 0, { rz: 0.5, ...NC }); return { r: 0.042, w: 0.084, h: 0.08, inner: '#F7EDC8' }; },
+    orange: (b) => { _ell(b, '#F28A1A', 0, 0.038, 0, 0.038, 0.037, 0.038, { detail: 3, kind: 'plastic', rough: 0.62, env: 1.1 }); box(b, 0.008, 0.004, 0.008, '#3E6A2A', 0, 0.074, 0, NC); return { r: 0.038, w: 0.076, h: 0.075, inner: '#F7B03A' }; },
     banana: (b) => { const P = [[0, 0.03, -0.09], [0, 0.02, -0.04], [0, 0.017, 0.01], [0, 0.022, 0.06], [0, 0.04, 0.1]]; _chain(b, P, 0.017, 0.012, '#F7D23A'); cyl(b, 0.005, 0.006, 0.02, '#5A4A2A', 0, 0.035, -0.105, { rx: 0.9, seg: 5 }); return { r: 0.1, w: 0.04, h: 0.05, inner: '#FFF4C8' }; },
     watermelon: (b) => { const sh = [[0, 0], [0.11, -0.06], [-0.11, -0.06]]; void sh; const w = mesh(b, G('melon', () => new THREE.CylinderGeometry(0.12, 0.12, 0.035, 16, 1, false, Math.PI * 0.75, Math.PI * 0.5)), mat('#E8404A'), 0, 0.06, 0, { rx: Math.PI / 2 });
       const r = mesh(b, G('melonR', () => new THREE.CylinderGeometry(0.128, 0.128, 0.034, 16, 1, false, Math.PI * 0.75, Math.PI * 0.5)), mat('#3E8E3A'), 0, 0.06, -0.0005, { rx: Math.PI / 2 }); r.scale.set(1, 0.97, 1); void w;
       for (let i = 0; i < 6; i++) _ell(b, '#1E1E1E', (hash(i) - 0.5) * 0.08, 0.0 + 0.03 * hash(i * 2), 0.018, 0.005, 0.008, 0.002, NC); b.children.forEach(c => c.position.y += 0.0); return { r: 0.02, w: 0.18, h: 0.1, inner: '#E8404A' }; },
-    grapes: (b) => { for (let i = 0; i < 16; i++) { const l = Math.floor(i / 5), k = i % 5; ball(b, 0.017, '#7A3A8A', (k - 2) * 0.018 * (1 - l * 0.2), 0.12 - l * 0.026, (hash(i) - 0.5) * 0.02, { detail: 1 }); } cyl(b, 0.003, 0.003, 0.04, '#5A4A2A', 0, 0.12, 0, { seg: 4 }); return { r: 0.02, w: 0.1, h: 0.16, inner: '#C8E07A' }; },
+    grapes: (b) => { for (let i = 0; i < 16; i++) { const l = Math.floor(i / 5), k = i % 5; ball(b, 0.017, '#6E2E7E', (k - 2) * 0.018 * (1 - l * 0.2), 0.12 - l * 0.026, (hash(i) - 0.5) * 0.02, { detail: 2, ...FD.WAX }); } cyl(b, 0.003, 0.003, 0.04, '#5A4A2A', 0, 0.12, 0, { seg: 4 }); return { r: 0.02, w: 0.1, h: 0.16, inner: '#C8E07A' }; },
     carrot: (b) => { cone(b, 0.022, 0.16, '#F28A1A', 0, 0, 0, { rx: Math.PI / 2, seg: 8 }); for (let i = 0; i < 3; i++) box(b, 0.006, 0.05, 0.006, '#3E8E3A', (i - 1) * 0.008, 0.0, -0.09, { rx: -1.1 + i * 0.15, ...NC }); return { r: 0.08, w: 0.045, h: 0.045, inner: '#F7B03A' }; },
     strawberry: (b) => { cone(b, 0.022, 0.04, '#D8283A', 0, 0, 0, { rx: Math.PI, seg: 8 }); for (let i = 0; i < 5; i++) box(b, 0.012, 0.002, 0.004, '#3E8E3A', Math.cos(i * 1.25) * 0.012, 0.04, Math.sin(i * 1.25) * 0.012, { ry: -i * 1.25, ...NC }); return { r: 0.022, w: 0.044, h: 0.045, inner: '#F7A0A0' }; },
     bread: (b) => { const l = _ell(b, '#C88A3E', 0, 0.045, 0, 0.065, 0.05, 0.12, { detail: 2 }); void l; for (let i = 0; i < 3; i++) box(b, 0.05, 0.004, 0.012, '#E8C48A', 0, 0.093, -0.06 + i * 0.06, { ry: 0.6, ...NC }); return { r: 0.12, w: 0.13, h: 0.1, inner: '#F4E2B8' }; },
@@ -9198,12 +9364,20 @@ const FD = (() => {
     bone: (b) => { cyl(b, 0.012, 0.012, 0.13, '#F4F1E8', 0, 0.015 - 0.065, 0, { rx: Math.PI / 2, seg: 6 });   /* v2.40: shaft between its knobs */ for (const z of [-0.065, 0.065]) for (const x of [-0.012, 0.012]) ball(b, 0.016, '#F4F1E8', x, 0.015, z, { detail: 0 }); return { r: 0.08, w: 0.05, h: 0.03, inner: '#F4F1E8' }; },
     fish: (b) => { _ell(b, '#8AA8B8', 0, 0.02, 0, 0.025, 0.022, 0.07); cone(b, 0.025, 0.035, '#8AA8B8', 0, 0.02, -0.08, { rx: -Math.PI / 2, seg: 4 }); return { r: 0.07, w: 0.05, h: 0.045, inner: '#F4C8B8' }; },
     pie: (b) => { cyl(b, 0.12, 0.1, 0.035, '#D9A45A', 0, 0, 0, { seg: 18 }); const c = ball(b, 0.12, '#FFFFFF', 0, 0.035, 0, { detail: 2 }); c.scale.set(1, 0.45, 1); ball(b, 0.015, '#D8283A', 0, 0.09, 0, { detail: 1 }); return { r: 0.12, w: 0.24, h: 0.09, inner: '#FFFFFF', splat: '#FFFFFF' }; },
-    tomato: (b) => { _ell(b, '#E03A2A', 0, 0.035, 0, 0.038, 0.034, 0.038, { detail: 2 }); for (let i = 0; i < 5; i++) box(b, 0.014, 0.003, 0.005, '#3E8E3A', Math.cos(i * 1.25) * 0.008, 0.068, Math.sin(i * 1.25) * 0.008, { ry: -i * 1.25, ...NC }); return { r: 0.038, w: 0.076, h: 0.07, inner: '#F27A6A', splat: '#E03A2A' }; },
+    tomato: (b) => { _ell(b, '#E03A2A', 0, 0.035, 0, 0.038, 0.034, 0.038, { detail: 3, kind: 'plastic', rough: 0.3 }); for (let i = 0; i < 5; i++) box(b, 0.014, 0.003, 0.005, '#3E8E3A', Math.cos(i * 1.25) * 0.008, 0.068, Math.sin(i * 1.25) * 0.008, { ry: -i * 1.25, ...NC }); return { r: 0.038, w: 0.076, h: 0.07, inner: '#F27A6A', splat: '#E03A2A' }; },
     spaghetti: (b) => { cyl(b, 0.11, 0.07, 0.04, '#F8F6F2', 0, 0, 0, { seg: 18 }); for (let i = 0; i < 9; i++) mesh(b, G('spag', () => new THREE.TorusGeometry(0.035, 0.005, 4, 12)), mat('#F2D27A'), (hash(i) - 0.5) * 0.08, 0.045 + 0.01 * hash(i * 2), (hash(i * 3) - 0.5) * 0.08, { rx: hash(i * 4) * 3, ry: hash(i * 5) * 3, cast: false });
       const s = ball(b, 0.05, '#C8402A', 0, 0.06, 0, { detail: 1 }); s.scale.set(1, 0.35, 1); for (let i = 0; i < 3; i++) ball(b, 0.016, '#7A3A22', (i - 1) * 0.03, 0.075, 0.01, { detail: 1 }); return { r: 0.11, w: 0.22, h: 0.08, inner: '#F2D27A', splat: '#C8402A' }; },
   };
-  return { B, NC };
+  return { B, NC, WAX: { kind: 'plastic', rough: 0.45, env: 1.3 } };   // v3.2 WAX: smooth, a little waxy sheen (apples, grapes)
 })();
+// fruitBowl(p, x, y, z, { color, fruit: [kind…], scale }) — glazed ceramic bowl heaped with fruit (apples, orange, banana, grapes); static (baked), y = table top
+function fruitBowl(p, x, y, z, o = {}) {
+  const g = grp(p ?? world, x, y, z, o.ry ?? 0), s = o.scale ?? 1; g.scale.setScalar(s);
+  mesh(g, G('fbowl', () => new THREE.LatheGeometry([[0, 0.004], [0.06, 0.004], [0.066, 0], [0.074, 0.006], [0.112, 0.04], [0.14, 0.074], [0.146, 0.08], [0.14, 0.082], [0.132, 0.076], [0.104, 0.046], [0.06, 0.024], [0, 0.022]].map(([r, h]) => new THREE.Vector2(r, h)), 28)), mat(o.color ?? '#EDE6DA', { kind: 'ceramic' }), 0, 0, 0);
+  const F = o.fruit ?? ['apple', 'orange', 'apple', 'banana', 'grapes', 'apple'], spots = [[-0.05, 0.022, 0.03, 0], [0.05, 0.022, 0.035, 1], [0.0, 0.022, -0.055, 2], [0.0, 0.06, 0.0, 0.4], [-0.07, 0.035, -0.03, 2.2], [0.06, 0.05, -0.04, 1.3]];
+  F.forEach((k, i) => { const [fx, fy, fz, ry] = spots[i % spots.length]; food(g, k, fx, fy, fz, { still: true, ry, color: k === 'apple' && i === 2 ? '#8CB83A' : undefined }); });
+  return g;
+}
 // food(p, kind, x, y, z, { state: 'fresh' | 'steam' | 'burnt' | 'frozen' | 'moldy' | 'melting' | 'bitten', scale, ry, plate, color, t0 }) → F with F.g, F.bite(i, t) …
 function food(p, kind, x = 0, y = 0, z = 0, o = {}) {
   const mk = FD.B[kind] ?? (console.warn('food: unknown kind ' + kind), FD.B.apple), g0 = grp(p ?? world, x, y, z, o.ry ?? 0), g = o.still ? g0 : dyn(g0), sc = o.scale ?? 1;
@@ -10175,7 +10349,7 @@ function prison(p, x, z, o = {}) {
   const tw = grp(g, 15, 0, fz); for (const [sx, sz] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) box(tw, 0.25, 7, 0.25, '#7A7E84', sx * 1.2, 0, sz * 1.2); box(tw, 3.2, 2.2, 3.2, '#B8B4AA', 0, 7, 0, { surf: 'concrete' }); box(tw, 4.4, 0.12, 4.4, '#7A7E84', 0, 6.9, 0); for (const r of [0, 1, 2, 3]) { const rq = grp(tw, 0, 7, 0, r * Math.PI / 2); box(rq, 4.4, 0.05, 0.05, '#5A5E64', 0, 1.0, 2.17, NC); box(rq, 4.4, 0.05, 0.05, '#5A5E64', 0, 0.5, 2.17, NC); for (let k = 0; k < 5; k++) box(rq, 0.05, 1.0, 0.05, '#5A5E64', -2.17 + k * 1.085, 0, 2.17, NC); }
   for (let k = 0; k < 14; k++) box(tw, 0.5, 0.04, 0.05, '#7A7E84', 0, 0.45 + k * 0.48, 1.33, NC); for (const sx of [-1, 1]) box(tw, 0.05, 7, 0.05, '#7A7E84', sx * 0.27, 0, 1.33, NC); for (const [a, b] of [[-1, 1], [1, -1]]) box(tw, 0.08, 3.6, 0.08, '#6A6E74', 0, 1.6, a * 1.2, { rz: b * 0.72, ...NC });   // ladder, cross braces
   for (const r of [0, 1, 2, 3]) box(tw, 2.6, 0.9, 0.05, '#2A3A4A', 0, 8, 0, { ry: r * Math.PI / 2, cast: false }).position.set(Math.sin(r * Math.PI / 2) * 1.62, 8.45, Math.cos(r * Math.PI / 2) * 1.62); prism(tw, 3.6, 1, 3.6, '#5A5E64', 0, 9.2, 0);
-  const sp = dyn(grp(world, x + 15, groundH(x, z) + 8.5, z + fz)); const bm = new THREE.Mesh(G('pbeam', () => new THREE.ConeGeometry(2.5, 18, 16, 1, true).translate(0, -9, 0)), new THREE.MeshBasicMaterial({ color: '#FFF4C8', transparent: true, opacity: 0.16, depthWrite: false, side: THREE.DoubleSide })); sp.add(bm);
+  const sp = dyn(grp(world, x + 15, groundH(x, z) + 8.5, z + fz)); const bm = new THREE.Mesh(G('pbeam', () => new THREE.ConeGeometry(2.5, 18, 20, 1, true).translate(0, -9, 0)), beamMat({ color: '#FFF4C8', k: 0.34, dustScale: 0.6 })); sp.add(bm); beamSpot(bm, { axis: [0, -1, 0], len: 18, tan: 0.14, color: '#FFF4C8', k: 0.4 });   // v3.2 beamMat + spot
   tick(t => { sp.rotation.set(-0.6 + 0.1 * Math.sin(t * 0.7), 0, 0.5 * Math.sin(t * 0.5)); bm.visible = o.night !== false; });
   return P;
 }
@@ -10268,7 +10442,7 @@ function balloons(p, x, y, z, o = {}) {
 function discoBall(p, x, y, z, o = {}) {
   const g = dyn(grp(p ?? world, x, y, z)), NC = { cast: false }; box(g, 0.02, 1, 0.02, '#9A9EA4', 0, 0.2, 0); const b = dyn(grp(g)); ball(b, 0.32, '#C9CDD3', 0, 0, 0, { detail: 2, metal: 1, rough: 0.15 });
   for (let i = 0; i < 40; i++) { const v = v3(hash(i) - 0.5, hash(i * 3) - 0.5, hash(i * 5) - 0.5).normalize().multiplyScalar(0.325); box(b, 0.06, 0.06, 0.005, '', v.x, v.y - 0.03, v.z, { mat: mat(['#FFFFFF', '#AEE8FF', '#FFD8F8'][i % 3], { basic: true, glow: 1.5 }), ...NC }).lookAt(v.clone().multiplyScalar(3)); }
-  const beams = []; for (let i = 0; i < 6; i++) { const bm = new THREE.Mesh(G('dbeam', () => new THREE.ConeGeometry(0.4, 9, 10, 1, true).translate(0, -4.5, 0)), new THREE.MeshBasicMaterial({ color: ['#FF4AA8', '#4AA8FF', '#7AFF6A', '#FFE14A', '#B87AFF', '#FF8A3A'][i], transparent: true, opacity: 0.18, depthWrite: false, side: THREE.DoubleSide })); b.add(bm); beams.push(bm); }
+  const beams = []; for (let i = 0; i < 6; i++) { const bm = new THREE.Mesh(G('dbeam', () => new THREE.ConeGeometry(0.4, 9, 14, 1, true).translate(0, -4.5, 0)), beamMat({ color: ['#FF4AA8', '#4AA8FF', '#7AFF6A', '#FFE14A', '#B87AFF', '#FF8A3A'][i], k: 0.42, soft: 1.2, dustScale: 1.5, len: 1.0 })); b.add(bm); beams.push(bm); }   // v3.2 beamMat
   tick(t => { b.rotation.y = t * 0.8; beams.forEach((bm, i) => bm.rotation.set(0.9 + 0.3 * Math.sin(t + i), i * TAU / 6, 0)); g.visible = t >= (o.t0 ?? 0); });
   return { g };
 }
@@ -10641,18 +10815,18 @@ function flak(o = {}) {
     tracerPool(shots, { color: T.color ?? '#FF8A40', len: 4, w: 0.12, pool: 40 }); }
   return { bursts: B };
 }
-// searchlight(p, x, z, { t0, t1, az: deg | t => deg, el: deg | t => deg, len: 380, r: 9, color, opacity: 0.14 }) — anti-aircraft searchlight with a soft beam (no real light)
+// searchlight(p, x, z, { t0, t1, az: deg | t => deg, el: deg | t => deg, len: 380, r: 9, color, opacity: 0.1, soft: 7, dust: 0.7 }) — anti-aircraft searchlight with a soft beam (no real light)
+//   v3.2: the beam starts at the lens, uses beamMat (bright core, soft edges, drifting haze, fades into the fog) instead of a flat additive cone (read as a white plank)
 function searchlight(p, x, z, o = {}) {
   const y = o.y ?? groundH(x, z), g = stat(grp(p, x, y, z)); cyl(g, 0.55, 0.65, 0.5, '#3C3F38', 0, 0, 0, { seg: 12 }); for (const s of [-1, 1]) box(g, 0.16, 1.3, 0.4, '#3C3F38', s * 0.62, 0.4, 0);
   const head = dyn(grp(p, x, y + 1.5, z)); head.rotation.order = 'YXZ'; cyl(head, 0.62, 0.62, 1.1, '#43473F', 0, -0.55, 0, { rx: Math.PI / 2, seg: 16 });
   cyl(head, 0.56, 0.56, 0.02, '', 0, -0.01, 0.56, { rx: Math.PI / 2, seg: 16, mat: mat('#FFF6D8', { basic: true, glow: 2 }) });
-  const L = o.len ?? 380, R = o.r ?? 9, cg = new THREE.ConeGeometry(R, L, 24, 1, true); cg.translate(0, -L / 2, 0); cg.rotateX(-Math.PI / 2);
-  const cp = cg.attributes.position, cc = []; for (let i = 0; i < cp.count; i++) { const k = (1 - clamp(cp.getZ(i) / L)) ** 2; cc.push(k, k, k); } cg.setAttribute('color', new THREE.Float32BufferAttribute(cc, 3));
-  const bm = new THREE.MeshBasicMaterial({ color: o.color ?? '#FFF2CF', vertexColors: true, transparent: true, opacity: o.opacity ?? 0.1, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide });
+  const L = o.len ?? 380, R = o.r ?? 9, cg = G(`slbeam|${L}|${R}`, () => new THREE.CylinderGeometry(0.5, R, L, 32, 1, true).translate(0, -L / 2, 0).rotateX(-Math.PI / 2));   // lens (r 0.5) → R at the far end, along +z
+  const K0 = (o.opacity ?? 0.1) * 1.8, bm = beamMat({ color: o.color ?? '#FFF2CF', k: K0, soft: o.soft ?? 7, dust: o.dust ?? 0.7, dustScale: 0.06, len: 1.6 });
   const beam = new THREE.Mesh(cg, bm); beam.castShadow = false; beam.frustumCulled = false; beam.position.z = 0.56; head.add(beam);
   const F = v => typeof v === 'function' ? v : () => v ?? 0, az = F(o.az ?? (t => 20 * Math.sin(t * 0.35 + x))), el = F(o.el ?? (t => 55 + 12 * Math.sin(t * 0.27 + z))), t0 = o.t0 ?? -1, t1 = o.t1 ?? 1e9;
-  tick(t => { head.rotation.y = az(t) * Math.PI / 180; head.rotation.x = -el(t) * Math.PI / 180; const k = clamp((t - t0) / 0.4) * (1 - clamp((t - t1) / 0.4)); beam.visible = k > 0; bm.opacity = (o.opacity ?? 0.1) * k; });
-  return { g, head };
+  tick(t => { head.rotation.y = az(t) * Math.PI / 180; head.rotation.x = -el(t) * Math.PI / 180; const k = clamp((t - t0) / 0.4) * (1 - clamp((t - t1) / 0.4)); beam.visible = k > 0; bm.uniforms.uK.value = K0 * k; });
+  return { g, head, beam };
 }
 
 // --- air: barrage balloons ---------------------------------------------------------------------------------
@@ -11668,8 +11842,8 @@ function bake() {
       if (!_SPM.has(mt)) { const c = mt.clone(); _SPM.set(mt, surfFx(c, mt.userData.surf, { sp: true, indoor: mt.userData.surfIn })); if (mt.userData.nightEi) NIGHTMATS.push(c); }
       bm = _SPM.get(mt); }   // plain colours become vertex colours: hundreds of props in a handful of draw calls
     if (plain) { const cc = mt.color, n = g.attributes.position.count, ca = new Float32Array(n * 3); for (let k = 0; k < n; k++) { ca[3 * k] = cc.r; ca[3 * k + 1] = cc.g; ca[3 * k + 2] = cc.b; } g.setAttribute('color', new THREE.BufferAttribute(ca, 3));
-      const vk = [mt.flatShading, mt.roughness, mt.metalness, mt.side, mt.userData.wind ?? ''].join('|'); bm = _vcm.get(vk);
-      if (!bm) { bm = new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: mt.flatShading, roughness: mt.roughness, metalness: mt.metalness, side: mt.side }); if (mt.userData.wind) windify(bm, mt.userData.wind); _vcm.set(vk, bm); } }
+      const vk = [mt.flatShading, mt.roughness, mt.metalness, mt.side, mt.userData.wind ?? '', mt.userData.envK ?? 1].join('|'); bm = _vcm.get(vk);
+      if (!bm) { bm = new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: mt.flatShading, roughness: mt.roughness, metalness: mt.metalness, side: mt.side }); if (mt.userData.wind) windify(bm, mt.userData.wind); envK(bm, mt.userData.envK ?? 1); _vcm.set(vk, bm); } }
     const key = bm.uuid + (o.castShadow ? '|c' : '|') + (o.receiveShadow ? 'r' : '');
     if (!buckets.has(key)) buckets.set(key, { m: bm, cast: o.castShadow, recv: o.receiveShadow, gs: [] });
     buckets.get(key).gs.push(g); done.push(o);
