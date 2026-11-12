@@ -1798,10 +1798,10 @@ function mouthDraw(FC, V, lip, s) {
   for (const k of ['position', 'normal', 'color']) A[k].needsUpdate = true; FC.geo.setDrawRange(0, n);
 }
 // what happens in the video, for faces that react on their own in close-ups (built once, scene time): loud hits, explosions, shakes, big flashes, counters that jump
-let FACEEV = null;
+let FACEEV = null, FACEEVK = '';
 const FLOUD = { explosion: 1, blast: 0.9, cannon: 0.9, thunder: 0.8, roar: 0.8, crash: 0.7, missile: 0.6, impact: 0.5, alarm: 0.4, shotgun: 0.5, gunshot: 0.5, crack: 0.3 };
 function faceEvents() {
-  if (FACEEV) return FACEEV; const E = [];
+  const key = (AUDIO.hits?.length ?? 0) + '|' + SHAKES.length + '|' + FLASHES.length + '|' + STATS.length; if (FACEEV && key === FACEEVK) return FACEEV; FACEEVK = key; const E = [];   // rebuilt if anything was added later (same lists → same reactions in every page)
   for (const h of AUDIO.hits ?? []) { const k = (FLOUD[h?.k] ?? 0) * Math.min(1.2, h.v ?? 1); if (k >= 0.45 && h.t >= 0) E.push({ t: ST(h.t), s: Math.min(1, k), k: 'bang' }); }
   for (const s of SHAKES) { const k = Math.min(1, (s.amp ?? 0.3) * 2.2); if (k >= 0.45 && s.t >= 0) E.push({ t: ST(s.t), s: k, k: 'bang' }); }
   for (const fl of FLASHES) if ((fl.a ?? 0.5) >= 0.55 && fl.t >= 0) E.push({ t: ST(fl.t), s: 0.5, k: 'bang' });
