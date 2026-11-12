@@ -3376,12 +3376,26 @@ function shark(p, o = {}) {   // shark (or o.kind 'whale'): segmented body that 
   tick(t => { const w = Math.sin(t * (wh ? 1.3 : 3.2) + (o.ph ?? 0)); if (wh) { tail.rotation.x = 0.12 * w; tail2.rotation.x = 0.25 * Math.sin(t * 1.3 - 0.8); } else { mid.rotation.y = 0.05 * w; tail.rotation.y = 0.18 * Math.sin(t * 3.2 - 0.6); tail2.rotation.y = 0.32 * Math.sin(t * 3.2 - 1.3); head.rotation.y = -0.06 * w; } });
   return { g };
 }
-function jelly(p, o = {}) {   // jellyfish: glowing translucent bell that pulses, trailing tentacles; drifts up and down
-  const c = o.color ?? '#F59FE0', g = dyn(grp(p, o.x ?? 0, o.y ?? 3, o.z ?? 0)), b = grp(g); b.scale.setScalar(o.scale ?? 1);
+function jelly(p, o = {}) {   // jellyfish: glowing translucent bell that pulses, frilly oral arms and long trailing tentacles (one mesh, rebuilt from t); drifts up with each pulse
+  const c = o.color ?? '#F59FE0', g = dyn(grp(p, o.x ?? 0, o.y ?? 3, o.z ?? 0)), b = grp(g); b.scale.setScalar(o.scale ?? 1); const sd = hash((o.ph ?? 0) * 7.1 + (o.x ?? 0) * 0.37 + (o.z ?? 0) * 0.91);
+  // v2.40.x: dome with a scalloped rim and a glowing four-leaf core; 12 tentacles + 4 oral arms as tapered tubes that wave and trail (were 8 straight sticks)
   const bell = ball(b, 0.45, '', 0, 0, 0, { mat: mat(c, { opacity: 0.55, em: c, ei: 0.6, flat: false }), detail: 2, cast: false }); bell.scale.set(1, 0.7, 1);
-  const T = []; for (let i = 0; i < 8; i++) { const a = i * TAU / 8, tg = dyn(grp(b, Math.cos(a) * 0.3, -0.15, Math.sin(a) * 0.3)); box(tg, 0.025, 0.9 + hash(i) * 0.6, 0.025, '', 0, -(0.9 + hash(i) * 0.6), 0, { mat: mat(c, { opacity: 0.5, em: c, ei: 0.4 }), cast: false }); T.push([tg, a]); }
-  const y0 = o.y ?? 3; tick(t => { const ph = t * 1.6 + (o.ph ?? 0), k = 0.5 + 0.5 * Math.sin(ph); bell.scale.set(1 - 0.12 * k, 0.7 + 0.1 * k, 1 - 0.12 * k); g.position.y = y0 + 0.25 * Math.sin(ph - 1) + 0.04 * t; T.forEach(([tg, a], i) => { tg.rotation.x = 0.25 * Math.sin(ph - 1.2 + i) * Math.cos(a); tg.rotation.z = 0.25 * Math.sin(ph - 1.2 + i) * Math.sin(a); }); });
-  return { g };
+  const rim = dyn(grp(b, 0, -0.04, 0)); for (let i = 0; i < 16; i++) { const a = i / 16 * TAU; ball(rim, 0.06, '', Math.cos(a) * 0.42, 0, Math.sin(a) * 0.42, { mat: mat(c, { opacity: 0.45, em: c, ei: 0.5 }), detail: 0, cast: false }).scale.set(1, 0.45, 1); }
+  for (let i = 0; i < 4; i++) { const a = i / 4 * TAU + 0.4; ball(b, 0.09, '', Math.cos(a) * 0.12, 0.05, Math.sin(a) * 0.12, { mat: mat(shade(c, 0.15), { opacity: 0.7, em: shade(c, 0.2), ei: 1.0 }), detail: 1, cast: false }).scale.set(1, 0.5, 0.6); }
+  const T = []; for (let i = 0; i < 12; i++) T.push({ a: i / 12 * TAU, r: 0.4, len: 1.3 + hash(i * 3.1 + sd) * 0.9, w: 0.018, f: 1 }); for (let i = 0; i < 4; i++) T.push({ a: i / 4 * TAU + 0.8, r: 0.07, len: 0.7 + hash(i * 5.3 + sd) * 0.25, w: 0.06, f: 0.6 });
+  const NP = 12, NS = 3, nTri = T.length * (NP - 1) * NS * 2, pos = new Float32Array(nTri * 9), geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  const tm = new THREE.Mesh(geo, mat(c, { opacity: 0.5, em: c, ei: 0.45, flat: false })); tm.castShadow = false; tm.frustumCulled = false; b.add(dyn(tm));
+  const y0 = o.y ?? 3, P = [];
+  tick(t => { const ph = t * 1.6 + (o.ph ?? 0), k = 0.5 + 0.5 * Math.sin(ph); bell.scale.set(1 - 0.12 * k, 0.7 + 0.1 * k, 1 - 0.12 * k); rim.scale.set(1 - 0.14 * k, 1, 1 - 0.14 * k); rim.position.y = -0.04 - 0.05 * k;
+    g.position.y = y0 + 0.25 * Math.sin(ph - 1) + 0.04 * t; const rise = Math.cos(ph - 1);   // rising → the tentacles trail straighter, sinking → they float out
+    let w = 0; T.forEach((q, j) => { const rr = q.r * (1 - 0.14 * k), seg = q.len / (NP - 1), ca = Math.cos(q.a), sa = Math.sin(q.a);
+      for (let i = 0; i < NP; i++) { const u = i / (NP - 1), sw = (0.08 + 0.18 * u) * q.f * (1 - 0.35 * rise), wv = Math.sin(ph * 0.8 - i * 0.55 + j * 1.7), wv2 = Math.cos(ph * 0.6 - i * 0.4 + j * 2.3), out = rr + (0.12 - 0.08 * rise) * u * q.f;
+        P[i] = [ca * out + wv * sw * 0.6 * -sa + wv2 * sw * 0.3 * ca, -0.08 - i * seg * (0.95 + 0.05 * rise), sa * out + wv * sw * 0.6 * ca + wv2 * sw * 0.3 * sa]; }
+      for (let i = 0; i < NP - 1; i++) { const r0 = q.w * (1 - 0.85 * i / (NP - 1)), r1 = q.w * (1 - 0.85 * (i + 1) / (NP - 1));
+        for (let m = 0; m < NS; m++) { const a0 = m / NS * TAU, a1 = (m + 1) / NS * TAU, A = P[i], B = P[i + 1], V = [[A[0] + Math.cos(a0) * r0, A[1], A[2] + Math.sin(a0) * r0], [B[0] + Math.cos(a0) * r1, B[1], B[2] + Math.sin(a0) * r1], [B[0] + Math.cos(a1) * r1, B[1], B[2] + Math.sin(a1) * r1], [A[0] + Math.cos(a1) * r0, A[1], A[2] + Math.sin(a1) * r0]];
+          for (const id of [0, 1, 2, 0, 2, 3]) { pos[w++] = V[id][0]; pos[w++] = V[id][1]; pos[w++] = V[id][2]; } } } });
+    geo.attributes.position.needsUpdate = true; geo.computeVertexNormals(); });
+  _fuseDyn(g); return { g };
 }
 function diver(o = {}) {   // scuba diver: wetsuit, mask with glass, tank, regulator, fins — swim(rig, pts3d, {t0, speed}) for horizontal swimming with flutter kick and bubbles
   const f = figure({ shirt: o.suit ?? '#1E2A38', pants: o.suit ?? '#1E2A38', shoes: o.fins ?? '#F2C230', skin: o.skin, hair: o.hair ?? '#2A211D', hairStyle: 'buzz', expr: o.expr ?? 'calm', look: o.look, scale: o.scale });
@@ -7011,7 +7025,11 @@ function beast(o = {}) {   // kind: see BEASTS — real proportions in metres; w
       return c; };
     _loft(head, HZ.map(hst), { n: D.stripes || D.blaze ? 12 : 10, col: hcol, cap0: [0, skY, skZ - hl / 2], cap1: [0, yS + sh * 0.08, zN] }); }
   if (D.quills) for (let i = 0; i < 9; i++) box(head, 0.02, 0.14 - i * 0.008, 0.04, D.quills, 0, skY + hh * 0.42, skZ + hl * 0.2 - i * hl * 0.09, { rx: -0.6, ...NC });
-  if (kind === 'lion') { for (let i = 0; i < 16; i++) { const a = i / 16 * TAU, R = hh * 0.66; ball(head, hh * 0.3, D.mane, Math.sin(a) * R * 1.1, skY + Math.cos(a) * R - hh * 0.06, skZ - hl * 0.18, { detail: 1 }); } }
+  if (kind === 'lion') {   // v2.40.x mane: a full core ring plus two layers of shaggy tufts fanning out and back (was a ring of round boulders), darker at the back, a fringe down the chest
+    for (let i = 0; i < 14; i++) { const a = i / 14 * TAU, R = hh * 0.6; ball(head, hh * 0.27, D.mane, Math.sin(a) * R * 1.05, skY + Math.cos(a) * R - hh * 0.06, skZ - hl * 0.2, { detail: 1 }); }
+    for (const [ly, n, R0, len, zb, cs] of [[0, 20, 0.6, 0.36, 0.12, 0.06], [1, 16, 0.52, 0.32, 0.32, -0.08]]) for (let i = 0; i < n; i++) { const a = (i + ly * 0.5) / n * TAU + (rnd(i * 3 + ly + 70) - 0.5) * 0.2, cx = Math.sin(a) * 1.08, cy = Math.cos(a), l2 = hh * len * (0.8 + 0.4 * rnd(i * 5 + ly + 90)) * (cy < -0.3 ? 1.25 : 1);
+      const A = [cx * hh * R0, skY - hh * 0.06 + cy * hh * R0, skZ - hl * zb], B = [A[0] + cx * l2 * 0.75, A[1] + cy * l2 * 0.7 - (cy < 0 ? l2 * 0.35 : 0), A[2] - l2 * 0.8]; _seg(head, A, B, hh * 0.17, hh * 0.08, shade(D.mane, cs + (rnd(i * 7 + ly) - 0.5) * 0.08)); }
+    for (let i = 0; i < 7; i++) { const x = (i - 3) * bw * 0.07; _seg(fr, [x, -bh * 0.05, L * 0.47], [x * 1.2, -bh * 0.42 - rnd(i + 30) * bh * 0.1, L * 0.43], bh * 0.06, bh * 0.012, shade(D.mane, -0.05)); } }
   if (D.panda) for (const s of [-1, 1]) _ell(head, D.panda, s * hw * 0.22, skY + hh * 0.08, skZ + hl * 0.42, hw * 0.13, hh * 0.15, hl * 0.08, { ...NC, rz: s * 0.5 });
   if (D.tear) for (const s of [-1, 1]) _marks(head, [0, skY, skZ, hw / 2, hh / 2, hl / 2], [[0.55, s * 0.9, 0.012, hh * 0.45, s * 0.4]], '#1A1410');
   // mouth: jaw (opens), inside, tongue, teeth, nose
@@ -7526,9 +7544,9 @@ function flock(o = {}) {   // many distant birds in one draw call: circle (at, r
 // ---------------- sea creatures ----------------
 const SEAPROF = {   // body radius along the length (u: 0 nose … 1 tail base), × R
   shark: [[0, 0.1], [0.05, 0.45], [0.12, 0.72], [0.22, 0.92], [0.33, 1], [0.5, 0.88], [0.7, 0.55], [0.88, 0.25], [1, 0.12]],
-  cet:   [[0, 0.18], [0.05, 0.22], [0.09, 0.52], [0.15, 0.8], [0.3, 0.98], [0.4, 1], [0.6, 0.85], [0.8, 0.45], [0.93, 0.2], [1, 0.12]],
-  orca:  [[0, 0.3], [0.04, 0.62], [0.12, 0.88], [0.3, 1], [0.5, 0.92], [0.72, 0.55], [0.9, 0.22], [1, 0.12]],
-  whale: [[0, 0.35], [0.05, 0.62], [0.15, 0.86], [0.3, 1], [0.5, 0.9], [0.75, 0.45], [0.92, 0.18], [1, 0.1]],
+  cet:   [[0, 0.18], [0.05, 0.22], [0.09, 0.52], [0.15, 0.8], [0.3, 0.98], [0.4, 1], [0.6, 0.86], [0.8, 0.5], [0.93, 0.3], [1, 0.2]],
+  orca:  [[0, 0.3], [0.04, 0.62], [0.12, 0.88], [0.3, 1], [0.5, 0.92], [0.72, 0.58], [0.9, 0.32], [1, 0.2]],
+  whale: [[0, 0.35], [0.05, 0.62], [0.15, 0.86], [0.3, 1], [0.5, 0.9], [0.75, 0.5], [0.92, 0.28], [1, 0.18]],
   fish:  [[0, 0.25], [0.08, 0.65], [0.2, 0.92], [0.38, 1], [0.6, 0.8], [0.82, 0.4], [1, 0.16]],
   tuna:  [[0, 0.15], [0.1, 0.6], [0.25, 0.9], [0.42, 1], [0.65, 0.75], [0.85, 0.3], [1, 0.08]],
   round: [[0, 0.42], [0.1, 0.8], [0.35, 1], [0.65, 0.85], [0.88, 0.4], [1, 0.22]],
@@ -7570,7 +7588,7 @@ function seaColor(D, u, a, sd) {   // colour of the body at (u along, a around: 
   const y = Math.cos(a), side = Math.abs(Math.sin(a)), C = D.c, B = D.b, line = (D.line ?? -0.05) + 0.1 * Math.sin(u * 37 + sd * 9) + 0.05 * Math.sin(u * 91);
   let c = y > line ? C : B;
   switch (D.marks) {
-    case 'orca': c = C; if (y < -0.35 && u > 0.04 && u < 0.62) c = B; if (u > 0.5 && u < 0.75 && y < -0.05 && side > 0.3) c = B; if (u > 0.09 && u < 0.22 && y > 0.05 && y < 0.65 && side > 0.45) c = B; if (u > 0.47 && u < 0.6 && y > 0.78) c = '#7A7E86'; if (u < 0.08 && y < -0.2) c = B; break;
+    case 'orca': c = C; if (y < -0.35 && u > 0.04 && u < 0.62) c = B; if (u > 0.5 && u < 0.75 && y < -0.05 && side > 0.3) c = B; if (((u - 0.155) / 0.07) ** 2 + ((y - 0.36) / 0.3) ** 2 < 1 && side > 0.45) c = B; if (u > 0.47 && u < 0.6 && y > 0.78) c = '#7A7E86'; if (u < 0.08 && y < -0.2) c = B; break;
     case 'tiger': if (y > -0.2 && u > 0.25 && u < 0.92 && Math.sin(u * 52 + Math.sin(a * 3) * 0.8) > 0.72) c = '#4A463E'; break;
     case 'spots': if (y > -0.1) { const gu = Math.round(u * 46), ga = Math.round(a * 4.5), h = hash(gu * 13.7 + ga * 7.3); if (h > 0.55 && Math.abs(u * 46 - gu) < 0.3 && Math.abs(a * 4.5 - ga) < 0.3) c = '#E8E8E0'; if (Math.abs(Math.sin(u * 23)) < 0.08) c = '#C8CCC8'; } break;
     case 'dolphin': if (y > 0.55) c = shade(C, -0.1); else if (y > line) c = shade(C, 0.08); break;
@@ -7592,7 +7610,7 @@ function sea(p, o = {}) {   // kind: see SEA — fly(S.g, [[x,y,z], …], { spee
   const b = dyn(grp(g)), S = { g, b, kind, D, L, sd, acts: [], fx: [] };
   if (D.fam === 'ray') return _ray(S, o); if (D.fam === 'turtle') return _turtle(S, o); if (D.fam === 'octo') return _octo(S, o);
   const R = D.R * L, PR = SEAPROF[D.prof ?? D.fam] ?? SEAPROF.shark, wx = D.wx ?? 0.9, wy = D.wy ?? 1, NRg = 36, NA = 20;
-  const rad = u => _interp(PR, u) * R, Pt = (u, a) => { const r = rad(u), ca = Math.cos(a); let y = ca * r * wy; if (ca < 0) y *= D.flatB ?? 0.88; if (D.head === 'hammer' && u < 0.1) y *= 0.8; return [Math.sin(a) * r * wx, y, L * (0.5 - u)]; };
+  const rad = u => _interp(PR, u) * R, Pt = (u, a) => { const r = rad(u), ca = Math.cos(a); let y = ca * r * wy; if (ca < 0) y *= D.flatB ?? 0.88; if (D.head === 'hammer' && u < 0.1) y *= 0.8; const kl = D.fam === 'cet' ? sm01((u - 0.62) / 0.26) : 0; return [Math.sin(a) * r * wx * (1 - 0.5 * kl), y * (1 + 1.1 * kl), L * (0.5 - u)]; };   // v2.40.x whales / dolphins: tall, narrow tail stock (keel) instead of a thin rod
   const pos = [], col = [], cc = new THREE.Color(), cm = new Map(), pushT = (A, B2, C2, hex) => { let q = cm.get(hex); if (!q) { cc.set(hex); q = [cc.r, cc.g, cc.b]; cm.set(hex, q); } pos.push(...A, ...B2, ...C2); for (let i = 0; i < 3; i++) col.push(...q); };
   for (let j = 0; j < NRg; j++) for (let k = 0; k < NA; k++) { const u0 = j / NRg, u1 = (j + 1) / NRg, a0 = k / NA * TAU, a1 = (k + 1) / NA * TAU, hex = seaColor(D, (u0 + u1) / 2, (a0 + a1) / 2, sd);
     const A = Pt(u0, a0), B2 = Pt(u1, a0), C2 = Pt(u1, a1), E = Pt(u0, a1); pushT(A, C2, B2, hex); pushT(A, E, C2, hex);
@@ -7628,10 +7646,11 @@ function sea(p, o = {}) {   // kind: see SEA — fly(S.g, [[x,y,z], …], { spee
   const um0 = D.jawFront ? 0.02 : D.fam === 'cet' ? 0.02 : 0.06, um1 = D.jawFront ? 0.2 : 0.16, mW = rad(um1) * wx * 0.85, mLen = (um1 - um0) * L, mz0 = zAt(um1), yb = botY((um0 + um1) / 2);
   let jaw = null;
   if (D.teeth || D.fam === 'shark') {
-    add(_plateG([[-mW, 0], [-mW * 0.8, mLen * 0.6], [0, mLen], [mW * 0.8, mLen * 0.6], [mW, 0]].map(([x, z]) => [+x.toFixed(4), +z.toFixed(4)]), +(L * 0.01).toFixed(4), false), '#5A1E22', 0, yb - L * 0.003, mz0);
+    const kS = (botY(um0 + 0.01) - botY(um1)) / Math.max(1e-6, mLen), aS = Math.atan(kS);   // v2.40.x: the mouth follows the rising underside of the snout (the closed jaw stuck out under the chin as a slab)
+    add(_plateG([[-mW, 0], [-mW * 0.8, mLen * 0.6], [0, mLen], [mW * 0.8, mLen * 0.6], [mW, 0]].map(([x, z]) => [+x.toFixed(4), +z.toFixed(4)]), +(L * 0.01).toFixed(4), false), '#5A1E22', 0, yb - L * 0.003, mz0, -aS);
     const tN = D.teeth === 2 ? 15 : 13, tL = L * (D.teeth === 3 ? 0.06 : D.teeth === 2 ? 0.018 : 0.012), cg = G('tooth', () => new THREE.ConeGeometry(0.5, 1, 4).rotateX(Math.PI).translate(0, -0.5, 0));
-    if (D.teeth) for (let i = 0; i < tN; i++) { const q = i / (tN - 1) * 2 - 1, x = q * mW * 0.92, z = mz0 + mLen * (1 - q * q) * 0.98; add(cg, '#F4F0E6', x, yb - L * 0.002, z, 0, 0, 0, tL * 0.45, tL, tL * 0.45); }
-    jaw = dyn(grp(b, 0, yb - L * 0.004, mz0)); const jm = new THREE.Mesh(_plateG([[-mW, 0], [-mW * 0.8, mLen * 0.55], [0, mLen * 0.95], [mW * 0.8, mLen * 0.55], [mW, 0]].map(([x, z]) => [+x.toFixed(4), +z.toFixed(4)]), +(R * 0.12).toFixed(4), false), mat(D.b)); jm.position.y = -R * 0.06; jm.castShadow = true; jaw.add(jm);
+    if (D.teeth) for (let i = 0; i < tN; i++) { const q = i / (tN - 1) * 2 - 1, x = q * mW * 0.92, z = mz0 + mLen * (1 - q * q) * 0.98; add(cg, '#F4F0E6', x, yb - L * 0.002 + (z - mz0) * kS, z, 0, 0, 0, tL * 0.45, tL, tL * 0.45); }
+    jaw = dyn(grp(b, 0, yb - L * 0.004, mz0)); jaw.rotation.x = -aS; jaw.userData.r0 = -aS; const jm = new THREE.Mesh(_plateG([[-mW, 0], [-mW * 0.8, mLen * 0.55], [0, mLen * 0.95], [mW * 0.8, mLen * 0.55], [mW, 0]].map(([x, z]) => [+x.toFixed(4), +z.toFixed(4)]), +(R * 0.12).toFixed(4), false), mat(D.b)); jm.position.y = -R * 0.06; jm.castShadow = true; jaw.add(jm);
     if (D.teeth) for (let i = 0; i < tN - 2; i++) { const q = i / (tN - 3) * 2 - 1; cone(jaw, tL * 0.22, tL * 0.85, '#F4F0E6', q * mW * 0.85, -R * 0.0, mLen * (1 - q * q) * 0.9, NC); }
     _ell(jaw, '#7A2A30', 0, R * 0.0, mLen * 0.4, mW * 0.6, R * 0.02, mLen * 0.35, NC);
   }
@@ -7669,7 +7688,7 @@ function seaPose(S, t) {
   }
   let curv = 0; if (g._fly) { const y0 = g._fly(t - 0.25)[2], y1 = g._fly(t + 0.25)[2]; let dy = y1 - y0; dy = Math.atan2(Math.sin(dy), Math.cos(dy)); curv = clamp(dy * 0.06, -0.1, 0.1); }
   U.uT.value = ph; U.uA.value = cet ? 0 : amp; U.uV.value = cet ? amp * 0.8 : 0; U.uC.value = cet ? curv * 0.5 : curv;
-  S.b.position.z = lz; S.b.rotation.set(0, ry, rz); if (S.jaw) S.jaw.rotation.x = jaw;
+  S.b.position.z = lz; S.b.rotation.set(0, ry, rz); if (S.jaw) S.jaw.rotation.x = (S.jaw.userData.r0 ?? 0) + jaw;
   if (D.spikes) { S.b.scale.set(1 + 0.8 * inf, 1 + 0.8 * inf, 1 + 0.25 * inf); S.spikes.scale.setScalar(Math.max(0.001, inf)); }
   if (S.lure) S.lure.rotation.x = 0.15 * Math.sin(t * 2.2 + S.sd);
   for (const f of S.fx) f(t, S);
