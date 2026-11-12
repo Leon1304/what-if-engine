@@ -67,10 +67,10 @@ name = opt('voice', vc.get('name', 'deep'))
 #   pins one; { engine: 'kokoro' } or --kokoro forces the offline voice. Kokoro preset names (deep, narrator, documentary …) count as 'auto'.
 EL_VOICES = {'denzel': ('7sXif1ZLnLgbMgmFvs2G', 'Denzel'), 'jm': ('EkK5I93UQWFDigLMpZcX', 'JM – Husky & Engaging'), 'adam': ('wBXNqKUATyqu0RtYt25i', 'Adam'),
              'declan': ('kqVT88a5QfII1HNAEPTJ', 'Declan Sage'), 'storm': ('YI5bDiiDOYHHb2eLadHv', 'Storm Styles')}
-EL_BY_CAT = {'story': 'denzel', 'series': 'jm', 'explain': 'adam', 'conspiracy': 'declan', 'debunk': 'declan', 'horror': 'storm'}
+EL_BY_CAT = {'story': 'denzel', 'series': 'jm', 'explain': 'adam', 'conspiracy': 'declan', 'debunk': 'declan', 'horror': 'storm', 'truecrime': 'declan'}
 def category():   # CFG.kind explain / conspiracy / horror › series (CFG.series) › story. Horror music alone does not make a horror video (zombie clips stay 'story').
     k = CFG.get('kind') or 'story'
-    if k in ('explain', 'conspiracy', 'debunk', 'horror'): return k
+    if k in ('explain', 'conspiracy', 'debunk', 'horror', 'truecrime'): return k
     return 'series' if CFG.get('series') else 'story'
 EL_KEY = os.environ.get('ELEVENLABS_API_KEY') or os.environ.get('XI_API_KEY')
 CAT = category()

@@ -1,0 +1,11 @@
+ground({ color: '#9A968C', flat: 60, dirt: false });
+const M = museumGallery(null, 0, 0, { len: 22, y: 4.5, windows: 4, breakAt: 1, cases: [{ z: -2, items: ['crown', 'tiara', 'necklace'] }, { z: 4, items: ['brooch', 'earrings'] }] });
+const V = liftTruck(null, -11, M.winZ + 4, { ry: Math.PI });
+V.raise(1, 3, { yaw: 0.9, pitch: 0.75, extend: 4 }); V.ride(3.5, 6, { to: 1 });
+const th = hivis(figure({ shirt: '#2A2E36', pants: '#2A2E36', hatStyle: 'beanie', hat: '#16181C' })); world.add(th.root); dyn(th.root);
+tick(t => { const b = V.basketAt(t); th.root.position.copy(b); th.root.rotation.y = V.basketYaw(t) + Math.PI; });
+const gr = grinder(); holdItem(th, gr, 0, 9);
+M.breakWindow(7.2, { cut: [6.2, 7.1] }); M.cases[0].cut(2, 3); M.cases[0].smash(3.4); vanish(M.cases[0].items[0], 4);
+const you = char('you', { outfit: 'guard' }); you.root.position.set(1.5, 4.5, 3); world.add(you.root); walkie(you, { talk: [[2, 4]] });
+track('you', you); toss(dyn(jewel(null, 'crown', -9, 0.1, 2)), 5, { from: [-9, 3, 2], to: [-8, 2.5] });
+road(world, [[-16, -20], [-16, 20]], { w: 7 });

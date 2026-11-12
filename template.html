@@ -316,7 +316,7 @@ const CFG = {
   dur: 22,                 // seconds (15–60; with all running gags 45–50)
   seed: 7,                 // change for a different random layout
   locale: 'en-US',         // every on-screen text is English
-  kind: 'story',           // story | explain | conspiracy | horror (badge 'Explaining' / 'Conspiracy'; horror = story badge, horror narrator) — ElevenLabs narrator by kind (v2.48)
+  kind: 'story',           // story | explain | conspiracy | horror | truecrime (badge 'Explaining' / 'Conspiracy' / 'True Crime'; horror = story badge, horror narrator) — ElevenLabs narrator by kind (v2.48)
   badge: 'What if',        // explain: 'Explaining' by default
   accent: 'yellow',        // yellow | blue | red | green | orange | pink | purple | lime | cyan (or a hex) | auto (from the title) — one per series, varies between series/videos
   filter: 'film',          // none | film | crt
@@ -2168,7 +2168,8 @@ const OUTFITS = {   // char('you', { outfit: 'cap' | ['capBack', 'shades'] … }
   cowboy: { hatStyle: 'cowboy', hat: '#8A5A3C' }, shades: { glasses: true }, hair: { hat: null, hatStyle: null }, spiky: { hairStyle: 'spiky' }, long: { hairStyle: 'long' }, bun: { hairStyle: 'bun' },
   curly: { hairStyle: 'curly' }, buzz: { hairStyle: 'buzz' }, mohawk: { hairStyle: 'mohawk' }, blond: { hair: '#D8B25A' }, ginger: { hair: '#B5562A' }, black: { hair: '#1E1A18' },
   grey: { hair: '#9C9B96' }, silver: { hair: '#C9C8C2' }, scar: { scar: true }, readers: { glasses: 'readers' },   // v2.21
-  workjacket: { shirt: '#56613A', jacket: true }, cardigan: { shirt: '#7B5B43', jacket: 'knit' }, boots: { shoes: '#4A3424' }
+  workjacket: { shirt: '#56613A', jacket: true }, guard: { shirt: '#1E2A44', pants: '#171C27', jacket: true, shoes: '#111111' },   // v2.49: museum / security guard (navy jacket)
+  cardigan: { shirt: '#7B5B43', jacket: 'knit' }, boots: { shoes: '#4A3424' }
 };
 function char(name, o = {}) {   // look keys (shirt, pants, hat, skin, kind) can't be overridden here: change them in cast.json, then they change everywhere
   const base = { ...(CHARS[name] ?? {}), ...(SERIES_CAST[name] ?? {}) };
@@ -9431,6 +9432,218 @@ const _truckBase = (g, L, W, c, cab, V, hb = 2.55) => {   // v2.40: one side pro
   const er = mesh(g, _boxesG([[0.1, 0.34, 0.16, -(W / 2 + 0.11), 1.95, hl - 0.3], [0.1, 0.34, 0.16, W / 2 + 0.11, 1.95, hl - 0.3]]), mat(dark), 0, 0, 0, NC); er.userData.keep = true; er.userData.noHit = true;
   for (const z of [zf, ...zr]) for (const sx of [-1, 1]) { const w = _vWheel(g, sx * (W / 2 - 0.148), z, 0.48, 0.32, { style: 'steel', steer: z > 0 }); if (V) { V.wheels.push(w); V._steer = true; } } };
 const _lightbar = (g, y, z, w, cols) => { const L = []; cols.forEach((c, i) => L.push(box(g, w / cols.length * 0.9, 0.14, 0.25, '', (i - (cols.length - 1) / 2) * w / cols.length, y, z, { mat: mat(c, { basic: true, glow: 2 }), cast: false }))); tick(t => L.forEach((m, i) => m.visible = Math.floor(t * 6 + i * (i % 2 ? 1.5 : 0)) % 2 === 0)); return L; };
+// ---- v2.49 museum & heist kit (True Crime): museumGallery, jewelCase, jewel, liftTruck, grinder, grindSparks, hivis — plus outfit 'guard' and CFG.kind 'truecrime' (badge 'True Crime') ----
+const _sfxDur = (t, k, v, d) => { const n = (AUDIO.hits ??= []).length; sfx(t, k, v); if (AUDIO.hits.length > n) AUDIO.hits[AUDIO.hits.length - 1].dur = d; };
+// jewel(p, kind, x, y, z, { scale, gem, metal, ry }) — crown · tiara · necklace · brooch · earrings: gold with gems that catch the light. Plain group: dyn() it (or carry / toss / vanish) to move it
+function jewel(p, kind = 'crown', x = 0, y = 0, z = 0, o = {}) {
+  const g = grp(p ?? world, x, y, z, o.ry ?? 0), k = grp(g), NC = { cast: false }; k.scale.setScalar(o.scale ?? 1); g.userData.jewel = kind;
+  const gold = mat(o.metal ?? '#D9B24C', { rough: 0.3, metal: 0.7, em: '#5A4210', ei: 0.35 }), gemOf = c => mat(c, { rough: 0.04, metal: 0.15, em: c, ei: 0.45 });
+  const gc = o.gem ?? { crown: '#2A5BD8', tiara: '#2A5BD8', necklace: '#1FA35A', brooch: '#EAF6FF', earrings: '#1FA35A' }[kind] ?? '#EAF6FF';
+  const GEM = gemOf(gc), DIA = gemOf('#EAF6FF'), PEARL = mat('#F4EEE2', { rough: 0.3, metal: 0.1 });
+  const B = (r, m, bx, by, bz, sc) => { const b = ball(k, r, '', bx, by, bz, { mat: m, detail: 1, ...NC }); if (sc) b.scale.set(...sc); return b; };
+  if (kind === 'crown') {
+    cyl(k, 0.1, 0.1, 0.05, '', 0, 0, 0, { mat: gold, seg: 20 }); for (const yy of [0, 0.04]) cyl(k, 0.105, 0.105, 0.012, '', 0, yy, 0, { mat: gold, seg: 20, ...NC });
+    for (let i = 0; i < 12; i++) { const a = i / 12 * TAU; B(i % 2 ? 0.011 : 0.015, i % 2 ? DIA : GEM, Math.sin(a) * 0.106, 0.025, Math.cos(a) * 0.106, [1, 1.25, 1]); }
+    const arc = G('jwArch', () => new THREE.TorusGeometry(0.1, 0.007, 5, 18, Math.PI));
+    for (let i = 0; i < 4; i++) { const th = i * Math.PI / 4; mesh(k, arc, gold, 0, 0.05, 0, { ry: th, ...NC });
+      for (const f of [0.2, 0.4, 0.6, 0.8]) { const a = f * Math.PI, lx = Math.cos(a) * 0.1, ly = Math.sin(a) * 0.1; B(0.008, PEARL, lx * Math.cos(th), 0.05 + ly, -lx * Math.sin(th)); } }
+    B(0.088, mat('#6B1A2A', { rough: 0.85 }), 0, 0.06, 0, [1, 0.62, 1]);   // velvet cap inside the arches
+    B(0.022, gold, 0, 0.162, 0); box(k, 0.009, 0.045, 0.009, '', 0, 0.175, 0, { mat: gold, ...NC }); box(k, 0.03, 0.009, 0.009, '', 0, 0.2, 0, { mat: gold, ...NC });
+  } else if (kind === 'tiara') {
+    mesh(k, G('jwTiara', () => new THREE.TorusGeometry(0.09, 0.007, 5, 22, Math.PI)), gold, 0, 0.006, 0, { rx: Math.PI / 2, ...NC });
+    for (let i = -4; i <= 4; i++) { const a = Math.PI / 2 + i * Math.PI / 10, px = Math.cos(a) * 0.09, pz = Math.sin(a) * 0.09, h = 0.075 - 0.011 * Math.abs(i);
+      cone(k, 0.011, h, '', px, 0.006, pz, { mat: gold, seg: 5, ...NC }); B(i ? 0.012 : 0.02, i % 2 ? DIA : GEM, px * 1.04, 0.022 + (i ? 0 : 0.008), pz * 1.04, [1, 1.3, 0.8]); B(0.006, DIA, px, 0.008 + h, pz); }
+  } else if (kind === 'necklace') {
+    for (let i = 0; i <= 22; i++) { const a = Math.PI * i / 22, nx = Math.cos(a) * 0.13, nz = Math.sin(a) * 0.1 - 0.03; B(i % 2 ? 0.006 : 0.009, i % 2 ? gold : DIA, nx, 0.008, nz); }
+    for (const u of [0.3, 0.4, 0.5, 0.6, 0.7]) { const a = Math.PI * u, nx = Math.cos(a) * 0.13, nz = Math.sin(a) * 0.1 - 0.03, big = u === 0.5;
+      B(0.006, DIA, nx, 0.01, nz + 0.014); B(big ? 0.024 : 0.016, GEM, nx, 0.012, nz + (big ? 0.045 : 0.035), [1, 0.55, 1.35]); }
+  } else if (kind === 'brooch') {
+    for (const s of [-1, 1]) { B(0.034, gold, s * 0.038, 0.01, 0, [1, 0.3, 0.68]); for (let i = 0; i < 5; i++) B(0.006, DIA, s * (0.018 + i * 0.012), 0.022, 0.012 * Math.sin(i * 1.3)); cone(k, 0.012, 0.07, '', s * 0.022, 0.006, 0.05, { mat: gold, rx: Math.PI / 2, rz: s * 0.35, seg: 4, ...NC }); }
+    B(0.02, DIA, 0, 0.018, 0); for (const dx of [-0.02, 0, 0.02]) B(0.012, DIA, dx, 0.012, 0.075 + Math.abs(dx), [1, 0.6, 1.4]);
+  } else {   // earrings: a pair of drops
+    for (const s of [-1, 1]) { mesh(k, G('jwRing', () => new THREE.TorusGeometry(0.012, 0.003, 4, 10)), gold, s * 0.04, 0.006, -0.02, { rx: Math.PI / 2, ...NC }); B(0.006, DIA, s * 0.04, 0.008, 0); B(0.016, GEM, s * 0.04, 0.01, 0.03, [1, 0.55, 1.4]); }
+  }
+  return g;
+}
+// jewelCase(p, x, z, { w, d, h, glass, items: ['crown', 'tiara'], scale, ry, y, cushion, wood }) → C: pedestal with gold trim, velvet cushion, glass hood with a light strip, the jewels on top.
+//   C.items[i] (jewel groups: vanish / carry / toss them) · C.at(i) world position of item i · C.front world point on the front pane
+//   C.cut(t0, t1) — disc cutter on the front pane (sparks + whine) · C.smash(t) — the pane cracks, the hood bursts into shards (the frame stays)
+function jewelCase(p, x, z, o = {}) {
+  const P = p ?? world, w = o.w ?? 0.95, d = o.d ?? 0.7, ph = o.h ?? 0.95, gh = o.glass ?? 0.55, NC = { cast: false };
+  const g = stat(grp(P, x, o.y ?? (P === world ? groundH(x, z) : 0), z, o.ry ?? 0)), trim = mat('#C9A24A', { rough: 0.3, metal: 0.85 }), C = { g, root: g, items: [], w, d, ph, gh };
+  box(g, w + 0.1, 0.1, d + 0.1, '#1E1814', 0, 0, 0); box(g, w, ph - 0.16, d, o.wood ?? '#3A2A20', 0, 0.1, 0); box(g, w + 0.06, 0.06, d + 0.06, '', 0, ph - 0.06, 0, { mat: trim });
+  for (const sz of [-1, 1]) for (const yy of [0.3, ph - 0.3]) box(g, w - 0.2, 0.014, 0.01, '', 0, yy, sz * (d / 2 + 0.004), { mat: trim, ...NC });
+  for (const sx of [-1, 1]) for (const yy of [0.3, ph - 0.3]) box(g, 0.01, 0.014, d - 0.2, '', sx * (w / 2 + 0.004), yy, 0, { mat: trim, ...NC });
+  rbox(g, w - 0.12, 0.05, d - 0.12, o.cushion ?? '#5B1A2A', 0, ph, 0);
+  for (const [sx, sz] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) box(g, 0.025, gh, 0.025, '', sx * w / 2, ph, sz * d / 2, { mat: trim, ...NC });
+  for (const sz of [-1, 1]) box(g, w + 0.025, 0.025, 0.025, '', 0, ph + gh, sz * d / 2, { mat: trim, ...NC });
+  for (const sx of [-1, 1]) box(g, 0.025, 0.025, d, '', sx * w / 2, ph + gh, 0, { mat: trim, ...NC });
+  box(g, w - 0.12, 0.012, 0.05, '', 0, ph + gh - 0.022, 0, { mat: mat('#FFF1CF', { basic: true, glow: 0.8 }), ...NC });   // light strip under the lid
+  const gl = dyn(grp(g, 0, ph, 0)), gm = mat('#D6EEF7', { opacity: 0.17, rough: 0.02, metal: 0.25 }); C.glass = gl;
+  for (const sz of [-1, 1]) box(gl, w - 0.02, gh, 0.008, '', 0, 0, sz * d / 2, { mat: gm, ...NC });
+  for (const sx of [-1, 1]) box(gl, 0.008, gh, d - 0.02, '', sx * w / 2, 0, 0, { mat: gm, ...NC });
+  box(gl, w - 0.02, 0.008, d - 0.02, '', 0, gh, 0, { mat: gm, ...NC });
+  const its = o.items ?? ['crown'];
+  its.forEach((kd, i) => { const ix = its.length > 1 ? -(w - 0.32) / 2 + i * (w - 0.32) / (its.length - 1) : 0; C.items.push(jewel(g, kd, ix, ph + 0.05, 0, { scale: o.scale ?? 1.15 })); });
+  g.updateWorldMatrix(true, true);
+  C.at = i => C.items[i].getWorldPosition(v3());
+  C.front = g.localToWorld(v3(0, ph + gh * 0.55, d / 2 + 0.02));
+  const ry = new THREE.Euler().setFromQuaternion(g.getWorldQuaternion(new THREE.Quaternion()), 'YXZ').y;
+  C.cut = (t0, t1, q = {}) => (grindSparks(C.front.toArray(), t0, t1, q), C);
+  C.smash = (t, q = {}) => { crackGlass(C.front.toArray(), t - 0.35, { size: 0.28, ry }); shatter(gl, t, { dy: gh / 2, pieces: q.pieces ?? 70, power: q.power ?? 3, size: q.size ?? 0.045 }); return C; };
+  return C;
+}
+// grinder(p, { x, y, z, color }) — angle grinder / disc cutter (motor, gear head, disc with guard, side handle). Hold it: holdItem(f, grinder(), t0, t1)
+function grinder(p, o = {}) {
+  const g = dyn(grp(p ?? world, o.x ?? 0, o.y ?? 0, o.z ?? 0)), NC = { cast: false }, c = o.color ?? '#2E6FB8';
+  mesh(g, G('grMot', () => new THREE.CylinderGeometry(0.036, 0.042, 0.26, 10)), mat(c), 0, 0, -0.12, { rx: Math.PI / 2, ...NC });
+  mesh(g, G('grCap', () => new THREE.CylinderGeometry(0.03, 0.036, 0.05, 10)), mat('#2A2D33'), 0, 0, -0.27, { rx: Math.PI / 2, ...NC });
+  box(g, 0.075, 0.07, 0.085, '#3A3D44', 0, -0.035, 0.035, NC);
+  mesh(g, G('grDisc', () => new THREE.CylinderGeometry(0.065, 0.065, 0.005, 22)), mat('#8A8E96', { metal: 0.7, rough: 0.35 }), 0, -0.05, 0.05, NC);
+  mesh(g, G('grGuard', () => new THREE.CylinderGeometry(0.07, 0.07, 0.03, 16, 1, true, 0, Math.PI)), mat('#55595F', { metal: 0.5, side: THREE.DoubleSide }), 0, -0.03, 0.05, { ry: Math.PI, ...NC });
+  mesh(g, G('grHdl', () => new THREE.CylinderGeometry(0.014, 0.016, 0.12, 6)), mat('#1E1F22'), 0.09, -0.02, 0.03, { rz: Math.PI / 2, ...NC });
+  return g;
+}
+// grindSparks(at, t0, t1, { rate, size, v }) — a fan of orange sparks + the high whine of a disc cutting metal or glass
+function grindSparks(at, t0, t1, o = {}) {
+  emit('spark', { at, t0, t1, rate: o.rate ?? 140, size: o.size ?? 0.045 });
+  _sfxDur(t0, 'saw', o.v ?? 0.75, Math.max(0.3, t1 - t0));
+}
+// hivis(f, { color }) — high-visibility work vest with reflective stripes over the figure's torso (workers, road crews, disguises)
+function hivis(f, o = {}) {
+  const ch = f.chest; if (!ch) return f; const c = o.color ?? '#E3E030', NC = { cast: false }, s = mat('#E9ECEF', { basic: true, glow: 0.25 });
+  box(ch, 0.535, 0.47, 0.33, c, 0, 0.07, 0, NC); for (const yy of [0.17, 0.32]) box(ch, 0.545, 0.035, 0.335, '', 0, yy, 0, { mat: s, ...NC });
+  for (const sx of [-1, 1]) box(ch, 0.04, 0.2, 0.335, '', sx * 0.15, 0.36, 0, { mat: s, ...NC });
+  return f;
+}
+// liftTruck(p, x, z, { ry, color, ladderColor, ladder: 9 }) → V: mover's truck with a furniture lift (inclined ladder on a turntable, telescopic, with a level platform that rides up and down).
+//   V.raise(t0, t1, { yaw, pitch, extend }) swings and raises the ladder (pitch in rad, extend in m) · V.ride(t0, t1, { to: 0..1 }) sends the platform up (1) or down (0)
+//   V.basketAt(t) → world position of the platform floor (stand riders there) · V.basketYaw(t) → the platform's heading
+function liftTruck(p, x, z, o = {}) {
+  const L = 7.6, W = 2.4, R0 = o.ry ?? 0, gy = groundH(x, z), g = dyn(grp(p ?? world, x, gy, z, R0)), V = { g, root: g, wheels: [], len: L, acts: [], rides: [] }, NC = { cast: false };
+  const Y = o.ladderColor ?? '#C9CDD3', bedY = 1.25, pz = -L / 2 + 0.95, B1 = o.ladder ?? 9, B2 = B1 - 0.5, OR = '#E3B23C';
+  _truckBase(g, L, W, o.color ?? '#E4E1D8', 2.3, V, bedY);
+  box(g, W - 0.06, 0.07, L - 2.5, '#6A6E75', 0, bedY, -1.2, { metal: 0.4 });
+  for (const sx of [-1, 1]) for (const zz of [pz - 0.2, L / 2 - 2.6]) { box(g, 0.5, 0.12, 0.14, OR, sx * (W / 2 + 0.2), 0.75, zz, NC); box(g, 0.1, 0.75, 0.1, OR, sx * (W / 2 + 0.4), 0.05, zz); box(g, 0.3, 0.05, 0.3, '#3A3D44', sx * (W / 2 + 0.4), 0, zz, NC); }
+  const tt = dyn(grp(g, 0, bedY + 0.07, pz)); cyl(tt, 0.45, 0.5, 0.22, '#3A3D44', 0, 0, 0, { seg: 14 }); box(tt, 0.72, 0.48, 0.6, OR, 0, 0.22, -0.1); cyl(tt, 0.16, 0.16, 0.8, '#2A2D33', 0, 0.45, 0.1, { rz: Math.PI / 2, seg: 10, ...NC });
+  const boom = dyn(grp(tt, 0, 0.62, 0)), ext = dyn(grp(boom, 0, 0.09, 0));
+  for (const [G2, len, w] of [[boom, B1, 0.64], [ext, B2, 0.5]]) { for (const sx of [-1, 1]) box(G2, 0.06, 0.1, len, Y, sx * w / 2, 0, len / 2, { metal: 0.6 }); for (let r = 0.3; r < len; r += 0.34) box(G2, w, 0.03, 0.035, Y, 0, 0.03, r, { metal: 0.6, ...NC }); }
+  box(boom, 0.7, 0.18, 0.4, OR, 0, -0.12, 0.25, NC);
+  const car = dyn(grp(boom, 0, 0.14, 0.6)), plat = dyn(grp(car, 0, 0, 0));
+  box(car, 0.7, 0.08, 0.5, '#3A3D44', 0, 0, 0, NC);
+  box(plat, 1.2, 0.06, 1.05, '#8E949C', 0, 0, 0.12, { metal: 0.5 });
+  for (const sx of [-1, 1]) { for (const zz of [-0.38, 0.62]) box(plat, 0.04, 1.02, 0.04, OR, sx * 0.58, 0.04, zz); for (const yy of [0.55, 1.04]) box(plat, 0.04, 0.04, 1.04, OR, sx * 0.58, yy, 0.12, NC); }
+  for (const yy of [0.55, 1.04]) box(plat, 1.18, 0.04, 0.04, OR, 0, yy, -0.38, NC);
+  box(plat, 1.18, 0.04, 0.04, OR, 0, 1.04, 0.62, NC);   // front: only a top rail (step-off side)
+  V.raise = (t0, t1, q = {}) => (V.acts.push({ t0, t1, ...q }), V.acts.sort((a, b) => a.t0 - b.t0), _sfxDur(t0, 'servo', 0.7, t1 - t0), V);
+  V.ride = (t0, t1, q = {}) => (V.rides.push({ t0, t1, to: q.to ?? 1 }), V.rides.sort((a, b) => a.t0 - b.t0), _sfxDur(t0, 'servo', 0.45, t1 - t0), V);
+  const st = t => { let yaw = 0, pitch = 0, ex = 0, r = 0;
+    for (const a of V.acts) { const k = sm01((t - a.t0) / Math.max(0.2, a.t1 - a.t0)); yaw = lerp(yaw, a.yaw ?? yaw, k); pitch = lerp(pitch, a.pitch ?? 1.0, k); ex = lerp(ex, a.extend ?? B2 - 0.6, k); }
+    for (const a of V.rides) r = lerp(r, a.to, sm01((t - a.t0) / Math.max(0.2, a.t1 - a.t0)));
+    return [yaw, pitch, ex, 0.6 + r * (ex + B2 - 1.7)]; };
+  tick(t => { const [yaw, pitch, ex, dist] = st(t); tt.rotation.y = yaw; boom.rotation.x = -pitch; ext.position.z = ex; car.position.z = dist; plat.rotation.x = pitch; });
+  V.basketAt = t => { const [yaw, p, , dist] = st(t), cy = Math.cos(yaw), sy = Math.sin(yaw), cp = Math.cos(p), sp = Math.sin(p);
+    const lx = cp * sy * dist + (-sp * sy) * 0.14 + 0.12 * sy, ly = bedY + 0.07 + 0.62 + sp * dist + cp * 0.14 + 0.06, lz = pz + cp * cy * dist + (-sp * cy) * 0.14 + 0.12 * cy;
+    const c = Math.cos(R0), s = Math.sin(R0); return v3(x + lx * c + lz * s, gy + ly, z - lx * s + lz * c); };
+  V.basketYaw = t => st(t)[0] + R0;
+  _fuseDyn(g);
+  return V;
+}
+// museumGallery(p, x, z, { len, w, h, y, side, windows, breakAt, cases: [{ x, z, items, ry }], facade, paintings }) → M
+//   A grand palace gallery along z: parquet with a red runner, cream walls with gold pilasters and framed paintings, a painted barrel vault with gold ribs,
+//   chandeliers, tall windows on the side wall (x = side · w/2) and a doorway at +z. y = floor height (upper floor); facade: true (default) also builds the
+//   outside: stone ground floor with arched windows, pilasters, pediments, a balcony at window `breakAt`, cornice and a slate mansard roof.
+//   M.win (pane group of the balcony window) · M.winAt (world centre of that window) · M.cases (jewelCase objects) · M.at('door' | 'window' | 'balcony') · M.breakWindow(t)
+function museumGallery(p, x, z, o = {}) {
+  const L = o.len ?? 28, W = o.w ?? 9, H = o.h ?? 6.2, side = o.side ?? -1, y0 = o.y ?? 0, nW = o.windows ?? 5, bi = o.breakAt ?? 1, NC = { cast: false };
+  const g = stat(grp(p ?? world, x, (p ? 0 : groundH(x, z)) + y0, z, o.ry ?? 0)), M = { g, root: g, len: L, w: W, h: H, side, cases: [] };
+  const stone = '#D3C4A2', cream = '#EADFC4', gold = mat('#C9A24A', { rough: 0.3, metal: 0.85 }), wx = side * (W / 2 + 0.25), ix = side * W / 2;
+  const IN = { cast: false, indoor: true };
+  box(g, W, 0.1, L, '#8C5E36', 0, -0.1, 0, { surf: 'boards', ...IN }); box(g, 2.4, 0.012, L - 5, '#6B1E24', 0, 0, 0, NC);
+  for (const sx of [-1, 1]) box(g, 2.5, 0.014, 0.08, '', 0, 0, sx * (L - 5) / 2, { mat: gold, ...NC });
+  // window wall: piers, sills, lintels; panes (the balcony window keeps its own group)
+  const ww = 1.9, wh0 = 4.2, wy0 = 1.0, zs = Array.from({ length: nW }, (_, i) => -L / 2 + (i + 0.5) * L / nW);
+  let a = -L / 2; zs.forEach(zc => { box(g, 0.5, H, zc - ww / 2 - a, stone, wx, 0, (a + zc - ww / 2) / 2, { surf: 'stone', cast: false }); a = zc + ww / 2; }); box(g, 0.5, H, L / 2 - a, stone, wx, 0, (a + L / 2) / 2, { surf: 'stone', cast: false });
+  const glassM = mat('#DCEEFF', { opacity: 0.32, em: '#CFE6FF', ei: 0.35, rough: 0.05 }), fr = '#E8E2D2';
+  zs.forEach((zc, i) => { const wy = i === bi ? 0.04 : wy0, wh = i === bi ? wh0 + wy0 - 0.04 : wh0; if (wy > 0.05) box(g, 0.5, wy, ww, stone, wx, 0, zc, { surf: 'stone', cast: false }); box(g, 0.5, H - wy - wh, ww, stone, wx, wy + wh, zc, { surf: 'stone', cast: false });
+    const wg = (i === bi ? dyn : stat)(grp(g, wx, wy, zc)); box(wg, 0.04, wh, ww, '', 0, 0, 0, { mat: glassM, ...NC });
+    box(wg, 0.1, wh, 0.07, fr, 0, 0, 0, NC); for (let k = 1; k < 4; k++) box(wg, 0.1, 0.06, ww, fr, 0, k * wh / 4, 0, NC); box(wg, 0.12, 0.08, ww + 0.1, fr, 0, wh - 0.04, 0, NC);
+    if (i === bi) { M.win = wg; M.winZ = zc; }
+    box(g, 0.05, wh + 0.3, 0.1, '', ix - side * 0.03, wy - 0.15, zc - ww / 2 - 0.06, { mat: gold, ...NC }); box(g, 0.05, wh + 0.3, 0.1, '', ix - side * 0.03, wy - 0.15, zc + ww / 2 + 0.06, { mat: gold, ...NC });
+    box(g, 0.05, 0.12, ww + 0.3, '', ix - side * 0.03, wy + wh + 0.1, zc, { mat: gold, ...NC }); });
+  // interior skin of the window wall between the windows + gold pilasters
+  a = -L / 2; for (const zc of [...zs, L / 2 + ww / 2]) { const b = Math.min(L / 2, zc - ww / 2) - 0.2; if (b - a > 0.3) { box(g, 0.04, H, b - a, cream, ix - side * 0.02, 0, (a + b) / 2, { surf: 'plaster', ...IN }); box(g, 0.08, H - 0.2, 0.32, '', ix - side * 0.06, 0.1, (a + b) / 2, { mat: gold, ...NC }); } a = zc + ww / 2 + 0.2; }
+  // opposite wall: dado, damask, paintings between pilasters
+  const ox = -side * (W / 2 + 0.2), oi = -side * W / 2;
+  box(g, 0.4, H, L, cream, ox, 0, 0, { surf: 'plaster', ...IN }); box(g, 0.05, 1.05, L, '#3D4637', oi + side * 0.025, 0, 0, NC); box(g, 0.07, 0.06, L, '', oi + side * 0.04, 1.05, 0, { mat: gold, ...NC });
+  box(g, 0.03, H - 1.6, L, '#7A2C2A', oi + side * 0.015, 1.15, 0, { surf: 'wallpaper', ...IN });
+  const pal = ['#3E4A5A', '#5A4632', '#2F4A3A', '#6A3A2E', '#4A3E5A', '#556B7A'], nP = Math.max(2, Math.floor(L / 4.6));
+  for (let i = 0; i < nP; i++) { const zc = -L / 2 + (i + 0.5) * L / nP, pw = 2.3 + 0.4 * hash(i * 3.1), phh = 1.7 + 0.6 * hash(i * 5.3), py = 2.0 + (2.3 - phh) / 2, c = pal[i % pal.length];
+    box(g, 0.08, phh + 0.24, pw + 0.24, '', oi + side * 0.06, py - 0.12, zc, { mat: gold, ...NC }); box(g, 0.04, phh, pw, c, oi + side * 0.1, py, zc, NC);
+    const cx = oi + side * 0.125;
+    if (i % 2 === 0) {   // landscape: sky, hills, a tree, a little figure
+      box(g, 0.02, phh * 0.5, pw - 0.04, ['#C9B48A', '#9FB4C4', '#D9A98A'][i % 3], cx, py + phh * 0.48, zc, NC); box(g, 0.022, phh * 0.22, pw * 0.7, '#5E6E4A', cx + side * 0.003, py + phh * 0.3, zc - pw * 0.12, NC);
+      box(g, 0.024, phh * 0.3, pw - 0.04, '#4A5034', cx + side * 0.005, py + 0.02, zc, NC); ball(g, phh * 0.16, '#2F3A26', cx + side * 0.01, py + phh * 0.55, zc + pw * 0.25, { detail: 0, ...NC }).scale.x = 0.15;
+      box(g, 0.026, phh * 0.25, 0.04, '#3A2A1E', cx + side * 0.008, py + phh * 0.28, zc + pw * 0.25, NC); box(g, 0.026, phh * 0.12, 0.05, '#7A2A22', cx + side * 0.008, py + phh * 0.3, zc - pw * 0.2, NC);
+    } else {   // portrait: dark ground, face, collar, red sash
+      box(g, 0.026, phh * 0.42, pw * 0.5, '#2A2420', cx + side * 0.004, py + 0.02, zc, NC); ball(g, phh * 0.12, '#D8B596', cx + side * 0.01, py + phh * 0.6, zc, { detail: 1, ...NC }).scale.x = 0.15;
+      box(g, 0.028, phh * 0.06, pw * 0.22, '#EDE6D6', cx + side * 0.006, py + phh * 0.43, zc, NC); box(g, 0.03, phh * 0.05, pw * 0.42, '#8A1A22', cx + side * 0.008, py + phh * 0.3, zc, { rx: 0.4, ...NC });
+      box(g, 0.026, phh * 0.1, pw * 0.2, '#3A2A1E', cx + side * 0.006, py + phh * 0.7, zc, NC); }
+    if (i < nP - 1) box(g, 0.08, H - 1.3, 0.32, '', oi + side * 0.06, 1.1, zc + L / nP / 2, { mat: gold, ...NC }); }
+  // end walls: big tapestry at −z, doorway at +z
+  box(g, W + 0.9, H, 0.4, cream, 0, 0, -L / 2 - 0.2, { surf: 'plaster', ...IN }); box(g, 3.4, 3.4, 0.06, '', 0, 1.4, -L / 2 + 0.03, { mat: gold, ...NC }); box(g, 3.1, 3.1, 0.04, '#5A3A2A', 0, 1.55, -L / 2 + 0.07, NC);
+  for (let k = 0; k < 7; k++) box(g, 3.1 * (0.15 + 0.4 * hash(k * 2.7)), 3.1 * (0.1 + 0.3 * hash(k * 4.1)), 0.02, shade('#8A6A3A', 0.2 * hash(k)), 3.1 * (hash(k * 5.9) - 0.5) * 0.6, 1.8 + 2.2 * hash(k * 8.3), -L / 2 + 0.1, NC);
+  const dw = 2.6, dh = 3.8;
+  for (const sx of [-1, 1]) box(g, (W + 0.9 - dw) / 2, H, 0.4, cream, sx * (dw + (W + 0.9 - dw) / 2) / 2, 0, L / 2 + 0.2, { surf: 'plaster', ...IN });
+  box(g, dw, H - dh, 0.4, cream, 0, dh, L / 2 + 0.2, { surf: 'plaster', ...IN }); box(g, dw, dh, 0.05, '#1A1512', 0, 0, L / 2 + 0.6, NC);
+  for (const sx of [-1, 1]) box(g, 0.16, dh + 0.1, 0.12, '', sx * (dw / 2 + 0.08), 0, L / 2 - 0.02, { mat: gold, ...NC }); box(g, dw + 0.5, 0.2, 0.14, '', 0, dh, L / 2 - 0.02, { mat: gold, ...NC });
+  // cornice + painted barrel vault with gold ribs and sky panels
+  for (const sx of [-1, 1]) box(g, 0.3, 0.32, L, '', sx * (W / 2 - 0.14), H - 0.32, 0, { mat: gold, ...NC });
+  const vS = 0.5, vTop = H + W / 2 * vS;
+  mesh(g, G(`vault${W}|${L}`, () => new THREE.CylinderGeometry(W / 2, W / 2, L, 28, 1, true, Math.PI / 2, Math.PI)), mat('#E6D3A6', { side: THREE.DoubleSide, rough: 0.7, em: '#7E6A48', ei: 0.6 }), 0, H, 0, { rx: Math.PI / 2, ...NC }).scale.z = vS;
+  const rib = G(`vrib${W}`, () => new THREE.TorusGeometry(W / 2 - 0.05, 0.08, 6, 26, Math.PI));
+  const ribM = mat('#C9A24A', { rough: 0.35, metal: 0.6, em: '#7A5A20', ei: 0.55 });
+  for (let zr = -L / 2 + 1.5; zr < L / 2 - 1; zr += 3) { mesh(g, rib, ribM, 0, H, zr, NC).scale.y = vS; }
+  for (let zr = -L / 2 + 3; zr < L / 2 - 1.5; zr += 3) { box(g, 2.0, 0.04, 1.9, '', 0, vTop - 0.09, zr, { mat: ribM, ...NC }); box(g, 1.75, 0.04, 1.65, '#8FA9C8', 0, vTop - 0.12, zr, { em: '#8FA9C8', ei: 0.25, ...NC }); ball(g, 0.45, '#F2EBDD', 0, vTop - 0.16, zr, { detail: 1, ...NC }).scale.set(1.3, 0.05, 1); }
+  // chandeliers (emissive only — scenes add a glow if they want real light)
+  const candle = mat('#FFE3A0', { basic: true, glow: 1.2 });
+  for (const zc of [-L / 4, 0, L / 4]) { const cy = vTop - 1.9; cyl(g, 0.02, 0.02, 1.6, '#8A6A2A', 0, cy + 0.25, zc, NC); mesh(g, G('chRing', () => new THREE.TorusGeometry(0.55, 0.03, 5, 20)), gold, 0, cy + 0.25, zc, { rx: Math.PI / 2, ...NC });
+    mesh(g, G('chRing2', () => new THREE.TorusGeometry(0.32, 0.025, 5, 16)), gold, 0, cy + 0.6, zc, { rx: Math.PI / 2, ...NC }); ball(g, 0.12, '', 0, cy + 0.25, zc, { mat: gold, detail: 1, ...NC });
+    for (let k = 0; k < 10; k++) { const an = k / 10 * TAU; ball(g, 0.045, '', Math.cos(an) * 0.55, cy + 0.33, zc + Math.sin(an) * 0.55, { mat: candle, detail: 0, ...NC }); }
+    for (let k = 0; k < 6; k++) { const an = k / 6 * TAU; ball(g, 0.035, '', Math.cos(an) * 0.32, cy + 0.66, zc + Math.sin(an) * 0.32, { mat: candle, detail: 0, ...NC }); } }
+  // marble busts on pedestals at the ends
+  for (const [bx, bz] of [[-side * (W / 2 - 0.7), -L / 2 + 1.2], [-side * (W / 2 - 0.7), L / 2 - 1.4]]) { box(g, 0.5, 1.15, 0.5, '#E9E4DA', bx, 0, bz); box(g, 0.42, 0.28, 0.24, '#F1EDE4', bx, 1.15, bz); ball(g, 0.15, '#F1EDE4', bx, 1.6, bz, { detail: 1 }); }
+  // display cases (+ stanchions with a red rope)
+  for (const c of o.cases ?? []) { const C = jewelCase(g, c.x ?? 0, c.z, { items: c.items, ry: c.ry ?? 0, scale: c.scale, w: c.w }); M.cases.push(C);
+    if (c.rope !== false) { const r = 0.85, pts = [[-r, -r], [r, -r], [r, r], [-r, r]]; for (const [px, pz2] of pts) { cyl(g, 0.03, 0.04, 0.9, '', (c.x ?? 0) + px, 0, c.z + pz2, { mat: gold, seg: 8 }); ball(g, 0.045, '', (c.x ?? 0) + px, 0.92, c.z + pz2, { mat: gold, detail: 0, ...NC }); }
+      for (let k = 0; k < 4; k++) { const [ax, az] = pts[k], [bx, bz] = pts[(k + 1) % 4]; if (k === 3 - (c.open ?? 0)) continue; _seg(g, [(c.x ?? 0) + ax, 0.86, c.z + az], [(c.x ?? 0) + bx, 0.86, c.z + bz], 0.018, 0.018, '#8A1A22', NC); } } }
+  // outside: stone ground floor, belt course, pilasters, pediments, balcony, cornice, mansard roof
+  if (o.facade !== false) {
+    const fx = side * (W / 2 + 0.5), S = { surf: 'stone' };
+    if (y0 > 0.2) { box(g, W + 1.0, y0 - 0.1, L + 0.9, stone, 0, -y0, 0, S); for (let yy = -y0 + 0.6; yy < -0.3; yy += 0.6) box(g, 0.03, 0.04, L + 0.9, '#A99A7A', fx + side * 0.005, yy, 0, NC);
+      zs.forEach(zc => { const gx = fx + side * 0.01; box(g, 0.06, Math.min(2.6, y0 - 1.6), 1.5, '#2A2622', gx, -y0 + 0.9, zc, NC); cyl(g, 0.75, 0.75, 0.06, '#2A2622', gx, -y0 + 0.9 + Math.min(2.6, y0 - 1.6) - 0.03, zc, { rz: Math.PI / 2, seg: 16, ...NC }); });
+      box(g, 0.5, 0.3, L + 1.0, stone, fx + side * 0.15, -0.35, 0, S); }
+    const wy = wy0, wh = wh0;
+    zs.forEach((zc, i) => { const px = fx + side * 0.05;
+      const jy = i === bi ? 0 : wy; if (i !== bi) box(g, 0.12, 0.14, ww + 0.5, stone, px, wy - 0.14, zc, S); box(g, 0.12, wh + wy - jy + 0.1, 0.2, stone, px, jy, zc - ww / 2 - 0.12, S); box(g, 0.12, wh + wy - jy + 0.1, 0.2, stone, px, jy, zc + ww / 2 + 0.12, S);
+      const pg = grp(g, px + side * 0.05, wy + wh + 0.12, zc, Math.PI / 2); prism(pg, ww + 0.7, 0.5, 0.3, stone, 0, 0, 0, S);
+      if (i < nW - 1) { const zp = (zc + zs[i + 1]) / 2; box(g, 0.25, H - 0.3, 0.55, stone, fx + side * 0.1, 0, zp, S); box(g, 0.32, 0.3, 0.68, stone, fx + side * 0.12, H - 0.6, zp, { ...S, cast: false }); }
+      if (i === bi) { const bx = fx + side * 0.5; box(g, 1.1, 0.18, ww + 1.0, stone, bx, -0.12, zc, S);
+        for (let k = 0; k <= 10; k++) cyl(g, 0.045, 0.06, 0.72, stone, bx + side * 0.48, 0.06, zc - (ww + 0.8) / 2 + k * (ww + 0.8) / 10, { seg: 6 });
+        box(g, 0.14, 0.08, ww + 1.0, stone, bx + side * 0.48, 0.78, zc, S); for (const sz of [-1, 1]) box(g, 1.0, 0.08, 0.14, stone, bx, 0.78, zc + sz * (ww + 0.9) / 2, S);
+        M.balcony = g.localToWorld(v3(side * (W / 2 + 1.0), 0, zc)); } });
+    const SN = { ...S, cast: false }; box(g, 1.0, 0.55, L + 1.4, stone, side * (W / 2 + 0.35), H, 0, SN); box(g, 1.1, 0.12, L + 1.5, stone, side * (W / 2 + 0.38), H + 0.55, 0, SN);
+    const rg = grp(g, 0, H + 0.67, 0, Math.PI / 2); prism(rg, L + 1.2, 3.3, W + 1.6, '#59626C', 0, 0, 0, { surf: 'tile', cast: false });
+    for (const zc of zs) { const dg = grp(g, side * (W / 2 - 0.4), H + 0.67, zc, side > 0 ? Math.PI / 2 : -Math.PI / 2); box(dg, 1.1, 1.4, 0.9, '#59626C', 0, 0.2, 0, NC); box(dg, 0.7, 0.9, 0.05, '#2A3A4A', 0, 0.35, 0.46, NC); const pp = grp(dg, 0, 1.6, 0.1); prism(pp, 1.3, 0.5, 1.0, '#4E565F', 0, 0, 0, NC); }
+    for (const zc of [-L / 2 + 2, L / 2 - 2]) box(g, 0.8, 1.6, 1.2, stone, 0, H + 2.6, zc, SN);
+  }
+  g.updateWorldMatrix(true, true);
+  M.winAt = g.localToWorld(v3(ix, 2.6, M.winZ ?? 0));
+  const pts = { door: v3(0, 0, L / 2 - 1), window: v3(ix - side * 0.8, 0, M.winZ ?? 0) };
+  M.at = n => n === 'balcony' ? M.balcony?.clone() : g.localToWorld((pts[n] ?? v3()).clone());
+  M.breakWindow = (t, q = {}) => { if (q.cut) grindSparks(M.winAt.toArray(), q.cut[0], q.cut[1], q); shatter(M.win, t, { dy: q.dy ?? 2.1, pieces: q.pieces ?? 70, power: q.power ?? 3.5 }); return M; };
+  return M;
+}
 // firetruck(p, x, z, { ry }) → F with F.ladder(t0, t1, { yaw, pitch, extend }), F.spray(t0, t1, { at }) (water jet from the ladder tip)
 function firetruck(p, x, z, o = {}) {
   const L = 9, W = 2.5, g = dyn(grp(p ?? world, x, groundH(x, z), z, o.ry ?? 0)), F = { g, root: g, wheels: [], len: L, acts: [] };
@@ -11382,6 +11595,7 @@ const SERIES = CFG.series;
 const KIND = CFG.kind === 'debunk' ? 'conspiracy' : CFG.kind ?? 'story', EXPLAIN = KIND === 'explain' || KIND === 'conspiracy';   // explainer 'Explaining' / conspiracy check 'Conspiracy': badge without episode number
 const FEWNUM = (CFG.numbers ?? (EXPLAIN ? 'few' : 'all')) === 'few';   // v2.37: explainer / conspiracy videos show few numbers — the needle of a meter speaks for itself (num: true = show the figure), no +/− pop-ups (pop: true = show); any stat: num: false = bar or needle only
 if (EXPLAIN && (CFG.badge == null || CFG.badge === 'What if')) CFG.badge = tr(KIND === 'conspiracy' ? 'Conspiracy' : 'Explaining');
+if (KIND === 'truecrime' && (CFG.badge == null || CFG.badge === 'What if')) CFG.badge = tr('True Crime');   // v2.49: True Crime = story format (you as witness), own badge + documentary narrator
 $('badge').textContent = SERIES?.ep && !EXPLAIN ? `${CFG.badge} #${SERIES.ep}` : CFG.badge;
 const XSTEPS = (typeof STEPS === 'undefined' || !STEPS ? [] : STEPS).map(([a, b]) => [evT(a), tr(b)]);
 $('chan').textContent = SERIES?.handle ?? SERIES?.name ?? '';

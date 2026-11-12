@@ -947,6 +947,7 @@ Dinge zerbrechen so, wie sie gebaut sind. Alles ist echte Physik (einmal vorab s
 | Explaining | `CFG.kind: 'explain'` | Adam | `wBXNqKUATyqu0RtYt25i` |
 | Conspiracy | `CFG.kind: 'conspiracy'` / `'debunk'` | Declan Sage | `kqVT88a5QfII1HNAEPTJ` |
 | Horror | `CFG.kind: 'horror'` | Storm Styles | `YI5bDiiDOYHHb2eLadHv` |
+| True Crime | `CFG.kind: 'truecrime'` | Declan Sage | `kqVT88a5QfII1HNAEPTJ` |
 
 - Reihenfolge: `kind` (explain / conspiracy / horror) vor Serie vor Story. Horror-Musik allein macht kein Horror-Video. `kind: 'horror'` verhält sich sonst wie `'story'` (Badge „What if“).
 - Innerhalb einer Serie bleibt die Stimme gleich, solange `kind` in allen Folgen gleich bleibt.
@@ -959,3 +960,17 @@ Dinge zerbrechen so, wie sie gebaut sind. Alles ist echte Physik (einmal vorab s
 - Tempo pro Satz wie bisher (an ElevenLabs als `speed` 0,7–1,2). Wortzeiten, Karaoke, Lippen-Sync und Mix unverändert.
 - Modell: `eleven_v4`, sonst `eleven_v3`, sonst `eleven_multilingual_v2` (ohne Tags). Jede Zeile wird in `.voice/el-*.npy` gecacht; nur geänderte Sätze kosten erneut Credits. `voice.py` meldet `elevenlabs: category … · model … · N new requests (… characters)`.
 - Ohne Key oder wenn der Key schon beim ersten Satz scheitert (ungültig, keine Credits): ganzes Video mit Kokoro, nie gemischt. Stimmen im Bild (`who: 'steve' | 'you'`) bleiben Kokoro, wenn es installiert ist.
+
+## Museum und Einbruch (v2.49, True Crime)
+- `museumGallery(p, x, z, { len: 28, w: 9, h: 6.2, y, side: -1, windows: 5, breakAt: 1, cases: [{ x, z, items, ry, rope, open }], facade })` → M: prunkvolle Palast-Galerie entlang z (Parkett mit rotem Läufer, cremefarbene Wände mit Goldpilastern und Gemälden, bemaltes Tonnengewölbe mit Goldrippen und Himmelsfeldern, drei Kronleuchter, Marmorbüsten, Durchgang bei +z). `y` = Fußbodenhöhe (Obergeschoss), Fensterwand bei x = side · w/2. Mit `facade` (Standard) auch die Außenseite: Steinsockel mit Bogenfenstern, Gurtgesims, Pilaster, Fensterverdachungen, Balkon mit Balustrade vor Fenster `breakAt`, Kranzgesims, Mansarddach mit Gauben. `M.win` (Scheiben des Balkonfensters), `M.winAt`, `M.cases`, `M.at('door' | 'window' | 'balcony')`, `M.breakWindow(t, { cut: [t0, t1] })` (Funken von außen, dann zersplittert die Scheibe). Hülle wirft keine Schatten (Tageslicht fällt hinein).
+- `jewelCase(p, x, z, { w, d, h, glass, items: ['crown', 'tiara', 'necklace'], scale, ry })` → C: Vitrine auf Sockel mit Goldleisten, Samtkissen, Glashaube mit Lichtleiste. `C.items[i]` (Schmuckgruppen: `vanish`, `carry`, `toss`), `C.at(i)`, `C.front`, `C.cut(t0, t1)` (Trennschleifer an der Frontscheibe), `C.smash(t)` (Riss, dann zerspringt die Haube, der Rahmen bleibt).
+- `jewel(p, kind, x, y, z, { scale, gem, metal })`: crown · tiara · necklace · brooch · earrings (Gold, Perlen, leuchtende Steine).
+- `liftTruck(p, x, z, { ry, color, ladder: 9 })` → V (ladder = Länge des Grundteils in m): Lkw mit Möbellift (Leiter auf Drehkranz, ausziehbar, waagerechte Plattform). `V.raise(t0, t1, { yaw, pitch, extend })`, `V.ride(t0, t1, { to: 0..1 })`, `V.basketAt(t)` (Weltposition des Plattformbodens: Mitfahrer dort hinstellen), `V.basketYaw(t)`.
+- `grinder()` (Trennschleifer, für `holdItem`), `grindSparks(at, t0, t1, { rate })` (Funkenfächer + Kreischen), `hivis(figur, { color })` (Warnweste), Outfit `char('you', { outfit: 'guard' })` (dunkelblaue Wachdienst-Jacke).
+- `CFG.kind: 'truecrime'`: Badge „True Crime“, sonst wie eine Story (du als Zeuge, Ende „What would you have done?“); Erzähler Declan Sage (ElevenLabs).
+
+## Stimme ohne API-Key: ElevenLabs über den Connector (v2.49)
+Ist in der Sitzung kein `ELEVENLABS_API_KEY` gesetzt, aber der ElevenLabs-Connector verbunden, spricht der Erzähler trotzdem mit ElevenLabs: `elmcp/requests.py` ersetzt für `voice.py` das Paket `requests`.
+1. Planen: `EL_LOG=el_log.jsonl ELEVENLABS_API_KEY=via-mcp PYTHONPATH=.engine/elmcp python3 assemble.py <slug>` → `el_log.jsonl` enthält jede Zeile (Text mit Ton-Tag, Modell, Tempo); nichts wird bezahlt.
+2. Jeden eindeutigen Text einmal mit `creative_generate_speech` erzeugen (Voice-ID der Kategorie aus `EL_VOICES`, `eleven_v4`, `generations_count: 1`, alle in einen Flow), mit `creative_get_generations` die URLs holen, laden und `{ Text: Datei }` als JSON speichern.
+3. Bauen: `.voice/el-*.npy` löschen, dann `EL_MAP=<map.json> ELEVENLABS_API_KEY=via-mcp PYTHONPATH=.engine/elmcp python3 assemble.py <slug>`. Das Tempo, das `voice.py` je Zeile verlangt, setzt der Shim per ffmpeg `atempo` um — Neu-Timing braucht keine neue Generierung.
