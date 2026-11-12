@@ -1511,6 +1511,22 @@ function rbox(p, w, h, d, c, x = 0, y = 0, z = 0, o = {}) {   // rounded, smooth
   if (CFG.smooth === false) return box(p, w, h, d, c, x, y, z, o);
   return mesh(p, rboxG(w, h, d, o.rf), o.mat ?? mat(c, { flat: false }), x, y + h / 2, z, o);
 }
+// --- faces (v2.40.5): round eyeballs with iris ring, pupil and glints, upper / lower lids (blink, squint, slant), two-part brows, a mouth drawn on the face
+// (lips, teeth, tongue — grin, frown, O, clenched, smirk), cheeks that lift and blush, nose wrinkle, sweat drop, tears. Everything is a pure function of t:
+// expression changes blend over ~0.25 s (brows and lids lead with a small overshoot, the mouth follows), blinks, glances and reactions come from t alone.
+const _strH = s => { let h = 7; for (const c of String(s)) h = (h * 31 + c.charCodeAt(0)) % 1000003; return h / 1000003; };
+const IRIS = ['#5A3A22', '#6B4A2A', '#3E6E8E', '#4E7A4A', '#7A5A2E', '#4A3424'];
+const capG = (r, th, ws, hs) => G(`cap${r}|${th}|${ws}|${hs}`, () => new THREE.SphereGeometry(r, ws, hs, 0, TAU, 0, th).rotateX(Math.PI / 2));   // spherical cap around +z
+const ER = 0.05, EZ = 0.5, EY = 0.185, EX = 0.083, EZ0 = 0.179, MY = 0.098;   // eyeball radius, depth squash, eye centre · mouth line height (head space)
+const lidG = up => G('lid' + up, () => new THREE.SphereGeometry(ER * 1.1, 12, 5, Math.PI / 2 - 1.45, 2.9, up ? 0 : Math.PI / 2 - 0.04, Math.PI / 2 + 0.04));
+const lashG = () => G('lash', () => new THREE.SphereGeometry(ER * 1.12, 12, 1, Math.PI / 2 - 1.3, 2.6, Math.PI / 2 - 0.085, 0.11));
+// channels of a face: brows (by raise · bq one brow up · bi inner end up / − angry · bo outer end · bk knit), lids (lu upper closed 0..1 · ll lower up · lt slant: + angry, − sad),
+// eyes (es size · ps pupil · gx gy gaze), mouth (mo open · mu share of the opening above the lip line · mc smile / − frown · ma lopsided · mw width · mr round O · mp shape ·
+// mtU mtL upper / lower teeth · mcl clenched teeth · mtg tongue), ch cheeks lift · bl blush · sw sweat drop · tr tears · nw nose wrinkle · wob trembling mouth (Hz)
+const FCH = ['by', 'bq', 'bi', 'bo', 'bk', 'lu', 'll', 'lt', 'es', 'ps', 'gx', 'gy', 'mo', 'mu', 'mc', 'ma', 'mw', 'mr', 'mp', 'mtU', 'mtL', 'mcl', 'mtg', 'ch', 'bl', 'sw', 'tr', 'nw', 'wob'];
+const FI = Object.fromEntries(FCH.map((k, i) => [k, i])), NCH = FCH.length;
+const FDEF = { by: 0, bq: 0, bi: 0, bo: 0.04, bk: 0, lu: 0.22, ll: 0.06, lt: 0, es: 1, ps: 1, gx: 0, gy: 0, mo: 0, mu: 0.3, mc: 0.12, ma: 0, mw: 1, mr: 0, mp: 0.8, mtU: 0, mtL: 0, mcl: 0, mtg: 0, ch: 0, bl: 0, sw: 0, tr: 0, nw: 0, wob: 0 };
+const FLEAD = new Set(['by', 'bq', 'bi', 'bo', 'bk', 'lu', 'll', 'lt', 'es', 'ps']);   // brows and eyes lead the change with a small overshoot, the mouth follows
 function figure(o = {}) {
   const zb = o.kind === 'zombie';
   const skin = o.skin ?? (zb ? pick(['#8FB07A', '#7E9C6E', '#9AB58A']) : pick(['#F1C7A5', '#D9A47E', '#A8714F', '#7A4E34']));
@@ -1538,27 +1554,14 @@ function figure(o = {}) {
   };
   const [armL, foreL] = arm(-1), [armR, foreR] = arm(1);
   const neck = grp(chest, 0, 0.62, 0), head = grp(neck, 0, 0.01, 0);
-  rbox(head, 0.38, 0.38, 0.38, skin, 0, 0, 0, { rf: 0.16 });
-  // face: eyes (white, pupil, glint) that blink and glance around, brows, nose, ears, cheeks, a mouth with lips, teeth and corners that smile or droop
-  const skinD = shade(skin, -0.05), lipC = zb ? '#2A0E0E' : '#' + new THREE.Color(skin).lerp(new THREE.Color('#9A3E38'), 0.42).getHexString(), pupM = zb ? mat('#E8FF6A', { basic: true, glow: 0.8 }) : mat(o.eyeColor ?? '#2A1E16'), glint = mat('#FFFFFF', { basic: true }), NC = { cast: false };
-  const eyes = [-0.085, 0.085].map((sx, i) => {
-    const e = grp(head, sx, 0.215, 0.19);
-    if (zb) { box(e, i ? 0.09 : 0.068, i ? 0.075 : 0.056, 0.02, '', 0, i ? -0.0375 : -0.028, 0, { mat: pupM, ...NC }); e.pupil = null; }
-    else { box(e, 0.092, 0.076, 0.014, '', 0, -0.038, 0, { mat: mat('#F7F4EE'), ...NC }); const pp = grp(e, 0, 0, 0.009); box(pp, 0.044, 0.056, 0.01, '', 0, -0.028, 0, { mat: pupM, ...NC }); box(pp, 0.014, 0.014, 0.004, '', 0.012, 0.006, 0.006, { mat: glint, ...NC }); e.pupil = pp; }
-    return e;
-  });
-  box(head, 0.06, 0.07, 0.05, skinD, 0, 0.11, 0.2, NC);   // nose
-  for (const sx of [-1, 1]) box(head, 0.035, 0.1, 0.07, skinD, sx * 0.2, 0.12, -0.01, NC);   // ears
-  if (!zb) for (const sx of [-1, 1]) box(head, 0.06, 0.032, 0.006, '', sx * 0.115, 0.115, 0.191, { mat: mat('#' + new THREE.Color(skin).lerp(new THREE.Color('#E88A8A'), 0.2).getHexString()), ...NC });   // cheeks
-  const mouth = grp(head, 0, 0.068, 0.191), M = { lipU: null };
-  M.inner = box(mouth, 0.12, 0.05, 0.006, '', 0, -0.025, 0, { mat: mat('#3A1212'), ...NC });
-  M.teeth = box(mouth, 0.1, 0.016, 0.004, '', 0, -0.008, 0.004, { mat: mat('#F4F1E8'), ...NC });
-  if (zb) { M.teeth.scale.x = 0.35; M.teeth.position.x = -0.02; box(mouth, 0.025, 0.02, 0.004, '', 0.035, -0.012, 0.004, { mat: mat('#D8D0B0'), ...NC }); }
-  M.lipU = box(mouth, 0.07, 0.016, 0.008, lipC, 0, -0.008, 0.004, NC); M.lipL = grp(mouth, 0, 0, 0.004); box(M.lipL, 0.07, 0.016, 0.008, lipC, 0, -0.008, 0, NC);
-  M.corners = [-1, 1].map(sx => { const c = grp(mouth, sx * 0.034, 0, 0.004); box(c, 0.04, 0.016, 0.008, lipC, sx * 0.02, -0.008, 0, NC); c.sx = sx; return c; });
+  const skull = rbox(head, 0.38, 0.38, 0.38, skin, 0, 0, 0, { rf: 0.16 });
+  // face (v2.40.5): round eyeballs (white, iris with a darker ring, pupil, two glints) under upper and lower lids with a lash line, two-part brows, rounded nose with a
+  // wrinkle, ears, cheeks that lift and blush, a mouth drawn onto the face (lips, teeth, tongue), sweat drop and tears — all posed every frame by facePass()
+  const skinD = shade(skin, -0.05), lipC = zb ? '#3A1414' : '#' + new THREE.Color(skin).lerp(new THREE.Color('#9A3E38'), 0.55).getHexString(), NC = { cast: false };
   const hs = o.hatStyle ?? (o.hat ? 'straw' : null), hst = o.hairStyle ?? 'short';
   const hairC = zb ? null : o.hat ? (o.hair ?? (hs === 'straw' || hs === 'cowboy' ? null : '#3A2A1E')) : o.hair ?? pick(['#2A211D', '#5C3F2A', '#B88A5A']);
-  const brows = zb ? [] : [-0.085, 0.085].map(sx => { const b = grp(head, sx, 0.285, 0.196); box(b, 0.11, 0.032, 0.02, '', 0, 0, 0, { mat: mat(hairC ? shade(hairC, -0.05) : '#2A211D'), ...NC }); return b; });
+  const FC = faceBuild(head, { skin, skinD, lipC, zb, hairC, eyeColor: o.eyeColor ?? IRIS[Math.floor(_strH(skin + (hairC ?? '') + (o.who ?? '')) * IRIS.length) % IRIS.length] });
+  FC.skull = skull; const { eyes, brows, mouth, M } = FC;
   const hairG = grp(head);
   const HAIR = (st, c, under) => {   // short · buzz · spiky · long · bun · curly · mohawk (under = a cap or beanie covers the top)
     const head = hairG;
@@ -1601,18 +1604,63 @@ function figure(o = {}) {
   if (o.hold) o.holdShape === 'board' ? box(foreR, 0.27, 0.34, 0.03, o.hold, 0, -0.62, 0.08) : box(foreR, 0.09, 0.24, 0.09, o.hold, 0, -0.6, 0.03);   // held item: flashlight/megaphone (along the forearm) or holdShape 'board' (clipboard)
   root.scale.setScalar(o.scale ?? 1);
   const f = { root, body, hips, chest, neck, head, legL, legR, shinL, shinR, footL, footR, armL, armR, foreL, foreR, mouth, brows, eyes, hat, coat, hair: hairG, cape,
-    expr: o.expr, kind: o.kind ?? 'human', id, sd: hash(id * 7.31 + 0.5), look: o.look, talk: o.talk, who: o.who, M, fx: [], hands: HANDS };
+    expr: o.expr, kind: o.kind ?? 'human', id, sd: hash(id * 7.31 + 0.5), look: o.look, talk: o.talk, who: o.who, M, fx: [], hands: HANDS, FC, autoFace: o.autoFace };
   let _lookV = f.look;   // v2.31: look targets switched inside a scene tick are cross-faded (see poseProbe)
   Object.defineProperty(f, 'look', { enumerable: true, get: () => _lookV, set: v => { if (TKP) { TKP.look.set(f, v); return; } _lookV = v; if (TK && !TK._idle && !TK._poser) TK._poser = TK._redo = true; } });
   RIGS.push(f);
   tick(t => pose(f, 'idle', 0, t))._idle = true;   // breathes, blinks and looks around even if the scene never poses it; later pose()/walk() calls win
   return f;
 }
-// expressions: o = mouth open, sm = smile (− = frown), by/br = brows up / inner end up (− = angry), es = eye size (0.5 = half-closed), ps = pupil size, asym = lopsided smirk
-const FACES = { calm: { o: 0, sm: 0.06 }, happy: { o: 0.3, sm: 0.5, by: 0.012, br: 0.1, es: 0.9 }, scared: { o: 0.6, sm: -0.3, by: 0.03, br: 0.38, es: 1.3, ps: 0.7, wob: 14 },
-  angry: { o: 0.12, sm: -0.4, by: -0.025, br: -0.45, es: 0.85 }, shout: { o: 1, sm: -0.12, by: 0.02, br: -0.28, es: 1.15, wob: 14 }, sad: { o: 0, sm: -0.45, by: 0.012, br: 0.48, es: 0.95 },
-  surprised: { o: 0.75, sm: 0, by: 0.045, br: 0.15, es: 1.35, ps: 0.8 }, smug: { o: 0, sm: 0.3, asym: 0.45, br: 0, es: 0.8 }, annoyed: { o: 0, sm: -0.18, by: -0.012, br: -0.1, es: 0.5 },
-  zombie: { o: 0.7, sm: -0.2, wob: 3 } };
+// expressions (channels: see FCH above; old entries with o / sm / br / es / asym still work). 'happy+sweat', 'scared+tears', 'calm+blush' add a sweat drop / tears / blush
+const FACES = {
+  calm: {},
+  happy: { by: 0.008, bi: 0.1, bo: 0.12, lu: 0.14, ll: 0.34, ps: 1.15, mo: 0.42, mu: 0.12, mc: 1, mw: 1.18, mp: 0.75, mtU: 1, ch: 1 },
+  scared: { by: 0.026, bi: 0.44, bo: -0.16, bk: 0.006, lu: 0, ll: 0, es: 1.12, ps: 0.6, mo: 0.5, mu: 0.3, mc: -0.6, mw: 1.08, mtU: 0.7, mtL: 0.7, wob: 14 },
+  angry: { by: -0.016, bi: -0.52, bo: 0.1, bk: 0.012, lu: 0.3, ll: 0.26, lt: 0.36, ps: 0.85, mo: 0.24, mu: 0.45, mc: -0.75, mw: 1.1, mcl: 1, nw: 0.6 },
+  shout: { by: 0.012, bi: -0.36, bo: 0.12, bk: 0.01, lu: 0.04, ll: 0.12, lt: 0.2, es: 1.08, ps: 0.8, mo: 1.1, mu: 0.36, mc: -0.1, mw: 1.25, mr: 0.15, mp: 0.6, mtU: 1, mtL: 1, mtg: 1, nw: 0.4, wob: 14 },
+  sad: { by: 0.006, bi: 0.5, bo: -0.22, bk: 0.005, lu: 0.4, ll: 0.06, lt: -0.36, gy: -0.3, mc: -0.95, mw: 0.9, ps: 1.08 },
+  surprised: { by: 0.032, bi: 0.2, bo: -0.04, lu: 0, ll: 0, es: 1.15, ps: 0.7, mo: 0.78, mu: 0.4, mc: 0, mw: 0.85, mr: 0.85, mp: 0.5, mtg: 0.5 },
+  smug: { bq: 0.02, bi: -0.06, lu: 0.44, ll: 0.14, mc: 0.55, ma: 0.75, gx: 0.12 },
+  annoyed: { by: -0.01, bi: -0.2, bo: -0.04, bk: 0.004, lu: 0.52, ll: 0.12, lt: 0.12, mc: -0.4, ma: -0.3, mw: 0.85, gy: 0.06 },
+  disgust: { by: -0.006, bq: -0.016, bi: -0.26, bk: 0.008, lu: 0.4, ll: 0.36, lt: 0.16, mo: 0.28, mu: 0.75, mc: -0.65, ma: 0.6, mtU: 0.9, nw: 1 },
+  confused: { by: 0.004, bq: 0.032, bi: 0.16, lu: 0.2, ll: 0.08, mo: 0.1, mc: -0.25, ma: -0.55, mw: 0.8, gx: -0.2, gy: 0.2 },
+  nervous: { by: 0.016, bi: 0.4, bo: -0.12, lu: 0.1, ll: 0.06, es: 1.05, ps: 0.72, mo: 0.24, mu: 0.5, mc: 0.75, mw: 1.25, mcl: 1, ch: 0.4, sw: 1, wob: 9 },
+  relieved: { by: 0.012, bi: 0.32, bo: -0.12, lu: 0.58, ll: 0.16, mo: 0.16, mu: 0.4, mc: 0.6, mr: 0.45, ch: 0.45, gy: 0.12 },
+  determined: { by: -0.012, bi: -0.3, bo: 0.1, bk: 0.008, lu: 0.26, ll: 0.24, lt: 0.2, ps: 0.9, mc: -0.18, mw: 0.9 },
+  panic: { by: 0.036, bi: 0.52, bo: -0.22, bk: 0.006, lu: 0, ll: 0, es: 1.2, ps: 0.45, mo: 1.1, mu: 0.34, mc: -0.85, mw: 1.3, mtU: 1, mtL: 0.8, mtg: 0.6, sw: 1, wob: 18 },
+  deadpan: { by: -0.003, bi: 0, bo: 0, lu: 0.5, ll: 0.08, mc: 0, mw: 0.85 },
+  cry: { by: 0.01, bi: 0.56, bo: -0.26, bk: 0.008, lu: 0.56, ll: 0.3, lt: -0.4, gy: -0.2, mo: 0.5, mu: 0.25, mc: -1, mw: 1.1, mtU: 0.3, mtL: 0.6, ch: 0.3, bl: 0.4, tr: 1, wob: 7 },
+  blush: { by: 0.006, bi: 0.22, lu: 0.34, ll: 0.16, gy: -0.25, gx: 0.25, mc: 0.45, mw: 0.85, ch: 0.6, bl: 1 },
+  sweat: { by: 0.012, bi: 0.3, bo: -0.08, lu: 0.16, mo: 0.05, mc: -0.2, ma: 0.3, ps: 0.85, sw: 1 },
+  zombie: { by: 0, lu: 0.36, ll: 0.14, ps: 0.4, mo: 0.95, mu: 0.12, mc: -0.35, mw: 1.1, mtU: 1, mtL: 0.6, wob: 3 }
+};
+const FREACT = {   // what react() and the automatic close-up reactions do to the face (only the channels named here)
+  startle: { by: 0.034, bi: 0.26, bo: -0.05, bk: 0, lu: 0, ll: 0, lt: 0, es: 1.18, ps: 0.55, mo: 0.6, mu: 0.4, mc: -0.2, mr: 0.5, mp: 0.6, mtU: 0.4, mcl: 0 },
+  flinch: { by: -0.006, bi: 0.2, bk: 0.012, lu: 0.85, ll: 0.5, lt: 0, mo: 0.18, mu: 0.5, mc: -0.6, mw: 1.15, mcl: 1, nw: 0.8 },
+  hit: { by: -0.004, bi: 0.34, bk: 0.014, lu: 1, ll: 0.6, lt: 0, mo: 0.3, mu: 0.5, mc: -0.8, mw: 1.15, mcl: 1, nw: 0.9 },
+  facepalm: { by: -0.01, bi: -0.2, lu: 0.75, ll: 0.12, mc: -0.45, ma: -0.3, mo: 0 },
+  sigh: { by: 0.004, bi: 0.18, bo: -0.06, lu: 0.6, gy: -0.15, mo: 0.28, mu: 0.4, mr: 0.9, mc: -0.15 },
+  shrug: { bq: 0.032, bi: 0.18, lu: 0.2, mo: 0.06, mc: -0.35, ma: -0.5, mw: 0.85 },
+  nod: { mc: 0.55, ch: 0.45, lu: 0.26, ll: 0.16 },
+  shake: { bi: -0.12, mc: -0.35, lu: 0.3 },
+  wave: { by: 0.01, bi: 0.1, mo: 0.32, mu: 0.12, mc: 1, mw: 1.15, mtU: 0.9, ch: 1, ll: 0.3 },
+  worried: { by: 0.022, bi: 0.46, bo: -0.14, bk: 0.006, lu: 0.04, ll: 0, es: 1.06, ps: 0.75, mo: 0.16, mu: 0.4, mc: -0.55, gy: -0.12 },
+  relieved: { by: 0.012, bi: 0.3, lu: 0.5, mc: 0.55, mo: 0.14, mr: 0.4, ch: 0.4 }
+};
+const _fvec = new Map(), _fmask = new Map();
+function faceVec(name) {   // expression name → channel vector (cached)
+  let v = _fvec.get(name); if (v) return v;
+  v = new Float32Array(NCH); FCH.forEach((k, i) => { v[i] = FDEF[k]; });
+  const parts = String(name).split('+'), add = { sweat: 'sw', blush: 'bl', tears: 'tr', cry: 'tr' };
+  const one = n => { let F = FACES[n] ?? FACES.calm; if (F.o != null || F.sm != null || F.br != null || F.asym != null) F = { mo: F.o ?? 0, mc: (F.sm ?? 0.06) * 2, by: F.by ?? 0, bi: F.br ?? 0, es: Math.max(1, F.es ?? 1), lu: 0.22 + Math.max(0, 1 - (F.es ?? 1)) * 0.9, ps: F.ps ?? 1, ma: (F.asym ?? 0) * 1.5, wob: F.wob ?? 0 };   // pre-v2.40.5 entry
+    const w = new Float32Array(NCH); FCH.forEach((k, i) => { w[i] = F[k] ?? FDEF[k]; }); return w; };
+  v.set(one(parts[0]));
+  for (const p of parts.slice(1)) { if (add[p]) v[FI[add[p]]] = 1; else if (FACES[p]) { const w = one(p); for (let i = 0; i < NCH; i++) v[i] = (v[i] + w[i]) / 2; } }
+  _fvec.set(name, v); return v;
+}
+const faceMask = R => { let m = _fmask.get(R); if (!m) { m = new Uint8Array(NCH); for (const k in R) m[FI[k]] = 1; _fmask.set(R, m); } return m; };
+const FREACTV = Object.fromEntries(Object.entries(FREACT).map(([k, R]) => { const v = new Float32Array(NCH); FCH.forEach((c, i) => { v[i] = R[c] ?? FDEF[c]; }); return [k, { v, m: faceMask(R) }]; }));
+function face(f, ex) { return faceVec(ex ?? 'calm'); }   // pre-v2.40.5 name; the face itself is drawn by facePass()
 const LIPS = {};   // lip sync: voice.py writes a mouth track (opening + shape per 1/30 s) for every line an on-screen character speaks (BEATS[].who)
 for (const m of VOICE?.mouth ?? []) (LIPS[m.who] ??= []).push(m);
 function lipAt(who, t) {   // → { o: 0..1, w: wide 0..1, r: round 0..1, c: closed 0..1 } or null
@@ -1621,26 +1669,208 @@ function lipAt(who, t) {   // → { o: 0..1, w: wide 0..1, r: round 0..1, c: clo
     return { o, w: fr('w') + 0.6 * fr('f'), r: fr('r'), c: fr('n'), f: fr('f') }; }
   return null;
 }
-function face(f, ex, t) {   // calm | happy | scared | angry | shout | sad | surprised | smug | annoyed (zombies: open jaw); lips follow the voice (lip sync) or f.talk: [[t0, t1], …] | t => bool
-  const F = FACES[ex] ?? FACES.calm, M = f.M, wob = F.wob ? 1 + 0.15 * Math.sin(t * F.wob) : 1;
-  const lip = f.who ? lipAt(f.who, t) : null, synced = f.who && LIPS[f.who];
-  const tk = !synced && (typeof f.talk === 'function' ? f.talk(t) : Array.isArray(f.talk) && f.talk.some(([a, b]) => t >= a && t <= b));
-  let open, wide = 0, round = 0;
-  if (lip) { open = clamp((F.o ?? 0) * 0.35 * wob + lip.o * 0.9 * (1 - 0.75 * lip.c), 0, 1.1); if (lip.f > 0.5) open = Math.min(open, 0.28); wide = lip.w; round = lip.r; }
-  else if (tk) {   // no voice track: syllable rhythm (~5 per second) with closures, varied loudness and shapes
-    const ph = t * 5.2 + f.sd * 9, n = Math.floor(ph), syl = Math.pow(Math.max(0, Math.sin((ph - n) * Math.PI)), 0.7) * (0.45 + 0.55 * hash(n + f.sd * 31)), hs = hash(n * 1.7 + f.sd * 13);
-    open = clamp((F.o ?? 0) * wob * 0.5 + 0.06 + 0.62 * syl, 0, 1.1); round = hs < 0.25 ? syl : 0; wide = hs > 0.7 ? syl : 0;
-  } else open = clamp((F.o ?? 0) * wob, 0, 1.1);
-  if (f.mouth) { f.mouth.scale.x = 1 + 0.2 * wide - 0.32 * round; f.mouth.position.z = 0.191 + 0.012 * round; }
-  if (M) {
-    M.inner.scale.y = 0.05 + open * 1.25; M.inner.position.y = -0.008 - open * 0.03; M.teeth.visible = open > 0.12;
-    M.lipL.position.y = -open * 0.058; M.lipU.position.y = -0.008 + open * 0.004;
-    M.corners.forEach(c => { const sm = (F.sm ?? 0) + (F.asym ?? 0) * c.sx; c.rotation.z = c.sx * sm * 0.9; c.position.y = -open * 0.03; });
-  } else f.mouth.scale.y = 1 + open * 2;
-  f.brows.forEach((b, i) => { b.position.y = 0.285 + (F.by ?? 0) + (F.asym && i ? 0.02 : 0); b.rotation.z = (i ? -1 : 1) * (F.br ?? 0); });
-  return F;
+const blinkShape = k => k < 0 || k > 0.2 ? 0 : k < 0.06 ? sm01(k / 0.06) : k < 0.09 ? 1 : 1 - sm01((k - 0.09) / 0.11);   // fast close, short hold, slower open
+function blinkAt(sd, t) {   // natural blinks: every 2–6 s (per figure), sometimes a double blink
+  const P = 4, ph = sd * 4, i0 = Math.floor((t - ph) / P); let b = 0;
+  for (let i = i0 - 1; i <= i0 + 1; i++) { const tb = ph + i * P + (hash(i * 7.13 + sd * 31) - 0.5) * 2; b = Math.max(b, blinkShape(t - tb)); if (hash(i * 3.71 + sd * 17) < 0.2) b = Math.max(b, blinkShape(t - tb - 0.27)); }
+  return b;
 }
-const blink = (t, sd) => { const P = 2.6 + sd * 2.4, k = ((t + sd * 9.7) % P + P) % P; return k < 0.13 ? Math.abs(k / 0.065 - 1) * 0.9 + 0.1 : 1; };
+const blink = (t, sd) => 1 - 0.9 * blinkAt(sd, t);   // pre-v2.40.5 helper (1 = open)
+// head surface (head space): the face is drawn onto the rounded head box — features near its edges follow the bevel instead of floating in front of it
+const HEADZ = (() => { const R = 0.38 * 0.16, sg = CFG.smoothSeg ?? 1, flat = CFG.smooth === false;
+  return (x, y) => { if (flat) return 0.19; const dx = Math.max(0, Math.abs(x) - (0.19 - R)), dy = Math.max(0, R - y, y - (0.38 - R)); if (!dx && !dy) return 0.19;
+    return sg <= 1 ? 0.19 - dx - dy : 0.19 - R + Math.sqrt(Math.max(0, R * R - dx * dx - dy * dy)); }; })();
+let _mouthM = null; const _mcol = {};
+const mouthCol = hex => _mcol[hex] ??= new THREE.Color(hex).convertSRGBToLinear().toArray();
+function faceBuild(head, P) {
+  const { skin, skinD, lipC, zb, hairC } = P, NC = { cast: false }, own = [], O = x => { own.push(x); return x; };
+  const whiteM = zb ? mat('#C4C98A', { flat: false, rough: 0.6, em: '#6A7420', ei: 1 }) : mat('#F8F6F0', { flat: false, rough: 0.32, em: '#3A3936', ei: 1 });
+  whiteM.polygonOffset = true; whiteM.polygonOffsetFactor = 1; whiteM.polygonOffsetUnits = 2;
+  const irisM = mat(P.eyeColor, { flat: false, rough: 0.3 }), ringM = mat(shade(P.eyeColor, -0.12), { flat: false, rough: 0.3 }), pupM = mat(zb ? '#2A1C08' : '#0C0907', { flat: false, rough: 0.25 });
+  const glintM = mat('#FFFFFF', { basic: true }), lidM = mat(shade(skin, zb ? -0.1 : -0.015), { flat: false }), lashM = mat(zb ? shade(skin, -0.2) : '#22180F', { flat: false });
+  const eyes = [-1, 1].map(sx => {
+    const e = O(grp(head, sx * EX, EY, EZ0)); e.scale.set(1, 1.08, EZ); e.sx = sx;
+    mesh(e, capG(ER, 1.75, 16, 7), whiteM, 0, 0, 0, NC);
+    const ir = grp(e); e.iris = ir;
+    if (!zb) { mesh(ir, capG(ER * 1.012, 0.56, 16, 2), ringM, 0, 0, 0, NC); mesh(ir, capG(ER * 1.022, 0.46, 16, 2), irisM, 0, 0, 0, NC); }
+    e.pupil = mesh(ir, capG(ER * 1.05, zb ? 0.12 : 0.24, 12, 2), pupM, 0, 0, 0, NC);
+    if (!zb) { const gG = G('glint', () => new THREE.SphereGeometry(1, 8, 4));
+      for (const [gx, gy, s] of [[0.36, 0.4, 0.0085], [-0.3, -0.28, 0.0042]]) { const d = new THREE.Vector3(gx, gy, 1).normalize().multiplyScalar(ER * 1.075); mesh(e, gG, glintM, d.x, d.y, d.z, NC).scale.set(s, s, s * 0.5); } }
+    e.ul = grp(e); e.ul.rotation.order = 'ZYX'; mesh(e.ul, lidG(true), lidM, 0, 0, 0, NC); mesh(e.ul, lashG(), lashM, 0, 0, 0, NC);
+    e.lw = grp(e); e.lw.rotation.order = 'ZYX'; mesh(e.lw, lidG(false), lidM, 0, 0, 0, NC);
+    e.ul.rotation.x = Math.asin(2 * (zb ? 0.42 : 0.22) - 1); e.lw.rotation.x = Math.asin(1 - 2 * (zb ? 0.16 : 0.06));   // built pose: relaxed open eyes
+    return e;
+  });
+  const browM = mat(hairC ? shade(hairC, -0.06) : '#2A211D', { flat: false });
+  const brows = zb ? [] : [-1, 1].map(sx => { const b = O(grp(head, sx * EX, 0.268, 0.197)); b.sx = sx; b.I = grp(b); b.O = grp(b);
+    rbox(b.I, 0.052, 0.026, 0.014, '', -sx * 0.022, -0.013, 0, { mat: browM, rf: 0.45, ...NC }); rbox(b.O, 0.05, 0.02, 0.013, '', sx * 0.022, -0.01, 0, { mat: browM, rf: 0.45, ...NC }); return b; });
+  const nose = O(grp(head, 0, 0.122, 0.2)); rbox(nose, 0.056, 0.07, 0.05, skinD, 0, 0, 0, { rf: 0.45, ...NC });
+  const wr = O(grp(head, 0, 0.198, 0.191)); for (let i = 0; i < 2; i++) box(wr, 0.03 - i * 0.008, 0.004, 0.004, shade(skin, -0.16), 0, i * 0.009, 0, NC);
+  for (const sx of [-1, 1]) { O(rbox(head, 0.035, 0.1, 0.07, skinD, sx * 0.2, 0.12, -0.01, { rf: 0.4, ...NC })); O(box(head, 0.008, 0.055, 0.032, shade(skin, -0.14), sx * 0.2155, 0.142, -0.005, NC)); }   // ears with a darker inner ear
+  const cheekC = zb ? null : new THREE.Color(new THREE.Color(skin).lerp(new THREE.Color('#F08A8A'), 0.13)), cheekM = zb ? null : mat('#' + cheekC.getHexString(), { flat: false, own: true });
+  const cheeks = zb ? [] : [-1, 1].map(sx => { const c = O(ball(head, 1, '', sx * 0.113, 0.116, 0.186, { mat: cheekM, detail: 1, ...NC })); c.scale.set(0.029, 0.023, 0.01); return c; });
+  const mouth = O(grp(head, 0, MY, 0)), NV = 900, geo = new THREE.BufferGeometry();
+  for (const [k, n] of [['position', 3], ['normal', 3], ['color', 3]]) geo.setAttribute(k, new THREE.BufferAttribute(new Float32Array(NV * n), n).setUsage(THREE.DynamicDrawUsage));
+  geo.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, 0, 0.18), 0.13); geo.setDrawRange(0, 0);
+  _mouthM ??= new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.55, metalness: 0 });
+  const mm = mesh(mouth, geo, _mouthM, 0, 0, 0, NC);
+  const sweat = O(grp(head, 0.15, 0.3, 0.188)), swM = mat('#9ADCFF', { basic: true, opacity: 0.92 }); ball(sweat, 0.016, '', 0, 0, 0, { mat: swM, detail: 1, ...NC }); cone(sweat, 0.0155, 0.026, '', 0, 0, 0, { mat: swM, seg: 8, ...NC }); ball(sweat, 0.004, '', 0.006, 0.006, 0.013, { mat: glintM, detail: 0, ...NC });
+  const tearM = mat('#8FD0FF', { basic: true, opacity: 0.85 }), tears = zb ? [] : [-1, 1].map(sx => { const g = O(grp(head, sx * 0.112, 0.14, 0.2)); g.strip = grp(g); box(g.strip, 0.012, 1, 0.003, '', 0, -1, 0, { mat: tearM, ...NC }); g.drop = ball(g, 0.012, '', 0, 0, 0.003, { mat: tearM, detail: 1, ...NC }); return g; });
+  const FC = { eyes, brows, mouth, nose, wr, cheeks, cheekM, cheekC, sweat, tears, zb, lipC: mouthCol(lipC), geo, own, key: '', M: { mouth: mm } };
+  mouthDraw(FC, faceVec(zb ? 'zombie' : 'calm'), null, 0);
+  return FC;
+}
+// the mouth: lip line, opening, lips, teeth rows, tongue — rebuilt only when its shape changes (pure: the shape is a function of the channels)
+const _mC = { in: mouthCol('#4A1418'), tooth: mouthCol('#F4F1E8'), ztooth: mouthCol('#C9BE8A'), tongue: mouthCol('#C8505A') };
+function mouthDraw(FC, V, lip, s) {
+  const zb = FC.zb, wob = V[FI.wob] ? 1 + 0.12 * Math.sin(s * V[FI.wob]) : 1;
+  let mo = V[FI.mo] * wob, mr = V[FI.mr], mw = V[FI.mw];
+  let hw = clamp(0.052 * mw * (1 - 0.34 * mr) + (lip ? 0.009 * lip.w : 0), 0.024, 0.085), O = clamp(mo, 0, 1.15) * 0.074;
+  let ou = Math.min(0.024, O * clamp(V[FI.mu], 0, 1)), ol = Math.min(0.05, O * (1 - clamp(V[FI.mu], 0, 1))), p = lerp(V[FI.mp], 0.5, clamp(mr)), c = V[FI.mc] * 0.015 * (V[FI.wob] ? 1 + 0.06 * Math.sin(s * V[FI.wob] * 1.3) : 1), ma = V[FI.ma];
+  let cR = c + ma * 0.013, cL = c - ma * 0.004, dx = ma * 0.006, tU = V[FI.mtU], tL = V[FI.mtL], cl = V[FI.mcl], tg = V[FI.mtg];
+  const Q = [hw, ou, ol, p, cR, cL, dx, tU, tL, cl, tg].map(x => Math.round(x * 2000)), key = Q.join(',');   // the shape is drawn from the rounded values: same key → same mouth, whatever came before
+  if (key === FC.key) return; FC.key = key;
+  [hw, ou, ol, p, cR, cL, dx, tU, tL, cl, tg] = Q.map(x => x / 2000);
+  const A = FC.geo.attributes, Pp = A.position.array, Nn = A.normal.array, Cc = A.color.array, NV = Pp.length / 3; let n = 0;
+  const put = (x, y, dz, col) => { if (n >= NV) return; const yy = y + MY, z = HEADZ(x, yy), e = 0.002, gx = (HEADZ(x + e, yy) - HEADZ(x - e, yy)) / (2 * e), gy = (HEADZ(x, yy + e) - HEADZ(x, yy - e)) / (2 * e), l = Math.hypot(gx, gy, 1);
+    Pp[3 * n] = x; Pp[3 * n + 1] = y; Pp[3 * n + 2] = z + dz; Nn[3 * n] = -gx / l; Nn[3 * n + 1] = -gy / l; Nn[3 * n + 2] = 1 / l; Cc[3 * n] = col[0]; Cc[3 * n + 1] = col[1]; Cc[3 * n + 2] = col[2]; n++; };
+  const X = u => dx + u * hw, lift = u => (u > 0 ? cR : cL) * u * u, env = u => Math.pow(Math.max(0, 1 - u * u), p), gap = u => 0.0034 * (1 - 0.7 * u * u);
+  const yu = u => lift(u) + Math.max(ou * env(u), gap(u)), yl = u => lift(u) - Math.max(ol * env(u), gap(u));
+  const band = (fa, fb, u0, u1, dz, col, skip) => { const S = 10; for (let i = 0; i < S; i++) { if (skip && skip(i)) continue; const a = lerp(u0, u1, i / S), b = lerp(u0, u1, (i + 1) / S), a0 = fa(a), a1 = Math.max(a0, fb(a)), b0 = fa(b), b1 = Math.max(b0, fb(b));
+    if (a1 - a0 < 1e-5 && b1 - b0 < 1e-5) continue; const xa = X(a), xb = X(b); put(xa, a0, dz, col); put(xb, b0, dz, col); put(xb, b1, dz, col); put(xa, a0, dz, col); put(xb, b1, dz, col); put(xa, a1, dz, col); } };
+  band(yl, yu, -1, 1, 0.0018, _mC.in);
+  const mid = u => (yu(u) + yl(u)) / 2, TT = zb ? _mC.ztooth : _mC.tooth, zs = zb ? i => hash(i * 3.3 + 1) < 0.3 : null;
+  if (tg > 0.02) band(yl, u => Math.min(mid(u), yl(u) + tg * 0.022 * Math.max(0, 1 - (u / 0.62) ** 2)), -0.62, 0.62, 0.0026, _mC.tongue);
+  if (cl > 0.02) { band(u => Math.max(yl(u), mid(u) + 0.0008), yu, -0.86 * cl, 0.86 * cl, 0.0034, TT); band(yl, u => Math.min(yu(u), mid(u) - 0.0008), -0.8 * cl, 0.8 * cl, 0.0034, TT); }
+  else { if (tU > 0.02) band(u => Math.max(yl(u), yu(u) - (zb ? 0.012 + 0.008 * hash(Math.round(u * 5) + 3) : 0.016) * tU), yu, -0.78, 0.78, 0.0034, TT, zs);
+    if (tL > 0.02) band(yl, u => Math.min(yu(u), yl(u) + 0.011 * tL), -0.7, 0.7, 0.0034, TT, zs); }
+  const th = (k, u) => k * (1 - 0.6 * u * u);
+  band(yu, u => yu(u) + th(zb ? 0.004 : 0.0068, u), -1, 1, 0.0044, FC.lipC); band(u => yl(u) - th(zb ? 0.005 : 0.0088, u), yl, -1, 1, 0.0044, FC.lipC);
+  for (const k of ['position', 'normal', 'color']) A[k].needsUpdate = true; FC.geo.setDrawRange(0, n);
+}
+// what happens in the video, for faces that react on their own in close-ups (built once, scene time): loud hits, explosions, shakes, big flashes, counters that jump
+let FACEEV = null;
+const FLOUD = { explosion: 1, blast: 0.9, cannon: 0.9, thunder: 0.8, roar: 0.8, crash: 0.7, missile: 0.6, impact: 0.5, alarm: 0.4, shotgun: 0.5, gunshot: 0.5, crack: 0.3 };
+function faceEvents() {
+  if (FACEEV) return FACEEV; const E = [];
+  for (const h of AUDIO.hits ?? []) { const k = (FLOUD[h?.k] ?? 0) * Math.min(1.2, h.v ?? 1); if (k >= 0.45 && h.t >= 0) E.push({ t: ST(h.t), s: Math.min(1, k), k: 'bang' }); }
+  for (const s of SHAKES) { const k = Math.min(1, (s.amp ?? 0.3) * 2.2); if (k >= 0.45 && s.t >= 0) E.push({ t: ST(s.t), s: k, k: 'bang' }); }
+  for (const fl of FLASHES) if ((fl.a ?? 0.5) >= 0.55 && fl.t >= 0) E.push({ t: ST(fl.t), s: 0.5, k: 'bang' });
+  try { for (const s of STATS) { if (!s.up) continue; const a = s.show ?? 0, b = Math.min(DUR, s.hide ?? DUR), V = []; let lo = Infinity, hi = -Infinity;   // same rule as whatif.events() (the narrator's voice)
+    for (let x = a; x <= b; x += 0.25) { const v = statVal(s, x); V.push(v); lo = Math.min(lo, v); hi = Math.max(hi, v); }
+    const rg = Math.max(1e-6, hi - lo); for (let i = 2; i < V.length; i++) { const d = V[i] - V[i - 2]; if (Math.abs(d) > rg * 0.12 && (i < 4 || Math.abs(V[i - 2] - V[i - 4]) <= rg * 0.12)) E.push({ t: ST(a + (i - 1) * 0.25), s: Math.min(1, 0.45 + Math.abs(d) / rg), k: (d > 0) === (s.up === 'good') ? 'good' : 'bad' }); } } } catch (e) { }
+  E.sort((a, b) => a.t - b.t); FACEEV = [];
+  for (const e of E) { const l = FACEEV[FACEEV.length - 1]; if (l && l.k === e.k && e.t - l.t < 0.2) l.s = Math.max(l.s, e.s); else FACEEV.push(e); }
+  return FACEEV;
+}
+// expression at scene time s with smooth changes: the expr is sampled over the last 0.36 s (and 0.06 s ahead, so brows and eyes can lead); each change found
+// (bisected to ~2 ms) blends in with its own step curve — no state between frames. → V (channels), returns the change times (for blinks)
+const _fsV = new Float32Array(NCH), _fsT = [];
+function _exprN(f, s, d) { const e = typeof f.expr === 'function' ? f.expr(s) : f.expr; return e ?? d; }
+const _stepLead = u => u <= 0 ? 0 : u >= 1 ? 1 : 1 + 2.4 * (u - 1) ** 3 + 1.4 * (u - 1) ** 2, _stepMouth = u => u <= 0 ? 0 : u >= 1 ? 1 : 1 - (1 - u) ** 3;
+function faceExpr(f, s, d, V) {
+  const H = 0.06, K = 7, CH = _fsT; CH.length = 0; let nw = _exprN(f, s + H, d), tn = s + H, old = nw;
+  for (let k = 1; k <= K; k++) { const tk = s + H - k * H, e = _exprN(f, tk, d);
+    if (e !== nw) { let a = tk, b = tn; for (let j = 0; j < 6; j++) { const m = (a + b) / 2; if (_exprN(f, m, d) === nw) b = m; else a = m; } CH.push([b, e, nw]); nw = e; }
+    tn = tk; old = e; }
+  V.set(faceVec(old));
+  for (let c = CH.length - 1; c >= 0; c--) { const [tc, A0, B0] = CH[c], A = faceVec(A0), B = faceVec(B0), uL = (s - tc + 0.05) / 0.24, uM = (s - tc) / 0.2, kL = _stepLead(uL), kM = _stepMouth(uM);
+    for (let i = 0; i < NCH; i++) if (A[i] !== B[i]) V[i] += (B[i] - A[i]) * (FLEAD.has(FCH[i]) ? kL : kM); }
+  return CH;
+}
+const _fW = new THREE.Vector3(), _fW2 = new THREE.Vector3(), _fM = new THREE.Matrix4(), _fR = new Float32Array(NCH);
+function faceCover(f) {   // gear in front of the face (masks, beards, helmets, goggles, hoods, eye patch) hides the features behind it — rays from the front, so eye holes stay open
+  const FC = f.FC, own = new Set(); for (const n of FC.own) n.traverse(x => own.add(x));
+  f.root.updateWorldMatrix(true, true); const L = [], H = f.head, rc = new THREE.Raycaster(), o = new THREE.Vector3(), d = new THREE.Vector3(), q = new THREE.Vector3();
+  H.traverse(m => { if (!m.isMesh || own.has(m) || m === FC.skull || !m.visible || !m.geometry) return; for (let p = m; p && p !== H; p = p.parent) if (p.userData.dyn || p === f.hair || p === f.hat || !p.visible) return;
+    const mt = m.material; if (!mt || mt.transparent || (mt.opacity ?? 1) < 1) return; L.push(m); });
+  const ray = (x, y, zf) => { H.localToWorld(o.set(x, y, 0.7)); d.copy(H.localToWorld(q.set(x, y, 0))).sub(o).normalize(); rc.set(o, d); rc.far = o.distanceTo(q);
+    return rc.intersectObjects(L, false).some(h => H.worldToLocal(h.point.clone()).z >= zf); };
+  const hit = (x, y, zf, w = 0.02) => (ray(x - w, y, zf) + ray(x, y, zf) + ray(x + w, y, zf)) >= 2;
+  return L.length ? { eye: [-1, 1].map(sx => hit(sx * EX, EY, 0.198)), brow: [-1, 1].map(sx => hit(sx * EX, 0.27, 0.198)), mouth: hit(0, MY, 0.194, 0.025), nose: hit(0, 0.15, 0.2, 0.01) && hit(0, 0.17, 0.2, 0.01), cheek: [-1, 1].map(sx => hit(sx * 0.113, 0.116, 0.195, 0.012)) }
+    : { eye: [false, false], brow: [false, false], mouth: false, nose: false, cheek: [false, false] };
+}
+function _lookTgt(L, t) { if (typeof L === 'function') { const v = L(t); if (!Array.isArray(v)) return v ? _lookTgt(v, t) : null; } return L === 'cam' || L === true ? _fW.copy(camera.position) : typeof L === 'function' ? _fW.fromArray(L(t)) : typeof L === 'string' ? (TRACK[L] ? TRACK[L].obj.getWorldPosition(_fW) : null)
+  : L.isObject3D ? L.getWorldPosition(_fW) : L.root ? (L.head ?? L.root).getWorldPosition(_fW) : Array.isArray(L) ? _fW.fromArray(L) : null; }
+const _pulse = k => k < 0 ? 0 : k < 0.06 ? k / 0.06 : Math.max(0, 1 - (k - 0.06) / 0.24);
+function _emph(f, s, talking) {   // stressed syllables while talking → a short brow lift (voice track: loud peaks; without voice: every few syllables)
+  let e = 0; const tr = f.who && LIPS[f.who];
+  if (tr) { for (const m of tr) { const i1 = Math.floor((s - m.t0) * 30); if (i1 < 2 || i1 - 9 >= m.o.length) continue; for (let j = Math.max(2, i1 - 9); j <= Math.min(i1, m.o.length - 3); j++) { const o = +m.o[j];
+      if (o >= 7 && o >= +m.o[j - 1] && o > +m.o[j + 1] && o >= +m.o[j - 2] && o >= +m.o[j + 2]) e = Math.max(e, _pulse(s - m.t0 - j / 30) * (o - 6) / 3); } } }
+  else if (talking) { const ph = s * 5.2 + f.sd * 9, n0 = Math.floor(ph); for (let n = n0 - 2; n <= n0; n++) if (hash(n * 2.3 + f.sd * 41) > 0.8) e = Math.max(e, _pulse(s - (n + 0.4 - f.sd * 9) / 5.2)); }
+  return Math.min(1, e);
+}
+let FSEQ = 0;
+function facePass(t) {   // after the camera and the head turns: every figure's face for this moment (expression + blinks + gaze + lips + reactions)
+  camera.updateMatrixWorld();
+  const tanH = Math.tan(camera.fov * Math.PI / 360), auto = CFG.autoFace !== false;
+  for (const f of RIGS) {
+    const FC = f.FC; if (!FC || f._fq !== FSEQ || !f.root.visible) continue;
+    const s = f._ft, zb = FC.zb, m = f._fm, V = _fsV, sd = f.sd;
+    FC.cover ??= faceCover(f);
+    const CH = faceExpr(f, s, zb ? 'zombie' : m === 'panic' ? 'scared' : m === 'cheer' ? 'happy' : 'calm', V);
+    let blk = zb ? 0 : blinkAt(sd, s), jolt = 0;
+    if (!zb) for (const [tc] of CH) if (hash(tc * 13.1 + sd * 7) < 0.7) blk = Math.max(blk, blinkShape(s - tc + 0.03));   // people blink as their expression changes
+    if (f._lookFrom && f._lookFrom.w < 0.6 && !zb) blk = Math.max(blk, Math.sin(Math.PI * f._lookFrom.w / 0.6));   // … and as they turn to look somewhere else
+    // reactions: react() (always) and, in a close-up, automatic ones to loud hits, explosions, shakes, big flashes and counters that jump
+    const R = _fR; R.set(V); let best = 0;
+    const over = (name, w) => { if (w <= 0.001) return; const X = FREACTV[name]; if (!X) return; for (let i = 0; i < NCH; i++) if (X.m[i]) R[i] = lerp(R[i], X.v[i], Math.min(1, w)); best = Math.max(best, w); };
+    if (!zb) for (const [t0, kind, d, amp] of f._rx ?? []) { const k = (s - t0) / d; if (k < 0 || k > 1) continue; const e = sm01(k / 0.15) * (1 - sm01((k - 0.72) / 0.28)) * Math.min(1, amp);
+      over(kind === 'startle' ? 'startle' : kind, e); if (kind === 'startle' || kind === 'flinch' || kind === 'hit') { const kk = s - t0; if (kk < 0.16) blk = Math.max(blk, Math.sin(Math.PI * kk / 0.16)); } }
+    if (auto && !zb && f.autoFace !== false) {
+      const E = faceEvents(); let gate = -1;
+      for (const e of E) { const k = s - e.t - 0.04; if (k < 0) break; if (k > 1.6) continue;
+        if (gate < 0) { f.head.getWorldPosition(_fW2); const dd = _fW2.distanceTo(camera.position), h = 2 * dd * tanH / Math.max(0.3, f.root.scale.x); _fW2.project(camera);
+          gate = _fW2.z > 1 || dd > 12 ? 0 : (1 - sm01((h - 2.9) / 1.3)) * (1 - sm01((Math.max(Math.abs(_fW2.x), Math.abs(_fW2.y)) - 0.85) / 0.3)); }
+        if (!gate) break;
+        if (e.k === 'bang') { const w = e.s * gate * sm01(k / 0.07) * (1 - sm01((k - 0.45) / 0.9)); over('startle', w); if (k < 0.14) blk = Math.max(blk, Math.sin(Math.PI * k / 0.14) * e.s * gate); jolt = Math.max(jolt, bump(k, 0, 0.32) * e.s * gate); }
+        else over(e.k === 'bad' ? 'worried' : 'relieved', e.s * gate * (e.k === 'bad' ? 1 : 0.7) * sm01(k / 0.12) * (1 - sm01((k - 0.7) / 0.7))); }
+    }
+    if (jolt) f.neck.rotation.x -= 0.075 * jolt;   // flinch: the head jerks back a little
+    // lips: voice track (lip sync) or talk: [[t0, t1]] / t => bool (syllable rhythm)
+    const lip = f.who ? lipAt(f.who, s) : null, synced = f.who && LIPS[f.who];
+    const tk = !synced && (typeof f.talk === 'function' ? f.talk(s) : Array.isArray(f.talk) && f.talk.some(([a, b]) => s >= a && s <= b));
+    if (lip) { let o = R[FI.mo] * 0.35 + lip.o * 0.9 * (1 - 0.75 * lip.c); if (lip.f > 0.5) o = Math.min(o, 0.28); R[FI.mo] = clamp(o, 0, 1.1); R[FI.mr] = Math.max(R[FI.mr] * 0.5, lip.r); R[FI.mtU] = Math.max(R[FI.mtU], lip.f, lip.o > 0.5 ? 0.6 : 0); R[FI.mcl] *= 0.3; R[FI.mu] = lerp(R[FI.mu], 0.3, 0.6); }
+    else if (tk) { const ph = s * 5.2 + sd * 9, n = Math.floor(ph), syl = Math.pow(Math.max(0, Math.sin((ph - n) * Math.PI)), 0.7) * (0.45 + 0.55 * hash(n + sd * 31)), hs = hash(n * 1.7 + sd * 13);
+      R[FI.mo] = clamp(R[FI.mo] * 0.5 + 0.06 + 0.62 * syl, 0, 1.1); R[FI.mr] = Math.max(R[FI.mr] * 0.5, hs < 0.25 ? syl : 0); R[FI.mw] += hs > 0.7 ? 0.2 * syl : 0; R[FI.mtU] = Math.max(R[FI.mtU], 0.5 * syl); R[FI.mcl] *= 0.3; R[FI.mu] = lerp(R[FI.mu], 0.3, 0.6); }
+    if (lip || tk) { const em = _emph(f, s, tk); if (em) { if (R[FI.bi] < -0.2) { R[FI.bk] += 0.006 * em; R[FI.by] -= 0.006 * em; } else { R[FI.by] += 0.014 * em; R[FI.bi] += 0.08 * em; R[FI.lu] -= 0.06 * em; } } }
+    // gaze: toward the look target (each eye on its own — the eyes get there before the head), else glances; plus tiny saccades
+    f.head.updateWorldMatrix(true, false);
+    const L = f.look, tg = L ? _lookTgt(L, s) : null, gk = s / 1.4 + sd * 11, gn = Math.floor(gk), gj = sm01((gk - gn - 0.9) / 0.1), mk = s / 0.37 + sd * 5, mn = Math.floor(mk), mj = sm01((mk - mn) / 0.12);
+    const mx = lerp(hash(mn - 1 + sd * 70), hash(mn + sd * 70), mj) - 0.5, my = lerp(hash((mn - 1) * 1.7 + sd * 30), hash(mn * 1.7 + sd * 30), mj) - 0.5;
+    if (tg) _fM.copy(f.head.matrixWorld).invert();
+    const covE = FC.cover.eye, gx0 = R[FI.gx], gy0 = R[FI.gy];
+    FC.eyes.forEach((e, i) => {
+      e.visible = !covE[i]; if (covE[i]) return;
+      let yaw, pit;
+      if (tg) { const p = _fW2.copy(tg).applyMatrix4(_fM).sub(e.position); yaw = Math.atan2(p.x, Math.max(0.05, p.z)); pit = Math.atan2(p.y, Math.hypot(p.x, p.z)); }
+      else { yaw = (lerp(hash(gn + sd * 50), hash(gn + 1 + sd * 50), gj) - 0.5) * 0.7; pit = (lerp(hash(gn * 1.3 + sd * 20), hash((gn + 1) * 1.3 + sd * 20), gj) - 0.5) * 0.26; }
+      yaw = clamp(yaw + gx0 + mx * 0.05, -0.55, 0.55); pit = clamp(pit + gy0 + my * 0.035, -0.4, 0.35);
+      if (zb) { yaw *= 0.4; pit = pit * 0.4 + (i ? 0.05 : -0.08); }
+      e.iris.rotation.set(-pit, yaw, 0);
+      const es = R[FI.es]; e.scale.set(Math.min(1.12, es), 1.08 * es, EZ);
+      e.pupil.scale.set(R[FI.ps], R[FI.ps], 1);
+      let cu = clamp(R[FI.lu] + (zb ? (i ? -0.22 : 0.16) : 0) - pit * 0.35, 0, 1), cl = clamp(R[FI.ll], 0, 1);
+      if (cu + cl > 1) { const k = cu + cl; cu /= k; cl /= k; }
+      cu += (1 - cl - cu) * blk;
+      e.ul.rotation.set(Math.asin(clamp(2 * cu - 1, -1, 1)), 0, e.sx * R[FI.lt] * 0.9);
+      e.lw.rotation.set(Math.asin(clamp(1 - 2 * cl, -1, 1)), 0, e.sx * R[FI.lt] * 0.3);
+    });
+    FC.brows.forEach((b, i) => { b.visible = !FC.cover.brow[i]; if (!b.visible) return; const sx = b.sx, bi = R[FI.bi], bo = R[FI.bo];
+      let y = 0.268 + R[FI.by] + (sx > 0 ? R[FI.bq] : -0.5 * R[FI.bq]); y = Math.min(y, 0.317 - 0.05 * Math.max(0, Math.sin(bi), Math.sin(bo)));
+      b.position.set(sx * (EX - R[FI.bk]), y, 0.197); b.I.rotation.z = -sx * bi; b.O.rotation.z = sx * bo; });
+    const nw = clamp(R[FI.nw]); FC.nose.visible = !FC.cover.nose; FC.nose.position.y = 0.122 + 0.005 * nw; FC.nose.scale.y = 1 - 0.08 * nw;
+    FC.wr.visible = nw > 0.08 && !FC.cover.nose && !FC.cover.eye[0]; FC.wr.scale.x = Math.max(0.01, nw);
+    const ch = R[FI.ch]; FC.cheeks.forEach((c, i) => { c.visible = !FC.cover.cheek[i]; c.position.y = 0.116 + 0.012 * ch; c.scale.set(0.029 * (1 + 0.1 * ch), 0.023 * (1 + 0.15 * ch), 0.01 * (1 + 0.4 * ch)); });
+    if (FC.cheekM) FC.cheekM.color.copy(FC.cheekC).lerp(_fBlush, clamp(R[FI.bl]) * 0.7);
+    const sw = clamp(R[FI.sw]), sk = ((s * 0.55 + sd * 3) % 1 + 1) % 1; FC.sweat.visible = sw > 0.03 && !FC.cover.brow[1];
+    if (FC.sweat.visible) { FC.sweat.position.set(0.15, 0.305 - 0.075 * sk * sk, 0.188); FC.sweat.scale.setScalar(sw * Math.min(1, sk * 8) * (1 - sm01((sk - 0.85) / 0.15))); }
+    const tr = clamp(R[FI.tr]); FC.tears.forEach((g, i) => { g.visible = tr > 0.03 && !FC.cover.cheek[i]; if (!g.visible) return; g.strip.scale.y = 0.075 * tr; const q = ((s * 0.8 + i * 0.5 + sd) % 1 + 1) % 1; g.drop.position.y = -0.085 * tr * q; g.drop.scale.setScalar(Math.min(1, q * 6) * tr); });
+    FC.mouth.visible = !FC.cover.mouth; if (FC.mouth.visible) mouthDraw(FC, R, lip, s);
+  }
+  FSEQ++;
+}
+const _fBlush = new THREE.Color('#FF6070');
 // gait: b = share of the cycle a foot is on the ground, lift = swing height, bob = hip drop at double support, H = hip height
 const GAIT = { walk: { b: 0.6, lift: 0.11, bob: 0.036, H: 0.83 }, run: { b: 0.36, lift: 0.24, bob: 0.06, H: 0.8 }, shamble: { b: 0.7, lift: 0.07, bob: 0.025, H: 0.81 }, panic: { b: 0.45, lift: 0.16, bob: 0.05, H: 0.8 }, lowg: { b: 0.35, lift: 0.2, bob: 0, H: 0.8 } };
 const cycleLen = (mode, v) => mode === 'lowg' ? clamp(0.9 + 0.5 * v, 1.1, 2.1) : mode === 'run' ? clamp(0.32 * v + 0.35, 1.3, 2.0) : mode === 'shamble' ? clamp(0.45 + 0.4 * v, 0.6, 1.0) : mode === 'panic' ? clamp(0.3 * v + 0.6, 0.9, 1.8) : clamp(0.55 + 0.42 * v, 0.8, 1.2);
@@ -1788,17 +2018,13 @@ function poseFin(f, S, m, t, o) {
   for (const fx of f.fx) fx(t, S);
   if (o.turn) S.broll = clamp(-o.turn * (o.v ?? 0) * 0.07, -0.3, 0.3);   // lean into curves
   applyRig(f, S);
-  if (f.mouth) {
-    const ex = typeof f.expr === 'function' ? f.expr(t) : f.expr, F = face(f, ex ?? (f.kind === 'zombie' ? 'zombie' : m === 'panic' ? 'scared' : m === 'cheer' ? 'happy' : 'calm'), t);
-    const b = f.kind === 'zombie' ? 1 : blink(t, f.sd), es = F.es ?? 1, k = t / 1.4 + f.sd * 11, n = Math.floor(k), j = sm01((k - n - 0.9) / 0.1);   // glances: quick jumps, then hold
-    const px = f.look ? 0 : lerp(hash(n + f.sd * 50) - 0.5, hash(n + 1 + f.sd * 50) - 0.5, j) * 0.034, py = f.look ? 0 : lerp(hash(n * 1.3 + f.sd * 20) - 0.5, hash((n + 1) * 1.3 + f.sd * 20) - 0.5, j) * 0.016;
-    f.eyes.forEach(e => { e.scale.set(Math.min(1.2, es), b * es, 1); if (e.pupil) { e.pupil.position.set(px, py, 0.009); e.pupil.scale.setScalar(F.ps ?? 1); } });
-  }
+  if (f.FC) { f._fq = FSEQ; f._fm = m; f._ft = t; }   // the face is drawn after the camera and the head turns: facePass()
   f._fast = (o.v ?? 0) > 2.6 ? FRAME : -1;
 }
 // acting layer on a figure — react(f, t0, 'startle'|'hit'|'shrug'|'nod'|'shake'|'facepalm'|'wave'|'sigh'|'flinch', { dur, amp })
 function react(f, t0, kind = 'startle', o = {}) {
   const d = o.dur ?? { startle: 0.7, hit: 0.6, shrug: 1.1, nod: 0.9, shake: 1.0, facepalm: 1.6, wave: 1.6, sigh: 1.5, flinch: 0.45 }[kind] ?? 0.8, amp = o.amp ?? 1;
+  (f._rx ??= []).push([t0, kind, d, amp]);   // the face acts along (facePass)
   (f.fx ??= []).push((t, S) => {
     const k = (t - t0) / d; if (k < 0 || k > 1) return;
     const e = sm01(k / 0.15) * (1 - sm01((k - 0.72) / 0.28)) * amp, L = (a, b) => lerp(a, b, e);
@@ -10932,6 +11158,7 @@ function needsMB(t, lo, hi) {
 }
 const _lv = new THREE.Vector3(), _lv2 = new THREE.Vector3(), _lm = new THREE.Matrix4();
 function lookAng(f, L, t) {   // look target → [yaw, pitch] of the neck (clamped), or null
+  if (typeof L === 'function') { const v = L(t); if (!Array.isArray(v)) return v ? lookAng(f, v, t) : null; }   // t => 'cam' | 'track' | rig | null works too
   const tg = L === 'cam' || L === true ? _lv.copy(camera.position) : typeof L === 'function' ? _lv.fromArray(L(t)) : typeof L === 'string' ? (TRACK[L] ? TRACK[L].obj.getWorldPosition(_lv) : null)
     : L.isObject3D ? L.getWorldPosition(_lv) : L.root ? L.root.getWorldPosition(_lv) : _lv.fromArray(L);
   if (!tg) return null;
@@ -11353,7 +11580,8 @@ function stepScene(t) {   // everything in the 3D scene at time t (no HUD) — a
     // every part of the figure too (hair, hat, coat, cape, head, hands, face, gear …): layers that add to a part (inertia, sway, recoil) start from the built pose in every frame —
     // was: hair / hat / cape kept what the frames before had added, so a render block that starts in a fresh page showed them somewhere else (the pop at block borders)
     if (!f.isModel && CFG.restReset !== false) { const P = f._restP ??= (() => { const a = []; r.traverse(n => { if (n !== r && n !== f.body && !n.userData.dyn && !n.isBone && !n.isSkinnedMesh) a.push([n, n.position.clone(), n.rotation.clone(), n.scale.clone(), n.visible]); }); return a; })();
-      for (let i = 0; i < P.length; i++) { const Q = P[i], n = Q[0]; n.position.copy(Q[1]); n.rotation.copy(Q[2]); n.scale.copy(Q[3]); n.visible = Q[4]; } } }
+      for (let i = 0; i < P.length; i++) { const Q = P[i], n = Q[0]; n.position.copy(Q[1]); n.rotation.copy(Q[2]); n.scale.copy(Q[3]); n.visible = Q[4]; } }
+    if (f.FC && !f.FC.cover) f.FC.cover = faceCover(f); }   // v2.40.5: which face parts gear hides — read once from the built pose
   applySky(t); WIND.t.value = st;
   runTickers(st);
   for (const h of hordes) h.update(st);
@@ -11363,6 +11591,7 @@ function stepScene(t) {   // everything in the 3D scene at time t (no HUD) — a
   if (THUMB_ON) thumbCam();
   fitShadow();
   lookPass(t);
+  facePass(t);
 }
 function update(t) {
   FRAME++;
