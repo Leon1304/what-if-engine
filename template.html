@@ -3936,7 +3936,7 @@ function collapse(obj, t, o = {}) {
   if (o.fx !== false) { sfx(t, 'rumble', 1); sfx(t + 0.05, 'crack', 0.9); SHAKES.push({ t: VT(t), amp: 0.25 + 0.3 * big, dur: 1.2 }); }
   if (style === 'pancake') {
     const dur = o.dur ?? clamp(0.42 * Math.sqrt(H) + 0.7, 1.4, 4.4), te = t + dur, lean = (sd - 0.5) * 0.09, la = sd * TAU;
-    tick(st => { if (st < t) return; const k = clamp((st - t) / dur), e = Math.pow(clamp((k - 0.1) / 0.9), 1.9), sh = (1 - k) * Math.min(1, (st - t) * 6) * 0.05 * (0.5 + big);
+    tick(st => { if (st < t) { node.position.copy(p0); node.quaternion.copy(q0); node.visible = true; return; } const k = clamp((st - t) / dur), e = Math.pow(clamp((k - 0.1) / 0.9), 1.9), sh = (1 - k) * Math.min(1, (st - t) * 6) * 0.05 * (0.5 + big);
       node.position.set(p0.x + sh * Math.sin(st * 43) + Math.cos(la) * lean * e * H * 0.3, p0.y - (H + 0.6) * e, p0.z + sh * Math.sin(st * 37 + 1.3) + Math.sin(la) * lean * e * H * 0.3); node.quaternion.copy(q0); node.rotateZ(Math.cos(la) * lean * e); node.rotateX(Math.sin(la) * lean * e); node.visible = k < 1; });
     mound(t + dur * 0.3, te + 0.15); dust(t + dur * 0.08, te + 0.5, 1.4);
     for (let i = 0; i < 4; i++) { const a = i * Math.PI / 2 + sd * 3, tb = t + dur * (0.2 + 0.18 * i); emit('debris', { at: [c.x + Math.cos(a) * sz.x * 0.5, gy + 0.8, c.z + Math.sin(a) * sz.z * 0.5], t0: tb, burst: 22, colors: cols, size: clamp(Wd * 0.045, 0.14, 0.5), speed: 4 + 3 * big, life: 2.6 }); _dustPuff(c.x + Math.cos(a) * sz.x * 0.6, gy + 0.5, c.z + Math.sin(a) * sz.z * 0.6, tb, clamp(Wd * 0.35, 1, 5)); }
@@ -3950,7 +3950,7 @@ function collapse(obj, t, o = {}) {
     let [dx, dz] = o.dir ?? [Math.cos(sd * TAU), Math.sin(sd * TAU)]; const L = Math.hypot(dx, dz) || 1; dx /= L; dz /= L;
     const dur = o.dur ?? clamp(0.7 * Math.sqrt(H), 1.5, 4.6), te = t + dur, ex = (Math.abs(dx) * sz.x + Math.abs(dz) * sz.z) / 2, P = new THREE.Vector3(c.x + dx * ex, gy, c.z + dz * ex), ax = new THREE.Vector3(dz, 0, -dx), M = new THREE.Matrix4(), M2 = new THREE.Matrix4(), qa = new THREE.Quaternion();
     const ang = st => (Math.PI / 2 - 0.05) * Math.pow(clamp((st - t) / dur), 2.5), T = st => M.makeTranslation(P.x, P.y, P.z).multiply(M2.makeRotationAxis(ax, ang(st))).multiply(M2.makeTranslation(-P.x, -P.y, -P.z));
-    tick(st => { if (st < t) return; const a = ang(Math.min(st, te)); qa.setFromAxisAngle(ax, a); node.position.copy(p0).sub(P).applyQuaternion(qa).add(P); node.quaternion.copy(qa).multiply(q0); });
+    tick(st => { if (st < t) { node.position.copy(p0); node.quaternion.copy(q0); return; } const a = ang(Math.min(st, te));   /* v2.40: before t the node is set back too (a tick run for a later time must not leave it toppled) */ qa.setFromAxisAngle(ax, a); node.position.copy(p0).sub(P).applyQuaternion(qa).add(P); node.quaternion.copy(qa).multiply(q0); });
     breakApart(node, te, { _T: st => T(st).clone(), power: 1.2, up: 0.6, spin: 5, max: o.max ?? 52, fx: false, _at: [c.x + dx * H * 0.5, gy + 0.6, c.z + dz * H * 0.5] });
     dust(t, t + 0.9, 0.6); for (let i = 0; i < 6; i++) { const u = (0.12 + i * 0.17) * H; _dustPuff(P.x + dx * u + dz * (hash(i + sd) - 0.5) * Wd, gy + 0.4, P.z + dz * u - dx * (hash(i + sd) - 0.5) * Wd, te - 0.02 + i * 0.015, clamp(Wd * 0.5, 1.2, 5), { life: 3.4 }); }
     emit('debris', { at: [c.x + dx * H * 0.55, gy + 0.5, c.z + dz * H * 0.55], t0: te, burst: 56, colors: ['#DDEFF8', ...cols], size: clamp(Wd * 0.04, 0.12, 0.4), speed: 6, life: 2.4 });
@@ -3959,7 +3959,7 @@ function collapse(obj, t, o = {}) {
     return { t1: te, style };
   }
   const pre = o.dur ?? 0.45, te = t + pre;   // crumble: a shudder, then it falls apart on the spot
-  tick(st => { if (st < t || st >= te) return; const k = (st - t) / pre, sh = 0.035 * (0.4 + big) * k; node.position.set(p0.x + sh * Math.sin(st * 51), p0.y - 0.05 * k * k, p0.z + sh * Math.sin(st * 43 + 1)); });
+  tick(st => { if (st < t || st >= te) { node.position.copy(p0); return; } const k = (st - t) / pre, sh = 0.035 * (0.4 + big) * k; node.position.set(p0.x + sh * Math.sin(st * 51), p0.y - 0.05 * k * k, p0.z + sh * Math.sin(st * 43 + 1)); });
   const r = breakApart(node, te, { power: o.power ?? 2.2, up: o.up ?? 0.2, spin: 4, max: o.max ?? 56, fx: false });
   dust(t, te + 1.6, 1); emit('debris', { at: [c.x, c.y, c.z], t0: te, burst: 50, colors: ['#DDEFF8', ...cols], size: clamp(Wd * 0.03, 0.09, 0.3), speed: 4.5, life: 2.4 });
   for (let i = 0; i < 5; i++) { const a = i * TAU / 5 + sd; _dustPuff(c.x + Math.cos(a) * sz.x * 0.55, gy + 0.4, c.z + Math.sin(a) * sz.z * 0.55, te + 0.35, clamp(Wd * 0.4, 1, 4.5), { life: 3.4 }); }
