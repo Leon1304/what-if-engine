@@ -592,7 +592,7 @@ function applySky(t) {
   skyNow = k < 0.5 ? A : B;
   mixC(skyU.top.value, A.top, B.top, k); mixC(skyU.bot.value, A.bot, B.bot, k);
   skyU.stars.value = lerp(A.stars, B.stars, k);
-  applyWeather(t); NIGHTK = lerp(A.nk ?? 0, B.nk ?? 0, k); for (const m of NIGHTMATS) m.emissiveIntensity = m.userData.nightEi * clamp(0.1 + NIGHTK * 1.15);   // v2.34: how dark it is (0 day … 1 night) — city windows, fireflies, butterflies follow it
+  applyWeather(t); NIGHTK = lerp(A.nk ?? 0, B.nk ?? 0, k); for (const m of NIGHTMATS) m.emissiveIntensity = m.userData.nightEi * clamp((m.userData.dayEi ?? 0.1) + NIGHTK * 1.15);   // v2.34: how dark it is (0 day … 1 night) — city windows, fireflies, butterflies follow it
   { const ca = A.cl ?? [0], cb = B.cl ?? [0], on = CFG.clouds === false ? 0 : 1, cv = typeof CFG.clouds === 'number' ? (CFG.clouds - 1) * 0.12 : 0;
     skyU.cT.value = t; skyU.cAmt.value = lerp(ca[0], cb[0], k) * on; skyU.cCov.value = lerp(ca[1] ?? 0.5, cb[1] ?? 0.5, k) - cv;
     mixC(skyU.cLit.value, ca[2] ?? '#000000', cb[2] ?? '#000000', k); mixC(skyU.cShd.value, ca[3] ?? '#000000', cb[3] ?? '#000000', k); }
@@ -795,7 +795,8 @@ function house(p, x, z, o = {}) {   // farmhouse: stone plinth, corner boards, f
   if (o.chimney !== false) { box(g, 0.45, 1.5, 0.45, '#7A6A5E', w * 0.26, h + 0.2, -d * 0.16, { surf: 'brick' }); box(g, 0.56, 0.1, 0.56, '#5E5048', w * 0.26, h + 1.7, -d * 0.16, NC); }
   box(g, 1.15, 1.92, 0.06, trim, 0, 0.2, d / 2 + 0.03, NC); box(g, 0.95, 1.78, 0.02, '#1A140F', 0, 0.2, d / 2 + 0.065, NC);   // frame + dark doorway (seen when open)
   const door = dyn(grp(g, -0.475, 0.2, d / 2 + 0.085)); door.userData.sign = 1; door.userData.angle = 1.7;   // openDoor(house, t)
-  box(door, 0.95, 1.78, 0.05, doorC, 0.475, 0, 0); for (const yy of [0.25, 1.0]) box(door, 0.6, 0.5, 0.02, shade(doorC, -0.022), 0.475, yy, 0.03, NC);   // v2.40: panels a shade darker (-0.06 turned a dark door's panels black) ball(door, 0.045, '#D9B65C', 0.8, 0.9, 0.06, { detail: 0, ...NC });
+  box(door, 0.95, 1.78, 0.05, doorC, 0.475, 0, 0); for (const yy of [0.25, 1.0]) box(door, 0.6, 0.5, 0.02, shade(doorC, -0.022), 0.475, yy, 0.03, NC);   // v2.40: panels a shade darker (-0.06 turned a dark door's panels black)
+  ball(door, 0.045, '#D9B65C', 0.8, 0.9, 0.06, { detail: 0, ...NC });   // v2.40: the handle had slipped into the comment above (doors had none)
   const windows = [];
   const winMat = mat(o.win ?? '#FFE2A0', { em: o.win ?? '#FFC060', ei: o.lit ?? 0, own: true });
   const win = (cx, cy, cz, ry, front) => {   // local +z points out of the wall
@@ -2602,12 +2603,13 @@ function facadeKit(g, w, h, d, o = {}) {
   for (const sx of [-1, 1]) { cyl(g, 0.07, 0.07, h, '#6E747C', sx * (w / 2 + 0.09), 0, -d / 2 + 0.3, { seg: 6, ...NC }); box(g, 0.2, 0.12, 0.2, '#6E747C', sx * (w / 2 + 0.09), h - 0.12, -d / 2 + 0.3, NC); }
   for (const lx of o.lamps ?? []) { box(g, 0.14, 0.3, 0.12, '#2A2D33', lx, 2.5, d / 2 + 0.07, NC); box(g, 0.12, 0.18, 0.04, '', lx, 2.52, d / 2 + 0.14, { mat: mat('#FFE9B8', { em: '#FFD88A', ei: 1.2 }), ...NC }); }
 }
+const _shopMs = new Map(), _shopM = share => { const k = share > 0 ? 1 : 0; if (!_shopMs.has(k)) { const m = mat('#33465C', { em: '#FFE3A8', ei: k ? 0.9 : 0, rough: 0.25, own: true }); if (k) { m.userData.nightEi = 0.9; m.userData.dayEi = 0.2; NIGHTMATS.push(m); } _shopMs.set(k, m); } return _shopMs.get(k); };
 function tower(p, x, z, o = {}) {   // city building with depth: style glass | brick | deco (default: varies by position); lit 0..2 = share of lit windows at night
   const w = o.w ?? 6, d = o.d ?? 6, h = o.h ?? 24, g = stat(grp(p, x, 0, z, o.ry ?? 0)), c0 = o.color ?? pick(['#8A94A6', '#A7B0BE', '#6F7A8C', '#C9C1B3', '#5E6B7D', '#B5A48C']), NC = { cast: false };
   const hv = k => hash(x * 13.1 + z * 7.7 + k * 1.9), style = o.style ?? (h < 18 && hv(5) < 0.55 ? 'brick' : ['glass', 'deco', 'brick', 'glass', 'deco'][Math.floor(hv(4) * 5)]);
   const c = style === 'brick' && !o.color ? pick2(['#9C4A36', '#A8583E', '#8A3E30', '#B7704E', '#7E5A48'], hv(6)) : c0, trim = style === 'brick' ? '#D9D2C4' : shade(c, 0.08), deep = shade(c, -0.1);
   const share = clamp((o.lit ?? (SKY.some(([, n]) => (SKIES[n]?.nk ?? 0) >= 0.5) ? 0.8 : 0)) * 0.6), dark = mat(o.glass ?? '#26324A', { rough: 0.3, metal: 0.2 }), lit = mat(o.glass ?? '#26324A', { em: '#FFD27A', ei: 1.1, rough: 0.3 });   // v2.34: windows light up by themselves when the video has a dusk or night, and follow the darkness
-  if (!lit.userData.nightEi) { lit.userData.nightEi = 1.1; NIGHTMATS.push(lit); }
+  if (!lit.userData.nightEi) { lit.userData.nightEi = 1.1; lit.userData.dayEi = 0.03; NIGHTMATS.push(lit); }   // v2.40: by day a lit window is only a hint (0.1 made them look like brown boards)
   box(g, w, h, d, c, 0, 0, 0, style === 'glass' ? {} : { surf: style === 'brick' ? 'brick' : 'concrete' });
   const floors = []; for (let y = 2.0; y < h - 1.6; y += 3.1) floors.push([y, rnd() < share]);   // one rnd per floor, as before (layout of old episodes unchanged)
   const nx = Math.max(2, Math.round(w / 2.2)), nz = Math.max(2, Math.round(d / 2.2)), win = (f, i, on) => on || (share > 0 && hv(f * 31 + i * 3 + 7) < share * 0.45) ? lit : dark;
@@ -2630,7 +2632,7 @@ function tower(p, x, z, o = {}) {   // city building with depth: style glass | b
       floors.forEach(([y, on], f) => { for (let i = 0; i < n; i++) { box(q, W / n - 0.5, 1.8, 0.05, '', col(i), y - 0.15, 0.005, { mat: win(f + fi * 50, i, on), ...NC }); box(q, W / n - 0.48, 0.85, 0.1, deep, col(i), y + 1.75, 0.03, NC); }
         if (f % 4 === 3) box(q, W + 0.5, 0.3, 0.38, trim, 0, y + 2.6, 0.12, NC); });
     }
-    box(q, W * 0.72, 1.25, 0.05, '', 0, 0.35, 0.1, { mat: mat('#33465C', { em: '#FFE3A8', ei: share > 0 ? 0.9 : 0, rough: 0.25 }), ...NC });   // shop window
+    box(q, W * 0.72, 1.25, 0.05, '', 0, 0.35, 0.1, { mat: _shopM(share), ...NC });   // shop window (v2.40: follows the darkness instead of glowing cream all day)
     if (fi === 0 || hv(fi + 20) < 0.5) { const ac = pick2(['#C0392B', '#2E86AB', '#3DA56A', '#E3B23C', '#8E5BD9', '#E07A3A'], hv(fi + 10)); box(q, W * 0.74, 0.08, 1.0, ac, 0, 1.95, 0.6, { rx: 0.25, ...NC }); box(q, W * 0.74, 0.22, 0.04, ac, 0, 1.78, 1.08, NC); }
     if (fi === 0) { box(q, 1.3, 1.8, 0.06, '#1E2024', W * 0.3, 0.14, 0.12, NC); box(q, 1.6, 0.14, 0.4, trim, W * 0.3, 2.0, 0.2, NC); }
   });
