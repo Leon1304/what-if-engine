@@ -1600,7 +1600,7 @@ function figure(o = {}) {
   // hair (v2.40.x): a shell that hugs the skull — crown, back and sides in one rounded piece whose front edge is the hairline, plus fringe / bun / spikes / curls / long fall.
   // Everything is fixed to the head: it turns, nods and falls with it and never moves against it (was: a cap-like slab on top with a ledge all round, the bun on top read as a bowler hat,
   // long hair was a flat plate down the back that swung out beside the shoulders when the head turned).  Head: x ±0.19, y 0…0.38, z ±0.19 (face at +z).
-  const hairG = grp(head);
+  const hairG = grp(head); let hairFall = null;
   const HAIR = (st, c, under) => {   // short · buzz · spiky · long · bun · curly · mohawk (under = a hat covers the crown)
     const head = hairG, lg = st === 'long', thin = st === 'buzz' || st === 'mohawk', T = under ? 0.016 : thin ? 0.01 : 0.024, W = 0.38 + 2 * T, zb0 = -0.19 - T, zf = 0.184;   // T: thickness over the skin · zf: front edge, just behind the forehead
     const top = under ? 0.345 : 0.38 + T, bot = under ? 0.16 : 0.2;
@@ -1615,7 +1615,10 @@ function figure(o = {}) {
     }
     if (st === 'bun') { ball(head, 0.088, c, 0, under ? 0.25 : 0.33, -0.235, { detail: 1, ...NC }); ball(head, 0.055, c, 0, under ? 0.23 : 0.31, -0.2, { detail: 0, ...NC }); }   // at the back of the head (was: on top — read as a hat)
     // the back of the head down to the nape (short styles) or a fall over the ears and the neck to the top of the shoulders (long) — 3 mm inside the crown's faces (no flicker)
-    const zr = lg ? 0.1 : -0.11, yb = lg ? -0.045 : 0.05, dz = zr - zb0 - 0.003; rbox(head, W - 0.014, 0.32 - yb, dz, c, 0, yb, (zr + zb0 + 0.003) / 2, { rf: 0.04 / dz });   // reaches up into the crown: fills the groove of its rounded edge
+    const zr = lg ? 0.1 : -0.11, yb = lg ? 0.0 : 0.05, dz = zr - zb0 - 0.003; rbox(head, W - 0.014, 0.32 - yb, dz, c, 0, yb, (zr + zb0 + 0.003) / 2, { rf: 0.04 / dz });   // reaches up into the crown: fills the groove of its rounded edge
+    // long (v2.40.x): the rest falls down the back to the shoulder blades. That part hangs from the upper back (the chest), its top tucked up inside the hair of the head,
+    // so a turning or nodding head never swings a plate through the shoulders, and bending moves it with the back. Visibility follows the hair (dressPass).
+    if (lg) { const fb = grp(chest); rbox(fb, 0.4, 0.5, 0.04, c, 0, 0.3, -0.185, { rf: 0.3 }); rbox(fb, 0.3, 0.08, 0.036, c, 0, 0.25, -0.185, { rf: 0.45 }); hairFall = fb; }
   };
   let hat = null, coat = null;
   if (hs) {   // headwear: straw (farmer) · cap (o.capBack: worn backwards) · beanie · cowboy
@@ -1650,7 +1653,7 @@ function figure(o = {}) {
   let cape = null; if (o.cape) { cape = grp(chest, 0, 0.58, -0.17); cape.add(Object.assign(new THREE.Mesh(new THREE.PlaneGeometry(0.62, 1.15, 6, 10).translate(0, -0.575, 0), clothMat(o.cape, { pin: 'top', len: 1.15, amp: 0.5, speed: 1.4 })), { castShadow: true })); }   // cape: flows back when running, waves   // lab-coat tail: swings with the steps, flies back when running
   if (o.hold) o.holdShape === 'board' ? box(foreR, 0.27, 0.34, 0.03, o.hold, 0, -0.62, 0.08) : box(foreR, 0.09, 0.24, 0.09, o.hold, 0, -0.6, 0.03);   // held item: flashlight/megaphone (along the forearm) or holdShape 'board' (clipboard)
   root.scale.setScalar(o.scale ?? 1);
-  const f = { root, body, hips, chest, neck, head, legL, legR, shinL, shinR, footL, footR, armL, armR, foreL, foreR, mouth, brows, eyes, hat, coat, hair: hairG, cape,
+  const f = { root, body, hips, chest, neck, head, legL, legR, shinL, shinR, footL, footR, armL, armR, foreL, foreR, mouth, brows, eyes, hat, coat, hair: hairG, hairFall, cape,
     expr: o.expr, kind: o.kind ?? 'human', id, sd: hash(id * 7.31 + 0.5), look: o.look, talk: o.talk, who: o.who, M, fx: [], hands: HANDS, FC, autoFace: o.autoFace };
   if (coat) f.flaps = coat.Q;
   let _lookV = f.look;   // v2.31: look targets switched inside a scene tick are cross-faded (see poseProbe)
@@ -2330,6 +2333,7 @@ function walk(obj, pts, o = {}) {
 function appear(obj, t0, o = {}) {   // from: pop | rise | drop
   dyn(obj);
   const p0 = obj.position.clone(), s0 = obj.scale.clone(), dur = o.dur ?? 0.45, from = o.from ?? 'pop';
+  if (from === 'drop') MBAUTO.push([t0 + dur * 0.6, t0 + dur + 0.05]);   // v2.40.x: a drop lands at full speed — motion blur, and the audit takes the hard stop as the impact it is
   return tick(t => {
     const k = clamp((t - t0) / dur); obj.visible = t >= t0;
     const s = from === 'pop' ? EASE.back(k) : 1; obj.scale.set(s0.x * s, s0.y * s, s0.z * s);
@@ -6708,7 +6712,8 @@ function cuirass(f, kind, o = {}) {
 }
 function pteruges(f, o = {}) {
   const Hp = f.hips, c1 = o.c1 ?? '#E6DCC2', c2 = o.c2 ?? '#6A4A30', NC = { cast: false };
-  for (let row = 0; row < 2; row++) { const n = 16; for (let i = 0; i < n; i++) { const a = (i + row * 0.5) / n * TAU, rx = 0.25 + row * 0.008, rz = 0.165 + row * 0.008, s = grp(Hp, Math.sin(a) * rx, 0.02 - row * 0.1, Math.cos(a) * rz, a);
+  const FQ = {}, fl = a => { const sx = Math.abs(Math.sin(a)) < 0.3 ? 0 : Math.sign(Math.sin(a)), fz = Math.cos(a) >= 0 ? 1 : -1, k = sx + ',' + fz; return (FQ[k] ??= hipFlap(Hp, f.flaps ??= [], sx, fz, { gain: 0.4 })).in; };   // v2.40.x: strips hang from hip-hinged flaps (the thighs push them)
+  for (let row = 0; row < 2; row++) { const n = 16; for (let i = 0; i < n; i++) { const a = (i + row * 0.5) / n * TAU, rx = 0.25 + row * 0.008, rz = 0.165 + row * 0.008, s = grp(fl(a), Math.sin(a) * rx, 0.02 - row * 0.1, Math.cos(a) * rz, a);
     s.rotation.order = 'YXZ'; s.rotation.x = -(0.12 + row * 0.06); rbox(s, 0.062, 0.15, 0.012, row ? c1 : c2, 0, -0.15, 0, { rf: 0.3, ...NC }); if (!row) box(s, 0.018, 0.018, 0.006, '', 0, -0.1, 0.008, { mat: bronzeMat(o.metal), ...NC }); } }
 }
 function greaves(f, o = {}) {
@@ -6743,7 +6748,9 @@ function hopliteGear(f, o = {}) {
   for (const ua of [f.armL, f.armR]) rbox(ua, 0.172, 0.12, 0.172, o.chiton ?? '#A8281E', 0, -0.11, 0, { rf: 0.3 });   // short chiton sleeves
   for (const ft of [f.footL, f.footR]) { for (const c of ft.children) if (c.isMesh) c.material = mat(skin, { flat: false });
     if (!boy) { box(ft, 0.18, 0.03, 0.3, '#5A3A22', 0, -ANK - 0.05, 0.05, NC); for (const zz of [-0.02, 0.06, 0.13]) box(ft, 0.18, 0.012, 0.022, '#4A2E1C', 0, -ANK + 0.005, zz, NC); box(ft, 0.17, 0.08, 0.02, '#4A2E1C', 0, -ANK - 0.01, -0.09, NC); } }
-  const hk = grp(f.hips, 0, -0.08, 0); cyl(hk, 0.25, 0.27, 0.16, o.chiton ?? '#A8281E', 0, -0.16, 0, { seg: 16, flat: false }).scale.z = 0.7;   // chiton hem
+  { const cm = mat(o.chiton ?? '#A8281E', { own: true, flat: false }); cm.side = THREE.DoubleSide;   // chiton hem (v2.40.x): four quarter rings hinged at the hips — the thighs push them (was one rigid ring the legs went through)
+    [[1, 1, 0], [1, -1, 1], [-1, -1, 2], [-1, 1, 3]].forEach(([sx, fz, k]) => { const q = hipFlap(f.hips, f.flaps ??= [], sx, fz, { gain: 0.5 }), m = new THREE.Mesh(G('chq' + k, () => new THREE.CylinderGeometry(0.25, 0.27, 0.16, 6, 1, true, k * Math.PI / 2, Math.PI / 2)), cm);
+      m.position.set(0, -0.16, 0); m.scale.z = 0.7; m.castShadow = m.receiveShadow = true; q.in.add(m); }); }
   if (boy) { if (f.hair) f.hair.visible = true; f.hoplite = { shaved: true }; }
   // beard without moustache (Spartan law), long hair falling from under the helmet
   if (!boy && (o.beard ?? V(3) < 0.85)) { rbox(f.head, 0.39, 0.075, 0.1, hairC, 0, -0.03, 0.15, { rf: 0.4 }); for (const sx of [-1, 1]) rbox(f.head, 0.06, 0.17, 0.12, hairC, sx * 0.17, -0.01, 0.1, { rf: 0.4 }); rbox(f.head, 0.24, 0.15, 0.1, hairC, 0, -0.17, 0.165, { rf: 0.45 }); }
@@ -11406,6 +11413,7 @@ function lookPass(t) {   // figure.look = 'cam' | [x,y,z] | t => [x,y,z] | objec
 //   (front panel forward, back panel backward) — never through a leg; back panels fly up when running, tuck under the thighs when sitting
 function dressPass() {
   for (const f of RIGS) { if (f.isModel || !f.legL) continue;
+    if (f.hairFall) { let v = !!f.hair?.visible; for (let p = f.hair?.parent; v && p && p !== f.root; p = p.parent) v = p.visible; f.hairFall.visible = v; }   // long hair down the back: shown exactly when the hair is
     const ix = f._inx ?? 0, fly = f._fly ?? 0;
     const Q = f.flaps; if (Q?.length) { let c = fly + clamp(0.06 * ix, -0.5, 0.6); if (f.coat) { c = f.coat.rotation.x; f.coat.rotation.x = 0; }
       const aL = f.legL.rotation.x, aR = f.legR.rotation.x, sit = sm01((Math.min(-aL, -aR) - 0.75) / 0.45);
