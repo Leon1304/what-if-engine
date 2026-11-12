@@ -337,12 +337,12 @@ const BEATS = [
 const SLOWMO = [{ t: 39.8, dur: 0.9, rate: 0.3, catch: 0.5 }];
 const TEASE = [{ t: 30.9, dur: 0.6, at: 43.0, label: 'Ten seconds later' }];
 const CAM = [
-  { t: 0, cut: true, tr: 'cut', p: [1.2, 1.85, -1.2], l: [0, 3.05, -3.0], fov: 62, dof: 0 }, { t: 2.6, p: [0.9, 1.95, -1.8], l: [0, 3.05, -3.0], fov: 58, dof: 0 },
+  { t: 0, cut: true, tr: 'cut', p: [1.2, 1.85, -4.8], l: [0, 3.05, -6.6], fov: 62, dof: 0 }, { t: 2.6, p: [0.9, 1.95, -5.4], l: [0, 3.05, -6.6], fov: 58, dof: 0 },
   ...shot('close', 2.6, 2.6, 'you', { az: -30, dist: 3.4 }),
-  ...shot('wide', 5.2, 3.4, [0, 2.4, 0], { az: 140, dist: 30, move: 'orbit' }),
+  ...shot('wide', 5.2, 3.4, [0, 2.4, 0], { az: 140, dist: 36, move: 'orbit' }),
   ...shot('close', 8.6, 2.6, 'bed', { az: 120, dist: 2.2 }),
   ...shot('mid', 11.2, 2.8, 'you', { az: 20, dist: 6 }),
-  ...shot('wide', 14.0, 4.7, [0, 2, 4], { az: 70, dist: 22, h: 0.25, move: 'crane' }),
+  ...shot('wide', 14.0, 4.7, [0, 2, 7], { az: 70, dist: 26, h: 0.25, move: 'crane' }),
   ...shot('close', 18.7, 2.7, 'you', { az: -10 }),
   ...shot('mid', 21.4, 2.7, 'gerald', { az: 140, dist: 4 }),
   ...shot('mid', 24.1, 2.2, 'you', { az: -60, dist: 6, h: 0.3 }),
@@ -353,8 +353,8 @@ const CAM = [
   ...shot('mid', 37.2, 1.05, 'you', { az: -70, dist: 5.5 }),
   ...shot('mid', 38.25, 1.25, 'you', { az: -50, dist: 5, tr: 'cut' }),
   ...shot('mid', 39.5, 2.0, 'you', { az: -40, dist: 6, h: 0.25 }),
-  ...shot('wide', 41.5, 3.0, [0, 1, 7], { az: 80, dist: 26, move: 'pull' }),
-  ...shot('mid', 44.5, 3.4, [0, 0, 16], { az: 60, dist: 18 }),
+  ...shot('wide', 41.5, 3.0, [0, 1, 10], { az: 80, dist: 28, move: 'pull' }),
+  ...shot('mid', 44.5, 3.4, [0, 0, 19], { az: 60, dist: 20 }),
   ...shot('close', 47.9, 3.7, 'gerald', { az: 160, dist: 2.6 }),
   ...shot('mid', 51.6, 6.4, 'you', { az: -15, dist: 7.5, h: 0.12, move: 'push' })
 ];
@@ -366,7 +366,7 @@ const STATS = [
   { label: 'Float air', fmt: 'clock', keys: [[0, 60], [5.2, 57], [28.2, 15], [38.0, 0]], show: 'b1', up: 'good', crit: 20 },
   { label: 'Gerald streak', keys: [[0, 10], [49.0, 10], [49.4, 11]], show: 'b1+1' }
 ];
-const RULER = { label: 'Shark vs. pool', show: 'b3', hide: 'b4', min: 0, max: 20, fmt: 'dist', keys: [[14.2, 0], [17.4, 15]], marks: [[10, 'Pool'], [15, 'Shark+']] };
+const RULER = { label: 'Shark vs. pool', show: 'b3', hide: 'b4', min: 0, max: 25, fmt: 'dist', keys: [[14.2, 0], [17.4, 18]], marks: [[16, 'Pool'], [18, 'Shark']] };
 const END = { t: 51.6, q: 'Which monster comes back *next?*', opts: ['A T. rex in the city', 'Mammoths at the mall', 'A kraken in the harbor'], say: 'What would you have done? Most votes decides part two.', loop: 'Next morning, the pool is full again —' };
 const AUDIO = {
   score: [[0, 'tense'], [5.2, 'chill'], [8.6, 'tense'], [18.7, 'funny'], [24.1, 'action'], [32.1, 'funny'], [37.2, 'action'], [44.5, 'triumph']],
@@ -377,8 +377,8 @@ const AUDIO = {
     { t: 30.6, k: 'riser', dur: 1.2 }, { t: 38.0, k: 'pop' }, { t: 39.9, k: 'heartbeat', dur: 1.2 }, { t: 42.0, k: 'crack' }, { t: 42.3, k: 'splash' }, { t: 49.2, k: 'ding' }, { t: 51.6, k: 'stinger' }]
 };
 const THUMB = [
-  { t: 1.2, text: '_60 seconds_ of air', cam: { p: [1.4, 1.65, -0.4], l: [0, 3.1, -3.0], fov: 64 }, expr: 'panic', rays: true },
-  { t: 16.5, text: 'It doesn’t *fit*', cam: { p: [16, 6, 12], l: [0, 1.5, 3], fov: 46 }, expr: 'panic', glow: true }
+  { t: 1.2, text: '_60 seconds_ of air', cam: { p: [1.4, 1.65, -4.0], l: [0, 3.1, -6.6], fov: 64 }, expr: 'panic', rays: true },
+  { t: 16.5, text: 'It doesn’t *fit*', cam: { p: [20, 8, 16], l: [0, 1.5, 5], fov: 46 }, expr: 'panic', glow: true }
 ];
 /* @STORY-END */
 
@@ -10998,34 +10998,34 @@ const _rimW = new THREE.Color('#FFFFFF');
 const T = ST;   // scene times after the slow-motion (39.8)
 ground({ color: '#9DB36A', coast: 9, depth: 5 }); water({ level: -0.3 });
 house(world, 0, -14, { w: 11, d: 6, h: 3.6 });
-const P = swimPool(world, 0, 0, { w: 4.5, d: 10, h: 3.0, drain: [T(42.3), T(45.2)] });
-const DB = divingBoard(world, 0, 3.0, -6.4, { len: 2.6 });
-for (const [x, z] of [[-4.2, -3], [-4.2, 0], [4.2, -2]]) { const g = stat(grp(world, x, 3.05, z, Math.PI / 2)); box(g, 0.66, 0.05, 1.7, '#F2F2F2', 0, 0.3, 0); box(g, 0.66, 0.55, 0.05, '#F2F2F2', 0, 0.32, -0.85, { rx: -0.6 }); }
+const P = swimPool(world, 0, 0, { w: 5.5, d: 16, h: 3.0, drain: [T(42.3), T(45.2)] });
+const DB = divingBoard(world, 0, 3.0, -9.6, { len: 2.6 });
+for (const [x, z] of [[-4.6, -5], [-4.6, -1], [4.6, -3], [4.6, 2]]) { const g = stat(grp(world, x, 3.05, z, Math.PI / 2)); box(g, 0.66, 0.05, 1.7, '#F2F2F2', 0, 0.3, 0); box(g, 0.66, 0.55, 0.05, '#F2F2F2', 0, 0.32, -0.85, { rx: -0.6 }); }
 
 // you on the leaking float, then the diving board
-const AB = airbed(world, 0, t => P.level(t), -3.0, { color: '#2ECC71', deflate: [8.8, 37.9], pop: 38.0 }); track('bed', AB.g, 0.2);
+const AB = airbed(world, 0, t => P.level(t), -6.6, { color: '#2ECC71', deflate: [8.8, 37.9], pop: 38.0 }); track('bed', AB.g, 0.2);
 const you = char('you', { expr: t => t < 1.6 ? 'nervous' : t < 5.2 ? 'panic' : t < 8.6 ? 'happy' : t < T(47) ? 'panic' : 'relieved' }); world.add(you.root); track('you', you);
 sit(you, 0, { seat: AB.g, h: 0.12, t1: 38.0 });
-react(you, 9.0, 'startle'); react(you, 24.2, 'startle', { dur: 1.2 }); for (const t of [24.3, 24.8]) splash(0.6, -3.0, t, { size: 0.8 });
+react(you, 9.0, 'startle'); react(you, 24.2, 'startle', { dur: 1.2 }); for (const t of [24.3, 24.8]) splash(0.6, -6.6, t, { size: 0.8 });
 const hang = [0, DB.tip[1] - 2.05, DB.tip[2] - 0.15];
-late(t => { if (t < 38.25) return; const k = clamp((t - 38.25) / 0.35), r = you.root; r.position.set(lerp(0, hang[0], k), lerp(P.level(t) + 0.1, hang[1], k) + Math.sin(Math.PI * k) * 0.5, lerp(-3.0, hang[2], k)); r.rotation.y = 0; });
+late(t => { if (t < 38.25) return; const k = clamp((t - 38.25) / 0.35), r = you.root; r.position.set(lerp(0, hang[0], k), lerp(P.level(t) + 0.1, hang[1], k) + Math.sin(Math.PI * k) * 0.5, lerp(-6.6, hang[2], k)); r.rotation.y = 0; });
 you.fx.push((t, S) => { const e = clamp((t - 38.25) / 0.3); if (!e) return; S.las = S.ras = lerp(S.las, -3.0, e); S.lae = S.rae = lerp(S.lae, 0, e); S.laz = -0.12 * e; S.raz = 0.12 * e; S.lt = lerp(S.lt, 0.15 + 0.15 * Math.sin(t * 7), e); S.rt = lerp(S.rt, 0.15 - 0.15 * Math.sin(t * 7), e); S.lk = S.rk = lerp(S.lk, 0.4, e); S.H = lerp(S.H, 0.84, e); });
 
 // the Megalodon: too long for the pool, tail over the infinity edge
-const SH = sea({ kind: 'megalodon', x: 0, y: 1.5, z: 4.2, len: 11 }); SH.g.rotation.y = Math.PI; track('shark', SH.g, 0.6);
+const SH = sea({ kind: 'megalodon', x: 0, y: 1.5, z: 4, len: 18 }); SH.g.rotation.y = Math.PI; SH.g.scale.set(0.66, 0.66, 1); track('shark', SH.g, 0.6);
 tick(t => { const g = SH.g, lunge = bump(t, 24.9, 1.4) * 1.0 + bump(t, T(39.6), 1.0) * 2.0, k = EASE.inOut(clamp((t - T(42.4)) / (T(45.6) - T(42.4))));
-  g.position.z = 4.2 + 0.35 * Math.sin(t * 0.45) - lunge + k * 26; g.position.y = 1.5 - k * 4.6; g.rotation.x = -0.18 * k; });
+  g.position.z = 4 + 0.35 * Math.sin(t * 0.45) - lunge + k * 26; g.position.y = 1.5 - k * 4.6; g.rotation.x = -0.18 * k; });
 SH.do('open', 24.9, { dur: 1.2 }); SH.do('bite', 25.6); SH.do('bite', T(40.0)); SH.do('thrash', T(42.6), { dur: 2 });
 
 // the wall breaks: the water rushes down the slope and takes the shark
 breakApart(P.wall, T(42.0), { dir: [0, -0.3, 1], power: 4 });
-emit('spray', { at: [0, 2.8, 5.3], t0: T(42.1), t1: T(45.6), rate: 220, speed: 4.5, spread: 1.4, size: 0.28, life: 1.3 });
-const sheet = dyn(grp(world, 0, 0, 5.2)); { const m = box(sheet, 4.4, 0.06, 13, '', 0, 0, 6.5, { mat: mat('#8FD6F0', { own: true, opacity: 0.6, rough: 0.05 }), cast: false }); m.position.y = 2.6; sheet.rotation.x = 0.3; }
+emit('spray', { at: [0, 2.8, 8.3], t0: T(42.1), t1: T(45.6), rate: 220, speed: 4.5, spread: 1.4, size: 0.28, life: 1.3 });
+const sheet = dyn(grp(world, 0, 0, 8.2)); { const m = box(sheet, 4.4, 0.06, 13, '', 0, 0, 6.5, { mat: mat('#8FD6F0', { own: true, opacity: 0.6, rough: 0.05 }), cast: false }); m.position.y = 2.6; sheet.rotation.x = 0.3; }
 tick(t => { sheet.visible = t > T(42.1) && t < T(45.8); });
 
 // Gerald on his flamingo, rides the water down into the empty pool
-const FL = floatie(world, 1.3, t => P.level(t), -4.6, { kind: 'flamingo', ry: 0.6 }); const ger = gerald({ scale: 1.5 }); FL.seat.add(ger.root); track('gerald', ger.root, 0.4);
-biome('beach', { keep: [[0, 0, 12]] });
+const FL = floatie(world, 2.0, t => P.level(t), -1.2, { kind: 'flamingo', ry: 0.6 }); const ger = gerald({ scale: 1.5 }); FL.seat.add(ger.root); track('gerald', ger.root, 0.4);
+biome('beach', { keep: [[0, 0, 15]] });
 }
 /* @SCENE-END */
 

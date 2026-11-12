@@ -23,12 +23,12 @@ const BEATS = [
 const SLOWMO = [{ t: 39.8, dur: 0.9, rate: 0.3, catch: 0.5 }];
 const TEASE = [{ t: 30.9, dur: 0.6, at: 43.0, label: 'Ten seconds later' }];
 const CAM = [
-  { t: 0, cut: true, tr: 'cut', p: [1.2, 1.85, -1.2], l: [0, 3.05, -3.0], fov: 62, dof: 0 }, { t: 2.6, p: [0.9, 1.95, -1.8], l: [0, 3.05, -3.0], fov: 58, dof: 0 },
+  { t: 0, cut: true, tr: 'cut', p: [1.2, 1.85, -4.8], l: [0, 3.05, -6.6], fov: 62, dof: 0 }, { t: 2.6, p: [0.9, 1.95, -5.4], l: [0, 3.05, -6.6], fov: 58, dof: 0 },
   ...shot('close', 2.6, 2.6, 'you', { az: -30, dist: 3.4 }),
-  ...shot('wide', 5.2, 3.4, [0, 2.4, 0], { az: 140, dist: 30, move: 'orbit' }),
+  ...shot('wide', 5.2, 3.4, [0, 2.4, 0], { az: 140, dist: 36, move: 'orbit' }),
   ...shot('close', 8.6, 2.6, 'bed', { az: 120, dist: 2.2 }),
   ...shot('mid', 11.2, 2.8, 'you', { az: 20, dist: 6 }),
-  ...shot('wide', 14.0, 4.7, [0, 2, 4], { az: 70, dist: 22, h: 0.25, move: 'crane' }),
+  ...shot('wide', 14.0, 4.7, [0, 2, 7], { az: 70, dist: 26, h: 0.25, move: 'crane' }),
   ...shot('close', 18.7, 2.7, 'you', { az: -10 }),
   ...shot('mid', 21.4, 2.7, 'gerald', { az: 140, dist: 4 }),
   ...shot('mid', 24.1, 2.2, 'you', { az: -60, dist: 6, h: 0.3 }),
@@ -39,8 +39,8 @@ const CAM = [
   ...shot('mid', 37.2, 1.05, 'you', { az: -70, dist: 5.5 }),
   ...shot('mid', 38.25, 1.25, 'you', { az: -50, dist: 5, tr: 'cut' }),
   ...shot('mid', 39.5, 2.0, 'you', { az: -40, dist: 6, h: 0.25 }),
-  ...shot('wide', 41.5, 3.0, [0, 1, 7], { az: 80, dist: 26, move: 'pull' }),
-  ...shot('mid', 44.5, 3.4, [0, 0, 16], { az: 60, dist: 18 }),
+  ...shot('wide', 41.5, 3.0, [0, 1, 10], { az: 80, dist: 28, move: 'pull' }),
+  ...shot('mid', 44.5, 3.4, [0, 0, 19], { az: 60, dist: 20 }),
   ...shot('close', 47.9, 3.7, 'gerald', { az: 160, dist: 2.6 }),
   ...shot('mid', 51.6, 6.4, 'you', { az: -15, dist: 7.5, h: 0.12, move: 'push' })
 ];
@@ -52,7 +52,7 @@ const STATS = [
   { label: 'Float air', fmt: 'clock', keys: [[0, 60], [5.2, 57], [28.2, 15], [38.0, 0]], show: 'b1', up: 'good', crit: 20 },
   { label: 'Gerald streak', keys: [[0, 10], [49.0, 10], [49.4, 11]], show: 'b1+1' }
 ];
-const RULER = { label: 'Shark vs. pool', show: 'b3', hide: 'b4', min: 0, max: 20, fmt: 'dist', keys: [[14.2, 0], [17.4, 15]], marks: [[10, 'Pool'], [15, 'Shark+']] };
+const RULER = { label: 'Shark vs. pool', show: 'b3', hide: 'b4', min: 0, max: 25, fmt: 'dist', keys: [[14.2, 0], [17.4, 18]], marks: [[16, 'Pool'], [18, 'Shark']] };
 const END = { t: 51.6, q: 'Which monster comes back *next?*', opts: ['A T. rex in the city', 'Mammoths at the mall', 'A kraken in the harbor'], say: 'What would you have done? Most votes decides part two.', loop: 'Next morning, the pool is full again —' };
 const AUDIO = {
   score: [[0, 'tense'], [5.2, 'chill'], [8.6, 'tense'], [18.7, 'funny'], [24.1, 'action'], [32.1, 'funny'], [37.2, 'action'], [44.5, 'triumph']],
@@ -63,6 +63,6 @@ const AUDIO = {
     { t: 30.6, k: 'riser', dur: 1.2 }, { t: 38.0, k: 'pop' }, { t: 39.9, k: 'heartbeat', dur: 1.2 }, { t: 42.0, k: 'crack' }, { t: 42.3, k: 'splash' }, { t: 49.2, k: 'ding' }, { t: 51.6, k: 'stinger' }]
 };
 const THUMB = [
-  { t: 1.2, text: '_60 seconds_ of air', cam: { p: [1.4, 1.65, -0.4], l: [0, 3.1, -3.0], fov: 64 }, expr: 'panic', rays: true },
-  { t: 16.5, text: 'It doesn’t *fit*', cam: { p: [16, 6, 12], l: [0, 1.5, 3], fov: 46 }, expr: 'panic', glow: true }
+  { t: 1.2, text: '_60 seconds_ of air', cam: { p: [1.4, 1.65, -4.0], l: [0, 3.1, -6.6], fov: 64 }, expr: 'panic', rays: true },
+  { t: 16.5, text: 'It doesn’t *fit*', cam: { p: [20, 8, 16], l: [0, 1.5, 5], fov: 46 }, expr: 'panic', glow: true }
 ];
