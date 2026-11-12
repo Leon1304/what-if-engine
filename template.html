@@ -1573,7 +1573,7 @@ function figure(o = {}) {
   const hairC = zb ? null : o.hat ? (o.hair ?? (hs === 'straw' || hs === 'cowboy' ? null : '#3A2A1E')) : o.hair ?? pick(['#2A211D', '#5C3F2A', '#B88A5A']);
   const FC = faceBuild(head, { skin, skinD, lipC, zb, hairC, eyeColor: o.eyeColor ?? IRIS[Math.floor(_strH(skin + (hairC ?? '') + (o.who ?? '')) * IRIS.length) % IRIS.length] });
   FC.skull = skull; const { eyes, brows, mouth, M } = FC;
-  // hair (v2.40.1): a shell that hugs the skull — crown, back and sides in one rounded piece whose front edge is the hairline, plus fringe / bun / spikes / curls / long fall.
+  // hair (v2.40.x): a shell that hugs the skull — crown, back and sides in one rounded piece whose front edge is the hairline, plus fringe / bun / spikes / curls / long fall.
   // Everything is fixed to the head: it turns, nods and falls with it and never moves against it (was: a cap-like slab on top with a ledge all round, the bun on top read as a bowler hat,
   // long hair was a flat plate down the back that swung out beside the shoulders when the head turned).  Head: x ±0.19, y 0…0.38, z ±0.19 (face at +z).
   const hairG = grp(head);
@@ -1598,7 +1598,7 @@ function figure(o = {}) {
     hat = grp(head, 0, 0.36, 0);
     if (hs === 'straw') { box(hat, 0.7, 0.05, 0.7, o.hat); box(hat, 0.42, 0.2, 0.42, o.hat, 0, 0.02, 0); }
     else if (hs === 'cowboy') { box(hat, 0.8, 0.04, 0.62, o.hat); for (const sx of [-1, 1]) box(hat, 0.1, 0.12, 0.62, o.hat, sx * 0.38, 0.02, 0, { rz: -sx * 0.6, ...NC }); rbox(hat, 0.4, 0.24, 0.38, o.hat, 0, 0.02, 0); box(hat, 0.41, 0.05, 0.39, shade(o.hat, -0.25), 0, 0.05, 0, NC); }
-    else if (hs === 'beanie') { rbox(hat, 0.42, 0.17, 0.42, o.hat, 0, -0.06, 0, { rf: 0.4 }); box(hat, 0.43, 0.07, 0.43, shade(o.hat, -0.08), 0, -0.07, 0, NC); ball(hat, 0.07, '#F2F2F2', 0, 0.13, 0, { detail: 0, ...NC }); }
+    else if (hs === 'beanie') { rbox(hat, 0.42, 0.17, 0.42, o.hat, 0, -0.035, 0, { rf: 0.4 }); box(hat, 0.43, 0.07, 0.43, shade(o.hat, -0.08), 0, -0.045, 0, NC);   /* v2.40.x: cuff above the brows */ ball(hat, 0.07, '#F2F2F2', 0, 0.13, 0, { detail: 0, ...NC }); }
     else { const bk = o.capBack ? -1 : 1; rbox(hat, 0.41, 0.13, 0.41, o.hat, 0, -0.04, 0, { rf: 0.4 }); box(hat, 0.34, 0.03, 0.22, o.capBrim ?? shade(o.hat, -0.1), 0, -0.03, bk * 0.29, NC); ball(hat, 0.03, shade(o.hat, -0.1), 0, 0.09, 0, { detail: 0, ...NC });
       if (o.capLogo) box(hat, 0.1, 0.07, 0.01, o.capLogo, 0, 0.0, bk * 0.206, NC); }
     if (hairC) HAIR(hst, hairC, true);
@@ -1971,10 +1971,13 @@ function rigState(mode, u, t, o = {}) {   // pure: (mode, cycle position u, time
     const Hh = (o.seatH ?? 0.45) + 0.08; S.H = Hh; [S.lt, S.lk] = legIK(0.44, ANK - Hh); [S.rt, S.rk] = legIK(0.42, ANK - Hh); S.lz = -0.05; S.rz = 0.05;
     S.crx = 0.03 + 0.01 * breath; S.las = S.ras = -0.6; S.lae = S.rae = -0.55; S.laz = -0.08; S.raz = 0.08; S.nry = 0.35 * noise1(t * 0.2 + sd * 30); S.nrx = 0.04 * noise1(t * 0.3 + sd * 9);
   } else {   // idle · point · hold (and anything unknown): weight shifts from leg to leg, breathing, looking around
-    const w1 = Math.sin(TAU * t / 5.3 + sd * 10), Hh = HIP - 0.012 - 0.005 * (0.5 + 0.5 * breath);
-    S.hx = 0.025 * w1; S.hrz = -0.025 * w1; S.crz = 0.02 * w1; S.H = Hh; S.crx = 0.02;
-    [S.lt, S.lk] = legIK(0.04, ANK - Hh); [S.rt, S.rk] = legIK(-0.03, ANK - Hh);
-    S.las = S.ras = 0.04 + 0.025 * breath;
+    // v2.40.x: weight shifts that are not a metronome, stance and arm hang varied per figure, arms swing a little with the breath and the sway, the chest counters the hips
+    const w1 = 0.75 * Math.sin(TAU * t / (4.6 + 1.6 * hash(sd * 3.1)) + sd * 10) + 0.25 * noise1(t * 0.17 + sd * 17), Hh = HIP - 0.012 - 0.005 * (0.5 + 0.5 * breath) - 0.006 * w1 * w1;
+    const st = hash(sd * 5.3), ar = hash(sd * 7.7);
+    S.hx = 0.025 * w1; S.hrz = -0.03 * w1; S.crz = 0.026 * w1; S.H = Hh; S.crx = 0.02 + 0.02 * ar; S.hry = 0.03 * noise1(t * 0.11 + sd * 41); S.cry = -0.6 * S.hry;
+    [S.lt, S.lk] = legIK(0.03 + 0.03 * st, ANK - Hh); [S.rt, S.rk] = legIK(-0.02 - 0.03 * st, ANK - Hh); S.lz = -0.015 - 0.02 * st; S.rz = 0.015 + 0.02 * st;
+    S.las = 0.04 + 0.025 * breath + 0.03 * noise1(t * 0.31 + sd * 23); S.ras = 0.04 + 0.025 * breath + 0.03 * noise1(t * 0.29 + sd * 29);
+    S.laz = -0.06 - 0.03 * ar - 0.6 * S.crz; S.raz = 0.06 + 0.03 * ar - 0.6 * S.crz; S.lae = -0.1 - 0.12 * ar + 0.03 * breath; S.rae = -0.1 - 0.12 * (1 - ar) + 0.03 * breath;
     S.nry = 0.42 * noise1(t * 0.22 + sd * 50); S.nrx = 0.06 * noise1(t * 0.31 + sd * 30); S.nrz = 0.04 * noise1(t * 0.27 + sd * 70);
     if (o.zb) {
       S.las = -1.15 + (o.armOff ?? 0) + 0.06 * Math.sin(t * 1.3 + sd * 9); S.ras = -1.3 - (o.armOff ?? 0) + 0.06 * Math.sin(t * 1.1 + sd * 7); S.lae = S.rae = -0.25;
@@ -1995,7 +1998,7 @@ function applyRig(f, S) {
   f.legL.rotation.set(S.lt - S.hrx, -S.hry, comp + S.lz); f.shinL.rotation.x = S.lk; f.footL.rotation.x = S.lf - S.lt - S.lk;
   f.legR.rotation.set(S.rt - S.hrx, -S.hry, comp + S.rz); f.shinR.rotation.x = S.rk; f.footR.rotation.x = S.rf - S.rt - S.rk;
   f.armL.rotation.set(S.las, 0, S.laz); f.foreL.rotation.x = S.lae; f.armR.rotation.set(S.ras, 0, S.raz); f.foreR.rotation.x = S.rae;
-  if (f.coat) f.coat.rotation.x = S.coat;   // hats and hair sit fixed on the head (v2.40.1: a tilting hat lifted off the skull or dipped into the face)
+  if (f.coat) f.coat.rotation.x = S.coat;   // hats and hair sit fixed on the head (v2.40.x: a tilting hat lifted off the skull or dipped into the face)
   f._fly = S.coat; f._inx = 0;   // for dressPass(): how far hanging clothes fly back (gait) and swing (inertia, added later in the frame)
   if (f.cape) f.cape.rotation.x = 0.06 + S.coat * 1.35;
 }
@@ -4077,7 +4080,7 @@ late(ts => {
       const rf = clamp(springResp(tt => acc(tt, false), ts), -12, 12), rs = clamp(springResp(tt => acc(tt, true), ts), -12, 12);
       if (Math.abs(rf) + Math.abs(rs) > 0.05) {
         f.chest.rotation.x += clamp(-0.016 * rf, -0.16, 0.16); f.chest.rotation.z += clamp(0.01 * rs, -0.08, 0.08); f.neck.rotation.x += clamp(-0.012 * rf, -0.12, 0.12);
-        f._inx = rf;   // hats and hair stay on the head (v2.40.1: they used to slide over the face / off the skull here)
+        f._inx = rf;   // hats and hair stay on the head (v2.40.x: they used to slide over the face / off the skull here)
         if (f.coat) f.coat.rotation.x += clamp(0.06 * rf, -0.5, 0.6);
         if (f.cape) { f.cape.rotation.x += clamp(0.08 * rf, -0.4, 0.8); f.cape.rotation.z += clamp(-0.05 * rs, -0.4, 0.4); }
       }
@@ -5289,7 +5292,7 @@ function duel(a, b, o = {}) {   // a and b trade blows: attacks alternate, the o
 }
 function punch(f, t, o = {}) { return strike(f, t, { ...o, kind: 'punch' }); }
 function kick(f, t, o = {}) { return strike(f, t, { ...o, kind: 'kick' }); }
-function strike(f, t, o) { const C = cbRig(f), a = { type: 'strike', kind: o.kind, side: o.side ?? 'R', t, T: cbTarget(o.at) }; a.wt = tt => env3(tt, t - 0.35, t + 0.45, 0.12, 0.2); C.A.push(a); MBAUTO.push([t - 0.12, t + 0.08]);
+function strike(f, t, o) { const C = cbRig(f), a = { type: 'strike', kind: o.kind, side: o.side ?? 'R', t, T: cbTarget(o.at) }; a.wt = tt => env3(tt, t - 0.45, t + 0.45, 0.25, 0.2);   // v2.40.x: the guard comes up over 0.25 s (was 0.12 s: arms snapped ~47° a frame); the hit stays at t C.A.push(a); MBAUTO.push([t - 0.12, t + 0.08]);
   if (a.T) cbFace(f, t - 0.6, t + 0.45, a.T); sfx(t - 0.06, 'swing', 0.5);
   if (a.T && o.hit !== false) { const P = a.T.pos(t), from = rigPos(f, t, new THREE.Vector3()).add(v3(0, 1.3, 0)); cbBurst('spark', P, t, { n: 7, colors: ['#FFFFFF', '#FFE27A'], speed: 3 }); sfx(t, 'punch', 1); SHAKES.push({ t: VT(t), amp: 0.14, dur: 0.25 }); hitReact(a.T, t, { from, kill: o.kill, ragdoll: o.ragdoll, power: o.power }); }
   return a; }
@@ -6354,7 +6357,7 @@ function gear(f, kind, o = {}) {
       box(C, 0.44, 0.7, 0.02, tab, 0, -0.45, 0.2); box(C, 0.44, 0.5, 0.02, tab, 0, -0.32, -0.2, NC); const cr = P(15, ['cross', 'chevron', 'stripe', 'quarter']);
       if (cr === 'cross') { box(C, 0.08, 0.38, 0.005, em, 0, -0.02, 0.212, NC); box(C, 0.3, 0.08, 0.005, em, 0, 0.12, 0.212, NC); } else if (cr === 'chevron') for (const sx of [-1, 1]) box(C, 0.06, 0.3, 0.005, em, sx * 0.08, -0.05, 0.212, { rz: sx * 0.6, ...NC }); else if (cr === 'stripe') box(C, 0.12, 0.6, 0.005, em, 0, -0.42, 0.212, NC); else { box(C, 0.21, 0.18, 0.005, em, -0.11, 0.06, 0.212, NC); box(C, 0.21, 0.18, 0.005, em, 0.11, -0.12, 0.212, NC); }
       both((ua, s, fa, th, sh, ft) => { rbox(ua, 0.24, 0.14, 0.24, '', 0, -0.06, 0, { mat: steel }); rbox(ua, 0.2, 0.06, 0.2, '', 0, -0.18, 0, { mat: dsteel }); rbox(fa, 0.17, 0.17, 0.17, '', 0, -0.41, 0, { mat: dsteel }); rbox(fa, 0.165, 0.2, 0.165, '', 0, -0.25, 0, { mat: steel }); rbox(sh, 0.19, 0.32, 0.2, '', 0, -0.33, 0, { mat: steel }); rbox(th, 0.21, 0.24, 0.22, '', 0, -0.3, 0, { mat: steel }); rbox(ft, 0.18, 0.1, 0.3, '', 0, -ANK - 0.005, 0.05, { mat: dsteel }); });
-      const fm = M('#7A8088', { metal: 0.4, rough: 0.6 }); rbox(Hp, 0.48, 0.13, 0.32, '', 0, -0.05, 0, { mat: fm }); hemPanels(Hp, FL(), '', -0.01, 0.15, { mat: fm, hw: 0.245, hd: 0.165, t: 0.035, gain: 0.3 }); box(Hp, 0.5, 0.05, 0.33, leather, 0, 0.05, 0, NC);   // fauld: v2.40.1 plates hinged at the hips (a lifted thigh went through the rigid skirt)
+      const fm = M('#7A8088', { metal: 0.4, rough: 0.6 }); rbox(Hp, 0.48, 0.13, 0.32, '', 0, -0.05, 0, { mat: fm }); hemPanels(Hp, FL(), '', -0.01, 0.15, { mat: fm, hw: 0.245, hd: 0.165, t: 0.035, gain: 0.3 }); box(Hp, 0.5, 0.05, 0.33, leather, 0, 0.05, 0, NC);   // fauld: v2.40.x plates hinged at the hips (a lifted thigh went through the rigid skirt)
       if (V(16) < 0.45) cape(P(17, ['#5A1E1E', '#1E2A5A', '#2A4A2A', '#3A3A3A']));
       break;
     }
@@ -6363,7 +6366,7 @@ function gear(f, kind, o = {}) {
         if (V(11) < 0.15) for (const sx of [-1, 1]) { const hn = rod(h, 0, 0.06, 0.32, '#E8E0C8', sx * 0.26, 0.15, 0, { seg: 6 }); hn.rotation.set(0, sx * Math.PI / 2, sx * -0.6); } }
       beard(hairC, V(12) < 0.75); if (V(13) < 0.5) box(H, 0.06, 0.12, 0.02, '#1E3A6A', 0.1, 0.2, 0.197, NC);   // beard, war paint
       const fur = P(14, ['#5A4632', '#7A6A5A', '#3A3026', '#8A8A80']); for (let i = 0; i < 10; i++) { const a = i / 10 * TAU; rbox(C, 0.2, 0.16, 0.16, shade(fur, (hash(i + sd) - 0.5) * 0.1), Math.sin(a) * 0.26, 0.54, Math.cos(a) * 0.17, { ry: a }); }
-      rbox(Hp, 0.48, 0.07, 0.31, dleather, 0, 0.06, 0); box(Hp, 0.09, 0.08, 0.02, M('#C9A64A', { metal: 0.6 }), 0, 0.055, 0.16, NC); hemPanels(Hp, FL(), shade(f.chest.children[0]?.material?.color ? '#' + f.chest.children[0].material.color.getHexString() : '#7A5A3A', -0.05), -0.05, 0.25, { hw: 0.235, hd: 0.155, gain: 0.6 });   // tunic skirt (v2.40.1: hinged panels, was a rigid box the legs went through)
+      rbox(Hp, 0.48, 0.07, 0.31, dleather, 0, 0.06, 0); box(Hp, 0.09, 0.08, 0.02, M('#C9A64A', { metal: 0.6 }), 0, 0.055, 0.16, NC); hemPanels(Hp, FL(), shade(f.chest.children[0]?.material?.color ? '#' + f.chest.children[0].material.color.getHexString() : '#7A5A3A', -0.05), -0.05, 0.25, { hw: 0.235, hd: 0.155, gain: 0.6 });   // tunic skirt (v2.40.x: hinged panels, was a rigid box the legs went through)
       both((ua, s, fa, th, sh) => { cyl(fa, 0.085, 0.085, 0.04, '', 0, -0.16, 0, { mat: M('#C9A64A', { metal: 0.6 }), seg: 8, ...NC }); for (let i = 0; i < 4; i++) rbox(sh, 0.18, 0.05, 0.19, i % 2 ? '#C9B58A' : '#8A7A5A', 0, -0.36 + i * 0.07, 0); });
       if (V(15) < 0.4) cape(P(16, ['#5A1E1E', '#2A3A5A', '#3A3A2A']), 1.0);
       break;
@@ -8158,7 +8161,7 @@ function gesture(f, t0, kind = 'thumbsup', o = {}) {
   const d = o.dur ?? { thumbsup: 1.4, fistpump: 1.4, clap: 2, salute: 1.6, shush: 1.6, beckon: 1.8, stop: 1.4, point: 1.6, peace: 1.4, cross: 2.5 }[kind] ?? 1.5;
   if (kind === 'clap') for (let k = 0.35; k < d - 0.3; k += 0.32) sfx(t0 + k, 'clap', 0.5);
   (f.fx ??= []).push((t, S) => {
-    const e = env3(t, t0, t0 + d, 0.22, 0.28); if (!e) return; const u = t - t0, L = (k, v) => { S[k] = lerp(S[k], v, e); };
+    const e = env3(t, t0, t0 + d, 0.22, 0.28); if (!e) return; const u = t - t0, eo = e * (1 + 0.08 * Math.sin(Math.PI * clamp((u - 0.1) / 0.42))), L = (k, v) => { S[k] = lerp(S[k], v, eo); };   // v2.40.x: arms overshoot ~8 % and settle
     if (kind === 'thumbsup') { L('ras', -0.85); L('raz', 0.1); L('rae', -1.55); _hset(S, 'R', HANDP.thumb, e); S.nrz -= 0.08 * e; }
     else if (kind === 'fistpump') { const p = Math.max(0, Math.sin(TAU * 1.7 * u)); L('ras', -2.4 - 0.3 * p); L('raz', 0.25); L('rae', -0.9 + 0.6 * p); _hset(S, 'R', HANDP.fist, e); S.crx -= 0.06 * e; }
     else if (kind === 'clap') { const c = Math.abs(Math.sin(Math.PI * u / 0.32)); L('las', -1.15); L('ras', -1.15); L('lae', -0.9); L('rae', -0.9); L('laz', 0.35 + 0.25 * c); L('raz', -0.35 - 0.25 * c); _hset(S, 'L', HANDP.open, e); _hset(S, 'R', HANDP.open, e); }
@@ -8174,10 +8177,22 @@ function gesture(f, t0, kind = 'thumbsup', o = {}) {
   return f;
 }
 // turn a standing figure toward a target (rig, [x,z], [x,y,z]) between t0 and t1 (eases in and out)
-function faceTo(f, at, t0, t1, o = {}) {
+function faceTo(f, at, t0, t1, o = {}) {   // o: { fade, off, steps: false }
   const r = dyn(f.root); _cap(f); if (at?.legL && at.root) _cap(at);
-  late(t => { const e = env3(t, t0, t1, o.fade ?? 0.35, o.fade ?? 0.35); if (!e) return; const p = r.position, q = at?._posAt ? at._posAt(t) : at?.legL || at?.root ? _bp(at, t) : toV(at);
-    const cur = _byaw(f, t), want = Math.atan2(q.x - p.x, q.z - p.z) + (o.off ?? 0); let d = want - cur; d = Math.atan2(Math.sin(d), Math.cos(d)); r.rotation.y = cur + d * e; });
+  const fd = o.fade ?? 0.35, yawAt = (t, p) => { const e = env3(t, t0, t1, fd, fd); if (!e) return null; const q = at?._posAt ? at._posAt(t) : at?.legL || at?.root ? _bp(at, t) : toV(at);
+    const cur = _byaw(f, t), want = Math.atan2(q.x - p.x, q.z - p.z) + (o.off ?? 0); let d = want - cur; d = Math.atan2(Math.sin(d), Math.cos(d)); return cur + d * e; };
+  late(t => { const y = yawAt(t, r.position); if (y != null) r.rotation.y = y; if (t < t0 - 0.3 || t > t1 + 0.3) return;
+    // v2.40.x: a quick turn on the spot steps round — the feet lift in turn while the body turns (was: the figure spun on planted feet) — and the head leads into the turn.
+    // Turn speed from the same pure function a moment before and after (no state between frames).
+    if (!f.legL || f._seated || (f._rag && t >= f._rag.t) || o.steps === false) return;
+    const h = 0.05, Y = tt => yawAt(tt, _bp(f, tt)) ?? _byaw(f, tt), W = tt => { const dy = Y(tt + h) - Y(tt - h); return Math.atan2(Math.sin(dy), Math.cos(dy)) / (2 * h); }, w = W(t);
+    const mv = _bp(f, t + h).distanceTo(_bp(f, t - h)) / (2 * h), kw = 1 - sm01((mv - 0.1) / 0.3); if (kw <= 0) return;   // walking: walk() does the legs (fades out, no snap when a walk starts)
+    f.neck.rotation.y += clamp(w * 0.09, -0.3, 0.3) * kw;
+    let wa = 0; for (let j = -3; j <= 3; j++) wa += Math.abs(W(t + j * 0.1)) * (4 - Math.abs(j)) / 16;   // stepping follows the turn speed averaged over ±0.3 s: the last step lands over ~0.5 s (was: the lifted foot dropped in 2–3 frames when the turn ended)
+    const k = sm01((wa - 0.5) / 1.5) * kw; if (k < 0.01) return;
+    const s = Math.sin(TAU * (t * 2.4 + f.sd * 3)); f.hips.position.y -= 0.012 * k;
+    [[f.legL, f.shinL, f.footL, Math.max(0, s)], [f.legR, f.shinR, f.footR, Math.max(0, -s)]].forEach(([th, sh, ft, u]) => { const a = Math.acos(1 - 0.075 * k * u * u * (3 - 2 * u) / (LEG1 + LEG2)); th.rotation.x -= a; sh.rotation.x += 2 * a; ft.rotation.x -= a; });
+  });
   return f;
 }
 // ---- crouch helper: lower the hips by d and keep the feet where they are (two-bone IK) ----
@@ -11301,10 +11316,11 @@ function lookPass(t) {   // figure.look = 'cam' | [x,y,z] | t => [x,y,z] | objec
   for (const f of RIGS) {
     const L = f.look, B = f._lookFrom; if (!L && !B) continue;
     f.chest.updateWorldMatrix(true, false);
-    const y0 = f.neck.rotation.y, x0 = f.neck.rotation.x, w = f.lookW ?? 1, A = L ? lookAng(f, L, t) : null; if (L && !A && !B) continue;
+    const me = f.chest.matrixWorld.elements, up = me[5] / (Math.hypot(me[4], me[5], me[6]) || 1), wu = sm01((up - 0.35) / 0.4); if (wu <= 0) continue;   // v2.40.x: falling, lying, ragdoll: the look lets go (was: the neck snapped round toward the target while the body tumbled)
+    const y0 = f.neck.rotation.y, x0 = f.neck.rotation.x, w = (f.lookW ?? 1) * wu, A = L ? lookAng(f, L, t) : null; if (L && !A && !B) continue;
     let ty = A ? lerp(y0, A[0], w) : y0, tx = A ? lerp(x0, A[1], w) : x0;
     if (B && B.w < 1) { const A0 = B.from ? lookAng(f, B.from, t) : null, k = EASE.inOut(B.w); ty = lerp(A0 ? lerp(y0, A0[0], w) : y0, ty, k); tx = lerp(A0 ? lerp(x0, A0[1], w) : x0, tx, k); }   // v2.31: a new target set in a tick → the head turns over POSEFADE s
-    // v2.40.1: the head leads, the body follows — of a turn beyond the pose's own head turn the chest takes ~28 %, the hips ~10 % (feet stay planted), the neck the rest:
+    // v2.40.x: the head leads, the body follows — of a turn beyond the pose's own head turn the chest takes ~28 %, the hips ~10 % (feet stay planted), the neck the rest:
     // the head turns at most ~60° against the shoulders (was: up to 69° on a square torso — read as a wrung neck in close-ups)
     const d = ty - y0, rag = f._rag && t >= f._rag.t;
     if (!rag && f.legL && !f.isModel && Math.abs(d) > 1e-4) { const c = d * 0.28, h = f._seated ? 0 : d * 0.1; f.chest.rotation.y += c; f.hips.rotation.y += h; f.legL.rotation.y -= h; f.legR.rotation.y -= h; ty -= c + h; }

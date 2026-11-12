@@ -9,7 +9,7 @@
   ['soldier', 'knight', 'viking', 'spartan', 'roman', 'samurai', 'ninja', 'pirate', 'cowboy', 'bandit', 'swat', 'caveman'].forEach((k, i) => put(warrior(k, { seed: 3 + i * 7, ...(i % 3 ? { weapon: false } : {}) }), 85 + i * 2.5));
   ALL.forEach((f, i) => {
     const x = f.root.position.x;
-    tick(t => { if (t < 1.6 || t >= 9.4) return; const m = t < 3.6 ? 'walk' : t < 5.2 ? 'run' : t < 6.6 ? 'idle' : t < 8 ? 'cheer' : 'panic'; pose(f, m, t * (m === 'run' ? 8 : 5.4), t, { v: m === 'walk' ? 1.4 : m === 'run' ? 4.5 : 0 }); });
+    tick(t => { if (t < 1.6 || t >= 9.4) return; const m = t < 3.6 ? 'walk' : t < 5.2 ? 'run' : t < 6.6 ? 'idle' : t < 8 ? 'cheer' : 'panic'; pose(f, m, t < 3.6 ? t * 5.4 : 19.44 + (t - 3.6) * 8, t, { v: m === 'walk' ? 1.4 : m === 'run' ? 4.5 : 0 }); });
     const side = [x + (i % 2 ? 6 : -6), 1.6, 1.5], ahead = [x, 1.6, 20], mix = (a, b, k) => a.map((v, j) => v + (b[j] - v) * sm01(k));   // look set once as a function of t (smooth hand-overs)
     f.look = t => t < 1.6 ? mix(ahead, side, (t - 0.7) / 0.4) : t < 11.4 ? mix(side, ahead, (t - 1.6) / 0.4) : t < 13.2 ? mix(ahead, camera.position.toArray(), (t - 11.4) / 0.4) : mix(camera.position.toArray(), ahead, (t - 13.2) / 0.4);
     punch(f, 5.6); punch(f, 6.1, { side: 'L' });
