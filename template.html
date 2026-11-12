@@ -2299,8 +2299,9 @@ function walk(obj, pts, o = {}) {
   let y0 = yawAt(0) ?? 0;
   const gW = (s, P) => { if (!rig || !STAIRS.length) return groundH(P.x, P.z); let h = 0; for (let k = -2; k <= 2; k++) { const Q = path.at(s + k * 0.075); h += groundH(Q.x, Q.z); } return h / 5; };   // v2.29: on stairs the body rises smoothly (was: 18 cm jump per step); the feet still find the steps (foot IK)
   const rt = obj.root ?? obj; const me = { t0, v, pos: t => { const s = dist(t - t0), P = path.at(s); return new THREE.Vector3(P.x, gW(s, P) + (o.y ?? 0), P.z); }, yaw: t => { let y = o.face ?? (yawAt(dist(t - t0)) ?? y0); const i = rt._walks.indexOf(me), u = t - t0;   // v2.31: a walk that follows another one turns into its new heading over 0.45 s (was: spun round in one frame)
-      if (i > 0 && o.face == null && u < 0.45) { const yp = rt._walks[i - 1].yaw(t0); y = yp + Math.atan2(Math.sin(y - yp), Math.cos(y - yp)) * sm01(Math.max(0, u) / 0.45); } return y; } }; (rt._walks ??= []).push(me);
-  if (obj.beast || obj.chk) {   // v2.40.x beast / chicken feet: stride amplitude as a function of the distance walked (w at the moment a foot touched down) → feet stay planted while starting and stopping
+      const TT = me.turnT(); if (i > 0 && o.face == null && u < TT) { const yp = rt._walks[i - 1].yaw(t0); y = yp + Math.atan2(Math.sin(y - yp), Math.cos(y - yp)) * sm01(Math.max(0, u) / TT); } return y; },
+    turnT: () => me._tT ??= (() => { const i = rt._walks.indexOf(me); if (!(obj.beast || obj.chk || obj.bird) || i < 1 || o.face != null) return 0.45; const yp = rt._walks[i - 1].yaw(t0), y1 = yawAt(0) ?? y0, d = Math.abs(Math.atan2(Math.sin(y1 - yp), Math.cos(y1 - yp))); return 0.45 * Math.max(1, d / (Math.PI / 2)); })() }; (rt._walks ??= []).push(me);   // v2.40.x animals: a turn of more than 90° takes proportionally longer (stepping round instead of sliding)
+  if (obj.beast || obj.chk || obj.bird) {   // v2.40.x beast / chicken / bird feet: stride amplitude as a function of the distance walked (w at the moment a foot touched down) → feet stay planted while starting and stopping
     const a0 = ra ? v / ra : 0, tr = Math.min(ra, Te / 2), vp = a0 * tr, s1 = 0.5 * a0 * tr * tr, sE = ra ? vp * (Te - tr) : v * Te;
     const tauS = q => { q = clamp(q, 0, sE); return !ra ? q / v : q < s1 ? Math.sqrt(2 * q / a0) : q < sE - s1 ? tr + (q - s1) / vp : Te - Math.sqrt(Math.max(0, 2 * (sE - q) / a0)); }, wAt = tau => (tau <= 0 || tau >= Te ? 0 : clamp(Math.min(tau, Te - tau) / bl));
     Object.assign(me, { Te, bl, sE, dist, tauS, wAt: tt => wAt(tt - t0), wS: q => (q <= 0 || q >= sE ? 0 : wAt(tauS(q))) }); }
@@ -2323,7 +2324,7 @@ function walk(obj, pts, o = {}) {
     const w = moving ? clamp(Math.min(tau, Te - tau) / bl) : 0, vn = moving ? (dist(tau + 0.02) - dist(tau - 0.02)) / 0.04 : 0;
     const from = tau < Te / 2 ? (o.startMode ?? 'idle') : (o.endMode ?? 'idle');
     let turn = (yawAt(s + 0.5) ?? yw) - (yawAt(s - 0.5) ?? yw); turn = Math.atan2(Math.sin(turn), Math.cos(turn));
-    if (obj.beast || obj.chk) obj._wk = me;
+    if (obj.beast || obj.chk || obj.bird) obj._wk = me;
     if (obj.quad) animalPose(obj, moving, s * stride / sc, t, o.graze ?? 0.6, w, s);
     else if (obj.isModel) obj.pose(mode, s / ((obj.stride[mode] ?? 1.3) * sc), t, { w, from, v: vn });
     else if (obj.legL) pose(obj, mode, TAU * s / Cl, t, { v, w, from, turn: mode === 'run' ? turn : 0 });
@@ -6896,7 +6897,7 @@ const BEASTS = {
   sheep:    { L: 0.85, lh: 0.42, bh: 0.48, bw: 0.44, c: '#EFECE4', b: '#EFECE4', k: '#3A3632', nk: [0.15, 0.45, 0.12], hd: [0.22, 0.18, 0.15], sn: [0.1, 0.12, 0.12], headC: '#3A3632', ear: 'side', tail: [0.12, 0.05, 'stub'], leg: [0.04, 0.028], legC: '#3A3632', ft: 'hoof', z: 'hoof', flex: 0.06, gal: 'tra', eye: 'side', voice: 'bleat', herb: 1, wool: 1 },
   goat:     { L: 0.8, lh: 0.5, bh: 0.38, bw: 0.3, c: '#E8E2D6', b: '#E8E2D6', k: '#3A3632', nk: [0.22, 0.75, 0.08], hd: [0.2, 0.17, 0.14], sn: [0.12, 0.1, 0.1], ear: 'side', tail: [0.1, 0.03, 'upStub'], leg: [0.04, 0.025], ft: 'hoof', z: 'hoof', flex: 0.08, gal: 'tra', eye: 'goat', iris: '#C8A040', voice: 'bleat', herb: 1, horns: 'goat', beard: 1 },
   camel:    { L: 1.55, lh: 1.15, bh: 0.7, bw: 0.55, c: '#C9A26B', b: '#D8B888', k: '#5A4026', nk: [0.8, 0.7, 0.12, 1.4], hd: [0.32, 0.22, 0.2], sn: [0.22, 0.17, 0.15], hp: 0.1, ear: 'roundSmall', tail: [0.45, 0.025, 'tuft'], leg: [0.075, 0.04], ft: 'pad', nails: false, z: 'hoof', flex: 0.04, gal: 'tra', pace: 1, eye: 'side', voice: 'grunt', herb: 1, humps: 1 },
-  elephant: { L: 2.5, lh: 1.5, bh: 1.55, bw: 1.35, c: '#8E8B88', b: '#8E8B88', k: '#3A3836', nk: [0.32, 0.2, 0.55], hd: [0.85, 0.95, 0.8], sn: [0.2, 0.4, 0.35], ear: 'elephant', tail: [0.9, 0.035, 'tuft'], leg: [0.3, 0.24], ft: 'pad', z: 'plant', flex: 0, gal: 'tra', maxG: 'walk', eye: 'side', voice: 'trumpet', trunk: 1.9, tusk: 'elephant', nt: 'none' },
+  elephant: { L: 2.5, lh: 1.5, bh: 1.55, bw: 1.35, c: '#8E8B88', b: '#8E8B88', k: '#3A3836', nk: [0.32, 0.2, 0.55], hd: [0.85, 0.95, 0.8], sn: [0.2, 0.4, 0.35], ear: 'elephant', tail: [0.9, 0.035, 'tuft'], leg: [0.3, 0.24], ft: 'pad', z: 'plant', flex: 0, gal: 'tra', maxG: 'amble', sMax: 1.45, eye: 'side', voice: 'trumpet', trunk: 1.9, tusk: 'elephant', nt: 'none' },
   giraffe:  { L: 1.45, lh: 1.7, bh: 0.85, bw: 0.58, c: '#E4B45E', b: '#F2DDB0', k: '#4A2E1A', nk: [1.9, 1.0, 0.13, 1.35], hd: [0.32, 0.2, 0.18], sn: [0.26, 0.15, 0.13], hp: 0.45, ear: 'side', tail: [0.85, 0.025, 'tuft'], leg: [0.075, 0.04], ft: 'hoof', z: 'hoof', flex: 0.05, gal: 'tra', pace: 1, eye: 'side', voice: null, herb: 1, spots: 'patch', patchC: '#8A5530', ossicone: 1, fl: 1.18, mane: '#8A5530', hmane: 'up' },
   rhino:    { L: 2.3, lh: 0.7, bh: 0.98, bw: 0.98, c: '#8E8A86', b: '#8E8A86', k: '#3A3836', nk: [0.25, 0.15, 0.42], hd: [0.62, 0.42, 0.4], sn: [0.32, 0.3, 0.32], hp: 0.35, ear: 'point', tail: [0.35, 0.03, 'tuft'], leg: [0.17, 0.14], ft: 'pad', z: 'plant', flex: 0.05, gal: 'tra', eye: 'side', voice: 'snort', herb: 1, horn: 'rhino', folds: 1 },
   hippo:    { L: 2.5, lh: 0.45, bh: 1.05, bw: 1.2, c: '#8A7482', b: '#D8A6A8', k: '#3A2E36', nk: [0.2, 0.15, 0.5], hd: [0.55, 0.5, 0.6], sn: [0.45, 0.45, 0.7], ear: 'tiny', tail: [0.3, 0.06, 'stub'], leg: [0.19, 0.16], ft: 'pad', z: 'plant', flex: 0.03, gal: 'tra', maxG: 'trot', eye: 'top', voice: 'grunt', herb: 1, tusk: 'hippo', snoutC: '#9A8290' },
@@ -7150,7 +7151,7 @@ function beast(o = {}) {   // kind: see BEASTS — real proportions in metres; w
   return a;
 }
 const _GAITS = { walk: { off: [0.25, 0.75, 0, 0.5], d: 0.64, lift: 0.1 }, pace: { off: [0, 0.5, 0, 0.5], d: 0.6, lift: 0.1 }, trot: { off: [0, 0.5, 0.5, 0], d: 0.42, lift: 0.17 },
-  rot: { off: [0.64, 0.52, 0, 0.12], d: 0.32, lift: 0.24 }, brun: { off: [0, 0, 0, 0.5], d: 0.36, lift: 0.3 }, tra: { off: [0.52, 0.64, 0, 0.12], d: 0.34, lift: 0.22 }, hop: { off: [0.5, 0.55, 0, 0.04], d: 0.3, lift: 0.28 } };
+  rot: { off: [0.64, 0.52, 0, 0.12], d: 0.32, lift: 0.24 }, amble: { off: [0.25, 0.75, 0, 0.5], d: 0.46, lift: 0.13 }, brun: { off: [0, 0, 0, 0.5], d: 0.36, lift: 0.3 }, tra: { off: [0.52, 0.64, 0, 0.12], d: 0.34, lift: 0.22 }, hop: { off: [0.5, 0.55, 0, 0.04], d: 0.3, lift: 0.28 } };
 function _ik2(hy, hz, ty, tz, l1, l2, back) {   // two-bone IK in the sagittal plane → absolute angles [a1, a2] (from vertical, + = backwards)
   let dz = tz - hz, dy = ty - hy, d = Math.hypot(dz, dy); const dmax = (l1 + l2) * 0.999, dmin = Math.abs(l1 - l2) + 0.02 * (l1 + l2);
   if (d > dmax) { dz *= dmax / d; dy *= dmax / d; d = dmax; } else if (d < dmin) { const k = dmin / Math.max(d, 1e-5); dz = d < 1e-5 ? 0 : dz * k; dy = d < 1e-5 ? -dmin : dy * k; d = dmin; }
@@ -7160,9 +7161,9 @@ function _ik2(hy, hz, ty, tz, l1, l2, back) {   // two-bone IK in the sagittal p
 // v2.40.x planted feet for beasts on a walk(): a foot in stance stays where it touched down (offset = touch-down offset − distance walked since),
 // a swing goes from the lift-off point to the next touch-down, whose stride is scaled by the walk's ramp at that distance (short first and last steps).
 // After the stop the feet that are still apart (or in the air) step under the body one after another; the next walk starts from where they are.
-const _bGaits = (a, mx) => { const D = a.D; return [D.pace ? _GAITS.pace : _GAITS.walk, D.pace ? _GAITS.pace : _GAITS.trot, mx === 'hop' ? _GAITS.hop : D.biped ? _GAITS.brun : D.gal === 'tra' ? _GAITS.tra : _GAITS.rot]; };
-const _bSw = (a, vc) => { const lhW = a.lh * a.sc, Frc = Math.max(0.02, vc * vc / (9.81 * lhW)); return Math.max(0.55 * lhW, lhW * 2.3 * Math.pow(Frc, 0.3), vc / 3.2); };
-const _bGw = (mx, F) => { if (mx === 'hop') return [0, 0, 1]; if (mx === 'walk') return [1, 0, 0]; const k1 = sm01((F - 0.3) / 0.3), k2 = mx === 'gallop' ? sm01((F - 1.9) / 1.0) : 0; return [1 - k1, k1 * (1 - k2), k1 * k2]; };   // gait weights [walk, trot, gallop] from the Froude number
+const _bGaits = (a, mx) => { const D = a.D; return [D.pace ? _GAITS.pace : _GAITS.walk, D.pace ? _GAITS.pace : mx === 'amble' ? _GAITS.amble : _GAITS.trot, mx === 'hop' ? _GAITS.hop : D.biped ? _GAITS.brun : D.gal === 'tra' ? _GAITS.tra : _GAITS.rot]; };
+const _bSw = (a, vc) => { const lhW = a.lh * a.sc, Frc = Math.max(0.02, vc * vc / (9.81 * lhW)); return Math.min(Math.max(0.55 * lhW, lhW * 2.3 * Math.pow(Frc, 0.3), vc / 3.2), (a.D.sMax ?? 1e9) * lhW); };   // sMax: longest stride (× leg height) — elephants amble with quicker steps instead of over-reaching
+const _bGw = (mx, F) => { if (mx === 'hop') return [0, 0, 1]; if (mx === 'walk') return [1, 0, 0]; if (mx === 'amble') { const k = sm01((F - 0.3) / 0.3); return [1 - k, k, 0]; } const k1 = sm01((F - 0.3) / 0.3), k2 = mx === 'gallop' ? sm01((F - 1.9) / 1.0) : 0; return [1 - k1, k1 * (1 - k2), k1 * k2]; };   // gait weights [walk, trot, gallop] from the Froude number
 const _bGw0 = (a, wk) => { const lhW = a.lh * a.sc; return _bGw(a.D.maxG ?? 'gallop', Math.max(0.02, wk.v * wk.v / (9.81 * lhW))); };
 function _bFoot(a, G, d, off, s, Sw, W, z0) {   // one foot, one gait → [z offset, lift, swing 0‥1] (local units); z0: where the foot stood when the walk began
   const sc = a.sc, half = Sw / sc * d / 2, uu = ((s / Sw - off) % 1 + 1) % 1, sc0 = s - uu * Sw, swL = (1 - d) * Sw, ex = sN => sN >= 0.4 * swL;   // ex: a swing cut by the start is still taken if ≥ 40 % of it is left
@@ -7175,13 +7176,13 @@ function _bFoot(a, G, d, off, s, Sw, W, z0) {   // one foot, one gait → [z off
 }
 // turning: a walk that starts in a new direction turns over 0.45 s (walk()); the turn also advances the step phase (Rt m of 'walking' per radian),
 // so the feet step round on the spot, and a planted foot stays on its spot while the body yaws over it (was: the feet swept round with the body).
-const _bRt = a => 0.3 * a.L * a.sc;
-const _bTurn = (a, wk) => wk._tn ?? (wk._tn = (() => { if ((a.root._walks ?? []).indexOf(wk) < 1) return 0; const d = wk.yaw(wk.t0 + 0.45) - wk.yaw(wk.t0), dd = Math.abs(Math.atan2(Math.sin(d), Math.cos(d))); return dd > 0.15 ? dd : 0; })());
-const _bPsi = (a, wk, t) => { const tn = _bTurn(a, wk); if (!tn) return 0; const d = wk.yaw(Math.min(t, wk.t0 + 0.45)) - wk.yaw(wk.t0); return Math.min(tn, Math.abs(Math.atan2(Math.sin(d), Math.cos(d)))); };
+const _bRt = a => 0.5 * a.L * a.sc;
+const _bTurn = (a, wk) => wk._tn ?? (wk._tn = (() => { if ((a.root._walks ?? []).indexOf(wk) < 1) return 0; const d = wk.yaw(wk.t0 + wk.turnT()) - wk.yaw(wk.t0), dd = Math.abs(Math.atan2(Math.sin(d), Math.cos(d))); return dd > 0.15 ? dd : 0; })());
+const _bPsi = (a, wk, t) => { const tn = _bTurn(a, wk); if (!tn) return 0; const d = wk.yaw(Math.min(t, wk.t0 + wk.turnT())) - wk.yaw(wk.t0); return Math.min(tn, Math.abs(Math.atan2(Math.sin(d), Math.cos(d)))); };
 const _bSp = (a, wk, t) => wk.dist(t - wk.t0) + _bRt(a) * _bPsi(a, wk, t);   // step-phase distance
 function _bTq(a, wk, q) {   // time at which the step-phase distance reaches q
-  if (q <= 0) return wk.t0; const tn = _bTurn(a, wk); if (!tn) return wk.t0 + wk.tauS(q); const R = _bRt(a), sp1 = wk.dist(0.45) + R * tn; if (q >= sp1) return wk.t0 + wk.tauS(q - R * tn);
-  let lo = wk.t0, hi = wk.t0 + 0.45; for (let j = 0; j < 22; j++) { const m = (lo + hi) / 2; if (_bSp(a, wk, m) < q) lo = m; else hi = m; } return (lo + hi) / 2;
+  if (q <= 0) return wk.t0; const tn = _bTurn(a, wk); if (!tn) return wk.t0 + wk.tauS(q); const R = _bRt(a), TT = wk.turnT(), sp1 = wk.dist(TT) + R * tn; if (q >= sp1) return wk.t0 + wk.tauS(q - R * tn);
+  let lo = wk.t0, hi = wk.t0 + TT; for (let j = 0; j < 22; j++) { const m = (lo + hi) / 2; if (_bSp(a, wk, m) < q) lo = m; else hi = m; } return (lo + hi) / 2;
 }
 function _bFoot2(a, wk, G, d, off, i, t, sp, Sw, z0, x0) {   // one foot, one gait → [dz, lift, swing 0‥1, dx] in the root frame (local units, offsets from the neutral stance)
   const sc = a.sc, g = a.LG[i], half = Sw / sc * d / 2, uu = ((sp / Sw - off) % 1 + 1) % 1, sc0 = sp - uu * Sw, swL = (1 - d) * Sw, ex = sN => sN >= 0.4 * swL, q0 = sc0 < 0 || (sc0 - swL < 0 && !ex(sc0)) ? 0 : sc0;
@@ -7217,13 +7218,13 @@ function beastPose(a, t, w = 0, s = 0, graze = 0) {
   const D = a.D, lh = a.lh, lhW = lh * a.sc, sd = a.sd, mx = D.maxG ?? 'gallop';
   let v = 0, vc = 0.6;
   if (a._posAt && w > 0) { const p0 = a._posAt(t - 0.05), p1 = a._posAt(t + 0.05); v = Math.hypot(p1.x - p0.x, p1.z - p0.z) / 0.1; const wk = a.root._walks; if (wk) { let e = wk[0]; for (const x of wk) if (x.t0 <= t) e = x; vc = e.v ?? v; } }
-  const Fr = v * v / (9.81 * lhW), Frc = Math.max(0.02, vc * vc / (9.81 * lhW)), Sw = Math.max(0.55 * lhW, lhW * 2.3 * Math.pow(Frc, 0.3), vc / 3.2), S = Sw / a.sc, U = s / Sw;   // v2.40: at most 3.2 strides/s (longer bounds instead of flickering legs)
+  const Fr = v * v / (9.81 * lhW), Frc = Math.max(0.02, vc * vc / (9.81 * lhW)), Sw = _bSw(a, vc), S = Sw / a.sc, U = s / Sw;   // v2.40: at most 3.2 strides/s (longer bounds instead of flickering legs)
   let yr = 0, vPast = 0; if (a._yawAt && w > 0) { const d = a._yawAt(t + 0.12) - a._yawAt(t - 0.12); yr = Math.atan2(Math.sin(d), Math.cos(d)) / 0.24; }
   if (a._posAt && D.pant) { const p0 = a._posAt(t - 1.3), p1 = a._posAt(t - 1.2); vPast = Math.hypot(p1.x - p0.x, p1.z - p0.z) / 0.1; }
   const bend = clamp(yr * 0.2, -0.4, 0.4) * w, cad = vc / Sw, flick = clamp(30 * 0.6 / Math.max(cad, 0.1) / 9, 0.35, 1);   // paw flick shrinks when a swing lasts only a few frames
   let ww = 1, wt = 0, wg = 0;
   [ww, wt, wg] = _bGw(mx, a._wk?.wS ? Frc : Fr);   // v2.40.x: gait from the walk's cruise speed (one gait per walk, started and stopped with short steps; blending gaits while braking dragged the feet)
-  const GW = D.pace ? _GAITS.pace : _GAITS.walk, GT = D.pace ? _GAITS.pace : _GAITS.trot, GG = mx === 'hop' ? _GAITS.hop : D.biped ? _GAITS.brun : D.gal === 'tra' ? _GAITS.tra : _GAITS.rot;
+  const GW = D.pace ? _GAITS.pace : _GAITS.walk, GT = D.pace ? _GAITS.pace : mx === 'amble' ? _GAITS.amble : _GAITS.trot, GG = mx === 'hop' ? _GAITS.hop : D.biped ? _GAITS.brun : D.gal === 'tra' ? _GAITS.tra : _GAITS.rot;
   let by = 0, bz = 0, bp = 0, br = 0, fx = 0, np = 0, ny = 0, hp = 0, hy = 0, hr = 0, jaw = 0, jawY = 0, tl = 0, tsA = 0.08, tsF = 2.2, ear = 0, earB = 0, trk = 0, lat = 0, rig = 0, rest = 0, lid = 0, swy = 0;
   const T = a._T ?? (a._T = [[0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0]]), A3 = a._A3 ?? (a._A3 = [0, 0, 0, 0]);
   const wk = a._wk && a._wk.wS && t >= a._wk.t0 ? a._wk : null, FT = wk ? _bFeet(a, wk, t, [ww, wt, wg]) : null;
@@ -7289,6 +7290,9 @@ function beastPose(a, t, w = 0, s = 0, graze = 0) {
   }
   // apply: body, spine, neck, head
   const brth = Math.sin(TAU * t / (1.6 + a.L) + sd * 20), bpT = a.slope + bp;
+  if (w > 0 && !D.sprawl) { let dr = 0; for (let i = 0; i < 4; i++) { const g = a.LG[i]; if (!g) continue;   // v2.40.x: long strides lower the body a little instead of the legs over-reaching (planted feet were dragged when out of reach)
+      let [y1, z1] = _rotYZ(g.hy, g.hz, g.front ? fx : -fx); [y1, z1] = _rotYZ(y1, z1, bpT); y1 += a.by0 + by; z1 += bz; const a3 = g.A[2] + A3[i], dz = T[i][0] + g.l3 * Math.sin(a3) - z1, dy = y1 - (T[i][1] + g.hf + g.l3 * Math.cos(a3)), Lm = 0.985 * (g.l1 + g.l2);
+      if (Math.abs(dz) < Lm) dr = Math.max(dr, dy - Math.sqrt(Lm * Lm - dz * dz)); } by -= Math.min(Math.max(0, dr), 0.22 * lh); }
   a.body.position.set(0, a.by0 + by, bz); a.body.rotation.set(bpT, 0, br); a.body.scale.set(1, 1 + 0.015 * brth, 1 + 0.01 * brth);
   a.fr.rotation.x = fx; a.rr.rotation.x = -fx; a.fr.rotation.y = swy + bend * 0.45; a.rr.rotation.y = -swy - bend * 0.45;
   if (D.sprawl && w > 0) { const sw3 = 0.12 * w * Math.sin(TAU * U + 0.5); a.fr.rotation.y += sw3; a.rr.rotation.y -= sw3; }
@@ -7454,7 +7458,17 @@ function birdPose(B, t, wk = null) {
   // body: perched upright, flying level; cancel the flight path's pitch / bank when sitting
   B.b.position.y = B.hb * fold - 0.03 * B.bl * flap * sn; B.b.rotation.set(-rx * fold, 0, -rz * fold);
   let bp = (D.up ?? -0.25) * fold, br = 0, hz2 = 0;
-  if (wk && wk.w > 0) { const k = TAU * wk.s / Math.max(0.08, D.lg * 2.2 + B.bl * 0.3); B.LG.forEach((L, i) => { L.lp.rotation.x = 0.55 * Math.sin(k + i * Math.PI) * wk.w; }); B.b.position.y += 0.02 * B.bl * Math.abs(Math.cos(k)) * wk.w; if (D.waddle) br = 0.14 * Math.sin(k) * wk.w; if (D.bob) hz2 = B.bl * 0.12 * (sm01((((k / TAU) % 1) - 0.7) / 0.2) - ((k / TAU) % 1)) * wk.w; }
+  const wkk = B._wk && B._wk.wS && t >= B._wk.t0 && !node._fly ? B._wk : null;
+  B.LG.forEach(L => { L.lp.scale.y = 1; L.ft.scale.y = 1; L._wth = 0; });
+  if (wkk || (wk && wk.w > 0)) {   // v2.40.x walking on the ground: two legs stepped by the distance walked, planted feet (also starting / stopping), toes curl in the swing
+    const sc = B.sc, lg = D.lg, w0 = wk?.w ?? 0, s0 = wk?.s ?? 0, Sw = Math.max(Math.max(lg * 2.4, B.bl * 0.22) * sc, (wkk?.v ?? 0.6) / 3.5), d = 0.6, U = s0 / Sw, A2 = { sc, lh: 1, D: {} }, G2 = { lift: lg * 0.45 };
+    B.LG.forEach((L, i) => { let z, y, k2;
+      if (wkk && t < wkk.t0 + wkk.Te) [z, y, k2] = _bFoot(A2, G2, d, i * 0.5, s0, Sw, wkk.wS, 0);
+      else if (wkk) { const st = _bFoot(A2, G2, d, i * 0.5, wkk.sE, Sw, wkk.wS, 0), air = st[1] > 1e-4, q = clamp((t - wkk.t0 - wkk.Te - (air ? 0 : 0.05 + 0.1 * i)) / 0.14); z = lerp(st[0], 0, sm01(q)); k2 = Math.sin(Math.PI * q) * (air || Math.abs(st[0]) > lg * 0.15 ? 1 : 0); y = (air ? st[1] * (1 - sm01(q)) : 0) + lg * 0.35 * k2; }
+      else { const uu = ((U - i * 0.5) % 1 + 1) % 1, half = Sw / sc * d / 2; if (uu < d) { z = half * (1 - 2 * uu / d); y = k2 = 0; } else { const q = (uu - d) / (1 - d); z = -half + 2 * half * sm01(q); k2 = Math.sin(Math.PI * q); y = lg * 0.45 * k2; } z *= w0; y *= w0; k2 *= w0; }
+      const Lh = Math.hypot(z, lg - y), th = Math.atan2(z, lg - y); L.lp.rotation.x = -th; L.lp.scale.y = Lh / lg; L.ft.scale.y = lg / Lh; L._wth = th + 0.8 * k2; });
+    const ph = TAU * U; B.b.position.y += 0.02 * B.bl * Math.abs(Math.cos(ph)) * w0; if (D.waddle) br = 0.14 * Math.sin(ph) * w0;
+    if (D.bob) { const f2 = ((2 * U) % 1 + 1) % 1; hz2 = Sw / sc / 2 * 0.9 * (sm01((f2 - 0.7) / 0.18) - f2) * w0; } }
   else B.LG.forEach(L => { L.lp.rotation.x = fl * (D.trail ? 1.55 : 1.3) - grab * 1.9; });
   B.LG.forEach(L => { L.lp.position.y = -lerp(B.bh, B.ext, fold) * 0.85; });
   B.bod.rotation.set(bp, 0, br);
@@ -7464,7 +7478,7 @@ function birdPose(B, t, wk = null) {
   const nr = lerp(D.neck > 0.3 ? 0.15 : 0.25, Math.PI / 2 - 0.15, fl);
   B.neck.rotation.set(nr + peck * 0.6, hy * 0.4, 0); B.head.rotation.set(-nr - bp + peck * 0.9 - call * 0.35, hy * 0.6, 0); B.head.position.z = hz2;
   B.tg.rotation.x = 0.12 * fold - 0.25 * flap * 0 + 0.15 * clamp((4 - v) / 3) * fl; B.tg.scale.x = 1 + 0.5 * clamp((4 - v) / 3) * fl;
-  B.LG.forEach(L => { L.ft.rotation.x = fl * 0.8 - grab * 0.8; });
+  B.LG.forEach(L => { L.ft.rotation.x = fl * 0.8 - grab * 0.8 + L._wth; });
   for (const f of B.fx) f(t, B);
 }
 const BIRD_T = { value: 0 };
@@ -9263,12 +9277,20 @@ function snake(p, o = {}) {
 function slither(S, pts, o = {}) { const path = new Path(pts), t0 = o.t0 ?? 0, v = o.speed ?? 0.8; S._path = path; S._dist = t => clamp(S.len + Math.max(0, t - t0) * v, 0, path.len); S._posAt = t => { const P = path.at(S._dist(t)); return v3(P.x, 0, P.z); }; return S; }
 // lizard(p, { x, z, color }) → walk(L, pts, { speed }) scurries with a wiggling spine; frog(p, { x, z, color }) → hop(F, pts, { t0, h }) jumps, F.do('croak' | 'tongue', t)
 function lizard(p, o = {}) {
-  const g = dyn(grp(p ?? world, o.x ?? 0, 0, o.z ?? 0, o.ry ?? 0)), c = o.color ?? '#6A9A3A', L = { root: g }, NC = { cast: false }, s = o.scale ?? 1, b = grp(g, 0, 0.04 * s, 0);
-  const sp = []; for (let i = 0; i < 9; i++) { const q = dyn(grp(i ? sp[i - 1] : b, 0, 0, i ? -0.05 * s : 0.1 * s)); _ell(q, c, 0, 0, 0, 0.03 * s * (i < 2 ? 1 : 1 - i * 0.09), 0.02 * s, 0.035 * s); sp.push(q); }
-  _ell(b, c, 0, 0.005, 0.16 * s, 0.03 * s, 0.022 * s, 0.045 * s); for (const sx of [-1, 1]) ball(b, 0.008 * s, '#1E1E1E', sx * 0.022 * s, 0.015 * s, 0.17 * s, { detail: 0, ...NC });
-  const legs = []; for (const [z, k] of [[0.08, 0], [-0.04, 1]]) for (const sx of [-1, 1]) { const lg = dyn(grp(b, sx * 0.03 * s, 0, z * s)); _seg(lg, [0, 0, 0], [sx * 0.05 * s, -0.035 * s, 0.01 * s], 0.008 * s, 0.006 * s, c); legs.push([lg, k, sx]); }
-  tick(t => { const v = L._posAt ? L._posAt(t + 0.05).distanceTo(L._posAt(t - 0.05)) / 0.1 : 0, m = Math.min(1, v * 2); sp.forEach((q, i) => q.rotation.y = 0.25 * m * Math.sin(t * 18 - i * 0.7) + 0.08 * Math.sin(t * 2 + i)); legs.forEach(([lg, k, sx]) => lg.rotation.y = m * 0.6 * Math.sin(t * 18 + k * Math.PI + (sx > 0 ? Math.PI : 0))); });
-  return L;
+  const g = dyn(grp(p ?? world, o.x ?? 0, 0, o.z ?? 0, o.ry ?? 0)), c = o.color ?? '#6A9A3A', L = { root: g }, NC = { cast: false }, s = o.scale ?? 1, b = grp(g, 0, 0.04 * s, 0), dk = shade(c, -0.12), bl = shade(c, 0.25);
+  // v2.40.x: overlapping, flattened body segments tapering into a long tail, dorsal stripe and light belly, wedge head with eyes, two-part sprawled legs with toes (was: beads and sticks)
+  const sp = []; for (let i = 0; i < 12; i++) { const q = dyn(grp(i ? sp[i - 1] : b, 0, 0, i ? -0.045 * s : 0.1 * s)), k = i < 3 ? 1 : Math.max(0.12, 1 - (i - 2) * 0.095), rx = 0.032 * s * k, ry = 0.019 * s * k;
+    _ell(q, c, 0, 0, 0, rx, ry, 0.036 * s); _ell(q, dk, 0, ry * 0.8, 0, rx * 0.35, ry * 0.3, 0.03 * s, NC); if (i < 4) _ell(q, bl, 0, -ry * 0.55, 0, rx * 0.8, ry * 0.45, 0.032 * s, NC); sp.push(q); }
+  _ell(b, c, 0, 0.004 * s, 0.155 * s, 0.026 * s, 0.017 * s, 0.045 * s); _ell(b, c, 0, -0.001 * s, 0.195 * s, 0.017 * s, 0.011 * s, 0.025 * s); _ell(b, dk, 0, -0.006 * s, 0.185 * s, 0.018 * s, 0.003 * s, 0.03 * s, NC);
+  for (const sx of [-1, 1]) { ball(b, 0.007 * s, '#E8C040', sx * 0.021 * s, 0.012 * s, 0.168 * s, { detail: 1, ...NC }); ball(b, 0.0045 * s, '#141210', sx * 0.025 * s, 0.013 * s, 0.17 * s, { detail: 0, ...NC }); }
+  const legs = []; for (const [z, k] of [[-0.02, 0], [0, 1]]) for (const sx of [-1, 1]) { const lg = dyn(grp(sp[k ? 3 : 0], sx * 0.027 * s, 0, z * s)),   /* legs ride on the spine (hips follow its S-bend) */ P1 = [sx * 0.032 * s, 0.002 * s, (k ? -0.006 : 0.006) * s], P2 = [sx * 0.044 * s, -0.036 * s, (k ? -0.002 : 0.012) * s];
+    _seg(lg, [0, 0, 0], P1, 0.009 * s, 0.007 * s, c); _seg(lg, P1, P2, 0.0065 * s, 0.005 * s, c); for (let j = 0; j < 4; j++) { const a2 = (j - 1.5) * 0.45 + sx * 0.3; _seg(lg, P2, [P2[0] + Math.sin(a2) * 0.014 * s, P2[1], P2[2] + Math.cos(a2) * 0.014 * s], 0.0025 * s, 0.0015 * s, c, NC); } legs.push([lg, k, sx]); }
+  // v2.40.x trotting sprawl gait stepped by the distance walked (diagonal pairs): planted toes swing back exactly as far as the body moves, the spine S-bends with the step (legs waved with time and skated)
+  tick(t => { const v = L._posAt ? L._posAt(t + 0.05).distanceTo(L._posAt(t - 0.05)) / 0.1 : 0, m = clamp(v * 2.5), dd = L._sAt ? L._sAt(t) / s : 0, st = 0.11, hf = st * 0.55 / 2, R = 0.06, U = dd / st;
+    sp.forEach((q, i) => q.rotation.y = 0.22 * m * Math.sin(TAU * U - i * 0.7) + 0.08 * (1 - m) * Math.sin(t * 2 + i));
+    legs.forEach(([lg, k, sx]) => { const u = ((U + (k === (sx > 0 ? 1 : 0) ? 0 : 0.5)) % 1 + 1) % 1; let f, q = 0; if (u < 0.55) f = hf * (1 - 2 * u / 0.55); else { q = (u - 0.55) / 0.45; f = -hf + 2 * hf * sm01(q); }
+      lg.rotation.y = -sx * m * Math.asin(clamp(f / R, -0.9, 0.9)); lg.rotation.z = sx * m * 0.45 * Math.sin(Math.PI * q); }); });
+  _fuseDyn(g); return L;
 }
 function frog(p, o = {}) {
   const g = dyn(grp(p ?? world, o.x ?? 0, 0, o.z ?? 0, o.ry ?? 0)), c = o.color ?? '#4A9A2A', F = { root: g, acts: [], hops: [] }, NC = { cast: false }, s = o.scale ?? 1, b = dyn(grp(g)); b.scale.setScalar(s);
