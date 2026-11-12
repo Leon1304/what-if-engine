@@ -1527,6 +1527,17 @@ const FCH = ['by', 'bq', 'bi', 'bo', 'bk', 'lu', 'll', 'lt', 'es', 'ps', 'gx', '
 const FI = Object.fromEntries(FCH.map((k, i) => [k, i])), NCH = FCH.length;
 const FDEF = { by: 0, bq: 0, bi: 0, bo: 0.04, bk: 0, lu: 0.22, ll: 0.06, lt: 0, es: 1, ps: 1, gx: 0, gy: 0, mo: 0, mu: 0.3, mc: 0.12, ma: 0, mw: 1, mr: 0, mp: 0.8, mtU: 0, mtL: 0, mcl: 0, mtg: 0, ch: 0, bl: 0, sw: 0, tr: 0, nw: 0, wob: 0 };
 const FLEAD = new Set(['by', 'bq', 'bi', 'bo', 'bk', 'lu', 'll', 'lt', 'es', 'ps']);   // brows and eyes lead the change with a small overshoot, the mouth follows
+// things that hang from the hips (coat panels, tabards, tunic skirts, armour strips): a flap is hinged at a hip joint (sx −1 left · 1 right · 0 middle) in front (fz 1) or behind (−1).
+// dressPass() turns it every frame: the thigh pushes it, otherwise it hangs; it flies back with speed (gain) — so nothing that hangs there goes through a lifted leg any more.
+// Build the pieces into flap.in with the same coordinates as on the hips.
+function hipFlap(hips, list, sx, fz, o = {}) {   // → the flap (its pieces go into flap.in)
+  const q = grp(hips, sx * 0.12, 0, 0); q.sx = sx; q.fz = fz; q.gain = o.gain ?? 1; q.flare = o.flare ?? 0.07; q.in = sx ? grp(q, -sx * 0.12, 0, 0) : q; list.push(q); return q; }
+function hemPanels(hips, list, c, top, L, o = {}) {   // four panels round the thighs (front / back × left / right; front and back split in the middle, the sides overlap), from y = top down by L → [front L, back L, front R, back R]
+  const hw = o.hw ?? 0.25, hd = o.hd ?? 0.155, t = o.t ?? 0.03, m = o.mat ? { mat: o.mat } : {}, out = [];
+  for (const sx of [-1, 1]) for (const fz of [1, -1]) { const q = hipFlap(hips, list, sx, fz, o); out.push(q);
+    box(q.in, hw - 0.008, L, t, c, sx * (hw / 2 + 0.002), top - L, fz * (hd - t / 2), m); box(q.in, t - 0.004, L, hd + 0.07, c, sx * (hw - t / 2 + (fz > 0 ? -0.003 : 0.002)), top - L, fz * (hd - 0.07) / 2, m); }
+  return out;
+}
 function figure(o = {}) {
   const zb = o.kind === 'zombie';
   const skin = o.skin ?? (zb ? pick(['#8FB07A', '#7E9C6E', '#9AB58A']) : pick(['#F1C7A5', '#D9A47E', '#A8714F', '#7A4E34']));
@@ -1562,20 +1573,25 @@ function figure(o = {}) {
   const hairC = zb ? null : o.hat ? (o.hair ?? (hs === 'straw' || hs === 'cowboy' ? null : '#3A2A1E')) : o.hair ?? pick(['#2A211D', '#5C3F2A', '#B88A5A']);
   const FC = faceBuild(head, { skin, skinD, lipC, zb, hairC, eyeColor: o.eyeColor ?? IRIS[Math.floor(_strH(skin + (hairC ?? '') + (o.who ?? '')) * IRIS.length) % IRIS.length] });
   FC.skull = skull; const { eyes, brows, mouth, M } = FC;
+  // hair (v2.40.1): a shell that hugs the skull — crown, back and sides in one rounded piece whose front edge is the hairline, plus fringe / bun / spikes / curls / long fall.
+  // Everything is fixed to the head: it turns, nods and falls with it and never moves against it (was: a cap-like slab on top with a ledge all round, the bun on top read as a bowler hat,
+  // long hair was a flat plate down the back that swung out beside the shoulders when the head turned).  Head: x ±0.19, y 0…0.38, z ±0.19 (face at +z).
   const hairG = grp(head);
-  const HAIR = (st, c, under) => {   // short · buzz · spiky · long · bun · curly · mohawk (under = a cap or beanie covers the top)
-    const head = hairG;
+  const HAIR = (st, c, under) => {   // short · buzz · spiky · long · bun · curly · mohawk (under = a hat covers the crown)
+    const head = hairG, lg = st === 'long', thin = st === 'buzz' || st === 'mohawk', T = under ? 0.016 : thin ? 0.01 : 0.024, W = 0.38 + 2 * T, zb0 = -0.19 - T, zf = 0.184;   // T: thickness over the skin · zf: front edge, just behind the forehead
+    const top = under ? 0.345 : 0.38 + T, bot = under ? 0.16 : 0.2;
+    rbox(head, W, top - bot, zf - zb0, c, 0, bot, (zf + zb0) / 2, { rf: 0.3 });   // children[0] = the crown (helmets hide it)
     if (!under) {
-      if (st === 'buzz') rbox(head, 0.395, 0.05, 0.395, c, 0, 0.345, 0);
-      else if (st === 'curly') for (let i = 0; i < 9; i++) ball(head, 0.1, c, ((i % 3) - 1) * 0.13, 0.37 + (i % 2) * 0.03, (Math.floor(i / 3) - 1) * 0.13 - 0.02, { detail: 0, ...NC });
-      else if (st === 'mohawk') { rbox(head, 0.395, 0.03, 0.395, c, 0, 0.35, 0); box(head, 0.09, 0.16, 0.38, c, 0, 0.37, -0.01, NC); }
-      else rbox(head, 0.41, 0.11, 0.41, c, 0, 0.33, -0.01);
-      if (st === 'spiky') for (let i = 0; i < 6; i++) cone(head, 0.07, 0.17, c, ((i % 3) - 1) * 0.12, 0.42, i < 3 ? 0.06 : -0.08, { seg: 4, rz: ((i % 3) - 1) * -0.35, ...NC });
-      if (st === 'bun') ball(head, 0.1, c, 0, 0.47, -0.12, { detail: 1, ...NC });
+      if (thin) box(head, 0.35, 0.026, 0.01, c, 0, 0.338, 0.189, NC);   // straight hairline
+      else if (st === 'bun' || lg) for (const sx of [-1, 1]) box(head, 0.19, 0.045, 0.02, c, sx * 0.092, 0.34, 0.195, { rz: sx * -0.22, ...NC });   // middle parting
+      else if (st !== 'curly') { box(head, 0.37, 0.05, 0.02, c, 0, 0.345, 0.195, NC); box(head, 0.19, 0.03, 0.02, c, -0.085, 0.326, 0.197, { rz: 0.12, ...NC }); }   // fringe, a little lower on one side
+      if (st === 'mohawk') for (let i = 0; i < 4; i++) rbox(head, 0.07, 0.12 - Math.abs(i - 1.2) * 0.02, 0.1, c, 0, 0.37, 0.13 - i * 0.1, { rf: 0.35, rx: -0.25 });   // a crest of tufts from the forehead to the crown
+      if (st === 'spiky') for (let i = 0; i < 6; i++) cone(head, 0.07, 0.15, c, ((i % 3) - 1) * 0.12, 0.385, i < 3 ? 0.05 : -0.09, { seg: 4, rz: ((i % 3) - 1) * -0.35, rx: i < 3 ? 0.25 : -0.15, ...NC });
+      if (st === 'curly') for (let i = 0; i < 9; i++) ball(head, 0.095, c, ((i % 3) - 1) * 0.125, 0.385 + (i % 2) * 0.02, (Math.floor(i / 3) - 1) * 0.125 - 0.025, { detail: 0, ...NC });
     }
-    const lg = st === 'long';
-    box(head, 0.4, lg ? 0.5 : 0.24, 0.05, c, 0, lg ? -0.12 : 0.12, -0.185);
-    for (const sx of [-1, 1]) box(head, 0.03, lg ? 0.36 : 0.13, 0.09, c, sx * 0.195, lg ? -0.02 : 0.21, -0.07, NC);
+    if (st === 'bun') { ball(head, 0.088, c, 0, under ? 0.25 : 0.33, -0.235, { detail: 1, ...NC }); ball(head, 0.055, c, 0, under ? 0.23 : 0.31, -0.2, { detail: 0, ...NC }); }   // at the back of the head (was: on top — read as a hat)
+    // the back of the head down to the nape (short styles) or a fall over the ears and the neck to the top of the shoulders (long) — 3 mm inside the crown's faces (no flicker)
+    const zr = lg ? 0.1 : -0.11, yb = lg ? -0.045 : 0.05, dz = zr - zb0 - 0.003; rbox(head, W - 0.014, 0.32 - yb, dz, c, 0, yb, (zr + zb0 + 0.003) / 2, { rf: 0.04 / dz });   // reaches up into the crown: fills the groove of its rounded edge
   };
   let hat = null, coat = null;
   if (hs) {   // headwear: straw (farmer) · cap (o.capBack: worn backwards) · beanie · cowboy
@@ -1599,12 +1615,20 @@ function figure(o = {}) {
     if (knit) { box(chest, 0.12, 0.22, 0.012, o.under ?? '#EDE6D6', 0, 0.38, 0.152, NC); for (let i = 0; i < 4; i++) ball(chest, 0.014, '#3A2A1E', 0.035, 0.32 - i * 0.1, 0.156, { detail: 0, ...NC }); }
     else { box(chest, 0.45, 0.07, 0.33, jd, 0, 0.56, 0, NC); box(chest, 0.018, 0.56, 0.012, '#2A2A26', 0, 0.0, 0.153, NC);
       for (const sx of [-1, 1]) { box(chest, 0.14, 0.13, 0.012, shade(shirt, -0.07), sx * 0.13, 0.3, 0.152, NC); box(chest, 0.15, 0.035, 0.016, jd, sx * 0.13, 0.41, 0.154, NC); } } }
-  if (o.coat) { coat = grp(hips, 0, 0.06, -0.16); rbox(coat, 0.5, 0.5, 0.04, shirt, 0, -0.5, 0); }
+  // coat (lab coat, overcoat): collar, lapels and buttons on the chest; a waist over the hips; below it four panels (front / back × left / right) that hang from the hip joints.
+  // dressPass() lets each thigh push its panels (they never go through a leg), the back ones fly up when running; split front and back, closed at the sides. Hem above the knee.
+  if (o.coat) { const cd = shade(shirt, -0.09), cb = shade(shirt, -0.3);
+    box(chest, 0.3, 0.045, 0.27, cd, 0, 0.578, -0.005, NC);   // collar
+    for (const sx of [-1, 1]) box(chest, 0.085, 0.25, 0.012, cd, sx * 0.068, 0.33, 0.153, { rz: sx * -0.3, ...NC });   // lapels
+    box(chest, 0.012, 0.31, 0.008, cb, 0, -0.01, 0.153, NC); for (let i = 0; i < 3; i++) ball(chest, 0.016, cb, 0.04, 0.26 - i * 0.11, 0.156, { detail: 0, ...NC });   // front edge, buttons
+    coat = grp(hips, 0, 0, 0); rbox(coat, 0.5, 0.27, 0.29, shirt, 0, -0.14, 0, { rf: 0.12 });   // waist: covers the hips up into the chest (no trousers showing at the belt)
+    hemPanels(coat, coat.Q = [], shirt, -0.04, o.coatLen ?? 0.365); box(coat.Q[2].in, 0.012, o.coatLen ?? 0.365, 0.008, cb, 0.006, -0.04 - (o.coatLen ?? 0.365), 0.154, NC); }   // + the front edge goes on down the right panel
   let cape = null; if (o.cape) { cape = grp(chest, 0, 0.58, -0.17); cape.add(Object.assign(new THREE.Mesh(new THREE.PlaneGeometry(0.62, 1.15, 6, 10).translate(0, -0.575, 0), clothMat(o.cape, { pin: 'top', len: 1.15, amp: 0.5, speed: 1.4 })), { castShadow: true })); }   // cape: flows back when running, waves   // lab-coat tail: swings with the steps, flies back when running
   if (o.hold) o.holdShape === 'board' ? box(foreR, 0.27, 0.34, 0.03, o.hold, 0, -0.62, 0.08) : box(foreR, 0.09, 0.24, 0.09, o.hold, 0, -0.6, 0.03);   // held item: flashlight/megaphone (along the forearm) or holdShape 'board' (clipboard)
   root.scale.setScalar(o.scale ?? 1);
   const f = { root, body, hips, chest, neck, head, legL, legR, shinL, shinR, footL, footR, armL, armR, foreL, foreR, mouth, brows, eyes, hat, coat, hair: hairG, cape,
     expr: o.expr, kind: o.kind ?? 'human', id, sd: hash(id * 7.31 + 0.5), look: o.look, talk: o.talk, who: o.who, M, fx: [], hands: HANDS, FC, autoFace: o.autoFace };
+  if (coat) f.flaps = coat.Q;
   let _lookV = f.look;   // v2.31: look targets switched inside a scene tick are cross-faded (see poseProbe)
   Object.defineProperty(f, 'look', { enumerable: true, get: () => _lookV, set: v => { if (TKP) { TKP.look.set(f, v); return; } _lookV = v; if (TK && !TK._idle && !TK._poser) TK._poser = TK._redo = true; } });
   RIGS.push(f);
@@ -1971,8 +1995,8 @@ function applyRig(f, S) {
   f.legL.rotation.set(S.lt - S.hrx, -S.hry, comp + S.lz); f.shinL.rotation.x = S.lk; f.footL.rotation.x = S.lf - S.lt - S.lk;
   f.legR.rotation.set(S.rt - S.hrx, -S.hry, comp + S.rz); f.shinR.rotation.x = S.rk; f.footR.rotation.x = S.rf - S.rt - S.rk;
   f.armL.rotation.set(S.las, 0, S.laz); f.foreL.rotation.x = S.lae; f.armR.rotation.set(S.ras, 0, S.raz); f.foreR.rotation.x = S.rae;
-  if (f.hat) f.hat.rotation.x = S.hat;
-  if (f.coat) f.coat.rotation.x = S.coat;
+  if (f.coat) f.coat.rotation.x = S.coat;   // hats and hair sit fixed on the head (v2.40.1: a tilting hat lifted off the skull or dipped into the face)
+  f._fly = S.coat; f._inx = 0;   // for dressPass(): how far hanging clothes fly back (gait) and swing (inertia, added later in the frame)
   if (f.cape) f.cape.rotation.x = 0.06 + S.coat * 1.35;
 }
 // v2.31 pose switches: a scene tick that calls pose(rig, 'idle') in one frame and pose(rig, 'cheer') in the next used to flip the whole body at once.
@@ -4053,8 +4077,7 @@ late(ts => {
       const rf = clamp(springResp(tt => acc(tt, false), ts), -12, 12), rs = clamp(springResp(tt => acc(tt, true), ts), -12, 12);
       if (Math.abs(rf) + Math.abs(rs) > 0.05) {
         f.chest.rotation.x += clamp(-0.016 * rf, -0.16, 0.16); f.chest.rotation.z += clamp(0.01 * rs, -0.08, 0.08); f.neck.rotation.x += clamp(-0.012 * rf, -0.12, 0.12);
-        if (f.hat) { f.hat.rotation.x += clamp(-0.04 * rf, -0.35, 0.35); f.hat.rotation.z += clamp(0.035 * rs, -0.3, 0.3); }
-        if (f.hair) { f.hair.rotation.x += clamp(-0.018 * rf, -0.12, 0.12); f.hair.rotation.z += clamp(0.012 * rs, -0.08, 0.08); }
+        f._inx = rf;   // hats and hair stay on the head (v2.40.1: they used to slide over the face / off the skull here)
         if (f.coat) f.coat.rotation.x += clamp(0.06 * rf, -0.5, 0.6);
         if (f.cape) { f.cape.rotation.x += clamp(0.08 * rf, -0.4, 0.8); f.cape.rotation.z += clamp(-0.05 * rs, -0.4, 0.4); }
       }
@@ -6297,7 +6320,7 @@ function arm(f, kind, sd, pickW, wo = {}) {   // weapon loadout per kind, varied
 }
 function gear(f, kind, o = {}) {
   const sd = o.seed ?? 1, V = k => hash(sd * 13.71 + k * 3.17), P = (k, arr) => arr[Math.floor(V(k) * arr.length) % arr.length], NC = { cast: false };
-  const H = f.head, C = f.chest, Hp = f.hips, hideHair = () => { if (f.hair) f.hair.visible = false; };
+  const H = f.head, C = f.chest, Hp = f.hips, hideHair = () => { if (f.hair) f.hair.visible = false; }, FL = () => (f.flaps ??= []);
   const M = (c, o2) => mat(c, o2), steel = M('#A8B0B8', { metal: 0.65, rough: 0.32 }), dsteel = M('#6E747C', { metal: 0.6, rough: 0.4 }), bronze = M('#C9963A', { metal: 0.7, rough: 0.3 }), leather = '#6A4428', dleather = '#3A2618';
   const both = fn => { fn(f.armL, -1, f.foreL, f.legL, f.shinL, f.footL); fn(f.armR, 1, f.foreR, f.legR, f.shinR, f.footR); };
   const cape = (color, len = 1.15) => { if (f.cape) return; const cp = grp(C, 0, 0.58, -0.17); cp.add(Object.assign(new THREE.Mesh(new THREE.PlaneGeometry(0.62, len, 6, 10).translate(0, -len / 2, 0), clothMat(color, { pin: 'top', len, amp: 0.5, speed: 1.4 })), { castShadow: true })); f.cape = cp; };
@@ -6331,7 +6354,7 @@ function gear(f, kind, o = {}) {
       box(C, 0.44, 0.7, 0.02, tab, 0, -0.45, 0.2); box(C, 0.44, 0.5, 0.02, tab, 0, -0.32, -0.2, NC); const cr = P(15, ['cross', 'chevron', 'stripe', 'quarter']);
       if (cr === 'cross') { box(C, 0.08, 0.38, 0.005, em, 0, -0.02, 0.212, NC); box(C, 0.3, 0.08, 0.005, em, 0, 0.12, 0.212, NC); } else if (cr === 'chevron') for (const sx of [-1, 1]) box(C, 0.06, 0.3, 0.005, em, sx * 0.08, -0.05, 0.212, { rz: sx * 0.6, ...NC }); else if (cr === 'stripe') box(C, 0.12, 0.6, 0.005, em, 0, -0.42, 0.212, NC); else { box(C, 0.21, 0.18, 0.005, em, -0.11, 0.06, 0.212, NC); box(C, 0.21, 0.18, 0.005, em, 0.11, -0.12, 0.212, NC); }
       both((ua, s, fa, th, sh, ft) => { rbox(ua, 0.24, 0.14, 0.24, '', 0, -0.06, 0, { mat: steel }); rbox(ua, 0.2, 0.06, 0.2, '', 0, -0.18, 0, { mat: dsteel }); rbox(fa, 0.17, 0.17, 0.17, '', 0, -0.41, 0, { mat: dsteel }); rbox(fa, 0.165, 0.2, 0.165, '', 0, -0.25, 0, { mat: steel }); rbox(sh, 0.19, 0.32, 0.2, '', 0, -0.33, 0, { mat: steel }); rbox(th, 0.21, 0.24, 0.22, '', 0, -0.3, 0, { mat: steel }); rbox(ft, 0.18, 0.1, 0.3, '', 0, -ANK - 0.005, 0.05, { mat: dsteel }); });
-      rbox(Hp, 0.48, 0.24, 0.32, '', 0, -0.16, 0, { mat: M('#7A8088', { metal: 0.4, rough: 0.6 }) }); box(Hp, 0.5, 0.05, 0.33, leather, 0, 0.05, 0, NC);
+      const fm = M('#7A8088', { metal: 0.4, rough: 0.6 }); rbox(Hp, 0.48, 0.13, 0.32, '', 0, -0.05, 0, { mat: fm }); hemPanels(Hp, FL(), '', -0.01, 0.15, { mat: fm, hw: 0.245, hd: 0.165, t: 0.035, gain: 0.3 }); box(Hp, 0.5, 0.05, 0.33, leather, 0, 0.05, 0, NC);   // fauld: v2.40.1 plates hinged at the hips (a lifted thigh went through the rigid skirt)
       if (V(16) < 0.45) cape(P(17, ['#5A1E1E', '#1E2A5A', '#2A4A2A', '#3A3A3A']));
       break;
     }
@@ -6340,7 +6363,7 @@ function gear(f, kind, o = {}) {
         if (V(11) < 0.15) for (const sx of [-1, 1]) { const hn = rod(h, 0, 0.06, 0.32, '#E8E0C8', sx * 0.26, 0.15, 0, { seg: 6 }); hn.rotation.set(0, sx * Math.PI / 2, sx * -0.6); } }
       beard(hairC, V(12) < 0.75); if (V(13) < 0.5) box(H, 0.06, 0.12, 0.02, '#1E3A6A', 0.1, 0.2, 0.197, NC);   // beard, war paint
       const fur = P(14, ['#5A4632', '#7A6A5A', '#3A3026', '#8A8A80']); for (let i = 0; i < 10; i++) { const a = i / 10 * TAU; rbox(C, 0.2, 0.16, 0.16, shade(fur, (hash(i + sd) - 0.5) * 0.1), Math.sin(a) * 0.26, 0.54, Math.cos(a) * 0.17, { ry: a }); }
-      rbox(Hp, 0.48, 0.07, 0.31, dleather, 0, 0.06, 0); box(Hp, 0.09, 0.08, 0.02, M('#C9A64A', { metal: 0.6 }), 0, 0.055, 0.16, NC); box(Hp, 0.46, 0.25, 0.3, shade(f.chest.children[0]?.material?.color ? '#' + f.chest.children[0].material.color.getHexString() : '#7A5A3A', -0.05), 0, -0.3, 0);
+      rbox(Hp, 0.48, 0.07, 0.31, dleather, 0, 0.06, 0); box(Hp, 0.09, 0.08, 0.02, M('#C9A64A', { metal: 0.6 }), 0, 0.055, 0.16, NC); hemPanels(Hp, FL(), shade(f.chest.children[0]?.material?.color ? '#' + f.chest.children[0].material.color.getHexString() : '#7A5A3A', -0.05), -0.05, 0.25, { hw: 0.235, hd: 0.155, gain: 0.6 });   // tunic skirt (v2.40.1: hinged panels, was a rigid box the legs went through)
       both((ua, s, fa, th, sh) => { cyl(fa, 0.085, 0.085, 0.04, '', 0, -0.16, 0, { mat: M('#C9A64A', { metal: 0.6 }), seg: 8, ...NC }); for (let i = 0; i < 4; i++) rbox(sh, 0.18, 0.05, 0.19, i % 2 ? '#C9B58A' : '#8A7A5A', 0, -0.36 + i * 0.07, 0); });
       if (V(15) < 0.4) cape(P(16, ['#5A1E1E', '#2A3A5A', '#3A3A2A']), 1.0);
       break;
@@ -6350,7 +6373,7 @@ function gear(f, kind, o = {}) {
       hideHair(); const h = grp(H, 0, 0.19, 0); ball(h, 0.245, '', 0, 0.06, 0, { mat: steel, detail: 2 }).scale.set(1, 0.85, 1.02); box(h, 0.46, 0.06, 0.12, '', 0, -0.02, -0.22, { mat: steel, rx: 0.4 }); for (const sx of [-1, 1]) box(h, 0.03, 0.22, 0.16, '', sx * 0.21, -0.2, 0.08, { mat: steel });
       const cr = grp(h, 0, 0.27, 0); for (let i = 0; i < 7; i++) { const a = (i / 6 - 0.5) * 2.2; box(cr, 0.06, 0.12, 0.08, V(10) < 0.25 ? '#E8E0C8' : '#B8302A', V(11) < 0.3 ? Math.sin(a) * 0.2 : 0, Math.cos(a) * 0.08, V(11) < 0.3 ? 0 : Math.sin(a) * 0.2, NC); }
       rbox(C, 0.58, 0.5, 0.38, '', 0, 0.08, 0, { mat: steel }); for (let i = 0; i < 5; i++) box(C, 0.6, 0.012, 0.4, '#5E646C', 0, 0.12 + i * 0.09, 0, NC); for (const sx of [-1, 1]) rbox(C, 0.2, 0.06, 0.34, '', sx * 0.25, 0.56, 0, { mat: steel });
-      for (let i = 0; i < 8; i++) box(Hp, 0.06, 0.28, 0.02, '#8A5A34', -0.16 + i * 0.046, -0.32, 0.17, NC); rbox(Hp, 0.47, 0.07, 0.31, dleather, 0, 0.04, 0); rbox(Hp, 0.46, 0.25, 0.3, '#B8302A', 0, -0.3, 0);
+      const rq = hemPanels(Hp, FL(), '#B8302A', -0.05, 0.25, { hw: 0.235, hd: 0.155, gain: 0.6 }); for (let i = 0; i < 8; i++) { const x = -0.16 + i * 0.046; box((x < 0 ? rq[0] : rq[2]).in, 0.04, 0.28, 0.02, '#8A5A34', x, -0.32, 0.172, NC); } rbox(Hp, 0.47, 0.07, 0.31, dleather, 0, 0.04, 0);   // tunic skirt + leather strips on the front panels
       both((ua, s, fa, th, sh, ft) => { for (let i = 0; i < 3; i++) box(sh, 0.18, 0.02, 0.19, dleather, 0, -0.38 + i * 0.1, 0, NC); });
       if (V(12) < 0.35) cape('#8A1E1E', 1.05);
       break;
@@ -6361,7 +6384,8 @@ function gear(f, kind, o = {}) {
       for (const sx of [-1, 1]) { const k = grp(h, sx * 0.07, 0.24, 0.24); k.rotation.z = -sx * 0.5; box(k, 0.04, 0.3, 0.015, M('#E8C02A', { metal: 0.7, rough: 0.3 }), 0, 0, 0, NC); }
       if (V(12) < 0.6) { box(H, 0.38, 0.16, 0.05, M('#5A1E1E', { rough: 0.6 }), 0, 0.0, 0.18); box(H, 0.1, 0.03, 0.02, '#E8E0C8', 0, 0.06, 0.21, NC); }
       rbox(C, 0.58, 0.5, 0.38, ar, 0, 0.08, 0); for (let i = 0; i < 5; i++) box(C, 0.59, 0.015, 0.39, lac, 0, 0.12 + i * 0.08, 0, NC);
-      for (let k = 0; k < 2; k++) for (let i = 0; i < 4; i++) { const a = (i / 4) * TAU + 0.4; box(Hp, 0.22, 0.12, 0.03, k % 2 ? lac : ar, Math.sin(a) * 0.2, -0.2 - k * 0.12, Math.cos(a) * 0.15, { ry: a }); }
+      const kz = [-1, 1].flatMap(sx => [1, -1].map(fz => hipFlap(Hp, FL(), sx, fz, { gain: 0.4 })));   // kusazuri: the plates hang from the hips, the thighs push them
+      for (let k = 0; k < 2; k++) for (let i = 0; i < 4; i++) { const a = (i / 4) * TAU + 0.4, q = kz[(Math.sin(a) > 0 ? 2 : 0) + (Math.cos(a) > 0 ? 0 : 1)]; box(q.in, 0.22, 0.12, 0.03, k % 2 ? lac : ar, Math.sin(a) * 0.2, -0.2 - k * 0.12, Math.cos(a) * 0.15, { ry: a }); }
       both((ua, s, fa, th, sh) => { box(ua, 0.26, 0.26, 0.04, ar, s * 0.03, -0.24, 0, { rz: s * 0.15 }); for (let i = 0; i < 3; i++) box(ua, 0.27, 0.012, 0.045, lac, s * 0.03, -0.18 - i * 0.07, 0, { rz: s * 0.15, ...NC }); rbox(sh, 0.19, 0.3, 0.2, ar, 0, -0.34, 0); });
       break;
     }
@@ -6374,10 +6398,10 @@ function gear(f, kind, o = {}) {
     }
     case 'pirate': {
       const hat = V(10); if (hat < 0.55) { hideHair(); const h = grp(H, 0, 0.36, 0); for (let i = 0; i < 3; i++) { const a = i / 3 * TAU; box(h, 0.5, 0.16, 0.08, '#1E1E1E', Math.sin(a) * 0.17, 0.02, Math.cos(a) * 0.17, { ry: a, rx: -0.3 }); } cyl(h, 0.22, 0.24, 0.16, '#1E1E1E', 0, 0, 0, { seg: 10 }); if (V(11) < 0.5) box(h, 0.08, 0.06, 0.01, '#F2F2F2', 0, 0.06, 0.26, NC); }
-      else { const bc = P(12, ['#B8302A', '#2E5AA8', '#1E1E1E', '#E8C02A']); rbox(H, 0.42, 0.14, 0.42, bc, 0, 0.27, 0, { rf: 0.4 }); box(H, 0.06, 0.18, 0.06, bc, -0.2, 0.18, -0.2, NC); }
+      else { const bc = P(12, ['#B8302A', '#2E5AA8', '#1E1E1E', '#E8C02A']); rbox(H, 0.44, 0.16, 0.44, bc, 0, 0.27, 0, { rf: 0.4 }); box(H, 0.06, 0.18, 0.06, bc, -0.2, 0.18, -0.21, NC); }   // bandana over the hair
       if (V(13) < 0.5) { box(H, 0.1, 0.09, 0.02, '#1A1A1A', 0.085, 0.17, 0.205, NC); box(H, 0.4, 0.02, 0.41, '#1A1A1A', 0, 0.24, 0, { rz: 0.4, ...NC }); } if (V(14) < 0.7) beard(hairC, V(15) < 0.3);
       if (V(16) < 0.25) cyl(H, 0.03, 0.03, 0.01, '#E8C02A', 0.21, 0.08, 0.02, { rz: Math.PI / 2, seg: 8, ...NC });
-      const coat = P(17, ['#5A1E1E', '#1E2A5A', '#3A2A1E', '#1E1E1E']); if (V(18) < 0.6) { rbox(C, 0.6, 0.6, 0.38, coat, 0, -0.04, -0.02); for (const sx of [-1, 1]) box(C, 0.04, 0.5, 0.02, '#C9A64A', sx * 0.12, 0.0, 0.18, NC); box(Hp, 0.5, 0.6, 0.06, coat, 0, -0.62, -0.13); both((ua, s, fa) => { rbox(fa, 0.17, 0.1, 0.17, '#C9A64A', 0, -0.25, 0); }); }
+      const coat = P(17, ['#5A1E1E', '#1E2A5A', '#3A2A1E', '#1E1E1E']); if (V(18) < 0.6) { rbox(C, 0.6, 0.6, 0.38, coat, 0, -0.04, -0.02); for (const sx of [-1, 1]) box(C, 0.04, 0.5, 0.02, '#C9A64A', sx * 0.12, 0.0, 0.18, NC); for (const sx of [-1, 1]) box(hipFlap(Hp, FL(), sx, -1).in, 0.245, 0.6, 0.06, coat, sx * 0.125, -0.62, -0.13); /* coat tails: two halves the legs push back (was one board the thighs went through) */ both((ua, s, fa) => { rbox(fa, 0.17, 0.1, 0.17, '#C9A64A', 0, -0.25, 0); }); }
       box(Hp, 0.48, 0.09, 0.32, P(19, ['#B8302A', '#E8C02A', '#2E5AA8']), 0, 0.03, 0); box(Hp, 0.08, 0.3, 0.02, P(19, ['#B8302A', '#E8C02A', '#2E5AA8']), 0.15, -0.25, 0.16, { rz: 0.2, ...NC });
       both((ua, s, fa, th, sh, ft) => { rbox(sh, 0.2, 0.3, 0.21, '#2A1E16', 0, -0.36, 0); }); if (V(20) < 0.15) { f.foreL.children.forEach(c => { if (c.userData.handRoot || Math.abs(c.position.y + 0.315) < 0.01) c.visible = false; }); cone(f.foreL, 0.03, 0.12, '#C9CED4', 0, -0.47, 0.0, { rx: Math.PI, metal: 0.7 }); }   // hook hand
       break;
@@ -6392,7 +6416,7 @@ function gear(f, kind, o = {}) {
     }
     case 'bandit': {
       const hood = V(10) < 0.55, mc = P(11, ['#1E1E1E', '#5A1E1E', '#3A3A2A', '#2A2A3A']); if (hood) { hideHair(); rbox(H, 0.46, 0.44, 0.46, mc, 0, 0.02, -0.03); box(H, 0.42, 0.3, 0.02, '#0A0A0A', 0, 0.06, 0.2, NC); rbox(H, 0.2, 0.25, 0.25, mc, 0, -0.1, -0.25); }
-      else { const bc = P(12, ['#B8302A', '#1E1E1E', '#3A5A3A']); rbox(H, 0.42, 0.12, 0.42, bc, 0, 0.29, 0, { rf: 0.4 }); for (let i = 0; i < 2; i++) box(H, 0.05, 0.16, 0.02, bc, -0.08 + i * 0.05, 0.16, -0.21, { rz: 0.3 - i * 0.6, ...NC }); }
+      else { const bc = P(12, ['#B8302A', '#1E1E1E', '#3A5A3A']); rbox(H, 0.44, 0.14, 0.44, bc, 0, 0.29, 0, { rf: 0.4 }); for (let i = 0; i < 2; i++) box(H, 0.05, 0.16, 0.02, bc, -0.08 + i * 0.05, 0.16, -0.225, { rz: 0.3 - i * 0.6, ...NC }); }
       mask(P(13, ['#1E1E1E', '#4A3A2A', '#5A1E1E', '#2A2A3A'])); if (V(14) < 0.35) box(H, 0.04, 0.12, 0.01, '#C9A07A', -0.11, 0.25, 0.206, { rz: 0.4, ...NC });
       const vc = P(15, ['#4A3020', '#3A2A1E', '#2A2A2A']); for (const sx of [-1, 1]) box(C, 0.22, 0.5, 0.33, vc, sx * 0.16, 0.05, 0); rbox(Hp, 0.48, 0.08, 0.31, dleather, 0, 0.05, 0); for (let i = 0; i < 3; i++) box(Hp, 0.09, 0.1, 0.06, '#5A3A22', -0.18 + i * 0.12, -0.04, 0.16, NC);
       box(C, 0.06, 0.8, 0.02, dleather, 0, 0.0, 0.17, { rz: 0.7, ...NC }); if (V(16) < 0.5) cape(P(17, ['#2A2A2A', '#3A2A1E', '#2A3A2A']), 1.0);
@@ -6407,7 +6431,8 @@ function gear(f, kind, o = {}) {
     }
     case 'caveman': {
       const fur = P(10, ['#8A6A4A', '#6A5A4A', '#A8885A', '#5A4632']); box(C, 0.56, 0.5, 0.34, fur, 0, -0.02, 0, { rz: 0.0 }); box(C, 0.28, 0.2, 0.34, fur, -0.15, 0.48, 0, { rz: 0.3 }); for (let i = 0; i < 8; i++) box(C, 0.07, 0.1, 0.02, shade(fur, -0.12), -0.24 + i * 0.07, -0.08, 0.175, { rz: (i % 2 ? 0.3 : -0.3), ...NC });
-      rbox(Hp, 0.48, 0.28, 0.32, fur, 0, -0.18, 0); for (let i = 0; i < 6; i++) box(Hp, 0.08, 0.12, 0.02, shade(fur, -0.1), -0.2 + i * 0.08, -0.4, 0.165, { rz: (i % 2 ? 0.25 : -0.25), ...NC });
+      rbox(Hp, 0.48, 0.16, 0.32, fur, 0, -0.06, 0); const fq = hemPanels(Hp, FL(), fur, -0.02, 0.24, { hw: 0.245, hd: 0.165, t: 0.035, gain: 0.6 });   // loincloth: hinged panels
+      for (let i = 0; i < 6; i++) { const x = -0.2 + i * 0.08; box((x < 0 ? fq[0] : fq[2]).in, 0.08, 0.12, 0.02, shade(fur, -0.1), x, -0.36, 0.175, { rz: (i % 2 ? 0.25 : -0.25), ...NC }); }
       beard(hairC, V(11) < 0.5); box(H, 0.42, 0.04, 0.42, dleather, 0, 0.27, 0, NC); if (V(12) < 0.4) { const bn = grp(H, 0, 0.38, -0.05); cyl(bn, 0.025, 0.025, 0.28, '#F2EEE6', 0, -0.14, 0, { rz: Math.PI / 2, seg: 5, ...NC }); for (const sx of [-1, 1]) ball(bn, 0.035, '#F2EEE6', sx * 0.14, 0, 0, { detail: 0, ...NC }); }
       both((ua, s, fa, th, sh, ft) => { box(ft, 0.19, 0.11, 0.3, fur, 0, -ANK - 0.01, 0.05); });
       break;
@@ -11270,7 +11295,7 @@ function lookAng(f, L, t) {   // look target → [yaw, pitch] of the neck (clamp
   if (!tg) return null;
   const p = _lv2.copy(tg).applyMatrix4(_lm.copy(f.chest.matrixWorld).invert()).sub(f.neck.position);
   const yw = Math.atan2(p.x, p.z), fwd = 1 - sm01((Math.abs(yw) - 2.0) / 0.9);   // v2.31: a target that passes behind the back lets the head come forward (was: flipped from one shoulder to the other in one frame)
-  return [clamp(yw, -1.2, 1.2) * fwd, clamp(-Math.atan2(p.y - 0.2, Math.hypot(p.x, p.z)), -0.5, 0.6) * fwd];
+  return [clamp(yw, -1.5, 1.5) * fwd, clamp(-Math.atan2(p.y - 0.2, Math.hypot(p.x, p.z)), -0.5, 0.6) * fwd];   // yaw: up to 86°, shared out by lookPass (neck · chest · hips)
 }
 function lookPass(t) {   // figure.look = 'cam' | [x,y,z] | t => [x,y,z] | object | track name → the head turns toward it (after the camera has moved)
   for (const f of RIGS) {
@@ -11279,7 +11304,23 @@ function lookPass(t) {   // figure.look = 'cam' | [x,y,z] | t => [x,y,z] | objec
     const y0 = f.neck.rotation.y, x0 = f.neck.rotation.x, w = f.lookW ?? 1, A = L ? lookAng(f, L, t) : null; if (L && !A && !B) continue;
     let ty = A ? lerp(y0, A[0], w) : y0, tx = A ? lerp(x0, A[1], w) : x0;
     if (B && B.w < 1) { const A0 = B.from ? lookAng(f, B.from, t) : null, k = EASE.inOut(B.w); ty = lerp(A0 ? lerp(y0, A0[0], w) : y0, ty, k); tx = lerp(A0 ? lerp(x0, A0[1], w) : x0, tx, k); }   // v2.31: a new target set in a tick → the head turns over POSEFADE s
+    // v2.40.1: the head leads, the body follows — of a turn beyond the pose's own head turn the chest takes ~28 %, the hips ~10 % (feet stay planted), the neck the rest:
+    // the head turns at most ~60° against the shoulders (was: up to 69° on a square torso — read as a wrung neck in close-ups)
+    const d = ty - y0, rag = f._rag && t >= f._rag.t;
+    if (!rag && f.legL && !f.isModel && Math.abs(d) > 1e-4) { const c = d * 0.28, h = f._seated ? 0 : d * 0.1; f.chest.rotation.y += c; f.hips.rotation.y += h; f.legL.rotation.y -= h; f.legR.rotation.y -= h; ty -= c + h; }
     f.neck.rotation.y = ty; f.neck.rotation.x = tx;
+  }
+}
+// last step of a frame, after every pose, foot IK, ragdoll and look: clothes that depend on the finished body (a pure function of this frame's joints).
+//   panels that hang from the hips (coat, tunic, tabard, armour skirt — hipFlap/hemPanels): each hangs from its hip joint and the thigh pushes it
+//   (front panel forward, back panel backward) — never through a leg; back panels fly up when running, tuck under the thighs when sitting
+function dressPass() {
+  for (const f of RIGS) { if (f.isModel || !f.legL) continue;
+    const ix = f._inx ?? 0, fly = f._fly ?? 0;
+    const Q = f.flaps; if (Q?.length) { let c = fly + clamp(0.06 * ix, -0.5, 0.6); if (f.coat) { c = f.coat.rotation.x; f.coat.rotation.x = 0; }
+      const aL = f.legL.rotation.x, aR = f.legR.rotation.x, sit = sm01((Math.min(-aL, -aR) - 0.75) / 0.45);
+      for (const q of Q) { const a = q.sx < 0 ? aL : q.sx > 0 ? aR : q.fz > 0 ? Math.min(aL, aR) : Math.max(aL, aR), cg = c * q.gain, zr = q.sx < 0 ? Math.min(0, f.legL.rotation.z) : q.sx > 0 ? Math.max(0, f.legR.rotation.z) : 0;
+        q.rotation.x = q.fz > 0 ? Math.min(a, cg - q.flare) : Math.max(a, cg) + sit * Math.min(0, a); q.rotation.z = zr + q.sx * 0.03; } }
   }
 }
 const _sc = new THREE.Vector3();
@@ -11698,6 +11739,7 @@ function stepScene(t) {   // everything in the 3D scene at time t (no HUD) — a
   fitShadow();
   lookPass(t);
   facePass(t);
+  dressPass();
 }
 function update(t) {
   FRAME++;
