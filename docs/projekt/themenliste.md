@@ -40,3 +40,12 @@ Badge „True Crime“, du als Zeuge mittendrin (Wachmann, Passagier, Mithäftli
 - TC4 What if you shared a cell block with the men who escaped Alcatraz? – 1962, nie gefunden
 - TC5 What if you saw the Mona Lisa disappear? – 1911, Diebstahl machte sie berühmt
 - Bewusst ausgelassen: aktuelle Mord-/Vermisstenfälle aus Dokus und Prozessen (Natalee Holloway, Karen Read u. a.) – echte Opfer/Familien, offene Verfahren.
+
+## Neue News-Themen V21–V26 (Recherche 12.11.2026 abends, humorvoll wo es passt)
+- ★ V21 What if the world ended tomorrow? Scientists picked the date in 1960. (Conspiracy/Mythos; Science 4.11.1960 „Doomsday: Friday, 13 November, A.D. 2026“, von Foerster: Bevölkerung → unendlich; Satire, Formel passte nur bis 1973 → FALSE; von Foersters 115. Geburtstag; **Fr 13.11.**, mit T13 kombinierbar; Gag: unendlich viele Menschen = unendliche Klo-Schlange)
+- ★ V22 What if a bear locked itself in your car? (Story/Comedy; Juneau 26.10.2026, Bär zerlegt Innenraum, Hupe weckt Nachbarn, Polizei öffnet die Tür mit Seil; keine Automarke; Bewertungskarte „1 bear found this comfortable“)
+- V23 What if you opened your suitcase… and 3,000 tarantulas crawled out? (Horror-Comedy; Lima 3.11.2026, über 3.000 Vogelspinnen in Socken, Ziel Deutschland; Gag: die Socken waren schlimmer als die Spinnen)
+- V24 What if you stayed on board while they sank the ship on purpose? (Erklärung; SS United States, 990 ft, geplant 12.11.2026 vor Destin, größtes künstliches Riff, ~55 m tief; Sinken vor dem Bau bestätigen)
+- V25 Where did the water in your glass come from? (Erklärung, Rate-Frage Kometen? → evtl. in der heißen Ur-Atmosphäre entstanden; ScienceDaily Nov. 2026)
+- V26 What will be left of our Solar System? (Erklärung; Doppelring aus Planetentrümmern um einen toten Stern, ScienceDaily 6.11.2026)
+- Bewusst ausgelassen: Alligator-Angriff, Sekten-Urteil Kenia, Krebs-/Alzheimer-Studien, Trunkenheitsfahrt (ernst bzw. Gesundheit/Alkohol).
