@@ -933,13 +933,15 @@ const shade = (hex, dl, ds = 0) => { const k = hex + dl.toFixed(3) + ds.toFixed(
 const noise2 = (x, z) => { const xi = Math.floor(x), zi = Math.floor(z), fx = x - xi, fz = z - zi, u = fx * fx * (3 - 2 * fx), v = fz * fz * (3 - 2 * fz), h = (a, b) => hash(a * 57.31 + b * 113.17);
   return lerp(lerp(h(xi, zi), h(xi + 1, zi), u), lerp(h(xi, zi + 1), h(xi + 1, zi + 1), u), v) * 2 - 1; };
 const wmat = c => mat(c, CFG.wind === 0 ? {} : { wind: 1 });   // material that sways once baked
+const _roots = (g, s, r, c, hv, M, n = 4) => { for (let i = 0; i < n; i++) { const q = grp(g, 0, 0, 0, i * TAU / n + hv(50 + i) * 0.9); const l = (0.42 + hv(60 + i) * 0.25) * s;   // v2.40: root flare — a few tapered roots running out of the trunk foot
+  const m = cyl(q, 0.02 * s, r * 0.55, l, c, 0, -l / 2, 0, { ...M(c), seg: 4, cast: false }); m.rotation.z = -1.875; m.position.set(r * 0.3 + l * 0.48, 0.12 * s - 0.15 * l, 0); } };
 function tree(p, x, z, o = {}) {   // kind: round | pine | snowpine | birch | dead | palm — returns the (static) group
   const s = o.size ?? rr(0.85, 1.25), kind = o.kind ?? 'round', y0 = groundH(x, z), g = stat(grp(p, x, y0, z, rnd() * TAU));
   const hv = k => hash(x * 12.9898 + z * 78.233 + k * 3.31), M = c => ({ mat: wmat(c) });
   const bark = o.bark ?? (kind === 'birch' ? '#E8E4DA' : kind === 'dead' ? '#4A3B30' : '#5A4030');
   if (kind === 'pine' || kind === 'snowpine') {
     const c = o.color ?? pick(['#2F5D3A', '#2A5434', '#356642']);
-    cyl(g, 0.11 * s, 0.21 * s, 1.1 * s, bark, 0, 0, 0, { ...M(bark), seg: 6 });
+    cyl(g, 0.11 * s, 0.21 * s, 1.1 * s, bark, 0, 0, 0, { ...M(bark), seg: 6 }); _roots(g, s, 0.21 * s, bark, hv, M, 3);
     const L = [[1.42, 1.9, 0.6], [1.15, 1.7, 1.3], [0.88, 1.5, 2.0], [0.58, 1.25, 2.7], [0.3, 0.8, 3.3]];
     L.forEach(([r, h, y], i) => {
       const cc = shade(c, (i % 2 ? 0.035 : -0.02) + (hv(i) - 0.5) * 0.04);
@@ -965,15 +967,15 @@ function tree(p, x, z, o = {}) {   // kind: round | pine | snowpine | birch | de
     ball(top, 0.28 * s, shade(fc, -0.04), 0, 0.12 * s, 0, { ...M(shade(fc, -0.04)), detail: 0 });
     g.userData.wb = { y0, h: py + 0.5 * s };
   } else if (kind === 'dead') {
-    cyl(g, 0.09 * s, 0.22 * s, 3 * s, bark, 0, 0, 0, { ...M(bark), seg: 6, rz: (hv(1) - 0.5) * 0.15 });
-    for (let i = 0; i < 4; i++) {
-      const b = grp(g, 0, (1.2 + i * 0.45) * s, 0, i * 2.1 + hv(i)); b.rotation.z = 0.7 + hv(i + 2) * 0.4; box(b, 0.09 * s, (1.3 - i * 0.15) * s, 0.09 * s, bark, 0, 0, 0, M(bark));
-      const tw = grp(b, 0, (0.8 - i * 0.1) * s, 0, 0.6); tw.rotation.z = -0.8; box(tw, 0.05 * s, 0.45 * s, 0.05 * s, bark, 0, 0, 0, M(bark));
+    cyl(g, 0.09 * s, 0.22 * s, 3 * s, bark, 0, 0, 0, { ...M(bark), seg: 6, rz: (hv(1) - 0.5) * 0.15 }); _roots(g, s, 0.22 * s, bark, hv, M, 4);
+    for (let i = 0; i < 4; i++) {   // v2.40: branches and twigs taper to a point (were square sticks)
+      const b = grp(g, 0, (1.2 + i * 0.45) * s, 0, i * 2.1 + hv(i)); b.rotation.z = 0.7 + hv(i + 2) * 0.4; cyl(b, 0.025 * s, 0.065 * s, (1.3 - i * 0.15) * s, bark, 0, 0, 0, { ...M(bark), seg: 5 });
+      const tw = grp(b, 0, (0.8 - i * 0.1) * s, 0, 0.6); tw.rotation.z = -0.8; cyl(tw, 0.01 * s, 0.035 * s, 0.45 * s, bark, 0, 0, 0, { ...M(bark), seg: 4 });
     }
     g.userData.wb = { y0, h: 3.2 * s };
   } else {   // round broadleaf / birch: a cluster of blobs, lit from above, darker underneath
     const c = o.color ?? (kind === 'birch' ? '#8DBF4E' : pick(['#4C7A3A', '#5A8A40', '#3F6E35'])), bi = kind === 'birch';
-    cyl(g, 0.12 * s, 0.22 * s, (bi ? 2.2 : 1.7) * s, bark, 0, 0, 0, { ...M(bark), seg: 7, rz: (hv(1) - 0.5) * 0.12 });
+    cyl(g, 0.12 * s, 0.22 * s, (bi ? 2.2 : 1.7) * s, bark, 0, 0, 0, { ...M(bark), seg: 7, rz: (hv(1) - 0.5) * 0.12 }); _roots(g, s, 0.22 * s, bark, hv, M, bi ? 3 : 4);
     if (bi) for (let i = 0; i < 5; i++) box(g, 0.2 * s, 0.05 * s, 0.05 * s, '#2A2A2A', 0, (0.3 + i * 0.36) * s, 0.13 * s, { ry: hv(i) * 3, cast: false });
     for (let i = 0; i < 2; i++) { const b = grp(g, 0, (1.15 + i * 0.25) * s, 0, i * 2.6 + hv(i + 4)); b.rotation.z = 0.9; cyl(b, 0.04 * s, 0.07 * s, 0.6 * s, bark, 0, 0, 0, { ...M(bark), seg: 5 }); }
     const yc = (bi ? 2.9 : 2.35) * s, R = (bi ? 0.85 : 1.15) * s, nb = 5 + Math.floor(hv(2) * 3);
@@ -983,6 +985,8 @@ function tree(p, x, z, o = {}) {   // kind: round | pine | snowpine | birch | de
       ball(g, rr2, cc, Math.cos(a) * R * 0.62, yc + (up - 0.35) * R * 0.9, Math.sin(a) * R * 0.62, { ...M(cc), detail: 1 });
     }
     ball(g, R * 0.62, shade(c, 0.07), 0.1 * s, yc + R * 0.62, 0, { ...M(shade(c, 0.07)), detail: 1 });
+    for (let i = 0; i < 4; i++) { const a = (i + 0.5) * TAU / 4 + hv(i + 70), cc = shade(c, -0.07 + hv(i + 75) * 0.04);   // v2.40: small clumps under the crown rim break the round outline
+      ball(g, (0.26 + hv(i + 80) * 0.12) * R, cc, Math.cos(a) * R * 0.92, yc - R * (0.32 + hv(i + 85) * 0.2), Math.sin(a) * R * 0.92, { ...M(cc), detail: 0 }); }
     g.userData.wb = { y0, h: yc + R * 1.3 };
   }
   return g;
@@ -2717,7 +2721,7 @@ function leafLitter(spots, o = {}) {   // fallen leaves on the ground: spots [[x
     o3.position.set(px, (y ?? groundH(px, pz)) + 0.012 + h1 * 0.006, pz); o3.rotation.set((h2 - 0.5) * 0.5, h1 * 9, (h1 - 0.5) * 0.5); o3.scale.setScalar(0.7 + h2 * 0.7); o3.updateMatrix(); im.setMatrixAt(si * n + k, o3.matrix); im.setColorAt(si * n + k, c.set(cs[Math.floor(hash(k * 3.3 + x + z) * cs.length)])); } });
   im.castShadow = false; im.receiveShadow = true; im.userData.cover = true; world.add(im); return im;
 }
-const NIGHTGLOW = [], LEAFSPOTS = [];   // street-light heads: off by day, glowing at night (applySky)
+const NIGHTGLOW = [], LEAFSPOTS = [], nightGlowMat = () => NIGHTGLOW[0] ?? (NIGHTGLOW.push(mat('#FFF1C8', { em: '#FFE2A0', ei: 0, own: true })), NIGHTGLOW[0]);   // street-light heads: off by day, glowing at night (applySky)
 function streetlight(p, x, z, ry = 0, o = {}) {   // tall pole, arm over the road (local +z), lamp head that lights up after dark
   const g = stat(grp(p, x, groundH(x, z), z, ry)), H = o.h ?? 6, NC = { cast: false };
   if (!NIGHTGLOW.length) NIGHTGLOW.push(mat('#FFF1C8', { em: '#FFE2A0', ei: 0, own: true }));
@@ -8915,7 +8919,15 @@ function gasstation(p, x, z, o = {}) {
 function bank(p, x, z, o = {}) {
   const g = stat(grp(p ?? world, x, groundH(x, z), z, o.ry ?? 0)), c = o.color ?? '#E8E2D2', NC = { cast: false };
   for (let i = 0; i < 4; i++) box(g, 16 - i * 0.6, 0.3, 4 - i * 0.6 + 8, shade(c, -0.05), 0, i * 0.3, 2 - i * 0.3); box(g, 15, 9, 10, c, 0, 1.2, -2, { surf: 'stone' }); for (let i = 0; i < 6; i++) { cyl(g, 0.45, 0.5, 7.4, '#F4F1E8', -6 + i * 2.4, 1.2, 4.2, { seg: 14 }); box(g, 1.1, 0.3, 1.1, '#F4F1E8', -6 + i * 2.4, 8.6, 4.2); }
-  box(g, 15.6, 0.9, 1.6, c, 0, 8.9, 4.2); prism(g, 15.6, 2.8, 1.6, shade(c, 0.03), 0, 9.8, 4.2); box(g, 3, 4.2, 0.2, '#5A3A1E', 0, 1.2, 3.01); box(g, 3.2, 0.6, 0.3, '#C9A64A', 0, 7.6, 3.1, NC);
+  box(g, 15.6, 0.9, 1.6, c, 0, 8.9, 4.2); box(g, 3, 4.2, 0.2, '#5A3A1E', 0, 1.2, 3.01); box(g, 3.2, 0.6, 0.3, '#C9A64A', 0, 7.6, 3.1, NC);
+  { const pd = grp(g, 0, 9.8, 4.2, Math.PI / 2), cc = shade(c, 0.03);   // v2.40: a real pediment facing the street (was a wedge sloping front to back), raking cornice, tympanum, dentils, roof behind it
+    prism(pd, 1.6, 2.4, 15.6, cc, 0, 0, 0); prism(pd, 0.06, 1.85, 12.6, shade(c, -0.06), -0.81, 0.22, 0, NC); const ra = Math.atan2(2.4, 7.8), rl = Math.hypot(2.4, 7.8) + 0.3;
+    for (const s2 of [-1, 1]) box(pd, 1.8, 0.22, rl, cc, 0, 1.2 - 0.11, s2 * 3.9, { rx: s2 * ra, ...NC });
+    box(g, 15.3, 0.12, 10.2, shade(c, -0.12), 0, 10.2, -2, NC); for (let i = 0; i < 31; i++) box(g, 0.18, 0.18, 0.12, shade(c, -0.04), -7.5 + i * 0.5, 9.48, 5.03, NC); box(g, 15.8, 0.14, 1.75, cc, 0, 9.66, 4.2, NC); }
+  for (const s2 of [-1, 1]) { box(g, 1.46, 4.0, 0.06, '#6A4626', s2 * 0.75, 1.3, 3.12, NC); for (const yy of [1.6, 3.4]) box(g, 1.1, 1.3, 0.04, '#7A5432', s2 * 0.75, yy, 3.16, NC); box(g, 0.08, 0.5, 0.08, '#C9A64A', s2 * 0.12, 2.8, 3.2, { metal: 0.7, rough: 0.3, ...NC });   // door leaves, panels, brass handles
+    box(g, 0.32, 0.5, 0.26, '#2A2D33', s2 * 2.2, 4.0, 3.12, NC); box(g, 0.22, 0.32, 0.2, '', s2 * 2.2, 4.08, 3.16, { mat: nightGlowMat(), ...NC });   // wall lanterns
+    for (const zz of [-5, -2, 1]) { const q = grp(g, s2 * 7.51, 3.2, zz, s2 * Math.PI / 2); box(q, 1.5, 2.6, 0.08, '#D8D2C2', 0, -0.1, 0, NC); _win(q, 1.2, 2.2, 0, 0.1, 0.05, 0); for (let i = 0; i < 4; i++) box(q, 0.05, 2.2, 0.06, '#3A3D44', -0.45 + i * 0.3, 0.1, 0.1, NC); box(q, 1.7, 0.14, 0.24, '#D8D2C2', 0, -0.24, 0.1, NC); } }   // barred side windows
+  box(g, 3.6, 0.5, 0.3, '#D8D2C2', 0, 5.4, 3.12, NC);   // transom over the door
   return g;
 }
 function vault(p, x, z, o = {}) {
