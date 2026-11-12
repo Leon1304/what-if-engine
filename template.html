@@ -5653,7 +5653,7 @@ function cbLate(t) {
     qLook(d, Math.abs(d.y) > 0.9 ? _AX : _AY, _o3.quaternion).multiply(_kq1.setFromAxisAngle(_AZ, hash(e.id * 3) * TAU)); _o3.position.copy(p); _o3.scale.set(sz, sz, sz * 1.3); _o3.updateMatrix();
     if (c < 48) { CB.flashIm.setMatrixAt(c, _o3.matrix); CB.flashIm.setColorAt(c, _pc2.copy(e.col).multiplyScalar(3 * (1 - 0.5 * k))); c++; } }
   CB.flashIm.count = c; if (c) { CB.flashIm.instanceMatrix.needsUpdate = true; CB.flashIm.instanceColor.needsUpdate = true; }
-  lit.sort((a, b) => b[0] - a[0]); CB.lights.forEach((L, i) => { const e = lit[i]; if (!e || e[0] <= 0) { L.intensity = 0; return; } L.position.copy(e[1]); L.intensity = e[0]; L.distance = e[2].dist; L.color.copy(e[2].col); });
+  lit.sort((a, b) => b[0] - a[0]); CB.lights.forEach((L, i) => { const e = lit[i]; if (!e || e[0] <= 0) { L.intensity = 0; L.color.set('#FFD27A'); return; }   /* v2.40.x: an unlit flash light no longer keeps the colour of the last flash (depended on earlier frames — the dragon's fire breath) */ L.position.copy(e[1]); L.intensity = e[0]; L.distance = e[2].dist; L.color.copy(e[2].col); });
   // tracers
   c = 0; for (const e of CB.tr) { const a = t - e.t0; if (a < 0) continue; const from = liveSrc(e.src, t); if (!from) continue; const D = from.distanceTo(e.to), dd = e.vel * a; if (dd > D + e.len) continue;
     const head = Math.min(dd, D), tail = Math.min(D, Math.max(0, dd - e.len)); if (head - tail < 0.02 || c >= 120) continue; const dir = _k1.subVectors(e.to, from).normalize();
