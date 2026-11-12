@@ -7846,6 +7846,14 @@ function petrify(obj, o = {}) {   // v2.43: turns an animal / figure / prop into
     for (let i = 0; i < n; i++) ball(g, 0.012 + hash(i * 3.3) * 0.02 * Math.max(1, sz.y), '#F6F2EA', b.min.x + hash(i * 1.1) * sz.x, b.max.y - hash(i * 2.7) * sz.y * 0.35, b.min.z + hash(i * 4.9) * sz.z, { detail: 0, cast: false }); }
   return obj;
 }
+function jetty(p, x, z, o = {}) {   // v2.43.1: wooden jetty / boardwalk from (x, z) toward +z over water (len, w, h = deck height, ry): plank deck in sections, posts down to the bed, optional rails; returns { g, sections, end } (end = last section, e.g. for breakApart)
+  const g = stat(grp(p ?? world, x, 0, z, o.ry ?? 0)), L = o.len ?? 10, W = o.w ?? 1.4, H = o.h ?? 0.55, seg = o.seg ?? 2.5, n = Math.max(1, Math.round(L / seg)), sl = L / n, wood = o.color ?? '#9A7650', sections = [];
+  for (let i = 0; i < n; i++) { const s0 = (i === n - 1 && o.breakable !== false) ? dyn(grp(g, 0, 0, i * sl)) : grp(g, 0, 0, i * sl); sections.push(s0);
+    for (let k = 0; k < Math.round(sl / 0.22); k++) box(s0, W, 0.06, 0.2, shade(wood, (hash(i * 31 + k) - 0.5) * 0.12), 0, H - 0.06, k * 0.22 + 0.11, { surf: 'plank' });
+    for (const sx of [-1, 1]) { box(s0, 0.08, 0.14, sl, shade(wood, -0.15), sx * (W / 2 - 0.05), H - 0.2, sl / 2); cyl(s0, 0.08, 0.09, H + (o.depth ?? 1.4), shade(wood, -0.2), sx * (W / 2 - 0.06), -(o.depth ?? 1.4), sl - 0.1, { seg: 7 });
+      if (o.rails) { cyl(s0, 0.035, 0.035, 0.9, shade(wood, -0.1), sx * (W / 2 - 0.04), H, sl - 0.1, { seg: 5 }); box(s0, 0.06, 0.06, sl, wood, sx * (W / 2 - 0.04), H + 0.86, sl / 2); } } }
+  return { g, sections, end: sections[sections.length - 1], h: H, len: L, at: u => [x + Math.sin(o.ry ?? 0) * u * L, H, z + Math.cos(o.ry ?? 0) * u * L] };
+}
 function saltCrust(p, x, z, o = {}) {   // v2.43: flat white salt / soda crust islands on a lake or flat ground (cracked polygon plates with raised rims); y = surface height, r = spread, n = plates
   const g = stat(grp(p ?? world, x, o.y ?? 0, z)), n = o.n ?? 9, R = o.r ?? 6, C = o.color ?? '#EEE8DC';
   for (let i = 0; i < n; i++) { const a = hash(i * 2.3 + 1) * TAU, d = Math.sqrt(hash(i * 5.1)) * R, cx = Math.cos(a) * d, cz = Math.sin(a) * d, r = 0.6 + hash(i * 7.7) * (o.size ?? 1.6), k = 7 + Math.floor(hash(i * 9.1) * 4);

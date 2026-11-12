@@ -926,5 +926,6 @@ Dinge zerbrechen so, wie sie gebaut sind. Alles ist echte Physik (einmal vorab s
 ## Versteinern und Salzkrusten (v2.43)
 
 - `petrify(obj, { color, t0, dur, crust, grains })`: macht ein Tier, eine Figur oder einen Gegenstand zur kreidigen „Stein“-Statue (matt, Farbe `#E4DED2`, Salzkörner oben drauf). Mit `t0` + `dur` geht die Farbe über die Zeit über (Verkrustung), sonst sofort. Für Natronsee, Medusa-Mythen, Statuen, versteinerte Tiere.
+- `jetty(p, x, z, { len, w, h, seg, ry, rails, depth, color, breakable })` (v2.43.1): Holzsteg bzw. Bohlenweg von (x, z) Richtung +z übers Wasser: Planken in Abschnitten, Pfosten bis zum Grund, optional Geländer. Rückgabe `{ g, sections, end, h, at(u) }`; `end` (letzter Abschnitt) ist beweglich, z. B. `breakApart(J.end, t, { dir: [0, -1, 0.3] })` – der Steg bricht unter jemandem weg.
 - `saltCrust(p, x, z, { r, n, size, y, color })`: flache, weiße Salz- und Sodakrusten (gerissene Platten mit Rand) auf einem See oder einer Salzpfanne; `y` = Höhe der Wasser- bzw. Bodenfläche.
 - Test: `tests/salt-lake.*`.
