@@ -79,5 +79,5 @@ const AUDIO = {
 };
 const THUMB = [
   { t: 47.0, text: '*10* minutes', sub: 'Part 1', cam: { p: [31, 2.6, -3.4], l: [20, 1.4, 0.3], fov: 44 }, rays: true, expr: 'scared' },
-  { t: 34.5, text: 'Thanks, *Steve*', sub: 'Part 1', cam: { p: [4.5, 3.9, 3.2], l: [4.1, 1.3, 8.0], fov: 44 }, glow: [50, 62, 24] }
+  { t: 34.5, text: 'Thanks, *Steve*', sub: 'Part 1', cam: { p: [4.6, 3.0, 4.4], l: [4.1, 1.4, 8.0], fov: 46 }, glow: [50, 64, 30] }
 ];
