@@ -8,4 +8,5 @@
   trainStation(world, 40, 20, { len: 24 }); supermarket(world, -40, 20);
   aircraft({ kind: 'cessna', x: 60, z: -20, ry: 0.6 }); heli(world, { kind: 'news', x: 75, z: -20, ry: 0.6 });
   water({ level: -0.3, size: 200, z: -300 }); ship(world, 'speedboat', 0, -300, { ry: 0.6 }); ship(world, 'fishing', 20, -300, { ry: 0.6 });
+  rocket(world, -60, -40, { t0: 7 }); crane(world, -40, -40, {}).move(1, 4, { yaw: 1.2, trolley: 20 }).move(4.5, 6.5, { hook: 18 });   // engine bell, porthole; hook swings after the moves
   window.__D = [H.door, B.door];
