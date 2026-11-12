@@ -2070,6 +2070,7 @@ function jump(obj, t0, o = {}) {
 }
 function animal(o = {}) {   // kind: cow | pig | sheep | dog | chicken (+ every beast() kind) — returns rig { root, body, legs, head }; detail: false = old blocky look
   if ((o.kind ?? 'cow') !== 'chicken' && o.detail !== false && typeof BEASTS !== 'undefined' && BEASTS[o.kind ?? 'cow']) return beast({ ...o, kind: o.kind ?? 'cow' });
+  if (o.kind === 'chicken' && o.detail !== false) return _chicken(o);
   const k = o.kind ?? 'cow';
   const S = { cow: [1.0, 0.75, 1.9, 0.75, '#F2F0EA'], pig: [0.75, 0.55, 1.2, 0.4, '#F2B3B0'], sheep: [0.8, 0.6, 1.2, 0.5, '#EDEBE4'], dog: [0.4, 0.4, 0.95, 0.45, '#A9743F'], chicken: [0.3, 0.3, 0.4, 0.22, '#FFFFFF'] }[k];
   const [w, h, d, legH, c] = S, col = o.color ?? c, root = new THREE.Group(), body = grp(root, 0, legH, 0);
@@ -2119,16 +2120,75 @@ function char(name, o = {}) {   // look keys (shirt, pants, hat, skin, kind) can
   if (rest.talk == null) rest.talk = t => BEATS.some(b => b.who === name && t >= b.t + 0.1 && t <= b.t + (b.dur ?? 3) - 0.3);   // lips move during his tip   // motion-capture body (cast.json entry with model 'robot' and an optional tint {…})
   return figure({ ...base, ...rest });
 }
+function _chicken(o = {}) {   // v2.40.x chicken: plump lofted body, folded wings with feather rows, tail fan, comb, wattles, hooked beak, eyes with blinking lids, scaly legs and toes (same size, rig and pose as before)
+  const C = o.color ?? '#FFFFFF', Wc = shade(C, -0.06), Tc = shade(C, -0.11), R = '#D9302A', Y = '#F0A030', NC = { cast: false }, sd = hash(++_rigN * 3.7), legH = 0.28, by0 = 0.22;
+  const root = new THREE.Group(), body = dyn(grp(root, 0, by0, 0));
+  _loft(body, [[-0.205, 0.215, 0.025, 0.025, 0.025], [-0.17, 0.195, 0.08, 0.07, 0.075], [-0.095, 0.17, 0.13, 0.11, 0.12], [0, 0.155, 0.148, 0.122, 0.138], [0.08, 0.16, 0.14, 0.118, 0.148], [0.145, 0.185, 0.108, 0.1, 0.125], [0.19, 0.225, 0.058, 0.058, 0.07]].map(([z, y, a, b, c]) => ({ c: [0, y, z], r: [a, b, c] })),
+    { n: 12, col: (i, k, a) => (a > 2.4 ? shade(C, -0.03) : C), cap0: [0, 0.22, -0.215], cap1: [0, 0.235, 0.2] });
+  for (const s of [-1, 1]) _ell(body, C, s * 0.068, 0.045, 0.01, 0.05, 0.065, 0.07);   // feathered thighs
+  const wings = [-1, 1].map(s => { const wg = dyn(grp(body, s * 0.112, 0.2, 0.03)); wg.rotation.z = s * 0.12; wg.rotation.order = 'ZYX';
+    _ell(wg, Wc, s * 0.012, -0.03, -0.045, 0.026, 0.07, 0.115, { rx: 0.28 });
+    for (let k = 0; k < 4; k++) _ell(wg, k % 2 ? Tc : Wc, s * (0.02 + 0.003 * k), -0.06 - 0.011 * k, -0.105 - 0.016 * k, 0.007, 0.017, 0.055, { rx: 0.42 + 0.06 * k, ...NC });
+    return wg; });
+  const tail = dyn(grp(body, 0, 0.215, -0.175));
+  for (let k = -3; k <= 3; k++) { const f = grp(tail); f.rotation.set(-0.42 - 0.07 * Math.abs(k), 0, k * 0.2); const h = 0.075 - 0.007 * Math.abs(k); _ell(f, k % 2 ? Tc : C, 0, h, 0, 0.016, h, 0.008); }
+  // head: neck with hackles, skull, beak, comb, wattles, red face skin, eyes, lids
+  const head = dyn(grp(body, 0, 0.365, 0.165)); head.rotation.order = 'YXZ';
+  _seg(head, [0, -0.03, -0.025], [0, -0.155, -0.075], 0.042, 0.065, C);
+  _ell(head, Wc, 0, -0.125, -0.07, 0.062, 0.045, 0.06);   // hackle cape over the shoulders
+  _ell(head, C, 0, 0, 0, 0.05, 0.056, 0.066);
+  cone(head, 0.022, 0.062, Y, 0, -0.008 - 0.031, 0.085, { rx: Math.PI / 2 + 0.18 }).scale.x = 0.95; cone(head, 0.015, 0.04, shade(Y, -0.08), 0, -0.024 - 0.02, 0.075, { rx: Math.PI / 2 - 0.15, ...NC });
+  for (let i = 0; i < 5; i++) { const z = 0.05 - i * 0.024, h = 0.024 + 0.013 * Math.sin(Math.PI * (i + 0.5) / 5); _ell(head, R, 0, 0.05 + h * 0.55, z, 0.008, h, 0.014); }
+  _ell(head, R, 0, 0.05, 0.005, 0.009, 0.014, 0.055);
+  for (const s of [-1, 1]) { _ell(head, R, s * 0.01, -0.06, 0.058, 0.009, 0.022, 0.014); _ell(head, '#E86A60', s * 0.043, 0.006, 0.014, 0.008, 0.017, 0.016, NC); }
+  const glintM = mat('#FFFFFF', { basic: true }), lidG = G('lid', () => new THREE.SphereGeometry(1, 8, 3, 0, TAU, 0, Math.PI * 0.5)), lids = [];
+  for (const s of [-1, 1]) { const ex = s * 0.047, ey = 0.014, ez = 0.03; ball(head, 0.0125, '#E8A020', ex, ey, ez, { detail: 1, ...NC }); ball(head, 0.0068, '#0E0C0B', ex + s * 0.0075, ey, ez + 0.003, { detail: 1, ...NC }); ball(head, 0.0028, '', ex + s * 0.0115, ey + 0.004, ez + 0.006, { mat: glintM, detail: 0, ...NC });
+    const lg = dyn(grp(head, ex, ey, ez)); lg.rotation.order = 'YXZ'; lg.rotation.y = Math.atan2(s, 0.35); mesh(lg, lidG, mat(shade(C, -0.05)), 0, 0, 0, NC).scale.setScalar(0.0138); lg.rotation.x = -0.9; lids.push(lg); }
+  if (o.gerald) {   // Gerald's tiny sunglasses: wrap-around shades over both eyes
+    const K = mat('#111111', { rough: 0.25, metal: 0.4 }); box(head, 0.08, 0.016, 0.012, '', 0, 0.012, 0.064, { mat: K, ...NC });
+    for (const s of [-1, 1]) { box(head, 0.01, 0.034, 0.052, '', s * 0.058, -0.003, 0.034, { mat: K, ry: s * 0.28, ...NC }); box(head, 0.007, 0.007, 0.07, '', s * 0.054, 0.016, -0.022, { mat: K, ...NC }); } }
+  // legs: shank + toes (the foot group keeps the toes flat on the ground)
+  const legs = [-1, 1].map(s => { const lp = dyn(grp(root, s * 0.055, legH, 0.005)); _seg(lp, [0, -0.05, 0], [0, -legH + 0.012, 0], 0.015, 0.011, Y);
+    const ft = dyn(grp(lp, 0, -legH + 0.012, 0)); for (const [x, z] of [[-0.032, 0.058], [0, 0.07], [0.032, 0.058], [0, -0.034]]) { _seg(ft, [0, 0, 0], [x, -0.006, z], 0.008, 0.005, Y, NC); cone(ft, 0.004, 0.012, '#5A4A3A', x * 1.15, -0.006 - 0.006, z * 1.15, { rx: z > 0 ? Math.PI / 2 : -Math.PI / 2, ...NC }); }
+    lp.userData.ft = ft; return lp; });
+  root.scale.setScalar(o.scale ?? 1);
+  const a = { root, body, head, legs, wings, tail, lids, kind: 'chicken', chk: true, quad: true, sd, by0, legH, head0: head.position.clone(), fx: [] };
+  _fuseDyn(root);
+  tick(t => animalPose(a, false, 0, t, 0, 0, 0));
+  return a;
+}
 function gerald(o = {}) {   // Gerald, the channel's chicken: in every video, never does anything, always survives
-  const g = animal({ kind: 'chicken', scale: o.scale ?? 1.5 });
+  if (o.detail !== false) { const g = animal({ kind: 'chicken', scale: o.scale ?? 1.5, gerald: true }); g.gerald = true; return g; }   // v2.40.x: detailed chicken, same tiny sunglasses
+  const g = animal({ kind: 'chicken', scale: o.scale ?? 1.5, detail: false });
   box(g.head, 0.19, 0.045, 0.02, '#111111', 0, 0.03, 0.175, { cast: false });   // tiny sunglasses = instant recognition
   for (const sx of [-1, 1]) box(g.head, 0.02, 0.02, 0.07, '#111111', sx * 0.092, 0.05, 0.13, { cast: false });
   g.gerald = true; return g;
+}
+function _chickenPose(a, t, w, s) {   // v2.40.x: planted two-legged strut (feet stay on the ground in stance, toes curl in the swing), head-lock, waddle; idle: jerky look-arounds, pecks, blinks, tail flicks
+  const sd = a.sd, sc = a.root.scale.x, wk = a.root._walks; let vc = 0.8; if (wk && w > 0) { let e = wk[0]; for (const x of wk) if (x.t0 <= t) e = x; vc = e.v ?? vc; }
+  const Sw = Math.max(0.26 * sc, vc / 3.0), U = s / Sw, d = vc > 1.6 * sc ? 0.42 : 0.6, half = Sw / sc * d / 2, Lh = a.legH - 0.012;
+  const wkk = a._wk && a._wk.wS && t >= a._wk.t0 ? a._wk : null, A2 = { sc, lh: 1, D: {} }, G2 = { lift: 0.07 }, foot = (i, q) => _bFoot(A2, G2, d, i * 0.5, q, Sw, wkk.wS, 0);   // planted feet while starting / stopping too (see _bFoot)
+  a.legs.forEach((lp, i) => { const uu = ((U - i * 0.5) % 1 + 1) % 1; let z, y = 0, k = 0;
+    if (wkk) { if (t < wkk.t0 + wkk.Te) [z, y, k] = foot(i, s); else { const st = foot(i, wkk.sE), air = st[1] > 1e-4, dt = t - wkk.t0 - wkk.Te, q = clamp((dt - (air ? 0 : 0.05 + 0.12 * i)) / 0.16); z = lerp(st[0], 0, sm01(q)); k = Math.sin(Math.PI * q) * (air || Math.abs(st[0]) > 0.02 ? 1 : 0); y = (air ? st[1] * (1 - sm01(q)) : 0) + 0.05 * k; } }
+    else { if (uu < d) z = half * (1 - 2 * uu / d); else { const q = (uu - d) / (1 - d); z = -half + 2 * half * sm01(q); k = Math.sin(Math.PI * q); y = 0.07 * k; }
+      z *= w; y *= w; k *= w; } const yb = a.legH - Lh, L = Math.hypot(z, Lh - y), th = Math.atan2(z, Lh - y);
+    lp.rotation.set(-th, 0, 0); lp.scale.set(1, L / Lh, 1); const ft = lp.userData.ft; ft.scale.set(1, Lh / L, 1); ft.rotation.set(th + 0.9 * k, 0, 0); void yb; });
+  const f2 = ((2 * U) % 1 + 1) % 1, snap = sm01((f2 - 0.7) / 0.18), stp = Sw / sc / 2;
+  a.body.position.y = a.by0 + w * 0.014 * Math.abs(Math.cos(Math.PI * 2 * U)); a.body.rotation.set(-0.06 * w, 0, w * 0.06 * Math.sin(TAU * U));
+  a.head.position.z += w * stp * (snap - f2) * 0.9; a.head.position.y += w * 0.012 * bump(f2, 0.75, 0.2); a.head.rotation.z = -a.body.rotation.z;
+  const k = t / 0.75 + sd * 13, i = Math.floor(k), j = sm01((k - i - 0.86) / 0.14), iw = 1 - w;   // idle: jerky look-arounds (head stops, then snaps to a new direction)
+  a.head.rotation.y = iw * lerp(hash(i + sd * 97) - 0.5, hash(i + 1 + sd * 97) - 0.5, j) * 1.3;
+  a.head.rotation.z += iw * lerp(hash(i * 1.7 + 5 + sd * 41) - 0.5, hash((i + 1) * 1.7 + 5 + sd * 41) - 0.5, j) * 0.5;
+  if (!a.gerald) { const q = t / 3.1 + sd * 7, pk = Math.floor(q); if (hash(pk + sd * 3) < 0.45) { const p = iw * (bump(q - pk, 0.1, 0.07) + 0.8 * bump(q - pk, 0.19, 0.06)); a.head.rotation.x += 1.1 * p; a.head.position.y -= 0.17 * p; a.head.position.z += 0.07 * p; a.body.rotation.x += 0.25 * p; } }   // pecking (Gerald never does anything)
+  const bq = t / 2.9 + sd * 11, bi = Math.floor(bq), lid = bump((bq - bi) * 2.9, 0.3 + 2.2 * hash(bi * 3.7 + sd * 5), 0.14); a.lids.forEach(l => { l.rotation.x = lerp(-0.9, 1.3, lid); });
+  const tq = t / 4.3 + sd * 3, ti = Math.floor(tq); a.tail.rotation.set(0.08 * Math.sin(TAU * U) * w + 0.12 * bump((tq - ti) * 4.3, 1 + 2 * hash(ti + sd), 0.25) * (a.gerald ? 0 : 1), 0, 0.05 * Math.sin(t * 1.3 + sd * 9) + 0.08 * w * Math.sin(TAU * U));
+  const fl = w * clamp((vc / sc - 1.6) / 1.5); a.wings.forEach((wg, n) => { const sg = n ? 1 : -1; wg.rotation.set(0, 0, sg * (0.04 * Math.sin(TAU * t / 3.1 + sd) + fl * (0.35 + 0.35 * Math.sin(t * 22 + n)))); });   // running fast: wings half open, flapping
 }
 function animalPose(a, moving, ph, t, graze = 0, w = moving ? 1 : 0, s = 0) {   // quadrupeds trot in diagonal pairs; chickens strut with a head-lock
   if (a.poseFn) return a.poseFn(t, w, s, graze);   // beast() / bird(): own gait
   const sd = a.sd ?? 0, br = Math.sin(TAU * t / (a.kind === 'cow' ? 4.2 : 2.4) + sd * 20);
   a.body.scale.set(1, 1 + 0.015 * br, 1 + 0.01 * br); a.body.rotation.set(0, 0, 0); a.head.rotation.set(0, 0, 0); a.head.position.copy(a.head0);
+  if (a.chk) { _chickenPose(a, t, w, s); for (const fx of a.fx) fx(t, a); return; }
   if (a.kind === 'chicken') {
     a.legs.forEach((l, i) => { l.rotation.x = w * 0.75 * Math.sin(ph + i * Math.PI); });
     a.body.position.y = a.by0 + w * Math.abs(Math.cos(ph)) * 0.03; a.body.rotation.z = w * 0.07 * Math.sin(ph); a.body.rotation.x = -0.05 * w;
@@ -2186,7 +2246,7 @@ function walk(obj, pts, o = {}) {
   const gW = (s, P) => { if (!rig || !STAIRS.length) return groundH(P.x, P.z); let h = 0; for (let k = -2; k <= 2; k++) { const Q = path.at(s + k * 0.075); h += groundH(Q.x, Q.z); } return h / 5; };   // v2.29: on stairs the body rises smoothly (was: 18 cm jump per step); the feet still find the steps (foot IK)
   const rt = obj.root ?? obj; const me = { t0, v, pos: t => { const s = dist(t - t0), P = path.at(s); return new THREE.Vector3(P.x, gW(s, P) + (o.y ?? 0), P.z); }, yaw: t => { let y = o.face ?? (yawAt(dist(t - t0)) ?? y0); const i = rt._walks.indexOf(me), u = t - t0;   // v2.31: a walk that follows another one turns into its new heading over 0.45 s (was: spun round in one frame)
       if (i > 0 && o.face == null && u < 0.45) { const yp = rt._walks[i - 1].yaw(t0); y = yp + Math.atan2(Math.sin(y - yp), Math.cos(y - yp)) * sm01(Math.max(0, u) / 0.45); } return y; } }; (rt._walks ??= []).push(me);
-  if (obj.beast) {   // v2.40.x beast feet: stride amplitude as a function of the distance walked (w at the moment a foot touched down) → feet stay planted while starting and stopping
+  if (obj.beast || obj.chk) {   // v2.40.x beast / chicken feet: stride amplitude as a function of the distance walked (w at the moment a foot touched down) → feet stay planted while starting and stopping
     const a0 = ra ? v / ra : 0, tr = Math.min(ra, Te / 2), vp = a0 * tr, s1 = 0.5 * a0 * tr * tr, sE = ra ? vp * (Te - tr) : v * Te;
     Object.assign(me, { Te, bl, sE, dist, wS: q => { if (q <= 0 || q >= sE) return 0; const tau = !ra ? q / v : q < s1 ? Math.sqrt(2 * q / a0) : q < sE - s1 ? tr + (q - s1) / vp : Te - Math.sqrt(2 * (sE - q) / a0); return clamp(Math.min(tau, Te - tau) / bl); } }); }
   const pick = t => { let w = rt._walks[0]; for (const x of rt._walks) if (x.t0 <= t) w = x; return w; };
@@ -2208,7 +2268,7 @@ function walk(obj, pts, o = {}) {
     const w = moving ? clamp(Math.min(tau, Te - tau) / bl) : 0, vn = moving ? (dist(tau + 0.02) - dist(tau - 0.02)) / 0.04 : 0;
     const from = tau < Te / 2 ? (o.startMode ?? 'idle') : (o.endMode ?? 'idle');
     let turn = (yawAt(s + 0.5) ?? yw) - (yawAt(s - 0.5) ?? yw); turn = Math.atan2(Math.sin(turn), Math.cos(turn));
-    if (obj.beast) obj._wk = me;
+    if (obj.beast || obj.chk) obj._wk = me;
     if (obj.quad) animalPose(obj, moving, s * stride / sc, t, o.graze ?? 0.6, w, s);
     else if (obj.isModel) obj.pose(mode, s / ((obj.stride[mode] ?? 1.3) * sc), t, { w, from, v: vn });
     else if (obj.legL) pose(obj, mode, TAU * s / Cl, t, { v, w, from, turn: mode === 'run' ? turn : 0 });
@@ -6766,7 +6826,7 @@ const BEASTS = {
   rhino:    { L: 2.3, lh: 0.7, bh: 0.98, bw: 0.98, c: '#8E8A86', b: '#8E8A86', k: '#3A3836', nk: [0.25, 0.15, 0.42], hd: [0.62, 0.42, 0.4], sn: [0.32, 0.3, 0.32], hp: 0.35, ear: 'point', tail: [0.35, 0.03, 'tuft'], leg: [0.17, 0.14], ft: 'pad', z: 'plant', flex: 0.05, gal: 'tra', eye: 'side', voice: 'snort', herb: 1, horn: 'rhino', folds: 1 },
   hippo:    { L: 2.5, lh: 0.45, bh: 1.05, bw: 1.2, c: '#8A7482', b: '#D8A6A8', k: '#3A2E36', nk: [0.2, 0.15, 0.5], hd: [0.55, 0.5, 0.6], sn: [0.45, 0.45, 0.7], ear: 'tiny', tail: [0.3, 0.06, 'stub'], leg: [0.19, 0.16], ft: 'pad', z: 'plant', flex: 0.03, gal: 'tra', maxG: 'trot', eye: 'top', voice: 'grunt', herb: 1, tusk: 'hippo', snoutC: '#9A8290' },
   croc:     { L: 1.5, lh: 0.2, bh: 0.32, bw: 0.62, c: '#4E5E34', b: '#C8C294', k: '#2A3420', nk: [0.15, 0.05, 0.24, 0.55], hd: [0.32, 0.18, 0.32], sn: [0.65, 0.12, 0.2], ear: 'none', tail: [2.0, 0.15, 'croc'], leg: [0.07, 0.05], ft: 'claw', z: 'sprawl', flex: 0, gal: 'tra', maxG: 'walk', eye: 'top', iris: '#C8B040', voice: 'hiss', fang: 2, scutes: 1, sprawl: 1, nt: 'nostrils' },
-  mammoth:  { base: 'elephant', c: '#5A3E2A', b: '#5A3E2A', s: 1.12, tusk: 'mammoth', hump: 1, shag: '#4A3220', ear: 'roundSmall', trunk: 2.1 },
+  mammoth:  { base: 'elephant', c: '#5A3E2A', b: '#5A3E2A', s: 1.12, tusk: 'mammoth', hump: 1, shag: '#4A3220', ear: 'elephantSmall', trunk: 2.1 },
   trex:     { L: 4.2, lh: 2.5, bh: 2.2, bw: 1.7, c: '#5E6E3A', b: '#B8B48A', k: '#2E3A1E', nk: [0.9, 0.55, 0.5, 1.2], hd: [1.4, 1.0, 0.85], sn: [1.0, 0.65, 0.7], hk: 1, nkK: 1, ear: 'none', tail: [6.2, 0.75, 'dino'], leg: [0.45, 0.2], ft: 'claw', z: 'dino', flex: 0.04, gal: 'rot', maxG: 'gallop', fang: 3, eye: 'side', iris: '#D8A020', voice: 'trex', biped: 1, arms: 0.55, saddle: '#4A5A2E', nt: 'nostrils', var: 0.05 },
   raptor:   { L: 1.15, lh: 0.95, bh: 0.55, bw: 0.4, c: '#8A6A42', b: '#D8C8A8', k: '#3A2A1A', nk: [0.45, 0.7, 0.13, 1.1], hd: [0.42, 0.26, 0.24], sn: [0.32, 0.15, 0.14], hk: 1, nkK: 1, ear: 'none', tail: [1.9, 0.16, 'dino'], leg: [0.12, 0.05], ft: 'claw', z: 'dino', flex: 0.05, gal: 'rot', fang: 3, eye: 'side', iris: '#E8C030', voice: 'raptor', biped: 1, arms: 1.1, stripes: '#4A3A26', nt: 'nostrils', quills: '#C0392B' },
   triceratops: { L: 3.8, lh: 1.25, bh: 1.9, bw: 1.9, c: '#7A6A4A', b: '#A8987A', k: '#3A3020', nk: [0.5, 0.3, 0.7], hd: [1.4, 1.0, 1.0], sn: [0.8, 0.6, 0.55], hk: 1, nkK: 1, ear: 'none', tail: [2.6, 0.5, 'dino'], leg: [0.32, 0.26], ft: 'pad', z: 'plant', flex: 0.03, gal: 'tra', maxG: 'trot', eye: 'side', voice: 'trex', frill: '#B8803A', horn: 'trike', herb: 1, nt: 'nostrils', beak: 1 },
@@ -6819,7 +6879,9 @@ function beast(o = {}) {   // kind: see BEASTS — real proportions in metres; w
   if (D.bristle) for (let i = 0; i < 12; i++) box(i < 6 ? fr : rr, 0.025, 0.06, 0.05, D.bristle, 0, bh * 0.43 - Math.abs(i - 4) * 0.01, L * (0.48 - i * 0.085), { rx: -0.4, ...NC });
   if (D.plates) for (let i = 0; i < 11; i++) { const u = i / 10, g2 = u < 0.5 ? fr : rr, z = L * (0.48 - u * 0.95), h = bh * (0.18 + 0.32 * Math.sin(Math.PI * Math.min(1, u * 1.1))), sx = i % 2 ? 1 : -1; finPlate(g2, [[h * 0.45, 0], [h * 0.2, h * 0.85], [-h * 0.15, h], [-h * 0.5, h * 0.55], [-h * 0.45, 0]], 0.06, D.plates, sx * bw * 0.06, bh * 0.4 + Math.sin(Math.PI * u) * bh * 0.05, z); }
   if (D.spines) for (let i = 0; i < 10; i++) { const u = i / 9; cone(u < 0.5 ? fr : rr, bh * 0.05, bh * 0.16, D.spines, 0, bh * 0.44 + Math.sin(Math.PI * u) * bh * 0.04, L * (0.5 - u), { rx: -0.5 }); }
-  if (D.shag) for (const [g2, E] of [[fr, EC], [rr, EH]]) for (let i = 0; i < 11; i++) for (const sx of [-1, 1]) for (const row of [0, 1]) { const u = -0.85 + i * 0.17 + row * 0.08, rr0 = Math.sqrt(1 - u * u), ph = row ? 0.95 : 0.7; cone(g2, E[3] * 0.16, E[4] * (0.75 - row * 0.2), shade(D.shag, (hash(i * 3 + sx + row * 7) - 0.5) * 0.12), E[0] + sx * E[3] * rr0 * Math.sin(ph) * 0.97, E[1] - E[4] * rr0 * Math.cos(ph) * 0.55, E[2] + u * E[5], { rx: Math.PI, rz: -sx * 0.12 }); }
+  if (D.shag) for (let i = 0; i < 15; i++) for (const sx of [-1, 1]) for (const row of [0, 1, 2]) {   // v2.40.x long hair hanging from the flanks (the old tufts sat inside the lofted torso)
+    const u = 0.05 + 0.9 * (i + (row % 2) * 0.5) / 15, R0 = tring(u), an = Math.PI * (0.5 + row * 0.14), sn = Math.sin(an), cs = Math.cos(an), e = R0.e, q = Math.pow(Math.pow(Math.abs(sn), e) + Math.pow(Math.abs(cs), e), -1 / e), h = bh * (0.46 - row * 0.1) * (0.8 + 0.4 * rnd(i * 3 + row + (sx > 0 ? 50 : 0)));
+    cone(u < 0.5 ? fr : rr, bh * 0.075, h, shade(D.shag, (rnd(i * 7 + row * 3 + sx) - 0.5) * 0.16), sx * sn * R0.r[0] * q * 0.96, R0.c[1] + cs * (cs < 0 ? R0.r[2] : R0.r[1]) * q * 0.96 - h + bh * 0.04, R0.c[2], { rx: Math.PI, rz: -sx * 0.1, ...NC }); }
   if (D.scutes) for (let i = 0; i < 12; i++) for (const x of [-1, 0, 1]) box(i < 6 ? fr : rr, 0.06, 0.04, 0.09, K, x * bw * 0.16, bh * 0.44, L * (0.5 - i * 0.09), NC);
   // --- neck & head
   const [nl, ne, nr0, nd = 1] = D.nk, nr = nr0 * (D.nkK ?? 1.3), nRest = Math.PI / 2 - ne;
@@ -6891,13 +6953,13 @@ function beast(o = {}) {   // kind: see BEASTS — real proportions in metres; w
   // ears
   const ears = [], ek = D.ear ?? 'round', ec = D.panda ?? HC, ei = shade(ec, kind === 'fox' ? 0.25 : -0.15);
   if (ek !== 'none') for (const s of [-1, 1]) {
-    const big = ek === 'elephant', eg = dyn(grp(head, s * hw * (big ? 0.44 : 0.3), skY + hh * (big ? 0.05 : 0.38), skZ - hl * (big ? 0.0 : 0.05))); let r0 = [0, 0, 0];
+    const big = ek === 'elephant' || ek === 'elephantSmall', eg = dyn(grp(head, s * hw * (big ? 0.44 : 0.3), skY + hh * (big ? 0.05 : 0.38), skZ - hl * (big ? 0.0 : 0.05))); let r0 = [0, 0, 0];
     if (ek === 'round' || ek === 'roundSmall' || ek === 'tiny') { const r = hh * (ek === 'round' ? 0.2 : ek === 'tiny' ? 0.08 : 0.13); _ell(eg, ec, 0, r * 0.5, 0, r, r * 0.85, r * 0.35); _ell(eg, ei, 0, r * 0.45, r * 0.2, r * 0.6, r * 0.5, r * 0.22, NC); r0 = [0, 0, -s * 0.25]; }
     else if (ek.startsWith('point')) { const r = hh * (ek === 'pointBig' ? 0.26 : ek === 'pointSmall' ? 0.13 : 0.18), h = hh * (ek === 'pointBig' ? 0.62 : ek === 'pointSmall' ? 0.48 : 0.42); cone(eg, r, h, kind === 'fox' ? '#2A211D' : ec).scale.z = 0.38; cone(eg, r * 0.6, h * 0.75, ei, 0, 0.01, r * 0.12, NC).scale.z = 0.25; r0 = [-0.15, 0, -s * 0.2]; }
     else if (ek === 'big' || ek === 'long' || ek === 'rabbit') { const ln = hh * (ek === 'big' ? 0.36 : ek === 'long' ? 0.5 : 0.95), w = hh * (ek === 'rabbit' ? 0.18 : 0.16); _ell(eg, ec, 0, ln, 0, w, ln, w * 0.4); _ell(eg, ei, 0, ln, w * 0.18, w * 0.6, ln * 0.82, w * 0.22, NC); r0 = ek === 'big' ? [-0.2, 0, -s * 0.85] : [-0.25, 0, -s * (ek === 'long' ? 0.3 : 0.12)]; }
     else if (ek === 'side') { _ell(eg, ec, 0, hh * 0.22, 0, hh * 0.12, hh * 0.24, hh * 0.05); _ell(eg, ei, 0, hh * 0.22, hh * 0.02, hh * 0.07, hh * 0.18, hh * 0.03, NC); r0 = [0.1, 0, -s * 1.35]; }
-    else if (ek === 'flop') { _ell(eg, kind === 'pig' ? ec : shade(ec, -0.12), 0, hh * 0.22, 0, hh * 0.15, hh * 0.26, hh * 0.05); r0 = kind === 'pig' ? [0.7, 0, -s * 0.5] : [0, 0, s * 2.7]; }
-    else if (big) { const k = hh * 0.95, P = [[0.05, 0.45], [-0.3, 0.62], [-0.85, 0.5], [-1.0, 0.0], [-0.75, -0.55], [-0.3, -0.68], [0.0, -0.2]].map(([z, y]) => [z * k, y * k]); finPlate(eg, P, 0.05, ec); finPlate(eg, P.map(([z, y]) => [z * 0.8 - 0.02, y * 0.8]), 0.02, shade(ec, 0.06), s * 0.03, 0, 0, NC); r0 = [0, -s * 0.3, 0]; }
+    else if (ek === 'flop') { const pg = kind === 'pig'; if (pg) _ell(eg, ec, 0, hh * 0.22, 0, hh * 0.15, hh * 0.26, hh * 0.05); else { _ell(eg, shade(ec, -0.12), 0, hh * 0.24, 0, hh * 0.045, hh * 0.27, hh * 0.15); _ell(eg, shade(ec, -0.24), s * hh * 0.02, hh * 0.26, 0, hh * 0.03, hh * 0.19, hh * 0.09, NC); } if (!pg) eg.position.x = s * hw * 0.4; r0 = pg ? [0.7, 0, -s * 0.5] : [0.15, 0, -s * 2.75]; }   // v2.40.x dog ears hang down outside the head (were turned into it)
+    else if (big) { const k = hh * (ek === 'elephant' ? 0.95 : 0.5), P = [[0.05, 0.45], [-0.3, 0.62], [-0.85, 0.5], [-1.0, 0.0], [-0.75, -0.55], [-0.3, -0.68], [0.0, -0.2]].map(([z, y]) => [z * k, y * k]); finPlate(eg, P, 0.05, ec); finPlate(eg, P.map(([z, y]) => [z * 0.8 - 0.02, y * 0.8]), 0.02, shade(ec, 0.06), s * 0.03, 0, 0, NC); r0 = [0, -s * 0.3, 0]; }
     eg.rotation.set(...r0); eg.userData.r0 = r0; eg.userData.big = big; ears.push(eg);
   }
   // horns, antlers, tusks, trunk, extras
@@ -6905,8 +6967,11 @@ function beast(o = {}) {   // kind: see BEASTS — real proportions in metres; w
   if (D.antler === 'deer' || D.antler === 'reindeer') for (const s of [-1, 1]) { const A = D.antler === 'reindeer' ? 1.45 : 1, P = _walkP([s * hw * 0.2, top, skZ - hl * 0.02], [[s * 0.06, 0.12, -0.05], [s * 0.08, 0.14, -0.03], [s * 0.05, 0.13, 0.04], [s * 0.0, 0.1, 0.08]], A);
     _chain(head, P, 0.022 * A, 0.009 * A, AC); for (const [i, d] of [[1, [0, 0.05, 0.12]], [2, [-s * 0.02, 0.13, 0.03]], [3, [-s * 0.03, 0.11, -0.02]]]) _seg(head, P[i], P[i].map((v, j) => v + d[j] * A), 0.012 * A, 0.006 * A, AC);
     if (D.antler === 'reindeer') _seg(head, P[1], [P[1][0] - s * 0.04, P[1][1] + 0.02, P[1][2] + 0.2], 0.012, 0.02, AC); }
-  if (D.antler === 'palm') for (const s of [-1, 1]) { const P = _walkP([s * hw * 0.25, top, skZ - hl * 0.05], [[s * 0.16, 0.05, -0.03], [s * 0.1, 0.06, 0]]); _chain(head, P, 0.04, 0.03, AC); const pg = grp(head, ...P[2]); pg.rotation.z = s * 0.55;
-    plate(pg, [[0, 0.1], [s * 0.3, 0.2], [s * 0.48, 0.05], [s * 0.42, -0.15], [s * 0.1, -0.14]], 0.035, AC); for (let i = 0; i < 6; i++) cone(pg, 0.022, 0.12, AC, s * (0.12 + i * 0.065), 0, 0.17 - i * 0.055 + (i > 3 ? -0.05 : 0), { rz: -s * 0.4 }); }
+  if (D.antler === 'palm') for (const s of [-1, 1]) {   // v2.40.x moose: a short beam out of the skull, a broad cupped palm tilted up and out, tines along its outer rim
+    const P0 = [s * hw * 0.28, top - hh * 0.06, skZ - hl * 0.06], P1 = [P0[0] + s * 0.17, P0[1] + 0.05, P0[2] - 0.02]; _seg(head, P0, P1, 0.045, 0.035, AC); ball(head, 0.05, shade(AC, -0.1), ...P0, { detail: 0 });
+    const pg = grp(head, ...P1); pg.rotation.order = 'YZX'; pg.rotation.set(-0.2, -s * 0.3, s * 0.85); const Pl = [[0, 0.1], [s * 0.16, 0.2], [s * 0.4, 0.17], [s * 0.56, 0.02], [s * 0.5, -0.16], [s * 0.22, -0.2], [0, -0.07]];
+    plate(pg, Pl, 0.045, AC);
+    for (let i = 0; i < 7; i++) { const u = i / 6, x = s * lerp(0.16, 0.5, u) + (u > 0.7 ? s * 0.04 : 0), z = u < 0.66 ? lerp(0.21, 0.02, u / 0.66) : lerp(0.02, -0.16, (u - 0.66) / 0.34), h = 0.1 + 0.05 * Math.sin(Math.PI * u); cone(pg, 0.026, h, AC, x, 0, z, { rz: -s * (0.15 + 0.4 * u) }); } }
   if (D.horns === 'cow' || D.horns === 'bull') for (const s of [-1, 1]) { const bl = D.horns === 'bull', P = _walkP([s * hw * 0.4, top - hh * 0.05, skZ], bl ? [[s * 0.14, 0.02, 0.03], [s * 0.08, 0.06, 0.08], [0, 0.08, 0.06]] : [[s * 0.08, 0.03, 0.02], [s * 0.03, 0.07, 0.04]]); _chain(head, P, bl ? 0.045 : 0.03, 0.012, '#EDE4CC'); ball(head, 0.014, '#3A3228', ...P[P.length - 1], { detail: 0, ...NC }); }
   if (D.horns === 'goat') for (const s of [-1, 1]) _chain(head, _walkP([s * hw * 0.22, top, skZ + hl * 0.05], [[s * 0.02, 0.1, -0.04], [s * 0.03, 0.06, -0.09], [s * 0.03, 0.0, -0.1], [s * 0.02, -0.05, -0.06]]), 0.028, 0.008, '#8A7A62');
   if (D.horn === 'rhino') { cone(head, sw * 0.32, sh * 1.35, '#BCB0A0', 0, yS + sh * 0.35, zN - sl * 0.28, { rx: -0.35 }); cone(head, sw * 0.22, sh * 0.6, '#BCB0A0', 0, yS + sh * 0.42, zN - sl * 0.82, { rx: -0.2 }); }
