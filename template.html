@@ -1899,11 +1899,11 @@ function beamSpot(beam, o = {}) {
 // lightPool(p, x, y, z, { r, color, k, night, wall, ry, ignore }) — soft glow of a lamp on the floor below it (local to p): draped over curbs, steps and paving (built just before bake,
 //   so it follows whatever lies under the lamp; anything higher than 0.28 m — benches, cars, the lamp's own base (ignore: its group) — stays out), merged with all other static pools into one draw call. Follows the darkness
 //   (NIGHTK; night: false = always on, e.g. indoor lamps). wall: true = a vertical glow on a wall (local +z out of the wall). No real light.
-const POOLS = [], _poolMats = {};
+const LPOOLS = [], _poolMats = {};
 function lightPool(p, x, y, z, o = {}) {
   if (CFG.pools === false || o.pool === false) return null;
-  const g = grp(p, x, y, z, o.ry ?? 0); POOLS.push({ g, r: o.r ?? 3, c: new THREE.Color(o.color ?? '#FFC880').multiplyScalar(o.k ?? 0.45), night: o.night !== false, wall: !!o.wall, ign: o.ignore });
-  if (POOLS.length === 1) DEFER.push(_buildPools); return g;
+  const g = grp(p, x, y, z, o.ry ?? 0); LPOOLS.push({ g, r: o.r ?? 3, c: new THREE.Color(o.color ?? '#FFC880').multiplyScalar(o.k ?? 0.45), night: o.night !== false, wall: !!o.wall, ign: o.ignore });
+  if (LPOOLS.length === 1) DEFER.push(_buildPools); return g;
 }
 function _buildPools() {
   world.updateMatrixWorld(true);
@@ -1912,7 +1912,7 @@ function _buildPools() {
     let st = false; for (let q = m; q && q !== world; q = q.parent) { if (q.userData.dyn || !q.visible) return; if (q.userData.stat) st = true; } if (!st) return;
     const gm = m.geometry; if (!gm.boundingBox) gm.computeBoundingBox(); cands.push([m, gm.boundingBox.clone().applyMatrix4(m.matrixWorld)]); });
   const RINGS = [0, 0.1, 0.22, 0.36, 0.52, 0.68, 0.84, 1], SEG = 28;
-  for (const L of POOLS) {
+  for (const L of LPOOLS) {
     L.g.updateWorldMatrix(true, false); L.g.getWorldPosition(C); inv.copy(L.g.matrixWorld).invert(); const R = L.r, pos = [], col = [], uv = [], idx = [];
     const fall = u => Math.pow(1 - u * u, 2.2) * 0.85 + Math.exp(-u * u * 10) * 0.25;
     if (L.wall) { for (let i = 0; i < RINGS.length; i++) for (let j = 0; j < SEG; j++) { const u = RINGS[i], a = j / SEG * TAU, f = fall(u); pos.push(Math.cos(a) * u * R, Math.sin(a) * u * R, 0.02); col.push(L.c.r * f, L.c.g * f, L.c.b * f); } }
