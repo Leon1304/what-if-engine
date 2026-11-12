@@ -121,7 +121,7 @@ for d in (os.path.join(here_, 'sfx'), os.path.join(here_, '.engine', 'sfx')):
             if f.endswith('.mp3') and f[:-4] not in sfx: sfx[f[:-4]] = base64.b64encode(open(os.path.join(d, f), 'rb').read()).decode()
 if sfx: t = t.replace('/* @SFX */{}', '/* @SFX */' + json.dumps(sfx, separators=(',', ':')), 1)
 # voice-over: voice.py (cached) → embed mp3 + word timings; CFG.voice: false = no voice
-if os.path.exists(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'tts', 'voices-v1.0.bin')) and '--no-voice' not in args:
+if (os.path.exists(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'tts', 'voices-v1.0.bin')) or os.environ.get('ELEVENLABS_API_KEY') or os.environ.get('XI_API_KEY')) and '--no-voice' not in args:
     # v2.38: the narrator reacts to the scene — ask the built page what happens when (loud hits, shakes, music mood, counters that jump);
     # cached per story + scene; if the page cannot be probed, voice.py falls back to what the story file itself lists
     import hashlib

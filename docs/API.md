@@ -934,3 +934,28 @@ Dinge zerbrechen so, wie sie gebaut sind. Alles ist echte Physik (einmal vorab s
 - `jetty(p, x, z, { len, w, h, seg, ry, rails, depth, color, breakable })` (v2.43.1): Holzsteg bzw. Bohlenweg von (x, z) Richtung +z übers Wasser: Planken in Abschnitten, Pfosten bis zum Grund, optional Geländer. Rückgabe `{ g, sections, end, h, at(u) }`; `end` (letzter Abschnitt) ist beweglich, z. B. `breakApart(J.end, t, { dir: [0, -1, 0.3] })` – der Steg bricht unter jemandem weg.
 - `saltCrust(p, x, z, { r, n, size, y, color })`: flache, weiße Salz- und Sodakrusten (gerissene Platten mit Rand) auf einem See oder einer Salzpfanne; `y` = Höhe der Wasser- bzw. Bodenfläche.
 - Test: `tests/salt-lake.*`.
+
+# Neu in v2.48 (ElevenLabs-Erzähler, Stimme je Kategorie)
+
+## Stimme je Kategorie
+- Ist `ELEVENLABS_API_KEY` gesetzt, spricht `voice.py` den Erzähler mit ElevenLabs. Nur amerikanische Sprecher:
+
+| Kategorie | Erkennung | Stimme | Voice-ID |
+|---|---|---|---|
+| What if (Einzelvideo) | sonst | Denzel | `7sXif1ZLnLgbMgmFvs2G` |
+| Serie | `CFG.series` gesetzt | JM – Husky & Engaging | `EkK5I93UQWFDigLMpZcX` |
+| Explaining | `CFG.kind: 'explain'` | Adam | `wBXNqKUATyqu0RtYt25i` |
+| Conspiracy | `CFG.kind: 'conspiracy'` / `'debunk'` | Declan Sage | `kqVT88a5QfII1HNAEPTJ` |
+| Horror | `CFG.kind: 'horror'` | Storm Styles | `YI5bDiiDOYHHb2eLadHv` |
+
+- Reihenfolge: `kind` (explain / conspiracy / horror) vor Serie vor Story. Horror-Musik allein macht kein Horror-Video. `kind: 'horror'` verhält sich sonst wie `'story'` (Badge „What if“).
+- Innerhalb einer Serie bleibt die Stimme gleich, solange `kind` in allen Folgen gleich bleibt.
+- `CFG.voice`: `'auto'` (Standard; Kokoro-Namen wie `deep`, `documentary` zählen als auto) · `'denzel' | 'jm' | 'adam' | 'declan' | 'storm'` oder eine ElevenLabs-Voice-ID legt eine Stimme fest · `{ engine: 'kokoro' }` bzw. `--kokoro` = Offline-Stimme · `{ model: 'eleven_v4', el_speed: 1.05 }` = Modell und Grundtempo.
+- `python3 voice.py <slug> --which` zeigt Kategorie und Stimme ohne Synthese.
+
+## Gefühl mit ElevenLabs
+- Die Töne aus v2.38 (Automatik und `tone`/`[tag]`) werden zu ElevenLabs-Audio-Tags: calm · tense · worried · excited · shout → `[shouting]` · whisper → `[whispers]` · sad · dramatic · deadpan · curious · relieved. Automatische Töne nur ab Stärke 0,6. Keine PSOLA-, Flüster- oder Schrei-Bearbeitung darüber; Atmer macht die Stimme selbst.
+- Einwürfe (`[whoa]`, `[ugh]` …) spricht ElevenLabs mit passendem Tag (excited, annoyed, worried, surprised, laughs); `[gasp]`/`[sigh]` bleiben Laute.
+- Tempo pro Satz wie bisher (an ElevenLabs als `speed` 0,7–1,2). Wortzeiten, Karaoke, Lippen-Sync und Mix unverändert.
+- Modell: `eleven_v4`, sonst `eleven_v3`, sonst `eleven_multilingual_v2` (ohne Tags). Jede Zeile wird in `.voice/el-*.npy` gecacht; nur geänderte Sätze kosten erneut Credits. `voice.py` meldet `elevenlabs: category … · model … · N new requests (… characters)`.
+- Ohne Key oder wenn der Key schon beim ersten Satz scheitert (ungültig, keine Credits): ganzes Video mit Kokoro, nie gemischt. Stimmen im Bild (`who: 'steve' | 'you'`) bleiben Kokoro, wenn es installiert ist.

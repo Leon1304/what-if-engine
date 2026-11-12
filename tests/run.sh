@@ -15,4 +15,12 @@ for s in $names; do
   if grep -q "PAGE DID NOT START\|PAGE ERRORS" "$s.log" || [ "$(ls shots_$s/*.png 2>/dev/null | wc -l)" -lt 3 ]; then echo "FAIL $s"; grep -A10 "PAGE" "$s.log" | head -14; fail=1
   else echo "ok   $s  $(grep -o '"meshes":[0-9]*' "$s.log" | head -1)"; fi
 done
+# v2.48 narrator voice by category (no synthesis, no API call)
+cp "$R/voice.py" .
+for c in "story:Denzel" "explain:Adam" "conspiracy:Declan Sage" "horror:Storm Styles" "series:JM"; do
+  k=${c%%:*}; want=${c#*:}; sed -n '/@STORY-BEGIN/,/@STORY-END/p' template.html | sed '1d;$d' > "vp_$k.story.js"
+  if [ "$k" = series ]; then sed -i "s#  series: null,#  series: { name: 'Test', ep: 2 },#" "vp_$k.story.js"; else sed -i "s#  kind: 'story',#  kind: '$k',#" "vp_$k.story.js"; fi
+  got=$(ELEVENLABS_API_KEY=test python3 voice.py "vp_$k" --which 2>&1)
+  case "$got" in *"$want"*) echo "ok   voice $k → $want";; *) echo "FAIL voice $k: $got"; fail=1;; esac
+done
 echo "work folder: $W"; exit $fail

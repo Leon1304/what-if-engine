@@ -22,6 +22,12 @@ Manual run: Actions → render → Run workflow (page path, width 1440 / 2160 / 
 - Everyday clothes: beards, ponytail, bald, hoodie, short sleeves, skirt / dress, backpack, watch, belt, shoe soles; secondary motion for ponytail, hood strings, backpack, belly
 - Look: rim light in the sky colour (stronger at night), warm skin, contact shadows under the feet. Switches: `CFG.bodyLang`, `CFG.fidget`, `CFG.windup`, `CFG.fingers`, `CFG.figLook`, `CFG.rim`, `CFG.contactShadows`. Test: `tests/bodies.*`
 
+## Engine v2.48 (Nov 2026): ElevenLabs narrator, voice by category
+- With `ELEVENLABS_API_KEY` set, `voice.py` speaks the narrator with ElevenLabs (American voices only), picked by category: story **Denzel** · series (`CFG.series`) **JM – Husky & Engaging** · `kind: 'explain'` **Adam** · `'conspiracy'` **Declan Sage** · `'horror'` **Storm Styles**. Horror music alone keeps a video in 'story'.
+- Tones and reactions become ElevenLabs audio tags (`[tense]`, `[whispers]`, `[shouting]`, `[excited]` …, model `eleven_v4` → `eleven_v3` → `eleven_multilingual_v2`); tempo per sentence, word timings, lip sync and the mix stay as before. Requests are cached in `.voice/`.
+- `CFG.voice: 'auto'` (default; Kokoro names count as auto) · a name (`denzel`, `jm`, `adam`, `declan`, `storm`) or an ElevenLabs voice id pins one · `{ engine: 'kokoro' }` / `--kokoro` = offline voice. `voice.py <slug> --which` prints category + voice.
+- Without a key, or if the key fails on the first line, the whole video falls back to Kokoro. On-screen voices (`who: 'steve' | 'you'`) stay Kokoro when it is installed.
+
 ## Engine v2.39 (Nov 2026): no question cards mid-video
 - `GUESS` shows no card and `MYTH` no claim card any more: the narrator asks, the answer comes at the very end (MYTH: only its verdict stamp right before the end card). `CFG.questionCards: true` / `card: true` = as before
 - v2.38.1–3: reaction words are acted (own melody and length), spoken slowly; no `[hm]`
