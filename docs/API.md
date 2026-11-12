@@ -53,9 +53,13 @@ Figuren haben ein Cartoon-Gesicht (runde Augen mit Iris, Pupille und Glanzpunkte
 Hauptmotive anleuchten mit `glow`, `lamp`, Fenstern über `lit` und hellen, satten Farben. Sonst säuft alles ab.
 
 ## Bild (läuft automatisch)
-
+ **Himmelslicht (v3.0):** Das Umgebungslicht (weiches Fülllicht und Spiegelungen) ist der aktuelle Himmel – Zenit, Horizont, Boden und Sonnenschein –, statt eines grauen Studios; es folgt jedem `SKY`-Wechsel. `CFG.env: false` = aus, `true` / `'studio'` = altes Studio, Zahl = Stärke.
 Kontaktschatten (`CFG.ao`, Standard 0.55), Glühen auf Feuer, Explosionen, Fenstern, Neon und Zombie-Augen (`CFG.bloom` 0.45, `bloomThreshold` 1.2; nur der Überschuss glüht, angestrahlte Flächen überstrahlen nicht), Sonnenschatten passend zum Bildausschnitt (in Nahaufnahmen scharf, `CFG.shadowFit`), echte Bewegungsunschärfe auf schnellen Frames (`CFG.motionBlur: 'auto'`: Schüttler, schnelle Kamera, Rennende nah an der Linse; `MBLUR = [[t0, t1]]` erzwingt sie; nur im Export, nicht in der Vorschau), abgerundete, weich schattierte Figuren (`CFG.smooth`). Umgebungslicht `CFG.env: true` nur bei „beste qualität“.
 
+
+# Prüfung (v3.0)
+
+`node render.mjs page.html --audit` (läuft auch mit `--shots` und im Render-Workflow) meldet neben `MOTION:`/`HITBOX:`/`GORE:` jetzt `QA:`: Massenmitglieder ineinander oder in Props, Füße im Boden beim Stehen, Glieder, die auf Klötze zurückfallen mussten. `--video` prüft die fertigen Frames auf Streifen durchs Bild (`LINES:`, qa_lines.py). Der Render-Workflow schreibt alle Warnungen in die Zusammenfassung und hängt `<slug>-qa.txt` an das Release. `--strict` bricht bei jeder Warnung ab (Exit 3). **Regel:** Vor dem Rendern `--audit` laufen lassen und jede `QA:`-/`HITBOX:`-/`MOTION:`-Zeile beheben.
 
 # Engine-API (für die Szene)
 
@@ -191,6 +195,10 @@ Sie entstehen nur über `char(name, { expr, hold })`, nie über `figure()` mit e
 
 Standard sind Haare ohne Hut. Der Look passt zum Szenario: `char('you', { outfit: … })` mit straw (Farm) · cap · capBack · beanie · cowboy · shades · hair (nimmt den Hut ab) und den Frisuren short · buzz · spiky · long · bun · curly · mohawk, dazu Haarfarbe blond · ginger · black; auch kombiniert, z. B. `['capBack', 'shades']`. Eine Serie legt den Look einmal in `cast.json` fest (`hatStyle`, `hat`, `hairStyle`, `hair`, `glasses`) und behält ihn, Einzelvideos wählen frei. Einmalige Figuren nehmen dieselben Optionen direkt in `figure({ hatStyle, hairStyle, glasses })`.
 
+## Durchgehende Glieder (v3.0, automatisch)
+
+Arme und Beine sind je eine durchgehende, geskinnte Fläche über Schulter, Ellbogen und Handgelenk bzw. Hüfte, Knie und Knöchel (an dieselben Gelenke gebunden, an jedem Gelenk weich überblendet): Ein gebeugter Ellbogen oder ein gebeugtes Knie bleibt geschlossen, die Schulter geht in den Körper über, keine Lücken und keine herausstehenden Kanten mehr. Ärmel, nackte Unterarme (`sleeves: 'short'`), Körperbau, `soot`/`wet`/Einfrieren und Sichtbarkeit gehen mit. Die alten Klötze bleiben unsichtbar im Rig (Gore, Ragdolls, Hitboxen und Prüfung lesen sie) und werden nur gezeichnet, wo die Haut nicht kann: ein abgetrenntes Glied oder ein von der Physik auseinandergezogenes Gelenk (> 12 %), nur für diese Frames. `figure({ skin: false })` bzw. `CFG.skin: false` = alte Klötze.
+
 ## Körperbau, Körpersprache und Alltagskleidung (v2.41)
 
 - **Körperbau:** `figure({ build })` mit man (Standard) · woman (schmalere Schultern, Taille, breitere Hüfte, schwingende Hüfte beim Gehen, Füße fast auf einer Linie, Standardfrisur long/ponytail/bun) · kid (≈ 1,2 m, großer Kopf, lebhafter Gang) · teen · old (gebeugt, leicht gebeugte Knie, kleiner Bauch, wenig Armschwung, graue Haare) · heavy (breit, Bauch der beim Gehen mitfedert, breiter Stand, schaukelnder Gang) · slim · tall · short · muscular (breite Schultern, dicke Arme, Arme leicht abgespreizt). Dazu `height: 0.9–1.1` als Feinregler. Schultergelenke wandern mit, IK (Greifen, Waffen, Tragen) stimmt bei jedem Körperbau. Serienfiguren bekommen ihren Körperbau in `cast.json` (`"build": "woman"`); `char()` lässt ihn wie die Farben nicht überschreiben. Massen (`horde`) mischen automatisch schmale bis kräftige Oberkörper.
@@ -255,6 +263,10 @@ Für alles, was fällt, fliegt, umkippt oder zerbricht, statt Handanimation. Vor
 - `kind: 'human'` setzt Hauttöne, bunte Shirts, dunkle Augen, `walk` und kein `rise`. `lift` lässt hüpfen oder Wellen laufen, `armsUp` reißt die Arme hoch (Jubel, Panik). Pro Mitglied variieren über `hash(i)`.
 - Starren (v2.27): `gaze: { t, at: [x, y, z], spread: 0.8, turn: 0.7, tilt: 0.55, arms: 'down' | 'up', face }` – ab `t` (pro Mitglied bis `spread` s später) bleibt jeder stehen, dreht sich zu `at` und schaut hoch (Feuerwerk, UFO, Sonnenfinsternis); Zombies hören auf zu hämmern. `face: false` = nicht drehen; `h.hit()` geht danach wie gewohnt.
 
+- **Simulation (v3.0, automatisch):** Die Wege oben sind der Plan, eine einmal vorab berechnete Massensimulation ist, was die Mitglieder tun: Jeder hält Abstand (niemand läuft durch einen anderen oder steht am Ziel in ihm), weicht Häusern, Zäunen, geparkten Autos und Figuren aus (vorausschauend, auf denselben Hitboxen wie die Figuren), beschleunigt und bremst weich und dreht sich mit begrenzter Geschwindigkeit. An einer Barriere (`wait.line`) entsteht echtes Gedränge: Die erste Reihe bleibt auf ihrer Seite, die Reihen dahinter drücken nach; ab `until` gilt die Barriere als durchbrochen. Ein fester Zaun ohne `wait` hält die Masse auf – vorher `knock()`/`breakApart()`. Bildgenau wiederholbar (30 Hz aufgezeichnet). `horde({ sim: false })` bzw. `CFG.crowdSim: false` = alte gerade Wege.
+- **Panikwelle (v3.0):** Mit `flee: { t, at }` laufen die Mitglieder los, wenn die Nachricht sie erreicht – Nächste zuerst, eine Welle durch die Menge (`flee.wave` m/s, Standard 9; `wave: false` = alle fast gleichzeitig wie früher).
+- **Köpfe (v3.0, automatisch):** Menschen haben meist Haare in natürlichen Farben, etwa jeder Fünfte Cap oder Mütze, Zombies teils strähnige dunkle Haare – keine Klon-Masse mehr. `hair: false` = ohne.
+- **Heldenfiguren (v3.0):** `horde({ heroes: k })` (true = 4) macht die ersten k Mitglieder (die Spitze der Masse, die zuerst bei der Kamera ist) zu vollen Figuren mit Gesicht, durchgehenden Gliedern, Haaren und Kleidung in ihren Farben – für Nahaufnahmen auf die vorderste Reihe. Sie folgen derselben Simulation (gehen, rennen, stehen); während eines `h.hit()` übernimmt das Instanz-Mitglied. **Regel:** Bei Nahaufnahmen auf eine Masse immer `heroes: 3–6`.
 ## Partikel und Licht
 
 - `emit(kind, {at:[x,y,z] | t => [x,y,z], t0, t1, rate | burst, size, jitter, …})` mit kind = fire · smoke · spark · debris · dust · goo · confetti · rain · snow. Mit einer Funktion als `at` wandert die Quelle mit (Schweif, Düse).

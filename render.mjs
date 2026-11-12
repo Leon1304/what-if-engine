@@ -5,7 +5,9 @@
 //   node render.mjs page.html --cover cover.jpg [--t 1.2]   (THUMB = [A, B] → also cover-b.jpg: A/B test thumbnails)
 //   node render.mjs page.html --audio out.wav
 //   node render.mjs page.html --srt out.srt   (v2.30: subtitles for YouTube, same pages + timing as the captions)
-//   node render.mjs page.html --audit   → MOTION: / HITBOX: / GORE: lines (pops, snapping joints, jitter, state left over between frames, figures inside props); --shots runs it too (--no-audit = off)
+//   node render.mjs page.html --audit   → MOTION: / HITBOX: / GORE: / QA: lines (pops, snapping joints, jitter, state left over between frames, figures inside props,
+//     v3.0: crowd members inside each other or props, feet in the floor, limbs that fell back to boxes); --shots runs it too (--no-audit = off); --strict = exit 3 on any warning
+//   --video also checks the finished frames for stray lines (qa_lines.py, LINES:)
 //     The audit also opens the page a second time and compares both (anything that depends on earlier frames or differs from page to page pops at the borders of
 //     render blocks / flickers between render workers); --no-fresh skips that second page.
 // Landscape pages (CFG.aspect: '16:9') render 16:9 with the same --w (short side): 1440 → 2560x1440.
@@ -81,6 +83,8 @@ if (flag('audit') && !opt('shots')) {   // v2.29: node render.mjs page.html --au
   const A = await page.evaluate(fresh => window.whatif.audit({ fresh }), fresh);
   for (const m of A.motion) console.log('MOTION: ' + m); for (const m of A.hit ?? []) console.log('HITBOX: ' + m); for (const g of A.gore) console.log('GORE: ' + g);
   if (!A.motion.length) console.log('motion: ok (no pops, jitter or left-over state)');
+  for (const q of A.qa ?? []) console.log('QA: ' + q); if (!(A.qa ?? []).length) console.log('qa: ok (crowds, feet, skin)');
+  const nWarn = A.motion.length + (A.hit ?? []).length + (A.qa ?? []).length; if (flag('strict') && nWarn) { console.log(`STRICT: ${nWarn} warning(s)`); report(errors); await browser.close(); process.exit(3); }
   console.log(`audit ${((Date.now() - t0) / 1000).toFixed(0)} s`); report(errors); await browser.close(); process.exit(0);
 }
 if (opt('shots')) {
@@ -101,6 +105,7 @@ if (opt('shots')) {
   for (const m of A.motion) console.log('MOTION: ' + m);
   for (const m of A.hit ?? []) console.log('HITBOX: ' + m);
   for (const g of A.gore) console.log('GORE: ' + g);
+  for (const q of A.qa ?? []) console.log('QA: ' + q);
   if (!A.motion.length) console.log('motion: ok (no pops, jitter or left-over state)');
   report(errors); await browser.close();
   const cols = Math.min(LAND ? 3 : 4, files.length), rows = Math.ceil(files.length / cols), TW = LAND ? 480 : 360, TH = LAND ? 270 : 640;
@@ -198,4 +203,6 @@ if (opt('video')) {
   }
   if (flag('clean')) { rmSync(dir, { recursive: true, force: true }); rmSync(wav, { force: true }); }
   console.log('wrote', video, `${(statSync(video).size / 1e6).toFixed(1)} MB`, `in ${Math.round((Date.now() - started) / 60000)} min`);
+  { const ql = path.join(path.dirname(new URL(import.meta.url).pathname), 'qa_lines.py');   // v3.0: stray 1–3 px lines through the picture (every 15th frame)
+    if (existsSync(ql)) { const r = spawnSync('python3', [ql, dir, '--every', '15'], { encoding: 'utf8' }); if (r.stdout) process.stdout.write(r.stdout); } }
 }

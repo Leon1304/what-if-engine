@@ -535,7 +535,29 @@ Object.assign(sun.shadow.camera, { left: -CFG.area, right: CFG.area, top: CFG.ar
 sun.shadow.camera.updateProjectionMatrix();
 sun.shadow.bias = -0.0006; sun.shadow.normalBias = 0.04;
 scene.add(hemi, sun, sun.target);
-if (CFG.env) { const pm = new THREE.PMREMGenerator(renderer); scene.environment = pm.fromScene(new RoomEnvironment(), 0.04).texture; pm.dispose(); }
+if (CFG.env === true || CFG.env === 'studio') { const pm = new THREE.PMREMGenerator(renderer); scene.environment = pm.fromScene(new RoomEnvironment(), 0.04).texture; pm.dispose(); }
+// v3.0 sky light: the environment (soft fill light and reflections on every PBR surface) is the current sky — its zenith, horizon and ground colours and a sun glow —
+// instead of a grey studio room. Rebuilt only when the sky's colours change by a visible step (quantised: the same t always gives the same light). CFG.env: false = off,
+// true / 'studio' = the old room, a number = strength with the sky.
+const SKYENV = { on: CFG.env !== false && CFG.env !== true && CFG.env !== 'studio', key: '', cache: new Map(), pm: null, scene: null, mat: null };
+function skyEnv() {
+  if (!SKYENV.on) return; const q = c => [c.r, c.g, c.b].map(v => Math.round(Math.min(1, v) * 24)).join(','), o = skyU.orbDir.value;
+  const key = q(skyU.top.value) + '|' + q(skyU.bot.value) + '|' + q(hemi.groundColor) + '|' + q(sun.color) + '|' + Math.round(o.y * 8) + ',' + Math.round(Math.atan2(o.x, o.z) * 4);
+  if (key === SKYENV.key) return; SKYENV.key = key;
+  let tex = SKYENV.cache.get(key);
+  if (!tex) {
+    if (!SKYENV.scene) { SKYENV.pm = new THREE.PMREMGenerator(renderer); SKYENV.scene = new THREE.Scene();
+      SKYENV.mat = new THREE.ShaderMaterial({ side: THREE.BackSide, depthWrite: false, uniforms: { uTop: { value: new THREE.Color() }, uHor: { value: new THREE.Color() }, uGnd: { value: new THREE.Color() }, uSun: { value: new THREE.Color() }, uDir: { value: new THREE.Vector3() } },
+        vertexShader: 'varying vec3 vD; void main() { vD = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+        fragmentShader: `uniform vec3 uTop, uHor, uGnd, uSun, uDir; varying vec3 vD;
+          void main() { float y = vD.y; vec3 c = y > 0.0 ? mix(uHor, uTop, pow(clamp(y, 0.0, 1.0), 0.6)) : mix(uHor, uGnd, clamp(-y * 3.0, 0.0, 1.0));
+            float s = max(dot(normalize(vD), normalize(uDir)), 0.0); c += uSun * (pow(s, 24.0) * 2.5 + pow(s, 4.0) * 0.25) * step(0.0, uDir.y + 0.05); gl_FragColor = vec4(c, 1.0); }` });
+      SKYENV.scene.add(new THREE.Mesh(new THREE.SphereGeometry(10, 32, 16), SKYENV.mat)); }
+    const U = SKYENV.mat.uniforms; U.uTop.value.copy(skyU.top.value); U.uHor.value.copy(skyU.bot.value).lerp(scene.fog.color, 0.35); U.uGnd.value.copy(hemi.groundColor); U.uSun.value.copy(sun.color); U.uDir.value.copy(o);
+    tex = SKYENV.pm.fromScene(SKYENV.scene, 0, 0.1, 100, { size: 64 }).texture; SKYENV.cache.set(key, tex);
+    if (SKYENV.cache.size > 48) { const k0 = SKYENV.cache.keys().next().value; if (k0 !== key) { SKYENV.cache.get(k0).dispose(); SKYENV.cache.delete(k0); } } }
+  scene.environment = tex;
+}
 const NLIFT = { night: 1, storm: 0.7, dusk: 0.35, deepsea: 0.4, apocalypse: 0.3 };   // v2.30 long videos: how much darker skies get lifted
 const ENVI = { underwater: 0.2, deepsea: 0.08, day: 0.3, golden: 0.24, dusk: 0.14, night: 0.06, dawn: 0.17, storm: 0.26, apocalypse: 0.12, space: 0.04 }, WINDY = { storm: 2.6, apocalypse: 1.7, dusk: 1.1, underwater: 1.8, deepsea: 1.2 };
 scene.fog = new THREE.Fog('#000000', 40, 260);
@@ -612,6 +634,7 @@ function applySky(t) {
   renderer.toneMappingExposure = lerp(A.exp, B.exp, k);
   const na = SKY[i][1], nb = (SKY[i + 1] ?? SKY[i])[1];
   scene.environmentIntensity = lerp(ENVI[na] ?? 0.2, ENVI[nb] ?? 0.2, k) * (typeof CFG.env === 'number' ? CFG.env : 1);
+  if (SKYENV.on) { skyEnv(); scene.environmentIntensity *= 0.9; hemi.intensity *= 0.82; }   // v3.0: part of the hemisphere fill now comes from the sky environment
   WIND.a.value = (CFG.wind ?? 1) * lerp(WINDY[na] ?? 1, WINDY[nb] ?? 1, k);
   if (LONG) { const lw = lerp(NLIFT[na] ?? 0, NLIFT[nb] ?? 0, k) * (CFG.nightLift ?? 1);   // v2.30: nights and storms stay readable over minutes; aerial haze in wide 16:9 shots
     if (lw) { hemi.intensity *= 1 + 1.1 * lw; sun.intensity *= 1 + 0.6 * lw; renderer.toneMappingExposure *= 1 + 0.28 * lw;
@@ -2675,7 +2698,17 @@ function horde(o = {}) {
   const thigh = mk(RG(0.19, LEG1 + 0.06, 0.2), 2 * n), shin = mk(RG(0.17, LEG2 + 0.05, 0.18), 2 * n), foot = mk(RG(0.17, 0.09, 0.28), 2 * n);
   const eyes = new THREE.InstancedMesh(boxG(0.26, 0.06, 0.02), human ? mat(o.eyes ?? '#1A1A1A') : mat(o.eyes ?? '#E8FF6A', { basic: true, glow: 0.8 }), n); eyes.frustumCulled = false; eyes.userData.crowd = true; world.add(eyes);
   const mouths = new THREE.InstancedMesh(boxG(0.17, human ? 0.05 : 0.11, 0.02), mat(human ? '#5A2320' : '#2A0E0E'), n); mouths.frustumCulled = false; mouths.userData.crowd = true; world.add(mouths);
-  const PARTS = [torso, head, uarm, farm, thigh, shin, foot];
+  // v3.0 heads: hair (humans: most of them, in natural colours; zombies: patchy, dark), caps and beanies on some humans — the crowd no longer reads as clones
+  const hairIM = new THREE.InstancedMesh(_boxesG([[0.41, 0.075, 0.41, 0, 0.372, 0], [0.41, 0.2, 0.06, 0, 0.27, -0.177], [0.05, 0.12, 0.3, -0.192, 0.31, -0.03], [0.05, 0.12, 0.3, 0.192, 0.31, -0.03]]), m, n);
+  const capIM = new THREE.InstancedMesh(_boxesG([[0.42, 0.1, 0.42, 0, 0.405, 0], [0.32, 0.025, 0.17, 0, 0.37, 0.27]]), m, n);
+  for (const im of [hairIM, capIM]) { im.castShadow = CFG.shadows; im.frustumCulled = false; im.userData.crowd = true; im.instanceMatrix.setUsage(THREE.DynamicDrawUsage); world.add(im); }
+  const HAIRC = ['#2A211D', '#4A3426', '#6A4A30', '#B88A5A', '#D8B25A', '#1E1A18', '#8A8A8A', '#B5562A'], CAPC = ['#C0392B', '#2E4A7A', '#2B2F3A', '#E3B23C', '#3DA56A', '#EDE8DE'];
+  const _hcol = new THREE.Color();
+  const HEAD = [];   // per member: 0 none · 1 hair · 2 cap
+  for (let i = 0; i < n; i++) { const r1 = hash(i * 5.71 + hid * 13.1), r2 = hash(i * 2.93 + hid * 7.7);
+    const k = o.hair === false ? 0 : human ? (r1 < 0.22 ? 2 : r1 < 0.93 ? 1 : 0) : (r1 < 0.33 ? 1 : 0); HEAD.push(k);
+    hairIM.setColorAt(i, _hcol.set(human ? HAIRC[Math.floor(r2 * HAIRC.length)] : ['#2A2A24', '#3A3328', '#4A4A40'][Math.floor(r2 * 3)])); capIM.setColorAt(i, _hcol.set(CAPC[Math.floor(r2 * CAPC.length)])); }
+  const PARTS = [torso, head, uarm, farm, thigh, shin, foot, hairIM, capIM];
   const col = new THREE.Color(), M = [], shoe = new THREE.Color(human ? '#2B2622' : '#3A3631');
   const target = (x0, z0, cx, cz, stop, pile, around) => { const a = around ? rnd() * TAU : Math.atan2(x0 - cx, z0 - cz) + rr(-0.6, 0.6), st = stop + Math.sqrt(rnd()) * pile; return [cx + Math.sin(a) * st, cz + Math.cos(a) * st]; };
   const lineTarget = (x0, z0, [[ax, az], [bx, bz]], stop, pile) => {   // nearest point on a barrier line, offset back toward the start side
@@ -2707,8 +2740,12 @@ function horde(o = {}) {
   const j = (dst, A, x, y, z, rx, ry, rz, ord = 'XYZ') => dst.multiplyMatrices(A, T.compose(V.set(x, y, z), Q.setFromEuler(E.set(rx, ry, rz, ord)), ONE));
   const put = (im, idx, A, x, y, z) => im.setMatrixAt(idx, out.multiplyMatrices(A, T.makeTranslation(x, y, z)));
   const go = (x0, z0, x1, z1, d) => { const D = Math.hypot(x1 - x0, z1 - z0), k = D ? Math.min(1, d / D) : 1; return [lerp(x0, x1, k), lerp(z0, z1, k), k < 1, Math.atan2(x1 - x0, z1 - z0)]; };
+  // v3.0 panic wave: with flee.at, members start running when the news reaches them (distance / flee.wave m/s, default 9) — nearest first, a wave through the crowd
+  const tfOf = q => { if (!o.flee) return 1e9; if (q.tf != null) return q.tf; let w = q.dl * 0.45;
+    if (o.flee.wave !== false && o.flee.at) { const S = q.fixed ? [q.x0, q.z0] : state0(q, o.flee.t); w = Math.hypot(S[0] - o.flee.at[0], S[1] - o.flee.at[1]) / (typeof o.flee.wave === 'number' ? o.flee.wave : 9) + q.dl * 0.18; }
+    return (q.tf = o.flee.t + w); };
   const state1 = (q, t) => {   // v2.19 layer: fixed spots (q.cy = height of the spot), jostle, flee (o.flee.path(i, d, q) → [x, z, y, yaw] for custom escape routes)
-    const tf = o.flee ? o.flee.t + q.dl * 0.45 : 1e9; q.cy = q.y ?? 0;
+    const tf = tfOf(q); q.cy = q.y ?? 0;
     if (q.fixed && t <= tf) { const j = o.jostle ? o.jostle * 0.12 : 0; return [q.x0 + j * Math.sin(t * 0.9 + q.ph), q.z0 + j * Math.cos(t * 0.7 + q.ph * 1.3), false, q.yaw + (o.jostle ? 0.15 * Math.sin(t * 0.5 + q.ph) : 0), 0]; }
     if (o.flee && t > tf) { const d = (o.flee.speed ?? 4.5) * (0.8 + 0.4 * hash(q.ph * 3)) * (t - tf);
       if (o.flee.path && q.fixed) { const r = o.flee.path(q.i, d, q); q.cy = r[2]; return [r[0], r[1], true, r[3], d]; }
@@ -2718,9 +2755,67 @@ function horde(o = {}) {
   };
   // v2.27 gaze: { t, at: [x,y,z], spread, turn, tilt, arms: 'down' | 'up', face } — from t (+ up to spread s per member) everyone stops, turns to `at` and looks up at it (fireworks, UFO, eclipse); zombies stop hammering
   const GZ = o.gaze, gT = q => q.gt ??= GZ.t + hash(q.ph * 7.31 + 2.2) * (GZ.spread ?? 0.8);
-  const state = (q, t) => { if (!GZ || t <= gT(q)) return state1(q, t); const r = state1(q, gT(q)); r[2] = false;
+  const stateRaw = (q, t) => { if (!GZ || t <= gT(q)) return state1(q, t); const r = state1(q, gT(q)); r[2] = false;
     if (GZ.face !== false) { const [gx, , gz] = GZ.at ?? [0, 30, 0], ty = Math.atan2(gx - r[0], gz - r[1]), d = ((ty - r[3] + Math.PI) % TAU + TAU) % TAU - Math.PI; r[3] += d * sm01((t - gT(q)) / (GZ.turn ?? 0.7)); }
     return r; };
+  // v3.0 crowd simulation: the paths above are the plan, a simulation run once after the scene is built (POSTBAKE, needs the hitboxes) is what the members do.
+  // Every member keeps its personal space (no walking through each other, no members standing inside each other at the goal), steers round props, walls,
+  // parked cars and people standing in the scene (look-ahead + push-out on the same hitboxes as the figures), speeds up and brakes with limited acceleration
+  // and turns with a limited rate (no snapping round). Crowding at a barrier (wait.line) builds real pressure: the front row stays on its side of the line,
+  // the rows behind press up. Recorded at 30 Hz → state() reads it back (a pure function of t: same picture in every render block). o.sim: false / CFG.crowdSim: false = old paths.
+  const SIMDT = 1 / 30, simOn = o.sim !== false && CFG.crowdSim !== false; let SIM = null;
+  const pinnedAt = (q, t) => t < q.b + (rise ? 0.8 : 0) || (q.fixed && !(o.flee && t > tfOf(q)));
+  const simBake = () => {
+    const t00 = performance.now(), T0 = Math.max(-0.5, Math.min(...M.map(q => q.b)) - 0.05), T1 = DUR + 0.6, NS = Math.ceil((T1 - T0) / SIMDT) + 2;
+    const X = new Float32Array(NS * n), Zc = new Float32Array(NS * n), Yw = new Float32Array(NS * n), Wk = new Float32Array(NS * n), Mv = new Uint8Array(NS * n);
+    const px = new Float32Array(n), pz = new Float32Array(n), vx = new Float32Array(n), vz = new Float32Array(n), yw = new Float32Array(n), wk = new Float32Array(n), rx = new Float32Array(n), rz = new Float32Array(n), pin = new Uint8Array(n);
+    const rad = M.map(q => 0.24 * q.sc * Math.max(q.bw ?? 1, q.bd ?? 1)), ovl = human ? 0.95 : 0.82, space = human ? 1.35 : 1.15;
+    const amax = (run ? 6.5 : human ? 3.4 : 2.4) * SIMDT, turn = (human ? 7 : 3.6) * SIMDT, info = {}, cell = 1.2, grid = new Map(), K = (i, j) => i * 100003 + j;
+    const hbNear = (x, z) => { const s = HITBOX.cell; for (let a = -1; a <= 1; a++) for (let b = -1; b <= 1; b++) if (HITBOX.grid.has(_hbKey(Math.floor(x / s) + a, Math.floor(z / s) + b))) return true; return false; };
+    const people = HITBOX.people.map(P => ({ x: P.x, z: P.z, r: P.hx + 0.06 })), walkers = RIGS.filter(f => f._posAt && f.legL && f.root?.parent === world && !f._crowdHero);
+    const wl = o.wait?.line, [la, lb] = wl ?? [[0, 0], [0, 0]], ldx = lb[0] - la[0], ldz = lb[1] - la[1], lL = Math.hypot(ldx, ldz) || 1, lnx = -ldz / lL, lnz = ldx / lL;
+    const side = wl ? Math.sign((sx - la[0]) * lnx + (sz - la[1]) * lnz) || 1 : 1;   // the start side of the barrier
+    const brk = (i, t) => { if (!wl || t < o.wait.until + M[i].dl) return false; const u = clamp(((px[i] - la[0]) * ldx + (pz[i] - la[1]) * ldz) / (lL * lL)); return Math.hypot(px[i] - la[0] - ldx * u, pz[i] - la[1] - ldz * u) < 1.4; };   // after wait.until the barrier counts as broken: members push through it
+    const gridAdd = () => { grid.clear(); for (let i = 0; i < n; i++) { const k = K(Math.floor(px[i] / cell), Math.floor(pz[i] / cell)); let L = grid.get(k); if (!L) grid.set(k, L = []); L.push(i); } };
+    const near = (i, fn) => { const ci = Math.floor(px[i] / cell), cj = Math.floor(pz[i] / cell); for (let a = -1; a <= 1; a++) for (let b = -1; b <= 1; b++) { const L = grid.get(K(ci + a, cj + b)); if (L) for (const j of L) if (j !== i) fn(j); } };
+    for (let i = 0; i < n; i++) { const r = stateRaw(M[i], T0); px[i] = rx[i] = r[0]; pz[i] = rz[i] = r[1]; yw[i] = r[3]; }
+    for (let s = 0; s < NS; s++) {
+      const t = T0 + s * SIMDT, WP = walkers.map(f => { const p = f._posAt(t); return { x: p.x, z: p.z, r: 0.3 * f.root.scale.x }; }), obst = people.concat(WP);
+      gridAdd();
+      for (let i = 0; i < n; i++) { const q = M[i], r = stateRaw(q, t), rs = s ? Math.hypot(r[0] - rx[i], r[1] - rz[i]) / SIMDT : 0; rx[i] = r[0]; rz[i] = r[1];
+        if (pinnedAt(q, t) || t > (fz ?? 1e9)) { pin[i] = 1; px[i] = r[0]; pz[i] = r[1]; vx[i] = vz[i] = 0; yw[i] = r[3]; continue; } pin[i] = 0;
+        const dx = r[0] - px[i], dz = r[1] - pz[i], d = Math.hypot(dx, dz), vmax = Math.max(rs, q.v * (run ? 1.4 : 1)) * 1.2 + 0.15, ds = Math.min(vmax, d / 0.45);
+        let tx = d > 1e-4 ? dx / d * ds : 0, tz = d > 1e-4 ? dz / d * ds : 0;
+        near(i, j => { const ex = px[i] - px[j], ez = pz[i] - pz[j], dd = Math.hypot(ex, ez), m = (rad[i] + rad[j]) * space; if (dd < m && dd > 1e-4) { const k = (m - dd) / m * 1.4; tx += ex / dd * k; tz += ez / dd * k; } });
+        for (const P of obst) { const ex = px[i] - P.x, ez = pz[i] - P.z, dd = Math.hypot(ex, ez), m = rad[i] + P.r + 0.35; if (dd < m && dd > 1e-4) { const k = (m - dd) / m * 2; tx += ex / dd * k; tz += ez / dd * k; } }
+        const sp = Math.hypot(tx, tz); if (sp > 0.2 && hbNear(px[i], pz[i]) && !brk(i, t)) { const L = 0.75, [ox, oz] = hitPush(px[i] + tx / sp * L, pz[i] + tz / sp * L, rad[i] + 0.12, groundH(px[i], pz[i]), info);   // look-ahead: steer round what is in front
+          if (ox || oz) { const ol = Math.hypot(ox, oz); tx += ox / ol * sp * 0.9; tz += oz / ol * sp * 0.9; } }
+        let ax = tx - vx[i], az = tz - vz[i]; const al = Math.hypot(ax, az); if (al > amax) { ax *= amax / al; az *= amax / al; }
+        vx[i] += ax; vz[i] += az; }
+      const ox0 = Float32Array.from(px), oz0 = Float32Array.from(pz);
+      for (let i = 0; i < n; i++) if (!pin[i]) { px[i] += vx[i] * SIMDT; pz[i] += vz[i] * SIMDT; }
+      for (let it = 0; it < 2; it++) { gridAdd();   // no overlaps: members apart, out of props and people, the front row on its side of the barrier
+        for (let i = 0; i < n; i++) { if (pin[i]) continue;
+          near(i, j => { const ex = px[i] - px[j], ez = pz[i] - pz[j], dd = Math.hypot(ex, ez), m = (rad[i] + rad[j]) * ovl; if (dd < m) { const ux = dd > 1e-5 ? ex / dd : Math.cos(i), uz = dd > 1e-5 ? ez / dd : Math.sin(i), k = (m - dd) * (pin[j] ? 1 : 0.5); px[i] += ux * k; pz[i] += uz * k; if (!pin[j]) { px[j] -= ux * k; pz[j] -= uz * k; } } });
+          for (const P of obst) { const ex = px[i] - P.x, ez = pz[i] - P.z, dd = Math.hypot(ex, ez), m = rad[i] + P.r; if (dd < m && dd > 1e-5) { px[i] += ex / dd * (m - dd); pz[i] += ez / dd * (m - dd); } }
+          if (hbNear(px[i], pz[i]) && !brk(i, t)) { const [ox, oz] = hitPush(px[i], pz[i], rad[i], groundH(px[i], pz[i]), info); px[i] += ox; pz[i] += oz; }
+          if (wl && t < o.wait.until + M[i].dl) { const u = clamp(((px[i] - la[0]) * ldx + (pz[i] - la[1]) * ldz) / (lL * lL)), cx = la[0] + ldx * u, cz = la[1] + ldz * u, sd = ((px[i] - cx) * lnx + (pz[i] - cz) * lnz) * side, need = rad[i] * 0.8;
+            if (sd < need && u > 0 && u < 1) { px[i] += lnx * side * (need - sd); pz[i] += lnz * side * (need - sd); } } } }
+      for (let i = 0; i < n; i++) { const o2 = s * n + i;
+        if (!pin[i]) { const mx = px[i] - ox0[i], mz = pz[i] - oz0[i], sp = Math.hypot(mx, mz) / SIMDT; vx[i] = mx / SIMDT; vz[i] = mz / SIMDT; wk[i] += sp * SIMDT;
+          const want = sp > 0.25 ? Math.atan2(mx, mz) : stateRaw(M[i], t)[3], dY = ((want - yw[i] + Math.PI) % TAU + TAU) % TAU - Math.PI; yw[i] += clamp(dY, -turn, turn); Mv[o2] = sp > 0.18 ? 1 : 0; }
+        X[o2] = px[i]; Zc[o2] = pz[i]; Yw[o2] = yw[i]; Wk[o2] = wk[i]; }
+    }
+    SIM = { T0, NS, X, Zc, Yw, Wk, Mv }; if (performance.now() - t00 > 4000) console.warn(`crowd sim ${n} members: ${Math.round(performance.now() - t00)} ms`);
+  };
+  const state = (q, t) => {
+    if (!SIM || q.fixed) { const r = stateRaw(q, t); if (!SIM || pinnedAt(q, t)) return r; }   // fixed spots: stateRaw also sets the spot height (q.cy)
+    const S = SIM, u = clamp((t - S.T0) / SIMDT, 0, S.NS - 1.001), s = Math.floor(u), f = u - s, a = s * n + q.i, b = a + n;
+    if (t < q.b + (rise ? 0.8 : 0)) return stateRaw(q, t);
+    const d = ((S.Yw[b] - S.Yw[a] + Math.PI) % TAU + TAU) % TAU - Math.PI;
+    return [lerp(S.X[a], S.X[b], f), lerp(S.Zc[a], S.Zc[b], f), !!S.Mv[f < 0.5 ? a : b], S.Yw[a] + d * f, lerp(S.Wk[a], S.Wk[b], f)];
+  };
+  if (simOn) POSTBAKE.push(simBake);
   const state0 = (q, t) => {   // → [x, z, moving, yaw, walked]
     const up = rise ? 0.8 : 0, age = t - q.b - up; if (age <= 0) return [q.x0, q.z0, false, Math.atan2(tx - q.x0, tz - q.z0), 0];
     if (o.wait) {
@@ -2744,6 +2839,11 @@ function horde(o = {}) {
       const L = Math.hypot(s0[0] - fr[0], s0[1] - fr[1]) || 1, dx = (s0[0] - fr[0]) / L, dz = (s0[1] - fr[1]) / L, back = Math.sin(s0[3]) * dx + Math.cos(s0[3]) * dz < 0 ? 1 : -1;   // hit from the front → falls on its back
       q.down = { t, dx, dz, push: o2.drop || o2.squash ? 0 : o2.push ?? 0.35, dir: o2.dir ?? back, sink: o2.sink ?? (!human && !(o2.drop && o2.keep)), drop: o2.drop, squash: o2.squash, keep: o2.keep, depth: o2.depth, pile: o2.pile }; return api; },   // drop + keep (v2.29): falls depth m, lands, topples, stays
     alive: (i, t) => !(M[i].down && t >= M[i].down.t),
+    _qa(t) {   // v3.0 QA: members standing inside each other or inside props at time t
+      const P = [], info = {}; for (let i = 0; i < n; i++) { const q = M[i]; if (t < q.b + (rise ? 0.9 : 0) || (q.down && t >= q.down.t) || q.hero) continue; const [x, z] = state(q, t); P.push([x, z, 0.24 * q.sc * Math.max(q.bw ?? 1, q.bd ?? 1), q.fixed ? 1 : 0, (q.cy ?? q.y ?? 0)]); }
+      let over = 0, inside = 0; for (let a = 0; a < P.length; a++) { for (let b = a + 1; b < P.length; b++) { const dx = P[a][0] - P[b][0], dz = P[a][1] - P[b][1]; if (dx * dx + dz * dz < ((P[a][2] + P[b][2]) * 0.55) ** 2) over++; }
+        if (!P[a][3]) { hitPush(P[a][0], P[a][1], P[a][2] * 0.6, groundH(P[a][0], P[a][1]) + P[a][4], info); if (info.deep > 0.15) inside++; } }   // fixed spots (stands, seats) are placed by hand
+      return { over, inside, n: P.length, sim: !!SIM }; },
     lose: (i, part, t, o2 = {}) => goreHordeLose(api, { M, farm, shin, foot }, i, part, t, o2),   // v2.29: forearm / lower leg flies off (zombies only)
     pit(o2 = {}) {   // v2.29: members walking into the area after t0 fall in (depth m), land, topple and pile up — at: [x,z], r | w, d (+ ry), t0, t1, depth
       const [px, pz] = o2.at ?? [0, 0], c = Math.cos(o2.ry ?? 0), s2 = Math.sin(o2.ry ?? 0), D = o2.depth ?? 2.9, list = [];
@@ -2759,9 +2859,9 @@ function horde(o = {}) {
       }
       for (let i = 0; i < n; i++) {
         const q = M[i]; if (q.lose) for (const kk in q.lose) q.lose[kk].vis = false;
-        if (t < q.b) { for (const im of [torso, head, eyes, mouths]) im.setMatrixAt(i, Z); for (const im of [uarm, farm, thigh, shin, foot]) { im.setMatrixAt(2 * i, Z); im.setMatrixAt(2 * i + 1, Z); } continue; }
+        if (t < q.b || (q.hero && !(q.down && t >= q.down.t))) { for (const im of [torso, head, eyes, mouths, hairIM, capIM]) im.setMatrixAt(i, Z); for (const im of [uarm, farm, thigh, shin, foot]) { im.setMatrixAt(2 * i, Z); im.setMatrixAt(2 * i + 1, Z); } continue; }
         const dn = q.down && t >= q.down.t ? q.down : null;   // knocked down by h.hit(): stays where it was hit, topples, lies (zombies sink back into the ground)
-        if (dn && ((dn.sink && t - dn.t > 5.4) || (dn.drop && !dn.keep && t - dn.t > 0.9))) { for (const im of [torso, head, eyes, mouths]) im.setMatrixAt(i, Z); for (const im of [uarm, farm, thigh, shin, foot]) { im.setMatrixAt(2 * i, Z); im.setMatrixAt(2 * i + 1, Z); } continue; }
+        if (dn && ((dn.sink && t - dn.t > 5.4) || (dn.drop && !dn.keep && t - dn.t > 0.9))) { for (const im of [torso, head, eyes, mouths, hairIM, capIM]) im.setMatrixAt(i, Z); for (const im of [uarm, farm, thigh, shin, foot]) { im.setMatrixAt(2 * i, Z); im.setMatrixAt(2 * i + 1, Z); } continue; }
         let [x, z, moving, yaw0, walked] = state(q, dn ? dn.t : t); const u = q.ph / TAU + walked / q.cl; if (dn) moving = false;
         const yaw = moving ? yaw0 + Math.sin(Math.PI * u) * (human ? 0.04 : 0.1) : yaw0;
         const em = rise ? EASE.out(clamp((t - q.b) / 0.8)) : 1; let y = groundH(x, z) + (q.fixed ? q.cy ?? q.y : 0) - (1 - em) * 1.9 + (o.lift ? o.lift(t, i) : 0), fa = 0;
@@ -2786,7 +2886,7 @@ function horde(o = {}) {
         if (rise && em < 1) { S.las = lerp(-2.6, S.las, em); S.ras = lerp(-2.4, S.ras, em); }   // claw out of the ground
         j(Mh, base, S.hx, S.H + S.by, 0, S.hrx, S.hry, S.hrz);
         j(Mc, Mh, 0, 0.02, 0, S.crx, S.cry, S.crz); torso.setMatrixAt(i, out.multiplyMatrices(Mc, T.compose(V.set(0, 0.29, 0), Q.identity(), SC.set(q.bw, 1, q.bd))));   // v2.41: everyone a little different in build
-        j(Mn, Mc, 0, 0.63, 0, S.nrx, S.nry, S.nrz); put(head, i, Mn, 0, 0.19, 0); put(eyes, i, Mn, 0, 0.23, 0.2); put(mouths, i, Mn, 0, 0.085, 0.2);
+        j(Mn, Mc, 0, 0.63, 0, S.nrx, S.nry, S.nrz); put(head, i, Mn, 0, 0.19, 0); put(eyes, i, Mn, 0, 0.23, 0.2); put(mouths, i, Mn, 0, 0.085, 0.2); if (HEAD[i] === 1) put(hairIM, i, Mn, 0, 0, 0); else hairIM.setMatrixAt(i, Z); if (HEAD[i] === 2) put(capIM, i, Mn, 0, 0, 0); else capIM.setMatrixAt(i, Z);
         const comp = -S.hx / 0.78 - S.hrz;
         for (const [k, s, th, kn, fp, as, az, ae] of [[0, -1, S.lt, S.lk, S.lf, S.las, S.laz, S.lae], [1, 1, S.rt, S.rk, S.rf, S.ras, S.raz, S.rae]]) {
           const idx = 2 * i + k;
@@ -2803,6 +2903,19 @@ function horde(o = {}) {
       for (const im of [...PARTS, eyes, mouths]) im.instanceMatrix.needsUpdate = true;
     }
   };
+  // v3.0 heroes: o.heroes = k (true = 4) → the first k members (the front of the horde, the ones that reach the camera first) are full figures with face, skinned
+  // limbs, hair and clothes in the member's colours, driven by the same simulation (walk / run / idle). While one is down (h.hit) the instanced member takes over.
+  const NH = Math.min(n, o.heroes === true ? 4 : o.heroes ?? 0), _hc = new THREE.Color(), hx = (im, k) => { im.getColorAt(k, _hc); return '#' + _hc.getHexString(); };
+  for (let i = 0; i < NH; i++) { const q = M[i];
+    const f = figure({ kind: human ? 'human' : 'zombie', shirt: hx(torso, i), skin: hx(head, i), pants: hx(thigh, 2 * i), hair: HEAD[i] === 1 ? hx(hairIM, i) : undefined, hairStyle: HEAD[i] === 0 ? 'bald' : undefined,
+      hat: HEAD[i] === 2 ? hx(capIM, i) : undefined, hatStyle: HEAD[i] === 2 ? 'cap' : undefined, build: human ? ['man', 'woman', 'slim', 'heavy', 'teen'][Math.floor(hash(i * 3.3 + hid) * 5)] : undefined, fidget: false });
+    world.add(f.root); f.root.scale.multiplyScalar(q.sc); f._crowdHero = true; q.hero = f;
+    f._posAt = t => { const r = state(q, t); return new THREE.Vector3(r[0], groundH(r[0], r[1]), r[1]); }; f._yawAt = t => state(q, t)[3];
+    tick(t => { const on = t >= q.b && !(q.down && t >= q.down.t); f.root.visible = on; if (!on) return;
+      const [x, z, moving, yaw, walked] = state(q, t), em = rise ? EASE.out(clamp((t - q.b) / 0.8)) : 1, fl = o.flee && t > tfOf(q);
+      f.root.position.set(x, groundH(x, z) + (q.fixed ? q.cy ?? q.y ?? 0 : 0) - (1 - em) * 1.9 + (o.lift ? o.lift(t, i) : 0), z); f.root.rotation.y = yaw;
+      pose(f, moving ? (fl || run ? 'run' : mode) : 'idle', (q.ph / TAU + walked / q.cl) * TAU, t, { v: fl ? 4 : q.v }); });
+  }
   hordes.push(api); return api;
 }
 
@@ -11138,7 +11251,7 @@ function wear(f, o) {
     for (const ft of [f.footL, f.footR]) { box(ft, 0.18, 0.026, 0.292, sc, 0, -ANK - 0.001, 0.05, NC); if (dark) { box(ft, 0.08, 0.012, 0.075, '#E6E0D4', 0, -ANK + 0.086, 0.085, NC); box(ft, 0.172, 0.03, 0.05, sc, 0, -ANK + 0.02, 0.172, NC); } } }
   // sleeves: 'short' = T-shirt (bare forearms)
   if (o.sleeves === 'short' && !zb) for (const [ua, fa] of [[f.armL, f.foreL], [f.armR, f.foreR]]) { const a = ua.children.find(n => n.isMesh), b = fa.children.find(n => n.isMesh), aw = a?.scale.x ?? 1;
-    if (a) { a.scale.y = 0.17 / 0.34; a.position.y = -0.15 + 0.085; } rbox(ua, 0.142 * aw, 0.2, 0.142 * aw, skin, 0, -0.32, 0); box(ua, 0.168 * aw, 0.03, 0.168 * aw, shade(shirt, -0.06), 0, -0.155, 0, NC);
+    if (a) { a.scale.y = 0.17 / 0.34; a.position.y = -0.15 + 0.085; } rbox(ua, 0.142 * aw, 0.2, 0.142 * aw, skin, 0, -0.32, 0).userData.limb = true; box(ua, 0.168 * aw, 0.03, 0.168 * aw, shade(shirt, -0.06), 0, -0.155, 0, NC);
     if (b) b.material = mat(skin, { flat: false }); }
   // hoodie: hood bunched behind the neck, kangaroo pocket, drawstrings, ribbed hem and cuffs
   if (o.top === 'hoodie' || o.hoodie) { const hc = shade(shirt, -0.07);
@@ -11206,6 +11319,76 @@ function figLook(f) {
     f.gait = o.gait; f.bodyLang = o.bodyLang; f.freeLeg = o.freeLeg;
     f._fidget = !zb && o.fidget !== false && (o.fidget || !o.who) && CFG.fidget !== false;
     return f; }; }
+// ---- v3.0 skinned limbs: arms and legs are one continuous, skinned surface over the joints (shoulder → elbow → wrist, hip → knee → ankle) ----
+// Was: every limb part a separate box on its joint — at a bent elbow or knee the boxes stuck out or opened a gap, at the shoulder the arm hung next to the torso.
+// Now each limb box is replaced by a tube that is bound to the same joints (linear blend skinning, two bones per vertex, blended across every joint), so a
+// bent elbow or knee stays closed and the shoulder / hip bridge into the body. Sleeves, bare arms (sleeves: 'short'), builds, soot / wet / freeze recolours and
+// visibility carry over: every tube takes the material and visibility of the box it replaces. The boxes stay in the rig (gore, ragdolls, hitboxes and the audit
+// read them) but are only drawn where the skin cannot be: a limb that came off or a joint the physics stretched (> 12 %) shows the old boxes for that frame.
+// CFG.skin: false = old boxes · CFG.smooth: false (hard boxes) also keeps the boxes.
+let SKINQA = null; const SKINRIGS = [], SKIN_LAYER = 7, _skM = new THREE.Matrix4(), _skA = new THREE.Vector3(), _skB = new THREE.Vector3();
+function _skinBox(m, bone) {   // the mesh's box in the bone's frame
+  m.geometry.boundingBox ?? m.geometry.computeBoundingBox(); const b = m.geometry.boundingBox.clone();
+  _skM.copy(bone.matrixWorld).invert().multiply(m.matrixWorld); return b.applyMatrix4(_skM);
+}
+function _skinTube(spec) {   // spec: { rings: [{ y, cx, cz, hx, hz, w: [[bi, w], …], M }], K, capTop, capBot } → BufferGeometry in root space (ring frame M = root⁻¹ · bone)
+  // normals are exact (superellipse gradient, turned by the bone): two tubes that meet at a joint share the same ring with the same normals → no seam in the light
+  const K = spec.K ?? 20, R = spec.rings, P = [], N = [], SI = [], SW = [], I = [], p = 4.2, v = new THREE.Vector3(), n = new THREE.Vector3(), nm = new THREE.Matrix3(), e = 2 * (p - 1) / p;
+  const vert = (r, x, z, nx, ny, nz) => { v.set(x, r.y, z).applyMatrix4(r.M); P.push(v.x, v.y, v.z); n.set(nx, ny, nz).applyMatrix3(nm.getNormalMatrix(r.M)).normalize(); N.push(n.x, n.y, n.z);
+    const w = r.w; SI.push(w[0][0], w[1]?.[0] ?? 0, 0, 0); SW.push(w[0][1], w[1]?.[1] ?? 0, 0, 0); };
+  const ring = (r, cap) => { for (let k = 0; k < K; k++) { const a = k / K * TAU, c = Math.cos(a), s = Math.sin(a), ac = Math.abs(c), as = Math.abs(s);
+    const x = r.cx + r.hx * Math.sign(c) * Math.pow(ac, 2 / p), z = r.cz + r.hz * Math.sign(s) * Math.pow(as, 2 / p);
+    if (cap) vert(r, x, z, 0, cap, 0); else vert(r, x, z, Math.sign(c) * Math.pow(ac, e) / r.hx, 0, Math.sign(s) * Math.pow(as, e) / r.hz); } };
+  R.forEach(r => ring(r, 0));
+  for (let i = 0; i < R.length - 1; i++) for (let k = 0; k < K; k++) { const a = i * K + k, b = i * K + (k + 1) % K, c = a + K, d = b + K; I.push(a, b, c, b, d, c); }
+  for (const [ri, up] of [[0, 1], [R.length - 1, -1]]) { if (up > 0 ? spec.capTop === false : spec.capBot === false) continue;   // caps only on free ends (a joint end is closed by the next tube)
+    const r = R[ri], base = P.length / 3; ring(r, up); const cIdx = P.length / 3; vert({ ...r, y: r.y + up * Math.min(r.hx, r.hz) * 0.25 }, r.cx, r.cz, 0, up, 0);
+    for (let k = 0; k < K; k++) { const a = base + k, b = base + (k + 1) % K; up > 0 ? I.push(cIdx, b, a) : I.push(cIdx, a, b); } }
+  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(P, 3)); g.setAttribute('normal', new THREE.Float32BufferAttribute(N, 3));
+  g.setAttribute('skinIndex', new THREE.Uint16BufferAttribute(SI, 4)); g.setAttribute('skinWeight', new THREE.Float32BufferAttribute(SW, 4)); g.setIndex(I); return g;
+}
+function skinFigure(f) {
+  if (CFG.skin === false || CFG.smooth === false || f.isModel || !f.legL || !f.armL) return;
+  const root = f.root, bones = [f.hips, f.chest, f.armL, f.foreL, f.armR, f.foreR, f.legL, f.shinL, f.legR, f.shinR], BI = n => bones.indexOf(n);
+  root.updateMatrixWorld(true); const rootInv = root.matrixWorld.clone().invert(), segs = [];
+  const sm = x => sm01(clamp(x));
+  for (const [par, up, lo] of [[f.chest, f.armL, f.foreL], [f.chest, f.armR, f.foreR], [f.hips, f.legL, f.shinL], [f.hips, f.legR, f.shinR]]) {
+    const srcU = up.children.filter((n, i, A) => n.isMesh && (n === A.find(m => m.isMesh) || n.userData.limb)), srcL = lo.children.filter((n, i, A) => n.isMesh && n === A.find(m => m.isMesh));
+    if (!srcU.length || !srcL.length) continue;
+    const J = lo.position, bxU = srcU.map(m => _skinBox(m, up)), bxL = _skinBox(srcL[0], lo), arm = up === f.armL || up === f.armR;
+    const lowU = bxU.reduce((a, b, i) => b.min.y < bxU[a].min.y ? i : a, 0), hj = { hx: 0, hz: 0 };
+    const sz = b => [(b.max.x - b.min.x) / 2, (b.max.z - b.min.z) / 2, (b.max.x + b.min.x) / 2, (b.max.z + b.min.z) / 2];
+    const [ux, uz] = sz(bxU[lowU]), [lx, lz, lcx, lcz] = sz(bxL); hj.hx = (ux + lx) / 2 * 1.04; hj.hz = (uz + lz) / 2 * 1.04;
+    const rb = Math.max(0.05, Math.min(hj.hx, hj.hz) * 1.1), rt = 0.09, Mu = rootInv.clone().multiply(up.matrixWorld), Ml = rootInv.clone().multiply(lo.matrixWorld);
+    const wU = y => { const wp = y >= 0 ? 0.3 + 0.1 * sm(y / 0.03) : 0.3 * (1 - sm(-y / rt)), wc = y <= J.y + rb ? 0.5 * (1 - sm((y - J.y) / rb)) : 0;   // upper part: parent near the top, child near the elbow / knee
+      return wp >= wc ? [[BI(up), 1 - wp], [BI(par), wp]] : [[BI(up), 1 - wc], [BI(lo), wc]]; };
+    // upper tubes (one per source box: a sleeve and a bare lower arm are two tubes)
+    bxU.forEach((b, i) => { const [hx, hz, cx, cz] = sz(b), top = i === bxU.reduce((a, bb, k) => bb.max.y > bxU[a].max.y ? k : a, 0) ? Math.max(b.max.y, 0.03) : b.max.y, bot = i === lowU ? J.y : b.min.y;
+      if (top - bot < 0.02) return; const ys = [], st = 0.03; for (let y = top; y > bot + 1e-4; y -= (y < J.y + rb + 0.02 && i === lowU) || y > -rt ? st * 0.6 : st * 1.6) ys.push(y); ys.push(bot);
+      const rings = ys.map(y => { const k = i === lowU ? sm((J.y + rb - y) / rb) : 0; return { y, M: Mu, w: wU(y), cx: lerp(cx, J.x, k), cz: lerp(cz, J.z, k), hx: lerp(hx, hj.hx, k), hz: lerp(hz, hj.hz, k) }; });
+      segs.push({ src: srcU[i], g: _skinTube({ rings, K: 20, capBot: i !== lowU }), up, lo, par }); });
+    // lower tube: from the joint down to the end of the forearm / shin
+    { const top = 0, bot = bxL.min.y, ys = []; for (let y = top; y > bot + 1e-4; y -= y > -rb - 0.02 ? 0.018 : 0.05) ys.push(y); ys.push(bot);
+      const rings = ys.map(y => { const k = sm(-y / rb), wp = 0.5 * (1 - k); return { y, M: Ml, w: [[BI(lo), 1 - wp], [BI(up), wp]], cx: lerp(0, lcx, k), cz: lerp(0, lcz, k), hx: lerp(hj.hx, lx, k), hz: lerp(hj.hz, lz, k) }; });
+      segs.push({ src: srcL[0], g: _skinTube({ rings, K: 20, capTop: false }), up, lo, par }); }
+    void arm;
+  }
+  if (!segs.length) return;
+  const skel = new THREE.Skeleton(bones), S = { f, segs: [], rest: new Map() };
+  for (const s of segs) { const m = new THREE.SkinnedMesh(s.g, s.src.material); m.castShadow = s.src.castShadow; m.receiveShadow = true; m.frustumCulled = false; m.userData.skin = true; m.userData.noHit = true;
+    root.add(m); m.updateMatrixWorld(true); m.bind(skel, m.matrixWorld); S.segs.push({ m, src: s.src, m0: s.src.material, up: s.up, lo: s.lo, par: s.par, pUp: s.up.parent, pLo: s.lo.parent }); }
+  for (const s of S.segs) for (const [a, b] of [[s.par, s.up], [s.up, s.lo]]) if (!S.rest.has(b)) S.rest.set(b, b.position.clone());   // joint offset in the parent's frame (squash / stretch of the whole figure does not count)
+  f.skin = S; SKINRIGS.push(S);
+}
+function skinPass() {   // every frame: the skin shows exactly what the boxes would show; where it cannot (a part came off, a stretched joint), the boxes are drawn instead
+  for (const S of SKINRIGS) { const r = S.f.root; let on = r.visible && !!r.parent; const bad = new Set();
+    if (on) for (const [b, p0] of S.rest) { if (b.parent == null || !b.visible) continue; if (b.position.distanceTo(p0) > 0.12 * Math.max(0.1, p0.length())) bad.add(b); }
+    for (const s of S.segs) { let v = s.src.visible; for (let p = s.src.parent; v && p && p !== r; p = p.parent) v = p.visible;
+      const ok = on && s.up.parent === s.pUp && s.lo.parent === s.pLo && !bad.has(s.up) && !bad.has(s.lo);
+      s.m.visible = v && ok; if (s.src.material !== s.m0 && s.m.material !== s.src.material) s.m.material = s.src.material;
+      if (ok) s.src.layers.set(SKIN_LAYER); else { s.src.layers.set(0); if (SKINQA && v && on) SKINQA.add(S.f); } } }
+}
+{ const _fig2 = figure; figure = function (o = {}) { const f = _fig2(o); if (f && !f.isModel && f.legL && o.skin !== false) skinFigure(f); return f; }; }
 // ---- background extras fidget on their own (figure() without who, never walked): small idle actions every few seconds while they stand ----
 let _fidgetOn = false;
 function _fidgetSetup() {
@@ -11425,6 +11608,16 @@ function hitWalker(f, t, r, out) {   // eased sidestep at time t: per axis the l
     const k = 1 - sm01(Math.abs(j * HB_DT - t) / HB_WIN), x = S[0] * k, z = S[1] * k; if (x > xp) xp = x; if (x < xn) xn = x; if (z > zp) zp = z; if (z < zn) zn = z; }
   return [xp + xn, zp + zn];
 }
+// v3.0 feet on the floor: after every pose, a standing or walking figure whose lowest sole would be in the floor (some gaits, dances and builds bend the legs
+// more than the hips drop) is lifted by exactly that much — the lowest foot rests on the floor. Sitting, kneeling, lying, jumping, held and riding figures are left alone.
+const _ffV = new THREE.Vector3();
+function footFloor(t) {
+  if (CFG.footFloor === false) return;
+  for (const f of RIGS) { const r = f.root; if (!f.footL || f.isModel || !r?.visible || r.parent !== world || !f.body) continue; const w = hitFree(f, t); if (w < 0.5) continue;
+    r.updateWorldMatrix(true, true); let d = 0; const sc = r.scale.x;
+    for (const ft of [f.footL, f.footR]) { ft.getWorldPosition(_ffV); const floor = Math.min(r.position.y, groundH(_ffV.x, _ffV.z)); d = Math.max(d, floor - (_ffV.y - ANK * sc)); }
+    if (d > 0.004) f.body.position.y += Math.min(0.25, d) * w / sc; }
+}
 function hitResolve(t) {
   if (CFG.hitboxes === false) return;
   const F = [], W = [], R = [], info = {};
@@ -11450,7 +11643,7 @@ const _vcm = new Map();
 function bake() {
   for (const f of DEFER.splice(0)) f();
   world.updateMatrixWorld(true);
-  hitBuild(); LATE.unshift(hitResolve);   // v2.29 hitboxes (needs the props before they are merged)
+  hitBuild(); LATE.unshift(hitResolve); LATE.push(footFloor);   // v2.29 hitboxes (needs the props before they are merged)
   const inv = world.matrixWorld.clone().invert(), M4 = new THREE.Matrix4(), buckets = new Map(), done = [];
   world.traverse(o => {
     if (!o.isMesh || o.isInstancedMesh || !o.visible) return;
@@ -12768,6 +12961,7 @@ function stepScene(t) {   // everything in the 3D scene at time t (no HUD) — a
   lookPass(t);
   facePass(t);
   dressPass();
+  skinPass();
 }
 function update(t) {
   FRAME++;
@@ -12954,6 +13148,23 @@ function audFresh(o = {}) {   // runs in a second, freshly opened page (render.m
   [...F].reverse().forEach(i => { stepScene(teaseV(0)); stepScene(teaseV(i * dt)); const a = audPure(Q), k = F.indexOf(i); audHash(a, n - 1, out, k * 2 * n); cam.set(a.subarray(a.length - 14, a.length - 1)); audHash(cam, 1, out, k * 2 * n + 2 * (n - 1)); });
   return { frames: F, parts: n - 1, data: audB64(out) };
 }
+// --- v3.0 QA audit (render.mjs --audit / --shots, render workflow): what the motion audit cannot see ---
+//   crowds: members inside each other or inside props · figures: feet sunk into the floor while standing · skin: limbs that had to fall back to boxes
+//   Lines read "QA: …". Sampled at 4 Hz (crowds 2 Hz) over the whole video.
+function qaAudit() {
+  const out = [], name = f => { const i = RIGS.indexOf(f); return f.who ? `'${f.who}' #${i}` : f.kind === 'zombie' ? `zombie #${i}` : `figure #${i}`; };
+  for (const [hi, h] of hordes.entries()) { let w = null; for (let t = 0; t <= DUR; t += 0.5) { const r = h._qa?.(t); if (!r || !r.n) continue; const bad = r.over > Math.max(2, r.n * 0.02) || r.inside > 0;
+      if (bad && (!w || r.over + 4 * r.inside > w.over + 4 * w.inside)) w = { ...r, t }; }
+    if (w) out.push(`crowd #${hi}: ${w.over} pairs of members inside each other${w.inside ? `, ${w.inside} inside props` : ''} around ${w.t.toFixed(1)} s (${w.n} on screen${w.sim ? '' : ', simulation off'}) – spread the goal (stop / pile), give more room, or move the props`); }
+  const sink = new Map(); SKINQA = new Set(); const _f = new THREE.Vector3();
+  try { for (let t = 0; t <= DUR; t += 0.25) { stepScene(teaseV(t)); world.updateMatrixWorld(true); skinPass();
+      for (const f of RIGS) { const r = f.root; if (!f.footL || !r?.visible || r.parent !== world || f.isModel || hitFree(f, t) < 0.9) continue; const sc = r.scale.x;
+        for (const ft of [f.footL, f.footR]) { ft.getWorldPosition(_f); const sole = _f.y - ANK * sc, floor = Math.min(r.position.y, groundH(_f.x, _f.z)), d = floor - sole;
+          if (d > 0.07) { const S = sink.get(f); if (!S || d > S.d) sink.set(f, { d, t }); } } } } }
+  finally { const sk = SKINQA; SKINQA = null; for (const f of sk) out.push(`${name(f)}: arm or leg drawn as old boxes for a moment (a joint was pulled apart or a part came off) – fine for gore and ragdolls, otherwise check the pose`); }
+  for (const [f, S] of sink) out.push(`${name(f)}: foot ${(S.d * 100).toFixed(0)} cm in the floor around ${S.t.toFixed(2)} s while standing – raise the figure or its floor (y) or check the pose`);
+  return out;
+}
 function motionAudit(o = {}) {
   const fps = o.fps ?? 30, dt = 1 / fps, N = Math.floor(DUR * fps), L = audItems(), W = new Map(), warn = (key, sev, msg) => { const w = W.get(key); if (!w || sev > w.sev) W.set(key, { sev, msg }); };
   const at = (n, p) => `(${p[0].toFixed(1)}, ${p[2].toFixed(1)})`, Q = audParts(L), keyT = o.purity === false ? [] : audFrames(Math.round(DUR * fps), N), keyS = new Set(keyT), ref = new Map(), JMP = new Map();
@@ -13041,7 +13252,8 @@ window.whatif = {
     HITBOX.rep.clear(); const m = motionAudit(o); goreAudit();
     const hit = [...HITBOX.rep.values()].filter(r => r.d > 0.3).sort((a, b) => b.d - a.d).slice(0, 8).map(r => { const i = RIGS.indexOf(r.f), B = r.B, nm = r.f.who ? `'${r.f.who}' #${i}` : r.f.kind === 'zombie' ? `zombie #${i}` : `figure #${i}`;
       return `${nm} stands ${r.d.toFixed(2)} m inside ${B?.src ? 'a ' + B.src : 'an object'} (${(2 * B.hx).toFixed(1)} × ${(2 * B.hz).toFixed(1)} m, ${B.y0.toFixed(1)}–${B.y1.toFixed(1)} m high, at ${B.x.toFixed(1)}, ${B.z.toFixed(1)}) around ${r.t.toFixed(2)} s – ${r.d > 0.45 ? 'too deep to push out: move the figure or its path, or noHit() if it is meant to be inside' : 'pushed out automatically; place it beside it'}`; });
-    return { motion: m, gore: [...GORE.warn], hit }; },
+    let qa = []; try { qa = qaAudit(); } catch (e) { qa = ['QA audit failed: ' + e.message]; }
+    return { motion: m, gore: [...GORE.warn], hit, qa }; },
   info() { goreAudit(); let meshes = 0, inst = 0, baked = BAKED; scene.traverse(o => { if (o.isInstancedMesh) inst += o.count; else if (o.isMesh) meshes++; }); return { meshes, instances: inst, baked, emitters: emitters.length, hordes: hordes.length, calls: renderer.info.render.calls, tris: renderer.info.render.triangles, ...(GORE.warn.size ? { gore: [...GORE.warn] } : {}) }; }
 };
 if (EXPORT) draw(0); else requestAnimationFrame(loop);

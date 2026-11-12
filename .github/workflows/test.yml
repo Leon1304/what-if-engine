@@ -8,6 +8,14 @@ on:
     paths: ['template.html', 'assemble.py', 'render.mjs', 'sfx/**', 'tests/**', '.github/workflows/test.yml']
   pull_request:
   workflow_dispatch:
+    inputs:
+      update_golden:
+        description: 'Write the current shots as the new reference frames (tests/golden) and commit them'
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
 
 env:
   PW_VERSION: 1.65.0
@@ -32,6 +40,17 @@ jobs:
           command -v ffmpeg >/dev/null || { sudo apt-get update -qq && sudo apt-get install -y -qq --no-install-recommends ffmpeg >/dev/null; }
       - name: smoke test
         run: SMOKE_DIR="$RUNNER_TEMP/smoke" bash tests/run.sh
+      - name: reference frames (v3.0)
+        if: always()
+        run: |
+          if [ "${{ inputs.update_golden }}" = "true" ]; then
+            python3 tests/golden.py "$RUNNER_TEMP/smoke" --update
+            git config user.name "github-actions[bot]"; git config user.email "41898283+github-actions[bot]@users.noreply.github.com"
+            git add tests/golden && git commit -m "tests: update reference frames" && git push || echo "nothing to commit"
+          else
+            python3 tests/golden.py "$RUNNER_TEMP/smoke" | tee "$RUNNER_TEMP/golden.txt"
+            { echo "### Reference frames"; grep -E '^(CHANGED|NEW|golden):' "$RUNNER_TEMP/golden.txt" | head -60 | sed 's/^/- /'; } >> "$GITHUB_STEP_SUMMARY"
+          fi
       - uses: actions/upload-artifact@v4
         if: always()
         with:

@@ -101,6 +101,7 @@ jobs:
           (command -v ffmpeg >/dev/null || { sudo apt-get update -qq && sudo apt-get install -y -qq --no-install-recommends ffmpeg >/dev/null; })
           npm init -y >/dev/null && npm i --no-audit --no-fund three@0.170.0 @dimforge/rapier3d-deterministic-compat@0.21.0 playwright@$PW_VERSION >/dev/null
           npx playwright install --with-deps chromium >/dev/null
+          python3 -m pip install -q numpy || true
       - id: s
         run: echo "slug=$(basename '${{ matrix.page }}' .html)" >> "$GITHUB_OUTPUT"
       - uses: actions/download-artifact@v4
@@ -112,16 +113,23 @@ jobs:
         run: |
           S=${{ steps.s.outputs.slug }}
           ls out/$S.mp4.frames | wc -l
-          node render.mjs "${{ matrix.page }}" --video out/$S.mp4 --w $WIDTH
+          node render.mjs "${{ matrix.page }}" --video out/$S.mp4 --w $WIDTH | tee out/$S-render.log
           node render.mjs "${{ matrix.page }}" --cover out/$S-cover.jpg --w $WIDTH
           node render.mjs "${{ matrix.page }}" --srt out/$S.srt || true
           ffprobe -v error -show_entries format=duration:stream=codec_type,width,height -of csv=p=0 out/$S.mp4
+      - name: quality check (v3.0)
+        run: |
+          S=${{ steps.s.outputs.slug }}
+          node render.mjs "${{ matrix.page }}" --audit > out/$S-audit.log 2>&1 || true
+          cat out/$S-audit.log out/$S-render.log 2>/dev/null | grep -E '^(MOTION|HITBOX|QA|GORE|LINES):' > out/$S-qa.txt || true
+          { echo "### Quality check: $S"; if [ -s out/$S-qa.txt ]; then head -40 out/$S-qa.txt | sed 's/^/- /'; else echo "No warnings (motion, hitboxes, crowds, feet, skin, stray lines)."; fi; } >> "$GITHUB_STEP_SUMMARY"
+          [ -s out/$S-qa.txt ] || echo "no warnings" > out/$S-qa.txt
       - name: publish release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           S=${{ steps.s.outputs.slug }}; TAG=render-$S
           gh release view $TAG >/dev/null 2>&1 || gh release create $TAG --title "$S" --notes "Rendered by GitHub Actions (${{ github.sha }})"
-          gh release upload $TAG out/$S.mp4 out/$S-cover*.jpg $( [ -s out/$S.srt ] && echo out/$S.srt ) --clobber
+          gh release upload $TAG out/$S.mp4 out/$S-cover*.jpg out/$S-qa.txt $( [ -s out/$S.srt ] && echo out/$S.srt ) --clobber
           gh release delete-asset $TAG $S-ig.mp4 -y >/dev/null 2>&1 || true
           echo "done: https://github.com/${{ github.repository }}/releases/tag/$TAG"
