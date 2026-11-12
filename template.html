@@ -5325,7 +5325,7 @@ function duel(a, b, o = {}) {   // a and b trade blows: attacks alternate, the o
 }
 function punch(f, t, o = {}) { return strike(f, t, { ...o, kind: 'punch' }); }
 function kick(f, t, o = {}) { return strike(f, t, { ...o, kind: 'kick' }); }
-function strike(f, t, o) { const C = cbRig(f), a = { type: 'strike', kind: o.kind, side: o.side ?? 'R', t, T: cbTarget(o.at) }; a.wt = tt => env3(tt, t - 0.45, t + 0.45, 0.25, 0.2);   // v2.40.x: the guard comes up over 0.25 s (was 0.12 s: arms snapped ~47° a frame); the hit stays at t C.A.push(a); MBAUTO.push([t - 0.12, t + 0.08]);
+function strike(f, t, o) { const C = cbRig(f), a = { type: 'strike', kind: o.kind, side: o.side ?? 'R', t, T: cbTarget(o.at) }; a.wt = tt => env3(tt, t - 0.45, t + 0.45, 0.25, 0.2); /* v2.40.x: the guard comes up over 0.25 s (was 0.12 s: arms snapped ~47° a frame); the hit stays at t */ C.A.push(a); MBAUTO.push([t - 0.12, t + 0.08]);
   if (a.T) cbFace(f, t - 0.6, t + 0.45, a.T); sfx(t - 0.06, 'swing', 0.5);
   if (a.T && o.hit !== false) { const P = a.T.pos(t), from = rigPos(f, t, new THREE.Vector3()).add(v3(0, 1.3, 0)); cbBurst('spark', P, t, { n: 7, colors: ['#FFFFFF', '#FFE27A'], speed: 3 }); sfx(t, 'punch', 1); SHAKES.push({ t: VT(t), amp: 0.14, dur: 0.25 }); hitReact(a.T, t, { from, kill: o.kill, ragdoll: o.ragdoll, power: o.power }); }
   return a; }
@@ -11934,6 +11934,13 @@ function thumbOn() {
   const U = fin.uniforms; U.uSat.value = (CFG.saturation ?? 1.08) * 1.25; U.uCon.value = (CFG.contrast ?? 1.05) * 1.12; U.uVig.value = Math.max(U.uVig.value, 0.55); U.uGrain.value = 0;
 }
 if (PENDING.length) await Promise.all(PENDING);
+{ // v2.40.x purity: which scene ticks pose figures or set a look is found once here (probe runs over the whole video, every 0.1 s) — was: learned on the first frame
+  // a tick posed, so a page opened right after a tick stopped posing (fade back to idle) showed the idle pose at once while the played video was still fading
+  const _ps = performance.now(), T1 = (DUR ?? CFG.dur ?? 60) + 1;
+  for (const f of tickers) { if (f._idle || f._poser) continue; const M = { mode: new Map(), look: new Map() }; TKP = M;
+    try { for (let v = -0.5; v <= T1 && !M.mode.size && !M.look.size; v += 0.1) f(ST(v)); } catch (e) {} finally { TKP = null; }
+    if (M.mode.size || M.look.size) f._poser = true; }
+  if (performance.now() - _ps > 1500) console.warn('pose scan ' + Math.round(performance.now() - _ps) + ' ms'); }
 for (const [tt, fn] of PRESNAP.sort((a, b) => a[0] - b[0])) { stepScene(tt); world.updateMatrixWorld(true); fn(); }
 await physicsBake();   // simulate once, then every frame plays it back
 document.querySelectorAll('.err').forEach(n => n.remove());
