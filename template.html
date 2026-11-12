@@ -581,6 +581,11 @@ const SKIES = {
   apocalypse: { top: '#2A0905', bot: '#C8441B', fog: '#6C2412', near: 35, far: 200, sun: '#FF7034', si: 1.8, el: 10, hs: '#C8603A', hg: '#2A1610', hi: 0.6, stars: 0, orb: 0.003, glow: 1.6, exp: 1.05, nk: 0.6, cl: [0.9, 0.42, '#D65E38', '#38120C'] },
   underwater: { top: '#0E5A7A', bot: '#1E8AA8', fog: '#17607E', near: 4, far: 60, sun: '#D8F6FF', si: 0.9, el: 72, hs: '#6FD0EE', hg: '#0A3346', hi: 0.75, stars: 0, orb: 0, glow: 0.15, exp: 1.05, nk: 0.3, cl: [0, 0.5, '#000000', '#000000'] },
   deepsea:    { top: '#031A2A', bot: '#06304A', fog: '#062A40', near: 2, far: 34, sun: '#7FD8FF', si: 0.7, el: 80, hs: '#2A7FA8', hg: '#02121C', hi: 0.55, stars: 0, orb: 0, glow: 0, exp: 1.2, nk: 0.8, cl: [0, 0.5, '#000000', '#000000'] },
+  mercury:    { top: '#000004', bot: '#0A0A14', fog: '#0A0A14', near: 120, far: 600, sun: '#FFFFFF', si: 4.2, el: 4, hs: '#556070', hg: '#101010', hi: 0.25, stars: 1, orb: 0.006, glow: 1.4, exp: 1, nk: 0, cl: [0, 0.5, '#000000', '#000000'] },
+  venus:      { top: '#B07A2A', bot: '#F2C25A', fog: '#D9A548', near: 3, far: 46, sun: '#FFD27A', si: 1.2, el: 50, hs: '#F2C25A', hg: '#5A3A18', hi: 1.1, stars: 0, orb: 0, glow: 0.4, exp: 1.05, nk: 0, cl: [0, 0.5, '#E0B050', '#C08A30'] },
+  mars:       { top: '#8C6A50', bot: '#E2B48A', fog: '#D0A07A', near: 40, far: 260, sun: '#FFE6CC', si: 2.2, el: 30, hs: '#E8C0A0', hg: '#5A2E1E', hi: 0.9, stars: 0, orb: 0.0012, glow: 0.5, exp: 1, nk: 0, cl: [0, 0.5, '#D8A880', '#C09070'] },
+  jupiter:    { top: '#6A4A30', bot: '#E8C9A0', fog: '#D6B48C', near: 10, far: 90, sun: '#FFF0D8', si: 1.6, el: 60, hs: '#F0D8B8', hg: '#4A3020', hi: 1.0, stars: 0, orb: 0, glow: 0.3, exp: 1.05, nk: 0, cl: [0, 0.5, '#E0C090', '#B08060'] },
+  neptune:    { top: '#06124A', bot: '#2E5EC8', fog: '#2448A8', near: 8, far: 80, sun: '#CFE0FF', si: 1.2, el: 50, hs: '#6A8AE0', hg: '#0A1440', hi: 0.9, stars: 0, orb: 0, glow: 0.2, exp: 1.1, nk: 0, cl: [0, 0.5, '#3A6AD8', '#1A3A90'] },
   space:      { top: '#000004', bot: '#04071A', fog: '#04071A', near: 600, far: 1100, sun: '#FFFFFF', si: 3.2, el: 20, hs: '#334455', hg: '#000000', hi: 0.15, stars: 1, orb: 0.0016, glow: 0.8, exp: 1, nk: 0, cl: [0, 0.5, '#000000', '#000000'] }
 };
 const _ca = new THREE.Color(), _cb = new THREE.Color();
@@ -7846,6 +7851,32 @@ function petrify(obj, o = {}) {   // v2.43: turns an animal / figure / prop into
     for (let i = 0; i < n; i++) ball(g, 0.012 + hash(i * 3.3) * 0.02 * Math.max(1, sz.y), '#F6F2EA', b.min.x + hash(i * 1.1) * sz.x, b.max.y - hash(i * 2.7) * sz.y * 0.35, b.min.z + hash(i * 4.9) * sz.z, { detail: 0, cast: false }); }
   return obj;
 }
+function portal(p, x, y, z, o = {}) {   // v2.45: glowing standing portal ring (r, color, ry) with a swirling disc; open: [t0, t1] or [[t0, t1], …] = disc visible (fades in/out), flicker: [t, …] short flickers; returns { g, ring, disc }
+  const r = o.r ?? 1.3, c = o.color ?? '#FFD23A', g = stat(grp(p ?? world, x, y, z, o.ry ?? 0)), NC = { cast: false };
+  const ring = mesh(g, new THREE.TorusGeometry(r, 0.11, 10, 40), mat(c, { em: c, ei: 1.6 }), 0, r + 0.05, 0, NC);
+  const dm = new THREE.MeshBasicMaterial({ color: c, transparent: true, opacity: 0.0, side: THREE.DoubleSide, depthWrite: false });
+  const disc = dyn(mesh(g, new THREE.CircleGeometry(r * 0.96, 40), dm, 0, r + 0.05, 0, NC)); const sw = dyn(mesh(g, new THREE.RingGeometry(r * 0.2, r * 0.9, 40, 1, 0, 4.2), new THREE.MeshBasicMaterial({ color: '#FFFFFF', transparent: true, opacity: 0, side: THREE.DoubleSide, depthWrite: false }), 0, r + 0.05, 0.01, NC));
+  const pl = new THREE.PointLight(c, 0, 9); pl.position.set(0, r, 0.6); g.add(pl);
+  const OP = !o.open ? [] : Array.isArray(o.open[0]) ? o.open : [o.open];
+  tick(t => { let k = 0; for (const [a, b] of OP) if (t >= a && t <= b) k = Math.max(k, Math.min(1, (t - a) / 0.35, (b - t) / 0.35)); for (const f of o.flicker ?? []) if (t > f && t < f + 0.3) k *= 0.3 + 0.7 * (Math.sin(t * 90) > 0 ? 1 : 0);
+    dm.opacity = 0.75 * k; sw.material.opacity = 0.45 * k; sw.rotation.z = -t * 4; disc.visible = sw.visible = k > 0.01; pl.intensity = 6 * k + 1.5; });
+  return { g, ring, disc };
+}
+function planetSet(p, x, z, kind, o = {}) {   // v2.45: small planet surface set at (x, z), far away from the main world (x ≥ 1000): mercury (grey rock, glowing day side left, frost on the night side) · venus (cracked orange basalt, haze) · mars (red dust, rocks, wheel tracks) · jupiter / neptune (no ground: stacked cloud bands you fall through, top at y = 0); returns { g, floor } (floor = ground height, null for gas giants)
+  const g = stat(grp(p ?? world, x, 0, z)), R = o.r ?? 60, NC = { cast: false }, rnd2 = i => hash(i * 13.7 + x * 0.01);
+  const disc = (c, y = 0, rr = R) => { const m = cyl(g, rr, rr, 0.3, c, 0, y - 0.3, 0, { seg: 40 }); m.receiveShadow = true; return m; };
+  if (kind === 'mercury') { disc('#77777C'); for (let i = 0; i < 40; i++) { const px = (rnd2(i) - 0.5) * 70, pz = (rnd2(i + 99) - 0.5) * 70; rock(g, px, pz, 0.4 + rnd2(i + 7) * 1.4, px < 0 ? '#8A6A5A' : '#9AA0AC'); }
+    for (let i = 0; i < 6; i++) crater(g, (rnd2(i + 3) - 0.5) * 50, (rnd2(i + 40) - 0.5) * 50, 2 + rnd2(i) * 3);
+    box(g, 30, 0.04, 70, '#C8501E', -16, 0.01, 0, { em: '#FF5A1E', ei: 0.5, ...NC }); box(g, 30, 0.04, 70, '#DDE6F2', 16, 0.01, 0, NC); return { g, floor: 0 }; }
+  if (kind === 'venus') { disc('#A0602A'); for (let i = 0; i < 70; i++) { const px = (rnd2(i) - 0.5) * 60, pz = (rnd2(i + 99) - 0.5) * 60; box(g, 2 + rnd2(i + 1) * 3, 0.06, 2 + rnd2(i + 2) * 3, shade('#7A3E1A', (rnd2(i + 3) - 0.5) * 0.3), px, 0, pz, NC).rotation.y = rnd2(i) * 3; if (i % 3 === 0) rock(g, px, pz, 0.5 + rnd2(i + 5), '#6A3A1E'); } return { g, floor: 0 }; }
+  if (kind === 'mars') { disc('#B8562E'); for (let i = 0; i < 60; i++) { const px = (rnd2(i) - 0.5) * 80, pz = (rnd2(i + 99) - 0.5) * 80; rock(g, px, pz, 0.3 + rnd2(i + 7) * 1.6, '#8A3E22'); }
+    for (const sx of [-0.8, 0.8]) box(g, 0.35, 0.02, 60, '#93421F', 6 + sx, 0.005, 0, NC); for (let i = 0; i < 4; i++) { const h = mesh(g, new THREE.ConeGeometry(14 + i * 4, 6 + i * 2, 7), mat('#A04A28'), -40 + i * 26, 2.5 + i, -70 - i * 6); } return { g, floor: 0 }; }
+  const cols = kind === 'neptune' ? ['#2E5EC8', '#4A7AE0', '#1E3E98', '#6A9AF0', '#16307A'] : ['#E8D2B0', '#C08A5A', '#F2E2C8', '#A86A40', '#E0B88A'];
+  for (let i = 0; i < 9; i++) { const y = -i * 9, m = cyl(g, R, R, 2.2 + rnd2(i) * 2, cols[i % cols.length], 0, y - 2, 0, { seg: 40, opacity: 0.55, ...NC }); m.material.depthWrite = false; }
+  for (let i = 0; i < 40; i++) { const b = ball(g, 2 + rnd2(i) * 4, cols[i % cols.length], (rnd2(i + 3) - 0.5) * 70, -rnd2(i + 9) * 70, (rnd2(i + 17) - 0.5) * 70, { opacity: 0.5, ...NC }); b.scale.y = 0.35; b.material.depthWrite = false; }
+  if (kind === 'neptune') { const sw = dyn(grp(g, 0, -6, 0)); for (let i = 0; i < 6; i++) { const t = mesh(sw, new THREE.TorusGeometry(4 + i * 3, 0.5, 6, 30, 4.6), mat('#BFD4FF', { opacity: 0.4 }), 0, 0, 0, NC); t.rotation.x = Math.PI / 2; t.rotation.z = i; } tick(t => { sw.rotation.y = t * 0.8; }); }
+  return { g, floor: null };
+}
 function aedBox(p, x, y, z, o = {}) {   // v2.44: wall-mounted AED cabinet (green, white heart with lightning bolt) with the defibrillator inside; ry = facing (0 = +z); open: t → door swings open; returns { g, unit } (unit: carry it with holdItem, after: 'hide')
   const g = stat(grp(p ?? world, x, y, z, o.ry ?? 0)), NC = { cast: false };
   box(g, 0.46, 0.56, 0.2, '#1E9A4E', 0, -0.28, 0); box(g, 0.4, 0.5, 0.02, '#E8F2EC', 0, -0.25, 0.09, { ...NC, opacity: 0.35 });
@@ -7879,7 +7910,7 @@ function tripodCam(p, x, z, o = {}) {   // v2.43.2: photo camera on a tripod (3 
   for (let i = 0; i < 3; i++) { const a = i * 2.094 + 0.5, L = cyl(g, 0.012, 0.016, H * 1.04, '#2A2A2E', 0, 0, 0, { seg: 5 }); L.position.set(Math.sin(a) * 0.17, H * 0.5, Math.cos(a) * 0.17); L.rotation.set(Math.cos(a) * 0.17, 0, -Math.sin(a) * 0.17); }
   const head = grp(g, 0, H, 0); box(head, 0.16, 0.11, 0.08, '#1E1E22', 0, 0, 0); box(head, 0.05, 0.03, 0.04, '#2E2E34', -0.04, 0.11, 0);
   const lens = cyl(head, 0.038, 0.042, 0.11, '#141416', 0, 0.055, 0.04, { seg: 12 }); lens.rotation.x = Math.PI / 2; lens.position.set(0, 0.055, 0.09);
-  const fl = dyn(box(head, 0.06, 0.03, 0.03, '#FFFFFF', 0.045, 0.12, 0.02, { emissive: '#FFFFFF' }));
+  const fl = dyn(box(head, 0.06, 0.03, 0.03, '#FFFFFF', 0.045, 0.12, 0.02, { em: '#FFFFFF', ei: 2 }));
   if (o.flash?.length) tick(t => { const k = Math.max(0, ...o.flash.map(f => t >= f && t < f + 0.18 ? 1 - (t - f) / 0.18 : 0)); fl.scale.setScalar(1 + k * 3); fl.visible = k > 0; });
   else fl.visible = false;
   return { g, head };
