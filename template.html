@@ -2385,8 +2385,8 @@ function knock(obj, t0, o = {}) {   // topple around local x (dir ±1, +1 = towa
 // --- motion-capture characters: rigged glTF/GLB with clips (e.g. CC0 packs), embedded by assemble.py from models/<name>.glb ---
 // model(name, { scale, ry, tint: { materialName: hex }, map: { walk: 'Walking', … }, stride: { walk: m per cycle } }) → rig usable with walk(), pose(), anim(), track()
 const MODELS = /* @MODELS */{}, PENDING = [];
-const CLIPS = { idle: ['Idle', 'idle', 'Idle_Loop'], walk: ['Walking', 'Walk', 'Walk_Loop', 'walk'], run: ['Running', 'Run', 'Run_Loop', 'Sprint_Loop'], shamble: ['Zombie_Walk', 'Zombie_Walk_Loop', 'Walking', 'Walk'],
-  panic: ['Running', 'Run', 'Run_Loop'], cheer: ['Dance', 'Dance_Loop', 'Jump', 'Wave'], point: ['ThumbsUp', 'Point', 'Idle'], hold: ['Idle', 'Idle_Loop'] };
+const CLIPS = { idle: ['Idle', 'idle', 'Idle_Loop'], walk: ['Walking', 'Walk', 'Walk_Loop', 'walk'], run: ['Running', 'Run', 'Run_Loop', 'Jog_Fwd_Loop', 'Sprint_Loop'], shamble: ['Zombie_Walk', 'Zombie_Walk_Loop', 'Zombie_Walk_Fwd_Loop', 'Walking', 'Walk'],
+  panic: ['Running', 'Run', 'Run_Loop', 'Sprint_Loop'], cheer: ['Dance', 'Dance_Loop', 'Jump', 'Wave'], point: ['ThumbsUp', 'Point', 'Yes', 'Idle'], hold: ['Idle', 'Idle_Loop'], sneak: ['Crouch_Fwd_Loop'], swim: ['Swim_Fwd_Loop'], tread: ['Swim_Idle_Loop'], sit: ['Sitting_Idle_Loop'] };
 function model(name, o = {}) {
   const root = dyn(new THREE.Group()), r = { root, isModel: true, name, clips: [], acts: new Map(), mixer: null, map: o.map ?? {}, stride: { walk: 1.3, run: 2.4, shamble: 0.9, panic: 2.2, ...(o.stride ?? {}) }, sched: null, fx: [] };
   const data = MODELS[name];
@@ -2396,9 +2396,16 @@ function model(name, o = {}) {
     const s = g.scene; s.scale.setScalar(o.scale ?? 1); if (o.ry) s.rotation.y = o.ry;
     s.traverse(m => { if (!m.isMesh) return; m.castShadow = true; m.receiveShadow = true; m.frustumCulled = false;
       const nm = m.material?.name; if (o.tint && nm && o.tint[nm]) { m.material = m.material.clone(); m.material.color.set(o.tint[nm]); } });
+    o.prep?.(s, r);   // e.g. human(): clothes, skin, hairstyle
+    if (name.includes('/') && !o.stride) { const b = new THREE.Box3().setFromObject(s), L = Math.max(b.max.x - b.min.x, b.max.z - b.min.z);   // library creatures: stride from body length
+      Object.assign(r.stride, { walk: 0.9 * L, run: 1.9 * L, panic: 1.9 * L, shamble: 0.7 * L, sneak: 0.6 * L, swim: 1.2 * L }); }
     root.add(s); r.mixer = new THREE.AnimationMixer(s); r.clips = g.animations; res();
   }, e => { console.error('model ' + name + ': ' + (e?.message ?? e)); res(); })));
-  r.clip = mode => { for (const n of [].concat(r.map[mode] ?? [], CLIPS[mode] ?? [], [mode])) { const c = r.clips.find(c => c.name === n); if (c) return c; } return r.clips[0]; };
+  r.clip = mode => { const L = [].concat(r.map[mode] ?? [], CLIPS[mode] ?? [], [mode]);
+    for (const n of L) { const c = r.clips.find(c => c.name === n); if (c) return c; }
+    for (const n of L) { const re = new RegExp('(^|[_|])' + n + '$', 'i'), c = r.clips.find(c => re.test(c.name)); if (c) return c; }   // library packs: 'TRex_Walk', 'Rat_Run'
+    for (const n of { panic: ['Run'], shamble: ['Walk', 'WalkSlow'], sneak: ['WalkSlow', 'Walk'], cheer: ['Jump'], swim: ['Swim'], fly: ['Flying'] }[mode] ?? []) { const re = new RegExp('(^|[_|])' + n + '$', 'i'), c = r.clips.find(c => re.test(c.name)); if (c) return c; }
+    return r.clips.find(c => /idle/i.test(c.name)) ?? r.clips[0]; };
   r.act = c => { if (!c) return null; let a = r.acts.get(c); if (!a) { a = r.mixer.clipAction(c); a.play(); a.weight = 0; r.acts.set(c, a); } return a; };
   r.apply = L => {   // L: [[clip, time, weight], …] — stateless: same t → same pose
     if (!r.mixer) return; for (const a of r.acts.values()) a.weight = 0;
@@ -2420,6 +2427,93 @@ function anim(r, list, o = {}) {   // model rig: [[t, clip, { once, speed }], �
     const prev = lay(L[i - 1], t); cur[2] = EASE.inOut(k); prev[2] = 1 - cur[2]; return [cur, prev];
   };
   return r;
+}
+
+// --- mocap people: human({ sex, shirt, pants, shoes, sleeves, legs, skin, hair, hairColor, beard, scale, seed }) → model rig (walk, pose, anim, track) ---
+// Quaternius Universal Base Characters (CC0) with 86 clips of the Universal Animation Library 1 + 2 (models/human_m.glb, human_f.glb, built by
+// models/build-quaternius.mjs). Clothes are painted onto the body in the shader from a per-vertex mask (_cloth: arm/leg position + weights):
+// shirt down to the waist with sleeves, trousers or shorts, shoes; fabric gets a flatter normal and matte roughness. Skin tone re-tints the texture by brightness.
+const HUMAN = {
+  hair: { parted: 'Hair_SimpleParted', buzzed: 'Hair_Buzzed', long: 'Hair_Long', buns: 'Hair_Buns', pixie: 'Hair_BuzzedFemale', bald: null },
+  sleeves: { none: 0.04, short: 0.5, long: 1.93 }, legs: { long: 1.93, shorts: 0.62, briefs: 0.08 },
+  shirts: ['#C0392B', '#2E86C1', '#F1C40F', '#27AE60', '#ECF0F1', '#34495E', '#8E44AD', '#E67E22', '#D35400', '#7F8C8D'],
+  pants: ['#2E3A5C', '#3B3B3B', '#6B5B45', '#1F2A44', '#7A7F87', '#4A5D3A'], shoes: ['#222222', '#EEEEEE', '#5A3A22', '#3A3A44'],
+  skins: ['#E8B48F', '#D9A27A', '#C68A5E', '#8D5A3B', '#5C3A24'], hairColors: ['#2B1D14', '#5A3A22', '#A87B4F', '#D9B26F', '#1A1A1A', '#8A3B1E'],
+  // clip duration → metres per cycle, measured from the root-motion versions; × hip ratio of the character (bones are longer than the mannequin's)
+  stride: { walk: 1.3, run: 5, panic: 5.5, shamble: 1.4, sneak: 1.5, swim: 2.9 }, hip: { m: 1.035, f: 1.016 },
+  map: { idle: 'Idle_Loop', walk: 'Walk_Loop', run: 'Jog_Fwd_Loop', panic: 'Sprint_Loop', shamble: 'Zombie_Walk_Fwd_Loop', cheer: 'Dance_Loop', point: 'Yes', hold: 'Idle_Loop',
+    sneak: 'Crouch_Fwd_Loop', swim: 'Swim_Fwd_Loop', tread: 'Swim_Idle_Loop', sit: 'Sitting_Idle_Loop', talk: 'Idle_Talking_Loop', phone: 'Idle_TalkingPhone_Loop', fold: 'Idle_FoldArms_Loop' }
+};
+let _humanN = 0;
+function human(o = {}) {
+  const n = o.seed ?? _humanN++, h = k => { let x = Math.sin((n + 1) * 12.9898 + k * 78.233) * 43758.5453; return x - Math.floor(x); }, pk = (A, k) => A[Math.floor(h(k) * A.length) % A.length];
+  const sex = o.sex === 'f' ? 'f' : 'm', sc = o.scale ?? 0.92, k = HUMAN.hip[sex] * sc;
+  const hair = o.hair ?? pk(sex === 'm' ? ['parted', 'buzzed', 'parted', 'bald'] : ['long', 'buns', 'pixie', 'long'], 1);
+  const beard = o.beard ?? (sex === 'm' && h(2) < 0.35), sleeves = HUMAN.sleeves[o.sleeves ?? 'short'] ?? o.sleeves, legs = HUMAN.legs[o.legs ?? 'long'] ?? o.legs;
+  const C = c => new THREE.Color(c), col = { shirt: C(o.shirt ?? pk(HUMAN.shirts, 3)), pants: C(o.pants ?? pk(HUMAN.pants, 4)), shoes: C(o.shoes ?? pk(HUMAN.shoes, 5)) };
+  const skin = C(o.skin ?? pk(HUMAN.skins, 6)), hairCol = o.hairColor ?? pk(HUMAN.hairColors, 7), top = o.shirt === false ? 0 : 1;
+  const stride = {}; for (const m in HUMAN.stride) stride[m] = HUMAN.stride[m] * k;
+  const prep = s => {
+    const keep = new Set([HUMAN.hair[hair] ?? hair, beard ? 'Hair_Beard' : null]), drop = [];
+    s.traverse(m => { if (!m.isMesh) return;
+      if (/^Hair_/.test(m.name) && !keep.has(m.name)) { drop.push(m); return; }
+      const mt = m.material;
+      if (/^MI_Hair/.test(mt.name)) { m.material = mt.clone(); m.material.color.set(hairCol); return; }
+      const cl = m.userData.cloth; if (!cl || !m.geometry.attributes._cloth) return;
+      const M = m.material = mt.clone(), ref = C(cl.skin), refL = 0.2126 * ref.r + 0.7152 * ref.g + 0.0722 * ref.b;
+      const U = { uShirt: { value: col.shirt }, uPants: { value: col.pants }, uShoes: { value: col.shoes }, uSkin: { value: skin }, uRefC: { value: new THREE.Vector3(ref.r / refL, ref.g / refL, ref.b / refL) }, uRefL: { value: refL },
+        uCl: { value: new THREE.Vector4(sleeves, legs, 1.88, top) }, uY: { value: new THREE.Vector2(cl.neckY, cl.waistY) } };
+      M.customProgramCacheKey = () => 'human-cloth';
+      M.onBeforeCompile = sh => {
+        Object.assign(sh.uniforms, U);
+        sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nattribute vec4 _cloth; varying vec4 vCloth; varying vec3 vRest;')
+          .replace('#include <begin_vertex>', '#include <begin_vertex>\nvCloth = _cloth; vRest = position;');
+        sh.fragmentShader = sh.fragmentShader.replace('#include <common>', `#include <common>
+uniform vec3 uShirt, uPants, uShoes, uSkin, uRefC; uniform float uRefL; uniform vec4 uCl; uniform vec2 uY; varying vec4 vCloth; varying vec3 vRest; float clM; vec3 clC;
+float clAA(float e, float x) { float w = max(fwidth(x), 1e-4); return smoothstep(e - w, e + w, x); }`)
+          .replace('#include <map_fragment>', `#include <map_fragment>
+{ float aw = smoothstep(0.35, 0.65, vCloth.z), lw = smoothstep(0.35, 0.65, vCloth.w), tor = (1.0 - aw) * (1.0 - lw);
+  float above = clAA(uY.y, vRest.y), below = 1.0 - clAA(uY.x + max(abs(vRest.x) - 0.06, 0.0) * 1.2, vRest.y);   // collar rises towards the shoulders
+  float shirt = uCl.w * (tor * above * below + aw * (1.0 - clAA(uCl.x, vCloth.x)));
+  float shoes = lw * clAA(uCl.z, vCloth.y);
+  float pants = (tor * (1.0 - above) + lw * (1.0 - clAA(uCl.y, vCloth.y))) * (1.0 - shoes);
+  clM = clamp(shirt + pants + shoes, 0.0, 1.0);
+  clC = (uShirt * shirt + uPants * pants + uShoes * shoes) / max(shirt + pants + shoes, 1e-3);
+  vec3 tx = diffuseColor.rgb; float tl = dot(tx, vec3(0.2126, 0.7152, 0.0722));   // skin: texture brightness × chosen tone, 35 % of the painted hue kept (lips, eyes, cheeks)
+  vec3 sk = uSkin * (tl / uRefL) * mix(vec3(1.0), tx / max(tl, 1e-4) / uRefC, 0.35);
+  diffuseColor.rgb = mix(sk, clC, clM); }`)
+          .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nroughnessFactor = mix(roughnessFactor, 0.9, clM);')
+          .replace('#include <normal_fragment_maps>', '#include <normal_fragment_maps>\nnormal = normalize(mix(normal, nonPerturbedNormal, clM * 0.75));');
+      };
+    });
+    for (const m of drop) m.parent.remove(m);
+  };
+  const r = model('human_' + sex, { scale: sc, map: { ...HUMAN.map, ...(o.map ?? {}) }, stride: { ...stride, ...(o.stride ?? {}) }, prep });
+  r.human = { sex, hair, beard, colors: col, skin }; return r;
+}
+
+// --- asset library: CC0 low-poly packs as GLB (assets/<pack>/<name>.glb, catalogue: node tools/import-assets.mjs → work/asset-catalog.html) ---
+// asset(p, 'farm/barn', x, z, { ry, scale, h, y, tint: { materialName: hex } | hex, dyn }) → Group, real-world metres, standing on the ground.
+// Static props (buildings, trees, cars, furniture …). Rigged animals/creatures of the library go through model('dino/trex') (walk, pose, anim).
+// Each name is parsed once and cloned (shared geometry + materials); assemble.py embeds only the names a video uses.
+const ASSETS = new Map();
+function asset(p, name, x = 0, z = 0, o = {}) {
+  const root = new THREE.Group(); root.name = name; root.position.set(x, o.y ?? groundH(x, z), z); root.rotation.y = o.ry ?? 0; root.scale.setScalar(o.scale ?? 1);
+  if (o.dyn) dyn(root); (p ?? world).add(root);
+  const data = MODELS[name];
+  if (!data) { console.warn('asset: ' + name + ' missing (assets/' + name + '.glb; see work/asset-catalog.html)'); rbox(root, 1, 1, 1, '#FF00FF'); return root; }
+  if (!ASSETS.has(name)) { const u8 = Uint8Array.from(atob(data), c => c.charCodeAt(0));
+    const pr = new Promise(res => new GLTFLoader().parse(u8.buffer, '', g => res(g.scene), e => { console.error('asset ' + name + ': ' + (e?.message ?? e)); res(null); }));
+    ASSETS.set(name, pr); PENDING.push(pr); }
+  PENDING.push(ASSETS.get(name).then(src => {
+    if (!src) return; const s = src.clone();
+    s.traverse(m => { if (!m.isMesh) return; m.castShadow = o.shadow !== false; m.receiveShadow = true;
+      if (o.tint) { const one = mt => { const c = typeof o.tint === 'string' ? o.tint : o.tint[mt.name]; if (!c) return mt; const k = mt.clone(); k.color.set(c); return k; };
+        m.material = Array.isArray(m.material) ? m.material.map(one) : one(m.material); } });
+    if (o.h) { const b = new THREE.Box3().setFromObject(s), hh = b.max.y - b.min.y; if (hh > 0) s.scale.multiplyScalar(o.h / hh); }
+    root.add(s);
+  }));
+  return root;
 }
 
 // --- interactions: people and objects — everything a pure function of t (frame-exact export) ---

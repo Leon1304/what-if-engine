@@ -4,7 +4,7 @@
 # v3.1: scenes run in parallel, SMOKE_JOBS at a time (default: half the CPU cores, 1–4). SMOKE_JOBS=1 = one after another.
 set -u
 R=$(cd "$(dirname "$0")/.." && pwd); W=${SMOKE_DIR:-$(mktemp -d)}; mkdir -p "$W"; cd "$W"
-cp "$R/template.html" "$R/assemble.py" "$R/render.mjs" .; ln -sfn "${NODE_MODULES:-$R/node_modules}" node_modules; ln -sfn "$R/sfx" sfx
+cp "$R/template.html" "$R/assemble.py" "$R/render.mjs" .; ln -sfn "${NODE_MODULES:-$R/node_modules}" node_modules; ln -sfn "$R/sfx" sfx; ln -sfn "$R/models" models; ln -sfn "$R/assets" assets
 sed -n '/@STORY-BEGIN/,/@STORY-END/p' template.html | sed '1d;$d' > example.story.js
 sed -n '/@SCENE-BEGIN/,/@SCENE-END/p' template.html | sed '1d;$d' > example.scene.js
 cp "$R"/tests/*.story.js "$R"/tests/*.scene.js .
@@ -14,7 +14,7 @@ one() {   # one scene → its result in <name>.res (first line "ok …" or "FAIL
   s=$1
   if ! python3 assemble.py "$s" --title "Smoke test" --no-voice > "$s.log" 2>&1; then { echo "FAIL $s (assemble)"; tail -6 "$s.log"; } > "$s.res"; return; fi
   timeout 600 node render.mjs "$s.html" --shots 1,4,8 --w 270 --out "shots_$s" >> "$s.log" 2>&1
-  if grep -q "PAGE DID NOT START\|PAGE ERRORS" "$s.log" || [ "$(ls shots_$s/*.png 2>/dev/null | wc -l)" -lt 3 ]; then { echo "FAIL $s"; grep -A10 "PAGE" "$s.log" | head -14; } > "$s.res"
+  if grep -q "PAGE DID NOT START\|PAGE ERRORS\|model missing" "$s.log" || [ "$(ls shots_$s/*.png 2>/dev/null | wc -l)" -lt 3 ]; then { echo "FAIL $s"; grep -A10 "PAGE" "$s.log" | head -14; } > "$s.res"
   else echo "ok   $s  $(grep -o '"meshes":[0-9]*' "$s.log" | head -1)" > "$s.res"; fi
 }
 export -f one
