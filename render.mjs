@@ -7,6 +7,10 @@
 //   node render.mjs page.html --srt out.srt   (v2.30: subtitles for YouTube, same pages + timing as the captions)
 //   node render.mjs page.html --audit   → MOTION: / HITBOX: / GORE: / QA: lines (v3.5 also QA: DARK / EMPTY / CAMCLIP / HEADCUT from tiny frames of every shot + the cover; pops, snapping joints, jitter, state left over between frames, figures inside props,
 //     v3.0: crowd members inside each other or props, feet in the floor, limbs that fell back to boxes); --shots runs it too (--no-audit = off); --strict = exit 3 on any warning
+//   node render.mjs page.html --gate   → quality gate = --audit --strict: counts MOTION / HITBOX / GORE / QA lines, PAGE ERRORS and unused waivers, prints
+//     "GATE: ok" or "GATE: N open warning(s)" and exits 3 if any are open (--shots prints the GATE: line too; exit 3 only with --strict).
+//     Deliberate exceptions: const QA_OK = [['substring' | /regex/, 'reason'], …] in the story → those lines print as "QA-OK: <line>  ← <reason>" and do not count;
+//     a waiver that matches nothing prints "QA-OK unused: …" and counts (waivers for LINES: / SEAM:, only known after --video, start with that word and are never "unused").
 //   --video also checks the finished frames for stray lines (qa_lines.py, LINES:)
 //     The audit also opens the page a second time and compares both (anything that depends on earlier frames or differs from page to page pops at the borders of
 //     render blocks / flickers between render workers); --no-fresh skips that second page.
@@ -63,6 +67,29 @@ async function openPage(W0 = W) {   // W0: render width of this page (the audit 
   return { browser, page, errors };
 }
 const report = errors => { if (errors.length) console.log('PAGE ERRORS:\n' + [...new Set(errors)].slice(0, 12).join('\n')); };
+// v3.24 quality gate: waivers from the story (QA_OK), every warning line goes through say(), gateLine() prints the "GATE:" summary
+const STRICT = flag('strict') || flag('gate');
+let WAIVE = []; const WAIVED = [];
+async function readWaivers(page) {   // QA_OK lives in the page's module scope → read it through whatif.probe (pages since v2.29); regexes come back as [source, flags]
+  const src = `(typeof QA_OK === 'undefined' || !QA_OK ? [] : [].concat(QA_OK)).map(w => { const p = Array.isArray(w) ? w[0] : w, why = Array.isArray(w) ? w[1] : '';
+    return [p instanceof RegExp ? [p.source, p.flags] : String(p ?? ''), String(why ?? '').trim()]; })`;
+  let raw; try { raw = await page.evaluate(s => window.whatif.probe ? window.whatif.probe(s) : [], src); } catch (e) { return [{ label: 'QA_OK', bad: 'could not be read: ' + String(e.message).split('\n')[0] }]; }
+  return (raw ?? []).map(([p, why]) => {
+    let re = null, bad = null;
+    try { if (Array.isArray(p)) re = new RegExp(p[0], p[1].replace(/[gy]/g, '')); else { const m = /^\/(.+)\/([a-z]*)$/s.exec(p); if (m) re = new RegExp(m[1], m[2].replace(/[gy]/g, '')); } } catch (e) { bad = 'bad regex: ' + e.message; }
+    const label = Array.isArray(p) ? `/${p[0]}/${p[1]}` : p;
+    if (!bad && !(Array.isArray(p) ? p[0] : p)) bad = 'empty pattern'; if (!bad && !why) bad = 'no reason given (every exception needs one)';
+    const after = re ? /^\^?\(?(\?:)?(LINES|SEAM)\b/.test(re.source) : /^(LINES|SEAM):/.test(p);   // matched only by --video (finished frames)
+    return { label, why, after, bad, n: 0, test: l => re ? re.test(l) : l.includes(p) }; });
+}
+const say = l => { const w = WAIVE.find(w => !w.bad && w.test(l)); if (!w) { console.log(l); return 1; } w.n++; WAIVED.push(l); console.log(`QA-OK: ${l}  ← ${w.why}`); return 0; };
+const openErrors = errors => [...new Set(errors)].filter(e => { const w = WAIVE.find(w => !w.bad && w.test('PAGE ERROR: ' + e)); if (!w) return true;   // page errors: waived ones print as QA-OK, the rest go to report()
+  w.n++; WAIVED.push(e); console.log(`QA-OK: PAGE ERROR: ${e}  ← ${w.why}`); return false; });
+function gateLine(open) {   // open = warning lines + page errors that are not waived → prints the waiver problems and the one summary line, returns the count
+  for (const w of WAIVE) { if (w.bad) { console.log(`QA-OK invalid: ${w.label} – ${w.bad}`); open++; } else if (!w.after && !w.n) { console.log(`QA-OK unused: ${w.label}  ← ${w.why} – matches no warning any more: remove it from QA_OK`); open++; } }
+  const k = WAIVED.length ? ` (${WAIVED.length} waived in QA_OK)` : '';
+  console.log(open ? `GATE: ${open} open warning(s)${k} – fix them, or waive a deliberate one in QA_OK with a reason` : `GATE: ok${k}`); return open;
+}
 // purity, second page: a freshly opened page jumps straight to the block starts and sends fingerprints of every moving part; the audit in the first page compares them
 async function freshPrints() {
   if (flag('no-fresh')) return null;
@@ -82,15 +109,20 @@ if (opt('probe')) {   // v2.29 debugging: evaluate code inside the engine (after
   try { console.log(JSON.stringify(await page.evaluate(s => window.whatif.probe(s), opt('probe')), null, 1)); } catch (e) { console.log('PROBE ERROR', e.message); }
   report(errors); await browser.close(); process.exit(0);
 }
-if (flag('audit') && !opt('shots')) {   // v2.29: node render.mjs page.html --audit → motion + gore check of the whole video, no images
+if ((flag('audit') || flag('gate')) && !opt('shots')) {   // v2.29: node render.mjs page.html --audit → motion + gore check of the whole video, no images (v3.24: --gate = --audit --strict)
   const t0 = Date.now(), [fresh, { browser, page, errors }] = await Promise.all([freshPrints(), openPage(135)]);   // v3.1: both pages load at once
+  WAIVE = await readWaivers(page);
   const A = await page.evaluate(fresh => window.whatif.audit({ fresh }), fresh);
-  for (const m of A.motion) console.log('MOTION: ' + m); for (const m of A.hit ?? []) console.log('HITBOX: ' + m); for (const g of A.gore) console.log('GORE: ' + g);
+  let open = 0;
+  for (const m of A.motion) open += say('MOTION: ' + m); for (const m of A.hit ?? []) open += say('HITBOX: ' + m); for (const g of A.gore) open += say('GORE: ' + g);
   if (!A.motion.length) console.log('motion: ok (no pops, jitter or left-over state)');
-  for (const q of A.qa ?? []) console.log('QA: ' + q); if (!(A.qa ?? []).length) console.log('qa: ok (crowds, feet, skin, look: dark, empty, camera clip, head cut)');
-  const nWarn = A.motion.length + (A.hit ?? []).length + (A.qa ?? []).length; if (flag('strict') && nWarn) { console.log(`STRICT: ${nWarn} warning(s)`); report(errors); await browser.close(); process.exit(3); }
-  console.log(`audit ${((Date.now() - t0) / 1000).toFixed(0)} s`); report(errors); await browser.close(); process.exit(0);
+  for (const q of A.qa ?? []) open += say('QA: ' + q); for (const q of A.qaInfo ?? []) console.log(q); if (!(A.qa ?? []).length) console.log('qa: ok (crowds, feet, skin, look: dark, empty, camera clip, head cut)');
+  console.log(`audit ${((Date.now() - t0) / 1000).toFixed(0)} s`); const errs = openErrors(errors); report(errs); await browser.close();
+  const n = gateLine(open + errs.length);
+  if (STRICT && n) { console.log(`STRICT: ${n} warning(s)`); process.exit(3); }
+  process.exit(0);
 }
+let shotsGate = null;   // v3.24: open warnings of the --shots audit (null = --no-audit)
 if (opt('shots')) {
   const out = opt('out', 'shots'); mkdirSync(out, { recursive: true });
   const freshP = flag('no-audit') ? null : freshPrints();   // v3.1: second (audit) page loads while the shots are taken
@@ -106,19 +138,25 @@ if (opt('shots')) {
   const info = await page.evaluate(() => window.whatif.info()), { gore: G0, ...rest } = info;
   console.log('scene:', JSON.stringify(rest));
   const fresh = await freshP;
+  if (!flag('no-audit')) WAIVE = await readWaivers(page);
   const A = flag('no-audit') ? { motion: [], gore: G0 ?? [] } : await page.evaluate(fresh => window.whatif.audit?.({ fresh }) ?? { motion: [], gore: [] }, fresh);   // v2.29 motion + gore audit
-  for (const m of A.motion) console.log('MOTION: ' + m);
-  for (const m of A.hit ?? []) console.log('HITBOX: ' + m);
-  for (const g of A.gore) console.log('GORE: ' + g);
-  for (const q of A.qa ?? []) console.log('QA: ' + q);
+  let open = 0;
+  for (const m of A.motion) open += say('MOTION: ' + m);
+  for (const m of A.hit ?? []) open += say('HITBOX: ' + m);
+  for (const g of A.gore) open += say('GORE: ' + g);
+  for (const q of A.qa ?? []) open += say('QA: ' + q);
+  for (const q of A.qaInfo ?? []) console.log(q);   // v3.24: 'QA-INFO: …' (not counted)
   if (!A.motion.length) console.log('motion: ok (no pops, jitter or left-over state)');
-  report(errors); await browser.close();
+  const errs = openErrors(errors); report(errs); await browser.close();
+  shotsGate = flag('no-audit') ? null : open + errs.length;   // GATE: line after the contact sheet
   const cols = Math.min(LAND ? 3 : 4, files.length), rows = Math.ceil(files.length / cols), TW = LAND ? 480 : 360, TH = LAND ? 270 : 640;
   const fc = files.length === 1 ? `[0:v]scale=${TW}:-1` :
     files.map((_, i) => `[${i}:v]scale=${TW}:-1[v${i}]`).join(';') + ';' + files.map((_, i) => `[v${i}]`).join('') +
     `xstack=inputs=${files.length}:layout=${files.map((_, i) => `${(i % cols) * TW}_${Math.floor(i / cols) * TH}`).join('|')}:fill=black`;
   ff([...files.flatMap(f => ['-i', f]), '-filter_complex', fc, '-frames:v', '1', path.join(out, 'sheet.jpg')]);
   console.log('contact sheet:', path.join(out, 'sheet.jpg'), `(${cols}x${rows}, in order of --shots)`);
+  if (shotsGate == null) console.log('GATE: not checked (--no-audit)');
+  else { const n = gateLine(shotsGate); if (STRICT && n) { console.log(`STRICT: ${n} warning(s)`); process.exit(3); } }
 }
 
 if (opt('cover')) {
@@ -173,9 +211,9 @@ async function seamCheck(dir, chunk, total, fr) {
     await page.evaluate(([i, f]) => { for (const k of [i - 2, i - 1, i]) window.whatif.seek(Math.max(0, k) / f); }, [i, fps]);   // played up to it, frame by frame
     await page.screenshot({ path: tmp, type: 'jpeg', quality: 92 });
     const d = spawnSync('python3', [qs, '--diff', fr(i), tmp], { encoding: 'utf8' }).stdout.trim(); rmSync(tmp, { force: true });
-    if (d.startsWith('DIFF ') && ++bad <= 5) { console.log(`SEAM: the frame at ${(i / fps).toFixed(2)} s (render chunk border) looks different when the page plays up to it (${d.slice(5)}) – something depends on earlier frames; fix it (compute it from t) or set CFG.shard: 'block'`); }
+    if (d.startsWith('DIFF ') && ++bad <= 5) { say(`SEAM: the frame at ${(i / fps).toFixed(2)} s (render chunk border) looks different when the page plays up to it (${d.slice(5)}) – something depends on earlier frames; fix it (compute it from t) or set CFG.shard: 'block'`); }
   }
-  if (bad > 5) console.log(`SEAM: … and ${bad - 5} more chunk borders like that`);
+  if (bad > 5) say(`SEAM: … and ${bad - 5} more chunk borders like that`);
   console.log(`seams: ${cand.length} suspect of ${borders.length} chunk borders checked, ${bad} confirmed`); report(errors); await browser.close();
 }
 if (opt('video')) {
@@ -189,6 +227,7 @@ if (opt('video')) {
   // the audit checks each chunk start, and --seams N (encode job) checks the finished frames at the chunk borders.
   const [si, sn] = (opt('shard') || '0/1').split('/').map(Number), seamN = +opt('seams', 0);
   const probe = await openPage(); const dur = await probe.page.evaluate(() => window.whatif.dur);
+  if (!framesOnly) WAIVE = await readWaivers(probe.page);   // v3.24: QA_OK also covers LINES: / SEAM: from the finished frames
   const planOf = async n => (await probe.page.evaluate(([n, f]) => window.whatif.plan?.(n, f), [n, fps])) ?? { n, chunk: Math.max(10, Math.min(30, Math.floor(Math.round(dur * fps) / (n * 4)))) };
   const { chunk } = await planOf(sn), seamPlan = seamN > 1 ? await planOf(seamN) : null; await probe.browser.close();
   const total = Math.round(dur * fps), fr = i => path.join(dir, `f${String(i).padStart(5, '0')}.jpg`);
@@ -234,6 +273,6 @@ if (opt('video')) {
   if (flag('clean')) { rmSync(dir, { recursive: true, force: true }); rmSync(wav, { force: true }); }
   console.log('wrote', video, `${(statSync(video).size / 1e6).toFixed(1)} MB`, `in ${Math.round((Date.now() - started) / 60000)} min`);
   { const ql = path.join(path.dirname(new URL(import.meta.url).pathname), 'qa_lines.py');   // v3.0: stray 1–3 px lines through the picture (every 15th frame)
-    if (existsSync(ql)) { const r = spawnSync('python3', [ql, dir, '--every', '15'], { encoding: 'utf8' }); if (r.stdout) process.stdout.write(r.stdout); } }
+    if (existsSync(ql)) { const r = spawnSync('python3', [ql, dir, '--every', '15'], { encoding: 'utf8' }); for (const l of (r.stdout || '').split('\n').filter(Boolean)) /^LINES:/.test(l) ? say(l) : console.log(l); } }
   if (seamPlan) await seamCheck(dir, seamPlan.chunk, total, fr);
 }

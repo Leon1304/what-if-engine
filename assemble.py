@@ -85,6 +85,11 @@ if _cuts or re.search(r"\b(bleed|ouch)\s*\(", scene):
     if _bad: print(f"WARNING: gore words in captions / voice / title / thumbnail ({', '.join(_bad)}) — say it dryly without them (\"He didn't need that arm anyway.\"), YouTube and Instagram read the words too")
     if _cuts > 3: print(f"WARNING: {_cuts} severed parts — keep it to 1–3 moments per video (gore as a punchline, not the topic)")
     if not re.search(r"gore:\s*'", story): print("NOTE: CFG.gore not set — zombie fluid is green goo ('goo'); set gore: 'blood' for dark cartoon blood or 'off'")
+# v3.24 quality gate: QA_OK = [['part of the warning line' | /regex/, 'reason'], …] — deliberate exceptions, checked and listed by render.mjs --gate / --shots
+if re.search(r'\bconst\s+QA_OK\b', story):
+    _qo = _block('QA_OK')
+    if not _qo: print("WARNING: QA_OK must be a list of [pattern, reason] pairs: const QA_OK = [['QA: crowd #0', 'why this is fine'], [/HITBOX: 'Gerald'/, 'why']];")
+    else: _nq = len(re.findall(r'''\[\s*[/'"`]''', _qo)); print(f"NOTE: QA_OK waives {_nq} warning pattern(s) — each needs a reason; render.mjs --gate prints them as QA-OK lines and counts unused ones")
 def put(t, tag, body):
     a, b = f'/* @{tag}-BEGIN */', f'/* @{tag}-END */'
     i, j = t.index(a) + len(a), t.index(b)

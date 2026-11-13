@@ -1,0 +1,46 @@
+#!/usr/bin/env bash
+# pre-push guard (v3.24): every renders/*.html added or changed in the pushed commits must pass the quality gate
+#   node render.mjs <page> --gate   (MOTION / HITBOX / GORE / QA lines, page errors, unused QA_OK waivers – the render workflow refuses the same pages)
+# Install once per clone: bash tools/install-hooks.sh   ·   Bypass (only with a reason): git push --no-verify
+# Pages are checked in the version that is pushed (not the working tree, if they differ). Plain bash 3.2 (macOS /bin/bash).
+set -u
+ROOT=$(git rev-parse --show-toplevel) || exit 0
+cd "$ROOT" || exit 0
+zero() { [ -z "${1//0/}" ]; }   # all-zero sha = branch created / deleted
+
+list=""
+while read -r lref lsha rref rsha; do
+  [ -z "${lsha:-}" ] && continue
+  zero "$lsha" && continue                                   # branch deletion: nothing to check
+  if zero "$rsha" || ! git cat-file -e "$rsha^{commit}" 2>/dev/null; then range="$lsha --not --remotes"; else range="$rsha..$lsha"; fi
+  for f in $(git log --format= --name-only --diff-filter=AM $range -- 'renders/*.html' | sort -u); do
+    git cat-file -e "$lsha:$f" 2>/dev/null || continue         # deleted again in a later commit
+    case " $list " in *" $f@"*) ;; *) list="$list $f@$lsha";; esac
+  done
+done
+[ -z "$list" ] && exit 0
+
+# node_modules (three, playwright): a worktree has none → link the main checkout's (gitignored)
+if [ ! -d "$ROOT/node_modules/three" ]; then
+  MAIN=$(cd "$(git rev-parse --git-common-dir)/.." && pwd)
+  if [ "$MAIN" != "$ROOT" ] && [ -d "$MAIN/node_modules/three" ] && [ ! -e "$ROOT/node_modules" ]; then ln -s "$MAIN/node_modules" "$ROOT/node_modules" && echo "pre-push: linked node_modules → $MAIN/node_modules"
+  else echo "pre-push: node_modules missing (npm i three@0.170.0 playwright) – cannot run the quality gate; push blocked (bypass: git push --no-verify)"; exit 1; fi
+fi
+
+TMP=$(mktemp -d "${TMPDIR:-/tmp}/whatif-gate.XXXXXX"); trap 'rm -rf "$TMP"' EXIT
+bad=0; n=0
+for e in $list; do
+  f=${e%@*}; sha=${e##*@}; n=$((n + 1)); page=$f
+  if ! git diff --quiet "$sha" -- "$f" 2>/dev/null; then page="$TMP/$n-$(basename "$f")"; git show "$sha:$f" > "$page"; fi   # working tree differs from the pushed version
+  echo "pre-push: quality gate for $f ($(git rev-parse --short "$sha")) …"
+  node "$ROOT/render.mjs" "$page" --gate > "$TMP/gate.log" 2>&1; rc=$?
+  grep -vE '^(motion|qa): ok|^audit [0-9]+ s$' "$TMP/gate.log" | sed 's/^/  /'
+  [ $rc -eq 0 ] || { bad=$((bad + 1)); echo "  ✗ $f (exit $rc)"; }
+done
+if [ $bad -gt 0 ]; then
+  echo "pre-push: blocked – $bad page(s) with open warnings. Fix them, or waive a deliberate one in QA_OK of the story (with a reason) and rebuild the page."
+  echo "          The render workflow would stop at the same gate. Bypass (only with a reason): git push --no-verify"
+  exit 1
+fi
+echo "pre-push: quality gate ok ($n page(s))"
+exit 0

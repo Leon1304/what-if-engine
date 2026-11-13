@@ -1,6 +1,9 @@
 # Renders /whatif videos in parallel: every page in renders/<slug>.html is split into SHARDS frame blocks,
 # rendered on parallel runners, then encoded (YouTube master + cover) and attached to the
 # release "render-<slug>". Trigger: push of renders/*.html, or manually with a page path.
+# v3.24 quality gate: before any frame is rendered, the gate job runs `render.mjs <page> --gate` (MOTION / HITBOX / GORE / QA lines,
+# page errors, unused QA_OK waivers). One open warning → the workflow fails there, nothing is rendered or published.
+# What only the finished frames show (LINES: / SEAM:) still publishes, but as a pre-release with "⚠ QA:" in the release notes.
 name: render
 
 on:
@@ -33,7 +36,7 @@ jobs:
       shards: ${{ steps.p.outputs.shards }}
       n: ${{ steps.p.outputs.N }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with: { fetch-depth: 2 }
       - id: p
         run: |
@@ -48,8 +51,57 @@ jobs:
           echo "shards=$(seq 0 $((N - 1)) | jq -sc .)" >> "$GITHUB_OUTPUT"; echo "SHARDS=$N" >> "$GITHUB_ENV"; echo "N=$N" >> "$GITHUB_OUTPUT"
           echo "pages: $P"
 
-  frames:
+  gate:   # v3.24: the audit runs BEFORE the ~30 min of frame rendering; open warnings stop the workflow here
     needs: plan
+    if: needs.plan.outputs.pages != '[]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        page: ${{ fromJSON(needs.plan.outputs.pages) }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with: { node-version: 22 }
+      - uses: actions/cache@v6
+        with:
+          path: ~/.cache/ms-playwright
+          key: pw-${{ env.PW_VERSION }}
+      - name: deps
+        run: |
+          npm init -y >/dev/null && npm i --no-audit --no-fund three@0.170.0 @dimforge/rapier3d-deterministic-compat@0.21.0 playwright@$PW_VERSION >/dev/null
+          npx playwright install --with-deps chromium >/dev/null
+      - id: s
+        run: echo "slug=$(basename '${{ matrix.page }}' .html)" >> "$GITHUB_OUTPUT"
+      - name: quality gate
+        run: |
+          S=${{ steps.s.outputs.slug }}; mkdir -p out
+          set +e; node render.mjs "${{ matrix.page }}" --gate > out/$S-gate.log 2>&1; RC=$?; set -e
+          cat out/$S-gate.log
+          GL=$(grep -m1 '^GATE:' out/$S-gate.log || echo "GATE: no result (exit $RC)")
+          {
+            echo "### Quality gate: $S"
+            if [ $RC -eq 0 ]; then echo "$GL"; else echo "**$GL – not rendered, nothing published.**"; fi
+            if [ $RC -ne 0 ]; then
+              echo; echo "Open:"
+              grep -E '^(MOTION|HITBOX|GORE|QA|QA-OK unused|QA-OK invalid):' out/$S-gate.log | head -60 | sed 's/^/- /' || true
+              awk '/^PAGE ERRORS:/{f=1;next} /^(GATE|STRICT|QA-OK)/{f=0} f' out/$S-gate.log | head -12 | sed 's/^/- PAGE ERROR: /' || true
+              grep -q 'PAGE DID NOT START' out/$S-gate.log && { echo '```'; tail -20 out/$S-gate.log; echo '```'; } || true
+              echo; echo "Fix them (\`node render.mjs ${{ matrix.page }} --gate\` locally), or waive a deliberate one in \`QA_OK\` of the story with a reason, rebuild the page and push again."
+            fi
+            if grep -q '^QA-OK: ' out/$S-gate.log; then echo; echo "Waived in QA_OK:"; grep '^QA-OK: ' out/$S-gate.log | head -40 | sed 's/^QA-OK: /- /'; fi
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit $RC
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: gate-${{ steps.s.outputs.slug }}
+          path: out/${{ steps.s.outputs.slug }}-gate.log
+          retention-days: 3
+
+  frames:
+    needs: [plan, gate]
     if: needs.plan.outputs.pages != '[]'
     runs-on: ubuntu-latest
     strategy:
@@ -58,10 +110,10 @@ jobs:
         page: ${{ fromJSON(needs.plan.outputs.pages) }}
         shard: ${{ fromJSON(needs.plan.outputs.shards) }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with: { node-version: 22 }
-      - uses: actions/cache@v4
+      - uses: actions/cache@v6
         with:
           path: ~/.cache/ms-playwright
           key: pw-${{ env.PW_VERSION }}
@@ -73,7 +125,7 @@ jobs:
         run: echo "slug=$(basename '${{ matrix.page }}' .html)" >> "$GITHUB_OUTPUT"
       - name: render frames
         run: node render.mjs "${{ matrix.page }}" --video "out/${{ steps.s.outputs.slug }}.mp4" --w $WIDTH --workers 3 --shard ${{ matrix.shard }}/${{ needs.plan.outputs.n }} --frames-only
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: frames-${{ steps.s.outputs.slug }}--${{ matrix.shard }}
           path: out/${{ steps.s.outputs.slug }}.mp4.frames/*.jpg
@@ -81,7 +133,7 @@ jobs:
           compression-level: 0
 
   encode:
-    needs: [plan, frames]
+    needs: [plan, gate, frames]
     if: needs.plan.outputs.pages != '[]'
     runs-on: ubuntu-latest
     strategy:
@@ -89,10 +141,10 @@ jobs:
       matrix:
         page: ${{ fromJSON(needs.plan.outputs.pages) }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with: { node-version: 22 }
-      - uses: actions/cache@v4
+      - uses: actions/cache@v6
         with:
           path: ~/.cache/ms-playwright
           key: pw-${{ env.PW_VERSION }}
@@ -104,11 +156,15 @@ jobs:
           python3 -m pip install -q numpy || true
       - id: s
         run: echo "slug=$(basename '${{ matrix.page }}' .html)" >> "$GITHUB_OUTPUT"
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           pattern: frames-${{ steps.s.outputs.slug }}--*
           path: out/${{ steps.s.outputs.slug }}.mp4.frames
           merge-multiple: true
+      - uses: actions/download-artifact@v8   # the gate's log (audit lines, QA-OK waivers): the audit is not run a second time
+        with:
+          name: gate-${{ steps.s.outputs.slug }}
+          path: out
       - name: encode + cover
         run: |
           S=${{ steps.s.outputs.slug }}
@@ -118,12 +174,21 @@ jobs:
           node render.mjs "${{ matrix.page }}" --srt out/$S.srt || true
           ffprobe -v error -show_entries format=duration:stream=codec_type,width,height -of csv=p=0 out/$S.mp4
       - name: quality check (v3.0)
+        id: qa
         run: |
           S=${{ steps.s.outputs.slug }}
-          node render.mjs "${{ matrix.page }}" --audit > out/$S-audit.log 2>&1 || true
-          cat out/$S-audit.log out/$S-render.log 2>/dev/null | grep -E '^(MOTION|HITBOX|QA|GORE|LINES|SEAM):' > out/$S-qa.txt || true
-          { echo "### Quality check: $S"; if [ -s out/$S-qa.txt ]; then head -40 out/$S-qa.txt | sed 's/^/- /'; else echo "No warnings (motion, hitboxes, crowds, feet, skin, stray lines, chunk seams)."; fi; } >> "$GITHUB_STEP_SUMMARY"
+          # open lines: the gate passed, so these can only be LINES: / SEAM: from the finished frames (waived ones print as QA-OK: in the render log)
+          cat out/$S-gate.log out/$S-render.log 2>/dev/null | grep -E '^(MOTION|HITBOX|QA|GORE|LINES|SEAM):' > out/$S-open.txt || true
+          cat out/$S-gate.log out/$S-render.log 2>/dev/null | grep -E '^QA-OK: ' > out/$S-waived.txt || true
+          {
+            echo "### Quality check: $S"
+            if [ -s out/$S-open.txt ]; then echo "⚠ $(wc -l < out/$S-open.txt) open warning(s) in the finished frames – published as pre-release:"; head -40 out/$S-open.txt | sed 's/^/- /'
+            else echo "No open warnings (gate: motion, hitboxes, crowds, feet, skin, look; frames: stray lines, chunk seams)."; fi
+            if [ -s out/$S-waived.txt ]; then echo; echo "Waived in QA_OK:"; head -40 out/$S-waived.txt | sed 's/^QA-OK: /- /'; fi
+          } >> "$GITHUB_STEP_SUMMARY"
+          { cat out/$S-open.txt out/$S-waived.txt; } > out/$S-qa.txt
           [ -s out/$S-qa.txt ] || echo "no warnings" > out/$S-qa.txt
+          echo "open=$(wc -l < out/$S-open.txt | tr -d ' ')" >> "$GITHUB_OUTPUT"
       - name: publish release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -135,7 +200,15 @@ jobs:
           LATEST=$(gh api "repos/$R/commits?path=$P&sha=main&per_page=1" -q '.[0].sha' 2>/dev/null || true)
           if [ -n "$MINE" ] && [ -n "$LATEST" ] && [ "$MINE" != "$LATEST" ]; then
             echo "superseded: $P changed on main since ${MINE:0:7} (now ${LATEST:0:7}) – the newer run publishes, this one is skipped" | tee -a "$GITHUB_STEP_SUMMARY"; exit 0; fi
-          gh release view $TAG >/dev/null 2>&1 || gh release create $TAG --title "$S" --notes "Rendered by GitHub Actions (${{ github.sha }})"
+          # v3.24: release notes carry the QA result; open warnings from the finished frames → pre-release + "⚠ QA:" (check before posting)
+          OPEN=${{ steps.qa.outputs.open || 0 }}
+          {
+            echo "Rendered by GitHub Actions (${{ github.sha }})"
+            if [ "$OPEN" -gt 0 ]; then echo; echo "⚠ QA: $OPEN open warning(s) in the finished frames – check them before posting:"; head -40 out/$S-open.txt | sed 's/^/- /'; fi
+            if [ -s out/$S-waived.txt ]; then echo; echo "Waived in QA_OK:"; head -40 out/$S-waived.txt | sed 's/^QA-OK: /- /'; fi
+          } > out/$S-notes.md
+          gh release view $TAG >/dev/null 2>&1 || gh release create $TAG --title "$S" --notes-file out/$S-notes.md
+          gh release edit $TAG --notes-file out/$S-notes.md --prerelease=$( [ "$OPEN" -gt 0 ] && echo true || echo false )
           gh release upload $TAG out/$S.mp4 out/$S-cover*.jpg out/$S-qa.txt $( [ -s out/$S.srt ] && echo out/$S.srt ) --clobber
           gh release delete-asset $TAG $S-ig.mp4 -y >/dev/null 2>&1 || true
-          echo "done: https://github.com/${{ github.repository }}/releases/tag/$TAG"
+          echo "done: https://github.com/${{ github.repository }}/releases/tag/$TAG$( [ "$OPEN" -gt 0 ] && echo ' (pre-release: ⚠ QA warnings in the notes)')"

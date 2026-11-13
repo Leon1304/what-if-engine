@@ -877,7 +877,7 @@ const boxG = (w, h, d) => G(`b${w}|${h}|${d}`, () => new THREE.BoxGeometry(w, h,
 function mesh(p, geo, m, x, y, z, o = {}) {
   const me = new THREE.Mesh(geo, m); me.position.set(x, y, z);
   if (o.rx) me.rotation.x = o.rx; if (o.ry) me.rotation.y = o.ry; if (o.rz) me.rotation.z = o.rz;
-  me.castShadow = o.cast ?? true; me.receiveShadow = o.recv ?? true; if (o.stat) me.userData.stat = true; p.add(me); return me;
+  me.castShadow = o.cast ?? true; me.receiveShadow = o.recv ?? true; if (o.stat) me.userData.stat = true; if (o.float) me.userData.float = true; p.add(me); return me;
 }
 const box = (p, w, h, d, c, x = 0, y = 0, z = 0, o = {}) => mesh(p, boxG(w, h, d), o.mat ?? mat(c, o), x, y + h / 2, z, o);
 const cyl = (p, rt, rb, h, c, x = 0, y = 0, z = 0, o = {}) => { const s = o.seg ?? 8; return mesh(p, G(`c${rt}|${rb}|${h}|${s}`, () => new THREE.CylinderGeometry(rt, rb, h, s)), o.mat ?? mat(c, o), x, y + h / 2, z, o); };
@@ -1655,7 +1655,7 @@ function _vFinish(root, paints, o = {}) {
   return root;
 }
 function vehicle(p, x, z, o = {}) {   // kind: car | sports | taxi | police | van | pickup | bus | truck | tractor — returns { g, wheels, doors, headMat, … } (police: { siren } light bar)
-  const kind = o.kind ?? 'car', g = grp(p, x, 0, z, o.ry ?? 0), wheels = [], NC = { cast: false };
+  const kind = o.kind ?? 'car', g = grp(p, x, 0, z, o.ry ?? 0), wheels = [], NC = { cast: false }; g.userData.stand = kind; if (o.buried) g.userData.buried = true;   // v3.24 stand: QA BURIED
   const c = o.color ?? (kind === 'taxi' ? '#F2C230' : kind === 'police' ? '#F2F2F2' : kind === 'bus' ? '#E3B23C' : '#3A7BD5'), c2 = shade(c, -0.09);
   const head = mat('#FFF6D8', { em: '#FFF2C0', ei: o.lights ?? 0.6, own: true }), tail = mat('#C8202A', { em: '#FF2020', ei: o.lights ?? 0.5 }), dark = '#24272D', fin = o.finish !== false && CFG.materials !== false, glass = fin ? '#7FA3BA' : '#9FC3D9', under = '#1B1D21', chrome = '#C9CED6', amber = '#F29A1F', GL = fin ? { kind: 'glass', cast: false } : { rough: 0.25, cast: false };   // v3.5: glass mirrors the sky
   const wheel = (wx, wz, r, w, style, rim) => { const pv = _vWheel(g, wx, wz, r, w, { style, rim, steer: wz > 0 }); wheels.push(pv); return pv; };
@@ -3061,6 +3061,7 @@ float clAA(float e, float x) { float w = max(fwidth(x), 1e-4); return smoothstep
 // Static props (buildings, trees, cars, furniture …). Rigged animals/creatures of the library go through model('dino/trex') (walk, pose, anim).
 // Each name is parsed once and cloned (shared geometry + materials); assemble.py embeds only the names a video uses.
 const ASSETS = new Map(), _META = new Map(), WALKSURF = []; let _walkG0 = null;   // v3.22: ground without walk surfaces (_hbQ: on a walk surface the model’s own boxes do not block)
+const _NOSTAND = /^(nature|street|fish|critters)\/|^space\/(terrain|roofmodule)|^city\/(base|road)|^farm\/(crop|field|fence|path)/, _SNAPUP = /^city\/car_|^space\/spacetruck/;   // v3.24 asset QA: models that sit in the ground by design · vehicles lifted onto their wheels
 // v3.17 hand-over data from Blender (tools/blender_asset.py → extras.wie in the GLB): { size, parts: { name: { node, pivot, parent, ud } }, marks: { name: [x, y, z, ry] }, walk: [x, y, z × 3 per triangle] }
 // read synchronously from the GLB's JSON chunk at build time (the mesh itself loads later), so a scene can use obj.at() / obj.parts right away
 function assetMeta(name) {
@@ -3075,6 +3076,7 @@ function asset(p, name, x = 0, z = 0, o = {}) {
   const root = new THREE.Group(); root.name = name; root.position.set(x, o.y ?? groundH(x, z), z); root.rotation.y = o.ry ?? 0; root.scale.setScalar(o.scale ?? 1);
   if (o.mirror) root.scale.x *= -1;   // v3.21: mirrored copy (left ↔ right) — breaks up repeats in long rows of the same model
   if (o.dyn) dyn(root); (p ?? world).add(root);
+  if (o.float) root.userData.float = true; if (o.buried) root.userData.buried = true; if (!_NOSTAND.test(name)) root.userData.stand = name;   // v3.24 QA FLOAT / BURIED (trees, rocks, street tiles, terrain sit in the ground by design)
   const data = MODELS[name];
   if (!data) { console.error('asset: ' + name + ' missing (assets/' + name + '.glb; see work/asset-catalog.html)'); rbox(root, 1, 1, 1, '#FF00FF'); return root; }
   if (!ASSETS.has(name)) { const u8 = Uint8Array.from(atob(data), c => c.charCodeAt(0));
@@ -3109,6 +3111,7 @@ function asset(p, name, x = 0, z = 0, o = {}) {
         nd.removeFromParent(); nd.position.copy(pv).sub(v3(...meta.parts[n].pivot)); nd.scale.copy(sv); nd.quaternion.identity(); root.parts[n].add(nd); }
       hold.add(s); return; }
     if (o.h) { const b = new THREE.Box3().setFromObject(s), hh = b.max.y - b.min.y; if (hh > 0) s.scale.multiplyScalar(o.h / hh); }
+    if (o.y == null && _SNAPUP.test(name)) { const b = new THREE.Box3().setFromObject(s); if (b.min.y < -0.05) s.position.y -= b.min.y; }   // v3.24: city/car_* (wheels 0.28 m below the origin), space/spacetruck* stood in the ground
     root.add(s);
   }));
   return root;
@@ -3475,8 +3478,9 @@ function horde(o = {}) {
     thigh.setColorAt(2 * i, col); thigh.setColorAt(2 * i + 1, col); shin.setColorAt(2 * i, col); shin.setColorAt(2 * i + 1, col);
     foot.setColorAt(2 * i, shoe); foot.setColorAt(2 * i + 1, shoe);
   }
+  const SPR = o.sim !== false && CFG.crowdSim !== false && o.body !== false ? 0.4 : 0.27;   // v3.24: start points as far apart as the body-shaped spacing (roughly)
   if (o.spread !== false) for (let it = 0; it < 12; it++) for (let a = 0; a < n; a++) { const A = M[a]; if (A.fixed) continue;   // v3.3: nobody rises out of the ground inside someone else (start points pushed apart, no rnd used)
-    for (let b = a + 1; b < n; b++) { const B = M[b]; if (B.fixed || Math.abs(A.b - B.b) > 2.5) continue; const dx = A.x0 - B.x0, dz = A.z0 - B.z0, d = Math.hypot(dx, dz), m = 0.5 * (A.sc + B.sc) * 0.27 * 2;
+    for (let b = a + 1; b < n; b++) { const B = M[b]; if (B.fixed || Math.abs(A.b - B.b) > 2.5) continue; const dx = A.x0 - B.x0, dz = A.z0 - B.z0, d = Math.hypot(dx, dz), m = 0.5 * (A.sc + B.sc) * SPR * 2;
       if (d < m) { const ux = d > 1e-5 ? dx / d : Math.cos(a + b), uz = d > 1e-5 ? dz / d : Math.sin(a + b), k = (m - d) / 2; A.x0 += ux * k; A.z0 += uz * k; B.x0 -= ux * k; B.z0 -= uz * k; } } }
   const NHERO = Math.min(n, o.heroes === true ? 4 : o.heroes ?? 0);
   const base = new THREE.Matrix4(), Z = new THREE.Matrix4().makeScale(0, 0, 0), out = new THREE.Matrix4(), T = new THREE.Matrix4(), TM = new THREE.Matrix4();
@@ -3532,7 +3536,14 @@ function horde(o = {}) {
     const t00 = performance.now(), T0 = Math.max(-0.5, Math.min(...M.map(q => q.b)) - 0.05), T1 = DUR + 0.6, NS = Math.ceil((T1 - T0) / SIMDT) + 2;
     const X = new Float32Array(NS * n), Zc = new Float32Array(NS * n), Yw = new Float32Array(NS * n), Wk = new Float32Array(NS * n), Mv = new Uint8Array(NS * n);
     const px = new Float32Array(n), pz = new Float32Array(n), vx = new Float32Array(n), vz = new Float32Array(n), yw = new Float32Array(n), wk = new Float32Array(n), rx = new Float32Array(n), rz = new Float32Array(n), pin = new Uint8Array(n);
-    const rad = M.map(q => 0.24 * q.sc * Math.max(q.bw ?? 1, q.bd ?? 1)), ovl = human ? 0.95 : 0.82, space = human ? 1.35 : 1.15;
+    // v3.24 body-shaped personal space: every member is a disc around a point ahead of its chest — zombies 0.5 × size, 0.25 m forward (shoulders 0.5 to the side,
+    // outstretched arms 0.75 ahead, back 0.25), people 0.42 (shoulders) on the chest. Pairs keep the sum apart (symmetric, follows the heading, no camera involved).
+    // Fades in over 1.5 s after a member appears or gets up again; push-outs ramp up (≤ 6 m/s²) and do not pile up into momentum (no shoves). Members lying down and members on a climbing pile keep the old
+    // 0.24 m disc (dense on purpose). o.body: false = the old disc everywhere.
+    let stamp = 0; const BODY = o.body !== false, rad = M.map(q => 0.24 * q.sc * Math.max(q.bw ?? 1, q.bd ?? 1)), ovl = human || BODY ? 0.95 : 0.82, space = human ? 1.35 : BODY ? 1.25 : 1.15, SEPK = BODY ? 2.4 : 1.4;   // body: keep apart earlier and firmer by steering (smooth), so the hard push-out rarely shoves
+    const bR = M.map(q => (human ? 0.42 : 0.5) * q.sc * Math.max(q.bw ?? 1, q.bd ?? 1)), bO = M.map(q => (human ? 0 : 0.25) * q.sc);
+    const oX = new Float32Array(n), oZ = new Float32Array(n), rB = Float32Array.from(rad), upP = new Uint8Array(n), gW = new Float32Array(n), qM = new Float32Array(n), pvM = new Float32Array(n), seen = new Int32Array(n),  PN = BODY ? new Uint8Array(NS * n) : null;   // gW: grows over 1.5 s (after appearing, getting up, climbing down), shrinks in 0.25 s
+    const heads = t => { if (BODY) for (let i = 0; i < n; i++) { const want = pin[i] === 2 || upP[i] || t < M[i].b - 0.25 ? 0 : 1; gW[i] += clamp(want - gW[i], -4 * SIMDT, SIMDT / 1.5); const g = sm01(gW[i]); rB[i] = lerp(rad[i], bR[i], g); oX[i] = bO[i] * g * Math.sin(yw[i]); oZ[i] = bO[i] * g * Math.cos(yw[i]); } };
     const amax = (run ? 6.5 : human ? 3.4 : 2.4) * SIMDT, turn = (human ? 7 : 3.6) * SIMDT, info = {}, cell = 1.2, grid = new Map(), K = (i, j) => i * 100003 + j;
     const hbNear = (x, z) => { const s = HITBOX.cell; for (let a = -1; a <= 1; a++) for (let b = -1; b <= 1; b++) if (HITBOX.grid.has(_hbKey(Math.floor(x / s) + a, Math.floor(z / s) + b))) return true; return false; };
     const people = HITBOX.people.map(P => ({ x: P.x, z: P.z, r: P.hx + 0.06 })), walkers = RIGS.filter(f => f._posAt && f.legL && f.root?.parent === world && !f._crowdHero);
@@ -3545,19 +3556,25 @@ function horde(o = {}) {
     const fallY = (i, t, P) => { if (xT[i] < 0) { xT[i] = t; xP[i] = P; } let Y = xP[i] - 4.905 * (t - xT[i]) ** 2, A = 0.5; return Y >= A ? Y : (Y = A * Math.exp((Y - A) / A)) < 0.01 ? 0 : Y; };
     const lineUD = i => { const u = ((px[i] - la[0]) * ldx + (pz[i] - la[1]) * ldz) / (lL * lL), cx = la[0] + ldx * clamp(u), cz = la[1] + ldz * clamp(u); return [u, ((px[i] - cx) * lnx + (pz[i] - cz) * lnz) * side]; };
     const Pat = u => { if (!NB) return 0; const f = clamp(u) * NB - 0.5, b0 = clamp(Math.floor(f), 0, NB - 1), b1 = Math.min(NB - 1, b0 + 1); return lerp(Pb[b0], Pb[b1], clamp(f - b0)); };
-    const brk = (i, t) => { if (!wl) return false; if (relT[i] <= t) return true; if (t < UNT + M[i].dl) return false; const u = clamp(((px[i] - la[0]) * ldx + (pz[i] - la[1]) * ldz) / (lL * lL)); return Math.hypot(px[i] - la[0] - ldx * u, pz[i] - la[1] - ldz * u) < 1.4; };   // after wait.until the barrier counts as broken: members push through it
+    const brk = (i, t) => { if (!wl) return false; const rel = relT[i] <= t; if (!rel && t < UNT + M[i].dl) return false; const u = clamp(((px[i] - la[0]) * ldx + (pz[i] - la[1]) * ldz) / (lL * lL)); return Math.hypot(px[i] - la[0] - ldx * u, pz[i] - la[1] - ldz * u) < (rel ? 2.5 : 1.4); };   // v3.24: released by a climb = through the wall only (was: through every prop on the way to the goal)   // after wait.until the barrier counts as broken: members push through it
     const gridAdd = () => { grid.clear(); for (let i = 0; i < n; i++) { if (pin[i] === 3) continue; const k = K(Math.floor(px[i] / cell), Math.floor(pz[i] / cell)); let L = grid.get(k); if (!L) grid.set(k, L = []); L.push(i); } };
     const near = (i, fn) => { const ci = Math.floor(px[i] / cell), cj = Math.floor(pz[i] / cell); for (let a = -1; a <= 1; a++) for (let b = -1; b <= 1; b++) { const L = grid.get(K(ci + a, cj + b)); if (L) for (const j of L) if (j !== i) fn(j); } };
     for (let i = 0; i < n; i++) { const r = stateRaw(M[i], T0); px[i] = rx[i] = r[0]; pz[i] = rz[i] = r[1]; yw[i] = r[3]; }
+    if (BODY) {   // v3.24: whoever is already there when the simulation starts gets its full body space at once — pushed apart before the first step (the plan paths overlap)
+      for (let i = 0; i < n; i++) { const there = M[i].b - 0.25 <= T0; gW[i] = there ? clamp((T0 - M[i].b + 0.25) / 1.5) : 0; pin[i] = there ? 0 : 3; } heads(T0);
+      for (let it = 0; it < 40; it++) { gridAdd(); for (let i = 0; i < n; i++) { if (pin[i]) continue; near(i, j => { if (j < i) return; const ex = px[i] + oX[i] - px[j] - oX[j], ez = pz[i] + oZ[i] - pz[j] - oZ[j], dd = Math.hypot(ex, ez), m = (rB[i] + rB[j]) * ovl; if (dd >= m) return;
+          const ux = dd > 1e-5 ? ex / dd : Math.cos(i), uz = dd > 1e-5 ? ez / dd : Math.sin(i), fi = M[i].fixed ? 0 : 1, fj = M[j].fixed ? 0 : 1, k = (m - dd) * 0.6 / Math.max(1, fi + fj);
+          px[i] += ux * k * fi; pz[i] += uz * k * fi; px[j] -= ux * k * fj; pz[j] -= uz * k * fj; }); } }
+      for (let i = 0; i < n; i++) { if (!pin[i] && !M[i].fixed && hbNear(px[i], pz[i])) { const [ox, oz] = hitPush(px[i], pz[i], rad[i], groundH(px[i], pz[i]), info); px[i] += ox; pz[i] += oz; } pin[i] = 0; } }
     for (let s = 0; s < NS; s++) {
       const t = T0 + s * SIMDT, WP = walkers.map(f => { const p = f._posAt(t); return { x: p.x, z: p.z, r: 0.3 * f.root.scale.x }; }), obst = people.concat(WP);
-      gridAdd();
+      gridAdd(); heads(t);
       const bodies = [];   // v3.3: members lying on the ground (tripped, or knocked down by h.hit) — the others step round them or fall over them
       for (let j = 0; j < n; j++) { const a = t - tripT[j], dn = M[j].down; let fx = 0, fz = 0, bx = px[j], bz = pz[j], ok = false;
         if (a >= 0.25 && a < TD - 0.5) { fx = Math.sin(yw[j]); fz = Math.cos(yw[j]); ok = true; }
         else if (dn && t >= dn.t + 0.3 && !dn.drop && !dn.squash && !(dn.sink && t > dn.t + 2.6)) { fx = -Math.sin(yw[j]) * dn.dir; fz = -Math.cos(yw[j]) * dn.dir; bx += dn.dx * dn.push; bz += dn.dz * dn.push; ok = true; }   // frozen at its sim position since dn.t
         if (ok) bodies.push({ j, pts: [[bx + fx * 0.5 * M[j].sc, bz + fz * 0.5 * M[j].sc], [bx + fx * 1.15 * M[j].sc, bz + fz * 1.15 * M[j].sc]] }); }
-      if (CLB) { cntB.fill(0); for (let i = 0; i < n; i++) { if (pin[i] && t < M[i].b) continue; const [u, d] = lineUD(i); if (u < 0 || u > 1 || d < 0 || d > 3.2) continue; const b = Math.min(NB - 1, Math.floor(u * NB)); cntB[b] += 1; if (b > 0) cntB[b - 1] += 0.5; if (b < NB - 1) cntB[b + 1] += 0.5; }
+      if (CLB) { cntB.fill(0); for (let i = 0; i < n; i++) { if (pin[i] && t < M[i].b) continue; const [u, d] = lineUD(i); if (u < 0 || u > 1 || d < 0 || d > 3.2) continue; const b = Math.min(NB - 1, Math.floor(u * NB)), w = BODY ? 1.5 : 1; cntB[b] += w; if (b > 0) cntB[b - 1] += 0.5 * w; if (b < NB - 1) cntB[b + 1] += 0.5 * w; /* v3.24 w: body spacing packs fewer per metre — same pressure for the same crush */ }
         for (let b = 0; b < NB; b++) { const pr = clamp((cntB[b] / (NB / lL) - 3) / 6); Pb[b] = Math.min(CH + 0.25, Pb[b] + crate * SIMDT * pr); if (Pb[b] >= CH && openB[b] > 1e8) openB[b] = t; } }
       for (let i = 0; i < n; i++) { const q = M[i], kb = BEH && !pinnedAt(q, t) ? speedK(q, t) : 1;   // behaviour = a member-own clock on the plan: hesitating holds it back, lunges run it ahead, then it eases back (≤ 15 %)
         lag[i] = clamp(lag[i] + (1 - kb) * SIMDT - (kb === 1 ? Math.sign(lag[i]) * Math.min(Math.abs(lag[i]), 0.15 * SIMDT) : 0), -0.8, 2.5);
@@ -3569,7 +3586,7 @@ function horde(o = {}) {
         const vnow = Math.hypot(vx[i], vz[i]);
         const onPile = CLB && (() => { const [u, d] = lineUD(i); return u > -0.05 && u < 1.05 && d < 4.5; })();
         if (vnow > 0.7 && i >= NHERO && !onPile && trips.n < trips.max && t - tripT[i] > 8) {   // trip: crowded and moving, or walking into someone on the ground
-          let cnt = 0, fell = false; if (TRR > 0) near(i, j => { if (Math.hypot(px[i] - px[j], pz[i] - pz[j]) < 0.75) cnt++; });
+          let cnt = 0, fell = false; if (TRR > 0) near(i, j => { if (Math.hypot(px[i] - px[j], pz[i] - pz[j]) < (BODY ? 1.0 : 0.75)) cnt++; });
           if (cnt >= 3 && hash(i * 91.7 + s * 0.377 + hid * 3.9) < TRR * SIMDT * 3) fell = true;
           for (const B of bodies) { if (fell || B.j === i || DOM <= 0) break; for (const [bx, bz] of B.pts) { const ex = bx - px[i], ez = bz - pz[i], dd = Math.hypot(ex, ez); if (dd < rad[i] + 0.28 && (ex * vx[i] + ez * vz[i]) > 0 && hash(i * 17.3 + B.j * 3.1 + hid) < DOM) { fell = true; break; } } }
           if (fell) { tripT[i] = t; trips.n++; (TR[i] ??= []).push(t); pin[i] = 2; continue; } }
@@ -3580,10 +3597,15 @@ function horde(o = {}) {
         if (TALL && relT[i] > 1e8) { const dw = lineUD(i)[1]; if (dw >= 0) vmax = Math.min(vmax, 0.25 + 0.9 * Math.max(0, dw - 0.6)); }   // v3.21: brakes over the last ~5 m to the wall (the front of the queue grows out from it) (no dead stop, no snapping arms)
         const dx = r[0] - px[i], dz = r[1] - pz[i], d = Math.hypot(dx, dz), ds = Math.min(vmax, d / 0.45);
         let tx = d > 1e-4 ? dx / d * ds : 0, tz = d > 1e-4 ? dz / d * ds : 0;
-        near(i, j => { const ex = px[i] - px[j], ez = pz[i] - pz[j], dd = Math.hypot(ex, ez), m = (rad[i] + rad[j]) * space; if (dd < m && dd > 1e-4) { const k = (m - dd) / m * 1.4; tx += ex / dd * k; tz += ez / dd * k; } });
+        near(i, j => { const ex = px[i] + oX[i] - px[j] - oX[j], ez = pz[i] + oZ[i] - pz[j] - oZ[j], dd = Math.hypot(ex, ez), m = (rB[i] + rB[j]) * space; if (dd < m && dd > 1e-4) { const k = (m - dd) / m * SEPK; tx += ex / dd * k; tz += ez / dd * k; } });
         for (const P of obst) { const ex = px[i] - P.x, ez = pz[i] - P.z, dd = Math.hypot(ex, ez), m = rad[i] + P.r + 0.35; if (dd < m && dd > 1e-4) { const k = (m - dd) / m * 2; tx += ex / dd * k; tz += ez / dd * k; } }
-        near(i, j => { const ex = px[j] - px[i], ez = pz[j] - pz[i], dd = Math.hypot(ex, ez), m0 = (rad[i] + rad[j]) * ovl, m2 = m0 + 0.3 + vnow * 0.55;   // v3.3: fall in behind whoever is in front (match its speed) instead of running into it
+        near(i, j => { const ex = px[j] + oX[j] - px[i] - oX[i], ez = pz[j] + oZ[j] - pz[i] - oZ[i], dd = Math.hypot(ex, ez), m0 = (rB[i] + rB[j]) * ovl, m2 = m0 + 0.3 + vnow * 0.55;   // v3.3: fall in behind whoever is in front (match its speed) instead of running into it
           if (dd < m2 && dd > 1e-4) { const ux = ex / dd, uz = ez / dd, vn = tx * ux + tz * uz, vj = pin[j] ? 0 : Math.max(0, vx[j] * ux + vz[j] * uz); if (vn > vj) { const red = (vn - vj) * (1 - clamp((dd - m0) / (m2 - m0))); tx -= ux * red; tz -= uz * red; } } });
+        if (BODY && vnow > 2) { const dX = vx[i] / vnow, dZ = vz[i] / vnow, AD = 0.5 * amax / SIMDT, LA = vnow * vnow / (2 * AD) + 1.5; stamp++;   // v3.24 runners look ahead along their path (as far as they need to brake) and slow
+          for (let d = 0; d <= LA; d += cell * 0.8) { const ci = Math.floor((px[i] + dX * d) / cell), cj = Math.floor((pz[i] + dZ * d) / cell);   // down in time for whoever is ahead (was: saw only ~2 m, ran into the back of a queue and stopped dead)
+            for (let a = -1; a <= 1; a++) for (let b = -1; b <= 1; b++) { const L = grid.get(K(ci + a, cj + b)); if (L) for (const j of L) { if (j === i || seen[j] === stamp) continue; seen[j] = stamp;
+              const ex = px[j] + oX[j] - px[i] - oX[i], ez = pz[j] + oZ[j] - pz[i] - oZ[i], pr = ex * dX + ez * dZ, m0 = (rB[i] + rB[j]) * ovl, la = Math.abs(ex * dZ - ez * dX); if (pr <= 0 || la >= m0) continue;
+              const gap = pr - Math.sqrt(m0 * m0 - la * la), vj = pin[j] ? 0 : Math.max(0, vx[j] * dX + vz[j] * dZ), ok = vj + Math.sqrt(2 * AD * Math.max(0, gap)), vn = tx * dX + tz * dZ; if (vn > ok) { tx -= dX * (vn - ok); tz -= dZ * (vn - ok); } } } } }
         for (const B of bodies) if (B.j !== i) for (const [bx, bz] of B.pts) { const ex = px[i] - bx, ez = pz[i] - bz, dd = Math.hypot(ex, ez), m = rad[i] + 0.55; if (dd < m && dd > 1e-4) { const k = (m - dd) / m * 1.6; tx += ex / dd * k; tz += ez / dd * k; } }
         const sp = Math.hypot(tx, tz); if (sp > 0.2 && hbNear(px[i], pz[i]) && !brk(i, t)) { const L = 0.75, [ox, oz] = hitPush(px[i] + tx / sp * L, pz[i] + tz / sp * L, rad[i] + 0.12, groundH(px[i], pz[i]), info);   // look-ahead: steer round what is in front
           if (ox || oz) { const ol = Math.hypot(ox, oz); tx += ox / ol * sp * 0.9; tz += oz / ol * sp * 0.9; } }
@@ -3592,28 +3614,38 @@ function horde(o = {}) {
         vx[i] += ax; vz[i] += az; }
       const ox0 = Float32Array.from(px), oz0 = Float32Array.from(pz);
       for (let i = 0; i < n; i++) if (pin[i] !== 1) { px[i] += vx[i] * SIMDT; pz[i] += vz[i] * SIMDT; }
+      qM.fill(0);   // v3.24: push-outs ramp up (≤ 6 m/s²) instead of shoving a standing member to ~1 m/s in one step
       for (let it = 0; it < 2; it++) { gridAdd();   // no overlaps: members apart, out of props and people, the front row on its side of the barrier
         cxA.fill(0); czA.fill(0);   // v3.3: member pushes are summed and capped per member (several neighbours at once no longer shove it 0.3 m in one step)
         for (let i = 0; i < n; i++) { if (pin[i]) continue;
-          near(i, j => { if (j < i && !pin[j]) return; const ex = px[i] - px[j], ez = pz[i] - pz[j], dd = Math.hypot(ex, ez), m = (rad[i] + rad[j]) * ovl; if (dd >= m) return;
+          near(i, j => { if (j < i && !pin[j]) return; const ex = px[i] + oX[i] - px[j] - oX[j], ez = pz[i] + oZ[i] - pz[j] - oZ[j], dd = Math.hypot(ex, ez), m = (rB[i] + rB[j]) * ovl; if (dd >= m) return;
             const ux = dd > 1e-5 ? ex / dd : Math.cos(i), uz = dd > 1e-5 ? ez / dd : Math.sin(i), fi = fresh(i, t), fj = !pin[j] && fresh(j, t);
             if (pin[j]) { const k = pin[j] === 2 || M[j].fixed ? m - dd : (m - dd) * 0.5; cxA[i] += ux * k; czA[i] += uz * k; }
             else if (fi !== fj) { const k = m - dd; if (fi) { cxA[i] += ux * k; czA[i] += uz * k; } else { cxA[j] -= ux * k; czA[j] -= uz * k; } }   // whoever is just appearing makes room
             else { const k = (m - dd) * 0.5; cxA[i] += ux * k; czA[i] += uz * k; cxA[j] -= ux * k; czA[j] -= uz * k; } }); }
-        for (let i = 0; i < n; i++) { if (pin[i]) continue; const L = Math.hypot(cxA[i], czA[i]), c0 = fresh(i, t) ? 0.06 : 0.03, c = L > c0 ? (c0 + 0.1 * (L - c0)) / L : 1; px[i] += cxA[i] * c; pz[i] += czA[i] * c;
+        for (let i = 0; i < n; i++) { if (pin[i]) continue; const L = Math.hypot(cxA[i], czA[i]), c0 = fresh(i, t) ? 0.06 : 0.03; let c = L > c0 ? (c0 + 0.1 * (L - c0)) / L : 1; if (BODY && L > 1e-6) { c = Math.min(c, Math.max(0, (pvM[i] + 6 * SIMDT) * SIMDT - qM[i]) / L); qM[i] += L * c; } px[i] += cxA[i] * c; pz[i] += czA[i] * c;
           for (const P of obst) { const ex = px[i] - P.x, ez = pz[i] - P.z, dd = Math.hypot(ex, ez), m = rad[i] + P.r; if (dd < m && dd > 1e-5) { px[i] += ex / dd * (m - dd); pz[i] += ez / dd * (m - dd); } }
           if (hbNear(px[i], pz[i]) && !brk(i, t)) { const [ox, oz] = hitPush(px[i], pz[i], rad[i], groundH(px[i], pz[i]), info); px[i] += ox; pz[i] += oz; }
           if (wl && t < UNT + M[i].dl && relT[i] > t) { const u = clamp(((px[i] - la[0]) * ldx + (pz[i] - la[1]) * ldz) / (lL * lL)), cx = la[0] + ldx * u, cz = la[1] + ldz * u, sd = ((px[i] - cx) * lnx + (pz[i] - cz) * lnz) * side, need = rad[i] * 0.8;
             if (sd < need && u > 0 && u < 1) { px[i] += lnx * side * (need - sd); pz[i] += lnz * side * (need - sd); } } } }
-      for (let i = 0; i < n; i++) { const o2 = s * n + i;
+      for (let i = 0; i < n; i++) { const o2 = s * n + i; pvM[i] = qM[i] / SIMDT; if (PN) PN[o2] = pin[i];
         if (pin[i] === 2) yw[i] = yw[i];   // tripped / down: keeps its heading
-        else if (!pin[i]) { const mx = px[i] - ox0[i], mz = pz[i] - oz0[i], sp = Math.hypot(mx, mz) / SIMDT; vx[i] = mx / SIMDT; vz[i] = mz / SIMDT; wk[i] += sp * SIMDT;
-          const want = sp > 0.25 ? Math.atan2(mx, mz) : stateRaw(M[i], t - lag[i])[3], dY = ((want - yw[i] + Math.PI) % TAU + TAU) % TAU - Math.PI, tr = sp > 1 && Math.abs(dY) > 1.4 ? turn * 3 : turn; yw[i] += clamp(dY, -tr, tr); Mv[o2] = sp > 0.18 ? 1 : 0; }   // v3.19: moving fast against the way it faces → turns 3× faster (was: ran backwards for up to 0.9 s)
+        else if (!pin[i]) { const mx = px[i] - ox0[i], mz = pz[i] - oz0[i], sp = Math.hypot(mx, mz) / SIMDT; const vm = BODY ? Math.hypot(vx[i], vz[i]) + 6 * SIMDT : 1e9, kv = sp > vm ? vm / sp : 1; vx[i] = mx / SIMDT * kv; vz[i] = mz / SIMDT * kv;   // v3.24: a push-out does not turn into a run-up (speed grows ≤ 6 m/s² from it) wk[i] += sp * SIMDT;
+          const want = sp > 0.25 ? Math.atan2(mx, mz) : stateRaw(M[i], t - lag[i])[3], dY = ((want - yw[i] + Math.PI) % TAU + TAU) % TAU - Math.PI, tr = sp > 1 && Math.abs(dY) > 1.4 ? Math.min(turn * 3, 9 * SIMDT) : turn; yw[i] += clamp(dY, -tr, tr); Mv[o2] = sp > 0.18 ? 1 : 0; }   // v3.19: moving fast against the way it faces → turns 3× faster (was: ran backwards for up to 0.9 s) · v3.24: at most 9 rad/s (no whip-round)
         X[o2] = px[i]; Zc[o2] = pz[i]; Yw[o2] = yw[i]; Wk[o2] = wk[i];
-        if (CLB && !pin[i]) { const [u, d] = lineUD(i); if (u > -0.02 && u < 1.02) { const P = Pat(u), L = rampL(P); Yy[o2] = d >= 0 ? P * clamp(1 - d / L) : relT[i] <= t ? (TALL ? fallY(i, t, P) : P * (1 - EASE.in(clamp(-d / (1.1 * Math.max(1, P / 2.6)))))) : 0; }   // v3.13: the drop on the far side grows with the wall height (16 m walls: no teleport)
-          else if (TALL && xT[i] >= 0) Yy[o2] = fallY(i, t, xP[i]); } }   // v3.22: still in the air when it leaves the line's ends
+        if (CLB && !pin[i]) { const [u, d] = lineUD(i); if (u > -0.02 && u < 1.02) { const P = Pat(u), L = rampL(P); Yy[o2] = d >= 0 ? P * clamp(1 - d / L) : relT[i] <= t ? (TALL ? fallY(i, t, P) : P * (1 - EASE.in(clamp(-d / (1.1 * Math.max(1, P / 2.6)))))) : 0; upP[i] = Yy[o2] > 0.15 && d >= 0 ? 1 : 0; }   // v3.13: the drop on the far side grows with the wall height (16 m walls: no teleport)
+          else { upP[i] = 0; if (TALL && xT[i] >= 0) Yy[o2] = fallY(i, t, xP[i]); } }   // v3.22: still in the air when it leaves the line's ends
+        else upP[i] = 0; }   // on the climbing pile → dense disc spacing (body spacing elsewhere)
       if (CLB) PH.set(Pb, s * NB);
     }
+    if (PN) {   // v3.24: the recorded paths are smoothed (±0.1 s, triangle) where a member walks free — push-outs in a packed crowd jitter by a few cm from step to step;
+      // walked distance (gait) and the moving flag follow the smoothed path, so standing members in a crush no longer tread on the spot
+      const cx = new Float32Array(NS), cz = new Float32Array(NS);
+      for (let i = 0; i < n; i++) { for (let k = 0; k < NS; k++) { cx[k] = X[k * n + i]; cz[k] = Zc[k * n + i]; }
+        for (let k = 3; k < NS - 3; k++) { let ok = true; for (let d = -3; d <= 3; d++) if (PN[(k + d) * n + i]) { ok = false; break; } if (!ok) continue;
+          let ax = 0, az = 0; for (let d = -3; d <= 3; d++) { const w = 4 - Math.abs(d); ax += cx[k + d] * w; az += cz[k + d] * w; } X[k * n + i] = ax / 16; Zc[k * n + i] = az / 16; }
+        let mv = Mv[i], hold = 99; for (let k = 1; k < NS; k++) { const a = (k - 1) * n + i, b = k * n + i; hold++; if (PN[b]) { Wk[b] = Wk[a]; mv = Mv[b]; continue; } const d = Math.hypot(X[b] - X[a], Zc[b] - Zc[a]), v = d / SIMDT; Wk[b] = Wk[a] + d;
+          const want = mv ? v > 0.1 : v > 0.25; if (want !== !!mv && hold >= 9) { mv = want ? 1 : 0; hold = 0; } Mv[b] = mv; } } }   // moving / standing with hysteresis and ≥ 0.3 s between switches (heroes switched walk ↔ idle every few frames: snapping limbs)
     SIM = { T0, NS, X, Zc, Yw, Wk, Mv, Yy, PH, NB, TR, trips: trips.n }; if (performance.now() - t00 > 4000) console.warn(`crowd sim ${n} members: ${Math.round(performance.now() - t00)} ms`);
   };
   const state = (q, t) => {
@@ -3649,11 +3681,20 @@ function horde(o = {}) {
     alive: (i, t) => !(M[i].down && t >= M[i].down.t),
     _qaMembers(t) { const R = []; for (let i = 0; i < n; i++) { const q = M[i]; if (t < q.b + (rise ? 0.9 : 0) || (q.down && t >= q.down.t) || tripAge(i, t) >= 0) continue; const r = state(q, t); if ((r[5] ?? 0) > 0.2) continue; R.push([i, r[0], r[1], r[3], q.sc ?? 1]); } return R; },   // v3.19 mover QA
     _dbg: (i, t) => ({ b: M[i].b, raw: stateRaw(M[i], t).slice(0, 2), state: state(M[i], t).slice(0, 2), trip: tripAge(i, t), hero: !!M[i].hero }),   // v3.3: --probe helper
-    _qa(t) {   // v3.0 QA: members standing inside each other or inside props at time t
-      const P = [], info = {}; for (let i = 0; i < n; i++) { const q = M[i]; if (t < q.b + (rise ? 0.9 : 0) || (q.down && t >= q.down.t) || q.hero || tripAge(i, t) >= 0) continue; const [x, z, , , , yp = 0] = state(q, t); if (yp > 0.2) continue; P.push([x, z, 0.24 * q.sc * Math.max(q.bw ?? 1, q.bd ?? 1), q.fixed ? 1 : 0, (q.cy ?? q.y ?? 0)]); }
-      let over = 0, inside = 0; for (let a = 0; a < P.length; a++) { for (let b = a + 1; b < P.length; b++) { const dx = P[a][0] - P[b][0], dz = P[a][1] - P[b][1]; if (dx * dx + dz * dz < ((P[a][2] + P[b][2]) * 0.55) ** 2) over++; }
+    _qa(t, view) {   // v3.0 QA: members standing inside each other or inside props at time t · v3.24 view (from qaCrowds): t → null | (x, y, z, r) → share of the frame height (0 = off screen)
+      const P = [], info = {}, on = view ? view(t) : null; if (view && !on) return { over: 0, near: 0, nearDisk: 0, nearSh: 0, inside: 0, n: 0, sim: !!SIM, bodySh: [] };   // that moment is not in the video (cut away by a flash-forward)
+      for (let i = 0; i < n; i++) { const q = M[i]; if (t < q.b + (rise ? 0.9 : 0) || (q.down && t >= q.down.t) || tripAge(i, t) >= 0) continue; const [x, z, , yaw, , yp = 0] = state(q, t); if (yp > 0.2) continue;   // v3.24: heroes count too (the front, nearest the lens)
+        const cy = q.cy ?? q.y ?? 0, sh = on ? on(x, groundH(x, z) + cy + 0.9 * q.sc, z, 0.9 * q.sc) : 0.05; if (!sh) continue;   // v3.24: only what the viewer sees
+        P.push([x, z, 0.24 * q.sc * Math.max(q.bw ?? 1, q.bd ?? 1), q.fixed ? 1 : 0, cy, sh, q.sc, Math.sin(yaw), Math.cos(yaw)]); }
+      // v3.24 close-ups (≥ QA_CLOSE of the frame height): the body, not a 0.24 m disk — shoulders 0.84 m wide, zombie arms reach ~0.7 m forward
+      const body = (A, B) => { const s = (A[6] + B[6]) / 2, ex = B[0] - A[0], ez = B[1] - A[1], lo = ex * A[7] + ez * A[8], la = Math.abs(ex * A[8] - ez * A[7]);
+        return (la < 0.6 * s && Math.abs(lo) < 0.3 * s) || (!human && lo > 0 && lo < 0.7 * s && la < 0.55 * s); };   // shoulders side by side · arms (at ±0.34 m, ~0.7 m long) in the torso ahead
+      let over = 0, near = 0, nearDisk = 0, nearAt = null, nearSh = 0, inside = 0; const bodySh = [];
+      for (let a = 0; a < P.length; a++) { for (let b = a + 1; b < P.length; b++) { const dx = P[a][0] - P[b][0], dz = P[a][1] - P[b][1]; const k = P[a][5] >= P[b][5] ? a : b, sh = P[k][5], disk = dx * dx + dz * dz < ((P[a][2] + P[b][2]) * 0.55) ** 2; if (disk) over++;
+          const bd = sh >= QA_NEAR && !disk && dx * dx + dz * dz < 1 && (body(P[a], P[b]) || body(P[b], P[a])); if (bd && bodySh.length < 400) bodySh.push(+sh.toFixed(3));   // bodySh: debugging (--probe)
+          if (disk && sh >= QA_NEAR) nearDisk++; if ((disk && sh >= QA_NEAR) || (bd && sh >= QA_CLOSE)) { near++; if (sh > nearSh) { nearSh = sh; nearAt = [P[k][0], groundH(P[k][0], P[k][1]) + P[k][4] + 0.9 * P[k][6], P[k][1]]; } } }   // v3.24: big on screen = zero tolerance
         if (!P[a][3]) { hitPush(P[a][0], P[a][1], P[a][2] * 0.6, groundH(P[a][0], P[a][1]) + P[a][4], info); if (info.deep > 0.15) inside++; } }   // fixed spots (stands, seats) are placed by hand
-      return { over, inside, n: P.length, sim: !!SIM }; },
+      return { over, near, nearDisk, nearAt, nearSh, inside, n: P.length, sim: !!SIM, bodySh }; },
     lose: (i, part, t, o2 = {}) => goreHordeLose(api, { M, farm, shin, foot }, i, part, t, o2),   // v2.29: forearm / lower leg flies off (zombies only)
     pit(o2 = {}) {   // v2.29: members walking into the area after t0 fall in (depth m), land, topple and pile up — at: [x,z], r | w, d (+ ry), t0, t1, depth
       const [px, pz] = o2.at ?? [0, 0], c = Math.cos(o2.ry ?? 0), s2 = Math.sin(o2.ry ?? 0), D = o2.depth ?? 2.9, list = [];
@@ -3734,16 +3775,20 @@ function horde(o = {}) {
       }
       for (const im of [...PARTS, eyes, mouths]) im.instanceMatrix.needsUpdate = true;
     },
-    _qaMove() {   // v3.3 QA: members that stop dead or whip round in one go (15 Hz) → { n, t, i }
-      if (!SIM) return null; const dt = 1 / 15; let worst = null, cnt = 0;
-      for (let i = 0; i < n; i++) { const q = M[i]; if (q.fixed) continue; let p0 = null, v0 = null;
+    _qaMove(view) {   // v3.3 QA: members that stop dead or whip round in one go (15 Hz) → { n, t, i, kind, off } · v3.24 view (see _qa): only moves the viewer sees count, off = how many were off screen only
+      if (!SIM) return null; const dt = 1 / 15; let worst = null, cnt = 0, off = 0;
+      const seen = (q, r, t) => { if (!view) return 0.05; const on = view(t); return on ? on(r[0], groundH(r[0], r[1]) + (r[5] ?? 0) + 0.9 * q.sc, r[1], 0.9 * q.sc) : 0; }, ev = [];
+      for (let i = 0; i < n; i++) { const q = M[i]; if (q.fixed) continue; let p0 = null, v0 = null, hid0 = false;
         for (let t = Math.max(0, q.b + 1); t <= DUR; t += dt) { if ((q.down && t >= q.down.t - 0.2) || tripAge(i, t) >= 0 || tripAge(i, t + dt) >= 0 || (GZ && Math.abs(t - gT(q)) < 0.8)) { p0 = v0 = null; continue; }
           const r = state(q, t); if (p0) { const vx = (r[0] - p0[0]) / dt, vz = (r[1] - p0[1]) / dt, sp = Math.hypot(vx, vz), dy = Math.abs(((r[3] - p0[3] + Math.PI) % TAU + TAU) % TAU - Math.PI) / dt;
-              if (v0) { const acc = Math.hypot(vx - v0[0], vz - v0[1]) / dt; const sp0 = Math.hypot(v0[0], v0[1]); if ((acc > 14 && Math.max(sp0, sp) > 0.8 && Math.min(sp0, sp) < 0.25) || (sp > 0.4 && sp0 > 0.4 && dy > 9.5)) { cnt++; if (!worst) worst = { t, i, kind: acc > 14 ? 'stops or starts dead' : 'whips round' }; break; } }
-              v0 = [vx, vz]; } p0 = r; } }
-      return cnt ? { n: cnt, ...worst } : null; },
-    _qaTwins() {   // v3.3 QA: two members that look exactly the same right next to each other → { pairs, t }
-      let best = null; for (let t = 0; t <= DUR; t += 1) { const P = []; for (let i = 0; i < n; i++) { const q = M[i]; if (t < q.b || (q.down && t >= q.down.t)) continue; const r = state(q, t); P.push([i, r[0], r[1]]); }
+              if (v0) { const acc = Math.hypot(vx - v0[0], vz - v0[1]) / dt; const sp0 = Math.hypot(v0[0], v0[1]); if ((acc > 14 && Math.max(sp0, sp) > 0.8 && Math.min(sp0, sp) < 0.25) || (sp > 0.4 && sp0 > 0.4 && dy > 9.5)) {
+                  const kind = acc > 14 ? 'stops or starts dead' : 'whips round', sh = seen(q, r, t); if (sh) { cnt++; if (!worst || t < worst.t) worst = { t, i, kind }; if (ev.length < 60) ev.push([i, +t.toFixed(2), +sh.toFixed(3), kind[0]]); hid0 = false; break; } hid0 = true; } }
+              v0 = [vx, vz]; } p0 = r; }
+        if (hid0) off++; }
+      return cnt || off ? { n: cnt, off, ...(worst ?? {}), big: ev.reduce((m, e) => Math.max(m, e[2]), 0), ev } : null; },
+    _qaTwins(view) {   // v3.3 QA: two members that look exactly the same right next to each other → { pairs, t } · v3.24 view (see _qa): both on screen
+      let best = null; for (let t = 0; t <= DUR; t += 1) { const P = [], on = view ? view(t) : null; if (view && !on) continue;
+        for (let i = 0; i < n; i++) { const q = M[i]; if (t < q.b || (q.down && t >= q.down.t)) continue; const r = state(q, t); if (on && !on(r[0], groundH(r[0], r[1]) + (r[5] ?? 0) + 0.9 * q.sc, r[1], 0.9 * q.sc)) continue; P.push([i, r[0], r[1]]); }
         let c = 0; for (let a = 0; a < P.length; a++) for (let b = a + 1; b < P.length; b++) if (SIG[P[a][0]] === SIG[P[b][0]] && Math.hypot(P[a][1] - P[b][1], P[a][2] - P[b][2]) < 1.3) c++;
         if (c && (!best || c > best.pairs)) best = { pairs: c, t }; } return best; }
   };
@@ -3801,6 +3846,7 @@ function horde(o = {}) {
       f.root.position.set(x, groundH(x, z) + (q.fixed ? q.cy ?? q.y ?? 0 : 0) - (1 - em) * 1.9 + (o.lift ? o.lift(t, i) : 0) + (state(q, t)[5] ?? 0), z); f.root.rotation.y = yaw;
       const gm = fl || run ? 'run' : mode; pose(f, gm, (q.ph / TAU + walked / q.cl) * TAU, t, gw < 1 ? { v: fl ? 4 : q.v, from: 'idle', w: gw, rec: gm } : { v: fl ? 4 : q.v }); });
   }
+  api._mb = [head, farm, foot];   // v3.24: the parts mbMeasure() follows on screen (heads, forearms, feet: what smears first)
   hordes.push(api); return api;
 }
 
@@ -4148,7 +4194,9 @@ function roadBridge(p, x0, x1, z, o = {}) {   // road deck from x0 to x1 (width 
   for (let i = 0; i < L / 4; i++) box(g, 1.6, 0.012, 0.15, '#F2F2EE', -L / 2 + 2 + i * 4, 0.06, 0, NC);
   for (const s of [-1, 1]) { box(g, L, 0.18, 1.5, '#9AA0A6', 0, 0, s * (w / 2 + 0.75)); for (let i = 0; i <= L / 2; i++) box(g, 0.08, 1.05, 0.08, c, -L / 2 + i * 2, 0.18, s * (w / 2 + 1.45)); box(g, L, 0.1, 0.12, c, 0, 1.2, s * (w / 2 + 1.45)); }
   const py = o.pylonH ?? 22; for (const f of [0.25, 0.75]) { const px = -L / 2 + f * L; for (const s of [-1, 1]) box(g, 1.2, py, 1.2, c, px, -0.6, s * (w / 2 + 1.9), { surf: 'concrete' }); box(g, 1.2, 1.4, w + 5, c, px, py - 3, 0);
-    for (let k = 1; k <= 7; k++) for (const s of [-1, 1]) for (const d of [-1, 1]) { const hx = px + d * k * L * 0.032, hh = py - 3 - k * (py - 5) / 8; box(g, 0.05, Math.max(0.5, hh - 1.2), 0.05, '#C9CDD3', hx, 1.2, s * (w / 2 + 1.9), NC); } }
+    for (let k = 1; k <= 7; k++) for (const s of [-1, 1]) for (const d of [-1, 1]) { const hx = px + d * k * L * 0.032, hh = py - 3 - k * (py - 5) / 8; box(g, 0.05, Math.max(0.5, hh - 0.16), 0.05, '#C9CDD3', hx, 0.16, s * (w / 2 + 1.9), NC); }
+    for (const s of [-1, 1]) for (const d of [-1, 1]) { const q = k => [px + d * k * L * 0.032, k >= 8 ? 0.16 : py - 3 - k * (py - 5) / 8, s * (w / 2 + 1.9)]; for (let k = 0; k < 8; k++) _seg(g, q(k), q(k + 1), 0.09, 0.09, c, { seg: 6, ...NC }); } }   /* v3.24: main cables + edge girders — the hangers hung in the air beside the deck (QA FLOAT) */
+  for (const s of [-1, 1]) box(g, L, 0.5, 0.8, '#5E646A', 0, -0.34, s * (w / 2 + 1.85), { surf: 'concrete' });
   return g;
 }
 // ---- v2.39.2 mine kit: tunnel, cage lift, headlamp with helmet, walkie-talkie ----
@@ -4198,7 +4246,7 @@ function arenaHall(p, o = {}) {   // dark indoor arena around (x, z): floor, wal
   box(g, W, 0.12, D, '#121317', 0, -0.12, 0, { surf: 'concrete', recv: true });
   for (const [sx, sz, w, d] of [[0, -D / 2, W, 0.6], [0, D / 2, W, 0.6], [-W / 2, 0, 0.6, D], [W / 2, 0, 0.6, D]]) box(g, w, H, d, wc, sx, 0, sz, { surf: 'concrete', ...NC });
   box(g, W, 0.4, D, '#0E0F12', 0, H, 0, NC);
-  for (let i = -3; i <= 3; i++) { box(g, 0.5, 0.9, D * 0.9, '#2A2C32', i * W / 8, H - 1.6, 0, NC); for (let k = -6; k <= 6; k++) box(g, 0.08, 0.9, 0.08, '#3A3D44', i * W / 8 + 0.2, H - 1.6, k * D / 14, NC); }
+  for (let i = -3; i <= 3; i++) { box(g, 0.5, 0.9, D * 0.9, '#2A2C32', i * W / 8, H - 0.9, 0, NC); for (let k = -6; k <= 6; k++) box(g, 0.08, 0.9, 0.08, '#3A3D44', i * W / 8 + 0.2, H - 0.9, k * D / 14, NC); }   /* v3.24: trusses under the roof (hung 0.7 m below it, QA FLOAT) */
   const ex = mat('#3AE07A', { basic: true, glow: 1.6 }); for (const [sx, sz, ry] of [[-W / 4, -D / 2 + 0.32, 0], [W / 4, -D / 2 + 0.32, 0], [-W / 2 + 0.32, D / 6, Math.PI / 2], [W / 2 - 0.32, D / 6, -Math.PI / 2]]) box(g, 1.2, 0.4, 0.06, '', sx, 3.2, sz, { mat: ex, ry, ...NC });
   const st = mat(o.strip ?? '#4A6AFF', { basic: true, glow: 1.1 }); for (const s of [-1, 1]) for (const k of [-1, 1]) box(g, 0.08, 0.03, D * 0.36, '', s * (o.aisle ?? 9), 0.01, k * D * 0.28, { mat: st, ...NC });
   return { g };
@@ -5289,7 +5337,9 @@ function collapse(obj, t, o = {}) {
   if (o.fx !== false) { sfx(te, 'crack', 1); sfx(te + 0.3, 'impact', 1); SHAKES.push({ t: VT(te + 0.3), amp: 0.25 + 0.3 * big, dur: 0.9 }); }
   return { t1: te + 1.2, style, ...r };
 }
+const _wreckAt = (v, t) => { const g = v.g ?? v.root ?? v; g.userData.wreckT = Math.min(g.userData.wreckT ?? 1e9, t); };   // QA BURIED: from t on a wreck may dig into the ground
 function wreck(v, t, o = {}) {
+  _wreckAt(v, t);
   const g = dyn(v.g ?? v.root ?? v), lb = localBox(g, m => m.userData.noHit), sz = lb.getSize(new THREE.Vector3()), lvl = clamp(o.level ?? 1, 0.3, 1.6), side = o.side ?? 'front', NC = { cast: false }, sd = hash(g.id * 0.71), s0 = g.scale.clone();
   const cols = _dhex(_dcols(g)), body = cols[0] ?? '#3A7BD5', dm = grp(g), fz = side === 'rear' ? -1 : 1, lat = side === 'left' || side === 'right', sx = side === 'left' ? -1 : 1;
   for (let i = 0; i < 7; i++) { const h1 = hash(i * 3.1 + sd), h2 = hash(i * 5.7 + sd), h3 = hash(i * 8.3 + sd), w = (lat ? sz.z : sz.x) * (0.22 + 0.3 * h1), hh = sz.y * (0.14 + 0.2 * h2), col = shade(body, -0.12 - 0.3 * h3);   // crumpled panels on the side that was hit
@@ -5315,7 +5365,7 @@ function wreck(v, t, o = {}) {
 function ragdoll(f, t, o = {}) { if (!f.legL) return f; dyn(f.root); f._rag = { t, o }; PHYS.rags.push(f); PHYS.t0 = Math.min(PHYS.t0, t); return f; }
 // crash(vehicle, t, { impulse: [x,y,z], spin: [x,y,z], smoke }) — the vehicle leaves its drive() path and tumbles with its momentum (+ impulse), glass bursts, smoke
 function crash(v, t, o = {}) {
-  const B = phys(v, { t0: t, mass: 1200, vel: o.impulse ?? [0, 3, 0], spin: o.spin ?? [0.6, 0.4, 1.4], keepVel: true }); B.crash = v;
+  const B = phys(v, { t0: t, mass: 1200, vel: o.impulse ?? [0, 3, 0], spin: o.spin ?? [0.6, 0.4, 1.4], keepVel: true }); B.crash = v; _wreckAt(v, t);
   emit('debris', { at: st => v._crashAt?.(st) ?? [0, -99, 0], t0: t, burst: 30, speed: 4, size: 0.08, colors: ['#BFE8FF', '#E8F8FF', '#9FCBE0'], basic: true });
   if (o.smoke !== false) emit('smoke', { at: st => v._crashAt?.(st) ?? [0, -99, 0], t0: t + 0.3, t1: t + 9, rate: 6, size: 0.9, jitter: 0.4 });
   sfx(t, 'impact', 1.2); sfx(t + 0.05, 'crack', 0.9);
@@ -9406,7 +9456,8 @@ function petrify(obj, o = {}) {   // v2.43: turns an animal / figure / prop into
   const apply = k => { for (const c of mats) if (c.color) { c.color.copy(c.userData.c0).lerp(col, k); c.color.offsetHSL(0, 0, -0.04 * (1 - k)); } };
   if (dur > 0) tick(t => apply(sm01((t - t0) / dur))); else apply(1);
   if (o.crust !== false) { const b = new THREE.Box3().setFromObject(root), sz = b.getSize(new THREE.Vector3()), g = stat(grp(world)), n = o.grains ?? 26;
-    for (let i = 0; i < n; i++) ball(g, 0.012 + hash(i * 3.3) * 0.02 * Math.max(1, sz.y), '#F6F2EA', b.min.x + hash(i * 1.1) * sz.x, b.max.y - hash(i * 2.7) * sz.y * 0.35, b.min.z + hash(i * 4.9) * sz.z, { detail: 0, cast: false }); }
+    const rc = new THREE.Raycaster(), dn = new THREE.Vector3(0, -1, 0); root.updateMatrixWorld(true);   // v3.24: grains lie on the statue (were scattered through its whole box, many in the air: QA FLOAT)
+    for (let i = 0; i < n; i++) { const gx = b.min.x + hash(i * 1.1) * sz.x, gz = b.min.z + hash(i * 4.9) * sz.z; rc.set(new THREE.Vector3(gx, b.max.y + 0.1, gz), dn); const h = rc.intersectObject(root, true).find(q => q.object.isMesh && q.point.y > b.max.y - sz.y * 0.35); if (h) ball(g, 0.012 + hash(i * 3.3) * 0.02 * Math.max(1, sz.y), '#F6F2EA', gx, h.point.y, gz, { detail: 0, cast: false }); } }
   return obj;
 }
 function balance(p, x, y, z, o = {}) {   // v2.47: giant beam balance (for size / mass comparisons): pivot post, beam of length len, two pans; returns { g, left, right } (add objects to the pans); tilt: number or t => radians (+ = right side down)
@@ -9908,7 +9959,7 @@ function aircraft(p, o = {}) {   // kind: see AIRCRAFT (real size; o.scale) — 
   const kind = AIRCRAFT[o.kind] ? o.kind : 'airliner', D = { ..._adef(kind), ...(o.paint ?? {}) }, s = o.scale ?? 1, NC = { cast: false };
   const g = dyn(grp(p ?? world, o.x ?? 0, o.y ?? 0, o.z ?? 0)), B = grp(g); B.scale.setScalar(s); g.rotation.order = 'YXZ'; if (o.ry) g.rotation.y = o.ry;
   if (CFG.fogScale == null) FOGK = Math.max(FOGK, clamp(D.L * s / 40, 1, 2.5));
-  const A = { g, B, s, kind: kind === 'fighter' ? 'fighter' : 'plane', type: kind, root: g, D, props: [], gears: [], hard: [], eng: [], acts: [], len: D.L * s };
+  const A = { g, B, s, kind: kind === 'fighter' ? 'fighter' : 'plane', type: kind, root: g, D, props: [], gears: [], hard: [], eng: [], acts: [], len: D.L * s }; g.userData.stand = kind; if (o.buried) g.userData.buried = true;
   const L = D.L, R = D.R, C = o.color ?? D.c, glass = mat('#1E2C40', { rough: 0.08, metal: 0.4 }), dark = '#2A2D33', metal = '#9AA0A6', glw = (c, gl = 1.5) => mat(c, { basic: true, glow: gl });
   const zAt = u => L * (0.5 - u), ip = (P, u) => _interp(P, u);
   A.gy = (D.R ?? 1.4) * 1.8 * s;
@@ -9988,7 +10039,7 @@ function aircraft(p, o = {}) {   // kind: see AIRCRAFT (real size; o.scale) — 
     // bomb bay (doors + bombs) and cargo ramp
     if (D.bay) { A.doors = [-1, 1].map(sx => { const dg = dyn(grp(B, sx * R * 0.55, -R * 0.82, zAt(0.47))); box(dg, R * 0.55, 0.06, 4.2, C, -sx * R * 0.27, 0, 0); return [dg, sx]; });
       for (let i = 0; i < 12; i++) { const m = dyn(grp(B, (i % 2 ? 1 : -1) * R * 0.3, -R * (0.35 + (Math.floor(i / 2) % 2) * 0.35), zAt(0.47) + (Math.floor(i / 4) - 1) * 1.3)); rod(m, 0.17, 0.17, 1.0, '#4A5236', 0, 0, 0, { seg: 8 }); rod(m, 0, 0.17, 0.25, '#4A5236', 0, 0, 0.62, { seg: 8 }); A.hard.push({ node: m, kind: 'bomb', used: false }); } }
-    if (D.ramp) { const rg = dyn(grp(B, 0, -R * 0.85, zAt(0.7))); box(rg, R * 1.5, 0.12, L * 0.17, shade(C, -0.06), 0, 0, -L * 0.085); A.ramp = rg; }
+    if (D.ramp) { const rg = dyn(grp(B, 0, -R * 0.85, zAt(0.7))); box(rg, R * 1.5, 0.12, L * 0.17, shade(C, -0.06), 0, 0, -L * 0.085); A.ramp = rg; A._rampFit = _rampGround(rg, L * 0.17, R * 1.5); }
   }
   _fuseDyn(g);
   // live: props spin (blur disc), gear folds near the ground / on command, bay doors, ramp, beacon
@@ -9997,7 +10048,7 @@ function aircraft(p, o = {}) {   // kind: see AIRCRAFT (real size; o.scale) — 
   late(t => { const [ang, lv] = _spin(A.acts, t, o.engineOff === true ? 0 : 1); A.props.forEach(({ pr, disc, ring, bq, rpm }, i) => { pr.rotation.z = ang * rpm + i; disc.visible = lv > 0.35; if (ring) ring.visible = lv > 0.6; if (bq) bq.visible = lv < 0.75; });   // running: blur disc with a tip ring; slow or still: the blades
     const gu = gearState(t); A.gears.forEach(({ gg, fold }) => { if (!fold) return; gg.rotation.x = -1.5 * gu; gg.scale.setScalar(Math.max(0.001, 1 - 0.85 * sm01((gu - 0.6) / 0.4))); });
     if (A.doors) { let d2 = 0; for (const a of A.acts) if (a.k === 'bay') d2 = Math.max(d2, _aw(t, a.t, a.t1, 0.6, 0.8)); A.doors.forEach(([dg, sx]) => { dg.rotation.z = sx * 1.4 * d2; }); }
-    if (A.ramp) { let r = 0; for (const a of A.acts) if (a.k === 'ramp') r = a.close ? 1 - sm01((t - a.t) / 1.5) : sm01((t - a.t) / 1.5); A.ramp.rotation.x = -0.55 * r; }
+    if (A.ramp) { let r = 0; for (const a of A.acts) if (a.k === 'ramp') r = a.close ? 1 - sm01((t - a.t) / 1.5) : sm01((t - a.t) / 1.5); A.ramp.rotation.x = -0.55 * r; A._rampFit(); }
     if (A.beacon) A.beacon.visible = (t * 1.1) % 1 < 0.12; });
   A.gearUp = t => (A.acts.push({ k: 'gear', t, up: true }), sfx(t, 'servo', 0.6), A); A.gearDown = t => (A.acts.push({ k: 'gear', t, up: false }), sfx(t, 'servo', 0.6), A);
   A.drop = (t, oo = {}) => { const n = oo.n ?? 6, iv = oo.interval ?? 0.25; A.acts.push({ k: 'bay', t: t - 0.9, t1: t + n * iv + 0.6 }); sfx(t - 0.9, 'servo', 0.7); const R2 = []; for (let i = 0; i < n; i++) R2.push(bomb(A, t + i * iv, { horde: oo.horde, r: oo.r, size: oo.size })); return R2; };
@@ -10085,7 +10136,7 @@ function crashLand(A, o = {}) {   // belly landing: descends onto o.at, skids o.
   const [x1, z1] = o.at ?? [0, 0], h = o.dir ?? (o.from ? Math.atan2(x1 - o.from[0], z1 - o.from[1]) : 0), dx = Math.sin(h), dz = Math.cos(h), v = o.speed ?? 55, alt = o.alt ?? 60, skid = o.skid ?? A.len * 4, gy = groundH(x1, z1) + (A.D?.R ?? 1.5) * 0.9 * A.s;
   const P = [[x1 - dx * alt * 9, gy + alt, z1 - dz * alt * 9], [x1 - dx * 30, gy + 3, z1 - dz * 30], [x1, gy, z1], [x1 + dx * skid, gy, z1 + dz * skid]];
   let len = 0; for (let i = 1; i < P.length; i++) len += Math.hypot(P[i][0] - P[i - 1][0], P[i][1] - P[i - 1][1], P[i][2] - P[i - 1][2]);
-  const st = 2 * skid / v, t0 = o.t0 ?? 0, td = t0 + (len - skid) / v, tEnd = td + st; fly(A, P, { t0, speed: v, stop: st, bank: 0 }); if (A.gearUp) A.gearUp(t0);
+  const st = 2 * skid / v, t0 = o.t0 ?? 0, td = t0 + (len - skid) / v, tEnd = td + st; fly(A, P, { t0, speed: v, stop: st, bank: 0 }); if (A.gearUp) A.gearUp(t0); _wreckAt(A, td);
   const at = tt => { const p = A.g._fly(tt)[0]; return [p[0], groundH(p[0], p[2]) + 0.3, p[2]]; };
   cbBurst('spark', at, td, { rate: 80, n: Math.ceil(st * 60), speed: 6, size: 0.25, life: 0.4 }); emit('dust', { at, t0: td, t1: tEnd, rate: 22, size: 1.4 });
   emit('smoke', { at: () => at(tEnd), t0: tEnd - 0.3, t1: tEnd + 12, rate: 8, size: 2.2 }); emit('fire', { at: at(tEnd), t0: tEnd, t1: tEnd + 12, rate: 16, size: 0.9 });
@@ -10093,16 +10144,24 @@ function crashLand(A, o = {}) {   // belly landing: descends onto o.at, skids o.
   return tEnd;
 }
 // --- helicopters: news · police · rescue (winch) · attack (rocket pods, chin gun) · transport (tandem rotors, rear ramp) ---
+// rear ramp (hinge group, opens with rotation.x < 0, tip at local z = -len, width w) stops on the ground: called in the aircraft's late hook (fly() has put it where t says), the opening angle
+// is capped where the lower tip corners reach groundH + 2 cm (bisection, a pure function of t; the ramp swings down smoothly and rests, also on uneven ground — was a fixed angle: 0.63 m into the ground, QA BURIED)
+function _rampGround(rg, len, w) {
+  const P = new THREE.Vector3(), clear = th => { rg.rotation.x = -th; rg.updateMatrix(); let lo = 1e9;
+    for (const sx of [-w / 2, 0, w / 2]) { P.set(sx, 0, -len).applyMatrix4(rg.matrix).applyMatrix4(rg.parent.matrixWorld); lo = Math.min(lo, P.y - groundH(P.x, P.z)); } return lo; };
+  return () => { const a = -rg.rotation.x; if (!(a > 1e-4) || !rg.parent) return; rg.parent.updateWorldMatrix(true, false);
+    if (clear(a) >= 0.02) return; let lo = 0, hi = a; for (let i = 0; i < 20; i++) { const m = (lo + hi) / 2; if (clear(m) >= 0.02) lo = m; else hi = m; } clear(lo); };
+}
 function heli2(p, o = {}) {
   const k = o.kind ?? 'news', s = o.scale ?? 1, NC = { cast: false }, g = dyn(grp(p ?? world, o.x ?? 0, o.y ?? 0, o.z ?? 0, o.ry ?? 0)), B = dyn(grp(g)); B.scale.setScalar(s); g.rotation.order = 'YXZ';
   const C = o.color ?? { news: '#2E86AB', police: '#1E2A44', rescue: '#D9332A', attack: '#4E5A3E', transport: '#5E6A4E' }[k], dk = shade(C, -0.12), glass = mat('#1E2C40', { rough: 0.08, metal: 0.4, opacity: 0.85 }), metal = '#3A3D44';
-  const H = { g, B, s, kind: 'heli', type: k, rotors: [], props: [], hard: [], acts: [], root: g };
+  const H = { g, B, s, kind: 'heli', type: k, rotors: [], props: [], hard: [], acts: [], root: g }; g.userData.stand = k + ' helicopter'; if (o.buried) g.userData.buried = true;
   const rotor = (x, y, z, r, nb) => { const ro = dyn(grp(B, x, y, z)); cyl(B, 0.14, 0.18, 0.45, metal, x, y - 0.45, z, NC); cyl(ro, 0.22, 0.22, 0.18, metal, 0, -0.09, 0, NC); for (let i = 0; i < nb; i++) { const q = grp(ro); q.rotation.y = i * TAU / nb; box(q, 0.32, 0.05, r, '#2A2D33', 0, 0, r / 2, { ...NC, rx: 0.04 }); }
     const disc = mesh(ro, G('rdisc', () => new THREE.CircleGeometry(1, 32).rotateX(-Math.PI / 2)), mat('#2A2D33', { opacity: 0.12 }), 0, 0.02, 0, NC); disc.scale.setScalar(r); H.rotors.push({ ro, disc, nb }); return ro; };
   if (k === 'transport') { rod(B, 1.3, 1.3, 13, C, 0, 0, 0, { seg: 12 }); _ell(B, C, 0, 0.1, 6.5, 1.3, 1.25, 1.3, { detail: 2 }); _ell(B, '', 0, 0.5, 7.2, 1.0, 0.6, 0.8, { mat: glass, detail: 1, ...NC });
     box(B, 1.6, 2.2, 3, C, 0, 0.4, -6.5); for (const z of [5.6, -6.6]) box(B, 0.9, 1.4, 1.4, dk, 0, 1.2, z); rotor(0, 2.9, 5.6, 9, 3); rotor(0, 3.4, -6.6, 9, 3);
     for (const sx of [-1, 1]) { _ell(B, dk, sx * 1.35, -0.5, 1.5, 0.45, 0.7, 4.5); for (const z of [3.5, -3.5]) { cyl(B, 0.4, 0.4, 0.35, '#1E1E1E', sx * 1.2, -1.75, z, { rz: Math.PI / 2, seg: 12 }); cyl(B, 0.06, 0.06, 0.8, metal, sx * 1.2, -1.6, z, NC); } }
-    _wins(B, [-1, 1].flatMap(s2 => _winRow(s2 * 1.3, 0.35, -4, 4, 7, 0.4, 0.35, true)), '#1E2C40'); const rp = dyn(grp(B, 0, -1.2, -6.4)); box(rp, 2.2, 0.12, 3.2, dk, 0, 0, -1.6); H.ramp = rp; }
+    _wins(B, [-1, 1].flatMap(s2 => _winRow(s2 * 1.3, 0.35, -4, 4, 7, 0.4, 0.35, true)), '#1E2C40'); const rp = dyn(grp(B, 0, -1.2, -6.4)); box(rp, 2.2, 0.12, 3.2, dk, 0, 0, -1.6); H.ramp = rp; H._rampFit = _rampGround(rp, 3.2, 2.2); }
   else { const atk = k === 'attack'; _ell(B, C, 0, 0, 0.3, atk ? 0.8 : 1.15, atk ? 1.0 : 1.05, atk ? 2.4 : 1.9, { detail: 2 }); _ell(B, '', 0, atk ? 0.35 : 0.25, atk ? 1.0 : 1.3, atk ? 0.7 : 1.0, atk ? 0.75 : 0.8, atk ? 1.5 : 1.0, { mat: glass, detail: 2, ...NC });
     if (atk) { box(B, 0.12, 0.6, 0.02, C, 0, 0.3, 0.5, NC); for (const sx of [-1, 1]) { box(B, 2.2, 0.15, 0.8, dk, sx * 1.3, -0.3, 0.1); for (const xx of [1.1, 2.0]) { rod(B, 0.24, 0.24, 1.4, '#2A2D33', sx * xx, -0.65, 0.2, { seg: 8 }); cyl(B, 0.2, 0.2, 0.02, '#141414', sx * xx, -0.66, 0.91, { rx: Math.PI / 2, seg: 8, ...NC }); } const hm = dyn(grp(B, sx * 1.55, -0.65, 0.2)); H.hard.push({ node: hm, kind: 'missile', used: false }); }
       const cg = dyn(grp(B, 0, -0.95, 1.6)); box(cg, 0.4, 0.3, 0.4, metal); rod(cg, 0.05, 0.06, 1.3, '#1A1A1A', 0, 0, 0.8, NC); H.gun = v3(0, -0.95, 2.6); H.chin = cg;
@@ -10122,7 +10181,7 @@ function heli2(p, o = {}) {
     const air = clamp((g.position.y - groundH(g.position.x, g.position.z) - H.gy - 0.3) / 2);   // v2.40: hovering bob and sway only in the air (a parked heli bobbed 15 cm into the ground)
     B.rotation.x = 0.14 * clamp(v / 30) + 0.02 * Math.sin(t * 0.9) * air; B.position.y = 0.15 * Math.sin(t * 1.1) * (1 - clamp(v / 10)) * air; bc.visible = (t * 1.1) % 1 < 0.12;
     if (H.winch) { const L2 = Math.max(0.3, winchLen(t)); H.cable.scale.y = L2; H.cable.position.y = -L2 / 2; H.hook.position.y = -L2; H.winch.rotation.set(-B.rotation.x, 0, 0); }
-    if (H.ramp) { let r = 0; for (const a of H.acts) if (a.k === 'ramp') r = a.close ? 1 - sm01((t - a.t) / 1.5) : sm01((t - a.t) / 1.5); H.ramp.rotation.x = -0.5 * r; }
+    if (H.ramp) { let r = 0; for (const a of H.acts) if (a.k === 'ramp') r = a.close ? 1 - sm01((t - a.t) / 1.5) : sm01((t - a.t) / 1.5); H.ramp.rotation.x = -0.5 * r; H._rampFit(); }
     if (H.spot) H.spot.rotation.set(o.spotPitch ?? -0.4, 0.4 * Math.sin(t * 0.7), 0); });
   if (o.downwash !== false) emit('dust', { at: tt => { const P = g._fly ? g._fly(tt)[0] : [g.position.x, g.position.y, g.position.z], gh = groundH(P[0], P[2]); return P[1] - gh < 18 * s && _spin(H.acts, tt, o.engineOff === true ? 0 : 1, 4)[1] > 0.5 ? [P[0], gh + 0.2, P[2]] : [0, -999, 0]; }, rate: 14, size: 1.1, speed: 3 });
   H.winchDown = (t, len = 12, dur = 3) => (H.acts.push({ k: 'winch', t, len, dur, from: winchLen(t) }), sfx(t, 'servo', 0.6), H);
@@ -10841,6 +10900,7 @@ function counter(p, x, z, o = {}) {
   box(g, w, 1.0, 0.7, '#F4F1E8', 0, 0, 0); box(g, w + 0.06, 0.06, 0.78, '#3A3A40', 0, 1.0, 0); box(g, w, 0.18, 0.02, acc, 0, 0.75, 0.36, NC);
   box(g, 0.35, 0.22, 0.3, '#2A2A2E', -w / 2 + 0.5, 1.06, 0); box(g, 0.3, 0.16, 0.02, '#4AD8A8', -w / 2 + 0.5, 1.2, 0.08, { mat: mat('#4AD8A8', { basic: true, glow: 0.8 }), ...NC, rx: -0.4 });
   const mb = grp(g, 0, 2.3, -0.9); const items = { fastfood: ['burger', 'fries', 'hotdog', 'cup', 'icecream', 'taco'], bakery: ['bread', 'croissant', 'cupcake', 'donut', 'pretzel', 'cookie'], icecream: ['icecream', 'milkshake', 'cupcake', 'donut', 'cup', 'lollipop'], cafe: ['mug', 'croissant', 'cupcake', 'sandwich', 'cookie', 'cup'] }[k];
+  for (const sx of [-1, 1]) box(g, 0.08, 3.12, 0.08, '#2A2A2E', sx * (w / 2 - 0.12), 0, -0.94); box(g, w - 0.1, 0.08, 0.08, '#2A2A2E', 0, 3.04, -0.94, FD.NC);   /* v3.24: posts — the menu board floated behind the counter (QA FLOAT) */
   items.forEach((it, i) => { const bx = (i - 2.5) * (w / 6.2); box(mb, w / 6.6, 0.75, 0.04, '#1E1E22', bx, 0, 0); const q = _picto(mb, it, bx, 0.18, 0.06, 2.2); q.rotation.x = 0.35; box(mb, w / 9, 0.06, 0.01, '#F7C531', bx, 0.06, 0.03, NC); });
   if (k === 'fastfood') { box(g, 0.6, 0.7, 0.5, '#C9CDD3', w / 2 - 0.5, 1.06, -0.2, { metal: 0.5 }); for (let i = 0; i < 3; i++) box(g, 0.12, 0.06, 0.06, ['#D8342A', '#F28A1A', '#2E86AB'][i], w / 2 - 0.68 + i * 0.18, 1.55, 0.06, NC); for (let i = 0; i < 2; i++) { food(g, 'tray', -0.4 + i * 0.9, 1.06, 0.1, { still: true }); food(g, 'burger', -0.48 + i * 0.9, 1.08, 0.1, { still: true }); food(g, 'fries', -0.3 + i * 0.9, 1.08, 0.08, { still: true }); } }
   if (k === 'bakery' || k === 'icecream') { const cs = grp(g, 0.3, 1.06, 0); box(cs, w * 0.55, 0.45, 0.55, '', 0, 0, 0, { mat: mat('#DDEEFF', { opacity: 0.25, rough: 0.05 }), cast: false }); for (let i = 0; i < 6; i++) { const xx = -w * 0.24 + i * w * 0.095;
@@ -10990,7 +11050,7 @@ function trainStation(p, x, z, o = {}) {
   const L = o.len ?? 40, g = stat(grp(p ?? world, x, groundH(x, z), z, o.ry ?? 0)), NC = { cast: false };
   box(g, 5, 1.1, L, '#B8B4AA', 0, 0, 0); box(g, 0.35, 0.012, L, '#F7C531', -2.3, 1.1, 0, NC); for (let zz = -L / 2 + 3; zz < L / 2; zz += 6) { box(g, 0.2, 3.2, 0.2, '#5A5E64', 0.8, 1.1, zz); } box(g, 3.6, 0.15, L, '#2E3A4A', 0.6, 4.3, 0);
   for (let zz = -L / 2 + 6; zz < L / 2; zz += 12) { const b = grp(g, 1.8, 1.1, zz); for (const s of [-1, 1]) box(b, 0.5, 0.42, 0.07, '#2A2D33', 0, 0, s * 0.765); for (let i = 0; i < 4; i++) box(b, 0.11, 0.04, 1.6, '#6E563C', -0.19 + i * 0.125, 0.42, 0, { cast: i === 1 }); for (let i = 0; i < 3; i++) box(b, 0.04, 0.12, 1.6, '#6E563C', 0.22, 0.55 + i * 0.15, 0); for (const s of [-1, 1]) box(b, 0.05, 0.55, 0.06, '#2A2D33', 0.25, 0.42, s * 0.7, { cast: false }); const s = grp(g, 0.8, 3.3, zz + 3); box(s, 0.06, 0.6, 1.4, '#1E3A6A', 0, 0, 0); box(s, 0.07, 0.3, 0.3, '#FFFFFF', 0, 0.15, -0.4, NC); box(s, 0.07, 0.05, 0.6, '#FFFFFF', 0, 0.27, 0.2, NC); }
-  const ck = grp(g, 0.8, 3.6, 0); cyl(ck, 0.35, 0.35, 0.08, '#F4F1E8', 0, 0, 0, { rz: Math.PI / 2, seg: 18 }); box(ck, 0.1, 0.25, 0.03, '#1E1E22', 0.05, 0, 0, NC); box(ck, 0.1, 0.03, 0.2, '#1E1E22', 0.05, 0, 0, NC);
+  const ck = grp(g, 0.8, 3.6, 0); cyl(ck, 0.35, 0.35, 0.08, '#F4F1E8', 0, 0, 0, { rz: Math.PI / 2, seg: 18 }); box(ck, 0.04, 0.34, 0.04, '#2A2D33', 0, 0.37, 0, NC);   /* v3.24: hanger rod — the clock floated 0.3 m under the canopy (QA FLOAT) */ box(ck, 0.1, 0.25, 0.03, '#1E1E22', 0.05, 0, 0, NC); box(ck, 0.1, 0.03, 0.2, '#1E1E22', 0.05, 0, 0, NC);
   if (!NIGHTGLOW.length) NIGHTGLOW.push(mat('#FFF1C8', { em: '#FFE2A0', ei: 0, own: true }));   // v2.40: canopy beams and fascia, lamps under the roof (glow at night), platform coping, bench legs and slats, bins, timetable board
   box(g, 0.12, 0.12, L, '#D9D5CB', -2.535, 1.0, 0, NC); box(g, 4.55, 0.02, L - 0.3, '#A8A49A', 0.175, 1.092, 0, NC); box(g, 3.7, 0.2, 0.1, '#232C38', 0.6, 4.22, L / 2, NC); box(g, 3.7, 0.2, 0.1, '#232C38', 0.6, 4.22, -L / 2, NC); for (const sx of [-1.2, 2.4]) box(g, 0.1, 0.2, L, '#232C38', sx, 4.22, 0, NC);
   for (let zz = -L / 2 + 3; zz < L / 2; zz += 6) { box(g, 3.4, 0.12, 0.12, '#5A5E64', 0.6, 4.18, zz, NC); box(g, 0.12, 0.7, 0.12, '#5A5E64', 0.42, 3.6, zz, { rz: 0.8, ...NC }); box(g, 0.36, 0.1, 0.36, '#4A4E56', 0.8, 1.1, zz, NC);
@@ -11522,7 +11582,7 @@ function castle(p, x, z, o = {}) {
   const h = S / 2; wall(-h, -h, h, -h); wall(h, -h, h, h); wall(-h, h, -h, -h); wall(-h, h, -3, h); wall(3, h, h, h);
   for (const [sx, sz] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) { cyl(g, 2.6, 2.8, H + 4, c, sx * h, 0, sz * h, { seg: 14, surf: 'stone' }); for (let i = 0; i < 10; i++) { const a = i / 10 * TAU; box(g, 0.7, 0.8, 0.5, c, sx * h + Math.cos(a) * 2.6, H + 4, sz * h + Math.sin(a) * 2.6, { ry: -a }); } cone(g, 3.0, 5, roof, sx * h, H + 4.8, sz * h, { seg: 14, surf: 'tile' });
     for (let k = 0; k < 3; k++) box(g, 0.25, 0.9, 0.2, '#1E1E22', sx * h + sx * 1.7, 3 + k * 3, sz * h + sz * 2.2, NC); }
-  for (const sx of [-1, 1]) { cyl(g, 2.0, 2.2, H + 3, c, sx * 3.6, 0, h, { seg: 12, surf: 'stone' }); cone(g, 2.3, 3.5, roof, sx * 3.6, H + 3.6, h, { seg: 12, surf: 'tile' }); } box(g, 6, 4, 1.8, c, 0, H - 1.5, h, { surf: 'stone' }); box(g, 4.4, 5.6, 0.3, '#2A2018', 0, 0, h + 0.75, NC);
+  for (const sx of [-1, 1]) { cyl(g, 2.0, 2.2, H + 3, c, sx * 3.6, 0, h, { seg: 12, surf: 'stone' }); cone(g, 2.3, 3.5, roof, sx * 3.6, H + 3, h, { seg: 12, surf: 'tile' }); }   /* v3.24: gate-tower roofs on the towers (floated 0.6 m above, QA FLOAT) */ box(g, 6, 4, 1.8, c, 0, H - 1.5, h, { surf: 'stone' }); box(g, 4.4, 5.6, 0.3, '#2A2018', 0, 0, h + 0.75, NC);
   const pc = dyn(grp(g, 0, 0, h + 0.95)); for (let i = 0; i < 6; i++) box(pc, 0.12, 5.4, 0.12, '#3A3A40', -1.9 + i * 0.76, 0, 0, NC); for (let i = 0; i < 6; i++) box(pc, 4.2, 0.12, 0.12, '#3A3A40', 0, 0.4 + i * 0.95, 0, NC);
   const db = dyn(grp(g, 0, 0.1, h + 1.1)); box(db, 4.2, 0.25, 5.5, '#6A4A2A', 0, 0, 2.75); for (let i = 0; i < 9; i++) box(db, 4.2, 0.26, 0.06, '#4A3220', 0, 0.01, 0.3 + i * 0.6, NC);
   const keep = grp(g, 0, 0, -3); box(keep, 9, 14, 9, shade(c, -0.05), 0, 0, 0, { surf: 'stone' }); box(keep, 9.3, 0.35, 9.3, shade(c, -0.12), 0, 9.2, 0, NC); box(keep, 9.4, 0.6, 9.4, shade(c, -0.14), 0, 0, 0, NC); for (let i = 0; i < 4; i++) for (const sx of [-1, 1]) box(keep, 0.8, 0.9, 0.5, shade(c, -0.05), sx * 4.3, 14, -3.6 + i * 2.4); for (let i = 0; i < 4; i++) box(keep, 0.5, 0.9, 0.8, shade(c, -0.05), -3.6 + i * 2.4, 14, 4.3);
@@ -13446,10 +13506,23 @@ function hitResolve(t) {
 
 // --- bake: merge all static props (stat) into one mesh per material — far fewer draw calls, 2–3× faster frames ---
 const _vcm = new Map();
+// v3.24 prop QA (qaProps: FLOAT): the static props as they are before bake() merges them — one world box per mesh, its opt-out and a name for the report
+const PROPQA = { stat: [] };
+function propSnap() {
+  const L = PROPQA.stat, skip = new Set(); L.length = 0; for (const f of RIGS) if (f.root) skip.add(f.root); for (const a of BEAST_ALL) skip.add(a.root ?? a.g);
+  const walk = (o, st, fl, nm, top) => { if (!o.visible || o.userData.dyn || skip.has(o)) return; const u = o.userData;
+    st ||= !!u.stat; fl ||= !!(u.float || u.cover || u.crowd); if (o.name && !o.name.startsWith('part:')) nm = o.name;
+    if (st && o.isMesh && !o.isInstancedMesh && o.geometry?.attributes?.position) { const g = o.geometry; g.boundingBox ?? g.computeBoundingBox(); const b = g.boundingBox.clone().applyMatrix4(o.matrixWorld);
+      if (!b.isEmpty()) L.push({ b, m: o, fl: fl || _qpClear(o), nm, top }); }
+    for (const c of o.children) walk(c, st, fl, nm, top); };
+  for (const c of world.children) walk(c, false, false, null, c);
+}
+const _qpClear = o => { const M = Array.isArray(o.material) ? o.material : [o.material]; return M.every(m => !m || m.visible === false || (m.transparent && (m.opacity ?? 1) < 0.5) || m.depthWrite === false || m.blending === THREE.AdditiveBlending || m.colorWrite === false); };   // glows, halos, light cones, decals: no solid object
 function bake() {
   for (const f of DEFER.splice(0)) f();
   world.updateMatrixWorld(true);
   hitBuild(); LATE.unshift(hitResolve); LATE.push(footFloor);   // v2.29 hitboxes (needs the props before they are merged)
+  propSnap();   // v3.24 prop QA (FLOAT): boxes of the static props before they are merged
   const inv = world.matrixWorld.clone().invert(), M4 = new THREE.Matrix4(), buckets = new Map(), done = [];
   world.traverse(o => {
     if (!o.isMesh || o.isInstancedMesh || !o.visible) return;
@@ -13481,7 +13554,7 @@ function bake() {
     buckets.get(key).gs.push(g); done.push(o);
   });
   for (const o of done) o.removeFromParent();
-  for (const b of buckets.values()) { const me = new THREE.Mesh(mergeGeometries(b.gs), b.m); me.castShadow = b.cast; me.receiveShadow = b.recv; me.renderOrder = b.m.transparent ? 1 : 0; world.add(me); }
+  for (const b of buckets.values()) { const me = new THREE.Mesh(mergeGeometries(b.gs), b.m); me.castShadow = b.cast; me.receiveShadow = b.recv; me.renderOrder = b.m.transparent ? 1 : 0; me.userData.baked = true; world.add(me); }
   return { merged: done.length, into: buckets.size };
 }
 if (PENDING.length) await Promise.all(PENDING.slice());   // v3.19: asset() models (own Blender sets, CC0 packs) are loaded before the hitboxes and the crowd simulation are built — before, every asset() building, car and tree was air for walkers, crowds and the QA
@@ -13763,6 +13836,20 @@ function tlLayout(nd) {   // v2.30: timeline labels never overlap each other, th
     if (ok || f < 0.7) { pos.forEach(([r, L], j) => { const b = nd.tm[j], e = ems[j]; b.classList.toggle('lo', r === 1); b.classList.remove('el', 'er'); e.style.left = ((L - xs[j] + bw / 2) / sw * 100).toFixed(3) + 'cqw'; e.style.right = 'auto'; e.style.transform = 'none'; }); return; }
   }
 }
+// v3.24 CFG.capDodge (default on; false = off): a caption page that would lie over a big face (see qaCapFace) moves to the other position (mid ↔ low) for the whole page, if it is clear there.
+// Decided once per page from the page's own moments (scene stepped there, then back to t) and the real word boxes — the same in every render block; beats with pos stay as set.
+const CAPDODGE = new Map();
+function capDodge(idx, pg, t) {
+  const key = idx + ':' + pg; if (CAPDODGE.has(key)) return CAPDODGE.get(key);
+  if (capEl.offsetParent === null || (document.fonts && document.fonts.status !== 'loaded')) return null;   // not cached: fonts still loading
+  const P = capPages(idx).find(x => x.p === pg); if (!P) { CAPDODGE.set(key, null); return null; }
+  const b = BEATS[idx], cls = capEl.className, base = (b.big ? 'big ' : ''), cur = CFG.capPos ?? 'mid', alt = cur === 'low' ? 'mid' : 'low';
+  capEl.className = base + cur; const Rc = capRects(true); capEl.className = base + alt; const Ra = capRects(true); capEl.className = cls;
+  let hc = 0, ha = 0;
+  for (const ts of P.ts) { if (!capOkT(ts)) continue; stepScene(teaseV(ts)); for (const F of qalFaces()) { const c = capCover(Rc, F), a = capCover(Ra, F); if (c.hit) hc = Math.max(hc, c.sev); if (a.hit) ha = Math.max(ha, a.sev); } }
+  stepScene(teaseV(t));   // the scene back at this frame
+  const r = hc > 0 && ha < hc * 0.5 ? alt : null; CAPDODGE.set(key, r); return r;
+}
 function updateHud(t) {
   const endT = END ? END.t : 1e9, endK = END ? span(t, END.t, 0.45, 'out') : 0;
   // series intro: the top row slides in with the episode badge and channel
@@ -13865,6 +13952,7 @@ function updateHud(t) {
     let cw = 0; for (let i = 0; i < n; i++) if (lt >= st(i) - 0.02) cw = i;
     const pg = b.instant ? 0 : capPageOf[cw] ?? 0;
     if (pg !== capPage) { capPage = pg; capWords.forEach((w, i) => { w.style.display = (b.instant || capPageOf[i] === pg) ? '' : 'none'; }); }
+    if ((CFG.capDodge ?? true) && b.pos == null && (b.big || !xBusy(t)) && !THUMB_ON) { const alt = capDodge(idx, pg, t); if (alt) { const w2 = (b.big ? 'big ' : '') + alt; if (capEl.className !== w2) capEl.className = w2; } }   // v3.24
     capWords.forEach((w, i) => {
       const k = b.instant || (CFG.subtitles && capPageOf[i] === pg) ? 1 : clamp((lt - st(i)) / 0.16), on = !!CFG.karaoke && lt >= st(i) && (i === n - 1 || lt < st(i + 1));
       const s = (k <= 0 ? 0.6 : b.instant ? 1 : 1 + (EASE.back(k) - 1) * 0.6) * (on ? 1.06 : 1);
@@ -14290,13 +14378,55 @@ if (BLI > 0) {
 let FPS = 30;
 const CUTS = CAM.filter(k => k.cut).map(k => k.t).sort((a, b) => a - b);
 const _m1 = new THREE.Vector3(), _m2 = new THREE.Vector3(), _d1 = new THREE.Vector3(), _d2 = new THREE.Vector3();
-function mbTimes(t) {   // CFG.motionBlur: 'auto' (fast frames only) | 'all' | false — CFG.mbSamples (3), CFG.shutter (0.5 = 180°); MBLUR = [[t0, t1], …] forces it
-  const mode = CFG.motionBlur ?? 'auto'; if (!EXPORT || !mode) return null;
-  const n = CFG.mbSamples ?? (MBAUTO.some(([x, y]) => t >= x && t <= y) ? 5 : 3), sh = (CFG.shutter ?? 0.5) / FPS;   // v2.31: fast actions (swings, kicks, throws, landings) get 5 samples — a smear instead of three ghosts
+function mbTimes(t) { return mbPlan(t)?.times ?? null; }
+// CFG.motionBlur: 'auto' (fast frames only) | 'all' | false — CFG.shutter (0.5 = 180°); MBLUR = [[t0, t1], …] forces it.
+// v3.24 adaptive samples: on a blurred frame mbMeasure() finds the largest on-screen move inside the shutter (figure joints, cars / flyers, crowd members, the camera);
+// n is chosen so two sub-frame copies are at most CFG.mbGap (0.005 = 0.5 % of the frame height ≈ 13 px at 2560) apart — a smear instead of a staircase of ghosts.
+// n runs from the base (3; 5 on fast actions, MBAUTO) up to CFG.mbMax (16). Faster than that: the shutter of this frame closes down (to CFG.mbMinShutter, 0.25 of it)
+// so the copies stay touching (a shorter, solid smear); what is still too fast after that is reported by the audit (QA: GHOST). CFG.mbSamples = n fixes the count (no adapting).
+// Pure function of t: measured at lo, t and hi with stepScene, then the scene is put back at t.
+function mbPlan(t, o = {}) {
+  const mode = CFG.motionBlur ?? 'auto'; if (!(EXPORT || o.force) || !mode) return null;
+  const base = MBAUTO.some(([x, y]) => t >= x && t <= y) ? 5 : 3, sh = (CFG.shutter ?? 0.5) / FPS;   // v2.31: fast actions (swings, kicks, throws, landings) get 5 samples
   let a = 0, b = DUR + 10; for (const c of CUTS) { if (c <= t) a = c; else { b = c; break; } }
-  const lo = Math.max(a, t - sh / 2), hi = Math.min(b - 1e-4, t + sh / 2);
+  let lo = Math.max(a, t - sh / 2), hi = Math.min(b - 1e-4, t + sh / 2);
   if (mode === 'auto' && !needsMB(t, lo, hi)) return null;
-  return Array.from({ length: n }, (_, i) => lerp(lo, hi, i / (n - 1)));
+  const P = { t, base, n: CFG.mbSamples ?? base, k: 1, D: 0, gap: 0, what: '' };
+  if (CFG.mbSamples == null && CFG.mbAdapt !== false && hi - lo > 1e-4) {
+    const g = CFG.mbGap ?? 0.005, cap = Math.max(base, CFG.mbMax ?? 16), M = mbMeasure(t, lo, hi); P.D = M.D; P.what = M.what;
+    let need = Math.ceil(M.D / g - 1e-6) + 1;
+    if (need > cap) { P.k = Math.max(CFG.mbMinShutter ?? 0.25, (cap - 1) * g / M.D); lo = t - (t - lo) * P.k; hi = t + (hi - t) * P.k; need = cap; }   // too fast for the cap: shorter shutter, copies stay touching
+    P.n = Math.max(base, need); P.cap = cap;
+  } else if (CFG.mbSamples != null && o.measure) { const M = mbMeasure(t, lo, hi); P.D = M.D; P.what = M.what; P.cap = P.n; }
+  P.gap = P.D * P.k / Math.max(1, P.n - 1);   // gap between two copies (frame heights), from the measured move
+  P.times = Array.from({ length: P.n }, (_, i) => lerp(lo, hi, i / (P.n - 1)));
+  return P;
+}
+// largest on-screen path inside [lo, t, hi] in frame heights → { D, what }. Points: head, chest, hands and feet of every visible figure, every drive()/fly() mover,
+// the heads, forearms and feet of every crowd member as drawn; plus the camera's own move (pan / dolly) for the background. Expects the scene at t; leaves it there.
+const _mbV = new THREE.Vector3();
+function mbPoints() {
+  const M = new Map(), shown = o => { for (let p = o; p; p = p.parent) if (!p.visible) return false; return true; }, put = (k, v, w, nm) => M.set(k, [v.x, v.y, v.z, w, nm]);
+  RIGS.forEach((f, i) => { const r = f.root; if (!r?.parent || !shown(r)) return; const nm = f.who ? `'${f.who}'` : f.kind === 'zombie' ? `zombie #${i}` : `figure #${i}`;
+    const J = [f.head, f.chest, f.footL, f.footR, ...(f.hands ?? []).map(h => h.hd)]; if (!J.some(Boolean)) J.push(r);
+    J.forEach((j, k) => { if (j) put('r' + i + ':' + k, j.getWorldPosition(_mbV), 1, nm); }); });
+  MOVERS.forEach((Mv, i) => { if (Mv.node?.parent && shown(Mv.node)) put('m' + i, Mv.node.getWorldPosition(_mbV), 1, Mv.kind === 'fly' ? `flying object #${i}` : `car #${i}`); });
+  hordes.forEach((h, hi) => { (h._mb ?? []).forEach((im, k) => { if (!im.parent || !shown(im)) return; const A = im.instanceMatrix.array, W = im.matrixWorld;   // crowd parts as drawn (hidden = scale 0)
+    for (let i = 0; i < im.count; i++) { const o = i * 16; if (A[o] * A[o] + A[o + 1] * A[o + 1] + A[o + 2] * A[o + 2] < 1e-6) continue; put('h' + hi + ':' + k + ':' + i, _mbV.set(A[o + 12], A[o + 13], A[o + 14]).applyMatrix4(W), 1, `crowd #${hi}`); } }); });
+  return M;
+}
+function mbMeasure(t, lo, hi) {
+  const proj = () => { camera.updateMatrixWorld(); const M = mbPoints(), R = new Map(); for (const [k, p] of M) { _mbV.set(p[0], p[1], p[2]).project(camera); if (_mbV.z > -1 && _mbV.z < 1) R.set(k, [_mbV.x, _mbV.y, p[3], p[4]]); } return R; };
+  const cam = () => [camera.position.clone(), camera.getWorldDirection(new THREE.Vector3()), camera.position.distanceTo(_l), camera.fov];
+  const A = proj(), CA = cam();
+  stepScene(lo); const L = proj(), CL = cam();
+  stepScene(hi); const H = proj(), CH = cam();
+  stepScene(t);
+  const asp = camera.aspect, d = (p, q) => Math.hypot((p[0] - q[0]) * asp, p[1] - q[1]) / 2, inF = p => Math.abs(p[0]) < 1.05 && Math.abs(p[1]) < 1.05;
+  let D = (CL[1].angleTo(CH[1]) + CL[0].distanceTo(CH[0]) / Math.max(2, CA[2])) / THREE.MathUtils.degToRad(CA[3]), what = 'the camera move';
+  for (const [k, p] of A) { const q = L.get(k), r = H.get(k); if (!q || !r || !(inF(p) || inF(q) || inF(r))) continue;
+    const s = (d(q, p) + d(p, r)) * p[2]; if (s > D) { D = s; what = p[3]; } }
+  return { D, what };
 }
 function needsMB(t, lo, hi) {
   if (typeof MBLUR !== 'undefined' && MBLUR.some(([a, b]) => t >= a && t <= b)) return true;
@@ -14999,8 +15129,8 @@ document.querySelectorAll('.err').forEach(n => n.remove());
 const AUD_J = ['body', 'hips', 'chest', 'neck', 'head', 'armL', 'armR', 'foreL', 'foreR', 'legL', 'legR', 'shinL', 'shinR', 'hat', 'hair', 'coat', 'cape'], _av = new THREE.Vector3(), _aq = new THREE.Quaternion();
 const _ab = new THREE.Box3(), _as = new THREE.Sphere(), _ac = new THREE.Vector3();
 // v2.31: what the viewer can see — inside the frame (10 % margin) and at least ~1.2 % of the frame height
-function audOn(x, y, z, r) { _ac.set(x, y, z).applyMatrix4(camera.matrixWorldInverse); const d = -_ac.z; if (d < 0.05) return d > -r ? 1 : 0; const hy = Math.tan(camera.fov * Math.PI / 360) * d, hx = hy * camera.aspect;
-  return d < camera.far && Math.abs(_ac.x) < hx * 1.1 + r && Math.abs(_ac.y) < hy * 1.1 + r && r / hy > 0.012 ? r / hy : 0; }   // → share of the frame height (0 = not visible)
+function audOn(x, y, z, r, C = camera) { _ac.set(x, y, z).applyMatrix4(C.matrixWorldInverse); const d = -_ac.z; if (d < 0.05) return d > -r ? 1 : 0; const hy = Math.tan(C.fov * Math.PI / 360) * d, hx = hy * C.aspect;   // v3.24 C: a camera snapshot (qaCrowds)
+  return d < C.far && Math.abs(_ac.x) < hx * 1.1 + r && Math.abs(_ac.y) < hy * 1.1 + r && r / hy > 0.012 ? r / hy : 0; }   // → share of the frame height (0 = not visible)
 function audItems() {
   world.updateMatrixWorld(true); const L = [];
   RIGS.forEach((f, i) => { if (f.root?.parent) L.push({ k: 'rig', n: f.root, f, name: `${f.who ? `'${f.who}'` : f.kind === 'zombie' ? 'zombie' : 'figure'} #${i}`, r: 0.9 * f.root.scale.x, up: 0.9 * f.root.scale.x, JN: AUD_J.filter(j => f[j]), J: AUD_J.map(j => f[j]).filter(Boolean) }); });
@@ -15071,11 +15201,7 @@ function audFresh(o = {}) {   // runs in a second, freshly opened page (render.m
 //   Lines read "QA: …". Sampled at 4 Hz (crowds 2 Hz) over the whole video.
 function qaAudit() {
   const out = [], name = f => { const i = RIGS.indexOf(f); return f.who ? `'${f.who}' #${i}` : f.kind === 'zombie' ? `zombie #${i}` : `figure #${i}`; };
-  for (const [hi, h] of hordes.entries()) { let w = null; for (let t = 0; t <= DUR; t += 0.5) { const r = h._qa?.(t); if (!r || !r.n) continue; const bad = r.over > Math.max(2, r.n * 0.02) || r.inside > 0;
-      if (bad && (!w || r.over + 4 * r.inside > w.over + 4 * w.inside)) w = { ...r, t }; }
-    if (w) out.push(`crowd #${hi}: ${w.over} pairs of members inside each other${w.inside ? `, ${w.inside} inside props` : ''} around ${w.t.toFixed(1)} s (${w.n} on screen${w.sim ? '' : ', simulation off'}) – spread the goal (stop / pile), give more room, or move the props`);
-    const mv = h._qaMove?.(); if (mv) out.push(`crowd #${hi}: ${mv.n} member(s) ${mv.kind}, first #${mv.i} around ${mv.t.toFixed(1)} s – give the path a curve or more room, or check lift / flee.path`);   // v3.3
-    const tw = h._qaTwins?.(); if (tw) out.push(`crowd #${hi}: ${tw.pairs} pair(s) of identical-looking members side by side around ${tw.t} s – pass more shirts / pants colours (or leave dedup on)`); }
+  try { out.push(...qaCrowds()); } catch (e) { out.push('crowd QA failed: ' + e.message); }   // v3.24: only what the viewer sees, zero tolerance near the lens
   const sink = new Map(); SKINQA = new Set(); const _f = new THREE.Vector3();
   try { for (let t = 0; t <= DUR; t += 0.25) { stepScene(teaseV(t)); world.updateMatrixWorld(true); skinPass();
       for (const f of RIGS) { const r = f.root; if (!f.footL || !r?.visible || r.parent !== world || f.isModel || hitFree(f, t) < 0.9) continue; const sc = r.scale.x;
@@ -15084,7 +15210,50 @@ function qaAudit() {
   finally { const sk = SKINQA; SKINQA = null; for (const f of sk) out.push(`${name(f)}: arm or leg drawn as old boxes for a moment (a joint was pulled apart or a part came off) – fine for gore and ragdolls, otherwise check the pose`); }
   for (const [f, S] of sink) out.push(`${name(f)}: foot ${(S.d * 100).toFixed(0)} cm in the floor around ${S.t.toFixed(2)} s while standing – raise the figure or its floor (y) or check the pose`);
   try { out.push(...qaMovers()); } catch (e) { out.push('mover QA failed: ' + e.message); }   // v3.19: VEHICLE · BACKWARD
+  try { out.push(...qaGhost()); } catch (e) { out.push('ghost QA failed: ' + e.message); }   // v3.24: GHOST (motion blur too coarse even at CFG.mbMax)
+  try { out.push(...qaProps()); } catch (e) { out.push('prop QA failed: ' + e.message); }   // v3.24: FLOAT · BURIED
   try { out.push(...qaLook()); } catch (e) { out.push('look QA failed: ' + e.message); }   // v3.5: DARK · EMPTY · CAMCLIP · HEADCUT
+  return out;
+}
+// --- v3.24 ghost QA (part of qaAudit): every 2nd video frame that gets motion blur is planned as the export plans it (mbPlan); a frame whose copies are still
+//   more than CFG.mbGap apart with CFG.mbMax samples and the shortest shutter (or with a fixed CFG.mbSamples) shows ghost copies → one line per run of such frames.
+function qaGhost(o = {}) {
+  if (!(CFG.motionBlur ?? 'auto')) return [];
+  const fps = o.fps ?? FPS, N = Math.floor(DUR * fps), g = CFG.mbGap ?? 0.005, step = o.step ?? 2, runs = []; let cur = null;   // every 2nd frame: ~half the cost, runs of ghost frames are longer than that
+  for (let i = 0; i < N; i += step) { const t = i / fps, tv = teaseV(t); FRAME++; stepScene(tv);
+    const P = mbPlan(tv, { force: true, measure: true }), bad = P && P.gap > g * 1.02;
+    if (bad) { if (!cur || cur.i1 < i - step) runs.push(cur = { i0: i, i1: i, w: P }); cur.i1 = i; if (P.gap > cur.w.gap) cur.w = P; } }
+  return runs.slice(0, 8).map(({ i0, i1, w }) => { const need = Math.ceil(w.D / g - 1e-6) + 1, pc = x => (x * 100).toFixed(1) + ' %';
+    return `GHOST – fast motion at ${(i0 / fps).toFixed(1)}${i1 > i0 ? '–' + (i1 / fps).toFixed(1) : ''} s needs ${need} blur samples (cap ${w.cap ?? w.n}) – ${w.what} moves ${pc(w.D)} of the frame height in one shutter, copies stay ${pc(w.gap)} apart${w.k < 1 ? ` even at ${Math.round(w.k * 100)} % shutter` : ''}: keep it further from the lens or slower, or raise CFG.mbMax${CFG.mbSamples != null ? ' (CFG.mbSamples fixes the count)' : ''}`; });
+}
+// --- v3.24 crowd QA (part of qaAudit): only what the viewer sees. The camera is sampled every 1/4 s of the video (the moment shown, flash-forwards and slow motion included);
+//   a member counts at crowd time t if it is in the frame (audOn: 10 % margin, ≥ 1.2 % of the frame height) at a sample within 0.135 s of t.
+//   Members inside each other: big on screen (≥ QA_NEAR of the frame height, ~27 m at 45°) = zero tolerance, the far crowd keeps 2 % of the members on screen;
+//   close-ups (≥ QA_CLOSE, ~12–14 m) are checked by body (shoulders side by side, zombie arms in the one ahead), not by a 0.24 m disk.
+//   Stops / whip-rounds and look-alikes off screen only: a QA-INFO: line (not counted by the gate).
+const QA_NEAR = 0.08, QA_CLOSE = 0.15;   // share of the frame height: 8 % ≈ 27 m, 15 % ≈ 14 m away at fov 45 (12 m at fov 52)
+function qaView() {   // → { view: t (crowd time) → null | (x, y, z, r) → share of the frame height, camD: (t, [x, y, z]) → nearest camera distance } — debugging: --probe "qaView().view(18)(x, y, z, 0.9)"
+  const C = []; for (let v = 0; v <= DUR + 1e-6; v += 0.25) { const ts = teaseV(v); stepScene(ts); camera.updateMatrixWorld(true);
+    C.push({ th: ST(ts), matrixWorldInverse: camera.matrixWorldInverse.clone(), fov: camera.fov, aspect: camera.aspect, far: camera.far, p: camera.position.clone() }); }
+  const VC = new Map(), view = t => { const key = Math.round(t * 1000); if (VC.has(key)) return VC.get(key); const S = C.filter(c => Math.abs(c.th - t) <= 0.135);
+    const f = S.length ? (x, y, z, r) => { let m = 0; for (const c of S) { const k = audOn(x, y, z, r, c); if (k < 1 || Math.hypot(_ac.x, _ac.y) < r + 0.3) m = Math.max(m, k); } return m; } : null; if (VC.size > 4000) VC.clear(); VC.set(key, f); return f; };   // audOn: 1 = level with the lens (counts only if it touches it)
+  const camD = (t, P) => { let d = 1e9; for (const c of C) if (Math.abs(c.th - t) <= 0.135) d = Math.min(d, c.p.distanceTo(_ac.set(...P))); return d; };
+  return { view, camD };
+}
+function qaCrowds() {
+  const out = []; if (!hordes.length) return out; const { view, camD } = qaView();
+  for (const [hi, h] of hordes.entries()) { let w = null, wn = null; const NT = [];
+    for (let t = 0; t <= DUR; t += 0.5) { const r = h._qa?.(t, view); if (!r || !r.n) continue; const far = r.over - r.nearDisk, bad = far > Math.max(2, r.n * 0.02) || r.inside > 0;
+      if (bad && (!w || far + 4 * r.inside > w.far + 4 * w.inside)) w = { ...r, far, t };
+      if (r.near) NT.push(t);
+      if (r.near && (!wn || r.near > wn.near || (r.near === wn.near && r.nearSh > wn.nearSh))) wn = { ...r, t }; }
+    const spans = NT.reduce((L, t) => { const l = L[L.length - 1]; if (l && t - l[1] <= 0.51) l[1] = t; else L.push([t, t]); return L; }, []).map(([a, b]) => a === b ? a.toFixed(1) : `${a.toFixed(1)}–${b.toFixed(1)}`).join(', ');
+    if (wn) out.push(`crowd #${hi}: ${wn.near} pair(s) of members inside each other close to the camera around ${wn.t.toFixed(1)} s (at ${spans} s; nearest ${camD(wn.t, wn.nearAt).toFixed(1)} m away, ${Math.round(100 * wn.nearSh)} % of the frame tall${wn.sim ? '' : ', simulation off'}) – zero tolerance near the lens${wn.sim ? ' (more members than fit there: the simulation could not keep their body space)' : ''}: fewer members or more room there (r, pile, stop), or keep the camera further off`);
+    if (w) out.push(`crowd #${hi}: ${w.far} pairs of members inside each other${w.inside ? `, ${w.inside} inside props` : ''} around ${w.t.toFixed(1)} s (${w.n} on screen${w.sim ? '' : ', simulation off'}) – spread the goal (stop / pile), give more room, or move the props`);
+    const mv = h._qaMove?.(view);
+    if (mv?.n) out.push(`crowd #${hi}: ${mv.n} member(s) on screen ${mv.kind}, first #${mv.i} around ${mv.t.toFixed(1)} s (biggest ${(100 * mv.big).toFixed(1)} % of the frame tall) – give the path a curve or more room, or check lift / flee.path`);   // v3.3
+    if (mv?.off) out.push(`QA-INFO: crowd #${hi}: ${mv.off} member(s) stop dead or whip round only while off screen – not counted`);
+    const tw = h._qaTwins?.(view); if (tw) out.push(`crowd #${hi}: ${tw.pairs} pair(s) of identical-looking members side by side on screen around ${tw.t} s – pass more shirts / pants colours (or leave dedup on)`); }
   return out;
 }
 // --- v3.19 mover QA (part of qaAudit): the obstacle rules for things that move on their own path, checked over the whole video at 4 Hz ---
@@ -15130,7 +15299,80 @@ function qaMovers() {
   const A = [...seen.values()], by = k => A.filter(x => x.startsWith(k));
   return ['VEHICLE', 'BACKWARD'].flatMap(k => { const L = by(k); return L.length > 6 ? [...L.slice(0, 6), `${k} – … and ${L.length - 6} more`] : L; });
 }
-// --- v3.5 look QA (part of qaAudit, lines "QA: DARK|EMPTY|CAMCLIP|HEADCUT – …"): what the picture looks like, from tiny frames of the middle of every camera shot and of every cover ---
+// --- v3.24 prop QA (part of qaAudit): things that stand or hang wrong — found before, but only by the viewer (crossbar 3.65 m over the goal posts, hay bale 0.55 m up, net drum over its rings, parked planes in the ground to the wings)
+//   FLOAT: a static part or prop (baked by stat(), an asset() model or any object that does not move) that is ≥ 0.25 m away from everything — ground, water, every other
+//          object (moving ones at t = 0 included). Boxes (slightly bigger than the real shapes), so something close to a wall / a ceiling / a wire counts as held. Not checked:
+//          moving things (dyn, tick, fly, figures, animals), glows and see-through parts, things under water, more than 40 m up, terrain-sized meshes, space skies.
+//          Meant to float: { float: true } on mesh / box / cyl / ball / asset, or obj.userData.float = true on any group.
+//   BURIED: a vehicle(), aircraft(), helicopter or asset() model (not trees, rocks, street tiles, terrain) with a visible point > 10 cm under the ground (> 20 cm while it
+//          drives: pitch and bumps) while it sticks out of it — checked every second; not under water, not tipped over, not after crash() / wreck() / crashLand().
+//          Meant to sink: { buried: true }.
+function qaProps() {
+  if (SKY.some(s => s[1] === 'space')) return [];
+  const NEAR = 0.25, out = [], b = new THREE.Box3(), C = 2, key = (i, j) => i * 100003 + j;
+  const skip = new Set(); for (const f of RIGS) if (f.root) skip.add(f.root); for (const a of BEAST_ALL) skip.add(a.root ?? a.g);
+  const live = () => { const M = new Map(), S = [];   // M: mesh → box of the meshes that may be static (not baked, no dyn above) · S: boxes of everything else (supports only)
+    const add = (o, mov, fl) => { const g = o.geometry; if (!g?.attributes?.position) return; g.boundingBox ?? g.computeBoundingBox(); if (g.boundingBox.isEmpty()) return;
+      if (o.isInstancedMesh) { if (o.count > 4000) return; const m = new THREE.Matrix4(); for (let i = 0; i < o.count; i++) { o.getMatrixAt(i, m); S.push(g.boundingBox.clone().applyMatrix4(m.premultiply(o.matrixWorld))); } return; }
+      const bb = g.boundingBox.clone().applyMatrix4(o.matrixWorld); if (mov || !o.isMesh || o.isSkinnedMesh) S.push(bb); else M.set(o, { b: bb, fl: fl || _qpClear(o) }); };
+    const walk = (o, mov, fl) => { if (!o.visible) return; const u = o.userData; mov ||= !!(u.dyn || skip.has(o) || u.crowd); fl ||= !!(u.float || u.cover);
+      if ((o.isMesh || o.isLine) && !u.baked) add(o, mov, fl); for (const c of o.children) walk(c, mov, fl); };
+    world.updateMatrixWorld(true); for (const c of world.children) walk(c, false, false); return { M, S }; };
+  const _v = new THREE.Vector3(), vbox = (o, bb) => { bb.makeEmpty(); o.traverseVisible(m => { if (!m.isMesh || m.isInstancedMesh || _qpClear(m)) return; const P = m.geometry?.attributes?.position; if (!P) return;   // visible solid parts, every vertex (a spinning wheel's box reaches 0.4 r below it; hidden gear / bombs do not count)
+    for (let i = 0; i < P.count; i += P.count > 3000 ? 3 : 1) bb.expandByPoint(_v.fromBufferAttribute(P, i).applyMatrix4(m.matrixWorld)); }); };
+  const tops = (bb, t) => { let lo = 1e9, hi = -1e9; for (const [x, z] of [[(bb.min.x + bb.max.x) / 2, (bb.min.z + bb.max.z) / 2], [bb.min.x, bb.min.z], [bb.max.x, bb.min.z], [bb.min.x, bb.max.z], [bb.max.x, bb.max.z]]) { const g = groundH(x, z); lo = Math.min(lo, g); hi = Math.max(hi, g); }
+    const w = waterH((bb.min.x + bb.max.x) / 2, (bb.min.z + bb.max.z) / 2, t); return { lo, hi, w: w > -900 ? w : -1e9 }; };
+  // ---- samples: t = 0 (FLOAT), every second (BURIED), the middle and the end (which unbaked meshes really stand still) ----
+  const T = [], bur = new Map(); for (let t = 0; t <= DUR + 1e-6; t += 1) T.push(t); if (T[T.length - 1] < DUR - 0.05) T.push(DUR);
+  const mid = T[Math.floor(T.length / 2)], last = T[T.length - 1], stands = []; world.traverse(o => { if (o.userData.stand && !o.userData.buried) stands.push(o); });
+  let L0 = null; const moved = new Set(), prevP = new Map();
+  for (const t of T) {
+    stepScene(teaseV(t)); const want = t === 0 || t === mid || t === last;
+    if (want) { const Lt = live(); if (t === 0) L0 = Lt; else for (const [o, r] of L0.M) { const q = Lt.M.get(o); if (q && (Math.abs(q.b.min.x - r.b.min.x) + Math.abs(q.b.min.y - r.b.min.y) + Math.abs(q.b.min.z - r.b.min.z) + Math.abs(q.b.max.y - r.b.max.y)) > 0.02) moved.add(o); } }
+    else world.updateMatrixWorld(true);
+    for (const o of stands) { let vis = !!o.parent; for (let p = o; p && vis; p = p.parent) if (!p.visible) vis = false; if (!vis) continue;
+      const wp = o.getWorldPosition(new THREE.Vector3()), lp = prevP.get(o), mv = !!lp && wp.distanceTo(lp) > 0.15; prevP.set(o, wp);   // driving: pitch and bumps dip the wheels a little (0.2 m allowed)
+      const up = new THREE.Vector3(0, 1, 0).transformDirection(o.matrixWorld); if (up.y < 0.94) continue;   // tipped over / crashed / banking: not standing
+      if (t >= (o.userData.wreckT ?? 1e9) - 0.2) continue;   // crash(), wreck(), crashLand(): wrecks dig in
+      vbox(o, b); if (b.isEmpty()) continue; const g = tops(b, t); if (b.min.y > g.hi - 0.1 || b.max.y < g.hi + 0.1 || g.w > b.min.y - 0.05) continue;   // above the ground · all under it · in water
+      let d = 0, at = null; o.traverseVisible(m => { if (!m.isMesh || m.isInstancedMesh || _qpClear(m)) return; const P = m.geometry?.attributes?.position; if (!P) return;   // deepest point under the ground right there
+        for (let i = 0; i < P.count; i++) { _v.fromBufferAttribute(P, i); _v.applyMatrix4(m.matrixWorld); if (_v.y > g.hi - 0.1) continue; const k = groundH(_v.x, _v.z) - _v.y; if (k > d) { d = k; at = [_v.x, _v.z, m]; } } });
+      if (d > (mv ? 0.2 : 0.1)) { const B = bur.get(o); if (!B || d > B.d) bur.set(o, { d, t, x: at[0], z: at[1], m: at[2], oy: o.getWorldPosition(new THREE.Vector3()).y - groundH(at[0], at[1]) }); } }
+  }
+  // ---- FLOAT at t = 0: union of the static boxes that are closer than NEAR; a group touching the ground, water or anything else is held ----
+  const cand = [], sup = L0.S.slice(), big = bb => Math.max(bb.max.x - bb.min.x, bb.max.z - bb.min.z) > 80, land = bb => Math.max(bb.max.x - bb.min.x, bb.max.z - bb.min.z) > 250;
+  for (const e of PROPQA.stat) cand.push({ b: e.b, m: e.m, fl: e.fl, nm: e.nm, top: e.top });
+  for (const [o, r] of L0.M) { if (moved.has(o)) { sup.push(r.b); continue; } let nm = null, top = o; for (let p = o; p && p !== world; p = p.parent) { if (!nm && p.name && !p.name.startsWith('part:')) nm = p.name; top = p; } cand.push({ b: r.b, m: o, fl: r.fl, nm, top }); }
+  const C2 = cand.filter(c => !(big(c.b) && c.b.max.y - c.b.min.y > 3)), S2 = [...sup, ...cand.filter(c => big(c.b) && c.b.max.y - c.b.min.y > 3).map(c => c.b)].filter(bb => !(land(bb) && bb.max.y - bb.min.y > 3));   // the ground mesh: groundH stands for it (a volcano or a mountain still holds what sits on it)
+  const grid = new Map(), put = (bb, v) => { for (let i = Math.floor((bb.min.x - NEAR) / C); i <= Math.floor((bb.max.x + NEAR) / C); i++) for (let j = Math.floor((bb.min.z - NEAR) / C); j <= Math.floor((bb.max.z + NEAR) / C); j++) { const k = key(i, j); (grid.get(k) ?? grid.set(k, []).get(k)).push(v); } };
+  const near = (a, c) => a.min.x - NEAR <= c.max.x && a.max.x + NEAR >= c.min.x && a.min.y - NEAR <= c.max.y && a.max.y + NEAR >= c.min.y && a.min.z - NEAR <= c.max.z && a.max.z + NEAR >= c.min.z;
+  C2.forEach((c, i) => put(c.b, i)); S2.forEach((bb, i) => put(bb, -1 - i));
+  const P = C2.map((_, i) => i), find = i => { while (P[i] !== i) i = P[i] = P[P[i]]; return i; }, held = new Uint8Array(C2.length);
+  C2.forEach((c, i) => { const g = tops(c.b, 0); if (c.b.min.y <= Math.max(g.hi, g.w) + NEAR || c.b.min.y > g.hi + 40 || c.b.max.y < g.w) held[i] = 1;   // on the ground / water, sky objects, under water
+    const seen = new Set(); for (let x = Math.floor(c.b.min.x / C); x <= Math.floor(c.b.max.x / C); x++) for (let z = Math.floor(c.b.min.z / C); z <= Math.floor(c.b.max.z / C); z++) for (const v of grid.get(key(x, z)) ?? []) {
+      if (v === i || seen.has(v)) continue; seen.add(v);
+      if (v < 0) { if (!held[i] && near(c.b, S2[-1 - v])) held[i] = 1; } else if (v > i && near(c.b, C2[v].b)) { const a = find(i), q = find(v); if (a !== q) P[a] = q; } } });
+  const comp = new Map(); C2.forEach((c, i) => { const r = find(i); const K = comp.get(r) ?? comp.set(r, { L: [], held: 0, fl: 0 }).get(r); K.L.push(i); K.held |= held[i]; K.fl |= c.fl ? 1 : 0; });
+  const fl = [];
+  for (const K of comp.values()) { if (K.held || K.fl) continue; const bb = new THREE.Box3(); let mx = null, mv = -1;
+    for (const i of K.L) { const c = C2[i]; bb.union(c.b); const s = c.b.getSize(new THREE.Vector3()), v = Math.max(s.x, 0.01) * Math.max(s.y, 0.01) * Math.max(s.z, 0.01); if (v > mv) { mv = v; mx = c; } }
+    const sz = bb.getSize(new THREE.Vector3()); if (Math.max(sz.x, sz.y, sz.z) < 0.03) continue;   // specks
+    let below = tops(bb, 0).hi; for (const bx of [...S2, ...C2.map(c => c.b)]) if (bx.max.y <= bb.min.y + 1e-3 && bx.min.x < bb.max.x && bx.max.x > bb.min.x && bx.min.z < bb.max.z && bx.max.z > bb.min.z) below = Math.max(below, bx.max.y);
+    const d = bb.min.y - below; if (d < NEAR) continue;
+    const others = [...S2, ...C2.filter((c, i) => find(i) !== find(K.L[0])).map(c => c.b)], over = (bx, m) => bx.min.x < bb.max.x + m && bx.max.x > bb.min.x - m && bx.min.z < bb.max.z + m && bx.max.z > bb.min.z - m;
+    if (!others.some(bx => over(bx, 0) && bx.min.y >= bb.max.y) && others.some(bx => over(bx, 5) && bx.max.y - bx.min.y > 2 && bx.min.y < tops(bx, 0).hi + 0.3 && bx.max.y >= bb.max.y - 0.5 && bx.max.y <= bb.max.y + 1)) continue;   // ceiling lamp of a room built without ceiling (open for the camera): walls up to its height, nothing above
+    const mine = new Set(K.L.map(i => C2[i].b)); let nd = 1e9; for (const bx of [...S2, ...C2.map(c => c.b)]) if (!mine.has(bx)) { const dx = Math.max(0, bx.min.x - bb.max.x, bb.min.x - bx.max.x), dy = Math.max(0, bx.min.y - bb.max.y, bb.min.y - bx.max.y), dz = Math.max(0, bx.min.z - bb.max.z, bb.min.z - bx.max.z); nd = Math.min(nd, Math.hypot(dx, dy, dz)); }
+    const m = mx.m, ms = mx.b.getSize(new THREE.Vector3()), col = (Array.isArray(m.material) ? m.material[0] : m.material)?.color?.getHexString?.(), gt = (m.geometry?.type ?? 'mesh').replace(/(Buffer)?Geometry$/, '').toLowerCase() || 'mesh';
+    const what = (mx.nm ? `'${mx.nm}'` : `${col ? '#' + col.toUpperCase() + ' ' : ''}${gt} ${ms.x.toFixed(2)} × ${ms.y.toFixed(2)} × ${ms.z.toFixed(2)} m`) + (K.L.length > 1 ? ` (${K.L.length} parts)` : '')
+      + (mx.top && mx.top !== m && !mx.nm ? ` of the group at (${mx.top.position.x.toFixed(1)}, ${mx.top.position.z.toFixed(1)})` : '');
+    fl.push({ d, s: `FLOAT – ${what} at (${((bb.min.x + bb.max.x) / 2).toFixed(1)}, ${bb.min.y.toFixed(2)}, ${((bb.min.z + bb.max.z) / 2).toFixed(1)}) hangs ${d.toFixed(2)} m above anything${nd < d - 0.05 ? ` (${nd.toFixed(2)} m from the nearest object)` : ''} – lower it, give it a support, or { float: true } if it is meant` }); }
+  fl.sort((a, c) => c.d - a.d); out.push(...fl.slice(0, 6).map(f => f.s)); if (fl.length > 6) out.push(`FLOAT – … and ${fl.length - 6} more`);
+  const BL = [...bur].sort((a, c) => c[1].d - a[1].d).map(([o, B]) => { const sz = new THREE.Box3().setFromObject(B.m).getSize(new THREE.Vector3()), pt = `${(B.m.geometry?.type ?? 'mesh').replace(/(Buffer)?Geometry$/, '').toLowerCase() || 'mesh'} ${sz.x.toFixed(1)} × ${sz.y.toFixed(1)} × ${sz.z.toFixed(1)} m`;
+    return `BURIED – '${o.userData.stand}' at (${o.position.x.toFixed(1)}, ${o.position.z.toFixed(1)}) reaches ${B.d.toFixed(2)} m into the ground at (${B.x.toFixed(1)}, ${B.z.toFixed(1)}) around ${B.t.toFixed(0)} s (part: ${pt}; its origin is ${B.oy.toFixed(2)} m above the ground there) – leave y out (asset / aircraft stand on the ground), raise it or the part, or { buried: true } if it is meant`; });
+  out.push(...BL.slice(0, 6)); if (BL.length > 6) out.push(`BURIED – … and ${BL.length - 6} more`);
+  return out;
+}
+// --- v3.5 look QA (part of qaAudit, lines "QA: DARK|EMPTY|CAMCLIP|HEADCUT – …", v3.24 also CAPFACE, see qaCapFace): what the picture looks like, from tiny frames of the middle of every camera shot and of every cover ---
 //   DARK: much of the frame near-black (not counting the sky) · EMPTY: most of the frame without any detail (flat sky / bare ground, a blob in the distance)
 //   CAMCLIP: geometry closer than 0.5 m to the lens covers a big part of the frame · HEADCUT: a close-up cuts through a face at the top edge
 //   Own small render targets and a plain renderer.render (no AO, bloom, lens effects), tone map + sRGB + contrast + vignette like the final pass; the renderer state is put back afterwards.
@@ -15240,7 +15482,94 @@ function qaLook(o = {}) {
   } finally { TH = TH0; THUMB_ON = ON0; }
   if (o.stats) return stats;
   const L = [...res.values()].sort((a, b) => b.sev - a.sev).map(x => x.msg), by = k => L.filter(m => m.startsWith(k + ' '));
-  return ['DARK', 'EMPTY', 'CAMCLIP', 'HEADCUT'].flatMap(k => { const A = by(k); return A.length > 6 ? [...A.slice(0, 6), `${k} – … and ${A.length - 6} more`] : A; });
+  let cf = []; if (o.capface !== false) try { cf = qaCapFace(o); } catch (e) { cf = ['CAPFACE – check failed: ' + e.message]; }   // v3.24
+  return [...['DARK', 'EMPTY', 'CAMCLIP', 'HEADCUT'].flatMap(k => { const A = by(k); return A.length > 6 ? [...A.slice(0, 6), `${k} – … and ${A.length - 6} more`] : A; }), ...cf];
+}
+// --- v3.24 CAPFACE (part of qaLook, lines "QA: CAPFACE – …"): a caption page lies over the face of a figure that is big in the frame ---
+//   For every caption page (the pages synced to the voice, see capPaginate) the HUD is set to that moment (updateHud) and the real on-screen boxes of its words / kick / who
+//   (getBoundingClientRect, relative to #stage) are laid over the projected faces: skull box and eye band of every visible figure facing the lens whose face is ≥ 4 % of the
+//   frame height. Reported when the words cover ≥ 35 % of the face or ≥ 50 % of the eye band. Geometry and DOM only (no renders); the HUD is put back afterwards.
+const _qf = [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()], _qfB = new THREE.Box3();
+const QF_CROWD = 0.06;   // v3.24: crowd faces count from 6 % of the frame height (figures from 4 %) — small background heads behind a caption are not an error
+function qalFaces() {   // → [{ i, f, box: [u0, v0, u1, v1], eye: [...], fh }] in frame fractions (0, 0 = top left)
+  const R = []; world.updateMatrixWorld(true); camera.updateMatrixWorld();
+  const [P, C, D] = _qf, uv = v => { _qlc.copy(v).applyMatrix4(camera.matrixWorldInverse); if (_qlc.z > -0.05) return null; v.project(camera); return [(v.x + 1) / 2, (1 - v.y) / 2]; };
+  RIGS.forEach((f, i) => { if (!f.head || f === POV_ON || !f.root?.visible) return;
+    let vis = true, top = f.head; for (; top; top = top.parent) { if (!top.visible) { vis = false; break; } if (top === scene) break; } if (!vis || !top) return;
+    const sk = f.FC?.skull; let u0 = Infinity, v0 = Infinity, u1 = -Infinity, v1 = -Infinity, bad = false;
+    const add = v => { const q = uv(v); if (!q) { bad = true; return; } u0 = Math.min(u0, q[0]); u1 = Math.max(u1, q[0]); v0 = Math.min(v0, q[1]); v1 = Math.max(v1, q[1]); };
+    if (sk?.geometry) { sk.geometry.boundingBox ?? sk.geometry.computeBoundingBox(); const b = sk.geometry.boundingBox; if (!sk.visible) return;   // the skull's own box, turned with the head (tight, not a world-axis box)
+      for (let k = 0; k < 8; k++) add(P.set(k & 1 ? b.max.x : b.min.x, k & 2 ? b.max.y : b.min.y, k & 4 ? b.max.z : b.min.z).applyMatrix4(sk.matrixWorld)); }
+    else { _qfB.makeEmpty().expandByObject(f.head); if (_qfB.isEmpty()) return; for (let k = 0; k < 8; k++) add(P.set(k & 1 ? _qfB.max.x : _qfB.min.x, k & 2 ? _qfB.max.y : _qfB.min.y, k & 4 ? _qfB.max.z : _qfB.min.z)); }
+    if (bad) return; const fh = v1 - v0, fw = u1 - u0; if (fh < 0.04 || u1 < 0 || u0 > 1 || v1 < 0 || v0 > 1) return;
+    // facing the lens: the face is +z of the head (back of the head: not a face)
+    f.head.localToWorld(C.set(0, 0.19, 0)); f.head.localToWorld(D.set(0, 0.19, 0.19)); D.sub(C).normalize(); P.copy(camera.position).sub(C).normalize(); if (D.dot(P) < -0.2) return;
+    let ey = v0 + 0.45 * fh, ex0 = u0 + 0.12 * fw, ex1 = u1 - 0.12 * fw; const E = f.FC?.eyes ?? [];
+    if (E.length) { const q = E.map(e => uv(e.getWorldPosition(P))).filter(Boolean); if (q.length) { ey = q.reduce((s, x) => s + x[1], 0) / q.length; const xs = q.map(x => x[0]), pad = 0.14 * fw; ex0 = Math.max(u0, Math.min(...xs) - pad); ex1 = Math.min(u1, Math.max(...xs) + pad); } }
+    R.push({ i, f, fh, key: 'f' + i, box: [u0, v0, u1, v1], eye: [ex0, ey - 0.09 * fh, ex1, ey + 0.09 * fh] }); });
+  // crowd members (horde): their eye strips are instances (0.26 × 0.06 × 0.02, on the front of the 0.38 head, 0.23 above its base) — the head box and the eye band follow from each one
+  QFE ??= (() => { const L = []; world.traverse(o => { if (!o.isInstancedMesh || !o.userData.crowd) return; const g = o.geometry; g.boundingBox ?? g.computeBoundingBox(); const z = g.boundingBox.getSize(_qf[0]);
+    if (Math.abs(z.x - 0.26) < 1e-3 && Math.abs(z.y - 0.06) < 1e-3 && Math.abs(z.z - 0.02) < 1e-3) L.push(o); }); return L; })();
+  const tf = Math.tan(camera.fov * Math.PI / 360) * 2, M = _qfM, e = M.elements;
+  QFE.forEach((im, hk) => { let vis = true; for (let p = im; p; p = p.parent) if (!p.visible) { vis = false; break; } if (!vis) return;
+    for (let i = 0; i < im.count; i++) { im.getMatrixAt(i, M); const sc = Math.hypot(e[0], e[1], e[2]); if (sc < 1e-4) continue; M.premultiply(im.matrixWorld);
+      C.set(0, 0, 0).applyMatrix4(M); _qlc.copy(C).applyMatrix4(camera.matrixWorldInverse); if (_qlc.z > -0.1 || 0.38 * Math.hypot(e[0], e[1], e[2]) / (-_qlc.z * tf) < QF_CROWD) continue;
+      D.set(e[8], e[9], e[10]).normalize(); P.copy(camera.position).sub(C).normalize(); if (D.dot(P) < -0.2) continue;   // back of the head
+      const box = (x0, x1, y0, y1, z0, z1) => { let a = Infinity, b = Infinity, c = -Infinity, d = -Infinity; for (let k = 0; k < 8; k++) { const q = uv(P.set(k & 1 ? x1 : x0, k & 2 ? y1 : y0, k & 4 ? z1 : z0).applyMatrix4(M)); if (!q) return null;
+        a = Math.min(a, q[0]); c = Math.max(c, q[0]); b = Math.min(b, q[1]); d = Math.max(d, q[1]); } return [a, b, c, d]; };
+      const fb = box(-0.19, 0.19, -0.23, 0.15, -0.39, 0.01), eb = fb && box(-0.17, 0.17, -0.035, 0.035, 0, 0.01); if (!fb || !eb) continue;
+      const fh = fb[3] - fb[1]; if (fh < QF_CROWD || fb[2] < 0 || fb[0] > 1 || fb[3] < 0 || fb[1] > 1) continue;
+      R.push({ i, crowd: hk, fh, key: `h${hk}:${i}`, box: fb, eye: eb }); } });
+  return R;
+}
+let QFE = null; const _qfM = new THREE.Matrix4();
+function capRects(all) {   // the caption as it stands: boxes of its visible words, kick and who label in frame fractions (all: every word of the page, without its pop-in transform)
+  const S = stage.getBoundingClientRect(), R = []; if (!S.width || !S.height || capEl.offsetParent === null) return R;
+  const add = e => { const tf = all ? e.style.transform : null; if (all) e.style.transform = 'none'; const r = e.getBoundingClientRect(); if (all) e.style.transform = tf;
+    if (r.width >= 1 && r.height >= 1) R.push([(r.left - S.left) / S.width, (r.top - S.top) / S.height, (r.right - S.left) / S.width, (r.bottom - S.top) / S.height]); };
+  const on = e => all || !(parseFloat(e.style.opacity === '' ? '1' : e.style.opacity) < 0.4);
+  for (const w of capWords) if (w.style.display !== 'none' && on(w)) add(w);
+  for (const e of [capKick, capWho]) if (e && on(e)) add(e);
+  return R;
+}
+function capCover(R, F) {   // share of the face box and of the eye band under the caption boxes (only the part inside the frame counts)
+  const cl = B => [Math.max(0, B[0]), Math.max(0, B[1]), Math.min(1, B[2]), Math.min(1, B[3])], ov = (A, B) => Math.max(0, Math.min(A[2], B[2]) - Math.max(A[0], B[0])) * Math.max(0, Math.min(A[3], B[3]) - Math.max(A[1], B[1]));
+  const fb = cl(F.box), eb = cl(F.eye), fa = (fb[2] - fb[0]) * (fb[3] - fb[1]), ea = (eb[2] - eb[0]) * (eb[3] - eb[1]); let a = 0, e = 0;
+  for (const r of R) { a += ov(r, fb); e += ov(r, eb); }
+  const face = fa > 1e-6 ? Math.min(1, a / fa) : 0, eye = ea > 1e-6 && ea > 0.25 * (F.eye[2] - F.eye[0]) * (F.eye[3] - F.eye[1]) ? Math.min(1, e / ea) : 0;
+  return { face, eye, hit: face >= 0.35 || eye >= 0.5, sev: Math.max(face / 0.35, eye / 0.5) };
+}
+// caption pages of beat i as the HUD shows them, in video time: a = page appears, z = next page / the beat fades, full = all its words are up; ts = the moments to check (full first)
+function capPages(i) {
+  const b = BEATS[i]; if (!b || !String(b.text ?? '').trim()) return [];
+  const tmp = document.createElement('div'); tmp.innerHTML = markup(b.text); const ws = [...tmp.querySelectorAll('.w')], n = ws.length; if (!n) return [];
+  const pg = capPaginate(ws), vt = VOICE?.beats?.[i], rate = b.rate ?? (CFG.karaoke ? clamp((b.dur - 0.5) / Math.max(1, n), CFG.wordRate, 0.42) : CFG.wordRate), st = j => vt ? vt[j] - 0.04 : j * rate;
+  const G = []; if (b.instant) G.push([...ws.keys()]); else ws.forEach((w, j) => { (G[pg[j]] ??= []).push(j); });
+  const zB = Math.min(b.t + b.dur - 0.16, END ? END.t : 1e9), L = G.filter(Boolean);
+  return L.map((g, k) => { const a = b.instant || k === 0 ? b.t : b.t + st(g[0]) - 0.02, z = k + 1 < L.length ? Math.min(zB, b.t + st(L[k + 1][0]) - 0.02) : zB;
+    let full = b.instant ? a + 0.05 : Math.min(z - 0.04, b.t + st(g[g.length - 1]) + 0.18); if (full < a + 0.05) full = (a + z) / 2;
+    const ts = [full]; for (let x = a + 0.2; x < z - 0.05; x += 0.3) if (Math.abs(x - full) > 0.12) ts.push(x);   // + every 0.3 s of the page (the camera and the figures move; words pop in one by one)
+    return { p: b.instant ? 0 : pg[g[0]] ?? k, a, z, full, ts, text: g.map(j => ws[j].textContent).join(' ').replace(/\s+/g, ' ').trim() }; }).filter(P => P.z - P.a > 0.12);
+}
+const capOkT = t => !SPLITS.some(x => t >= x.t && t < x.t + x.dur) && map2dK(t) < 0.5 && !(LOOPX && t > DUR - LOOPX);
+function qaCapFace(o = {}) {
+  const t0 = performance.now(), budget = o.capBudget ?? 12000, res = new Map(), TH0 = TH, ON0 = THUMB_ON;
+  const who = F => F.crowd != null ? `crowd #${F.crowd} member #${F.i}` : F.f.who ? `'${F.f.who}' #${F.i}` : F.f.kind === 'zombie' ? `zombie #${F.i}` : `figure #${F.i}`;
+  const tm = stage.classList.contains('thumbmode'); if (tm) stage.classList.remove('thumbmode');
+  try { TH = TH0; THUMB_ON = false;
+    const S = []; BEATS.forEach((b, i) => { for (const P of capPages(i)) P.ts.forEach((t, k) => { if (capOkT(t)) S.push({ i, P, t, extra: k > 0 }); }); });
+    for (const s of [...S.filter(x => !x.extra), ...S.filter(x => x.extra)]) {   // every page at 'full' first, then every 0.3 s; the budget is only a safety stop (a 60 s video takes well under a second)
+      if (s.extra && performance.now() - t0 > budget) break;
+      stepScene(teaseV(s.t)); updateHud(s.t); if (capIdx !== s.i) continue;
+      const R = capRects(false); if (!R.length) continue;
+      for (const F of qalFaces()) { const c = capCover(R, F); if (!c.hit) continue; const k = s.i + ':' + s.P.p + ':' + (F.crowd != null ? 'h' + F.crowd : F.key), x = res.get(k);   // one line per page and figure / per page and crowd
+        if (x) x.n.add(F.key); if (x && x.sev >= c.sev) continue;
+        res.set(k, { sev: c.sev, F, c, t: s.t, i: s.i, P: s.P, low: /\blow\b/.test(capEl.className), n: x?.n ?? new Set([F.key]) }); }
+    }
+  } finally { TH = TH0; THUMB_ON = ON0; if (tm) stage.classList.add('thumbmode'); updateHud(clock); }
+  const A = [...res.values()].sort((a, b) => b.sev - a.sev).map(({ F, c, t, i, P, low, n }) => { const words = P.text.split(' '), cap = words.slice(0, 5).join(' ').toUpperCase() + (words.length > 5 ? ' …' : '');
+    return `CAPFACE – caption "${cap}" covers the face of ${who(F)}${n.size > 1 ? ` (+${n.size - 1} more in the crowd)` : ''} at ${t.toFixed(1)} s (${c.eye >= 0.5 ? `eyes ${(c.eye * 100).toFixed(0)} %` : `face ${(c.face * 100).toFixed(0)} %`} under the words, beat ${i}) – set pos: '${low ? 'mid' : 'low'}' on the beat${CFG.capDodge ? '' : ' (or CFG.capDodge: true)'}, move the camera (fy / az) or the figure`; });
+  return A.length > 6 ? [...A.slice(0, 6), `CAPFACE – … and ${A.length - 6} more`] : A;
 }
 function motionAudit(o = {}) {
   const fps = o.fps ?? 30, dt = 1 / fps, N = Math.floor(DUR * fps), L = audItems(), W = new Map(), warn = (key, sev, msg) => { const w = W.get(key); if (!w || sev > w.sev) W.set(key, { sev, msg }); };
@@ -15334,7 +15663,7 @@ window.whatif = {
     const hit = [...HITBOX.rep.values()].filter(r => r.d > 0.3).sort((a, b) => b.d - a.d).slice(0, 8).map(r => { const i = RIGS.indexOf(r.f), B = r.B, nm = r.f.who ? `'${r.f.who}' #${i}` : r.f.kind === 'zombie' ? `zombie #${i}` : `figure #${i}`;
       return `${nm} stands ${r.d.toFixed(2)} m inside ${B?.src ? 'a ' + B.src : 'an object'} (${(2 * B.hx).toFixed(1)} × ${(2 * B.hz).toFixed(1)} m, ${B.y0.toFixed(1)}–${B.y1.toFixed(1)} m high, at ${B.x.toFixed(1)}, ${B.z.toFixed(1)}) around ${r.t.toFixed(2)} s – ${r.d > 0.45 ? 'too deep to push out: move the figure or its path, or noHit() if it is meant to be inside' : 'pushed out automatically; place it beside it'}`; });
     let qa = []; try { qa = qaAudit(); } catch (e) { qa = ['QA audit failed: ' + e.message]; }
-    return { motion: m, gore: [...GORE.warn], hit, qa }; },
+    return { motion: m, gore: [...GORE.warn], hit, qa: qa.filter(l => !l.startsWith('QA-INFO:')), qaInfo: qa.filter(l => l.startsWith('QA-INFO:')) }; },   // v3.24 qaInfo: printed as is, not counted
   info() { goreAudit(); let meshes = 0, inst = 0, baked = BAKED; scene.traverse(o => { if (o.isInstancedMesh) inst += o.count; else if (o.isMesh) meshes++; }); return { meshes, instances: inst, baked, emitters: emitters.length, hordes: hordes.length, calls: renderer.info.render.calls, tris: renderer.info.render.triangles, ...(GORE.warn.size ? { gore: [...GORE.warn] } : {}) }; }
 };
 if (EXPORT) draw(0); else requestAnimationFrame(loop);

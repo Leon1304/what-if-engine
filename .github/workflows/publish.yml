@@ -25,7 +25,7 @@ jobs:
     runs-on: ubuntu-latest
     if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: upload
         env:
           YT_CLIENT_ID: ${{ secrets.YT_CLIENT_ID }}
@@ -33,6 +33,7 @@ jobs:
           YT_REFRESH_TOKEN: ${{ secrets.YT_REFRESH_TOKEN }}
           IG_USER_ID: ${{ secrets.IG_USER_ID }}
           IG_TOKEN: ${{ secrets.IG_TOKEN }}
+          GH_TOKEN: ${{ github.token }}   # v3.24: upload.py skips pre-releases (open QA warnings)
         run: |
           ls renders/*.post.json >/dev/null 2>&1 || { echo "no post.json – nothing to publish"; exit 0; }
           if [ -n "${{ inputs.slug }}" ]; then python3 upload.py --slug "${{ inputs.slug }}"; else python3 upload.py --due; fi

@@ -8,7 +8,7 @@
   const tb = stat(grp(world, 60, 0, 0)); box(tb, 1.2, 0.04, 0.8, '#9A6A44', 0, 0.75, 0, { kind: 'wood' }); for (const sx of [-1, 1]) for (const sz of [-1, 1]) box(tb, 0.06, 0.75, 0.06, '#7A5034', sx * 0.52, 0, sz * 0.32);
   if (typeof fruitBowl === 'function') fruitBowl(tb, 0.05, 0.79, -0.05); else furnish(tb, 'appliances', -0.4, -0.05, 0);
   food(world, 'apple', 60.42, 0.79, 0.2, { still: true }); food(world, 'orange', 60.3, 0.79, 0.24, { still: true }); food(world, 'grapes', 59.72, 0.79, 0.16, { still: true }); food(world, 'tomato', 59.62, 0.79, -0.14, { still: true }); food(world, 'banana', 59.9, 0.79, 0.25, { still: true, ry: 1.2 });
-  furnish(world, 'appliances', 60, -1.6, 0);
+  furnish(world, 'counter', 60, -1.6, 0); furnish(world, 'appliances', 60, -1.6, 0);   // the appliances stand on a counter (they floated at counter height, QA FLOAT)
   // 3) street at dusk / night: post lamps and street lights with light pools, parked cars
   road(world, [[95, 0], [145, 0]], { w: 7, curb: true });
   box(world, 50, 0.16, 4, '#9A9C9F', 120, 0, 5.6, { cast: false, stat: true, surf: 'paving' }); box(world, 50, 0.16, 4, '#9A9C9F', 120, 0, -5.6, { cast: false, stat: true, surf: 'paving' });

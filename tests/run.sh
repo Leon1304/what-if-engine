@@ -26,6 +26,18 @@ ck() { node render.mjs "$1.html" --probe 'window.whatif.plan(12).chunk' 2>&1 | t
 sed "s#^const CFG = {#const CFG = { shard: 'block',#" example.story.js > plan_block.story.js; cp example.scene.js plan_block.scene.js
 python3 assemble.py plan_block --title "Plan" --no-voice > plan_block.log 2>&1; c1=$(ck example); c2=$(ck plan_block)
 if [ "$c1" -ge 10 ] 2>/dev/null && [ "$c1" -le 30 ] && [ "$c2" -gt 30 ] 2>/dev/null; then echo "ok   render plan  chunk $c1 · block $c2"; else echo "FAIL render plan: chunk '$c1' · block '$c2'"; fail=1; fi
+# v3.24 quality gate: qa-gate has one QA: BACKWARD line, waived in QA_OK → --gate exits 0; the same scene without QA_OK → exit 3
+case " $names " in *" qa-gate "*)
+  sed '/^const QA_OK/,/^\];/d' qa-gate.story.js > gate_open.story.js; cp qa-gate.scene.js gate_open.scene.js
+  python3 assemble.py gate_open --title "Gate" --no-voice > gate_open.log 2>&1
+  { timeout 600 node render.mjs qa-gate.html --gate > gate_ok.out 2>&1; echo $? > gate_ok.rc; } & { timeout 600 node render.mjs gate_open.html --gate > gate_open.out 2>&1; echo $? > gate_open.rc; } & wait
+  g1=$(cat gate_ok.rc); g2=$(cat gate_open.rc)
+  if [ "$g1" = 0 ] && grep -q '^QA-OK: QA: BACKWARD' gate_ok.out && grep -q '^GATE: ok (1 waived' gate_ok.out && [ "$g2" = 3 ] && grep -q '^GATE: 1 open' gate_open.out; then echo "ok   quality gate  waived → exit 0 · open → exit 3"
+  else echo "FAIL quality gate: waived exit $g1, open exit $g2"; tail -4 gate_ok.out gate_open.out; fail=1; fi;;
+esac
+# v3.24 crowd QA by what the viewer sees (tests/crowd-qa): members inside each other close to the lens are reported, the same cram behind the camera is not
+case " $names " in *" crowd-qa "*) q=$(node render.mjs crowd-qa.html --probe 'qaCrowds()' 2>&1)
+  if echo "$q" | grep -q 'crowd #0: .*close to the camera' && ! echo "$q" | grep -q 'crowd #1'; then echo "ok   crowd QA  near lens reported, off screen not"; else echo "FAIL crowd QA: $(echo "$q" | tail -5)"; fail=1; fi;; esac
 # v2.48 narrator voice by category (no synthesis, no API call)
 cp "$R/voice.py" .
 for c in "story:Denzel" "explain:Adam" "conspiracy:Declan Sage" "horror:Storm Styles" "series:JM" "truecrime:Declan Sage"; do

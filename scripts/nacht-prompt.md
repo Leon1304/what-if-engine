@@ -21,7 +21,7 @@ Die zwei Themen sollen sich in Kategorie, Ort oder Stimmung unterscheiden. Erfü
 Sobald beide feststehen und bevor du baust: in `docs/projekt/themenliste.md` hinter beiden Themen ` · Status: In Produktion ({{DATUM}}, Nachtlauf)` ergänzen, committen („docs: Nacht {{DATUM}} – Themen gewählt“) und pushen. Ist ein Claude-Docs-Tool verfügbar, dort das Feld Status beider Themen auf „In Produktion“ setzen, sonst nichts an der Liste ändern.
 
 ## 3. Beide Videos bauen
-Pro Thema den Skill `/whatif` (`.claude/skills/whatif/SKILL.md`) befolgen, Abschnitte 1–4 inklusive Korrekturrunde und Thumbnail-Kontrolle (`node render.mjs … --cover` lokal). Live-Vorschau als Artifact entfällt. Rahmen:
+Pro Thema den Skill `/whatif` (`.claude/skills/whatif/SKILL.md`) befolgen, Abschnitte 1–4 inklusive Korrekturrunden bis `GATE: ok` (ohne Ausnahme ohne Grund in `QA_OK`) und Thumbnail-Kontrolle (`node render.mjs … --cover` lokal). Live-Vorschau als Artifact entfällt. Rahmen:
 - 9:16, 2K (1440 × 2560). Badge nach Kategorie: Story/Horror „What if“, Erklärung „Explaining“, Conspiracy „Conspiracy“, History „History“, True Crime „True Crime“ (History und True Crime: Documentary-Erzähler, ernst, ohne Gags, Faktenkarte mit Quelle). Ohne Gerald und ohne Dr. Steve, Loop zurück in den Hook, keine Bewertungskarte. Farbe nicht wie die letzten zwei Videos. Fester Satz „And that's when it got worse.“ nur nach den Abstandsregeln in `running-gags.md`.
 - Fakten per Websuche prüfen (nur zur Faktenprüfung, nicht zur Themensuche); bei Erklär-, Conspiracy-, History- und True-Crime-Videos Quellen auf den Karten und unter „Sources:“ in der YouTube-Beschreibung.
 - Neue Gegenstände, Animationen und Geräusche detailliert und dauerhaft in die Engine bauen (`template.html`, Abschnitt in `docs/API.md`, Testszene in `tests/`), Tests mit dem macOS-Befehl aus `CLAUDE.md` grün, committen mit nächster freier Versionsnummer, pushen.
@@ -32,6 +32,7 @@ Scheitert ein Video, baue das zweite trotzdem und nenne den Grund.
 ## 4. Rendern über GitHub Actions
 - Pro Video: `<slug>.html` nach `renders/`, Captions nach `gallery/captions/<slug>.json` (Format aus Skill 5b, Texte exakt wie geliefert), einen Commit „render: <slug>“ und pushen. Pro Video ein eigener Commit und Push (der Workflow nimmt die Seiten aus dem letzten Commit), beide rendern parallel.
 - Warten, bis `https://api.github.com/repos/Leon1304/what-if-engine/releases/tags/render-<slug>` die Assets `<slug>.mp4` und `<slug>-cover.jpg` zeigt (curl ohne Login, alle 60 s; jeder Bash-Aufruf blockiert höchstens ca. 9 Minuten, dann erneut; insgesamt höchstens 2 Stunden). Schlägt der Workflow fehl, den Grund aus der Actions-API notieren, nicht lokal rendern.
+- Ist das Release als Pre-Release markiert (`⚠ QA:` in den Notizen), gilt das Video als gescheitert: Ursache beheben und neu rendern, sonst den Grund notieren.
 - MP4 und Cover nach `work/nacht/{{DATUM}}/` laden und mit `ffprobe` prüfen (Dauer, 1440 × 2560, Audiospur). Cover B (`<slug>-cover-b.jpg`) lokal mit `render.mjs --cover` erzeugen und dort ablegen.
 - Danach `python3 gallery/build.py --files-json`, `git add gallery`, Commit „gallery: Nacht {{DATUM}}“, pushen. Das Artifact „WhatIf – Videos“ zieht ein claude.ai-Chat nach.
 

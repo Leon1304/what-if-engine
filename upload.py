@@ -45,6 +45,16 @@ def asset(slug, name):   # release asset of the render workflow (public repo →
     return f'https://github.com/{REPO}/releases/download/render-{slug}/{name}'
 
 
+def qa_open(slug):   # v3.24: the render workflow marks a release as pre-release when the finished frames still have open QA lines (LINES / SEAM)
+    try:
+        h = {'Accept': 'application/vnd.github+json'}; tok = os.environ.get('GH_TOKEN') or os.environ.get('GITHUB_TOKEN')
+        if tok: h['Authorization'] = f'Bearer {tok}'
+        with urllib.request.urlopen(urllib.request.Request(f'https://api.github.com/repos/{REPO}/releases/tags/render-{slug}', headers=h), timeout=30) as r:
+            return bool(json.load(r).get('prerelease'))
+    except Exception as e:
+        print(f'  {slug}: could not read the release state ({e}) – not posting'); return True
+
+
 def exists(url):
     try: http(url, method='HEAD', raw=True); return True
     except Exception: return False
@@ -86,6 +96,7 @@ def run(slug, force=False):
     P = json.load(open(f'renders/{slug}.post.json', encoding='utf-8')); done_f = f'renders/{slug}.published.json'
     done = json.load(open(done_f)) if os.path.exists(done_f) else {}
     if not exists(asset(slug, f'{slug}.mp4')): print(f'{slug}: not rendered yet'); return False
+    if not force and qa_open(slug): print(f'{slug}: release is a pre-release (open QA warnings in the finished frames) – fix and re-render, or --slug to post anyway'); return False
     pa = dt.datetime.fromisoformat(P['publishAt']) if P.get('publishAt') else None
     if pa and pa.tzinfo is None: pa = pa.replace(tzinfo=dt.timezone.utc)
     now, changed = dt.datetime.now(dt.timezone.utc), False

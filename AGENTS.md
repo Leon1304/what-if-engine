@@ -28,7 +28,7 @@ Der Skill wurde für claude.ai geschrieben. Lokal gilt diese Übersetzung:
 - Änderungen an Engine und Skill immer direkt nach `main` pushen (Leons Vorgabe).
 
 ## Prüfen vor dem Rendern
-`node render.mjs … --shots` bzw. `--audit`: MOTION-, HITBOX-, GORE-, QA- und PAGE-ERRORS-Zeilen müssen leer sein. Null Toleranz für Bildfehler (fremde Linien, Streifen, Kanten).
+`node render.mjs … --shots` bzw. `--gate`: MOTION-, HITBOX-, GORE-, QA- und PAGE-ERRORS-Zeilen müssen leer sein, Ausgabe `GATE: ok` (v3.24; bewusste Ausnahmen nur als `QA_OK` in der Story mit Grund). Null Toleranz für Bildfehler (fremde Linien, Streifen, Kanten).
 
 ## Rendern
 Lokal für Testframes und Vorschau. Das finale 2K-Video rendert GitHub Actions: `renders/<slug>.html` pushen → Release `render-<slug>` mit `<slug>.mp4` und Cover. Captions nach `gallery/captions/<slug>.json`, Vorschau-Link in `gallery/previews.json` (siehe Skill Abschnitt 5).

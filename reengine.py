@@ -11,6 +11,8 @@ t = put(t, 'STORY', block(s, 'STORY')); t = put(t, 'SCENE', block(s, 'SCENE'))
 for name in ['VOICE', 'SFXS', 'CAST', 'MODELS', 'TR']:
     m = re.search(r'^const ' + name + r' = .*$', s, re.M); n = re.search(r'^const ' + name + r' = .*$', t, re.M)
     if m and n: t = t[:n.start()] + m.group(0) + t[n.end():]
+m = re.search(r'/\* @MOCAP \*/(.*?), _mcD = new Map', s, re.S)   # v3.24: keep the embedded mocap clips (they were dropped → figures fell back to procedural walks)
+if m and '/* @MOCAP */null, _mcD = new Map' in t: t = t.replace('/* @MOCAP */null, _mcD = new Map', '/* @MOCAP */' + m.group(1) + ', _mcD = new Map', 1)
 for pat in [r'<title>.*?</title>', r'aria-label="[^"]*"']:
     m = re.search(pat, s, re.S)
     if m: t = re.sub(pat, lambda _: m.group(0), t, count=1, flags=re.S)
