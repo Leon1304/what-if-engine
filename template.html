@@ -13748,6 +13748,20 @@ function tlLayout(nd) {   // v2.30: timeline labels never overlap each other, th
     if (ok || f < 0.7) { pos.forEach(([r, L], j) => { const b = nd.tm[j], e = ems[j]; b.classList.toggle('lo', r === 1); b.classList.remove('el', 'er'); e.style.left = ((L - xs[j] + bw / 2) / sw * 100).toFixed(3) + 'cqw'; e.style.right = 'auto'; e.style.transform = 'none'; }); return; }
   }
 }
+// v3.22 CFG.capDodge: a caption page that would lie over a big face (see qaCapFace) moves to the other position (mid ↔ low) for the whole page, if it is clear there.
+// Decided once per page from the page's own moments (scene stepped there, then back to t) and the real word boxes — the same in every render block; beats with pos stay as set.
+const CAPDODGE = new Map();
+function capDodge(idx, pg, t) {
+  const key = idx + ':' + pg; if (CAPDODGE.has(key)) return CAPDODGE.get(key);
+  if (capEl.offsetParent === null || (document.fonts && document.fonts.status !== 'loaded')) return null;   // not cached: fonts still loading
+  const P = capPages(idx).find(x => x.p === pg); if (!P) { CAPDODGE.set(key, null); return null; }
+  const b = BEATS[idx], cls = capEl.className, base = (b.big ? 'big ' : ''), cur = CFG.capPos ?? 'mid', alt = cur === 'low' ? 'mid' : 'low';
+  capEl.className = base + cur; const Rc = capRects(true); capEl.className = base + alt; const Ra = capRects(true); capEl.className = cls;
+  let hc = 0, ha = 0;
+  for (const ts of P.ts) { if (!capOkT(ts)) continue; stepScene(teaseV(ts)); for (const F of qalFaces()) { const c = capCover(Rc, F), a = capCover(Ra, F); if (c.hit) hc = Math.max(hc, c.sev); if (a.hit) ha = Math.max(ha, a.sev); } }
+  stepScene(teaseV(t));   // the scene back at this frame
+  const r = hc > 0 && ha < hc * 0.5 ? alt : null; CAPDODGE.set(key, r); return r;
+}
 function updateHud(t) {
   const endT = END ? END.t : 1e9, endK = END ? span(t, END.t, 0.45, 'out') : 0;
   // series intro: the top row slides in with the episode badge and channel
@@ -13850,6 +13864,7 @@ function updateHud(t) {
     let cw = 0; for (let i = 0; i < n; i++) if (lt >= st(i) - 0.02) cw = i;
     const pg = b.instant ? 0 : capPageOf[cw] ?? 0;
     if (pg !== capPage) { capPage = pg; capWords.forEach((w, i) => { w.style.display = (b.instant || capPageOf[i] === pg) ? '' : 'none'; }); }
+    if (CFG.capDodge && b.pos == null && (b.big || !xBusy(t)) && !THUMB_ON) { const alt = capDodge(idx, pg, t); if (alt) { const w2 = (b.big ? 'big ' : '') + alt; if (capEl.className !== w2) capEl.className = w2; } }   // v3.22
     capWords.forEach((w, i) => {
       const k = b.instant || (CFG.subtitles && capPageOf[i] === pg) ? 1 : clamp((lt - st(i)) / 0.16), on = !!CFG.karaoke && lt >= st(i) && (i === n - 1 || lt < st(i + 1));
       const s = (k <= 0 ? 0.6 : b.instant ? 1 : 1 + (EASE.back(k) - 1) * 0.6) * (on ? 1.06 : 1);
@@ -15070,7 +15085,7 @@ function qaMovers() {
   const A = [...seen.values()], by = k => A.filter(x => x.startsWith(k));
   return ['VEHICLE', 'BACKWARD'].flatMap(k => { const L = by(k); return L.length > 6 ? [...L.slice(0, 6), `${k} – … and ${L.length - 6} more`] : L; });
 }
-// --- v3.5 look QA (part of qaAudit, lines "QA: DARK|EMPTY|CAMCLIP|HEADCUT – …"): what the picture looks like, from tiny frames of the middle of every camera shot and of every cover ---
+// --- v3.5 look QA (part of qaAudit, lines "QA: DARK|EMPTY|CAMCLIP|HEADCUT – …", v3.22 also CAPFACE, see qaCapFace): what the picture looks like, from tiny frames of the middle of every camera shot and of every cover ---
 //   DARK: much of the frame near-black (not counting the sky) · EMPTY: most of the frame without any detail (flat sky / bare ground, a blob in the distance)
 //   CAMCLIP: geometry closer than 0.5 m to the lens covers a big part of the frame · HEADCUT: a close-up cuts through a face at the top edge
 //   Own small render targets and a plain renderer.render (no AO, bloom, lens effects), tone map + sRGB + contrast + vignette like the final pass; the renderer state is put back afterwards.
@@ -15180,7 +15195,78 @@ function qaLook(o = {}) {
   } finally { TH = TH0; THUMB_ON = ON0; }
   if (o.stats) return stats;
   const L = [...res.values()].sort((a, b) => b.sev - a.sev).map(x => x.msg), by = k => L.filter(m => m.startsWith(k + ' '));
-  return ['DARK', 'EMPTY', 'CAMCLIP', 'HEADCUT'].flatMap(k => { const A = by(k); return A.length > 6 ? [...A.slice(0, 6), `${k} – … and ${A.length - 6} more`] : A; });
+  let cf = []; if (o.capface !== false) try { cf = qaCapFace(o); } catch (e) { cf = ['CAPFACE – check failed: ' + e.message]; }   // v3.22
+  return [...['DARK', 'EMPTY', 'CAMCLIP', 'HEADCUT'].flatMap(k => { const A = by(k); return A.length > 6 ? [...A.slice(0, 6), `${k} – … and ${A.length - 6} more`] : A; }), ...cf];
+}
+// --- v3.22 CAPFACE (part of qaLook, lines "QA: CAPFACE – …"): a caption page lies over the face of a figure that is big in the frame ---
+//   For every caption page (the pages synced to the voice, see capPaginate) the HUD is set to that moment (updateHud) and the real on-screen boxes of its words / kick / who
+//   (getBoundingClientRect, relative to #stage) are laid over the projected faces: skull box and eye band of every visible figure facing the lens whose face is ≥ 4 % of the
+//   frame height. Reported when the words cover ≥ 35 % of the face or ≥ 50 % of the eye band. Geometry and DOM only (no renders); the HUD is put back afterwards.
+const _qf = [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()], _qfB = new THREE.Box3();
+function qalFaces() {   // → [{ i, f, box: [u0, v0, u1, v1], eye: [...], fh }] in frame fractions (0, 0 = top left)
+  const R = []; world.updateMatrixWorld(true); camera.updateMatrixWorld();
+  const [P, C, D] = _qf, uv = v => { _qlc.copy(v).applyMatrix4(camera.matrixWorldInverse); if (_qlc.z > -0.05) return null; v.project(camera); return [(v.x + 1) / 2, (1 - v.y) / 2]; };
+  RIGS.forEach((f, i) => { if (!f.head || f === POV_ON || !f.root?.visible) return;
+    let vis = true, top = f.head; for (; top; top = top.parent) { if (!top.visible) { vis = false; break; } if (top === scene) break; } if (!vis || !top) return;
+    const sk = f.FC?.skull; let u0 = Infinity, v0 = Infinity, u1 = -Infinity, v1 = -Infinity, bad = false;
+    const add = v => { const q = uv(v); if (!q) { bad = true; return; } u0 = Math.min(u0, q[0]); u1 = Math.max(u1, q[0]); v0 = Math.min(v0, q[1]); v1 = Math.max(v1, q[1]); };
+    if (sk?.geometry) { sk.geometry.boundingBox ?? sk.geometry.computeBoundingBox(); const b = sk.geometry.boundingBox; if (!sk.visible) return;   // the skull's own box, turned with the head (tight, not a world-axis box)
+      for (let k = 0; k < 8; k++) add(P.set(k & 1 ? b.max.x : b.min.x, k & 2 ? b.max.y : b.min.y, k & 4 ? b.max.z : b.min.z).applyMatrix4(sk.matrixWorld)); }
+    else { _qfB.makeEmpty().expandByObject(f.head); if (_qfB.isEmpty()) return; for (let k = 0; k < 8; k++) add(P.set(k & 1 ? _qfB.max.x : _qfB.min.x, k & 2 ? _qfB.max.y : _qfB.min.y, k & 4 ? _qfB.max.z : _qfB.min.z)); }
+    if (bad) return; const fh = v1 - v0, fw = u1 - u0; if (fh < 0.04 || u1 < 0 || u0 > 1 || v1 < 0 || v0 > 1) return;
+    // facing the lens: the face is +z of the head (back of the head: not a face)
+    f.head.localToWorld(C.set(0, 0.19, 0)); f.head.localToWorld(D.set(0, 0.19, 0.19)); D.sub(C).normalize(); P.copy(camera.position).sub(C).normalize(); if (D.dot(P) < -0.2) return;
+    let ey = v0 + 0.45 * fh, ex0 = u0 + 0.12 * fw, ex1 = u1 - 0.12 * fw; const E = f.FC?.eyes ?? [];
+    if (E.length) { const q = E.map(e => uv(e.getWorldPosition(P))).filter(Boolean); if (q.length) { ey = q.reduce((s, x) => s + x[1], 0) / q.length; const xs = q.map(x => x[0]), pad = 0.14 * fw; ex0 = Math.max(u0, Math.min(...xs) - pad); ex1 = Math.min(u1, Math.max(...xs) + pad); } }
+    R.push({ i, f, fh, box: [u0, v0, u1, v1], eye: [ex0, ey - 0.09 * fh, ex1, ey + 0.09 * fh] }); });
+  return R;
+}
+function capRects(all) {   // the caption as it stands: boxes of its visible words, kick and who label in frame fractions (all: every word of the page, without its pop-in transform)
+  const S = stage.getBoundingClientRect(), R = []; if (!S.width || !S.height || capEl.offsetParent === null) return R;
+  const add = e => { const tf = all ? e.style.transform : null; if (all) e.style.transform = 'none'; const r = e.getBoundingClientRect(); if (all) e.style.transform = tf;
+    if (r.width >= 1 && r.height >= 1) R.push([(r.left - S.left) / S.width, (r.top - S.top) / S.height, (r.right - S.left) / S.width, (r.bottom - S.top) / S.height]); };
+  const on = e => all || !(parseFloat(e.style.opacity === '' ? '1' : e.style.opacity) < 0.4);
+  for (const w of capWords) if (w.style.display !== 'none' && on(w)) add(w);
+  for (const e of [capKick, capWho]) if (e && on(e)) add(e);
+  return R;
+}
+function capCover(R, F) {   // share of the face box and of the eye band under the caption boxes (only the part inside the frame counts)
+  const cl = B => [Math.max(0, B[0]), Math.max(0, B[1]), Math.min(1, B[2]), Math.min(1, B[3])], ov = (A, B) => Math.max(0, Math.min(A[2], B[2]) - Math.max(A[0], B[0])) * Math.max(0, Math.min(A[3], B[3]) - Math.max(A[1], B[1]));
+  const fb = cl(F.box), eb = cl(F.eye), fa = (fb[2] - fb[0]) * (fb[3] - fb[1]), ea = (eb[2] - eb[0]) * (eb[3] - eb[1]); let a = 0, e = 0;
+  for (const r of R) { a += ov(r, fb); e += ov(r, eb); }
+  const face = fa > 1e-6 ? Math.min(1, a / fa) : 0, eye = ea > 1e-6 && ea > 0.25 * (F.eye[2] - F.eye[0]) * (F.eye[3] - F.eye[1]) ? Math.min(1, e / ea) : 0;
+  return { face, eye, hit: face >= 0.35 || eye >= 0.5, sev: Math.max(face / 0.35, eye / 0.5) };
+}
+// caption pages of beat i as the HUD shows them, in video time: a = page appears, z = next page / the beat fades, full = all its words are up; ts = the moments to check
+function capPages(i) {
+  const b = BEATS[i]; if (!b || !String(b.text ?? '').trim()) return [];
+  const tmp = document.createElement('div'); tmp.innerHTML = markup(b.text); const ws = [...tmp.querySelectorAll('.w')], n = ws.length; if (!n) return [];
+  const pg = capPaginate(ws), vt = VOICE?.beats?.[i], rate = b.rate ?? (CFG.karaoke ? clamp((b.dur - 0.5) / Math.max(1, n), CFG.wordRate, 0.42) : CFG.wordRate), st = j => vt ? vt[j] - 0.04 : j * rate;
+  const G = []; if (b.instant) G.push([...ws.keys()]); else ws.forEach((w, j) => { (G[pg[j]] ??= []).push(j); });
+  const zB = Math.min(b.t + b.dur - 0.16, END ? END.t : 1e9), L = G.filter(Boolean);
+  return L.map((g, k) => { const a = b.instant || k === 0 ? b.t : b.t + st(g[0]) - 0.02, z = k + 1 < L.length ? Math.min(zB, b.t + st(L[k + 1][0]) - 0.02) : zB;
+    let full = b.instant ? a + 0.05 : Math.min(z - 0.04, b.t + st(g[g.length - 1]) + 0.18); if (full < a + 0.05) full = (a + z) / 2;
+    const ts = [full]; if (full - a > 0.8) ts.push(a + 0.3); if (z - full > 0.6) ts.push(z - 0.1); if (z - full > 2) ts.push((full + z) / 2);
+    return { p: b.instant ? 0 : pg[g[0]] ?? k, a, z, full, ts, text: g.map(j => ws[j].textContent).join(' ').replace(/\s+/g, ' ').trim() }; }).filter(P => P.z - P.a > 0.12);
+}
+const capOkT = t => !SPLITS.some(x => t >= x.t && t < x.t + x.dur) && map2dK(t) < 0.5 && !(LOOPX && t > DUR - LOOPX);
+function qaCapFace(o = {}) {
+  const t0 = performance.now(), budget = o.capBudget ?? 12000, res = new Map(), TH0 = TH, ON0 = THUMB_ON;
+  const who = (f, i) => f.who ? `'${f.who}' #${i}` : f.kind === 'zombie' ? `zombie #${i}` : `figure #${i}`;
+  const tm = stage.classList.contains('thumbmode'); if (tm) stage.classList.remove('thumbmode');
+  try { TH = TH0; THUMB_ON = false;
+    const S = []; BEATS.forEach((b, i) => { for (const P of capPages(i)) P.ts.forEach((t, k) => { if (capOkT(t)) S.push({ i, P, t, extra: k > 0 }); }); });
+    for (const s of [...S.filter(x => !x.extra), ...S.filter(x => x.extra)]) {   // every page once (same lines on every machine), the extra moments while the time budget lasts
+      if (s.extra && performance.now() - t0 > budget) break;
+      stepScene(teaseV(s.t)); updateHud(s.t); if (capIdx !== s.i) continue;
+      const R = capRects(false); if (!R.length) continue;
+      for (const F of qalFaces()) { const c = capCover(R, F); if (!c.hit) continue; const k = s.i + ':' + s.P.p + ':' + F.i, x = res.get(k); if (x && x.sev >= c.sev) continue;
+        const low = /\blow\b/.test(capEl.className), words = s.P.text.split(' '), cap = words.slice(0, 5).join(' ').toUpperCase() + (words.length > 5 ? ' …' : '');
+        res.set(k, { sev: c.sev, msg: `CAPFACE – caption "${cap}" covers the face of ${who(F.f, F.i)} at ${s.t.toFixed(1)} s (${c.eye >= 0.5 ? `eyes ${(c.eye * 100).toFixed(0)} %` : `face ${(c.face * 100).toFixed(0)} %`} under the words, beat ${s.i}) – set pos: '${low ? 'mid' : 'low'}' on the beat${CFG.capDodge ? '' : ' (or CFG.capDodge: true)'}, move the camera (fy / az) or the figure` }); }
+    }
+  } finally { TH = TH0; THUMB_ON = ON0; if (tm) stage.classList.add('thumbmode'); updateHud(clock); }
+  const A = [...res.values()].sort((a, b) => b.sev - a.sev).map(x => x.msg);
+  return A.length > 6 ? [...A.slice(0, 6), `CAPFACE – … and ${A.length - 6} more`] : A;
 }
 function motionAudit(o = {}) {
   const fps = o.fps ?? 30, dt = 1 / fps, N = Math.floor(DUR * fps), L = audItems(), W = new Map(), warn = (key, sev, msg) => { const w = W.get(key); if (!w || sev > w.sev) W.set(key, { sev, msg }); };

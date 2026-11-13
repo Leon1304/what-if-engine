@@ -1234,7 +1234,7 @@ Test: `tests/v35-materials` (Autos am Tag, Material-Kugeln, Obst auf dem Tisch, 
 
 Zum Einmischen in `docs/API.md` (Abschnitt „Prüfung“) – Stand dieses Branches.
 
-#### Bild-Prüfung im Audit (`QA: DARK / EMPTY / CAMCLIP / HEADCUT`)
+#### Bild-Prüfung im Audit (`QA: DARK / EMPTY / CAMCLIP / HEADCUT / CAPFACE`)
 
 `node render.mjs page.html --audit` (läuft auch bei `--shots` mit und im Render-Workflow) prüft jetzt zusätzlich, **wie das Bild aussieht**. Die Engine rendert dafür selbst winzige Bilder (72 × 128, quer 128 × 72) in eigene Render-Targets: ein normales `renderer.render(scene, camera)` nach `stepScene(teaseV(t))`, Tone-Mapping + sRGB + Kontrast + Vignette wie im Final-Pass (ohne AO, Bloom, Unschärfe; gleiches Render-Target-Format wie der Composer, damit SwiftShader nichts neu kompiliert), dazu ein zweiter Durchgang nur mit der Tiefe der undurchsichtigen Geometrie. Renderer-Zustand (Render-Target, autoClear, Schatten-Update, Sichtbarkeit, `THUMB`-Modus) wird danach zurückgesetzt – am sichtbaren Bild ändert sich nichts.
 
@@ -1249,12 +1249,19 @@ Jede Meldung nennt Art, Ort (`shot n (a–b s) at t s` bzw. `cover A (THUMB at t
 | `QA: CAMCLIP – …` (Linse in etwas) | Geometrie näher als 0,5 m an der Linse | > 20 % des Bildes | Kamera weg (`dist`, `h`, `az`, `p`) oder Objekt verschieben |
 | `QA: CAMCLIP – …` (Vordergrund verdeckt) | etwas Großes zwischen Linse und einem weit entfernten Motiv: näher als min(2 m, 0,3 × Abstand zum Blickpunkt), nur wenn der Blickpunkt ≥ 4 m weg ist; nicht der Boden am unteren Rand | > 35 % des Bildes, Schwerpunkt in den oberen 60 % | Kamera daran vorbei (`az`, `h`, `p`) oder Objekt aus dem Weg |
 | `QA: HEADCUT – …` | Figur groß im Bild (Kopf bis Hüfte > 30 % der Bildhöhe), Brust im Bild, aber ≥ 30 % des Kopfes über dem oberen Rand | – | tiefer kadrieren (`fy` 0,4–0,5, etwas mehr `dist`/`fov`, auf das Gesicht zielen: `dy`) oder weiter aufziehen |
+| `QA: CAPFACE – …` (v3.22) | eine Caption-Seite liegt über dem Gesicht einer Figur, die dem Bild zugewandt ist und deren Gesicht ≥ 4 % der Bildhöhe hat | Wörter decken ≥ 35 % des Gesichts oder ≥ 50 % der Augenpartie | `pos: 'low'` am Beat (liegt sie schon unten: `pos: 'mid'`), Kamera anders (`fy`, `az`) oder Figur verschieben; oder `CFG.capDodge: true` |
 
 Nicht gemeldet: Rauch, Glas, Wasser, Strahlen, Partikel und der Himmel bei `CAMCLIP` (nur undurchsichtige Geometrie zählt); Ego-Perspektive (`shot('pov', …)`) bei `CAMCLIP` und `HEADCUT` (eigene Hände/Waffe sind gewollt nah); `HEADCUT` in Makro-Einstellungen (Blickpunkt < 2,3 m, `fov` ≤ 30 oder `hand` 1,5), wenn der Blickpunkt unterhalb des Halses liegt (Hände, gehaltene Dinge); Figuren, deren Brust nicht im Bild ist (bewusst angeschnitten).
 
 `--strict` zählt die neuen Zeilen mit (Exit 3). Debug: `node render.mjs page.html --probe "qaLook({ stats: true, budget: 1e9 })"` liefert die Messwerte jeder Probe (`dead`, `dark`, `flat`, `clip`, `fg`, `fd` = Abstand zum Blickpunkt, `heads`); `probes: false` = ohne die Tiefen-Proben.
 
 Test: `tests/v35-qa.story.js` + `.scene.js` – Einstellung 2 meldet absichtlich `EMPTY`, Einstellung 3 `CAMCLIP`, Einstellung 4 `HEADCUT`; Einstellung 1 und das Cover bleiben still.
+
+**`CAPFACE` (v3.22, `qaCapFace`, läuft am Ende von `qaLook`):** prüft jede Caption-Seite (die zur Stimme synchronen Seiten aus `capPaginate`), nicht nur Einstellungsmitten. Pro Seite der Moment, in dem alle Wörter stehen, immer; dazu kurz nach Seitenbeginn, kurz vor Seitenende und bei langen Seiten die Mitte, solange das eigene Zeitbudget reicht (12 s, `qaLook({ capBudget })`). Je Moment `stepScene(teaseV(t))` + `updateHud(t)` und dann die echten Rechtecke der sichtbaren Wörter, des Kick- und des Who-Schilds (`getBoundingClientRect` relativ zu `#stage`, also mit `mid`/`low`/`big`, `xBusy` und Pop-Skalierung) gegen die projizierten Gesichter: Schädel-Box der Figur (mit dem Kopf gedreht) und ein Augenband um die projizierten Augen. Kein Rendern, nur Geometrie + DOM; das HUD wird danach auf die aktuelle Zeit zurückgesetzt. Nicht gemeldet: die Ego-Figur selbst (`POV_ON`), Hinterköpfe, ausgeblendete Köpfe, kleine Gesichter (< 4 % der Bildhöhe), Split-Screens, `MAP2D`-Karten, Endkarte und die Loop-Überblendung. Höchstens 6 Zeilen (schlimmste zuerst), eine pro Seite und Figur.
+
+**`CFG.capDodge: true`** (Standard aus): eine Caption-Seite ohne eigenes `pos`, die über einem großen Gesicht läge, springt für die ganze Seite auf die andere Position (`mid` ↔ `low`), wenn sie dort deutlich weniger verdeckt. Entschieden einmal pro Seite aus denselben Momenten wie die Prüfung (Szene dorthin gerechnet, danach zurück) und gemerkt – in jedem Render-Block gleich; `CAPFACE` prüft die Endposition. Standard aus, weil es Captions bestehender Videos und Referenzbilder verschieben kann und die Entscheidung geladene Schriften braucht (`render.mjs` wartet darauf).
+
+Test: `tests/capface.story.js` + `.scene.js` – Einstellung 1 (Nahaufnahme, Augen in Bildmitte, Caption `mid`) meldet absichtlich genau ein `CAPFACE`; Einstellung 2 (gleiche Nahaufnahme, `pos: 'low'`) und 3 (weit, kleine Gesichter) bleiben still. Mit `capDodge: true` im `CFG` verschwindet die Meldung, die Seite steht unten.
 
 **Kalibrierung (Stand dieses Branches, alte Szenen mit neuer Engine neu gebaut):**
 - `iss-falls`: `EMPTY` Cover A (96 %) und Einstellung 12 (99 %, blauer Leer-Frame); `DARK` Einstellung 11 (Globus-Nachtseite, 71 %). Feuerball-Einstellung (73 % flach) und ISS im All (76 %) bleiben still.
