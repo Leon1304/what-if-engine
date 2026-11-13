@@ -307,6 +307,7 @@ import { GTAOPass } from 'three/addons/postprocessing/GTAOPass.js';
 import { Pass, FullScreenQuad } from 'three/addons/postprocessing/Pass.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+const CAMPATHS = /* @CAMPATHS */{}, CAMFX = []; let CAMROLL = 0;   // v3.17: before the story, so CAM can use camPath() (camera paths from Blender, tools/blender_cam.py)
 
 /* ====================================================================== */
 /* STORY — written per video between the markers                       */
@@ -1806,6 +1807,7 @@ function fly(obj, pts, o = {}) {
     let dy = yaw(s + 6) - yaw(s - 6); dy = Math.atan2(Math.sin(dy), Math.cos(dy));
     return [p, -Math.atan2(b[1] - a[1], Math.hypot(b[0] - a[0], b[2] - a[2])), yaw(s), clamp(-dy * (o.bank ?? 2.2), -0.9, 0.9)]; };
   node._fly = poseAt;   // pure pose at any time (engine trails, follow cams)
+  if (!o.loop) MOVERS.push({ node, kind: 'fly', ok: o.passThrough });
   return tick(t => { const [p, rx, ry, rz] = poseAt(t); node.position.set(p[0], p[1], p[2]); node.rotation.set(rx, ry, rz); });
 }
 // --- street furniture ---
@@ -3036,7 +3038,17 @@ float clAA(float e, float x) { float w = max(fwidth(x), 1e-4); return smoothstep
 // asset(p, 'farm/barn', x, z, { ry, scale, h, y, tint: { materialName: hex } | hex, dyn }) → Group, real-world metres, standing on the ground.
 // Static props (buildings, trees, cars, furniture …). Rigged animals/creatures of the library go through model('dino/trex') (walk, pose, anim).
 // Each name is parsed once and cloned (shared geometry + materials); assemble.py embeds only the names a video uses.
-const ASSETS = new Map();
+const ASSETS = new Map(), _META = new Map(), WALKSURF = [];
+// v3.17 hand-over data from Blender (tools/blender_asset.py → extras.wie in the GLB): { size, parts: { name: { node, pivot, parent, ud } }, marks: { name: [x, y, z, ry] }, walk: [x, y, z × 3 per triangle] }
+// read synchronously from the GLB's JSON chunk at build time (the mesh itself loads later), so a scene can use obj.at() / obj.parts right away
+function assetMeta(name) {
+  if (_META.has(name)) return _META.get(name);
+  let m = null; const d = MODELS[name];
+  if (d) try { const hd = atob(d.slice(0, 28)), n = (hd.charCodeAt(12) | hd.charCodeAt(13) << 8 | hd.charCodeAt(14) << 16 | hd.charCodeAt(15) << 24) >>> 0;
+    const s = atob(d.slice(0, Math.ceil((20 + n) / 3) * 4)).slice(20, 20 + n);
+    m = JSON.parse(new TextDecoder().decode(Uint8Array.from(s, c => c.charCodeAt(0)))).asset?.extras?.wie ?? null; } catch (e) { console.error('asset ' + name + ': hand-over data unreadable (' + (e?.message ?? e) + ')'); }
+  _META.set(name, m); return m;
+}
 function asset(p, name, x = 0, z = 0, o = {}) {
   const root = new THREE.Group(); root.name = name; root.position.set(x, o.y ?? groundH(x, z), z); root.rotation.y = o.ry ?? 0; root.scale.setScalar(o.scale ?? 1);
   if (o.dyn) dyn(root); (p ?? world).add(root);
@@ -3045,15 +3057,60 @@ function asset(p, name, x = 0, z = 0, o = {}) {
   if (!ASSETS.has(name)) { const u8 = Uint8Array.from(atob(data), c => c.charCodeAt(0));
     const pr = new Promise(res => new GLTFLoader().parse(u8.buffer, '', g => res(g.scene), e => { console.error('asset ' + name + ': ' + (e?.message ?? e)); res(null); }));
     ASSETS.set(name, pr); PENDING.push(pr); }
+  const meta = assetMeta(name), k = o.h && meta?.size?.[1] ? o.h / meta.size[1] : 1;
+  let hold = null; root.parts = {};
+  if (meta) {   // v3.17: model inside a holder scaled synchronously (h), movable parts as groups on their pivots — usable before the mesh has loaded
+    hold = new THREE.Group(); hold.scale.setScalar(k); root.add(hold); root.userData.k = k;
+    const P = meta.parts ?? {}, mk = n => { if (root.parts[n]) return root.parts[n]; const q = P[n], g = dyn(new THREE.Group()); g.name = 'part:' + n; Object.assign(g.userData, q.ud ?? {});
+      const par = q.parent ? mk(q.parent) : hold, pp = q.parent ? P[q.parent].pivot : [0, 0, 0]; g.position.set(q.pivot[0] - pp[0], q.pivot[1] - pp[1], q.pivot[2] - pp[2]); par.add(g); return root.parts[n] = g; };
+    for (const n in P) mk(n);
+    const pick = re => Object.keys(root.parts).filter(n => re.test(n)).sort().map(n => root.parts[n]);
+    if (pick(/^door/).length) root.doors = pick(/^door/); if (pick(/^window/).length) root.windows = pick(/^window/);   // openDoor(obj, t, { i }) / openWindow(obj, t)
+    const M = meta.marks ?? {}, miss = n => console.error('asset ' + name + ': no mark "' + n + '" (has: ' + (Object.keys(M).join(', ') || 'none') + ')');
+    root.marks = Object.keys(M).sort();
+    root.at = n => { const m = M[n]; if (!m) { miss(n); return root.position.toArray(); } root.updateWorldMatrix(true, false); return v3(m[0] * k, m[1] * k, m[2] * k).applyMatrix4(root.matrixWorld).toArray(); };
+    root.dir = n => { const m = M[n]; if (!m) { miss(n); return root.rotation.y; } root.updateWorldMatrix(true, false); const d = v3(Math.sin(m[3]), 0, Math.cos(m[3])).transformDirection(root.matrixWorld); return Math.atan2(d.x, d.z); };
+    root.path = pre => root.marks.filter(n => n.startsWith(pre)).sort((a, b) => a.localeCompare(b, 'en', { numeric: true })).map(n => { const q = root.at(n); return [q[0], q[2]]; });   // marks path_a_1, path_a_2 … → [[x, z], …] for walk()
+    root.lights = (q = {}) => root.marks.filter(n => n.startsWith(q.prefix ?? 'light')).slice(0, q.max ?? 2).map(n => { const a = root.at(n); return glow(a[0], a[1], a[2], { color: '#FFD08A', intensity: 18, dist: 9, flicker: 0, ...q }); });
+    if (o.walk && meta.walk?.length) { WALKSURF.push({ root, tri: meta.walk, k });   // walk surface: figures stand on the model's stairs, roofs and walkways (groundH)
+      if (WALKSURF.length === 1) DEFER.unshift(_walkSurf); }
+  } else if (o.walk) console.warn('asset ' + name + ': no walk surface in this model');
   PENDING.push(ASSETS.get(name).then(src => {
     if (!src) return; const s = src.clone();
     s.traverse(m => { if (!m.isMesh) return; m.castShadow = o.shadow !== false; m.receiveShadow = true;
       if (o.tint) { const one = mt => { const c = typeof o.tint === 'string' ? o.tint : o.tint[mt.name]; if (!c) return mt; const k = mt.clone(); k.color.set(c); if (k.emissive && k.emissive.getHex() !== 0) k.emissive.set(c); return k; };   // v3.12: glowing parts take the tint as glow too (signal on/off)
         m.material = Array.isArray(m.material) ? m.material.map(one) : one(m.material); } });
+    if (hold) { for (const n in meta.parts ?? {}) { const nd = s.getObjectByName(THREE.PropertyBinding.sanitizeNodeName(meta.parts[n].node)); if (!nd) { console.error('asset ' + name + ': part node ' + n + ' missing'); continue; }
+        nd.removeFromParent(); nd.position.set(0, 0, 0); nd.quaternion.identity(); root.parts[n].add(nd); }
+      hold.add(s); return; }
     if (o.h) { const b = new THREE.Box3().setFromObject(s), hh = b.max.y - b.min.y; if (hh > 0) s.scale.multiplyScalar(o.h / hh); }
     root.add(s);
   }));
   return root;
+}
+function _walkSurf() {   // v3.17: groundH also sees the walk surfaces of asset(…, { walk: true }) — highest surface under (x, z), 2-m grid
+  const T = [], C = 2, grid = new Map(), A = new THREE.Vector3(), B = new THREE.Vector3(), D = new THREE.Vector3();
+  for (const S of WALKSURF) { S.root.updateWorldMatrix(true, false); const tr = S.tri, k = S.k;
+    for (let i = 0; i + 8 < tr.length; i += 9) { A.set(tr[i] * k, tr[i + 1] * k, tr[i + 2] * k).applyMatrix4(S.root.matrixWorld); B.set(tr[i + 3] * k, tr[i + 4] * k, tr[i + 5] * k).applyMatrix4(S.root.matrixWorld); D.set(tr[i + 6] * k, tr[i + 7] * k, tr[i + 8] * k).applyMatrix4(S.root.matrixWorld);
+      const t = [A.x, A.y, A.z, B.x, B.y, B.z, D.x, D.y, D.z], ti = T.push(t) - 1;
+      for (let gx = Math.floor(Math.min(A.x, B.x, D.x) / C); gx <= Math.floor(Math.max(A.x, B.x, D.x) / C); gx++)
+        for (let gz = Math.floor(Math.min(A.z, B.z, D.z) / C); gz <= Math.floor(Math.max(A.z, B.z, D.z) / C); gz++) { const key = gx + ',' + gz; (grid.get(key) ?? grid.set(key, []).get(key)).push(ti); } } }
+  const g0 = groundH;
+  groundH = (X, Z) => { let h = g0(X, Z); const L = grid.get(Math.floor(X / C) + ',' + Math.floor(Z / C)); if (!L) return h;
+    for (const i of L) { const t = T[i], d = (t[5] - t[8]) * (t[0] - t[6]) + (t[6] - t[3]) * (t[2] - t[8]); if (Math.abs(d) < 1e-9) continue;
+      const u = ((t[5] - t[8]) * (X - t[6]) + (t[6] - t[3]) * (Z - t[8])) / d, v = ((t[8] - t[2]) * (X - t[6]) + (t[0] - t[6]) * (Z - t[8])) / d, w = 1 - u - v;
+      if (u >= -1e-4 && v >= -1e-4 && w >= -1e-4) h = Math.max(h, u * t[1] + v * t[4] + w * t[7]); }
+    return h; };
+}
+// animate(node | part, [[t, { x, y, z, rx, ry, rz }], …], { e, sound }) — keyframes for a part or object, offsets from where it rests (m / rad): lids, hatches, bars,
+// wheels, turrets. Each key eases in with its own e (inOut | out | in | lin | back) or the default; a pure function of t. Doors and windows: openDoor().
+function animate(obj, keys, o = {}) {
+  const node = dyn(obj.g ?? obj.root ?? obj), r0 = { x: node.position.x, y: node.position.y, z: node.position.z, rx: node.rotation.x, ry: node.rotation.y, rz: node.rotation.z };
+  const K = keys.map(([t, v, e]) => ({ t, v, e: e ?? v.e })).sort((a, b) => a.t - b.t), F = ['x', 'y', 'z', 'rx', 'ry', 'rz'], val = (q, f) => q.v[f] ?? 0;
+  if (o.sound) for (let i = 1; i < K.length; i++) sfx(K[i - 1].t, o.sound, 0.5);
+  return tick(t => { let i = 0; while (i < K.length - 1 && K[i + 1].t <= t) i++;
+    const a = K[i], b = K[i + 1], u = !b || t <= a.t ? (t < a.t ? 0 : 1) : (EASE[b.e ?? o.e ?? 'inOut'] ?? EASE.inOut)(clamp((t - a.t) / (b.t - a.t)));
+    for (const f of F) { const v = !b || t <= a.t ? val(a, f) : lerp(val(a, f), val(b, f), u), tg = f[0] === 'r' ? node.rotation : node.position; tg[f[f.length - 1]] = r0[f] + v; } });
 }
 
 // --- interactions: people and objects — everything a pure function of t (frame-exact export) ---
@@ -3275,7 +3332,7 @@ function splash(x, z, t0, o = {}) {
 }
 function drive(v, pts, o = {}) {   // o.jumps: [[t, h, airtime]] · o.bumpy: 0..2 (off-road) · see crash() for accidents
   const path = new Path(pts, o.loop), g = dyn(v.g ?? v), t0 = o.t0 ?? 0, t1 = o.t1 ?? 1e9, sp = o.speed ?? 8, ra = o.ramp ?? clamp(sp / 5, 0.6, 2.5);
-  PATHS.push(path);
+  PATHS.push(path); MOVERS.push({ node: g, kind: 'drive', ok: o.passThrough });
   const Tp = o.loop ? 1e9 : path.len < sp * ra ? 2 * Math.sqrt(path.len * ra / sp) : path.len / sp + ra, Te = Math.min(Tp, t1 - t0), a = sp / ra, tr = Math.min(ra, Te / 2), vp = a * tr;
   const dist = u => u <= 0 ? 0 : u >= Te ? vp * (Te - tr) : u < tr ? 0.5 * a * u * u : u > Te - tr ? vp * (Te - tr) - 0.5 * a * (Te - u) ** 2 : 0.5 * a * tr * tr + vp * (u - tr);
   const cr = path.p.length > 2 && !v.bike ? o.corner ?? clamp(sp * 0.3, 1.2, 3) : 0;   // corners are driven as an arc (was: the position turned on the spot of the corner point); exact again at both ends of the path
@@ -3311,7 +3368,7 @@ function drive(v, pts, o = {}) {   // o.jumps: [[t, h, airtime]] · o.bumpy: 0..
 }
 
 // --- crowds: hundreds of figures as instanced meshes, deterministic in t ---
-const hordes = [];
+const hordes = [], MOVERS = [];   // v3.19 MOVERS: { node, kind: 'drive' | 'fly' } for the mover QA (qaMovers)
 // wall(p, line | [[x,z],[x,z], …], { h, thick, kind: 'concrete' | 'brick' | 'stone', color, posts }) → { g, line, h } — free-standing wall along a line
 //   (v3.3: for crowds climbing over it, horde({ wait: { line: W.line, climb: { h: W.h } } })), coping on top, piers every ~3 m, surface pattern; static and solid (hitbox)
 function wall(p, pts, o = {}) {
@@ -3521,7 +3578,7 @@ function horde(o = {}) {
       for (let i = 0; i < n; i++) { const o2 = s * n + i;
         if (pin[i] === 2) yw[i] = yw[i];   // tripped / down: keeps its heading
         else if (!pin[i]) { const mx = px[i] - ox0[i], mz = pz[i] - oz0[i], sp = Math.hypot(mx, mz) / SIMDT; vx[i] = mx / SIMDT; vz[i] = mz / SIMDT; wk[i] += sp * SIMDT;
-          const want = sp > 0.25 ? Math.atan2(mx, mz) : stateRaw(M[i], t - lag[i])[3], dY = ((want - yw[i] + Math.PI) % TAU + TAU) % TAU - Math.PI; yw[i] += clamp(dY, -turn, turn); Mv[o2] = sp > 0.18 ? 1 : 0; }
+          const want = sp > 0.25 ? Math.atan2(mx, mz) : stateRaw(M[i], t - lag[i])[3], dY = ((want - yw[i] + Math.PI) % TAU + TAU) % TAU - Math.PI, tr = sp > 1 && Math.abs(dY) > 1.4 ? turn * 3 : turn; yw[i] += clamp(dY, -tr, tr); Mv[o2] = sp > 0.18 ? 1 : 0; }   // v3.19: moving fast against the way it faces → turns 3× faster (was: ran backwards for up to 0.9 s)
         X[o2] = px[i]; Zc[o2] = pz[i]; Yw[o2] = yw[i]; Wk[o2] = wk[i];
         if (CLB && !pin[i]) { const [u, d] = lineUD(i); if (u > -0.02 && u < 1.02) { const P = Pat(u), L = rampL(P); Yy[o2] = d >= 0 ? P * clamp(1 - d / L) : relT[i] <= t ? P * (1 - EASE.in(clamp(-d / (1.1 * Math.max(1, P / 2.6))))) : 0; } } }   // v3.13: the drop on the far side grows with the wall height (16 m walls: no teleport)
       if (CLB) PH.set(Pb, s * NB);
@@ -3559,6 +3616,7 @@ function horde(o = {}) {
       const L = Math.hypot(s0[0] - fr[0], s0[1] - fr[1]) || 1, dx = (s0[0] - fr[0]) / L, dz = (s0[1] - fr[1]) / L, back = Math.sin(s0[3]) * dx + Math.cos(s0[3]) * dz < 0 ? 1 : -1;   // hit from the front → falls on its back
       q.down = { t, dx, dz, push: o2.drop || o2.squash ? 0 : o2.push ?? 0.35, dir: o2.dir ?? back, sink: o2.sink ?? (!human && !(o2.drop && o2.keep)), drop: o2.drop, squash: o2.squash, keep: o2.keep, depth: o2.depth, pile: o2.pile }; return api; },   // drop + keep (v2.29): falls depth m, lands, topples, stays
     alive: (i, t) => !(M[i].down && t >= M[i].down.t),
+    _qaMembers(t) { const R = []; for (let i = 0; i < n; i++) { const q = M[i]; if (t < q.b + (rise ? 0.9 : 0) || (q.down && t >= q.down.t) || tripAge(i, t) >= 0) continue; const r = state(q, t); if ((r[5] ?? 0) > 0.2) continue; R.push([i, r[0], r[1], r[3], q.sc ?? 1]); } return R; },   // v3.19 mover QA
     _dbg: (i, t) => ({ b: M[i].b, raw: stateRaw(M[i], t).slice(0, 2), state: state(M[i], t).slice(0, 2), trip: tripAge(i, t), hero: !!M[i].hero }),   // v3.3: --probe helper
     _qa(t) {   // v3.0 QA: members standing inside each other or inside props at time t
       const P = [], info = {}; for (let i = 0; i < n; i++) { const q = M[i]; if (t < q.b + (rise ? 0.9 : 0) || (q.down && t >= q.down.t) || q.hero || tripAge(i, t) >= 0) continue; const [x, z, , , , yp = 0] = state(q, t); if (yp > 0.2) continue; P.push([x, z, 0.24 * q.sc * Math.max(q.bw ?? 1, q.bd ?? 1), q.fixed ? 1 : 0, (q.cy ?? q.y ?? 0)]); }
@@ -11704,7 +11762,6 @@ function instrument(f, kind = 'guitar', t0 = 0, t1 = 1e9, o = {}) {
    jello, fire that spreads (burn, spreadFire), cracked glass (crackGlass), camera moves (vertigo, crashZoom, droneShot, shaky) */
 /* ====================================================================== */
 // ---- camera effects (applied after the CAM keys, before the frame is drawn) ----
-const CAMFX = []; let CAMROLL = 0;
 // vertigo(t0, t1, { amount, at }) — dolly zoom: the camera pulls back while the lens zooms in (or the reverse with amount < 0); the subject keeps its size, the world stretches
 function vertigo(t0, t1, o = {}) { const A = o.amount ?? 0.8; CAMFX.push((t, P, L, fov) => { if (t < t0 || t > t1 + (o.hold ?? 0)) return; const k = EASE.inOut(clamp((t - t0) / (t1 - t0))), s = 1 + A * k;
   P.sub(L).multiplyScalar(s).add(L); return THREE.MathUtils.radToDeg(2 * Math.atan(Math.tan(THREE.MathUtils.degToRad(fov) / 2) / s)); }); sfx(t0, 'riser', 0.6); return t1; }
@@ -11721,6 +11778,28 @@ function droneShot(t0, t1, pts, o = {}) {
 }
 // shaky(t0, t1, { amp }) — handheld action camera: jitter, bumps, small rolls
 function shaky(t0, t1, o = {}) { const a = o.amp ?? 1; CAMFX.push((t, P, L) => { if (t < t0 || t > t1) return; const e = env3(t, t0, t1, 0.2, 0.2) * a; P.x += noise1(t * 4.1) * 0.12 * e; P.y += noise1(t * 3.3 + 9) * 0.1 * e; L.x += noise1(t * 5.3 + 4) * 0.18 * e; L.y += noise1(t * 4.7 + 21) * 0.15 * e; CAMROLL += noise1(t * 2.2 + 7) * 0.04 * e; }); }
+// v3.17 camPath('name', t0, { at, speed, dur, from, to, tr, td, dir, dof, hand, fy }) — camera path planned in Blender (tools/blender_cam.py → assets/cams/<name>.json):
+// → two CAM keys (start with cut + transition, end), spread them into CAM like shot(). at: the asset the path was planned around (it follows its
+// position, turn and scale; also a track() name or [x, z, ry] — CAM in the story cannot see scene objects), without at: world coordinates. speed / dur: play faster or stretch to dur s; from / to: seconds of the path.
+// Lens and roll come from Blender too. Collision checks (CAMCLIP) and the shot audit see the real path.
+function camPath(name, t0, o = {}) {   // callable in the story's CAM: everything that needs the engine runs per frame
+  const C = CAMPATHS[name]; if (!C) { console.error('camPath: ' + name + ' missing (assets/cams/' + name + '.json)'); return []; }
+  const cl = (v, a, b) => Math.min(b, Math.max(a, v)), li = (a, b, u) => a + (b - a) * u;
+  const n = C.n, len = (n - 1) / C.fps, a = cl(o.from ?? 0, 0, len), b = cl(o.to ?? len, a, len), sp = o.dur ? (b - a) / o.dur : (o.speed ?? 1), dur = Math.round((b - a) / sp * 1e6) / 1e6;
+  const fr = t => cl(((t - t0) * sp + a) * C.fps, 0, n - 1);
+  const s3 = (A, t) => { const f = fr(t), i = Math.min(Math.floor(f), Math.max(n - 2, 0)), j = Math.min(i + 1, n - 1), u = f - i; return [li(A[3 * i], A[3 * j], u), li(A[3 * i + 1], A[3 * j + 1], u), li(A[3 * i + 2], A[3 * j + 2], u)]; };
+  const s1 = (A, t) => { const f = fr(t), i = Math.min(Math.floor(f), Math.max(n - 2, 0)), j = Math.min(i + 1, n - 1); return li(A[i], A[j], f - i); };
+  let M = null;   // model → world, resolved on first use: an object, a track() name or [x, z, ry] (on the ground there)
+  const W = q => { const at = o.at; if (at == null) return q;
+    if (Array.isArray(at)) { if (!M) { const [x, z, ry = 0] = at; M = new THREE.Matrix4().compose(new THREE.Vector3(x, groundH(x, z), z), new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), ry), new THREE.Vector3(1, 1, 1)); } return new THREE.Vector3(...q).applyMatrix4(M).toArray(); }
+    const ob = typeof at === 'string' ? TRACK[at]?.obj : (at.g ?? at.root ?? at); if (!ob) { console.error('camPath ' + name + ': at "' + at + '" unknown (track() it)'); return q; }
+    ob.updateWorldMatrix(true, false); const k = ob.userData.k ?? 1; return new THREE.Vector3(q[0] * k, q[1] * k, q[2] * k).applyMatrix4(ob.matrixWorld).toArray(); };
+  const p = t => W(s3(C.p, t)), l = t => W(s3(C.l, t)), FV = Array.isArray(C.fov) ? C.fov : null, RL = Array.isArray(C.roll) ? C.roll : null;
+  const fov0 = FV ? s1(FV, t0) : C.fov ?? 45;
+  if (FV || RL) CAMFX.push((t, P, L, f) => { if (t < t0 || t > t0 + dur) return; if (RL) CAMROLL += s1(RL, t); return FV ? f * s1(FV, t) / fov0 : undefined; });
+  const base = { p, l, fov: fov0, fy: o.fy ?? 0.5, dof: o.dof ?? 0, hand: o.hand ?? 0 };
+  return [{ t: t0, ...base, cut: true, tr: o.tr, td: o.td, dir: o.dir }, { t: t0 + dur, ...base, e: 'lin' }];
+}
 // ---- crowds ----
 // audience(p, x, z, { rows, cols, gap, rise, ry, t0, ola: { t0, t1, speed }, cheer: [[t0, t1], …], flee: { at, t, speed }, jostle, shirts }) — bleachers full of people (one instanced crowd)
 function audience(p, x, z, o = {}) {
@@ -12690,17 +12769,317 @@ function figLook(f) {
   const sk = f.FC?.skull?.material?.color?.getHex();
   f.root.traverse(m => { if (!m.isMesh || own.has(m) || Array.isArray(m.material)) return; m.material = figMat(m.material, m.material?.color?.getHex() === sk); });
 }
+// ---- v3.18 costumes: figure({ costume: 'santa' }) · char('you', { outfit: 'santa' }) — full looks for the topic list, built on the normal rig (walk, pose, face, hands all work) ----
+// COSTUME_BASE holds the colours and clothing keys (shirt, pants, shoes, skirt, coat, beard …) a costume starts from (anything passed to figure() wins);
+// bare: 'top' (shirt = skin) | 'all' (shirt and trousers = skin: bare chest and legs under a kilt or loincloth);
+// COSTUMES[name](f, K) adds the pieces: headwear (f.hat, hides the hair crown or all of the hair), collars, badges, belts, pouches, boots, puttees, cuffs, gloves.
+// Head: x ±0.19, y 0…0.38, z ±0.19 (face +z) · chest: y −0.02…0.60, x ±0.26, z ±0.15 · hips: y −0.10…0.12 · shin: y −0.40…0.03 · forearm: y −0.27…0.03.
+const COSTUME_BASE = {
+  santa: { shirt: '#C0262E', pants: '#C0262E', shoes: '#151515', beard: 'full', beardColor: '#F2F2EE', hair: '#ECECE6', belt: '#141414', soles: '#2A2A2A' },
+  elf: { shirt: '#2E8B3A', pants: '#C8282E', shoes: '#2E8B3A', hair: '#B5562A', belt: '#1A1A1A' },
+  pharaoh: { skin: '#B9824F', bare: 'all', skirt: '#F2EEE2', skirtLen: 0.34, shoes: '#C9A060', hair: '#141210', hairStyle: 'buzz', soles: false },
+  galabeya: { shirt: '#E6DEC8', pants: '#E6DEC8', dress: '#E6DEC8', skirtLen: 0.62, shoes: '#6A4A30', beard: 'stubble', hair: '#1E1A18' },
+  archaeologist: { shirt: '#D2C29C', pants: '#B4A27A', shoes: '#5A3A22', belt: '#4A3020', beard: 'mustache' },
+  tommy: { shirt: '#6E6A48', pants: '#6E6A48', shoes: '#3A2A1E', belt: '#A8996A', beard: 'mustache' },
+  german1914: { shirt: '#7A7E6A', pants: '#6A6E60', shoes: '#1A1612', belt: '#2A2420', beard: 'mustache' },
+  police: { shirt: '#1E2A44', pants: '#1A2236', shoes: '#111111', belt: '#111111' },
+  prisoner: { shirt: '#5C7DA8', pants: '#4A5A72', shoes: '#2A2420', hairStyle: 'buzz' },
+  guard1960: { shirt: '#5A5E66', pants: '#3E4148', shoes: '#111111', belt: '#111111' },
+  suit: { shirt: '#2A2A30', pants: '#2A2A30', shoes: '#111111', coat: true, coatLen: 0.14 },
+  stewardess: { shirt: '#2F5DA8', dress: '#2F5DA8', skirtLen: 0.3, shoes: '#1E1E1E', hairStyle: 'bun', legs: '#D9B79A' },
+  sailor17: { shirt: '#E6DEC6', pants: '#8A7A5A', shoes: '#3A2A1E', beard: 'stubble', hairStyle: 'long' },
+  captain17: { shirt: '#1E2A4A', pants: '#3A3026', shoes: '#1A1410', coat: true, coatLen: 0.42, hair: '#D8D4C8', hairStyle: 'ponytail' },
+  maya: { skin: '#9A6A44', bare: 'all', skirt: '#E6DEC8', skirtLen: 0.3, shoes: '#8A5A34', hair: '#141210', hairStyle: 'long', cape: '#B83A2A', soles: false },
+  mongol: { shirt: '#7A3A2A', pants: '#3A3026', skirt: '#7A3A2A', skirtLen: 0.4, shoes: '#3A2418', hair: '#141210', beard: 'goatee', skin: '#C99A70' },
+  winter: { shirt: '#C8402E', pants: '#2E3440', shoes: '#4A3424', hatStyle: 'beanie', hat: '#3A5A44' },
+  scrubs: { shirt: '#3E8E8A', pants: '#3E8E8A', shoes: '#E6E6E6', sleeves: 'short' },
+  customs: { shirt: '#A9C4E0', pants: '#1E2A44', shoes: '#111111', belt: '#111111' },
+  pilgrim: { shirt: '#22201E', pants: '#22201E', shoes: '#1A1410', hair: '#5C3F2A' },
+  feral: { shirt: '#7A6A52', pants: '#6A5A44', hairStyle: 'long', hair: '#3A2A1E', soles: false },
+  scientist60s: { shirt: '#F2F2EE', pants: '#3A3A40', shoes: '#1A1A1A', sleeves: 'short', hairStyle: 'buzz' },
+  toga: { shirt: '#F2EEE4', dress: '#F2EEE4', skirtLen: 0.55, shoes: '#8A5A34', hairStyle: 'curly', soles: false },
+  worker: { shirt: '#3A4A5A', pants: '#3A4C6E', shoes: '#4A3424', belt: '#2A2420' },
+  smock1911: { shirt: '#ECE8DE', pants: '#3A3530', shoes: '#2A2420', coat: true, coatLen: 0.4, beard: 'mustache' }
+};
+for (const k in COSTUME_BASE) { const { skin, ...rest } = COSTUME_BASE[k]; OUTFITS[k] ??= { costume: k, ...rest }; }   // char('you', { outfit: 'santa' }) keeps the character's skin
+
+const COSTUMES = (() => {
+  const NC = { cast: false };
+  // --- shared pieces ---
+  const hat = (f, y = 0.36) => { const h = grp(f.head, 0, y, 0); f.hat = h; return h; };
+  const hide = (f, all) => { const hs = f.hair?.children ?? []; (all ? hs.slice(0, f._hairN ?? hs.length) : hs.slice(0, 1)).forEach(n => { n.visible = false; }); };
+  const recol = (g, c) => { const m = g?.children.find(n => n.isMesh); if (m) m.material = mat(c, { flat: false }); };
+  const gloves = (f, c) => { for (const H of f.hands ?? []) H.hd.traverse(n => { if (n.isMesh && n.userData.hand) n.material = mat(c, { flat: false }); }); };
+  const cuffs = (f, c, y = -0.27, h = 0.05, w = 0.17) => { for (const fa of [f.foreL, f.foreR]) box(fa, w, h, w, c, 0, y, 0, NC); };
+  const fz = f => 0.152 * (f.B?.cd ?? 1);   // chest front
+  const buttons = (f, c, n, y0, dy, x = 0, r = 0.016) => { for (let i = 0; i < n; i++) ball(f.chest, r, c, x, y0 - i * dy, fz(f) + 0.006, { detail: 0, ...NC }); };
+  const boots = (f, c, top = -0.06, w = 0.2) => { for (const sh of [f.shinL, f.shinR]) { box(sh, w, top + 0.41, w + 0.01, c, 0, -0.41, 0.005, NC); box(sh, w + 0.02, 0.04, w + 0.03, shade(c, -0.08), 0, top - 0.02, 0.005, NC); } };
+  const puttees = (f, c) => { for (const sh of [f.shinL, f.shinR]) for (let i = 0; i < 7; i++) box(sh, 0.19, 0.05, 0.2, i % 2 ? shade(c, -0.05) : c, 0, -0.36 + i * 0.048, 0, { rz: (i % 2 ? 0.06 : -0.06), ...NC }); };
+  const pocket = (f, c, x, y, w = 0.12, h = 0.12, flap = true, bt = null) => { const z = fz(f); box(f.chest, w, h, 0.012, c, x, y, z, NC); if (flap) box(f.chest, w + 0.01, 0.035, 0.018, shade(c, -0.08), x, y + h - 0.02, z + 0.002, NC); if (bt) ball(f.chest, 0.011, bt, x, y + h - 0.01, z + 0.014, { detail: 0, ...NC }); };
+  const peakCap = (f, c, band, badge) => { hide(f); const h = hat(f, 0.33); cyl(h, 0.235, 0.205, 0.1, c, 0, 0.0, -0.01, { seg: 14 }); cyl(h, 0.207, 0.205, 0.05, band, 0, -0.005, -0.01, { seg: 14, ...NC });
+    box(h, 0.3, 0.018, 0.13, '#111111', 0, -0.012, 0.2, { rx: 0.25, ...NC }); if (badge) box(h, 0.06, 0.06, 0.012, badge, 0, 0.03, 0.205, NC); return h; };
+  const tie = (f, c, w = 0.05) => { const z = fz(f) + 0.008; box(f.chest, 0.06, 0.05, 0.015, c, 0, 0.53, z, NC); box(f.chest, w, 0.34, 0.012, c, 0, 0.2, z, NC); box(f.chest, w * 0.8, 0.04, 0.012, c, 0, 0.17, z, { rz: Math.PI / 4, ...NC }); };
+  const shirtV = (f, c) => { const z = fz(f) + 0.004; box(f.chest, 0.14, 0.14, 0.01, c, 0, 0.46, z, NC); for (const sx of [-1, 1]) box(f.chest, 0.06, 0.05, 0.016, c, sx * 0.055, 0.56, z + 0.004, { rz: sx * 0.5, ...NC }); };
+  const ring = (p, R, r, c, x, y, z, n = 12, o = {}) => { for (let i = 0; i < n; i++) { const a = i / n * TAU; ball(p, r, c, x + Math.cos(a) * R * (o.sx ?? 1), y + (o.dy ?? 0) * Math.sin(a), z + Math.sin(a) * R * (o.sz ?? 1), { detail: 0, ...NC }); } };
+  const stripes = (g, c, n, y0, dy, w = 0.2, d = 0.21) => { for (let i = 0; i < n; i++) box(g, w, 0.025, d, c, 0, y0 + i * dy, 0, NC); };
+  return {
+    santa(f, K) {   // red suit with white fur trim, black belt, white beard, floppy hat with pompom, black boots with fur cuffs, black gloves
+      const W = '#F4F2EE', z = fz(f);
+      box(f.chest, 0.5, 0.08, 0.32, W, 0, 0.56, 0, NC); box(f.chest, 0.09, 0.58, 0.014, W, 0, -0.02, z + 0.002, NC);
+      rbox(f.hips, 0.5, 0.1, 0.33, W, 0, -0.13, 0, { rf: 0.4 }); cuffs(f, W, -0.27, 0.07, 0.185);
+      for (const sh of [f.shinL, f.shinR]) { box(sh, 0.2, 0.32, 0.21, '#151515', 0, -0.41, 0.005, NC); rbox(sh, 0.23, 0.08, 0.24, W, 0, -0.12, 0.005, { rf: 0.45 }); }
+      gloves(f, '#1A1A1A');
+      hide(f); const h = hat(f, 0.33); rbox(h, 0.44, 0.09, 0.44, W, 0, -0.04, 0, { rf: 0.45 });
+      cone(h, 0.21, 0.36, '#C0262E', 0, 0.03, -0.02, { seg: 10, rx: -0.6 }); cone(h, 0.09, 0.2, '#C0262E', 0, 0.2, -0.22, { seg: 8, rx: -2.0, ...NC });
+      ball(h, 0.06, W, 0, 0.13, -0.34, { detail: 1, ...NC });
+      if (f.FC?.M) ball(f.head, 0.045, '#E8828A', -0.11, 0.12, 0.18, { detail: 0, ...NC }), ball(f.head, 0.045, '#E8828A', 0.11, 0.12, 0.18, { detail: 0, ...NC });   // rosy cheeks
+    },
+    elf(f, K) {   // green tunic with zigzag collar and hem, red-white striped legs, pointed ears, tall hat with bell, curled shoes with bells
+      const z = fz(f), R = '#C8282E', Wh = '#F2F0EA', G = '#2E8B3A', Au = '#E3B54A';
+      for (let i = 0; i < 10; i++) { const a = i / 10 * TAU; cone(f.chest, 0.05, 0.09, i % 2 ? R : Wh, Math.sin(a) * 0.2, 0.55, Math.cos(a) * 0.13, { seg: 4, rx: Math.PI, ...NC }); }
+      for (let i = 0; i < 12; i++) { const a = i / 12 * TAU; cone(f.hips, 0.06, 0.12, G, Math.sin(a) * 0.24, -0.22, Math.cos(a) * 0.15, { seg: 4, rx: Math.PI, ...NC }); }
+      rbox(f.hips, 0.48, 0.14, 0.31, G, 0, -0.12, 0, { rf: 0.3 });
+      for (const sh of [f.shinL, f.shinR, f.legL, f.legR]) for (let i = 0; i < 4; i++) box(sh, 0.195, 0.04, 0.205, Wh, 0, -0.37 + i * 0.1, 0, NC);
+      for (const sx of [-1, 1]) cone(f.head, 0.05, 0.14, f.FC?.skull ? _hexOf(f.FC.skull) : '#F1C7A5', sx * 0.2, 0.14, 0.0, { seg: 5, rz: -sx * 1.25 });
+      hide(f); const h = hat(f, 0.33); rbox(h, 0.43, 0.07, 0.43, R, 0, -0.03, 0, { rf: 0.4 }); cone(h, 0.2, 0.5, G, 0, 0.03, -0.03, { seg: 10, rx: -0.35 });
+      ball(h, 0.045, Au, 0, 0.5, -0.2, { detail: 1, ...NC });
+      for (const ft of [f.footL, f.footR]) { cone(ft, 0.06, 0.16, G, 0, -ANK + 0.02, 0.22, { seg: 6, rx: 1.1, ...NC }); ball(ft, 0.03, Au, 0, -ANK + 0.12, 0.27, { detail: 0, ...NC }); }
+      buttons(f, Au, 3, 0.4, 0.12);
+    },
+    pharaoh(f, K) {   // nemes headdress (gold and lapis stripes, lappets, tail), uraeus, false beard, broad collar, gold arm rings, pleated kilt with apron and gold belt
+      const Au = '#E0B04A', La = '#2A4C9A', Tq = '#3AA6A0', z = fz(f);
+      hide(f, true); const h = hat(f, 0.18);
+      rbox(h, 0.44, 0.24, 0.44, Au, 0, -0.02, -0.01, { rf: 0.35 }); for (let i = 0; i < 3; i++) box(h, 0.442, 0.022, 0.442, La, 0, 0.0 + i * 0.05, -0.01, NC);
+      for (let i = 0; i < 4; i++) box(h, 0.03, 0.012, 0.36, La, -0.135 + i * 0.09, 0.215, -0.02, NC);   // stripes over the crown
+      box(h, 0.4, 0.05, 0.03, Au, 0, 0.1, 0.205, NC); box(h, 0.36, 0.02, 0.035, La, 0, 0.12, 0.205, NC);
+      for (const sx of [-1, 1]) { const lp = grp(h, sx * 0.21, -0.02, 0.06); rbox(lp, 0.13, 0.36, 0.05, Au, 0, -0.36, 0, { rf: 0.3 }); for (let i = 0; i < 6; i++) box(lp, 0.135, 0.018, 0.055, La, 0, -0.34 + i * 0.055, 0, NC); }
+      rbox(h, 0.16, 0.32, 0.08, Au, 0, -0.36, -0.2, { rf: 0.4 }); box(h, 0.17, 0.02, 0.085, La, 0, -0.25, -0.2, NC);
+      cyl(h, 0.018, 0.024, 0.09, Au, 0, 0.12, 0.225, { seg: 6, ...NC }); ball(h, 0.03, Au, 0, 0.22, 0.23, { detail: 0, ...NC }); box(h, 0.04, 0.03, 0.01, La, 0, 0.2, 0.258, NC);
+      box(f.head, 0.07, 0.15, 0.05, La, 0, -0.14, 0.15, NC); for (let i = 0; i < 4; i++) box(f.head, 0.075, 0.012, 0.055, Au, 0, -0.13 + i * 0.035, 0.15, NC);
+      [[0.58, 0.32, Au], [0.53, 0.38, La], [0.48, 0.44, Tq], [0.43, 0.5, Au], [0.38, 0.54, La]].forEach(([y, w, c], i) => { box(f.chest, w + 0.14, 0.05, 0.012, c, 0, y - 0.04, z + 0.003 + i * 0.001, NC); box(f.chest, w + 0.14, 0.05, 0.012, c, 0, y - 0.04, -z - 0.003, NC); });
+      for (const sx of [-1, 1]) rbox(f.chest, 0.17, 0.05, 0.31, Au, sx * 0.21, 0.55, 0, { rf: 0.4 });
+      for (const ua of [f.armL, f.armR]) box(ua, 0.17, 0.04, 0.17, Au, 0, -0.12, 0, NC); cuffs(f, Au, -0.25, 0.06, 0.16);
+      rbox(f.hips, 0.47, 0.06, 0.31, Au, 0, 0.06, 0, { rf: 0.4 }); plate(f.hips, [[-0.07, 0], [0.07, 0], [0.11, 0.3], [-0.11, 0.3]], 0.014, Au, 0, -0.2, 0.17, { rx: Math.PI / 2 });
+      for (let i = 0; i < 4; i++) box(f.hips, 0.012, 0.28, 0.016, La, -0.06 + i * 0.04, -0.3, 0.175, NC);
+      for (const ft of [f.footL, f.footR]) box(ft, 0.18, 0.02, 0.06, '#8A6A3A', 0, -ANK + 0.06, 0.12, NC);
+    },
+    galabeya(f, K) {   // long cotton robe, neck slit, wrapped turban with a hanging end, sash
+      const z = fz(f), c = '#ECE6D6';
+      box(f.chest, 0.03, 0.2, 0.012, shade('#E6DEC8', -0.2), 0, 0.38, z, NC); buttons(f, '#8A7A5A', 3, 0.55, 0.06, 0.03, 0.01);
+      hide(f); const h = hat(f, 0.26); rbox(h, 0.45, 0.16, 0.45, c, 0, 0.0, 0, { rf: 0.45 });
+      for (let i = 0; i < 3; i++) cyl(h, 0.235 - i * 0.025, 0.235 - i * 0.02, 0.045, i % 2 ? shade(c, -0.06) : c, 0, 0.04 + i * 0.045, 0, { seg: 12, rz: (i - 1) * 0.08, ...NC });
+      rbox(h, 0.08, 0.24, 0.05, c, 0.16, -0.22, -0.17, { rf: 0.4, rz: 0.2 });
+      rbox(f.hips, 0.47, 0.07, 0.31, '#8A6A4A', 0, 0.05, 0, { rf: 0.4 });
+    },
+    archaeologist(f, K) {   // 1920s: pith helmet, khaki shirt with pockets, brown waistcoat with buttons, red neckerchief, rolled sleeves, leather gaiters
+      const z = fz(f), V = '#6A4A30';
+      for (const sx of [-1, 1]) box(f.chest, 0.17, 0.5, 0.014, V, sx * 0.13, 0.0, z + 0.003, { rz: sx * -0.05, ...NC });
+      for (const sx of [-1, 1]) box(f.chest, 0.17, 0.5, 0.014, V, sx * 0.13, 0.0, -z - 0.003, NC);
+      buttons(f, '#D8C08A', 4, 0.36, 0.1, 0.035, 0.012); pocket(f, shade(V, -0.06), -0.15, 0.08, 0.08, 0.06, true);
+      box(f.chest, 0.24, 0.08, 0.04, '#B03A2A', 0, 0.54, z - 0.02, NC); cone(f.chest, 0.06, 0.12, '#B03A2A', 0, 0.42, z + 0.01, { seg: 4, rx: Math.PI, ...NC });
+      for (const ua of [f.armL, f.armR]) box(ua, 0.18, 0.07, 0.18, shade('#D2C29C', -0.06), 0, -0.3, 0, NC);
+      for (const fa of [f.foreL, f.foreR]) { const m = fa.children.find(n => n.isMesh); if (m) m.material = mat(f.FC?.skull ? _hexOf(f.FC.skull) : '#E8B892', { flat: false }); }
+      boots(f, '#7A5232', -0.04, 0.2); for (const sh of [f.shinL, f.shinR]) for (let i = 0; i < 3; i++) box(sh, 0.022, 0.02, 0.02, '#C9B07A', 0.1, -0.32 + i * 0.1, 0.06, NC);
+      hide(f); const h = hat(f, 0.3); const dm = ball(h, 0.24, '#E6DCC0', 0, 0.02, 0, { detail: 2 }); dm.scale.set(1, 0.72, 1.12);
+      cyl(h, 0.33, 0.34, 0.025, '#E6DCC0', 0, -0.03, 0.01, { seg: 18 }); dm.scale.y = 0.72; cyl(h, 0.24, 0.245, 0.04, '#7A6A4A', 0, -0.01, 0, { seg: 16, ...NC });
+      ball(h, 0.03, '#E6DCC0', 0, 0.19, 0, { detail: 0, ...NC });
+    },
+    tommy(f, K) {   // British infantry 1914: khaki tunic with four pocket flaps and brass buttons, webbing braces and ten ammo pouches, puttees, Brodie helmet with chin strap
+      const z = fz(f), Kh = '#6E6A48', Wb = '#A8996A', Br = '#C9A64A';
+      pocket(f, Kh, -0.13, 0.33, 0.13, 0.13, true, Br); pocket(f, Kh, 0.13, 0.33, 0.13, 0.13, true, Br);
+      buttons(f, Br, 5, 0.52, 0.12, 0, 0.015); box(f.chest, 0.36, 0.06, 0.3, shade(Kh, -0.06), 0, 0.56, 0, NC);
+      for (const sx of [-1, 1]) { box(f.chest, 0.06, 0.62, 0.012, Wb, sx * 0.13, -0.02, z + 0.01, NC); box(f.chest, 0.06, 0.62, 0.012, Wb, sx * 0.1, -0.02, -z - 0.01, NC); box(f.chest, 0.06, 0.32, 0.012, Wb, sx * 0.19, 0.445, 0, { rx: Math.PI / 2, ...NC }); }
+      for (const sx of [-1, 1]) for (let i = 0; i < 5; i++) box(f.hips, 0.075, 0.1, 0.06, Wb, sx * (0.07 + (i % 3) * 0.075), 0.02 + (i > 2 ? -0.11 : 0), 0.17, NC);
+      puttees(f, Kh);
+      hide(f); const h = hat(f, 0.3); cyl(h, 0.32, 0.33, 0.025, '#5E6248', 0, -0.02, 0, { seg: 18 }); cyl(h, 0.17, 0.235, 0.12, '#5E6248', 0, 0.0, 0, { seg: 16 });
+      ball(h, 0.17, '#5E6248', 0, 0.12, 0, { detail: 1 }).scale.set(1, 0.35, 1); for (const sx of [-1, 1]) box(h, 0.02, 0.3, 0.02, '#6A5A3A', sx * 0.19, -0.3, 0.06, { rz: sx * 0.1, ...NC });
+      box(f.head, 0.28, 0.02, 0.02, '#6A5A3A', 0, -0.03, 0.15, NC);
+    },
+    german1914(f, K) {   // German infantry 1914: field-grey tunic with eight buttons and red piping, belt with ammo pouches, jackboots, spiked Pickelhaube with brass plate
+      const z = fz(f), Fg = '#7A7E6A', Rd = '#9E2A22', Br = '#C9A64A', Lt = '#1E1A16';
+      buttons(f, '#B8B8AE', 8, 0.54, 0.07, 0, 0.014); box(f.chest, 0.012, 0.58, 0.014, Rd, 0.025, -0.02, z + 0.002, NC);
+      box(f.chest, 0.36, 0.07, 0.31, shade(Fg, -0.08), 0, 0.55, 0, NC); box(f.chest, 0.362, 0.012, 0.312, Rd, 0, 0.62, 0, NC); cuffs(f, Rd, -0.25, 0.05, 0.16);
+      for (const sx of [-1, 1]) for (let i = 0; i < 3; i++) box(f.hips, 0.075, 0.1, 0.07, Lt, sx * (0.06 + i * 0.075), -0.03, 0.17, NC);
+      boots(f, Lt, 0.02, 0.21);
+      hide(f); const h = hat(f, 0.3); ball(h, 0.22, Lt, 0, 0.02, 0, { detail: 2 }).scale.set(1, 0.8, 1.1);
+      box(h, 0.36, 0.02, 0.12, Lt, 0, -0.02, 0.2, { rx: 0.2, ...NC }); box(h, 0.38, 0.02, 0.12, Lt, 0, -0.03, -0.2, { rx: -0.25, ...NC });
+      cyl(h, 0.03, 0.05, 0.05, Br, 0, 0.17, 0, { seg: 8, ...NC }); cone(h, 0.03, 0.17, Br, 0, 0.21, 0, { seg: 8, ...NC });
+      plate(h, [[-0.08, 0], [0.08, 0], [0.05, 0.12], [0, 0.15], [-0.05, 0.12]], 0.012, Br, 0, 0.04, 0.235, { rx: Math.PI / 2 - 0.3 });
+      for (const sx of [-1, 1]) ball(h, 0.025, Br, sx * 0.2, 0.0, 0.05, { detail: 0, ...NC });
+    },
+    police(f, K) {   // modern patrol officer: peaked cap with badge, shield badge and name tag, shoulder patches, epaulettes, radio on the shoulder, duty belt with holster, radio and cuffs
+      const z = fz(f), Au = '#D8B44A';
+      peakCap(f, '#1A2236', '#111111', Au);
+      plate(f.chest, [[-0.04, 0], [0.04, 0], [0.05, 0.05], [0, 0.08], [-0.05, 0.05]], 0.01, Au, -0.13, 0.36, z + 0.008, { rx: Math.PI / 2 });
+      box(f.chest, 0.09, 0.025, 0.01, '#D8D8D0', 0.13, 0.38, z + 0.006, NC); pocket(f, '#1E2A44', -0.13, 0.24, 0.12, 0.1, true); pocket(f, '#1E2A44', 0.13, 0.24, 0.12, 0.1, true);
+      for (const ua of [f.armL, f.armR]) box(ua, 0.17, 0.12, 0.17, '#C9A64A', 0, -0.14, 0.004, NC);
+      for (const sx of [-1, 1]) box(f.chest, 0.12, 0.02, 0.06, '#141A2A', sx * 0.2, 0.6, 0, NC);
+      box(f.chest, 0.06, 0.09, 0.04, '#111111', 0.15, 0.48, z + 0.02, NC); box(f.chest, 0.012, 0.06, 0.012, '#111111', 0.17, 0.57, z + 0.02, NC);
+      box(f.hips, 0.08, 0.2, 0.1, '#111111', 0.25, -0.13, 0.02, NC); box(f.hips, 0.06, 0.1, 0.05, '#111111', -0.23, -0.05, 0.08, NC); box(f.hips, 0.08, 0.05, 0.05, '#2A2A2A', -0.15, -0.02, 0.16, NC);
+      buttons(f, '#2A3450', 5, 0.52, 0.12, 0, 0.012); tie(f, '#111522', 0.045);
+    },
+    prisoner(f, K) {   // 1960s federal prisoner: chambray shirt with a stencilled number on chest and back, button placket, rolled cuffs
+      const z = fz(f), W = '#F2EEE4', N = '#1A1A1A';
+      for (const s of [1, -1]) { box(f.chest, 0.17, 0.08, 0.01, W, s > 0 ? -0.12 : 0, s > 0 ? 0.4 : 0.32, s * (z + 0.002), NC); for (let i = 0; i < 4; i++) box(f.chest, 0.022, 0.05, 0.012, N, (s > 0 ? -0.18 : -0.06) + i * 0.04, s > 0 ? 0.415 : 0.335, s * (z + 0.006), NC); }
+      box(f.chest, 0.02, 0.6, 0.012, shade('#5C7DA8', -0.12), 0.02, -0.02, z + 0.002, NC); buttons(f, W, 5, 0.52, 0.12, 0.02, 0.01);
+      box(f.chest, 0.34, 0.06, 0.3, shade('#5C7DA8', -0.06), 0, 0.56, 0, NC); cuffs(f, shade('#5C7DA8', -0.08), -0.15, 0.08, 0.165);
+    },
+    guard1960(f, K) {   // 1960s prison guard: grey uniform, peaked cap, black tie, badge, key ring and baton on the belt
+      const z = fz(f), Au = '#C9A64A';
+      peakCap(f, '#4A4E56', '#111111', Au); tie(f, '#111111');
+      plate(f.chest, [[-0.035, 0], [0.035, 0], [0.045, 0.045], [0, 0.07], [-0.045, 0.045]], 0.01, Au, -0.13, 0.36, z + 0.008, { rx: Math.PI / 2 });
+      pocket(f, '#5A5E66', -0.13, 0.24, 0.12, 0.1, true); pocket(f, '#5A5E66', 0.13, 0.24, 0.12, 0.1, true);
+      const kr = grp(f.hips, 0.2, -0.04, 0.14); for (let i = 0; i < 8; i++) { const a = i / 8 * TAU; box(kr, 0.012, 0.012, 0.012, '#B8B8B0', Math.cos(a) * 0.04, Math.sin(a) * 0.04, 0, NC); }
+      for (let i = 0; i < 4; i++) box(kr, 0.014, 0.07, 0.006, '#B8A060', -0.03 + i * 0.02, -0.11, 0.004, { rz: (i - 1.5) * 0.15, ...NC });
+      cyl(f.hips, 0.02, 0.02, 0.5, '#111111', -0.25, -0.42, 0.03, { seg: 6, ...NC });
+    },
+    suit(f, K) {   // 1970s business suit: jacket (coat key) with lapels, white shirt, thin black tie, pocket square, wraparound dark glasses
+      const z = fz(f); shirtV(f, '#F2F2EE'); tie(f, '#141414', 0.04); box(f.chest, 0.08, 0.025, 0.012, '#F2F2EE', -0.14, 0.42, z + 0.006, NC);
+      cuffs(f, '#F2F2EE', -0.29, 0.03, 0.15);
+      box(f.head, 0.38, 0.07, 0.02, '#141414', 0, 0.17, 0.205, NC); for (const sx of [-1, 1]) box(f.head, 0.02, 0.025, 0.2, '#141414', sx * 0.19, 0.2, 0.1, NC);
+    },
+    stewardess(f, K) {   // early-1970s flight attendant: dress uniform with white buttons, wings badge, red neck scarf, tilted pillbox hat, white gloves
+      const z = fz(f); buttons(f, '#F2F2EE', 3, 0.4, 0.13, 0, 0.014);
+      plate(f.chest, [[-0.06, 0], [0.06, 0], [0.03, 0.02], [-0.03, 0.02]], 0.008, '#D8B44A', -0.13, 0.42, z + 0.006, { rx: Math.PI / 2 });
+      box(f.chest, 0.2, 0.05, 0.03, '#C8282E', 0, 0.55, z - 0.01, NC); cone(f.chest, 0.05, 0.09, '#C8282E', 0.05, 0.45, z + 0.01, { seg: 3, rx: Math.PI, rz: 0.3, ...NC });
+      const h = hat(f, 0.33); cyl(h, 0.12, 0.12, 0.08, '#2F5DA8', -0.04, 0.0, 0.02, { seg: 14, rz: 0.15 }); cyl(h, 0.122, 0.122, 0.015, '#F2F2EE', -0.04, 0.0, 0.02, { seg: 14, rz: 0.15, ...NC });
+      gloves(f, '#F4F2EC');
+    },
+    sailor17(f, K) {   // 17th-century sailor: red knit Monmouth cap, open-collared shirt, brown waistcoat, red sash with hanging ends, knee breeches and bare shins
+      const z = fz(f), sk = f.FC?.skull ? _hexOf(f.FC.skull) : '#E8B892';
+      box(f.chest, 0.12, 0.14, 0.01, sk, 0, 0.46, z + 0.004, NC);
+      for (const sx of [-1, 1]) box(f.chest, 0.15, 0.48, 0.014, '#6A4A30', sx * 0.15, 0.06, z + 0.003, NC);
+      rbox(f.hips, 0.47, 0.1, 0.31, '#A82A22', 0, 0.02, 0, { rf: 0.4 }); box(f.hips, 0.07, 0.25, 0.02, '#A82A22', 0.16, -0.25, 0.15, { rz: 0.1, ...NC });
+      for (const sh of [f.shinL, f.shinR]) recol(sh, sk); for (const lg of [f.legL, f.legR]) box(lg, 0.2, 0.05, 0.21, shade('#8A7A5A', -0.1), 0, -0.44, 0, NC);
+      hide(f); const h = hat(f, 0.3); rbox(h, 0.42, 0.14, 0.42, '#A82A22', 0, -0.03, 0, { rf: 0.45 }); box(h, 0.43, 0.05, 0.43, shade('#A82A22', -0.1), 0, -0.04, 0, NC);
+      cone(h, 0.12, 0.16, '#A82A22', 0, 0.06, -0.08, { seg: 8, rx: -1.0, ...NC });
+    },
+    captain17(f, K) {   // 17th-century captain: long coat (coat key) with gold buttons and wide turned-back cuffs, lace cravat, baldric, tall cuffed boots, black tricorn with gold trim
+      const z = fz(f), Au = '#D8B44A', W = '#F2EEE4';
+      for (const sx of [-1, 1]) buttons(f, Au, 5, 0.5, 0.1, sx * 0.09, 0.013);
+      box(f.chest, 0.1, 0.16, 0.03, W, 0, 0.42, z, NC); for (let i = 0; i < 3; i++) box(f.chest, 0.12 - i * 0.015, 0.03, 0.035, W, 0, 0.44 - i * 0.05, z + 0.005, NC);
+      cuffs(f, shade('#1E2A4A', -0.1), -0.27, 0.12, 0.19); cuffs(f, Au, -0.15, 0.012, 0.195);
+      box(f.chest, 0.07, 0.75, 0.014, '#4A3020', 0.02, -0.02, z + 0.012, { rz: 0.55, ...NC });
+      boots(f, '#1A1410', 0.02, 0.21); for (const sh of [f.shinL, f.shinR]) rbox(sh, 0.24, 0.1, 0.25, '#1A1410', 0, -0.02, 0.01, { rf: 0.3 });
+      hide(f); const h = hat(f, 0.33); cyl(h, 0.2, 0.22, 0.13, '#141414', 0, -0.02, 0, { seg: 12 });
+      for (let i = 0; i < 3; i++) { const a = i / 3 * TAU; const s = grp(h, Math.sin(a) * 0.2, 0.0, Math.cos(a) * 0.2, a); box(s, 0.36, 0.13, 0.03, '#141414', 0, -0.02, 0, { rx: -0.35 }); box(s, 0.36, 0.015, 0.035, Au, 0, 0.1, -0.04, { rx: -0.35, ...NC }); }
+    },
+    maya(f, K) {   // Maya noble: feather headdress (band with jade disc, fan of quetzal feathers), ear spools, jade bead collar, wrist cuffs, loincloth flap, red cape (cape key)
+      const z = fz(f), Jd = '#3A9A6A', Q = ['#2E8A4A', '#2A6AAA', '#C8302A', '#3AA06A', '#E0B04A'];
+      hide(f); const h = hat(f, 0.26); rbox(h, 0.43, 0.1, 0.43, '#C8A050', 0, 0.0, 0, { rf: 0.3 }); cyl(h, 0.06, 0.06, 0.02, Jd, 0, 0.05, 0.22, { rx: Math.PI / 2, seg: 10, ...NC });
+      for (let i = 0; i < 11; i++) { const a = (i - 5) * 0.2; const g = grp(h, Math.sin(a) * 0.15, 0.08, -0.08 - Math.abs(Math.cos(a)) * 0.04); box(g, 0.05, 0.62 - Math.abs(i - 5) * 0.04, 0.015, Q[i % Q.length], 0, 0, 0, { rz: -a * 1.2, rx: -0.35 }); }
+      for (const sx of [-1, 1]) cyl(f.head, 0.04, 0.04, 0.03, Jd, sx * 0.205, 0.12, 0.0, { rz: Math.PI / 2, seg: 10, ...NC });
+      ring(f.chest, 0.21, 0.03, Jd, 0, 0.58, 0, 14, { sz: 0.75 }); ring(f.chest, 0.24, 0.025, '#E0B04A', 0, 0.53, 0.01, 14, { sz: 0.7 });
+      cuffs(f, Jd, -0.24, 0.06, 0.16); for (const sh of [f.shinL, f.shinR]) box(sh, 0.19, 0.05, 0.2, Jd, 0, -0.05, 0, NC);
+      box(f.hips, 0.14, 0.42, 0.014, '#E6DEC8', 0, -0.42, 0.165, NC); for (let i = 0; i < 3; i++) box(f.hips, 0.145, 0.02, 0.018, '#C8302A', 0, -0.3 + i * 0.1, 0.166, NC);
+    },
+    mongol(f, K) {   // 13th-century Mongol warrior: deel robe (skirt key) with diagonal closure and trim, lamellar vest, sash, conical helmet with plume and leather neck flaps, boots with upturned toes
+      const z = fz(f), Tr = '#C9A040', Lm = '#6A6E72';
+      box(f.chest, 0.06, 0.62, 0.012, Tr, 0.05, -0.02, z + 0.002, { rz: -0.35, ...NC });
+      for (let r = 0; r < 4; r++) for (let i = 0; i < 6; i++) box(f.chest, 0.075, 0.1, 0.014, i % 2 ? Lm : shade(Lm, -0.06), -0.19 + i * 0.076, 0.05 + r * 0.1, z + 0.006, NC);
+      for (let r = 0; r < 4; r++) for (let i = 0; i < 6; i++) box(f.chest, 0.075, 0.1, 0.014, Lm, -0.19 + i * 0.076, 0.05 + r * 0.1, -z - 0.006, NC);
+      rbox(f.hips, 0.48, 0.09, 0.32, '#3A6A9A', 0, 0.03, 0, { rf: 0.4 });
+      boots(f, '#3A2418', -0.04, 0.2); for (const ft of [f.footL, f.footR]) cone(ft, 0.05, 0.1, '#3A2418', 0, -ANK + 0.03, 0.22, { seg: 6, rx: 1.3, ...NC });
+      hide(f); const h = hat(f, 0.3); cyl(h, 0.08, 0.23, 0.22, '#8A8E94', 0, -0.02, 0, { seg: 12 }); cyl(h, 0.235, 0.235, 0.04, '#6A4A2A', 0, -0.03, 0, { seg: 12, ...NC });
+      cyl(h, 0.012, 0.012, 0.14, '#8A8E94', 0, 0.2, 0, { seg: 5, ...NC }); cone(h, 0.05, 0.16, '#B83A2A', 0, 0.3, 0, { seg: 6, rx: Math.PI, ...NC });
+      for (const [x, zz, ry] of [[0, -0.22, 0], [-0.22, -0.05, Math.PI / 2], [0.22, -0.05, -Math.PI / 2]]) box(h, 0.3, 0.26, 0.02, '#5A3A22', x, -0.28, zz, { ry, ...NC });
+    },
+    winter(f, K) {   // puffy parka with quilting, zip and fur-trimmed hood down at the back, knitted scarf with a hanging end, mittens, snow boots (beanie: hatStyle key)
+      const z = fz(f), c = '#C8402E';
+      for (let i = 0; i < 5; i++) rbox(f.chest, 0.56, 0.1, 0.33, i % 2 ? shade(c, -0.04) : c, 0, 0.02 + i * 0.115, 0, { rf: 0.45 });
+      for (const ua of [f.armL, f.armR]) for (let i = 0; i < 3; i++) rbox(ua, 0.19, 0.09, 0.19, c, 0, -0.3 + i * 0.11, 0, { rf: 0.45 });
+      box(f.chest, 0.014, 0.6, 0.012, '#1A1A1A', 0, -0.02, z + 0.02, NC);
+      rbox(f.chest, 0.38, 0.16, 0.16, shade(c, -0.08), 0, 0.5, -0.19, { rf: 0.45 }); rbox(f.chest, 0.4, 0.06, 0.18, '#E8E0D0', 0, 0.62, -0.19, { rf: 0.5 });
+      rbox(f.chest, 0.36, 0.1, 0.34, '#3A5A8A', 0, 0.58, 0, { rf: 0.45 }); box(f.chest, 0.09, 0.32, 0.03, '#3A5A8A', 0.08, 0.28, z + 0.02, { rz: 0.06, ...NC });
+      for (let i = 0; i < 3; i++) box(f.chest, 0.095, 0.02, 0.034, '#E8E0D0', 0.08, 0.32 + i * 0.08, z + 0.02, NC);
+      gloves(f, '#3A5A8A'); for (const sh of [f.shinL, f.shinR]) { box(sh, 0.21, 0.24, 0.22, '#4A3424', 0, -0.41, 0.005, NC); rbox(sh, 0.23, 0.07, 0.24, '#E8E0D0', 0, -0.18, 0.005, { rf: 0.45 }); }
+    },
+    scrubs(f, K) {   // hospital scrubs: V-neck, chest pocket with pens, surgical cap, stethoscope round the neck, ID badge (mask: true adds a face mask)
+      const z = fz(f), sk = f.FC?.skull ? _hexOf(f.FC.skull) : '#E8B892';
+      cone(f.chest, 0.08, 0.14, sk, 0, 0.47, z - 0.01, { seg: 3, rx: Math.PI, ...NC }); pocket(f, shade('#3E8E8A', -0.05), -0.13, 0.3, 0.12, 0.11, false);
+      for (let i = 0; i < 2; i++) cyl(f.chest, 0.008, 0.008, 0.09, i ? '#1A4A9A' : '#1A1A1A', -0.16 + i * 0.03, 0.36, z + 0.012, { seg: 5, ...NC });
+      hide(f); const h = hat(f, 0.28); rbox(h, 0.42, 0.13, 0.42, '#5AA6C8', 0, -0.02, -0.01, { rf: 0.45 });
+      for (let i = 0; i < 9; i++) { const a = -1.3 + i * 0.32; box(f.chest, 0.025, 0.025, 0.025, '#2A2A2E', Math.sin(a) * 0.16, 0.6 - Math.cos(a) * 0.04, Math.cos(a) * 0.15 + 0.01, NC); }
+      for (const sx of [-1, 1]) box(f.chest, 0.014, 0.2, 0.014, '#2A2A2E', sx * 0.08, 0.38, z + 0.01, NC); cyl(f.chest, 0.035, 0.035, 0.015, '#B8BCC2', 0.08, 0.36, z + 0.02, { rx: Math.PI / 2, seg: 10, ...NC });
+      box(f.chest, 0.06, 0.08, 0.008, '#F2F2EE', 0.14, 0.24, z + 0.006, NC); box(f.chest, 0.04, 0.03, 0.01, '#3A6AB8', 0.14, 0.28, z + 0.008, NC);
+      if (K.mask) { box(f.head, 0.3, 0.13, 0.03, '#9FCDE0', 0, 0.02, 0.19, NC); for (const sx of [-1, 1]) box(f.head, 0.01, 0.01, 0.2, '#E8E8E8', sx * 0.19, 0.1, 0.09, NC); }
+    },
+    customs(f, K) {   // airport customs officer: light-blue shirt, navy epaulettes with gold bars, shoulder patch, badge, navy tie, peaked cap, blue nitrile gloves
+      const z = fz(f), Au = '#D8B44A';
+      peakCap(f, '#1E2A44', '#1E2A44', Au); tie(f, '#1E2A44', 0.045);
+      for (const sx of [-1, 1]) { box(f.chest, 0.12, 0.022, 0.07, '#1E2A44', sx * 0.2, 0.6, 0, NC); for (let i = 0; i < 2; i++) box(f.chest, 0.02, 0.026, 0.072, Au, sx * (0.17 + i * 0.03), 0.6, 0, NC); }
+      for (const ua of [f.armL, f.armR]) box(ua, 0.17, 0.1, 0.17, '#1E2A44', 0, -0.14, 0.004, NC);
+      plate(f.chest, [[-0.035, 0], [0.035, 0], [0.045, 0.045], [0, 0.07], [-0.045, 0.045]], 0.01, Au, -0.13, 0.36, z + 0.008, { rx: Math.PI / 2 });
+      pocket(f, '#A9C4E0', -0.13, 0.24, 0.12, 0.1, true); pocket(f, '#A9C4E0', 0.13, 0.24, 0.12, 0.1, true); gloves(f, '#3A6AC8');
+    },
+    pilgrim(f, K) {   // 1620s pilgrim: black doublet with buttons, wide white falling-band collar and cuffs, knee breeches with white stockings, buckled shoes, tall capotain hat with buckle
+      const z = fz(f), W = '#F2EEE4', Au = '#C9A64A';
+      plate(f.chest, [[-0.27, -0.16], [0.27, -0.16], [0.27, 0.16], [0.12, 0.17], [0.0, 0.03], [-0.12, 0.17], [-0.27, 0.16]], 0.02, W, 0, 0.6, 0.0);
+      box(f.chest, 0.16, 0.12, 0.012, W, 0, 0.44, z + 0.005, NC); buttons(f, '#3A3630', 6, 0.42, 0.08, 0, 0.012); cuffs(f, W, -0.25, 0.06, 0.18);
+      for (const sh of [f.shinL, f.shinR]) recol(sh, '#ECE8DE'); for (const lg of [f.legL, f.legR]) box(lg, 0.2, 0.05, 0.21, '#22201E', 0, -0.44, 0, NC);
+      for (const ft of [f.footL, f.footR]) { box(ft, 0.1, 0.06, 0.02, Au, 0, -ANK + 0.05, 0.19, NC); box(ft, 0.06, 0.03, 0.022, '#22201E', 0, -ANK + 0.065, 0.192, NC); }
+      hide(f); const h = hat(f, 0.33); cyl(h, 0.36, 0.36, 0.02, '#141414', 0, -0.02, 0, { seg: 18 }); cyl(h, 0.17, 0.21, 0.3, '#141414', 0, 0.0, 0, { seg: 14 });
+      cyl(h, 0.212, 0.212, 0.06, '#2A2622', 0, 0.01, 0, { seg: 14, ...NC }); box(h, 0.09, 0.07, 0.02, Au, 0, 0.005, 0.205, NC); box(h, 0.05, 0.035, 0.022, '#2A2622', 0, 0.022, 0.207, NC);
+    },
+    feral(f, K) {   // child raised in the wild: torn rags with ragged hems and patches, bare shins and feet, dirt smudges, twigs and leaves in long matted hair
+      const z = fz(f), sk = f.FC?.skull ? _hexOf(f.FC.skull) : '#D9A47E', Rg = '#7A6A52';
+      for (let i = 0; i < 8; i++) { const a = i / 8 * TAU; cone(f.hips, 0.05, 0.08 + (i % 3) * 0.04, Rg, Math.sin(a) * 0.23, -0.18, Math.cos(a) * 0.14, { seg: 3, rx: Math.PI, ...NC }); }
+      for (const fa of [f.foreL, f.foreR]) for (let i = 0; i < 4; i++) cone(fa, 0.03, 0.06, Rg, Math.sin(i * 1.6) * 0.07, -0.08, Math.cos(i * 1.6) * 0.07, { seg: 3, rx: Math.PI, ...NC });
+      box(f.chest, 0.12, 0.1, 0.012, shade(Rg, -0.15), 0.1, 0.12, z + 0.003, { rz: 0.2, ...NC }); box(f.chest, 0.08, 0.12, 0.012, shade(Rg, 0.08), -0.12, 0.3, z + 0.003, NC);
+      for (const sh of [f.shinL, f.shinR]) recol(sh, sk); for (const ft of [f.footL, f.footR]) { recol(ft, sk); for (let i = 0; i < 4; i++) box(ft, 0.03, 0.03, 0.03, sk, -0.06 + i * 0.04, -ANK, 0.19, NC); }
+      for (const [p, x, y, zz] of [[f.head, 0.1, 0.08, 0.19], [f.head, -0.07, 0.3, 0.19], [f.foreR, 0.07, -0.15, 0.03], [f.shinL, 0.05, -0.2, 0.09]]) box(p, 0.06, 0.04, 0.01, shade(sk, -0.25), x, y, zz, NC);
+      for (let i = 0; i < 5; i++) { const a = i * 1.3; box(f.head, 0.012, 0.012, 0.12, i % 2 ? '#5A3A22' : '#4E7A34', Math.sin(a) * 0.15, 0.38 + (i % 2) * 0.02, Math.cos(a) * 0.12 - 0.05, { ry: a, rx: 0.4, ...NC }); }
+    },
+    scientist60s(f, K) {   // 1960s scientist: short-sleeved white shirt, skinny black tie, pocket protector with pens, clip-on ID, heavy black horn-rimmed glasses, crew cut
+      const z = fz(f); tie(f, '#141414', 0.035); box(f.chest, 0.11, 0.13, 0.014, '#F8F8F8', -0.13, 0.28, z + 0.004, NC);
+      ['#1A1A1A', '#2A4AA8', '#C8282E'].forEach((c, i) => cyl(f.chest, 0.008, 0.008, 0.1, c, -0.16 + i * 0.03, 0.36, z + 0.012, { seg: 5, ...NC }));
+      box(f.chest, 0.06, 0.08, 0.008, '#F2E8C8', 0.14, 0.32, z + 0.006, NC); box(f.chest, 0.04, 0.02, 0.01, '#C8282E', 0.14, 0.38, z + 0.008, NC);
+      const lm = mat('#CFE4F2', { opacity: 0.3, rough: 0.05 });
+      for (const sx of [-1, 1]) { const cx = sx * 0.09; box(f.head, 0.14, 0.03, 0.02, '#141414', cx, 0.235, 0.21, NC); box(f.head, 0.14, 0.015, 0.02, '#141414', cx, 0.155, 0.21, NC);
+        for (const ex of [-1, 1]) box(f.head, 0.02, 0.09, 0.02, '#141414', cx + ex * 0.065, 0.155, 0.21, NC); box(f.head, 0.12, 0.07, 0.004, '', cx, 0.165, 0.208, { mat: lm, ...NC }); box(f.head, 0.015, 0.015, 0.2, '#141414', sx * 0.19, 0.23, 0.11, NC); }
+      box(f.head, 0.05, 0.02, 0.02, '#141414', 0, 0.215, 0.21, NC);
+    },
+    toga(f, K) {   // Roman citizen: white toga (long robe) draped over the left shoulder with a purple border, folds over the chest, bare right shoulder, laurel wreath, sandals
+      const z = fz(f), P = '#5A2A7A', W = '#F2EEE4';
+      box(f.chest, 0.2, 0.8, 0.03, W, 0.02, -0.1, z + 0.01, { rz: 0.6 }); box(f.chest, 0.21, 0.025, 0.035, P, 0.08, 0.24, z + 0.012, { rz: 0.6, ...NC });
+      box(f.chest, 0.2, 0.8, 0.03, W, -0.02, -0.1, -z - 0.01, { rz: -0.6 });
+      for (let i = 0; i < 3; i++) box(f.chest, 0.28 - i * 0.04, 0.025, 0.02, shade(W, -0.06), -0.02, 0.05 + i * 0.1, z + 0.03, { rz: 0.5, ...NC });
+      box(f.armL, 0.2, 0.3, 0.2, W, 0, -0.3, 0, NC); box(f.armL, 0.205, 0.025, 0.205, P, 0, -0.3, 0, NC);
+      for (let i = 0; i < 14; i++) { const a = i / 14 * TAU; box(f.head, 0.06, 0.02, 0.03, i % 2 ? '#4E7A34' : '#C9A64A', Math.sin(a) * 0.2, 0.32, Math.cos(a) * 0.2, { ry: a, rz: 0.4, ...NC }); }
+      for (const ft of [f.footL, f.footR]) for (let i = 0; i < 3; i++) box(ft, 0.185, 0.015, 0.03, '#6A4A2A', 0, -ANK + 0.05 + i * 0.04, 0.06 - i * 0.05, NC);
+      for (const sh of [f.shinL, f.shinR]) for (let i = 0; i < 2; i++) box(sh, 0.18, 0.015, 0.19, '#6A4A2A', 0, -0.35 + i * 0.08, 0, NC);
+    },
+    worker(f, K) {   // construction worker / disguise: yellow hard hat with brim and ridge, hi-vis vest with reflective tape, work gloves, tool belt pouch
+      hide(f); const h = hat(f, 0.3); ball(h, 0.23, '#F2C230', 0, 0.02, 0, { detail: 2 }).scale.set(1, 0.75, 1.1); box(h, 0.4, 0.02, 0.14, '#F2C230', 0, -0.02, 0.2, { rx: 0.1 });
+      box(h, 0.05, 0.03, 0.4, shade('#F2C230', -0.08), 0, 0.17, 0, NC); cyl(h, 0.235, 0.235, 0.02, shade('#F2C230', -0.1), 0, -0.02, 0.01, { seg: 16, ...NC });
+      hivis(f, { color: '#E3E030' }); gloves(f, '#C8A060'); box(f.hips, 0.12, 0.14, 0.08, '#6A4A2A', -0.22, -0.12, 0.08, NC);
+    },
+    smock1911(f, K) {   // museum workman 1911: white work smock (coat key) over a dark shirt, flat cap, moustache
+      const z = fz(f); box(f.chest, 0.14, 0.12, 0.01, '#3A3530', 0, 0.48, z + 0.004, NC);
+      hide(f); const h = hat(f, 0.32); rbox(h, 0.44, 0.08, 0.46, '#5A5248', 0, -0.02, 0.02, { rf: 0.45 }); box(h, 0.34, 0.025, 0.12, '#4A4238', 0, -0.03, 0.24, { rx: 0.15 });
+      ball(h, 0.025, '#4A4238', 0, 0.06, 0.03, { detail: 0, ...NC });
+    }
+  };
+})();
+function costume(f, o) {   // called by figure() after wear(): adds the pieces of o.costume (see COSTUMES); K = the figure options (scrubs: mask)
+  const fn = COSTUMES[o.costume]; if (!fn) { console.warn('costume: unknown ' + o.costume); return f; }
+  fn(f, o); f.costume = o.costume; return f;
+}
 // ---- figure(): the base rig, then build, fingers, clothes and look ----
 { const _fig = figure; figure = function (o = {}) {
+    if (o.costume && COSTUME_BASE[o.costume]) o = { ...COSTUME_BASE[o.costume], ...o };   // v3.18: costume colours / clothing keys first, anything passed wins
+    if (o.bare) { const sk = o.skin ?? pick(['#F1C7A5', '#D9A47E', '#A8714F', '#7A4E34']); o = { ...o, skin: sk, shirt: sk, ...(o.bare === 'all' ? { pants: sk } : {}) }; }
     const zb = o.kind === 'zombie', B = BUILDS[o.build] ?? null, oo = { ...o };
     if (B && !zb) { if (B.hair && oo.hairStyle == null && !oo.hat && !oo.hatStyle) { const L = [].concat(B.hair); oo.hairStyle = L[Math.floor(hash((o.seed ?? _rigN + 1) * 3.17 + 0.4) * L.length) % L.length]; }
       if (B.hairC && oo.hair == null) oo.hair = B.hairC; }
     if (o.dress && oo.shirt == null) oo.shirt = o.dress;
     const hs = oo.hairStyle; if (hs === 'ponytail') oo.hairStyle = 'short'; if (hs === 'bald') oo.hairStyle = 'buzz';
     const f = _fig(oo); if (!f || f.isModel || !f.legL) return f;
+    f._hairN = f.hair?.children.length ?? 0;   // hair pieces of the base rig (beards etc. come later; costume() hides only these)
     bodyBuild(f, B ?? {}, o); f.build = o.build ?? 'man';
     if (CFG.fingers !== false) fingers(f);
     wear(f, { ...oo, hairStyle: hs });
+    if (o.costume && !zb) costume(f, oo);
     if (CFG.figLook !== false) figLook(f);
     f.gait = o.gait; f.bodyLang = o.bodyLang; f.freeLeg = o.freeLeg;
     f._fidget = !zb && o.fidget !== false && (o.fidget || !o.who) && CFG.fidget !== false;
@@ -12875,12 +13254,12 @@ ground({ color: '#C7B58B', flat: 260, hills: 0 });
   // --- traffic: one car drives off down the street, parked cars and a van
   const car = asset(world, 'own/car_hatch', 1.75, -25, { dyn: true, ry: Math.PI, tint: { paint: '#B03A2E' } });
   drive(car, [[1.75, -25], [1.75, -61]], { t0: 4.6, speed: 8 });
-  asset(world, 'own/car_hatch', 3.9, -20, { ry: Math.PI, tint: { paint: '#2E5E8E' } });
+  asset(world, 'own/car_hatch', 3.9, -74, { ry: Math.PI, tint: { paint: '#2E5E8E' } });   // parked out of the zombies' way
   asset(world, 'own/car_van', -3.9, -52, { ry: 0 });
   asset(world, 'own/car_hatch', -20, -60.1, { ry: Math.PI / 2, tint: { paint: '#C9A227' } });
 
   // --- people in the street; they flee when the wall is breached
-  horde({ kind: 'human', n: 50, heroes: 3, from: [-3.0, -44], r: 3.4, to: [-3.0, -44], stop: 0, pile: 6, t0: -3, t1: -2, rise: false, speed: [0.3, 0.5],
+  horde({ kind: 'human', n: 50, heroes: 3, from: [-4.8, -44], r: 2.6, to: [-4.8, -44], stop: 0, pile: 6, t0: -3, t1: -2, rise: false, speed: [0.3, 0.5],
     flee: { t: 34.6, at: [0, -6], speed: 4.6 } });
 
   // --- the pretzel seller (shouting) with his cart, you eating a pretzel at a table
@@ -12896,14 +13275,14 @@ ground({ color: '#C7B58B', flat: 260, hills: 0 });
   walk(you, [[3.6, -34.0], [2.4, -56], [1.0, -70], [0.2, -84], [0, -97]], { t0: 38.4, speed: 6.6, mode: 'run' });
 
   // --- the zombie wave: runs at the wall, stacks up, pours over the top and into the streets
-  horde({ kind: 'zombie', n: 420, heroes: 4, from: [0, 88], r: 30, to: [0, -30], stop: 6, pile: 10, t0: -1, t1: 0, speed: [4.2, 5.6], mode: 'run', rise: false,
+  horde({ kind: 'zombie', n: 420, heroes: 4, from: [0, 88], r: 30, to: [0, -34], stop: 3, pile: 4, t0: -1, t1: 0, speed: [4.2, 5.6], mode: 'run', rise: false,
     wait: { line: [[-40, 1.9], [40, 1.9]], stop: 0.3, pile: 3, climb: { h: 16.5, rate: 1.15 } } });
 
   // --- the last helicopter: hovers over the plaza, lowers the rope, you grab it, it lifts off
   const H = heli(world, { kind: 'rescue', x: 0, y: 11, z: -97, ry: Math.PI });
   H.winchDown(44.0, 8.8, 2.0);
   hang(you, H, 48.9, 60);
-  fly(H, [[0, 11, -97], [0, 13, -101], [0, 30, -150], [0, 45, -230]], { t0: 49.4, speed: 9, ramp: 2.0 });
+  fly(H, [[0, 11, -97], [0, 13, -98], [0, 47, -100], [0, 58, -160], [0, 62, -240]], { t0: 49.4, speed: 9, ramp: 2.0 });   // straight up first: the dome is 37 m high, 'you' hangs 9 m below
   heliSound(H, 44, 56, 0.6);
 
   biome('desert', { density: 0.35, keep: [[0, -60, 110], [0, 45, 75]] });
@@ -12924,26 +13303,26 @@ const _hbKey = (i, j) => i * 100003 + j;
 function hitBuild() {
   const skip = new Set(); for (const f of RIGS) if (f.root) skip.add(f.root); for (const a of BEAST_ALL) skip.add(a.root ?? a.g);
   const C = [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()];
-  const add = (M, bb, src) => {
+  const add = (M, bb, src, nm) => {
     const { min: a, max: b } = bb; let k = 0; for (const x of [a.x, b.x]) for (const y of [a.y, b.y]) for (const z of [a.z, b.z]) C[k++].set(x, y, z).applyMatrix4(M);
     let y0 = 1e9, y1 = -1e9; for (const c of C) { y0 = Math.min(y0, c.y); y1 = Math.max(y1, c.y); }
     const e = M.elements, ax = [e[0], e[2]], az = [e[8], e[10]], ly = Math.hypot(e[4], e[5], e[6]) || 1, up = Math.abs(e[5]) / ly > 0.9;
     let B;
     if (up && Math.hypot(...ax) > 1e-6 && Math.hypot(...az) > 1e-6) { const cx = (C[0].x + C[7].x) / 2, cz = (C[0].z + C[7].z) / 2, la = Math.hypot(...ax), lz = Math.hypot(...az);
-      B = { x: cx, z: cz, ux: ax[0] / la, uz: ax[1] / la, vx: az[0] / lz, vz: az[1] / lz, hx: (b.x - a.x) / 2 * la, hz: (b.z - a.z) / 2 * lz, y0, y1, src }; }
+      B = { x: cx, z: cz, ux: ax[0] / la, uz: ax[1] / la, vx: az[0] / lz, vz: az[1] / lz, hx: (b.x - a.x) / 2 * la, hz: (b.z - a.z) / 2 * lz, y0, y1, src, nm }; }
     else { let x0 = 1e9, x1 = -1e9, z0 = 1e9, z1 = -1e9; for (const c of C) { x0 = Math.min(x0, c.x); x1 = Math.max(x1, c.x); z0 = Math.min(z0, c.z); z1 = Math.max(z1, c.z); }
-      B = { x: (x0 + x1) / 2, z: (z0 + z1) / 2, ux: 1, uz: 0, vx: 0, vz: 1, hx: (x1 - x0) / 2, hz: (z1 - z0) / 2, y0, y1, src }; }
+      B = { x: (x0 + x1) / 2, z: (z0 + z1) / 2, ux: 1, uz: 0, vx: 0, vz: 1, hx: (x1 - x0) / 2, hz: (z1 - z0) / 2, y0, y1, src, nm }; }
     if (B.hx * B.hz < 0.0008 || Math.max(B.hx, B.hz) > 30 || y1 - y0 < 0.05) return;   // specks, terrain, sky, flat decals
     if (y1 < groundH(B.x, B.z) + 0.35) return;   // below the knee on the ground (steps, curbs, rugs) — heights are checked against each figure's feet every frame
     HITBOX.boxes.push(B); const r = Math.hypot(B.hx, B.hz), s = HITBOX.cell;
     for (let i = Math.floor((B.x - r) / s); i <= Math.floor((B.x + r) / s); i++) for (let j = Math.floor((B.z - r) / s); j <= Math.floor((B.z + r) / s); j++) { const kk = _hbKey(i, j); if (!HITBOX.grid.has(kk)) HITBOX.grid.set(kk, []); HITBOX.grid.get(kk).push(B); }
   };
-  const walk = (o, src) => { if (skip.has(o) || o.userData.dyn || o.userData.noHit || o.userData.crowd || o.userData.cover || !o.visible) return;
+  const walk = (o, src, nm) => { if (skip.has(o) || o.userData.dyn || o.userData.noHit || o.userData.crowd || o.userData.cover || !o.visible) return;
     const s2 = o.userData.kind ?? src;
     if (o.isInstancedMesh) return;   // grass, crops, crowds, particles: walk-through or moving
-    if (o.isMesh && o.geometry?.attributes?.position) { const m = o.material; if (!(m?.transparent && (m.opacity ?? 1) < 0.5) && m?.depthWrite !== false) { o.geometry.boundingBox ?? o.geometry.computeBoundingBox(); add(o.matrixWorld, o.geometry.boundingBox, s2); } }
-    for (const c of o.children) walk(c, s2); };
-  world.updateMatrixWorld(true); for (const c of world.children) walk(c, null);
+    if (o.isMesh && o.geometry?.attributes?.position) { const m = o.material; if (!(m?.transparent && (m.opacity ?? 1) < 0.5) && m?.depthWrite !== false) { o.geometry.boundingBox ?? o.geometry.computeBoundingBox(); add(o.matrixWorld, o.geometry.boundingBox, s2, nm); } }
+    for (const c of o.children) walk(c, s2, nm); };
+  world.updateMatrixWorld(true); for (const c of world.children) walk(c, null, c.name || null);
   for (const f of RIGS) { const r = f.root; if (!f.legL || f.hit === false || !r || r.parent !== world || (f._posAt && f._yawAt)) continue;   // people standing on their spot: walkers plan round them
     const rr = 0.21 * r.scale.x; HITBOX.people.push({ f, x: r.position.x, z: r.position.z, hx: rr, hz: rr, ux: 1, uz: 0, vx: 0, vz: 1, y0: r.position.y, y1: r.position.y + 1.7 * r.scale.x }); }
 }
@@ -13078,6 +13457,7 @@ function bake() {
   for (const b of buckets.values()) { const me = new THREE.Mesh(mergeGeometries(b.gs), b.m); me.castShadow = b.cast; me.receiveShadow = b.recv; me.renderOrder = b.m.transparent ? 1 : 0; world.add(me); }
   return { merged: done.length, into: buckets.size };
 }
+if (PENDING.length) await Promise.all(PENDING.slice());   // v3.19: asset() models (own Blender sets, CC0 packs) are loaded before the hitboxes and the crowd simulation are built — before, every asset() building, car and tree was air for walkers, crowds and the QA
 const BAKED = bake();
 for (const f of POSTBAKE) f();   // e.g. underwater caustics on the baked materials
 
@@ -14631,8 +15011,52 @@ function qaAudit() {
           if (d > 0.07) { const S = sink.get(f); if (!S || d > S.d) sink.set(f, { d, t }); } } } } }
   finally { const sk = SKINQA; SKINQA = null; for (const f of sk) out.push(`${name(f)}: arm or leg drawn as old boxes for a moment (a joint was pulled apart or a part came off) – fine for gore and ragdolls, otherwise check the pose`); }
   for (const [f, S] of sink) out.push(`${name(f)}: foot ${(S.d * 100).toFixed(0)} cm in the floor around ${S.t.toFixed(2)} s while standing – raise the figure or its floor (y) or check the pose`);
+  try { out.push(...qaMovers()); } catch (e) { out.push('mover QA failed: ' + e.message); }   // v3.19: VEHICLE · BACKWARD
   try { out.push(...qaLook()); } catch (e) { out.push('look QA failed: ' + e.message); }   // v3.5: DARK · EMPTY · CAMCLIP · HEADCUT
   return out;
+}
+// --- v3.19 mover QA (part of qaAudit): the obstacle rules for things that move on their own path, checked over the whole video at 4 Hz ---
+//   VEHICLE: a car on drive() or anything on fly() (helicopter, plane, UFO …) passes through a building / prop / parked car, a standing figure or crowd members
+//            that are not knocked down (h.hit), or a figure hanging below it (hang) is dragged through a building. A pass on purpose: drive / fly { passThrough: true }.
+//   BACKWARD: a figure or crowd member moves faster than 1.2 m/s against the way it faces for more than 0.3 s (moonwalk, fleeing crowds that never turned round).
+function qaMovers() {
+  const out = [], dt = 0.25, bx = new THREE.Box3(), seen = new Map(), put = (k, msg) => { if (!seen.has(k)) seen.set(k, msg); };
+  const nm = B => B?.nm ? `'${B.nm}'` : B?.src ? `a ${B.src} object` : 'a building / prop';
+  const ov = (b, B, m) => { const cx = (b.min.x + b.max.x) / 2, cz = (b.min.z + b.max.z) / 2, ex = (b.max.x - b.min.x) / 2 - m, ez = (b.max.z - b.min.z) / 2 - m;   // AABB (shrunk by m) vs a hitbox (OBB in x/z + y range)
+    if (ex <= 0 || ez <= 0 || b.max.y - m < B.y0 || b.min.y + m > B.y1) return false; const dx = cx - B.x, dz = cz - B.z;
+    for (const [ax, az] of [[1, 0], [0, 1], [B.ux, B.uz], [B.vx, B.vz]]) if (Math.abs(dx * ax + dz * az) > ex * Math.abs(ax) + ez * Math.abs(az) + B.hx * Math.abs(ax * B.ux + az * B.uz) + B.hz * Math.abs(ax * B.vx + az * B.vz)) return false;
+    return true; };
+  const inB = (x, y, z, B) => { const dx = x - B.x, dz = z - B.z; return y > B.y0 && y < B.y1 && Math.abs(dx * B.ux + dz * B.uz) < B.hx - 0.1 && Math.abs(dx * B.vx + dz * B.vz) < B.hz - 0.1; };
+  const name = f => { const i = RIGS.indexOf(f); return f.who ? `'${f.who}'` : `figure #${i}`; };
+  const prev = new Map(), runB = new Map();
+  for (let t = 0; t <= DUR + 1e-6; t += dt) {
+    stepScene(teaseV(t)); world.updateMatrixWorld(true);
+    for (const Mv of MOVERS) { if (Mv.ok) continue; const nd = Mv.node; if (!nd.visible || !nd.parent) continue; let vis = true; for (let p = nd; p; p = p.parent) if (!p.visible) vis = false; if (!vis) continue;
+      const P = nd.getWorldPosition(new THREE.Vector3()), last = prev.get(nd); prev.set(nd, P); if (!last || P.distanceTo(last) < 0.15) continue;   // only while it moves
+      bx.setFromObject(nd); const who = Mv.kind === 'fly' ? 'flying object' : 'car on drive()', key = (k, x) => `${Mv.kind}${MOVERS.indexOf(Mv)}:${k}:${x}`;
+      for (const B of HITBOX.boxes) if (ov(bx, B, 0.25)) put(key('s', B.nm ?? B.x.toFixed(0) + ',' + B.z.toFixed(0)), `VEHICLE – ${who} #${MOVERS.indexOf(Mv)} drives / flies through ${nm(B)} at ${t.toFixed(1)} s (${P.x.toFixed(1)}, ${P.y.toFixed(1)}, ${P.z.toFixed(1)}) – route it round or over (fly: higher points), or { passThrough: true } if it is meant`);
+      if (bx.min.y < groundH(P.x, P.z) + 2.2) {   // low enough to hit people
+        for (const f of RIGS) { const r = f.root; if (!f.legL || !r?.visible || r.parent !== world || f.isModel || hitFree(f, t) < 0.9) continue;
+          const x = r.position.x, z = r.position.z; if (x > bx.min.x + 0.1 && x < bx.max.x - 0.1 && z > bx.min.z + 0.1 && z < bx.max.z - 0.1 && r.position.y + 1.2 > bx.min.y && r.position.y < bx.max.y)
+            put(key('f', RIGS.indexOf(f)), `VEHICLE – ${who} #${MOVERS.indexOf(Mv)} goes through ${name(f)} at ${t.toFixed(1)} s – stop it before, move the figure, or knock it down (crash / ragdoll)`); }
+        for (const [hi, h] of hordes.entries()) { const L = h._qaMembers?.(t) ?? []; let c = 0;
+          for (const [, x, z] of L) if (x > bx.min.x + 0.15 && x < bx.max.x - 0.15 && z > bx.min.z + 0.15 && z < bx.max.z - 0.15) c++;
+          if (c) put(key('h', hi), `VEHICLE – ${who} #${MOVERS.indexOf(Mv)} goes through ${c} member(s) of crowd #${hi} at ${t.toFixed(1)} s – keep the crowd off its path (from / to / r), stop the car, or knock them down (h.hit)`); } } }
+    // figures in the air (hanging below a helicopter, thrown, jumping) inside a building
+    for (const f of RIGS) { const r = f.root; if (!f.legL || !r?.visible || r.parent !== world || f._crowdHero) continue; const y = r.position.y, g = groundH(r.position.x, r.position.z); if (y < g + 1.5) continue;   // crowd heroes climb walls on purpose
+      for (const B of _hbQ(r.position.x, r.position.z, 0.3)) if (inB(r.position.x, y + 0.9, r.position.z, B)) { put('air' + RIGS.indexOf(f), `VEHICLE – ${name(f)} is ${(y - g).toFixed(0)} m up and inside ${nm(B)} at ${t.toFixed(1)} s (hanging below a helicopter?) – lift the path`); break; } }
+    // backwards: figures (root) and crowd members
+    for (const f of RIGS) { const r = f.root; if (!f.legL || !r?.visible || r.parent !== world || f.isModel || f.back) continue;
+      const P = [r.position.x, r.position.z], k = 'f' + RIGS.indexOf(f), L = prev.get(k); prev.set(k, P); if (!L) continue;
+      const vx = (P[0] - L[0]) / dt, vz = (P[1] - L[1]) / dt, v = Math.hypot(vx, vz), yw = r.rotation.y, d = v > 1.2 && hitFree(f, t) > 0.5 ? (vx * Math.sin(yw) + vz * Math.cos(yw)) / v : 1;
+      const n = d < -0.3 ? (runB.get(k) ?? 0) + 1 : 0; runB.set(k, n); if (n >= 2) put('b' + k, `BACKWARD – ${name(f)} moves ${v.toFixed(1)} m/s against the way it faces around ${t.toFixed(1)} s – turn it (walk / faceTo) or { back: true } on the figure if it is meant`); }
+    for (const [hi, h] of hordes.entries()) { const L = h._qaMembers?.(t) ?? [], N = h._qaMembers?.(t + 0.1) ?? [], at = new Map(N.map(m => [m[0], m])); let c = 0, worst = 0;
+      for (const [i, x, z, yw] of L) { const m = at.get(i); if (!m) continue; const vx = (m[1] - x) / 0.1, vz = (m[2] - z) / 0.1, v = Math.hypot(vx, vz); if (v < 1.2) continue;
+        const d = (vx * Math.sin(yw) + vz * Math.cos(yw)) / v; if (d < -0.3) { const k = `h${hi}:${i}`, n = (runB.get(k) ?? 0) + 1; runB.set(k, n); if (n >= 2) c++; } else runB.set(`h${hi}:${i}`, 0); }
+      if (c) put('bh' + hi + ':' + Math.floor(t), `BACKWARD – ${c} member(s) of crowd #${hi} run backwards around ${t.toFixed(1)} s – check flee / to / path (they must turn first)`); }
+  }
+  const A = [...seen.values()], by = k => A.filter(x => x.startsWith(k));
+  return ['VEHICLE', 'BACKWARD'].flatMap(k => { const L = by(k); return L.length > 6 ? [...L.slice(0, 6), `${k} – … and ${L.length - 6} more`] : L; });
 }
 // --- v3.5 look QA (part of qaAudit, lines "QA: DARK|EMPTY|CAMCLIP|HEADCUT – …"): what the picture looks like, from tiny frames of the middle of every camera shot and of every cover ---
 //   DARK: much of the frame near-black (not counting the sky) · EMPTY: most of the frame without any detail (flat sky / bare ground, a blob in the distance)
