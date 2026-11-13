@@ -305,6 +305,16 @@ Schlägt der Clone fehl, einmal nach 5 s wiederholen; klappt es dann nicht, dem 
 - **Allgemein halten:** keine Story-Details, keine echten Marken oder Logos. Position und Timing des Videos bleiben in der Szene, die nur noch die Funktion aufruft.
 - **Absichern wie jede Engine-Änderung:** Abschnitt in API.md, kleine Testszene in `.engine/tests/`, Smoke-Test grün, Commit und Push vor dem Rendern. In der Antwort in einem Halbsatz nennen, was neu in die Engine kam.
 
+**Wann Blender (eigene Modelle, `own/`):** Reihenfolge beim Szenenbau für jedes wichtige Objekt:
+1. Gibt es das schon? `grep -n -i '<begriff>' .engine/docs/API.md` und `.engine/assets/index.json` (Engine-Funktionen, rund 600 CC0-Modelle über `asset(p, 'paket/name', x, z, …)`, eigene Modelle `own/…`). Wenn ja: verwenden.
+2. **Bewegt oder animiert** (Figur, Tier, Fahrzeug in Fahrt, Tür, die aufgeht, Explosion, Effekt): immer Funktion in `template.html` wie oben, nie Blender – jedes Bild muss eine Funktion von t bleiben.
+3. **Festes Objekt mit vielen Details**, das es noch nicht gibt (Gebäude, Bunker, Turm, Maschine, Denkmal, Tresor, Raumstation …) und das auch in späteren Videos vorkommen kann: in **Blender** bauen, sofern Blender verfügbar ist (lokal auf Leons Mac: Blender-MCP live oder `/Applications/Blender.app` headless). Ohne Blender (z. B. claude.ai) bleibt es eine Funktion in `template.html`.
+   - Ein Bauskript `.engine/assets/own/src/<name>.py` mit `build(coll)`, Helfer aus `tools/blender_asset.py` (`box`, `cyl`, `torus`, `prism`, `bevel`, `recess`, `jitter`, `mat`), Export nach `assets/own/<name>.glb` mit eingebranntem AO. Vorlage: `assets/own/src/bunker.py`.
+   - **Immer nur in voller Detailstufe** (Leons Vorgabe): Fasen, eingesetzte Rahmen, Kleinteile, Schäden, Gebrauchsspuren, Umgebungsdetails – keine einfache Grundvariante, Name `own/<name>` ohne Zusatz. Echte Maße, ein Material pro Farbfläche (Namen = `tint`-Schlüssel), Gebäude ≤ 12 000 Dreiecke.
+   - Vor dem Export ansehen (`look` im MCP bzw. Testframe), dann wie jede Engine-Änderung absichern: in `docs/API.md` („Eigene Modelle aus Blender“) eintragen, in `tests/own-assets` aufnehmen, Smoke-Test grün, Commit und Push vor dem Rendern.
+   - In der Szene: `asset(world, 'own/<name>', x, z, { ry, h, tint: { material: '#hex' } })`.
+4. **Gelände und Landschaft** baut immer `ground()` in der Engine, nicht Blender.
+
 **Pro Video nur zwei Dateien schreiben** (Write), dann zusammensetzen:
 - `<slug>.story.js`: der STORY-Teil mit `CFG`, `LIVE`, `BEATS`, `CAM`, `SHAKES`, `FLASHES`, `SKY`, `PHASES`, `STATS`, `END` und `AUDIO`. Alle elf Namen müssen deklariert sein; `SLOWMO` ist optional, `THUMB` (Thumbnail) wird immer geschrieben, `MBLUR` nur bei Bedarf. Format wie die Beispiel-Story aus dem Setup.
 - `<slug>.scene.js`: der Szenen-Code ohne äußere Klammern. Er läuft in einem eigenen Block, deshalb sind alle Namen frei. Werte für Zähler über `LIVE.name = t => …`.
