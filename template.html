@@ -15218,9 +15218,23 @@ function qalFaces() {   // → [{ i, f, box: [u0, v0, u1, v1], eye: [...], fh }]
     f.head.localToWorld(C.set(0, 0.19, 0)); f.head.localToWorld(D.set(0, 0.19, 0.19)); D.sub(C).normalize(); P.copy(camera.position).sub(C).normalize(); if (D.dot(P) < -0.2) return;
     let ey = v0 + 0.45 * fh, ex0 = u0 + 0.12 * fw, ex1 = u1 - 0.12 * fw; const E = f.FC?.eyes ?? [];
     if (E.length) { const q = E.map(e => uv(e.getWorldPosition(P))).filter(Boolean); if (q.length) { ey = q.reduce((s, x) => s + x[1], 0) / q.length; const xs = q.map(x => x[0]), pad = 0.14 * fw; ex0 = Math.max(u0, Math.min(...xs) - pad); ex1 = Math.min(u1, Math.max(...xs) + pad); } }
-    R.push({ i, f, fh, box: [u0, v0, u1, v1], eye: [ex0, ey - 0.09 * fh, ex1, ey + 0.09 * fh] }); });
+    R.push({ i, f, fh, key: 'f' + i, box: [u0, v0, u1, v1], eye: [ex0, ey - 0.09 * fh, ex1, ey + 0.09 * fh] }); });
+  // crowd members (horde): their eye strips are instances (0.26 × 0.06 × 0.02, on the front of the 0.38 head, 0.23 above its base) — the head box and the eye band follow from each one
+  QFE ??= (() => { const L = []; world.traverse(o => { if (!o.isInstancedMesh || !o.userData.crowd) return; const g = o.geometry; g.boundingBox ?? g.computeBoundingBox(); const z = g.boundingBox.getSize(_qf[0]);
+    if (Math.abs(z.x - 0.26) < 1e-3 && Math.abs(z.y - 0.06) < 1e-3 && Math.abs(z.z - 0.02) < 1e-3) L.push(o); }); return L; })();
+  const tf = Math.tan(camera.fov * Math.PI / 360) * 2, M = _qfM, e = M.elements;
+  QFE.forEach((im, hk) => { let vis = true; for (let p = im; p; p = p.parent) if (!p.visible) { vis = false; break; } if (!vis) return;
+    for (let i = 0; i < im.count; i++) { im.getMatrixAt(i, M); const sc = Math.hypot(e[0], e[1], e[2]); if (sc < 1e-4) continue; M.premultiply(im.matrixWorld);
+      C.set(0, 0, 0).applyMatrix4(M); _qlc.copy(C).applyMatrix4(camera.matrixWorldInverse); if (_qlc.z > -0.1 || 0.38 * Math.hypot(e[0], e[1], e[2]) / (-_qlc.z * tf) < 0.04) continue;
+      D.set(e[8], e[9], e[10]).normalize(); P.copy(camera.position).sub(C).normalize(); if (D.dot(P) < -0.2) continue;   // back of the head
+      const box = (x0, x1, y0, y1, z0, z1) => { let a = Infinity, b = Infinity, c = -Infinity, d = -Infinity; for (let k = 0; k < 8; k++) { const q = uv(P.set(k & 1 ? x1 : x0, k & 2 ? y1 : y0, k & 4 ? z1 : z0).applyMatrix4(M)); if (!q) return null;
+        a = Math.min(a, q[0]); c = Math.max(c, q[0]); b = Math.min(b, q[1]); d = Math.max(d, q[1]); } return [a, b, c, d]; };
+      const fb = box(-0.19, 0.19, -0.23, 0.15, -0.39, 0.01), eb = fb && box(-0.17, 0.17, -0.035, 0.035, 0, 0.01); if (!fb || !eb) continue;
+      const fh = fb[3] - fb[1]; if (fh < 0.04 || fb[2] < 0 || fb[0] > 1 || fb[3] < 0 || fb[1] > 1) continue;
+      R.push({ i, crowd: hk, fh, key: `h${hk}:${i}`, box: fb, eye: eb }); } });
   return R;
 }
+let QFE = null; const _qfM = new THREE.Matrix4();
 function capRects(all) {   // the caption as it stands: boxes of its visible words, kick and who label in frame fractions (all: every word of the page, without its pop-in transform)
   const S = stage.getBoundingClientRect(), R = []; if (!S.width || !S.height || capEl.offsetParent === null) return R;
   const add = e => { const tf = all ? e.style.transform : null; if (all) e.style.transform = 'none'; const r = e.getBoundingClientRect(); if (all) e.style.transform = tf;
@@ -15237,7 +15251,7 @@ function capCover(R, F) {   // share of the face box and of the eye band under t
   const face = fa > 1e-6 ? Math.min(1, a / fa) : 0, eye = ea > 1e-6 && ea > 0.25 * (F.eye[2] - F.eye[0]) * (F.eye[3] - F.eye[1]) ? Math.min(1, e / ea) : 0;
   return { face, eye, hit: face >= 0.35 || eye >= 0.5, sev: Math.max(face / 0.35, eye / 0.5) };
 }
-// caption pages of beat i as the HUD shows them, in video time: a = page appears, z = next page / the beat fades, full = all its words are up; ts = the moments to check
+// caption pages of beat i as the HUD shows them, in video time: a = page appears, z = next page / the beat fades, full = all its words are up; ts = the moments to check (full first)
 function capPages(i) {
   const b = BEATS[i]; if (!b || !String(b.text ?? '').trim()) return [];
   const tmp = document.createElement('div'); tmp.innerHTML = markup(b.text); const ws = [...tmp.querySelectorAll('.w')], n = ws.length; if (!n) return [];
@@ -15246,26 +15260,27 @@ function capPages(i) {
   const zB = Math.min(b.t + b.dur - 0.16, END ? END.t : 1e9), L = G.filter(Boolean);
   return L.map((g, k) => { const a = b.instant || k === 0 ? b.t : b.t + st(g[0]) - 0.02, z = k + 1 < L.length ? Math.min(zB, b.t + st(L[k + 1][0]) - 0.02) : zB;
     let full = b.instant ? a + 0.05 : Math.min(z - 0.04, b.t + st(g[g.length - 1]) + 0.18); if (full < a + 0.05) full = (a + z) / 2;
-    const ts = [full]; if (full - a > 0.8) ts.push(a + 0.3); if (z - full > 0.6) ts.push(z - 0.1); if (z - full > 2) ts.push((full + z) / 2);
+    const ts = [full]; for (let x = a + 0.2; x < z - 0.05; x += 0.3) if (Math.abs(x - full) > 0.12) ts.push(x);   // + every 0.3 s of the page (the camera and the figures move; words pop in one by one)
     return { p: b.instant ? 0 : pg[g[0]] ?? k, a, z, full, ts, text: g.map(j => ws[j].textContent).join(' ').replace(/\s+/g, ' ').trim() }; }).filter(P => P.z - P.a > 0.12);
 }
 const capOkT = t => !SPLITS.some(x => t >= x.t && t < x.t + x.dur) && map2dK(t) < 0.5 && !(LOOPX && t > DUR - LOOPX);
 function qaCapFace(o = {}) {
   const t0 = performance.now(), budget = o.capBudget ?? 12000, res = new Map(), TH0 = TH, ON0 = THUMB_ON;
-  const who = (f, i) => f.who ? `'${f.who}' #${i}` : f.kind === 'zombie' ? `zombie #${i}` : `figure #${i}`;
+  const who = F => F.crowd != null ? `crowd #${F.crowd} member #${F.i}` : F.f.who ? `'${F.f.who}' #${F.i}` : F.f.kind === 'zombie' ? `zombie #${F.i}` : `figure #${F.i}`;
   const tm = stage.classList.contains('thumbmode'); if (tm) stage.classList.remove('thumbmode');
   try { TH = TH0; THUMB_ON = false;
     const S = []; BEATS.forEach((b, i) => { for (const P of capPages(i)) P.ts.forEach((t, k) => { if (capOkT(t)) S.push({ i, P, t, extra: k > 0 }); }); });
-    for (const s of [...S.filter(x => !x.extra), ...S.filter(x => x.extra)]) {   // every page once (same lines on every machine), the extra moments while the time budget lasts
+    for (const s of [...S.filter(x => !x.extra), ...S.filter(x => x.extra)]) {   // every page at 'full' first, then every 0.3 s; the budget is only a safety stop (a 60 s video takes well under a second)
       if (s.extra && performance.now() - t0 > budget) break;
       stepScene(teaseV(s.t)); updateHud(s.t); if (capIdx !== s.i) continue;
       const R = capRects(false); if (!R.length) continue;
-      for (const F of qalFaces()) { const c = capCover(R, F); if (!c.hit) continue; const k = s.i + ':' + s.P.p + ':' + F.i, x = res.get(k); if (x && x.sev >= c.sev) continue;
-        const low = /\blow\b/.test(capEl.className), words = s.P.text.split(' '), cap = words.slice(0, 5).join(' ').toUpperCase() + (words.length > 5 ? ' …' : '');
-        res.set(k, { sev: c.sev, msg: `CAPFACE – caption "${cap}" covers the face of ${who(F.f, F.i)} at ${s.t.toFixed(1)} s (${c.eye >= 0.5 ? `eyes ${(c.eye * 100).toFixed(0)} %` : `face ${(c.face * 100).toFixed(0)} %`} under the words, beat ${s.i}) – set pos: '${low ? 'mid' : 'low'}' on the beat${CFG.capDodge ? '' : ' (or CFG.capDodge: true)'}, move the camera (fy / az) or the figure` }); }
+      for (const F of qalFaces()) { const c = capCover(R, F); if (!c.hit) continue; const k = s.i + ':' + s.P.p + ':' + (F.crowd != null ? 'h' + F.crowd : F.key), x = res.get(k);   // one line per page and figure / per page and crowd
+        if (x) x.n.add(F.key); if (x && x.sev >= c.sev) continue;
+        res.set(k, { sev: c.sev, F, c, t: s.t, i: s.i, P: s.P, low: /\blow\b/.test(capEl.className), n: x?.n ?? new Set([F.key]) }); }
     }
   } finally { TH = TH0; THUMB_ON = ON0; if (tm) stage.classList.add('thumbmode'); updateHud(clock); }
-  const A = [...res.values()].sort((a, b) => b.sev - a.sev).map(x => x.msg);
+  const A = [...res.values()].sort((a, b) => b.sev - a.sev).map(({ F, c, t, i, P, low, n }) => { const words = P.text.split(' '), cap = words.slice(0, 5).join(' ').toUpperCase() + (words.length > 5 ? ' …' : '');
+    return `CAPFACE – caption "${cap}" covers the face of ${who(F)}${n.size > 1 ? ` (+${n.size - 1} more in the crowd)` : ''} at ${t.toFixed(1)} s (${c.eye >= 0.5 ? `eyes ${(c.eye * 100).toFixed(0)} %` : `face ${(c.face * 100).toFixed(0)} %`} under the words, beat ${i}) – set pos: '${low ? 'mid' : 'low'}' on the beat${CFG.capDodge ? '' : ' (or CFG.capDodge: true)'}, move the camera (fy / az) or the figure`; });
   return A.length > 6 ? [...A.slice(0, 6), `CAPFACE – … and ${A.length - 6} more`] : A;
 }
 function motionAudit(o = {}) {
