@@ -21,7 +21,7 @@ permissions:
   contents: write
 
 env:
-  SHARDS: 18   # v3.2: 18 (was 12) — the final render is HQ now (3D full-res + 4× MSAA: ~1.5× time per frame incl. screenshot), more shards keep the wall time (≤ 20 = free-plan job limit)
+  SHARDS: 18   # v3.3: 18 (was 12) — the final render is HQ now (3D full-res + 4× MSAA: ~1.5× time per frame incl. screenshot), more shards keep the wall time (≤ 20 = free-plan job limit)
   WIDTH: ${{ inputs.width || '1440' }}
   PW_VERSION: 1.65.0
 

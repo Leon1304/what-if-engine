@@ -992,11 +992,11 @@ Ist in der Sitzung kein `ELEVENLABS_API_KEY` gesetzt, aber der ElevenLabs-Connec
 3. Bauen: `.voice/el-*.npy` löschen, dann `EL_MAP=<map.json> ELEVENLABS_API_KEY=via-mcp PYTHONPATH=.engine/elmcp python3 assemble.py <slug>`. Das Tempo, das `voice.py` je Zeile verlangt, setzt der Shim per ffmpeg `atempo` um — Neu-Timing braucht keine neue Generierung.
 
 ## Umgebung & Look (v3.3)
-Seit v3.3 sieht jede Szene ohne Zutun hochwertiger aus: Hintergrund, Boden-Ausstattung, Räume, Wasser, Licht, Farblook und Materialien greifen automatisch. Jeder Teil lässt sich einzeln abschalten (siehe unten). Tests: `tests/v32-*.story.js` + `.scene.js`.
+Seit v3.3 sieht jede Szene ohne Zutun hochwertiger aus: Hintergrund, Boden-Ausstattung, Räume, Wasser, Licht, Farblook und Materialien greifen automatisch. Jeder Teil lässt sich einzeln abschalten (siehe unten). Tests: `tests/v33-*.story.js` + `.scene.js`.
 
 ### Neu in v3.3: Landschaft (Hintergrund, Skyline, Boden von selbst, Bäume, Felder)
 
-Alles hier wirkt ohne Änderung an der Szene. Test: `tests/v32-landscape.story.js` + `.scene.js`.
+Alles hier wirkt ohne Änderung an der Szene. Test: `tests/v33-landscape.story.js` + `.scene.js`.
 
 #### Hintergrund: `backdrop(kind, { coast, seed, r, r0, sector, also })`
 - `hills` · `islands` · `alps` · `snow`: statt einzelner Kegel („Pyramiden“) jetzt zwei durchgehende, weiche Hügelbänder rund um die Szene: vorn (~310 m) grüner mit Baumkante am Kamm und dunkleren Waldflecken, hinten (~450 m) bläulich. Höhe entlang des Rings aus mehreren Sinuswellen (Zufall aus dem Backdrop-Seed), Querschnitt mit Vorderhang, Kamm und Rückhang, die Kammlinie schwankt vor und zurück. In jedem 9:16-Bild stehen mehrere Hügel, nie ein einzelner Berg.
@@ -1076,7 +1076,7 @@ Alles hier wirkt ohne Änderung an der Szene. Test: `tests/v32-landscape.story.j
 - `fountain(p, x, z, { r: 2.2, jets: 8, color, water })` → F: Steinbecken mit profiliertem Rand, Wasser mit Ringwellen, Säule mit überlaufender Schale (Wasserschleier) und Bögen aus Tropfen (instanziert, reine Funktion von t). `F.seats`, `F.seat(i)`, `F.at()` (Spitze des Strahls).
 - Einzelstücke: `FURN.bollard` (`kind: 'iron' | 'steel' | 'stone'`), `FURN.parkBench` (`kind: 'wood' | 'concrete' | 'stone'`, Sitzplätze in `userData.seats`), `FURN.litterBin` (`'iron' | 'steel'`), `FURN.treePlanter` (`size`, `tree: false` = Blumen).
 
-Test/Vorschau: `tests/v32-interiors.*` (Kamera fliegt in ein Wohnzimmer, Tür öffnet auf den Flur, Museum, gedrehte erhöhte Küche, Platz mit Brunnen, Haus mit Flur, Galerie von außen).
+Test/Vorschau: `tests/v33-interiors.*` (Kamera fliegt in ein Wohnzimmer, Tür öffnet auf den Flur, Museum, gedrehte erhöhte Küche, Platz mit Brunnen, Haus mit Flur, Galerie von außen).
 
 
 ### Wasser (v3.3)
@@ -1107,7 +1107,7 @@ Steht im `SKY` irgendwo `'underwater'` oder `'deepsea'` und die Szene ruft `unde
 - `underwater()` selbst hat jetzt auch Meeresschnee und den Tiefen-Verlauf (`snow: false`, `gradient: false` = aus) und optional `depthDark: 0.4` (tiefer = dunkler).
 - Einzeln nutzbar: `seabed({ y, color, size, at, rocks })`, `marineSnow({ n, box, size, color, opacity, k })`, `depthGradient({ k, surface })`, `lightShafts({ …, follow: true, k: t => 0 … 1 })` (Strahlen wiederholen sich um die Kamera, `k` blendet ein und aus).
 
-Test: `tests/v32-water.*` (Pool mit Figur, Hai und Ablassen, roter Salzsee, Unterwasser-Himmel ohne `underwater()`).
+Test: `tests/v33-water.*` (Pool mit Figur, Hai und Ablassen, roter Salzsee, Unterwasser-Himmel ohne `underwater()`).
 
 
 ### Licht & Nachbearbeitung (v3.3)
@@ -1129,7 +1129,7 @@ Alles ist ab v3.3 automatisch an und verbessert jedes Video ohne Änderung an de
 Hinweise:
 - Eigene `ShaderMaterial` mit `fog: true` bekommen den Bodennebel nur, wenn ihre Uniforms aus `THREE.UniformsLib.fog` stammen; der Vertex-Shader muss dann `#include <fog_vertex>` nach `mvPosition` enthalten (wie bei Three.js üblich).
 - Die Werte je Himmel stehen in `LOOK` (rim, sh/hl Tönung, sat, con, lift, open, rays, haze, dust); Planeten-Himmel nutzen neutrale Werte (`LOOK0`).
-- Test: `tests/v32-light` (Tag → golden → Nacht, weit und nah).
+- Test: `tests/v33-light` (Tag → golden → Nacht, weit und nah).
 
 
 ### Neu in v3.3: Materialien, Lichtkegel, Lichtpfützen
@@ -1168,5 +1168,47 @@ Gemeinsames Material für alle Lichtkegel: additiv, ohne Tiefenschreiben; hell a
 - Automatisch: `lamp()` (Pfütze r = 1,25 × Höhe, schwächer wenn die Lampe ein echtes Licht hat, Halo um die Birne), `streetlight()` und damit `city()` (Pfütze unter dem Kopf über der Straße, Halo unter dem Kopf).
 - Abschalten: `lamp(…, { pool: false, halo: false })`, `streetlight(p, x, z, ry, { pool: false, halo: false })`, `city({ pools: false })`, ganz: `CFG.pools: false` (auch ohne Lichtflecken der Kegel).
 
-Test: `tests/v32-materials` (Autos am Tag, Material-Kugeln, Obst auf dem Tisch, Straße in Dämmerung und Nacht mit Laternen, Suchscheinwerfer, Leuchtturm, UFO-Strahl, Taschenlampe, Scheinwerfer, kleine Stadt von oben).
+Test: `tests/v33-materials` (Autos am Tag, Material-Kugeln, Obst auf dem Tisch, Straße in Dämmerung und Nacht mit Laternen, Suchscheinwerfer, Leuchtturm, UFO-Strahl, Taschenlampe, Scheinwerfer, kleine Stadt von oben).
+
+
+### v3.3 Bild-QA und HQ-Render (Paket P6)
+
+Zum Einmischen in `docs/API.md` (Abschnitt „Prüfung“) – Stand dieses Branches.
+
+#### Bild-Prüfung im Audit (`QA: DARK / EMPTY / CAMCLIP / HEADCUT`)
+
+`node render.mjs page.html --audit` (läuft auch bei `--shots` mit und im Render-Workflow) prüft jetzt zusätzlich, **wie das Bild aussieht**. Die Engine rendert dafür selbst winzige Bilder (72 × 128, quer 128 × 72) in eigene Render-Targets: ein normales `renderer.render(scene, camera)` nach `stepScene(teaseV(t))`, Tone-Mapping + sRGB + Kontrast + Vignette wie im Final-Pass (ohne AO, Bloom, Unschärfe; gleiches Render-Target-Format wie der Composer, damit SwiftShader nichts neu kompiliert), dazu ein zweiter Durchgang nur mit der Tiefe der undurchsichtigen Geometrie. Renderer-Zustand (Render-Target, autoClear, Schatten-Update, Sichtbarkeit, `THUMB`-Modus) wird danach zurückgesetzt – am sichtbaren Bild ändert sich nichts.
+
+**Stichproben:** jedes Cover (`THUMB`, alle A/B-Varianten, im Thumbnail-Modus mit `THUMB.cam`) und die Mitte jeder Kameraeinstellung (`CAM`-Keys zwischen zwei Schnitten; Split-Screens, bildfüllende `MAP2D`-Karten und die Endkarte zählen nicht), zusammen höchstens 30 volle Bilder; lange Einstellungen (> 3,5 s) zusätzlich bei 20 % und 80 %, solange Platz ist. Für `CAMCLIP` und `HEADCUT` außerdem reine Tiefen-Proben kurz nach Beginn und kurz vor Ende jeder Einstellung (12 / 88 %, höchstens 60; die Kamera fährt im Lauf der Bewegung in etwas hinein). Covers und Einstellungsmitten laufen immer (gleiche Zeilen auf jedem Rechner); das Zeitbudget (25 s ab Start der Bild-Prüfung, `qaLook({ budget })`) kürzt nur die Extra-Proben. Kosten: ca. 0,1–0,3 s pro Bild ohne Last, beim ersten Bild einmalig Shader-/Pipeline-Aufbau.
+
+Jede Meldung nennt Art, Ort (`shot n (a–b s) at t s` bzw. `cover A (THUMB at t s)`) und einen kurzen Hinweis. Pro Einstellung und Art nur die schlimmste Stelle, höchstens 6 Zeilen pro Art.
+
+| Zeile | Wann | Schwelle | Typische Abhilfe |
+|---|---|---|---|
+| `QA: DARK – …` | eine große, fast schwarze Fläche (8×8-Zellen, die zu ≥ 90 % Luma < 0,06 haben – eine schwarze Wand/Platte, nicht die dunklen Lücken einer belebten Nachtszene), **Himmel zählt nicht** | > 35 % des Bildes; bei dunklem Himmel (`night`, `deepsea`, `space`, `mercury`; Nachtanteil ≥ 0,75) > 60 % | Licht ans Motiv (`lamp`, Taschenlampe, Fenster, `CFG.nightLift`), hellerer `SKY`-Eintrag dort, Kamera weg von der dunklen Wand / dem Schatten |
+| `QA: EMPTY – …` | Bild fast ohne Details (flacher Himmel, kahler Boden, Nebel, Wasser; das Motiv winzig oder weg) | > 85 % der 8×8-Pixel-Zellen ohne Kontrast (Laplace-Mittel < 0,006 und Spitze < 0,05); nicht wenn schon `CAMCLIP` meldet. Auch: Kamera-Position/Linse `NaN` (nichts wird gezeichnet) | Kamera näher (`dist`, `fov`), aufs Motiv richten (`THUMB.cam` / `THUMB.t` beim Cover) oder etwas ins Bild stellen |
+| `QA: CAMCLIP – …` (Linse in etwas) | Geometrie näher als 0,5 m an der Linse | > 20 % des Bildes | Kamera weg (`dist`, `h`, `az`, `p`) oder Objekt verschieben |
+| `QA: CAMCLIP – …` (Vordergrund verdeckt) | etwas Großes zwischen Linse und einem weit entfernten Motiv: näher als min(2 m, 0,3 × Abstand zum Blickpunkt), nur wenn der Blickpunkt ≥ 4 m weg ist; nicht der Boden am unteren Rand | > 35 % des Bildes, Schwerpunkt in den oberen 60 % | Kamera daran vorbei (`az`, `h`, `p`) oder Objekt aus dem Weg |
+| `QA: HEADCUT – …` | Figur groß im Bild (Kopf bis Hüfte > 30 % der Bildhöhe), Brust im Bild, aber ≥ 30 % des Kopfes über dem oberen Rand | – | tiefer kadrieren (`fy` 0,4–0,5, etwas mehr `dist`/`fov`, auf das Gesicht zielen: `dy`) oder weiter aufziehen |
+
+Nicht gemeldet: Rauch, Glas, Wasser, Strahlen, Partikel und der Himmel bei `CAMCLIP` (nur undurchsichtige Geometrie zählt); Ego-Perspektive (`shot('pov', …)`) bei `CAMCLIP` und `HEADCUT` (eigene Hände/Waffe sind gewollt nah); `HEADCUT` in Makro-Einstellungen (Blickpunkt < 2,3 m, `fov` ≤ 30 oder `hand` 1,5), wenn der Blickpunkt unterhalb des Halses liegt (Hände, gehaltene Dinge); Figuren, deren Brust nicht im Bild ist (bewusst angeschnitten).
+
+`--strict` zählt die neuen Zeilen mit (Exit 3). Debug: `node render.mjs page.html --probe "qaLook({ stats: true, budget: 1e9 })"` liefert die Messwerte jeder Probe (`dead`, `dark`, `flat`, `clip`, `fg`, `fd` = Abstand zum Blickpunkt, `heads`); `probes: false` = ohne die Tiefen-Proben.
+
+Test: `tests/v33-qa.story.js` + `.scene.js` – Einstellung 2 meldet absichtlich `EMPTY`, Einstellung 3 `CAMCLIP`, Einstellung 4 `HEADCUT`; Einstellung 1 und das Cover bleiben still.
+
+**Kalibrierung (Stand dieses Branches, alte Szenen mit neuer Engine neu gebaut):**
+- `iss-falls`: `EMPTY` Cover A (96 %) und Einstellung 12 (99 %, blauer Leer-Frame); `DARK` Einstellung 11 (Globus-Nachtseite, 71 %). Feuerball-Einstellung (73 % flach) und ISS im All (76 %) bleiben still.
+- `volcano-trash`: `DARK` Cover A (63 %, „Trash into lava“ – im fertigen Cover grau mit Fleck, weil Bloom/Unschärfe das schwarze Gestein überstrahlen) und Einstellung 7 (40 %, schwarze Vulkanwand über der Lava).
+- `megalodon-pool`: `CAMCLIP` bei 36,0 s (Linse in der rosa Wand, 74 %), 48,3 s (blauer Pfeiler, 97 %), 39,7 s (Beckenrand unten, 29 %). Die Riesen-Luftmatratze bei 2,3 s ist 1–1,5 m entfernt und selbst das Motiv – nicht gemeldet.
+- `zombie-city-ep1`: `DARK` Einstellung 12 (32,1 s, schwarze Fläche oben links, 38 %). Die übrigen Dämmerungs-Einstellungen (dunkle Flächen 17–31 %) und die Stelle um 20 s bleiben still.
+- `coffee-test`: still (Köpfe in den Nahaufnahmen knapp, aber nicht angeschnitten).
+- Tests: `environment` meldet `DARK` in Einstellung 3 (Kamera vor der Scheunenwand bei Nacht, 91 % schwarz – echter Fehler der Testszene), `horror-kit` meldet `EMPTY` mit `NaN` (die Testszene hat kein `CFG.handheld` → Kamera `NaN`, das Bild ist leer grau), `interiors`, `sea-detail`, `retention`, `long` still.
+
+#### HQ-Render (fertiges Video in voller Qualität)
+
+- `node render.mjs page.html --video out.mp4` **ohne** `--draft` setzt `window.__HQ__`; die Engine hebt dann `CFG.renderScale` auf ≥ 1 und `CFG.msaa` auf ≥ 4 (wie bisher schon bei 16:9-Langvideos). `CFG.fast: true` behält überall die schnelle Qualität.
+- Vorschau im Browser, `--shots`, `--cover`, `--audit` und `--video --draft` bleiben schnell (`renderScale` 0,75, `msaa` 2), außer mit `--hq`. `--no-hq` schaltet es für `--video` ab.
+- Render-Workflow: die Frame-Shards rendern automatisch in HQ; das Cover wird mit `--hq` gerendert (ein Bild, kostet kaum Zeit).
+- Mehraufwand (lokal gemessen, M-Mac, 1 Worker, `--w 1440`): reines 3D-Rendern 1,6–1,8× (coffee-test 0,8 → 1,5 s, megalodon-pool 0,93 → 1,6 s pro Bild), ganzer `--video`-Pfad inkl. Screenshot + JPEG ca. 1,5× (megalodon-pool 2,1 → 3,1 s/Bild). Der Workflow nutzt deshalb 18 statt 12 Shards (`SHARDS: 18`; GitHub-Free-Limit 20 gleichzeitige Jobs), die Wandzeit pro Video bleibt etwa gleich (Megalodon-Shards bisher 6–15 min). Job-Timeouts (Standard 6 h) mussten nicht angepasst werden.
 

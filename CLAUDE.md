@@ -28,10 +28,10 @@ Der Skill wurde für claude.ai geschrieben. Lokal gilt diese Übersetzung:
 - Änderungen an Engine und Skill immer direkt nach `main` pushen (Leons Vorgabe).
 
 ## Prüfen vor dem Rendern
-`node render.mjs … --shots` bzw. `--audit`: MOTION-, HITBOX-, GORE-, QA- und PAGE-ERRORS-Zeilen müssen leer sein. Null Toleranz für Bildfehler (fremde Linien, Streifen, Kanten).
+`node render.mjs … --shots` bzw. `--audit`: MOTION-, HITBOX-, GORE-, QA- und PAGE-ERRORS-Zeilen müssen leer sein. Seit v3.3 gehören dazu auch `QA: DARK` / `EMPTY` / `CAMCLIP` / `HEADCUT` (zu dunkel, leeres Bild/Cover, Kamera in Geometrie, Kopf abgeschnitten); bewusste Ausnahmen im Chat begründen. Null Toleranz für Bildfehler (fremde Linien, Streifen, Kanten).
 
 ## Rendern
-Lokal für Testframes und Vorschau. Das finale 2K-Video rendert GitHub Actions: `renders/<slug>.html` pushen → Release `render-<slug>` mit `<slug>.mp4` und Cover. Captions nach `gallery/captions/<slug>.json`, Vorschau-Link in `gallery/previews.json` (siehe Skill Abschnitt 5).
+Lokal für Testframes und Vorschau (schnelle Qualität; `--hq` für einen Qualitätsvergleich). Das finale 2K-Video rendert GitHub Actions automatisch in HQ (3D in voller Auflösung, 4× MSAA; `CFG.renderScale`/`msaa` nicht von Hand hochsetzen): `renders/<slug>.html` pushen → Release `render-<slug>` mit `<slug>.mp4` und Cover. Captions nach `gallery/captions/<slug>.json`, Vorschau-Link in `gallery/previews.json` (siehe Skill Abschnitt 5).
 
 ## Stimme
 - Erzähler über ElevenLabs, braucht `ELEVENLABS_API_KEY` in der Umgebung (in `~/.zshrc`, nie ins Repo).

@@ -1,4 +1,4 @@
-  // v3.2 landscape: bare ground() without biome → dressed by itself (hills backdrop, sparse ring trees, tufts, pebbles, flowers);
+  // v3.3 landscape: bare ground() without biome → dressed by itself (hills backdrop, sparse ring trees, tufts, pebbles, flowers);
   // tree rows that must not repeat, wheat / corn / cabbage fields, and a skyline layer (windows lit at dusk, blinking beacons)
   ground({ color: '#5E7C3B', flat: 40, hills: 6 });
   for (let i = 0; i < 9; i++) tree(world, -15 + i * 3.6, -9, { kind: i % 4 === 3 ? 'birch' : 'round', size: 1 });   // one row, same size: variety from the position only

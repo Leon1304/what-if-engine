@@ -5,13 +5,13 @@
 //   node render.mjs page.html --cover cover.jpg [--t 1.2]   (THUMB = [A, B] → also cover-b.jpg: A/B test thumbnails)
 //   node render.mjs page.html --audio out.wav
 //   node render.mjs page.html --srt out.srt   (v2.30: subtitles for YouTube, same pages + timing as the captions)
-//   node render.mjs page.html --audit   → MOTION: / HITBOX: / GORE: / QA: lines (v3.2 also QA: DARK / EMPTY / CAMCLIP / HEADCUT from tiny frames of every shot + the cover; pops, snapping joints, jitter, state left over between frames, figures inside props,
+//   node render.mjs page.html --audit   → MOTION: / HITBOX: / GORE: / QA: lines (v3.3 also QA: DARK / EMPTY / CAMCLIP / HEADCUT from tiny frames of every shot + the cover; pops, snapping joints, jitter, state left over between frames, figures inside props,
 //     v3.0: crowd members inside each other or props, feet in the floor, limbs that fell back to boxes); --shots runs it too (--no-audit = off); --strict = exit 3 on any warning
 //   --video also checks the finished frames for stray lines (qa_lines.py, LINES:)
 //     The audit also opens the page a second time and compares both (anything that depends on earlier frames or differs from page to page pops at the borders of
 //     render blocks / flickers between render workers); --no-fresh skips that second page.
 // Landscape pages (CFG.aspect: '16:9') render 16:9 with the same --w (short side): 1440 → 2560x1440.
-// v3.2 HQ: --video without --draft renders the 3D at full resolution with 4× MSAA (window.__HQ__ → CFG.renderScale ≥ 1, CFG.msaa ≥ 4, unless CFG.fast);
+// v3.3 HQ: --video without --draft renders the 3D at full resolution with 4× MSAA (window.__HQ__ → CFG.renderScale ≥ 1, CFG.msaa ≥ 4, unless CFG.fast);
 //   --shots / --cover / --audit keep the fast preview quality (renderScale 0.75, msaa 2) unless --hq is given. --no-hq turns it off for --video.
 // Needs in this folder: npm i three@0.170.0 playwright ; ffmpeg on PATH.
 // Frames stay in <out>.frames/: a stopped run resumes, and --redo a-b re-renders only that time range (after a scene/caption
@@ -25,7 +25,7 @@ const argv = process.argv.slice(2), file = argv[0];
 const opt = (k, d) => { const i = argv.indexOf('--' + k); return i > -1 ? argv[i + 1] : d; };
 const flag = k => argv.includes('--' + k);
 const draft = flag('draft');
-const HQ = !flag('no-hq') && (flag('hq') || (!!opt('video') && !draft));   // v3.2: final render quality (see header)
+const HQ = !flag('no-hq') && (flag('hq') || (!!opt('video') && !draft));   // v3.3: final render quality (see header)
 const W = +opt('w', draft ? 540 : 1440), fps = +opt('fps', draft ? 15 : 30), workers = Math.max(1, +opt('workers', 2));
 const HERE = path.dirname(new URL(import.meta.url).pathname);
 const THREE_DIR = path.join(HERE, 'node_modules/three');

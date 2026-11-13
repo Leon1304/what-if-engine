@@ -1,4 +1,4 @@
-// v3.2 look QA test — EXPECTED warnings (node render.mjs v32-qa.html --audit): QA: EMPTY (shot 2, bare sky), QA: CAMCLIP (shot 3, the lens 0.25 m in front of a wall),
+// v3.3 look QA test — EXPECTED warnings (node render.mjs v33-qa.html --audit): QA: EMPTY (shot 2, bare sky), QA: CAMCLIP (shot 3, the lens 0.25 m in front of a wall),
 // QA: HEADCUT (shot 4, a close-up aimed at the chest). Shot 1 and the cover are normal and must stay quiet. The smoke test only fails on page errors.
 const CFG = { dur: 12.5, seed: 7, locale: 'en-US', kind: 'story', badge: 'What if', accent: 'blue', filter: 'film', grain: 0.03, vignette: 0.35, saturation: 1.08, contrast: 1.05,
   shadows: true, area: 30, renderScale: 0.75, msaa: 2, sunAz: -35, handheld: 0, coverT: 1.2, capPos: 'mid', karaoke: true, wordRate: 0.085, voice: false, series: null, cast: {}, transition: 'cut', clouds: false };

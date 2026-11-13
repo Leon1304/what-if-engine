@@ -2,7 +2,7 @@ const CFG = { dur: 12, seed: 7, locale: 'en-US', kind: 'story', badge: 'What if'
   shadows: true, area: 36, renderScale: 0.75, msaa: 2, sunAz: -35, handheld: 0.2, coverT: 1.2, capPos: 'mid', karaoke: true, wordRate: 0.085, voice: false, series: null, cast: {}, transition: 'cut', gore: 'blood' };
 const LIVE = {};
 const BEATS = [{ t: 0, dur: 0.4, kick: 'Test', text: "light", big: true, instant: true }];
-// v3.2 light & post: day (wide from above) → golden (close, then wide against the sun: god rays, dust) → night (close and wide: rim light, no black slabs)
+// v3.3 light & post: day (wide from above) → golden (close, then wide against the sun: god rays, dust) → night (close and wide: rim light, no black slabs)
 const CAM = [
   ...shot('wide', 0, 3, [0, 0, 0], { az: 40, dist: 90, h: 55, fov: 50, move: 'static', tr: 'cut' }),
   ...shot('close', 3, 3, 'hero', { az: 20, move: 'static', tr: 'cut' }),

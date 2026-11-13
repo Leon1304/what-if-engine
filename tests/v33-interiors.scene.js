@@ -1,5 +1,5 @@
   ground({ color: '#7FA05A', flat: 120, hills: 0 });
-  // v3.2: camera-aware front wall + ceiling, lit hall behind an open door, museum room, raised + rotated room, plaza, house hall
+  // v3.3: camera-aware front wall + ceiling, lit hall behind an open door, museum room, raised + rotated room, plaza, house hall
   const A = interior(world, 0, 0, { kind: 'living' }); openDoor(A, 1.4);
   const M = interior(world, 30, 0, { kind: 'museum', ry: 0.3 });
   const K = interior(world, -20, 0, { kind: 'kitchen', y: 2.5, ry: 0.6 });

@@ -2,7 +2,7 @@ const CFG = { dur: 10, seed: 5, locale: 'en-US', kind: 'story', badge: 'What if'
   shadows: true, area: 36, renderScale: 0.75, msaa: 2, sunAz: -35, handheld: 0, coverT: 1.0, capPos: 'mid', karaoke: true, wordRate: 0.085, voice: false, series: null, cast: {}, transition: 'cut' };
 const LIVE = {};
 const BEATS = [{ t: 0, dur: 0.2, text: ' ', instant: true }];
-// v3.2 water: pool with swimmer + shark + drain, red salt lake, underwater sky without an underwater() call (auto: caustics, shafts, marine snow, depth gradient)
+// v3.3 water: pool with swimmer + shark + drain, red salt lake, underwater sky without an underwater() call (auto: caustics, shafts, marine snow, depth gradient)
 const CAM = [
   { t: 0, p: [3.6, 4.4, -1.2], l: [0, 0.6, -6.4], fov: 46, cut: true }, { t: 3, p: [3.4, 4.2, -1.6], l: [0, 0.6, -6.4], fov: 46 },
   { t: 3, p: [-6, 2.2, 26], l: [6, -0.2, 42], fov: 50, cut: true, tr: 'cut' }, { t: 5, p: [-5.5, 2.1, 26.5], l: [6, -0.2, 42], fov: 50 },

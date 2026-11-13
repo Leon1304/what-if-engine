@@ -12,7 +12,7 @@ const CAM = [
   { t: 10, cut: true, p: [2.5, 1.7, 50], l: [0, 1.2, 54.6], fov: 50 }, { t: 12, p: [1.5, 1.6, 51], l: [0, 1.2, 54.6], fov: 50 },   // house: door opens on a hall
   { t: 12, cut: true, p: [30, 1.7, 27.5], l: [30, 1.6, 18], fov: 60 }, { t: 14, p: [31, 1.7, 27.4], l: [30, 1.6, 18], fov: 60 }   // camera outside → the gallery stays open (cut-away)
 ];
-const SHAKES = [], FLASHES = [], SKY = [[0, 'day']], PHASES = t => 'Interiors v3.2', STATS = [];
+const SHAKES = [], FLASHES = [], SKY = [[0, 'day']], PHASES = t => 'Interiors v3.3', STATS = [];
 const END = { t: 13.9, q: 'Test?', opts: ['A', 'B'], cta: 'x' };
 const AUDIO = { mood: 'chill', music: 0.25, sfx: 1, hits: [] };
 const THUMB = { t: 1, text: '*Test*' };
