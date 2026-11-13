@@ -216,6 +216,7 @@
   #stage { --u: 1cqw; }
   #stage.land { width: 960px; height: 540px; --u: 0.66cqh; }
   #stage.land #hud { left: 3.4cqw; right: 3.4cqw; top: 5.2cqh; bottom: 6.5cqh; }
+  #stage.cine #hud { top: calc(var(--bar, 0) * 1cqh + 1.8cqh); }   /* v3.23 cinema bars: badge and counters sit just below the top bar */
   #stage.land #cap, #stage.land #end, #stage.land #tease, #stage.land #prev, #stage.land #rev, #stage.land #stamp, #stage.land #xcard { left: 0; }
   #stage.land #cap.mid, #stage.land #end, #stage.land #prev, #stage.land #rev { top: 44.8cqh; }
   #stage.land #cap { padding: 0 9cqw; }
@@ -14168,11 +14169,12 @@ function updateLoop(t) {
 const FinalShader = {
   uniforms: { tDiffuse: { value: null }, uRes: { value: new THREE.Vector2(1, 1) }, uTime: { value: 0 }, uExp: { value: 1 }, uMode: { value: 1 }, uGrain: { value: 0.05 }, uVig: { value: 0.4 }, uAb: { value: 0 }, uSat: { value: 1.05 }, uCon: { value: 1.05 },
     uBlur: { value: 0 }, uBlurDir: { value: new THREE.Vector2(1, 0) }, uZoom: { value: 0 }, uDip: { value: 0 }, uDef: { value: 0 }, uDof: { value: 0 }, uFocus: { value: new THREE.Vector2(0.5, 0.5) }, tDepth: { value: null }, uDofOn: { value: 0 }, uRain: { value: 0 }, uFocusD: { value: 5 }, uNear: { value: 0.1 }, uFar: { value: 1200 },
-    tRays: { value: null }, uRays: { value: 0 }, uSh: { value: new THREE.Vector3() }, uHl: { value: new THREE.Vector3() }, uLift: { value: new THREE.Vector3() }, uOpen: { value: 0 }, uGSat: { value: 1 }, uGCon: { value: 1 } },
+    tRays: { value: null }, uRays: { value: 0 }, uSh: { value: new THREE.Vector3() }, uHl: { value: new THREE.Vector3() }, uLift: { value: new THREE.Vector3() }, uOpen: { value: 0 }, uGSat: { value: 1 }, uGCon: { value: 1 },
+    tStreak: { value: null }, tHal: { value: null }, uStreak: { value: 0 }, uSTint: { value: new THREE.Vector3(1, 1, 1) }, uHal: { value: 0 }, uCAb: { value: 0 }, uBars: { value: 0 } },   // v3.23 cinema look (CinePass)
   vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
   fragmentShader: `#include <packing>
-    uniform sampler2D tDiffuse, tDepth, tRays; uniform vec2 uRes, uBlurDir, uFocus; uniform float uTime, uExp, uMode, uGrain, uVig, uAb, uSat, uCon, uBlur, uZoom, uDip, uDef, uDof, uDofOn, uFocusD, uNear, uFar, uRain, uRays, uOpen, uGSat, uGCon;
-    uniform vec3 uSh, uHl, uLift; varying vec2 vUv;
+    uniform sampler2D tDiffuse, tDepth, tRays, tStreak, tHal; uniform vec2 uRes, uBlurDir, uFocus; uniform float uTime, uExp, uMode, uGrain, uVig, uAb, uSat, uCon, uBlur, uZoom, uDip, uDef, uDof, uDofOn, uFocusD, uNear, uFar, uRain, uRays, uOpen, uGSat, uGCon;
+    uniform float uStreak, uHal, uCAb, uBars; uniform vec3 uSh, uHl, uLift, uSTint; varying vec2 vUv;
     float hr(vec2 p){ return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
     vec3 drops(vec2 uv, float t, float sc){ vec2 a = vec2(uv.x * 0.5625, uv.y) * sc, id = floor(a), f = fract(a) - 0.5; float n = hr(id), n2 = hr(id + 17.3), n3 = hr(id + 41.7), life = fract(t * (0.1 + 0.12 * n) + n2);
       vec2 c = vec2(n - 0.5, n2 - 0.5) * 0.45; c.y -= step(0.72, n) * life * life * 0.7; float r = (0.1 + 0.16 * n3) * smoothstep(0.0, 0.06, life) * (1.0 - smoothstep(0.82, 1.0, life)) * step(0.3, n3);
@@ -14191,7 +14193,7 @@ const FinalShader = {
       vec2 uv = vUv; vec3 c; float rmk = 0.0;
       if (uRain > 0.001) { vec3 d1 = drops(uv, uTime, 6.0), d2 = drops(uv * 1.3 + 0.37, uTime * 1.2 + 3.0, 10.0); uv += (d1.xy + d2.xy) * uRain; rmk = max(d1.z, d2.z) * uRain; }
       if (uMode > 2.5) { vec2 cc = uv - 0.5; uv = 0.5 + cc * (1.0 + 0.07 * dot(cc, cc)); }
-      vec2 dir = uv - 0.5; float ab = uAb * 0.008 + (uMode > 2.5 ? 0.0018 : 0.0);
+      vec2 dir = uv - 0.5; float ab = uAb * 0.008 + (uMode > 2.5 ? 0.0018 : 0.0) + uCAb * 0.024 * dot(dir, dir);   // v3.23 cinema: lens colour fringes grow toward the edges (none in the centre)
       float cc = uDofOn > 0.5 ? coc(uv) : 0.0, r = uDef + (uDofOn > 0.5 ? cc : uDof * 0.012 * smoothstep(0.12, 0.45, length((uv - uFocus) * vec2(0.5625, 1.0))));   // depth of field (or the old screen-space focus look)
       if (uBlur + uZoom + r > 0.0004) {   // whip / zoom motion blur and depth-of-field look (only on frames that need it)
         vec3 acc = texture2D(tDiffuse, uv).rgb * 0.5; float ws = 0.5;
@@ -14202,11 +14204,14 @@ const FinalShader = {
         c = acc / ws;
       } else c = vec3(texture2D(tDiffuse, uv + dir * ab).r, texture2D(tDiffuse, uv).g, texture2D(tDiffuse, uv - dir * ab).b);
       if (uRays > 0.0) c += texture2D(tRays, vUv).rgb * uRays;   // v3.5 god rays (LookPass)
+      if (uStreak > 0.0) { vec3 s = texture2D(tStreak, vUv).rgb; c += (1.0 - exp(-mix(vec3(dot(s, vec3(0.2126, 0.7152, 0.0722))), s, 0.3) * uStreak)) * uSTint; }   // v3.23 anamorphic streaks (CinePass); saturating: a tiny lamp still streaks, a big bright area never washes out
+      if (uHal > 0.0) c += (1.0 - exp(-texture2D(tHal, vUv).a * uHal)) * vec3(0.55, 0.16, 0.06);   // v3.23 halation: warm red glow round hot lights
       c = grade(srgb(neutral(c * (1.0 + rmk * 0.12))));   // tone map + sRGB here: one full-screen pass less
       if (uMode > 2.5) c *= 0.8 + 0.2 * sin(uv.y * uRes.y * 1.5708);
       c *= mix(1.0 - uVig, 1.0, smoothstep(0.9, 0.25, length((vUv - 0.5) * vec2(1.0, 1.2))));
       c += (h(vUv * uRes + fract(uTime * 13.7) * 97.0) - 0.5) * uGrain;
       c *= 1.0 - uDip;
+      if (uBars > 0.0) c *= step(uBars, vUv.y) * step(uBars, 1.0 - vUv.y);   // v3.23 cinema bars (pure black, snapped to whole pixels in JS: no soft edge line)
       gl_FragColor = vec4(c, 1.0);
     }`
 };
@@ -14397,6 +14402,46 @@ class LookPass extends Pass {
   }
 }
 const lookFx = new LookPass(); composer.addPass(lookFx);
+// v3.23 cinema look — CFG.cinema: true | { bars, streaks, ab, halation, threshold, tint } (off by default). Runs right before the final pass:
+//   bars: black cinema bars top and bottom, share of the frame height per bar (9:16 default 0.085, 16:9 default 0.128 = 2.39:1 scope), number or t => number (0 = none);
+//   covers (THUMB) never get bars · streaks: × strength of the horizontal anamorphic streaks through hot lights (lamps, headlights, fire, neon, the sun disc;
+//   only what is brighter than threshold, default 1.6 in linear light: a lit wall or a bright sky does not streak) · tint: streak colour (default cool blue '#6E9BFF')
+//   · ab: × lens colour fringes toward the frame edges (none in the centre) · halation: × warm red glow round hot lights (film halation).
+//   Streak + glow: a quarter-size mask of the hot lights, blurred sideways in three widening passes (15 taps each) and once more upward for the glow: cheap.
+const CINE = (() => { const c = CFG.cinema; if (!c) return null; const o = c === true ? {} : c;
+  return { bars: o.bars ?? (LAND ? 0.128 : 0.085), streaks: o.streaks ?? 1, ab: o.ab ?? 1, halation: o.halation ?? 1, thr: o.threshold ?? 1.6, tint: new THREE.Color(o.tint ?? '#6E9BFF') }; })();
+const cineBars = t => { if (!CINE) return 0; const b = typeof CINE.bars === 'function' ? CINE.bars(t) : CINE.bars; return clamp(Number.isFinite(b) ? b : 0, 0, 0.3); };
+class CinePass extends Pass {
+  constructor() {
+    super(); this.needsSwap = false; const o = { type: THREE.HalfFloatType, depthBuffer: false };
+    this.t = [0, 1, 2, 3].map(() => new THREE.WebGLRenderTarget(4, 4, o));
+    const vs = 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }';
+    // mask: rgb = small hot points only (a lamp, a headlight, the sun disc: brighter than the ring round them — a big bright area like a lit window wall or the sky
+    //   gives none, so it never draws a band across the frame) → streaks · a = the plain excess over the threshold (luma) → halation
+    this.mask = new FullScreenQuad(new THREE.ShaderMaterial({ uniforms: { tex: { value: null }, uPx: { value: new THREE.Vector2() }, uRing: { value: new THREE.Vector2() }, uThr: { value: 1.6 } }, vertexShader: vs, depthTest: false, depthWrite: false,
+      fragmentShader: `uniform sampler2D tex; uniform vec2 uPx, uRing; uniform float uThr; varying vec2 vUv;
+        float lu(vec3 c){ return dot(c, vec3(0.2126, 0.7152, 0.0722)); }
+        void main(){ vec3 c = (texture2D(tex, vUv + uPx * vec2(-1.0, -1.0)).rgb + texture2D(tex, vUv + uPx * vec2(1.0, -1.0)).rgb + texture2D(tex, vUv + uPx * vec2(-1.0, 1.0)).rgb + texture2D(tex, vUv + uPx).rgb) * 0.25;
+          float l = lu(c), r = 0.0; for (int i = 0; i < 8; i++) { float a = float(i) * 0.785398; r = max(r, lu(texture2D(tex, vUv + uRing * vec2(cos(a), sin(a))).rgb)); }
+          float pk = max(0.0, l - max(r, uThr)) / max(l, 1e-3);
+          gl_FragColor = vec4(min(c * pk, vec3(3.0)), min(max(0.0, l - uThr), 3.0)); }` }));
+    this.blur = new FullScreenQuad(new THREE.ShaderMaterial({ uniforms: { tex: { value: null }, uStep: { value: new THREE.Vector2() }, uFall: { value: 0.3 } }, vertexShader: vs, depthTest: false, depthWrite: false,
+      fragmentShader: `uniform sampler2D tex; uniform vec2 uStep; uniform float uFall; varying vec2 vUv;
+        void main(){ vec4 s = vec4(0.0); float ws = 0.0; for (int i = -7; i <= 7; i++) { float w = exp(-abs(float(i)) * uFall); s += texture2D(tex, vUv + uStep * float(i)) * w; ws += w; } gl_FragColor = s / ws; }` }));
+  }
+  setSize(w, h) { for (const r of this.t) r.setSize(Math.max(1, w >> 2), Math.max(1, h >> 2)); this.w = w; this.h = h; }   // steps below are fractions of the frame (a 2K quarter-size texel): the same look in the preview and the final render
+  pass(r, src, dst, sx, sy, fall) { const B = this.blur.material.uniforms; B.tex.value = src.texture; B.uStep.value.set(sx, sy); B.uFall.value = fall; r.setRenderTarget(dst); this.blur.render(r); }
+  render(r, wb, rb) {
+    const U = fin.uniforms, [a, b, c, d] = this.t, qw = LAND ? 1 / 640 : 1 / 360, qh = LAND ? 1 / 360 : 1 / 640, M = this.mask.material.uniforms;
+    U.uStreak.value = U.uHal.value = 0; if (scenePass.split || (CINE.streaks <= 0 && CINE.halation <= 0)) return;
+    M.tex.value = rb.texture; M.uPx.value.set(1 / Math.max(1, this.w), 1 / Math.max(1, this.h)); M.uThr.value = CINE.thr; M.uRing.value.set(qw * 4, qh * 4);
+    r.setRenderTarget(a); this.mask.render(r);
+    this.pass(r, a, b, qw, 0, 0.32);   // short sideways blur …
+    if (CINE.halation > 0) { this.pass(r, b, c, 0, qh, 0.32); U.tHal.value = c.texture; U.uHal.value = 6 * CINE.halation; }   // … + upward = round glow
+    if (CINE.streaks > 0) { this.pass(r, b, d, qw * 6, 0, 0.16); this.pass(r, d, a, qw * 36, 0, 0.12); U.tStreak.value = a.texture; U.uStreak.value = 120 * CINE.streaks; U.uSTint.value.set(CINE.tint.r, CINE.tint.g, CINE.tint.b).multiplyScalar(0.7); }   // … wider and wider: a thin line across the frame
+  }
+}
+if (CINE) composer.addPass(new CinePass());
 const fin = new ShaderPass(FinalShader); composer.addPass(fin);
 Object.assign(fin.uniforms.uMode, { value: { none: 0, film: 1, crt: 3 }[CFG.filter] ?? 1 });
 fin.uniforms.uGrain.value = CFG.filter === 'none' ? 0 : CFG.grain;
@@ -14839,6 +14884,7 @@ function update(t) {
   U.uDof.value = camFx.dof; U.uFocus.value.set(0.5, 1 - camFx.fy); U.uDofOn.value = dofPass.on || (CFG.dof !== false && camFx.dof > 0.01) ? 1 : 0; U.tDepth.value = dofRT.texture; U.uFocusD.value = camFx.focus ?? 5; U.uRain.value = THUMB_ON ? 0 : lensRainAt(t); U.uNear.value = camera.near; U.uFar.value = camera.far;
   scenePass.t0 = tv; scenePass.times = THUMB_ON || SPLIT_NOW ? null : mbTimes(tv);   // tv: motion-blur samples (and the camera reset in needsMB) stay in the teased moment
   if (THUMB_ON) { U.uBlur.value = U.uZoom.value = U.uDip.value = U.uDef.value = U.uAb.value = 0; }
+  if (CINE) { const H = renderer.domElement.height || 1; U.uBars.value = THUMB_ON || SPLIT_NOW ? 0 : Math.round(cineBars(t) * H) / H; U.uCAb.value = CINE.ab; stage.classList.toggle('cine', U.uBars.value > 0); stage.style.setProperty('--bar', (U.uBars.value * 100).toFixed(3)); }   // v3.23: bars on whole pixels; none on covers and split screens
 }
 // v2.23 smooth loop: in the last LOOPX s the scene + camera at t − DUR (the moments just before frame 0) render first and are kept on #loopv,
 // which dissolves in over the last shot → the final frame equals frame 0, the restart is seamless. Everything is a function of t, so this stays frame-exact.
@@ -15138,7 +15184,7 @@ function qalMeasure(Q, fgD = 0) {
 }
 const _ql = [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()], _qlc = new THREE.Vector3();
 // HEADCUT: a visible figure big in the frame whose head is cut by the top edge (≥ 30 % of the head above it) while its chest is in the frame — not in first person, not in macro shots on the hands
-function qalHeads(macro) {
+function qalHeads(macro, edge = 1) {   // edge: the top edge in NDC (v3.23: 1 − 2 × cinema bar)
   const R = []; world.updateMatrixWorld(true); camera.updateMatrixWorld();
   const ndc = v => { _qlc.copy(v).applyMatrix4(camera.matrixWorldInverse); const front = _qlc.z < -0.05; v.project(camera); return front; };
   RIGS.forEach((f, i) => { if (!f.head || !f.chest || !f.hips || !f.neck || f === POV_ON) return;
@@ -15146,8 +15192,8 @@ function qalHeads(macro) {
     const [T, C, N, H, B] = _ql; _ab.makeEmpty(); for (const n of [f.FC?.skull ?? f.head, f.hair]) if (n) _ab.expandByObject(n); if (_ab.isEmpty()) return; _ab.getCenter(C); T.set(C.x, _ab.max.y, C.z);   // skull + hair as drawn (big cartoon heads too; not hats, sweat drops or '?' above the head)
     f.head.getWorldPosition(N); H.set(0, 0.3, 0); f.chest.localToWorld(H); f.hips.getWorldPosition(B);
     if (![T, C, N, H, B].every(ndc)) return;
-    const big = (C.y - B.y) / 2, cut = (T.y - 1) / Math.max(1e-3, T.y - N.y);
-    if (big < 0.3 || T.y <= 1 || N.y >= 1 || cut < 0.3 || Math.abs(C.x) > 0.95 || Math.abs(H.x) > 0.9 || H.y > 0.92 || H.y < -1) return;
+    const big = (C.y - B.y) / 2, cut = (T.y - edge) / Math.max(1e-3, T.y - N.y);
+    if (big < 0.3 || T.y <= edge || N.y >= edge || cut < 0.3 || Math.abs(C.x) > 0.95 || Math.abs(H.x) > 0.9 || H.y > edge - 0.08 || H.y < -edge) return;
     if (macro && _l.y < f.neck.getWorldPosition(_qlc).y - 0.25 * f.root.scale.x) return;   // a macro shot on the hands / a held thing: the head is meant to be out
     R.push({ i, f, cut: Math.min(1, cut), big }); });
   return R;
@@ -15179,7 +15225,7 @@ function qaLook(o = {}) {
       const where = s.cover != null ? `cover ${'ABCDEFGH'[s.cover]} (THUMB at ${s.t.toFixed(1)} s)` : `shot ${s.n} (${s.a.toFixed(1)}–${s.b.toFixed(1)} s) at ${s.t.toFixed(1)} s`, id = s.cover != null ? 'c' + s.cover : 's' + s.n;
       if (!Number.isFinite(fd) || !Number.isFinite(camera.fov)) { put('EMPTY' + id, 2, `EMPTY – ${where}: the camera position or lens is not a number (NaN) – nothing is drawn; check the CAM key there (p, l, follow, fov) and that CFG has handheld`); continue; }
       const M = qalMeasure(qalFrame(pov ? POV_ON?.root : null, !!s.probe, s.cover != null ? Math.max(fin.uniforms.uVig.value, 0.55) : fin.uniforms.uVig.value), fgD), darkSky = (skyNow.nk ?? 0) >= 0.75 || skyNow === SKIES.space || skyNow === SKIES.mercury;
-      const heads = pov ? [] : qalHeads(macro);
+      const barT = s.cover != null || SPLITS.some(x => s.t >= x.t && s.t < x.t + x.dur) ? 0 : cineBars(s.t), heads = pov ? [] : qalHeads(macro, 1 - 2 * barT);
       if (o.stats) stats.push({ where, probe: !!s.probe, fd: +fd.toFixed(1), ...Object.fromEntries(Object.entries(M).map(([k, v]) => [k, +v.toFixed(3)])), sky: Object.keys(SKIES).find(k => SKIES[k] === skyNow), heads: heads.map(x => x.i + ':' + x.cut.toFixed(2)) });
       if (!s.probe) {
         if (M.dead > (darkSky ? 0.6 : 0.35)) put('DARK' + id, M.dead, `DARK – ${where}: ${(M.dead * 100).toFixed(0)} % of the frame is a near-black area (not counting the sky${darkSky ? '; dark sky, limit 60 %' : ''}) – light the subject (lamp, flashlight, lit windows, CFG.nightLift), use a lighter SKY there or turn the camera off the dark wall / shadow`);
@@ -15189,7 +15235,7 @@ function qaLook(o = {}) {
         put('CAMCLIP' + id, 1 + M.clip, `CAMCLIP – ${where}: ${nm ? `'${nm}'` : 'geometry'} closer than 0.5 m to the lens covers ${(M.clip * 100).toFixed(0)} % of the frame${M.cy < 0.35 ? ' (top)' : M.cy > 0.65 ? ' (bottom)' : ''} – move the camera off it (dist, h, az, p) or move the object; the lens must not sit in a wall, a prop or a figure`); }
       else if (!pov && M.fg > 0.35 && M.fy < 0.6) { const nm = hitName(M.fx, M.fy, fgD + 0.3);   // not the floor at the bottom edge (low angles)
         put('CAMCLIP' + id, M.fg, `CAMCLIP – ${where}: ${nm ? `'${nm}'` : 'something'} less than ${fgD.toFixed(1)} m from the lens covers ${(M.fg * 100).toFixed(0)} % of the frame in front of the subject (${fd.toFixed(1)} m away) – move the camera past it (az, h, p) or move the object out of the way`); }
-      for (const x of heads) put('HEADCUT' + id + ':' + x.i, x.cut, `HEADCUT – ${where}: ${who(x.f, x.i)} fills the frame but ${(x.cut * 100).toFixed(0)} % of the head is above the top edge – frame lower (fy 0.4–0.5, a little more dist or fov, aim at the face: dy) or go wider`);
+      for (const x of heads) put('HEADCUT' + id + ':' + x.i, x.cut, `HEADCUT – ${where}: ${who(x.f, x.i)} fills the frame but ${(x.cut * 100).toFixed(0)} % of the head is above the top edge${barT ? ' (under the cinema bar)' : ''} – frame lower (fy 0.4–0.5, a little more dist or fov, aim at the face: dy) or go wider`);
     }
   } finally { TH = TH0; THUMB_ON = ON0; }
   if (o.stats) return stats;

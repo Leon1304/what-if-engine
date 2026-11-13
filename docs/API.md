@@ -1289,3 +1289,15 @@ Test: `tests/v35-qa.story.js` + `.scene.js` – Einstellung 2 meldet absichtlich
 - **`qa_lines.py`:** eine Linie, die im nächsten Bild an derselben Stelle (± 4 px) wieder da ist, gilt als Kante der Szene (Mauerfuge, Kabel, Dachkante) und wird nicht mehr als `LINES:` gemeldet; Bildfehler flackern.
 - **Render-Workflow:** Wird eine Seite neu gepusht, während ein älterer Lauf sie noch rendert, veröffentlicht nur der neueste Lauf (der ältere meldet „superseded“ und überspringt den Upload) – kein Überschreiben eines neueren Videos mehr.
 
+
+# Neu in v3.23 (Kino-Look: `CFG.cinema`)
+Schalter für den Kino-Look, standardmäßig aus. Läuft als eigener Schritt (`CinePass`) direkt vor der letzten Nachbearbeitung, jedes Bild bleibt eine reine Funktion von t.
+- `CFG.cinema: true` oder `{ bars, streaks, ab, halation, threshold, tint }`:
+  - `bars`: schwarze Kinobalken oben und unten, Anteil der Bildhöhe je Balken. Standard 9:16 `0.085`, 16:9 `0.128` (= 2,39:1 Scope). Zahl oder `t => Zahl` (z. B. Balken, die im Finale breiter werden), `0` = keine. Auf ganze Pixel gerundet (keine weiche Kantenlinie). **Cover (THUMB) und Split-Screens bekommen nie Balken.** Badge und Zähler (`#hud`) rücken automatisch unter den oberen Balken.
+  - `streaks`: × Stärke der anamorphen Lichtstreifen (dünne, waagrechte, kühlblaue Linien durch heiße Lichter: Laternen, Scheinwerfer, Feuer, Neon, Sonnenscheibe). Es streifen nur **kleine** Lichtpunkte, die heller sind als ihr Umfeld und als `threshold` (Standard `1.6`, lineares Licht). Große helle Flächen (Fensterfront, heller Himmel, angestrahlte Wand) streifen nicht, es entstehen also keine Bänder quer durchs Bild. Sättigende Kurve: Auch ein winziges Licht streift, nichts überstrahlt. `tint` = Farbe der Streifen (Standard `'#6E9BFF'`).
+  - `ab`: × Farbsäume der Linse, zum Bildrand hin stärker, in der Mitte keine. Auf Frames mit Tiefenunschärfe oder Whip/Zoom-Unschärfe entfallen sie (dort ist der Rand ohnehin weich).
+  - `halation`: × warmes, rötliches Glühen um heiße Lichter (Film-Halation).
+- Gleich aussehend in Vorschau und 2K-Render (Schrittweiten als Bildanteil, nicht in Pixeln). Kosten: Viertelauflösung, 5 kleine Durchgänge.
+- **Prüfung:** `QA: HEADCUT` misst die Oberkante am Balken. Ein Kopf, der unter dem Balken verschwindet, gilt als abgeschnitten (Meldung „under the cinema bar“). Für Nahaufnahmen also `fy` etwas tiefer setzen (ca. 0,42 statt 0,36).
+- **Rezept „filmisch“** (Skill-Schlüsselwort): `cinema: true, motionBlur: 'all', grain: 0.07, vignette: 0.6, saturation: 0.96, contrast: 1.14, dofAuto: 1`, dazu ein Himmel mit tiefer Sonne (`golden`, `dusk`) oder Nacht mit vielen Lichtern (Laternen, `headlights`, Neon) – dort wirken Streifen und Halation. Gesichter nachts mit `glow` nur mäßig aufhellen (`intensity` ≤ 15 bei 2–3 m), sonst überstrahlen sie.
+- Test: `tests/cinema` (golden → dusk-Straße mit Laternen und Scheinwerfern → Nacht-Nahaufnahme mit breiter werdenden Balken).

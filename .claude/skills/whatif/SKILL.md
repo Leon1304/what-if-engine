@@ -50,7 +50,7 @@ Antworten an den Nutzer auf Deutsch, knapp; alles im Video ist englisch. Nicht e
 | „schnell rendern“ | `CFG.motionBlur: false, ao: 0` (Renderzeit ca. ÷1,6, Bild etwas flacher) | aus |
 | „entwurf“/„draft“ | schnelles Probevideo (540 px, 15 fps) | aus |
 | „langvideo“ · „5 minuten“ · „youtube-video“ · „16:9“ | Langvideo nach Abschnitt 2c: `CFG.aspect: '16:9'`, 2560 × 1440, 3–10 Min, dazu ein 9:16-Short als Teaser | aus |
-| „filmisch“ | `CFG.motionBlur: 'all'`: Bewegungsunschärfe auf jedem Bild, weichere Schwenks; Renderzeit ca. ×2 | aus |
+| „filmisch“ · „cinematic“ · „kino“ | Kino-Look (v3.23): `CFG.cinema: true` (Kinobalken, anamorphe Lichtstreifen, Farbsäume am Rand, Halation; Cover ohne Balken) + `motionBlur: 'all'`, `grain: 0.07, vignette: 0.6, saturation: 0.96, contrast: 1.14, dofAuto: 1`; Himmel mit tiefer Sonne oder Nacht mit vielen Lichtern; Nahaufnahmen `fy` ca. 0,42 (Balken). Details `docs/API.md` „Neu in v3.23“. Renderzeit ca. ×2 | aus |
 | „ohne untertitel“ (nur Langvideo) | `CFG.burnSubs: false`: keine Untertitel im Bild, nur die .srt als YouTube-Untertitel | eingebrannt |
 | „nur vorschau“ | kein MP4, nur Artifact | aus |
 | „serie“ · „teil 2“ · „kanal @name“ | Serienmodus `CFG.series = { name, handle, ep, next }`: Badge „What if #2“, Kanal oben rechts, Jingle, Endcard-Zeile „Follow @handle for part 3“. Teil 2: gleiche Welt und gleicher Look, `ep` hochzählen, Story knüpft an. | aus |
