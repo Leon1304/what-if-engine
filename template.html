@@ -14192,7 +14192,7 @@ await physicsBake();   // simulate once, then every frame plays it back
 document.querySelectorAll('.err').forEach(n => n.remove());
 // --- motion audit (v2.29) — render.mjs --shots (and --audit) runs it: whatif.audit() → list of warnings ---
 //   1) pops: every figure, animal and moving object at 30 fps — sudden jumps, joints that snap in one frame, jitter (back and forth every frame)
-//   2) purity: a frame must not depend on the frames drawn before it. The video is rendered in blocks (12 shards on GitHub, each in a fresh page; v3.1: each shard takes interleaved chunks of 10–30 frames) and inside a block by
+//   2) purity: a frame must not depend on the frames drawn before it. The video is rendered in blocks (18 shards on GitHub since v3.3, each in a fresh page; v3.1: each shard takes interleaved chunks of 10–30 frames) and inside a block by
 //      workers that draw every 3rd frame — whatever a frame inherits from earlier ones pops at block borders or flickers. Checked at every border of 12 and 20 blocks, every shard start
 //      and 12 more moments: jumped to straight from 0 s · played frame by frame · only every 3rd frame · after jumping back · v3.2: every render chunk start, jumped forward to from the end of the shard’s previous chunk — and (render.mjs) in a second, freshly
 //      opened page. Compared: EVERY part below every figure, animal and moving object (hair, hat, coat, hands, face, held things …: place, rotation, size, visible),
@@ -14248,14 +14248,15 @@ function audPure(Q) {   // everything a frame shows of the moving things, as num
   return a;
 }
 // the moments the purity check looks at: the first frame of every render block (12 = GitHub, 20 = long videos / local shards) + 12 scattered ones
-// v3.2 render plan, the one source for render.mjs (--shard) and the audit: GitHub splits a video into n shards (12; long videos up to 20, see render.yml)
+// v3.2 render plan, the one source for render.mjs (--shard) and the audit: GitHub splits a video into n shards (18 since v3.3; long videos up to 20, see render.yml)
 // and shard s renders the chunks c of `chunk` frames with c % n === s, so heavy moments spread over all shards. CFG.shard: 'block' = one contiguous block
 // per shard (as before v3.1; emergency switch when a SEAM: line comes up and the cause cannot be fixed quickly).
-function shardPlan(NF, n) { n = n ?? clamp(Math.floor(Math.floor(DUR) / 15), 12, 20); return { n, chunk: CFG.shard === 'block' ? Math.ceil(NF / n) : Math.max(10, Math.min(30, Math.floor(NF / (n * 4)))) }; }
+function shardPlan(NF, n) { n = n ?? clamp(Math.floor(Math.floor(DUR) / 15), 18, 20);   // v3.3: 18 shards minimum (render.yml SHARDS)
+  return { n, chunk: CFG.shard === 'block' ? Math.ceil(NF / n) : Math.max(10, Math.min(30, Math.floor(NF / (n * 4)))) }; }
 function audChunks(NF, N) { const { chunk } = shardPlan(NF), B = []; for (let i = chunk; i <= N; i += chunk) B.push(i);   // every chunk start (at most 80, evenly spread)
   return B.length <= 80 ? B : [...new Set(Array.from({ length: 80 }, (_, k) => B[Math.round(k * (B.length - 1) / 79)]))]; }
 function audFrames(NF, N) { const s = new Set(), { n, chunk } = shardPlan(NF); for (let k = 1; k < n; k++) s.add(k * chunk);   // v3.2: where every shard's fresh page starts
-  for (const nb of [12, 20]) for (let k = 1; k < nb; k++) s.add(Math.floor(k * NF / nb)); for (let k = 0; k < 12; k++) s.add(1 + Math.floor(hash(k * 7.13 + 0.37) * (NF - 2)));
+  for (const nb of [12, 18, 20]) for (let k = 1; k < nb; k++) s.add(Math.floor(k * NF / nb)); for (let k = 0; k < 12; k++) s.add(1 + Math.floor(hash(k * 7.13 + 0.37) * (NF - 2)));
   return [...s].filter(i => i > 0 && i <= N).sort((a, b) => a - b); }
 // fingerprint per part (two grids of 0.5 mm / 0.03°, so a value sitting on a grid line cannot fake a difference) — to compare two browser pages without shipping every matrix
 function audHash(a, n, out, at) { for (let i = 0; i < n; i++) { let h1 = 2166136261, h2 = 2166136261; for (let k = 0; k < AUD_N; k++) { const x = a[i * AUD_N + k] * 2000; h1 = Math.imul(h1 ^ Math.round(x), 16777619); h2 = Math.imul(h2 ^ Math.round(x + 0.5), 16777619); } out[at + 2 * i] = h1 >>> 0; out[at + 2 * i + 1] = h2 >>> 0; } }
