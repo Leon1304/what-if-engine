@@ -15,7 +15,7 @@ AO = {'strength': 0.55, 'dist': 0.4}
 def build(coll):
     M = cyber_mats(); N = neon_mats(); out = []; R = random.Random(5)
     paint = mat('paint', '#2B3240', 0.3, 0.7); paint_d = mat('paint_dark', '#181C24', 0.4, 0.6); stripe = mat('stripe', '#E0207F', 0.35, 0.3)
-    thrust = mat('thrust', '#8FD8FF', 0.3, emit='#3AB8FF', ei=4.0); head = mat('headlight', '#F4F8FF', 0.2, emit='#E8F2FF', ei=1.8)
+    thrust = mat('thrust', '#8FD8FF', 0.3, emit='#3AB8FF', ei=4.0); head = mat('headlight', '#E6F0FF', 0.2, emit='#CFE2FF', ei=1.0)
     tail = mat('taillight', '#FF3B4A', 0.3, emit='#FF1A2A', ei=3.0)
     add = lambda n, bm, m: (out.append(mesh(n, bm, m, coll)), out[-1])[1]
     BW = 1.0   # half width of the body

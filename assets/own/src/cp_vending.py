@@ -40,8 +40,8 @@ def build(coll):
     add('window_frame', merge(fr), M['metal_d'])
     add('window_box', box(ww, 0.38, 0.01, (wx, F + 0.15, wz - 0.01)), M['void'])
     for x in (wx - ww / 2, wx + ww / 2): add(f'window_wall{x}', box(0.01, 0.38, wh, (x, F + 0.15, wz)), M['steel'])
-    add('window_top', box(ww, 0.38, 0.01, (wx, F + 0.15, wz + wh - 0.01)), mat('window_light', '#E8F4FF', 0.4, emit='#CFE6FF', ei=0.7))
-    add('window_back', box(ww, 0.02, wh, (wx, F + 0.32, wz)), mat('window_light', '#E8F4FF', 0.4, emit='#CFE6FF', ei=0.7))
+    add('window_top', box(ww, 0.38, 0.01, (wx, F + 0.15, wz + wh - 0.01)), mat('window_light', '#A9CBE6', 0.4, emit='#7FB2DD', ei=0.35))
+    add('window_back', box(ww, 0.02, wh, (wx, F + 0.32, wz)), mat('window_light', '#A9CBE6', 0.4, emit='#7FB2DD', ei=0.35))
     for r in range(4):
         z = wz + 0.04 + r * 0.235
         add(f'shelf{r}', box(ww, 0.3, 0.012, (wx, F + 0.17, z - 0.012)), M['steel'])

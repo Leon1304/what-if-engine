@@ -2792,7 +2792,7 @@ function walk(obj, pts, o = {}) {
   const tw = clamp(0.3 * v, 0.35, 2.2), yawAt = s => { const a = path.at(s - tw), b = path.at(s + tw), x = b.x - a.x, z = b.z - a.z; return Math.hypot(x, z) > 1e-3 ? Math.atan2(x, z) : null; };   // v2.31: heading = chord over ±tw m (grows with speed) → turns through a corner evenly (was: two 45° steps, one frame each for anything fast)
   const sc = (obj.root ?? obj).scale.x, Cl = obj.legL ? cycleLen(mode, v) * sc : 0, stride = o.stride ?? (obj.kind === 'chicken' ? 16 : 4), bl = Math.max(ra, 0.22);
   let y0 = yawAt(0) ?? 0;
-  const gW = (s, P) => { if (!rig || !STAIRS.length) return groundH(P.x, P.z); let h = 0; for (let k = -2; k <= 2; k++) { const Q = path.at(s + k * 0.075); h += groundH(Q.x, Q.z); } return h / 5; };   // v2.29: on stairs the body rises smoothly (was: 18 cm jump per step); the feet still find the steps (foot IK)
+  const gW = (s, P) => { if (!rig || !(STAIRS.length || WALKSURF.length)) return groundH(P.x, P.z); let h = 0; for (let k = -2; k <= 2; k++) { const Q = path.at(s + k * 0.075); h += groundH(Q.x, Q.z); } return h / 5; };   // v2.29 (v3.22: also walk surfaces of models): on stairs the body rises smoothly (was: 18 cm jump per step); the feet still find the steps (foot IK)
   const rt = obj.root ?? obj; const me = { t0, v, pos: t => { const s = dist(t - t0), P = path.at(s); return new THREE.Vector3(P.x, gW(s, P) + (o.y ?? 0), P.z); }, yaw: t => { let y = o.face ?? (yawAt(dist(t - t0)) ?? y0); const i = rt._walks.indexOf(me), u = t - t0;   // v2.31: a walk that follows another one turns into its new heading over 0.45 s (was: spun round in one frame)
       const TT = me.turnT(); if (i > 0 && o.face == null && u < TT) { const yp = rt._walks[i - 1].yaw(t0); y = yp + Math.atan2(Math.sin(y - yp), Math.cos(y - yp)) * sm01(Math.max(0, u) / TT); } return y; },
     turnT: () => me._tT ??= (() => { const i = rt._walks.indexOf(me); if (!(obj.beast || obj.chk || obj.bird) || i < 1 || o.face != null) return 0.45; const yp = rt._walks[i - 1].yaw(t0), y1 = yawAt(0) ?? y0, d = Math.abs(Math.atan2(Math.sin(y1 - yp), Math.cos(y1 - yp))); return 0.45 * Math.max(1, d / (Math.PI / 2)); })() }; (rt._walks ??= []).push(me);   // v2.40.x animals: a turn of more than 90° takes proportionally longer (stepping round instead of sliding)
@@ -3059,7 +3059,7 @@ float clAA(float e, float x) { float w = max(fwidth(x), 1e-4); return smoothstep
 // asset(p, 'farm/barn', x, z, { ry, scale, h, y, tint: { materialName: hex } | hex, dyn }) → Group, real-world metres, standing on the ground.
 // Static props (buildings, trees, cars, furniture …). Rigged animals/creatures of the library go through model('dino/trex') (walk, pose, anim).
 // Each name is parsed once and cloned (shared geometry + materials); assemble.py embeds only the names a video uses.
-const ASSETS = new Map(), _META = new Map(), WALKSURF = [];
+const ASSETS = new Map(), _META = new Map(), WALKSURF = []; let _walkG0 = null;   // v3.22: ground without walk surfaces (_hbQ: on a walk surface the model’s own boxes do not block)
 // v3.17 hand-over data from Blender (tools/blender_asset.py → extras.wie in the GLB): { size, parts: { name: { node, pivot, parent, ud } }, marks: { name: [x, y, z, ry] }, walk: [x, y, z × 3 per triangle] }
 // read synchronously from the GLB's JSON chunk at build time (the mesh itself loads later), so a scene can use obj.at() / obj.parts right away
 function assetMeta(name) {
@@ -3119,7 +3119,7 @@ function _walkSurf() {   // v3.17: groundH also sees the walk surfaces of asset(
       const t = [A.x, A.y, A.z, B.x, B.y, B.z, D.x, D.y, D.z], ti = T.push(t) - 1;
       for (let gx = Math.floor(Math.min(A.x, B.x, D.x) / C); gx <= Math.floor(Math.max(A.x, B.x, D.x) / C); gx++)
         for (let gz = Math.floor(Math.min(A.z, B.z, D.z) / C); gz <= Math.floor(Math.max(A.z, B.z, D.z) / C); gz++) { const key = gx + ',' + gz; (grid.get(key) ?? grid.set(key, []).get(key)).push(ti); } } }
-  const g0 = groundH;
+  const g0 = groundH; _walkG0 = g0;
   groundH = (X, Z) => { let h = g0(X, Z); const L = grid.get(Math.floor(X / C) + ',' + Math.floor(Z / C)); if (!L) return h;
     for (const i of L) { const t = T[i], d = (t[5] - t[8]) * (t[0] - t[6]) + (t[6] - t[3]) * (t[2] - t[8]); if (Math.abs(d) < 1e-9) continue;
       const u = ((t[5] - t[8]) * (X - t[6]) + (t[6] - t[3]) * (Z - t[8])) / d, v = ((t[8] - t[2]) * (X - t[6]) + (t[0] - t[6]) * (Z - t[8])) / d, w = 1 - u - v;
@@ -5464,12 +5464,12 @@ late(ts => {
     }
     // 3) feet on slopes: drop the hips on the low side, bend the knee on the high side, tilt the feet with the ground
     if (CFG.footIK === false) continue;
-    const r = f.root.position; let gy = groundH(r.x, r.z); if (STAIRS.length && Math.abs(r.y - gy) < 0.2) gy = r.y; if (Math.abs(r.y - gy) > 0.06) continue;   // on stairs the body rides a smooth ramp (walk) → feet measured from the body
+    const r = f.root.position; let gy = groundH(r.x, r.z); if ((STAIRS.length || WALKSURF.length) && Math.abs(r.y - gy) < 0.2) gy = r.y; if (Math.abs(r.y - gy) > 0.06) continue;   // on stairs the body rides a smooth ramp (walk) → feet measured from the body
     const s = f.root.scale.x, legs = [[f.legL, f.shinL, f.footL], [f.legR, f.shinR, f.footR]], d = [];
     f.root.updateWorldMatrix(true, true);
     legs.forEach(([, , ft], i) => ft.getWorldPosition(_FP[i])); const ymin = Math.min(_FP[0].y, _FP[1].y), cx = Math.sin(f.root.rotation.y), cz = Math.cos(f.root.rotation.y);
     for (const P of _FP) {   // v2.29 stairs: a lifted foot sees the steps blurred by its height → it rises over the edge smoothly and lands exactly on the step (was: the knee snapped 18 cm)
-      const W = STAIRS.length ? 0.15 * clamp((P.y - ymin) / 0.08) : 0; let h = 0;
+      const W = (STAIRS.length || WALKSURF.length) ? 0.15 * clamp((P.y - ymin) / 0.08) : 0; let h = 0;
       if (W > 0.005) { for (let k = -4; k <= 4; k++) h += groundH(P.x + cx * W * k / 4, P.z + cz * W * k / 4); h /= 9; } else h = groundH(P.x, P.z); d.push(h - gy); }
     if (Math.max(Math.abs(d[0]), Math.abs(d[1])) < 0.015) continue;
     const low = Math.min(0, d[0], d[1]), hrx = f.hips.rotation.x, yw = f.root.rotation.y; f.hips.position.y += low / s;
@@ -13321,6 +13321,7 @@ const _rimW = new THREE.Color('#FFFFFF');
 /* ---------------------------------------------------------------------- */
 const HITBOX = { boxes: [], grid: new Map(), cell: 2, rep: new Map(), people: [] }, _hb = new THREE.Vector3(), _hbB = new THREE.Box3(), _hbM = new THREE.Matrix4();
 const _hbKey = (i, j) => i * 100003 + j;
+let _hbWs = false;
 function hitBuild() {
   const skip = new Set(); for (const f of RIGS) if (f.root) skip.add(f.root); for (const a of BEAST_ALL) skip.add(a.root ?? a.g);
   const C = [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()];
@@ -13333,21 +13334,25 @@ function hitBuild() {
       B = { x: cx, z: cz, ux: ax[0] / la, uz: ax[1] / la, vx: az[0] / lz, vz: az[1] / lz, hx: (b.x - a.x) / 2 * la, hz: (b.z - a.z) / 2 * lz, y0, y1, src, nm }; }
     else { let x0 = 1e9, x1 = -1e9, z0 = 1e9, z1 = -1e9; for (const c of C) { x0 = Math.min(x0, c.x); x1 = Math.max(x1, c.x); z0 = Math.min(z0, c.z); z1 = Math.max(z1, c.z); }
       B = { x: (x0 + x1) / 2, z: (z0 + z1) / 2, ux: 1, uz: 0, vx: 0, vz: 1, hx: (x1 - x0) / 2, hz: (z1 - z0) / 2, y0, y1, src, nm }; }
+    if (_hbWs) B.ws = 1;
     if (B.hx * B.hz < 0.0008 || Math.max(B.hx, B.hz) > 30 || y1 - y0 < 0.05) return;   // specks, terrain, sky, flat decals
     if (y1 < groundH(B.x, B.z) + 0.35) return;   // below the knee on the ground (steps, curbs, rugs) — heights are checked against each figure's feet every frame
     HITBOX.boxes.push(B); const r = Math.hypot(B.hx, B.hz), s = HITBOX.cell;
     for (let i = Math.floor((B.x - r) / s); i <= Math.floor((B.x + r) / s); i++) for (let j = Math.floor((B.z - r) / s); j <= Math.floor((B.z + r) / s); j++) { const kk = _hbKey(i, j); if (!HITBOX.grid.has(kk)) HITBOX.grid.set(kk, []); HITBOX.grid.get(kk).push(B); }
   };
-  const walk = (o, src, nm) => { if (skip.has(o) || o.userData.dyn || o.userData.noHit || o.userData.crowd || o.userData.cover || !o.visible) return;
-    const s2 = o.userData.kind ?? src;
+  const wsRoots = new Set(WALKSURF.map(S => S.root));
+  const walk = (o, src, nm, ws) => { if (skip.has(o) || o.userData.dyn || o.userData.noHit || o.userData.crowd || o.userData.cover || !o.visible) return;
+    const s2 = o.userData.kind ?? src; ws = ws || wsRoots.has(o); _hbWs = ws;
     if (o.isInstancedMesh) return;   // grass, crops, crowds, particles: walk-through or moving
     if (o.isMesh && o.geometry?.attributes?.position) { const m = o.material; if (!(m?.transparent && (m.opacity ?? 1) < 0.5) && m?.depthWrite !== false) { o.geometry.boundingBox ?? o.geometry.computeBoundingBox(); add(o.matrixWorld, o.geometry.boundingBox, s2, nm); } }
-    for (const c of o.children) walk(c, s2, nm); };
+    for (const c of o.children) { walk(c, s2, nm, ws); _hbWs = ws; } };
   world.updateMatrixWorld(true); for (const c of world.children) walk(c, null, c.name || null);
   for (const f of RIGS) { const r = f.root; if (!f.legL || f.hit === false || !r || r.parent !== world || (f._posAt && f._yawAt)) continue;   // people standing on their spot: walkers plan round them
     const rr = 0.21 * r.scale.x; HITBOX.people.push({ f, x: r.position.x, z: r.position.z, hx: rr, hz: rr, ux: 1, uz: 0, vx: 0, vz: 1, y0: r.position.y, y1: r.position.y + 1.7 * r.scale.x }); }
 }
-const _hbQ = (x, z, r) => { const s = HITBOX.cell, out = new Set(); for (let i = Math.floor((x - r) / s); i <= Math.floor((x + r) / s); i++) for (let j = Math.floor((z - r) / s); j <= Math.floor((z + r) / s); j++) for (const B of HITBOX.grid.get(_hbKey(i, j)) ?? []) out.add(B); return out; };
+const _hbOnW = (x, z) => [[0, 0], [0.3, 0], [-0.3, 0], [0, 0.3], [0, -0.3]].some(([a, b]) => groundH(x + a, z + b) > _walkG0(x + a, z + b) + 0.05);
+const _hbQ = (x, z, r) => { const s = HITBOX.cell, out = new Set(), onW = _walkG0 && _hbOnW(x, z);   // v3.22: on (or stepping onto) a walk surface (stairs, roof) → the walkable model's own boxes do not block
+  for (let i = Math.floor((x - r) / s); i <= Math.floor((x + r) / s); i++) for (let j = Math.floor((z - r) / s); j <= Math.floor((z + r) / s); j++) for (const B of HITBOX.grid.get(_hbKey(i, j)) ?? []) if (!(onW && B.ws)) out.add(B); return out; };
 function hitPush(x, z, r, y, out) {   // circle (x, z, r) at feet height y vs the props → push [dx, dz] (box by box, 3 rounds; fades out for deep overlaps) and the deepest overlap
   let cx = x, cz = z, deep = -1, what = null; const L = [..._hbQ(x, z, r + 0.6)].filter(B => B.y1 >= y + 0.35 && B.y0 <= y + 1.6);
   for (let it = 0; it < 3; it++) { let moved = false;
