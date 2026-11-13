@@ -1,5 +1,5 @@
 {
- "updated": "2026-11-12T19:25:59Z",
+ "updated": "2026-11-13T13:26:35Z",
  "videos": [
   {
    "slug": "dday",
@@ -187,6 +187,169 @@
      "Sunrise is six hours away. Zombies hate sunlight. Easy, right?",
      "1 house, 1 silo, 0 plan. Zombies are slow — but they never stop.",
      "The fence holds four minutes. Then it folds like a cheap lawn chair."
+    ]
+   },
+   "auto": true
+  },
+  {
+   "slug": "jerusalem-zombie-wall",
+   "title": "What if the zombie apocalypse reached Jerusalem?",
+   "kind": "story",
+   "dur": 56.0,
+   "aspect": "9:16",
+   "accent": "orange",
+   "series": null,
+   "ending": null,
+   "date": "2026-11-13T13:26:35Z",
+   "status": "ready",
+   "files": {
+    "mp4": {
+     "url": "https://github.com/Leon1304/what-if-engine/releases/download/render-jerusalem-zombie-wall/jerusalem-zombie-wall.mp4",
+     "size": 214301285
+    },
+    "coverA": {
+     "url": "https://github.com/Leon1304/what-if-engine/releases/download/render-jerusalem-zombie-wall/jerusalem-zombie-wall-cover.jpg",
+     "size": 677700,
+     "thumb": "covers/jerusalem-zombie-wall.jpg"
+    },
+    "coverB": {
+     "url": "https://github.com/Leon1304/what-if-engine/releases/download/render-jerusalem-zombie-wall/jerusalem-zombie-wall-cover-b.jpg",
+     "size": 402927,
+     "thumb": "covers/jerusalem-zombie-wall-b.jpg"
+    },
+    "srt": {
+     "url": "https://github.com/Leon1304/what-if-engine/releases/download/render-jerusalem-zombie-wall/jerusalem-zombie-wall.srt",
+     "size": 1381
+    }
+   },
+   "preview": null,
+   "captions": {
+    "youtube": {
+     "title": "What if the zombie apocalypse reached Jerusalem?",
+     "description": "Sixteen meters of concrete. Thousands of zombies. They don't climb – they stack. 🧟‍♂️🧱\nYou have three minutes to reach the last helicopter.\nWhere would YOU have gone? Comment A, B or C 👇\n\n#shorts #fyp #viral #trending #youtubeshorts",
+     "tags": [
+      "what if zombies reached jerusalem",
+      "zombie apocalypse jerusalem",
+      "zombie wall",
+      "zombies climbing a wall",
+      "zombie pile",
+      "zombie apocalypse",
+      "zombie outbreak",
+      "what if zombies were real",
+      "zombie survival",
+      "zombie city",
+      "zombie horde",
+      "giant wall",
+      "jerusalem",
+      "zombi",
+      "zomby",
+      "zombie apocolypse",
+      "what if",
+      "what if scenarios",
+      "what if animation",
+      "shorts",
+      "3d animation",
+      "animated story",
+      "whatifthishappenedscenarios",
+      "survival story",
+      "helicopter escape",
+      "last helicopter",
+      "viral",
+      "trending",
+      "fyp"
+     ],
+     "tagChars": 478
+    },
+    "instagram": "A 16-meter wall. Thousands of zombies. They don't climb – they stack. 🧟‍♂️🧱\nWhere would you have gone: the wall, a basement or the helicopter rope? Comment A, B or C 👇\n\n#reels #viral #reelsinstagram #explore #trending",
+    "tiktok": "They don't climb the wall. They STACK. 🧟‍♂️🧱\nWall, basement or helicopter rope? Comment A, B or C 👇\n\n#fyp #foryou #foryoupage #viral #trending",
+    "hooks": [
+     "Sixteen meters of concrete vs. thousands of zombies. Guess who wins.",
+     "The safest city on Earth had one weakness: teamwork.",
+     "You have three minutes. They have a ladder made of themselves."
+    ]
+   },
+   "auto": false
+  },
+  {
+   "slug": "coffee-test",
+   "title": "What if your coffee never ran out?",
+   "kind": "story",
+   "dur": 21.0,
+   "aspect": "9:16",
+   "accent": "lime",
+   "series": null,
+   "ending": null,
+   "date": "2026-11-12T21:57:11Z",
+   "status": "ready",
+   "files": {
+    "mp4": {
+     "url": "https://github.com/Leon1304/what-if-engine/releases/download/render-coffee-test/coffee-test.mp4",
+     "size": 81617762
+    },
+    "coverA": {
+     "url": "https://github.com/Leon1304/what-if-engine/releases/download/render-coffee-test/coffee-test-cover.jpg",
+     "size": 229394,
+     "thumb": "covers/coffee-test.jpg"
+    },
+    "coverB": {
+     "url": "https://github.com/Leon1304/what-if-engine/releases/download/render-coffee-test/coffee-test-cover-b.jpg",
+     "size": 371151,
+     "thumb": "covers/coffee-test-b.jpg"
+    },
+    "srt": {
+     "url": "https://github.com/Leon1304/what-if-engine/releases/download/render-coffee-test/coffee-test.srt",
+     "size": 368
+    }
+   },
+   "preview": null,
+   "captions": {
+    "youtube": {
+     "title": "What if your coffee never ran out?",
+     "description": "Twelve cups by 9 a.m. Your heart is now a drum solo.\nWhat do you do with the cup? A) Keep drinking · B) Smash it · C) Sell refills — Comment A, B or C 👇\n\n#shorts #viral #trending #youtubeshorts #fyp",
+     "tags": [
+      "what if your coffee never ran out",
+      "your coffee never ran out",
+      "coffee test",
+      "what if story",
+      "survival",
+      "animated story",
+      "what if",
+      "what if scenarios",
+      "what if shorts",
+      "shorts",
+      "3d animation",
+      "animation",
+      "whatifthishappenedscenarios",
+      "hypothetical",
+      "viral",
+      "trending",
+      "fyp",
+      "youtube shorts",
+      "storytime",
+      "coffee",
+      "test",
+      "what if coffee",
+      "what if test",
+      "what would you do",
+      "would you survive",
+      "animated short",
+      "what if video",
+      "what if animation",
+      "scenario",
+      "cartoon",
+      "funny animation",
+      "shorts video",
+      "viral shorts",
+      "foryou"
+     ],
+     "tagChars": 494
+    },
+    "instagram": "What if your coffee never ran out?\nWhat do you do with the cup? A) Keep drinking · B) Smash it · C) Sell refills — Comment A, B or C 👇\n\n#reels #viral #explore #reelsinstagram #trending",
+    "tiktok": "What if your coffee never ran out?\nWhat do you do with the cup? A) Keep drinking · B) Smash it · C) Sell refills — Comment A, B or C 👇\n\n#fyp #foryou #foryoupage #viral #trending",
+    "hooks": [
+     "Twelve cups by 9 a.m. Your heart is now a drum solo.",
+     "Then the mug starts overflowing. The floor is now a latte.",
+     "Day three. You can hear colors."
     ]
    },
    "auto": true
