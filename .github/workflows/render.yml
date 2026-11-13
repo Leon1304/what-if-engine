@@ -21,7 +21,7 @@ permissions:
   contents: write
 
 env:
-  SHARDS: 12
+  SHARDS: 18   # v3.2: 18 (was 12) — the final render is HQ now (3D full-res + 4× MSAA: ~1.5× time per frame incl. screenshot), more shards keep the wall time (≤ 20 = free-plan job limit)
   WIDTH: ${{ inputs.width || '1440' }}
   PW_VERSION: 1.65.0
 
@@ -114,7 +114,7 @@ jobs:
           S=${{ steps.s.outputs.slug }}
           ls out/$S.mp4.frames | wc -l
           node render.mjs "${{ matrix.page }}" --video out/$S.mp4 --w $WIDTH --seams ${{ needs.plan.outputs.n }} | tee out/$S-render.log
-          node render.mjs "${{ matrix.page }}" --cover out/$S-cover.jpg --w $WIDTH
+          node render.mjs "${{ matrix.page }}" --cover out/$S-cover.jpg --w $WIDTH --hq   # v3.3: covers in final quality too (one frame each)
           node render.mjs "${{ matrix.page }}" --srt out/$S.srt || true
           ffprobe -v error -show_entries format=duration:stream=codec_type,width,height -of csv=p=0 out/$S.mp4
       - name: quality check (v3.0)
