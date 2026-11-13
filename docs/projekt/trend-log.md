@@ -27,4 +27,4 @@ Wird von der nächtlichen Routine fortgeschrieben: neuester Abschnitt oben, Eint
 
 Fester Satz: in beiden nicht (H7 hatte ihn zuletzt).
 Quellen im Planeten-Video: NASA (zitiert von TIME: Gezeiten +1/25 mm), NASA NSSDCA „The Planetary Alignment of 5 May 2000“, Wikipedia „The Jupiter Effect“ (Buch 1974, Termin 10.3.1982), Forbes 10.11.2026.
-Hashtags (Recherche 12.11. nachmittags): YouTube #shorts #youtubeshorts #viral #trending #fyp · Instagram #reels #viral #reelsinstagram #explore #trending · TikTok #fyp #foryou #foryoupage #viral #trending.
+Hashtags: ab 13.11.2026 themenbezogen statt „meistgenutzt“ (#fyp, #viral, #trending usw. sind verboten), Regeln in `hashtags.md`. Trend-Tags 13.11.: #planetparade (4 Planeten am Morgenhimmel 13.–22.11.), #humanoidrobot (REK-Käfigkampf Okt., URKL-Finale Nov./Dez.).
