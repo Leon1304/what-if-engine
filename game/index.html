@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Waldtank – Überleben im Nordwald</title>
+<style>
+  :root { --fg: #f3efe4; --mut: #b9b3a3; --bg: rgba(18, 20, 18, .72); --acc: #e2a83c; --good: #7fcf7a; --bad: #e0553f; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #0b0d0b; color: var(--fg); font: 15px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif; user-select: none; }
+  canvas { display: block; }
+  .ov { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; z-index: 20; background: radial-gradient(ellipse at center, rgba(10,14,10,.55), rgba(5,7,5,.92)); }
+  .ov.show { display: flex; }
+  .card { max-width: 620px; width: calc(100% - 32px); background: var(--bg); border: 1px solid rgba(255,255,255,.12); border-radius: 14px; padding: 26px 28px; backdrop-filter: blur(6px); }
+  h1 { margin: 0 0 4px; font-size: 44px; letter-spacing: .06em; color: var(--acc); }
+  h1 small { display: block; font-size: 15px; letter-spacing: .02em; color: var(--mut); font-weight: 500; }
+  h2 { margin: 6px 0 12px; font-size: 20px; } h2 small { color: var(--mut); font-weight: 400; font-size: 13px; margin-left: 8px; }
+  button { font: inherit; color: #1a1a14; background: var(--acc); border: 0; border-radius: 8px; padding: 10px 18px; margin: 6px 8px 6px 0; cursor: pointer; font-weight: 600; }
+  button:hover { filter: brightness(1.1); } button:disabled { opacity: .35; cursor: default; }
+  button.sec { background: rgba(255,255,255,.12); color: var(--fg); } button.on { outline: 2px solid var(--fg); }
+  .keys { display: grid; grid-template-columns: auto 1fr; gap: 3px 14px; margin: 14px 0; color: var(--mut); font-size: 13.5px; }
+  .keys b { color: var(--fg); font-weight: 600; }
+  p.story { color: var(--fg); margin: 12px 0; }
+  #loading .bar { height: 6px; background: rgba(255,255,255,.12); border-radius: 3px; overflow: hidden; margin-top: 10px; } #loadbar { height: 100%; width: 0; background: var(--acc); transition: width .2s; }
+  /* HUD */
+  #hud { position: fixed; inset: 0; pointer-events: none; z-index: 10; }
+  #cross { position: absolute; left: 50%; top: 50%; width: 6px; height: 6px; margin: -3px; border-radius: 50%; background: rgba(255,255,255,.85); box-shadow: 0 0 3px #000; }
+  #prompt { position: absolute; left: 50%; top: calc(50% + 26px); transform: translateX(-50%); padding: 5px 12px; border-radius: 6px; background: var(--bg); font-weight: 600; transition: opacity .15s; white-space: nowrap; }
+  #bars { position: absolute; left: 16px; bottom: 16px; width: 230px; display: grid; gap: 6px; }
+  .bar { display: grid; grid-template-columns: 22px 1fr; align-items: center; gap: 6px; font-size: 14px; }
+  .bar .tr { height: 9px; border-radius: 5px; background: rgba(0,0,0,.45); overflow: hidden; border: 1px solid rgba(255,255,255,.12); }
+  .bar .fl { height: 100%; border-radius: 5px; transition: width .2s; }
+  .bar.low .tr { animation: blink 1s infinite; } @keyframes blink { 50% { border-color: var(--bad); } }
+  #bar-health { background: #d9493a; } #bar-hunger { background: #d99a3a; } #bar-thirst { background: #3a9ad9; } #bar-warmth { background: #e0703a; } #bar-stamina { background: #c9d94a; }
+  #clock { position: absolute; right: 16px; top: 14px; padding: 6px 12px; border-radius: 8px; background: var(--bg); font-weight: 600; }
+  #quest { position: absolute; left: 16px; top: 14px; max-width: 380px; padding: 10px 14px; border-radius: 10px; background: var(--bg); border-left: 3px solid var(--acc); }
+  #quest:empty { display: none; } #quest .qt { font-weight: 700; color: var(--acc); display: flex; justify-content: space-between; gap: 10px; } #quest .qt span { color: var(--mut); font-weight: 400; font-size: 12px; }
+  #quest .qx { font-size: 14px; } #quest.pulse { animation: pulse .8s; } @keyframes pulse { 0% { transform: scale(1.04); box-shadow: 0 0 0 3px var(--acc); } 100% { transform: none; box-shadow: none; } }
+  #toasts { position: absolute; left: 50%; top: 18%; transform: translateX(-50%); display: grid; gap: 6px; justify-items: center; width: min(560px, 90vw); }
+  .toast { padding: 7px 14px; border-radius: 8px; background: var(--bg); text-align: center; animation: tin .25s; transition: opacity .8s, transform .8s; }
+  .toast.warn { border: 1px solid var(--bad); } .toast.good { border: 1px solid var(--good); } .toast.out { opacity: 0; transform: translateY(-10px); }
+  @keyframes tin { from { opacity: 0; transform: translateY(8px); } }
+  #hotbar { position: absolute; left: 50%; bottom: 16px; transform: translateX(-50%); display: flex; gap: 6px; }
+  .slot { width: 54px; height: 54px; border-radius: 9px; background: var(--bg); border: 2px solid rgba(255,255,255,.1); position: relative; display: grid; place-items: center; }
+  .slot.sel { border-color: var(--acc); } .slot b { position: absolute; left: 5px; top: 2px; font-size: 11px; color: var(--mut); } .slot i { font-style: normal; font-size: 26px; }
+  .slot em { position: absolute; right: 5px; bottom: 2px; font-style: normal; font-size: 12px; font-weight: 700; }
+  #selname { position: absolute; left: 50%; bottom: 76px; transform: translateX(-50%); font-size: 13px; color: var(--mut); text-shadow: 0 1px 2px #000; }
+  #marker { position: absolute; transform: translate(-50%, -50%); text-align: center; color: var(--acc); font-weight: 700; text-shadow: 0 1px 3px #000; display: none; }
+  #marker div { width: 14px; height: 14px; margin: 0 auto 2px; border: 2px solid var(--acc); transform: rotate(45deg); background: rgba(226,168,60,.25); }
+  #marker span { font-size: 12px; }
+  #vignette { position: absolute; inset: 0; opacity: 0; background: radial-gradient(ellipse at center, transparent 45%, rgba(200,20,10,.65)); }
+  #vignette.hit { animation: hit .6s; } @keyframes hit { 0% { opacity: 1; } 100% { opacity: 0; } }
+  #frost { position: absolute; inset: 0; opacity: 0; background: radial-gradient(ellipse at center, transparent 50%, rgba(190,225,255,.55)); transition: opacity 1s; }
+  /* panels */
+  .panel { position: fixed; inset: 6vh 50% auto auto; transform: translateX(50%); width: min(820px, 94vw); max-height: 88vh; overflow: auto; z-index: 25; display: none;
+           background: rgba(20,22,19,.94); border: 1px solid rgba(255,255,255,.14); border-radius: 14px; padding: 20px 22px; }
+  .panel.show { display: block; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 8px; }
+  .cell { background: rgba(255,255,255,.06); border-radius: 9px; padding: 9px; min-height: 92px; } .cell.empty { opacity: .35; }
+  .cell i { font-style: normal; font-size: 24px; } .cell div { font-weight: 600; } .cell small { display: block; color: var(--mut); font-size: 12px; margin: 3px 0; }
+  .cell button { padding: 4px 9px; font-size: 12px; margin: 4px 4px 0 0; } .cell button.drop { background: rgba(255,255,255,.1); color: var(--fg); }
+  .recipe { display: flex; justify-content: space-between; align-items: center; padding: 8px 10px; border-radius: 8px; background: rgba(255,255,255,.05); margin-bottom: 6px; opacity: .6; }
+  .recipe.ok { opacity: 1; } .recipe small { display: block; color: var(--mut); font-size: 12px; }
+  .hint { color: var(--mut); font-size: 12px; }
+  #reader p { white-space: pre-wrap; font-size: 17px; font-family: "Bradley Hand", "Segoe Print", cursive; background: #f6efc6; color: #2a2414; padding: 18px; border-radius: 6px; }
+  #reader small { color: var(--mut); }
+  #mappanel { width: min(560px, 94vw); text-align: center; } #mapcanvas { width: 100%; max-width: 520px; border-radius: 8px; }
+  #found { list-style: none; padding: 0; columns: 2; color: var(--mut); } #found li.on { color: var(--fg); }
+  @media (max-width: 700px) { #bars { width: 160px; } #quest { max-width: 60vw; font-size: 13px; } .slot { width: 44px; height: 44px; } }
+</style>
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/",
+  "three-mesh-bvh": "https://cdn.jsdelivr.net/npm/three-mesh-bvh@0.8.3/build/index.module.js"
+} }
+</script>
+</head>
+<body>
+<div id="hud">
+  <div id="cross"></div><div id="prompt"></div>
+  <div id="quest"></div><div id="clock"></div>
+  <div id="toasts"></div>
+  <div id="marker"><div></div><span></span></div>
+  <div id="bars">
+    <div class="bar" title="Gesundheit">❤️<div class="tr"><div class="fl" id="bar-health"></div></div></div>
+    <div class="bar" title="Hunger">🍗<div class="tr"><div class="fl" id="bar-hunger"></div></div></div>
+    <div class="bar" title="Durst">💧<div class="tr"><div class="fl" id="bar-thirst"></div></div></div>
+    <div class="bar" title="Wärme">🌡️<div class="tr"><div class="fl" id="bar-warmth"></div></div></div>
+    <div class="bar" title="Ausdauer">⚡<div class="tr"><div class="fl" id="bar-stamina"></div></div></div>
+  </div>
+  <div id="selname"></div><div id="hotbar"></div>
+  <div id="frost"></div><div id="vignette"></div>
+</div>
+
+<div class="ov show" id="loading"><div class="card"><h1>WALDTANK<small>Überleben im Nordwald</small></h1><p id="loadtext">Lade …</p><div class="bar"><div id="loadbar"></div></div></div></div>
+
+<div class="ov" id="start"><div class="card">
+  <h1>WALDTANK<small>Überleben im Nordwald</small></h1>
+  <p class="story">Herbst, später Nachmittag. Mitten im Nordwald bleibt dein Auto liegen. Kein Netz. Ein Stück die Straße hinauf steht eine Tankstelle – dunkel und verlassen. Bald wird es Nacht, kalt … und du bist nicht allein im Wald.</p>
+  <button id="btn-new">Neues Spiel</button><button id="btn-continue" class="sec">Weiterspielen</button>
+  <div class="keys">
+    <b>WASD · Maus</b><span>laufen · umschauen</span><b>Shift · Leertaste · Strg</b><span>sprinten · springen · ducken</span>
+    <b>E</b><span>benutzen, öffnen, aufheben</span><b>F</b><span>Taschenlampe</span><b>Tab / C</b><span>Rucksack &amp; Herstellen</span>
+    <b>1–5 · Mausrad · Q</b><span>Schnellleiste wählen · essen/trinken/benutzen</span><b>M</b><span>Karte (wenn du eine hast)</span>
+    <b>Z (halten)</b><span>Zeit vergehen lassen – nur drinnen mit Strom oder am Feuer</span><b>Rechte Maustaste</b><span>Fernglas</span><b>Esc</b><span>Pause</span>
+  </div>
+</div></div>
+
+<div class="ov" id="pause"><div class="card">
+  <h2>Pause</h2>
+  <button id="btn-resume">Weiter</button><button id="btn-restart" class="sec">Neu beginnen</button>
+  <h2>Orte</h2><ul id="found"></ul>
+  <h2>Grafik</h2><button class="sec" data-q="hoch">Hoch</button><button class="sec" data-q="mittel">Mittel</button><button class="sec" data-q="niedrig">Niedrig</button>
+  <p class="hint">Das Spiel speichert automatisch alle 20 Sekunden in diesem Browser.</p>
+</div></div>
+
+<div class="ov" id="dead"><div class="card"><h1 style="color:var(--bad)">Du bist gestorben<small id="deadcause"></small></h1>
+  <button id="btn-dead-load">Letzten Spielstand laden</button><button id="btn-dead-new" class="sec">Neues Spiel</button></div></div>
+<div class="ov" id="win"><div class="card"><h1 style="color:var(--good)">Gerettet!<small>Im Morgengrauen rumpelt der Geländewagen der Bergwacht auf den Hof.</small></h1>
+  <p id="winstats"></p><button id="btn-win-new">Noch einmal</button></div></div>
+
+<div class="panel" id="invpanel"></div>
+<div class="panel" id="reader"></div>
+<div class="panel" id="mappanel"><canvas id="mapcanvas" width="520" height="520"></canvas><p class="hint">M / Esc schließen</p></div>
+
+<script type="module" src="js/main.js"></script>
+</body>
+</html>

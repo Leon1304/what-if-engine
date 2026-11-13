@@ -1,0 +1,38 @@
+# Publishes the game (game/) on GitHub Pages: https://leon1304.github.io/what-if-engine/game/
+# Only the playable files go online (index.html, js/, map.glb); the Blender scripts stay in the repo.
+name: game-pages
+
+on:
+  push:
+    branches: [main]
+    paths: ['game/**', '.github/workflows/game-pages.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: game-pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}game/
+    steps:
+      - uses: actions/checkout@v7
+      - name: Collect the playable files
+        run: |
+          mkdir -p _site/game
+          cp -r game/index.html game/js game/map.glb _site/game/
+          printf '<!doctype html><meta http-equiv="refresh" content="0; url=game/">' > _site/index.html
+      - uses: actions/configure-pages@v6
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: _site
+      - id: deploy
+        uses: actions/deploy-pages@v5

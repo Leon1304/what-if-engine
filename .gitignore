@@ -4,3 +4,6 @@ work/
 .DS_Store
 node_modules/
 node_modules
+
+# Blender backup copies
+*.blend1
