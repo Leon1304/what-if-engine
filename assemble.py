@@ -165,14 +165,18 @@ for d in (os.path.join(here_, 'sfx'), os.path.join(here_, '.engine', 'sfx')):
             if f.endswith('.mp3') and f[:-4] not in sfx: sfx[f[:-4]] = base64.b64encode(open(os.path.join(d, f), 'rb').read()).decode()
 if sfx: t = t.replace('/* @SFX */{}', '/* @SFX */' + json.dumps(sfx, separators=(',', ':')), 1)
 # voice-over: voice.py (cached) → embed mp3 + word timings; CFG.voice: false = no voice
-if (os.path.exists(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'tts', 'voices-v1.0.bin')) or os.environ.get('ELEVENLABS_API_KEY') or os.environ.get('XI_API_KEY')) and '--no-voice' not in args:
+_KEY = os.environ.get('ELEVENLABS_API_KEY') or os.environ.get('XI_API_KEY')
+_want_voice = (os.path.exists(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'tts', 'voices-v1.0.bin')) or _KEY) and '--no-voice' not in args
+_want_el = bool(_KEY or os.environ.get('EL_FAKE') == '1') and '--no-el' not in args and not re.search(r"\bel:\s*false", story + scene)   # v3.25 ElevenLabs music + sounds for this video
+if _want_voice or _want_el:
     # v2.38: the narrator reacts to the scene — ask the built page what happens when (loud hits, shakes, music mood, counters that jump);
-    # cached per story + scene; if the page cannot be probed, voice.py falls back to what the story file itself lists
+    # cached per story + scene; if the page cannot be probed, voice.py falls back to what the story file itself lists. v3.25: the same probe
+    # returns the ElevenLabs plan (whatif.elPlan(): music sections + sound prompts) for elaudio.py
     import hashlib
-    _hd = os.path.dirname(os.path.abspath(__file__)); _eh = hashlib.md5((story + scene).encode()).hexdigest()[:12]; _ef = f'{OUT}.events.json'
+    _hd = os.path.dirname(os.path.abspath(__file__)); _eh = hashlib.md5((story + scene + 'el1').encode()).hexdigest()[:12]; _ef = f'{OUT}.events.json'
     try: _have = json.load(open(_ef)).get('hash') == _eh
     except Exception: _have = False
-    if not _have and '--no-probe' not in args and not re.search(r"voice:\s*(false|\{[^}]*auto:\s*false)", story):
+    if not _have and '--no-probe' not in args and (_want_el or not re.search(r"voice:\s*(false|\{[^}]*auto:\s*false)", story)):
         _pf = f'{OUT}.probe.html'; open(_pf, 'w', encoding='utf-8').write(t)
         try:
             _r = subprocess.run(['node', os.path.join(_hd, 'render.mjs'), _pf, '--probe', 'whatif.events()'], capture_output=True, text=True, timeout=240)
@@ -181,8 +185,15 @@ if (os.path.exists(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'tts
         except Exception as e: print('NOTE: could not read the scene events (voice reacts to the story file only):', str(e)[:120])
         finally:
             if os.path.exists(_pf): os.remove(_pf)
-    v = subprocess.run([sys.executable, os.path.join(os.path.dirname(os.path.abspath(__file__)), 'voice.py'), slug] + (['--lang', LANG] if LANG != 'en' else []), capture_output=True, text=True)
-    print((v.stdout or '').rstrip() or ('voice failed: ' + v.stderr[-600:]))
+    if _want_voice:
+        v = subprocess.run([sys.executable, os.path.join(os.path.dirname(os.path.abspath(__file__)), 'voice.py'), slug] + (['--lang', LANG] if LANG != 'en' else []), capture_output=True, text=True)
+        print((v.stdout or '').rstrip() or ('voice failed: ' + v.stderr[-600:]))
+if _want_el:
+    v = subprocess.run([sys.executable, os.path.join(os.path.dirname(os.path.abspath(__file__)), 'elaudio.py'), slug] + (['--lang', LANG] if LANG != 'en' else []), capture_output=True, text=True)
+    print((v.stdout or '').rstrip() or ('elevenlabs audio failed: ' + v.stderr[-600:]))
+elif os.path.exists(f'{OUT}.elaudio.json'): os.remove(f'{OUT}.elaudio.json')   # --no-el / AUDIO.el: false / no key: synth music + library sounds
+if os.path.exists(f'{OUT}.elaudio.json'):
+    t = t.replace('/* @ELAUDIO */null', '/* @ELAUDIO */' + open(f'{OUT}.elaudio.json').read(), 1)
 if os.path.exists(f'{OUT}.voice.json') and os.path.exists(f'{OUT}.voice.mp3'):
     vj = json.load(open(f'{OUT}.voice.json')); vj['mp3'] = base64.b64encode(open(f'{OUT}.voice.mp3', 'rb').read()).decode()
     t = t.replace('/* @VOICE */null', json.dumps(vj, separators=(',', ':')), 1)

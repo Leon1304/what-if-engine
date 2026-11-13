@@ -36,9 +36,10 @@ Der Skill wurde für claude.ai geschrieben. Lokal gilt diese Übersetzung:
 ## Rendern
 Lokal für Testframes und Vorschau (schnelle Qualität; `--hq` für einen Qualitätsvergleich). Das finale 2K-Video rendert GitHub Actions automatisch in HQ (3D in voller Auflösung, 4× MSAA; `CFG.renderScale`/`msaa` nicht von Hand hochsetzen): `renders/<slug>.html` pushen → Release `render-<slug>` mit `<slug>.mp4` und Cover. Captions nach `gallery/captions/<slug>.json`, Vorschau-Link in `gallery/previews.json` (siehe Skill Abschnitt 5).
 
-## Stimme
+## Stimme, Musik, Sounds
 - Erzähler über ElevenLabs, braucht `ELEVENLABS_API_KEY` in der Umgebung (in `~/.zshrc`, nie ins Repo).
 - Stimme je Kategorie wählt `voice.py` selbst (`CFG.voice: 'auto'`): Story Denzel · Serie JM · Explain Adam · Conspiracy Declan Sage · Horror Storm Styles · True Crime Declan Sage.
+- Musik und Sounds ebenfalls über ElevenLabs, für jedes Video eigens (v3.25, `elaudio.py`, läuft in `assemble.py`): `AUDIO.musicPrompt` (Genre, Instrumente, Ort des Videos), Atmo-Prompts als 5. Element in `amb`, Schlüsselgeräusche als `hits` mit `el`. Abschnitte folgen `AUDIO.score`. Cache `.elaudio/` in `work/`. Ohne Key Synth-Musik + Bibliotheks-SFX. Smoke-Tests laufen mit `--no-el` (keine Kosten).
 - Kokoro nur für die Figurenstimmen in Serien (Dr. Steve, „you“) und als Ersatz ohne Key. `python3 voice.py <slug> --which` zeigt Kategorie und Stimme.
 
 ## Lieferung pro Video

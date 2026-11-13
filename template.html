@@ -389,6 +389,7 @@ const STATS = [
 const END = { t: 18.3, q: 'Silo, cellar or tractor – where do *you* hide?', opts: ['Silo', 'Cellar', 'Tractor'], cta: 'Comment A, B or C', loop: 'Because sooner or later, someone asks —' };
 // Sound: mood horror | epic | action | funny | science | chill | tense | party | triumph | sad — or score: [[t, mood], …] (music follows the scene).
 // mood 'none' (or score: false) = no music, only ambience + SFX — use it when no mood fits the topic; score segments may be 'none' too ([[0, 'none'], [21, 'tense']]).
+// v3.25 ElevenLabs (ELEVENLABS_API_KEY): musicPrompt: 'genre, instruments, place' → a track made for this video, sections = score; amb[4] = own prompt of a bed; hits[].el = own sound (k = fallback). docs/API.md
 // sections [t, level 0..3]. amb: [[t0, t1, kind, vol]] ambience beds: night farm wind blizzard rain storm fire indoor crowd (zombies) city ocean space engine
 //   + v2.20: cabin (airliner) hum (fluorescent / electric buzz) people (human chatter) stadium (cheering crowd) underwater forest cave. sfx kinds: see SND below.
 const AUDIO = {
@@ -457,6 +458,39 @@ const HQ = (LONG || !!window.__HQ__) && !CFG.fast;
 if (HQ) { CFG.renderScale = Math.max(CFG.renderScale ?? 1, 1); CFG.msaa = Math.max(CFG.msaa ?? 2, 4); }
 const VOICE = /* @VOICE */null;
 const SFXS = /* @SFX */{};   // real sound effects: kind → base64 mp3 (sfx/*.mp3, CC0)
+const ELAUDIO = /* @ELAUDIO */null;   // v3.25 ElevenLabs music + sounds made for this video (elaudio.py via assemble.py): { music: b64 mp3, sfx: { key: b64 mp3 } }; null = synth music + library SFX
+function scoreOf() {   // the resolved music score [[t, mood], …] incl. the automatic ending — SND.build and the ElevenLabs plan use the same
+  const A = AUDIO, S = (A.score === false || A.mood === 'none' && !A.score?.length ? [[0, 'none']] : A.score?.length ? A.score : [[0, A.mood ?? 'horror']]).map(x => [...x]).sort((a, b) => a[0] - b[0]);
+  if (END?.ending && !S.every(x => x[1] === 'none') && !S.some(x => x[0] >= END.t - 0.05)) S.push([END.t, END.ending.type === 'dead' ? 'sad' : 'triumph']);
+  return S;
+}
+// v3.25 ElevenLabs sounds: hits { t, el: 'prompt', dur } and ambience beds [t0, t1, kind, vol, 'prompt'] are generated for the video; every ambience kind
+// has a default prompt (AMB_EL), so beds sound real even without a prompt of their own. The kind / k stays the fallback without ElevenLabs.
+const EL_BED = 20, elHitDur = h => Math.min(30, Math.max(0.5, h.dur ?? 2)), elKey = (p, d, loop) => `${loop ? 'loop' : 'sfx'}|${(+d).toFixed(1)}|${String(p).trim()}`;
+const AMB_EL = {
+  night: 'Quiet countryside night ambience, crickets chirping, faint breeze, a distant frog', farm: 'Rural farm daytime ambience, songbirds, a distant cow mooing, light breeze through grass',
+  wind: 'Steady outdoor wind ambience with gusts and a low howl', blizzard: 'Howling blizzard ambience, strong icy wind, snow hissing against surfaces',
+  rain: 'Steady rain ambience, raindrops on the ground and roofs, no thunder', storm: 'Heavy thunderstorm ambience, pouring rain, strong wind, distant rolling thunder',
+  fire: 'Close crackling fire ambience, burning wood, pops and hiss', indoor: 'Quiet indoor room tone, faint electrical hum, an occasional water drip',
+  crowd: 'Distant horde of zombies moaning and groaning, eerie, many voices layered', city: 'Busy city street ambience, traffic passing, distant car horns, footsteps',
+  ocean: 'Ocean waves rolling onto the shore, steady surf', space: 'Deep space ambience, low rumbling drone, subtle electronic hum of a spacecraft',
+  engine: 'Vehicle engine running steadily at medium revs, close perspective', cabin: 'Airplane cabin ambience, steady jet engine drone, air hiss, a soft seatbelt chime',
+  hum: 'Fluorescent light buzz and electrical hum in an empty building, an occasional flicker click', people: 'Indoor crowd chatter, many people talking indistinctly, shopping mall atmosphere',
+  stadium: 'Stadium crowd ambience, cheering, whistles, excited crowd swells', underwater: 'Underwater ambience, muffled pressure, bubbles rising, deep low rumble',
+  forest: 'Forest daytime ambience, rustling leaves, songbirds, insects, a distant woodpecker', battle: 'Distant battlefield ambience, artillery thumps, rifle and machine gun fire far away',
+  planes: 'Drone of many propeller aircraft engines flying overhead, steady', hq: 'Wartime command room ambience, ticking clock, distant typewriter, murmured room tone',
+  surf: 'Beach ambience, surf, wind, a distant seagull', cave: 'Cave ambience, water drips echoing, a deep distant rumble'
+};
+const ambPrompt = ([, , k, , p]) => AUDIO.el === false ? null : p ?? ((AUDIO.el ?? {}).amb === false ? null : AMB_EL[k] ?? null);
+function elPlan() {   // what elaudio.py asks ElevenLabs for (whatif.events().el): the score as sections + every sound, deduplicated by key
+  const A = AUDIO, E = A.el ?? {}; if (A.el === false) return null;
+  const sfx = new Map(), add = (text, dur, loop) => { const key = elKey(text, dur, loop); if (!sfx.has(key)) sfx.set(key, { key, text: String(text).trim(), dur: +(+dur).toFixed(1), loop }); };
+  if (E.sfx !== false) { for (const b of A.amb ?? []) { const p = ambPrompt(b); if (p) add(p, EL_BED, true); } for (const h of A.hits ?? []) if (h?.el) add(h.el, elHitDur(h), !!h.loop); }
+  const S = scoreOf(), lv = t => { let l = 2; for (const [ts, x] of A.sections ?? []) if (ts <= t + 1e-6) l = x; return l; };
+  const music = E.music === false || S.every(x => x[1] === 'none') ? null : { prompt: A.musicPrompt ?? '', dur: DUR, end: END?.t ?? null, kind: CFG.kind ?? 'story',
+    segs: S.map(([t, m], i) => ({ t: +t.toFixed(2), t1: +(i + 1 < S.length ? S[i + 1][0] : DUR).toFixed(2), mood: m, level: lv(t) })).filter(g => g.t1 - g.t > 0.01 && g.t < DUR) };
+  return { music, sfx: [...sfx.values()] };
+}
 const TR = /* @TR */null;   // language version (assemble.py --lang xx + <slug>.<xx>.json): { beats: [{ text, say }], end: { q, cta, say, loop }, thumb: { text, sub }, strings: { 'Sunrise in': 'Amanecer en', … } }
 const tr = s => typeof s !== 'string' || !TR?.strings ? s : Object.entries(TR.strings).sort((a, b) => b[0].length - a[0].length).reduce((a, [k, v]) => a.split(k).join(v), s);
 if (TR) {
@@ -14597,9 +14631,7 @@ const SND = (() => {
     let s = 987654321; const ar = () => (s = (s * 16807) % 2147483647) / 2147483647;
     const sr = ctx.sampleRate, A = AUDIO;
     // score: the music follows the scene. AUDIO.score = [[t, mood], …] (else AUDIO.mood for the whole video); an ending adds sad / triumph automatically
-    const SCORE = (A.score === false || A.mood === 'none' && !A.score?.length ? [[0, 'none']] : A.score?.length ? A.score : [[0, A.mood ?? 'horror']]).map(x => [...x]).sort((a, b) => a[0] - b[0]);
-    const NOMUSIC = SCORE.every(x => x[1] === 'none');
-    if (END?.ending && !NOMUSIC && !SCORE.some(x => x[0] >= END.t - 0.05)) SCORE.push([END.t, END.ending.type === 'dead' ? 'sad' : 'triumph']);
+    const SCORE = scoreOf(), NOMUSIC = SCORE.every(x => x[1] === 'none'), ELM = SB['@music'];   // ELM: the ElevenLabs score of this video (replaces the synth instruments)
     const moodAt = t => { let m = SCORE[0][1]; for (const [ts, mm] of SCORE) if (ts <= t + 1e-6) m = mm; return MOODS[m] ?? MOODS.horror; };
     const Md = moodAt(0);
     const noise = ctx.createBuffer(1, sr * 2, sr); { const d = noise.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = ar() * 2 - 1; }
@@ -14652,6 +14684,10 @@ const SND = (() => {
     const degM = (M, d, oct = 0) => M.root + 12 * oct + M.scale[((d % 7) + 7) % 7] + 12 * Math.floor(d / 7);
     const chordM = (M, d, oct) => [degM(M, d, oct), degM(M, d + 2, oct), degM(M, d + 4, oct), ...(M.sevenths ? [degM(M, d + 6, oct)] : [])].map(mtof);
     const end = END ? END.t : DUR;
+    if (ELM) {   // v3.25: one ElevenLabs track whose sections follow SCORE (elaudio.py); 'none' segments stay silent, ducking and loop fade as before
+      const src = ctx.createBufferSource(), gate = ctx.createGain(), gm = A.elMusic ?? 1; src.buffer = ELM; src.connect(gate); gate.connect(music);
+      gate.gain.setValueAtTime(SCORE[0][1] === 'none' ? 0 : gm, 0); SCORE.slice(1).forEach(([ts, mm]) => gate.gain.setTargetAtTime(mm === 'none' ? 0 : gm, Math.max(0, ts - 0.05), 0.25)); src.start(0);
+    } else {
     SCORE.forEach(([ts, mm], i) => {   // drones per mood segment
       const M = MOODS[mm] ?? MOODS.horror, te = i + 1 < SCORE.length ? SCORE[i + 1][0] : DUR, d0 = te - ts; if (M.none || !M.drone || d0 < 1.2) return;
       tone('sawtooth', mtof(M.root - 12), ts, 0.8, Math.max(0, d0 - 1.6), 0.8, 0.07, music, { lp: 220, q: 3 }); tone('sine', mtof(M.root - 12) * 1.5, ts, 1, Math.max(0, d0 - 2), 1, 0.04, music);
@@ -14682,6 +14718,7 @@ const SND = (() => {
       }
       b0 += bar;
     }
+    }   // synth score
     // SFX
     const ducks = [];
     const SFX = {
@@ -14888,13 +14925,18 @@ const SND = (() => {
         every(a, b, 1.6, 2.2, t => { const f = 1500 + ar() * 600; for (let e = 0; e < 3; e++) tone('sine', f, t + e * 0.19, 0.002, 0, 0.14, 0.035 * v * 0.45 ** e, amb, { to: f * 0.6, glide: 0.07 }); });
         every(a, b, 8, 8, t => nz(t, 0.8, 0.6, 1.8, 0.06 * v, amb, 'lowpass', 140, 70)); }
     };
-    for (const [t0, t1, k, v] of A.amb ?? []) (AMB[k] ?? (() => console.warn('amb: unknown kind ' + k)))(Math.max(0, t0), Math.min(DUR, t1), v ?? 1);
+    const elBed = (buf, a, b, v) => { if (b - a < 0.1) return; const s = ctx.createBufferSource(), g = ctx.createGain(), f = Math.min(0.35, (b - a) / 3); s.buffer = buf; s.loop = true; s.connect(g); g.connect(amb);   // v3.25 ElevenLabs bed, looped over its span
+      env(g, a, f, Math.max(0, b - a - 2 * f), f, (A.elAmb ?? 1) * v); s.start(a, ar() * buf.duration); s.stop(b + 0.05); };
+    for (const B of A.amb ?? []) { const [t0, t1, k, v] = B, p = ambPrompt(B), eb = p && SB['@el:' + elKey(p, EL_BED, true)], a = Math.max(0, t0), b = Math.min(DUR, t1);
+      if (eb) elBed(eb, a, b, v ?? 1); else (AMB[k] ?? (() => console.warn('amb: unknown kind ' + k)))(a, b, v ?? 1); }
     function bellFx(t, f, v) { tone('sine', f, t, 0.002, 0, 1.8, 0.12 * v, fx); tone('sine', f * 2.76, t, 0.002, 0, 0.7, 0.05 * v, fx); }
     if (CFG.series) for (const t0 of [0.05, (END ? END.t : DUR - 3) + 1.6]) [0, 7, 12].forEach((iv, k) => bellFx(t0 + k * 0.11, mtof(Md.root + 36 + iv), 0.7));   // series jingle
     const steveHits = [...BEATS.filter(b => b.who === 'steve').map(b => ({ t: Math.max(0, b.t - 0.05), k: 'jingle', v: 0.9 })),
       ...BEATS.filter(b => b.stamp).map(b => ({ t: b.t + (b.stampAt ?? 0.5), k: b.stamp === 'right' ? 'ding' : 'trombone', v: 1 })),
       ...BEATS.filter(b => b.sigh).map(b => ({ t: b.t - 0.05, k: 'sigh', v: 1 }))];   // automatic: Steve's jingle, verdict sound, narrator sigh (BEATS[].sigh)
-    for (const h of [...(A.hits ?? []), ...steveHits, ...XHITS]) (SFX[h.k] ?? (() => {}))(h.t, h.v ?? 1, h.dur, h.p);
+    const elHit = (buf, h) => { const s = ctx.createBufferSource(), g = ctx.createGain(), v = h.v ?? 1; s.buffer = buf; s.playbackRate.value = typeof h.p === 'number' ? h.p : 1; g.gain.value = (A.elSfx ?? 1) * v; s.connect(g); g.connect(fx);   // v3.25 ElevenLabs sound
+      if (h.loop && h.dur) { s.loop = true; s.start(h.t); s.stop(h.t + h.dur); } else s.start(h.t); if (v >= 1) ducks.push(h.t); };
+    for (const h of [...(A.hits ?? []), ...steveHits, ...XHITS]) { const eb = h.el && SB['@el:' + elKey(h.el, elHitDur(h), !!h.loop)]; if (eb) elHit(eb, h); else (SFX[h.k] ?? (() => {}))(h.t, h.v ?? 1, h.dur, h.p); }
     ducks.sort((a, b) => a - b).forEach(t => { music.gain.setTargetAtTime(mBase * 0.4, t, 0.015); music.gain.setTargetAtTime(mBase, t + 0.25, 0.4); });
     if (vbuf) {
       if (BO.voice !== false) { const vs = ctx.createBufferSource(), vg = ctx.createGain(); vs.buffer = vbuf; vg.gain.value = (VOICE.gain ?? 1) * 1.15; vs.connect(vg); vg.connect(master); vs.start(0); }
@@ -14947,7 +14989,9 @@ async function renderAudio(sr) {
   const OAC = window.OfflineAudioContext || window.webkitOfflineAudioContext; const oc = new OAC(2, Math.ceil(sr * DUR), sr);
   let vbuf = null;
   if (VOICE?.mp3) try { const bin = atob(VOICE.mp3), u8 = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i); vbuf = await oc.decodeAudioData(u8.buffer); } catch (e) { console.warn('voice decode failed', e); }
-  const SB = {}; for (const [k, b] of Object.entries(SFXS)) try { const bin = atob(b), u8 = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i); SB[k] = await oc.decodeAudioData(u8.buffer); } catch (e) { console.warn('sfx decode failed: ' + k); }
+  const SB = {}, dec = async (k, b) => { try { const bin = atob(b), u8 = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i); SB[k] = await oc.decodeAudioData(u8.buffer); } catch (e) { console.warn('sfx decode failed: ' + k); } };
+  for (const [k, b] of Object.entries(SFXS)) await dec(k, b);
+  if (ELAUDIO && AUDIO.el !== false) { if (ELAUDIO.music && AUDIO.el?.music !== false) await dec('@music', ELAUDIO.music); for (const [k, b] of Object.entries(ELAUDIO.sfx ?? {})) await dec('@el:' + k, b); }   // v3.25 ElevenLabs
   const post = !!vbuf && AUDIO.clarity !== false;
   SND.build(oc, vbuf, SB, { voice: !post }); const bed = await oc.startRendering(); if (!post) return bed;
   const vc = new OAC(2, bed.length, sr), vs = vc.createBufferSource(), hp = vc.createBiquadFilter(), pk = vc.createBiquadFilter(), cp = vc.createDynamicsCompressor(), vg = vc.createGain();   // the narrator's own chain: rumble out, presence in, evened out
@@ -15655,7 +15699,8 @@ window.whatif = {
       const rg = Math.max(1e-6, hi - lo); for (let i = 2; i < V.length; i++) { const d = V[i] - V[i - 2]; if (Math.abs(d) > rg * 0.12 && (i < 4 || Math.abs(V[i - 2] - V[i - 4]) <= rg * 0.12)) stats.push({ t: r2(a + (i - 1) * 0.25), good: (d > 0) === (s.up === 'good'), k: r2(Math.abs(d) / rg), label: s.label }); } }
     const score = AUDIO.score === false || (AUDIO.mood === 'none' && !AUDIO.score?.length) ? [[0, 'none']] : AUDIO.score?.length ? AUDIO.score.map(x => [r2(x[0]), x[1]]) : [[0, AUDIO.mood ?? 'horror']];
     return { dur: DUR, hits, shakes: SHAKES.map(s => ({ t: r2(s.t), amp: r2(s.amp ?? 0.3), dur: r2(s.dur ?? 0.5) })), flashes: FLASHES.map(f => ({ t: r2(f.t), a: r2(f.a ?? 0.5) })), score, stats,
-      night: SKY.map(([x, n]) => [r2(x), SKIES[n]?.nk ?? 0]), slow: (typeof SLOWMO === 'undefined' ? [] : SLOWMO).map(s => [r2(s.t ?? s[0] ?? 0), r2(s.dur ?? s[1] ?? 1)]) }; },
+      night: SKY.map(([x, n]) => [r2(x), SKIES[n]?.nk ?? 0]), slow: (typeof SLOWMO === 'undefined' ? [] : SLOWMO).map(s => [r2(s.t ?? s[0] ?? 0), r2(s.dur ?? s[1] ?? 1)]), el: elPlan() }; },
+  elPlan() { return elPlan(); },   // v3.25: music sections + sounds for elaudio.py
   plan(n, fps = 30) { return shardPlan(Math.round(DUR * fps), n); },   // v3.2: render chunks (render.mjs --shard / --seams)
   probe(src) { return eval(src); },   // debugging: node render.mjs page.html --probe "RIGS.length" (code runs inside the engine)
   audit(o = {}) { if (o.fresh === true) return audFresh(o);   // second page: fingerprints only (see motionAudit)
