@@ -2968,6 +2968,16 @@ function _mcPass(f, m, t, o, S) {   // after applyRig: the clip of the pose mode
   if (f._rag) off = Math.max(off, sm01((t - f._rag.t + 0.25) / 0.25));
   if (off > 0) for (const e of L) e.w *= 1 - off;
   _mcApply(f, L, S, f._S0t === t ? f._S0 : null, q); }
+// v3.8 crowds: the members of horde()/crowd draw the same rig from S (no groups) — local joint quaternions of that rig, and the member's mocap pose
+const _mcEq = (() => { const E = new THREE.Euler(); return (S, out) => { const st = (k, x, y, z, o = 'XYZ') => (out[k] ??= new THREE.Quaternion()).setFromEuler(E.set(x, y, z, o)), comp = -S.hx / 0.78 - S.hrz;
+  st('hips', S.hrx, S.hry, S.hrz); st('chest', S.crx, S.cry, S.crz); st('neck', S.nrx, S.nry, S.nrz);
+  st('legL', S.lt - S.hrx, -S.hry, comp, 'YXZ'); st('shinL', S.lk, 0, 0); st('footL', S.lf - S.lt - S.lk, 0, 0); st('armL', S.las, 0, S.laz); st('foreL', S.lae, 0, 0);
+  st('legR', S.rt - S.hrx, -S.hry, comp, 'YXZ'); st('shinR', S.rk, 0, 0); st('footR', S.rf - S.rt - S.rk, 0, 0); st('armR', S.ras, 0, S.raz); st('foreR', S.rae, 0, 0); return out; }; })();
+function mcCrowd(S, S0, D, time, w, mask, out) {   // → out.q (joint quaternions) + out.p (hips offset): own pose S with the clip swapped in for the base pose S0 (layers stay on top)
+  const P = _mcEq(S0, out.P ??= {}), Eq = _mcEq(S, out.q ??= {}), M = mcSample(D, time, true, out.M ??= { p: new THREE.Vector3(), q: {} }), d = out.d ??= new THREE.Quaternion(), I = out.I ??= new THREE.Quaternion();
+  const R = {}; for (const r in MC_KEYS) { let dd = 0; for (const [k, m] of MC_KEYS[r]) dd = Math.max(dd, Math.abs((S[k] ?? 0) - (S0[k] ?? 0)) * m); R[r] = sm01(dd / 0.8); }
+  for (const j in Eq) { if (!_mcIn(mask, j)) continue; d.copy(P[j]).invert().multiply(M.q[j]); Eq[j].multiply(I.identity().slerp(d, w * (1 - R[MC_REG[j]]))).normalize(); }
+  const k = _mcIn(mask, 'hips') ? w * (1 - R.lo) : 0; (out.p ??= new THREE.Vector3()).set((M.p.x - S0.hx) * k, (HIP + M.p.y - S0.H) * k, M.p.z * k); return out; }
 function _mcAnim(f, list, o = {}) {   // anim() on a figure: [[t, clip | null, { once, speed, only, fade }], …]
   const L = list.map(([t, c, x = {}]) => ({ t, c, ...x })).sort((a, b) => a.t - b.t), fade = o.fade ?? 0.3;
   const lay = (e, t, w) => { const D = e.c == null || e.c === 'pose' ? null : mcClip(e.c); if (!D) return { D: null, w }; const lt = (t - e.t) * (e.speed ?? 1); return { D, time: e.once ? Math.min(lt, D.d - 1e-3) : lt, loop: !e.once, w, mask: e.only ?? o.only ?? null }; };
@@ -3413,6 +3423,8 @@ function horde(o = {}) {
   const V = new THREE.Vector3(), Q = new THREE.Quaternion(), SC = new THREE.Vector3(), ONE = new THREE.Vector3(1, 1, 1), E = new THREE.Euler();
   const j = (dst, A, x, y, z, rx, ry, rz, ord = 'XYZ') => dst.multiplyMatrices(A, T.compose(V.set(x, y, z), Q.setFromEuler(E.set(rx, ry, rz, ord)), ONE));
   const put = (im, idx, A, x, y, z) => im.setMatrixAt(idx, out.multiplyMatrices(A, T.makeTranslation(x, y, z)));
+  const jq = (dst, A, x, y, z, q4) => dst.multiplyMatrices(A, T.compose(V.set(x, y, z), q4, ONE));
+  const MCON = !!MOCAP && (o.mocap ?? CFG.mocap ?? true), MCO = {};   // v3.8: members move with the mocap clips too (o.mocap: false = own poses)
   const go = (x0, z0, x1, z1, d) => { const D = Math.hypot(x1 - x0, z1 - z0), k = D ? Math.min(1, d / D) : 1; return [lerp(x0, x1, k), lerp(z0, z1, k), k < 1, Math.atan2(x1 - x0, z1 - z0)]; };
   // v3.0 panic wave: with flee.at, members start running when the news reaches them (distance / flee.wave m/s, default 9) — nearest first, a wave through the crowd
   const tfOf = q => { if (!o.flee) return 1e9; if (q.tf != null) return q.tf; let w = q.dl * 0.45;
@@ -3606,7 +3618,7 @@ function horde(o = {}) {
             fa = al <= 0 ? 0 : (Math.PI / 2 - 0.05) * EASE.in(clamp(al / 0.42)) - (al > 0.42 ? 0.1 * Math.exp(-(al - 0.42) * 7) * Math.abs(Math.sin((al - 0.42) * 16)) : 0); }
           else { fa = 0; y = groundH(x, z) - Math.min(3.2, 4.9 * (t - dn.t) ** 2); } } if (dn?.squash) fa = 0;
         base.compose(V.set(x, y, z), Q.setFromEuler(E.set(-fa * (dn?.dir ?? 1) + ft, yaw, 0, 'YXZ')), dn?.squash ? SC.set(q.sc * 1.35, q.sc * Math.max(0.12, 1 - 14 * (t - dn.t)), q.sc * 1.35) : SC.setScalar(q.sc));
-        const S = rigState(moving ? mode : 'idle', u, t, q.o), gk = GZ && !dn ? sm01((t - gT(q)) / (GZ.turn ?? 0.7)) : 0, up = !dn && ((o.armsUp ? o.armsUp(t, i) : false) || (GZ?.arms === 'up' && gk > 0.5));
+        const S = rigState(moving ? mode : 'idle', u, t, q.o), S0 = MCON ? { ...S } : null, gk = GZ && !dn ? sm01((t - gT(q)) / (GZ.turn ?? 0.7)) : 0, up = !dn && ((o.armsUp ? o.armsUp(t, i) : false) || (GZ?.arms === 'up' && gk > 0.5));
         if (dn) { const a = t - dn.t, k = clamp(a / 0.45), tw = human ? 0 : 0.12 * Math.sin(t * 9 + q.ph) * Math.exp(-a * 0.8);
           S.las = lerp(S.las, -2.5 + tw, k); S.ras = lerp(S.ras, -2.4 - tw, k); S.laz = -0.4 * k; S.raz = 0.4 * k; S.lae = S.rae = -0.2; S.lt = S.rt = lerp(S.lt, -0.12, k); S.lk = S.rk = lerp(S.lk, 0.3, k); S.lz = -0.1 * k; S.rz = 0.1 * k; S.crx = 0; S.nrx = -0.1 * k; S.nry *= 1 - k; }
         const cl = dn ? 0 : clamp(yp / 0.4);   // v3.3: on the pile — leans into the slope, claws upward, legs scramble
@@ -3627,20 +3639,25 @@ function horde(o = {}) {
         if (gk > 0) { S.nrx = lerp(S.nrx, -(GZ.tilt ?? 0.55), gk); S.nry = lerp(S.nry, 0, gk); S.crx = lerp(S.crx, -0.08, gk);   // v2.27 gaze: head back, mouth-breathing awe
           if (GZ.arms !== 'up') { S.las = lerp(S.las, -0.3 - 0.06 * Math.sin(t * 1.3 + q.ph), gk); S.ras = lerp(S.ras, -0.25, gk); S.lae = lerp(S.lae, -0.3, gk); S.rae = lerp(S.rae, -0.3, gk); } }
         if (rise && em < 1) { S.las = lerp(-2.6, S.las, em); S.ras = lerp(-2.4, S.ras, em); }   // claw out of the ground
-        j(Mh, base, S.hx, S.H + S.by, 0, S.hrx, S.hry, S.hrz);
-        j(Mc, Mh, 0, 0.02, 0, S.crx, S.cry, S.crz); TM.multiplyMatrices(Mc, T.compose(V.set(0, 0.29, 0), Q.identity(), SC.set(q.bw, 1, q.bd))); torso.setMatrixAt(i, TM);   // v2.41: everyone a little different in build
+        let JQ = null;   // v3.8 mocap: walk / jog / sprint / zombie walk by the distance walked (feet planted), idle clips offset per member; fades out for falls, trips, climbing, rising
+        if (S0) { const flee = !!o.flee && t > tfOf(q); let w = (dn ? 1 - sm01((t - dn.t) / 0.6) : 1) * (1 - cl) * (rise ? em : 1); if (ta >= 0) w *= 1 - Math.min(1, ta / 0.25, Math.max(0, TD - ta) / 0.4);
+          if (w > 1e-3) { let g, mask = null; if (moving) { g = run || flee ? ((flee ? (o.flee.speed ?? 4.5) : q.v * 1.4) >= 6 ? 'Sprint_Loop' : 'Jog_Fwd_Loop') : human ? 'Walk_Loop' : 'Zombie_Walk_Fwd_Loop'; if (!human && (run || flee)) mask = 'lower'; } else g = human ? 'Idle_Loop' : 'Zombie_Idle_Loop';
+            const D = mcClip(g, true); if (D) { const time = moving ? (q.ph / TAU + walked / (q.sc * MC_STRIDE[g] * (MOCAP.k ?? 0.9))) * D.d : t + q.ph * 1.7; JQ = mcCrowd(S, S0, D, time, w, mask, MCO).q; } } }
+        if (JQ) jq(Mh, base, S.hx + MCO.p.x, S.H + S.by + MCO.p.y, MCO.p.z, JQ.hips); else j(Mh, base, S.hx, S.H + S.by, 0, S.hrx, S.hry, S.hrz);
+        if (JQ) jq(Mc, Mh, 0, 0.02, 0, JQ.chest); else j(Mc, Mh, 0, 0.02, 0, S.crx, S.cry, S.crz); TM.multiplyMatrices(Mc, T.compose(V.set(0, 0.29, 0), Q.identity(), SC.set(q.bw, 1, q.bd))); torso.setMatrixAt(i, TM);   // v2.41: everyone a little different in build
         const X = XT[i]; jackIM.setMatrixAt(i, X.jk && !far ? TM : Z); ragIM.setMatrixAt(i, X.rag && !far ? TM : Z); bloodT.setMatrixAt(i, X.bl && !far ? TM : Z);
-        j(Mn, Mc, 0, 0.63, 0, S.nrx, S.nry, S.nrz); put(head, i, Mn, 0, 0.19, 0);
+        if (JQ) jq(Mn, Mc, 0, 0.63, 0, JQ.neck); else j(Mn, Mc, 0, 0.63, 0, S.nrx, S.nry, S.nrz); put(head, i, Mn, 0, 0.19, 0);
         if (far) for (const im of [eyes, mouths, hairIM, capIM, bloodH]) im.setMatrixAt(i, Z);
         else { put(eyes, i, Mn, 0, 0.23, 0.2); put(mouths, i, Mn, 0, 0.085, 0.2); if (HEAD[i] === 1) put(hairIM, i, Mn, 0, 0, 0); else hairIM.setMatrixAt(i, Z); if (HEAD[i] === 2) put(capIM, i, Mn, 0, 0, 0); else capIM.setMatrixAt(i, Z); if (X.bl) put(bloodH, i, Mn, 0, 0, 0); else bloodH.setMatrixAt(i, Z); }
         const comp = -S.hx / 0.78 - S.hrz;
         for (const [k, s, th, kn, fp, as, az, ae] of [[0, -1, S.lt, S.lk, S.lf, S.las, S.laz, S.lae], [1, 1, S.rt, S.rk, S.rf, S.ras, S.raz, S.rae]]) {
           const idx = 2 * i + k;
-          j(Ml, Mh, s * 0.12, 0, 0, th - S.hrx, -S.hry, comp, 'YXZ'); put(thigh, idx, Ml, 0, -LEG1 / 2, 0);
-          j(Mk, Ml, 0, -LEG1, 0, kn, 0, 0); put(shin, idx, Mk, 0, -LEG2 / 2 + 0.005, 0);
-          if (far) foot.setMatrixAt(idx, Z); else { j(Mf, Mk, 0, -LEG2, 0, fp - th - kn, 0, 0); put(foot, idx, Mf, 0, -ANK + 0.045, 0.05); }
-          j(Ma, Mc, s * 0.34, 0.54, 0, as, 0, az); put(uarm, idx, Ma, 0, -0.15, 0);
-          j(Me, Ma, 0, -0.29, 0, ae, 0, 0); put(farm, idx, Me, 0, -0.21, 0);
+          const sd = k ? 'R' : 'L';
+          if (JQ) jq(Ml, Mh, s * 0.12, 0, 0, JQ['leg' + sd]); else j(Ml, Mh, s * 0.12, 0, 0, th - S.hrx, -S.hry, comp, 'YXZ'); put(thigh, idx, Ml, 0, -LEG1 / 2, 0);
+          if (JQ) jq(Mk, Ml, 0, -LEG1, 0, JQ['shin' + sd]); else j(Mk, Ml, 0, -LEG1, 0, kn, 0, 0); put(shin, idx, Mk, 0, -LEG2 / 2 + 0.005, 0);
+          if (far) foot.setMatrixAt(idx, Z); else { if (JQ) jq(Mf, Mk, 0, -LEG2, 0, JQ['foot' + sd]); else j(Mf, Mk, 0, -LEG2, 0, fp - th - kn, 0, 0); put(foot, idx, Mf, 0, -ANK + 0.045, 0.05); }
+          if (JQ) jq(Ma, Mc, s * 0.34, 0.54, 0, JQ['arm' + sd]); else j(Ma, Mc, s * 0.34, 0.54, 0, as, 0, az); put(uarm, idx, Ma, 0, -0.15, 0);
+          if (JQ) jq(Me, Ma, 0, -0.29, 0, JQ['fore' + sd]); else j(Me, Ma, 0, -0.29, 0, ae, 0, 0); put(farm, idx, Me, 0, -0.21, 0);
           if (q.lose) { const R = q.lose[k ? 'armR' : 'armL'], G2 = q.lose[k ? 'legR' : 'legL'], gth = goreThumb();   // v2.29 h.lose(): joint pose for the loose part, part hidden
             if (R) { R.M.copy(Me); R.vis = true; if (t >= R.t && !gth) farm.setMatrixAt(idx, Z); }
             if (G2) { G2.M.copy(Mk); G2.vis = true; if (t >= G2.t && !gth) { shin.setMatrixAt(idx, Z); foot.setMatrixAt(idx, Z); } } }
