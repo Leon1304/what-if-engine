@@ -2525,8 +2525,8 @@ function runTickers(st) {
   TK = null;
 }
 function pose(f, mode, ph, t = 0, o = {}) {   // walk run shamble idle panic cheer point hold — o: { v: speed m/s, w: weight of mode (0..1), from: mode blended in with 1 − w, turn }
-  if (TKP) { if (o.from == null) TKP.mode.set(f, mode); return; }
-  let X = null; if (TK && o.from == null && !TK._idle) { if (!TK._poser) TK._poser = TK._redo = true; X = TK._blend?.get(f) ?? null; }   // X: cross-fade from what was shown a moment ago
+  if (TKP) { if (o.from == null || o.rec) TKP.mode.set(f, o.rec ?? mode); return; }   // v3.22 o.rec: a caller blending on its own (from / w) names the mode the switch detection sees
+  let X = null; if (TK && (o.from == null || o.rec) && !TK._idle) { if (!TK._poser) TK._poser = TK._redo = true; X = TK._blend?.get(f) ?? null; }   // X: cross-fade from what was shown a moment ago
   if (f.isModel) return f.pose(mode, ph / TAU, t, X && typeof X.from === 'string' ? { ...o, from: X.from, w: X.w } : o);
   const opt = _poseOpt(f, o);
   const S = rigState(mode, ph / TAU, t, opt);
@@ -3517,7 +3517,10 @@ function horde(o = {}) {
     const wl = o.wait?.line, [la, lb] = wl ?? [[0, 0], [0, 0]], ldx = lb[0] - la[0], ldz = lb[1] - la[1], lL = Math.hypot(ldx, ldz) || 1, lnx = -ldz / lL, lnz = ldx / lL;
     const side = wl ? Math.sign((sx - la[0]) * lnx + (sz - la[1]) * lnz) || 1 : 1;   // the start side of the barrier
     const fresh = (i, t) => t < M[i].b + (rise ? 0.8 : 0.15), cxA = new Float32Array(n), czA = new Float32Array(n), lag = new Float32Array(n), relT = new Float32Array(n).fill(1e9), NB = CLB ? Math.max(1, Math.ceil(lL)) : 0, Pb = new Float32Array(NB), openB = new Float32Array(NB).fill(1e9), cntB = new Float32Array(NB);
-    const PH = new Float32Array(NS * Math.max(1, NB)), Yy = new Float32Array(NS * n), crate = CLB ? CLB.rate ?? CH / 5 : 0, TR = [], trips = { n: 0, max: Math.max(2, Math.round(n * 0.06)) }, tripT = new Float32Array(n).fill(-1e9);
+    const PH = new Float32Array(NS * Math.max(1, NB)), Yy = new Float32Array(NS * n), xT = new Float64Array(n).fill(-1), xP = new Float32Array(n), crate = CLB ? CLB.rate ?? CH / 5 : 0, TR = [], trips = { n: 0, max: Math.max(2, Math.round(n * 0.06)) }, tripT = new Float32Array(n).fill(-1e9);
+    // v3.22 tall walls: the drop on the far side is a real fall (g from the moment it crosses the crown, ~18 m/s at the ground from 16.5 m) with the knees taking
+    // the last half metre (was: a curve over ~7 m of ground — 45 m/s at the bottom, then a dead stop: MOTION jumps)
+    const fallY = (i, t, P) => { if (xT[i] < 0) { xT[i] = t; xP[i] = P; } let Y = xP[i] - 4.905 * (t - xT[i]) ** 2, A = 0.5; return Y >= A ? Y : (Y = A * Math.exp((Y - A) / A)) < 0.01 ? 0 : Y; };
     const lineUD = i => { const u = ((px[i] - la[0]) * ldx + (pz[i] - la[1]) * ldz) / (lL * lL), cx = la[0] + ldx * clamp(u), cz = la[1] + ldz * clamp(u); return [u, ((px[i] - cx) * lnx + (pz[i] - cz) * lnz) * side]; };
     const Pat = u => { if (!NB) return 0; const f = clamp(u) * NB - 0.5, b0 = clamp(Math.floor(f), 0, NB - 1), b1 = Math.min(NB - 1, b0 + 1); return lerp(Pb[b0], Pb[b1], clamp(f - b0)); };
     const brk = (i, t) => { if (!wl) return false; if (relT[i] <= t) return true; if (t < UNT + M[i].dl) return false; const u = clamp(((px[i] - la[0]) * ldx + (pz[i] - la[1]) * ldz) / (lL * lL)); return Math.hypot(px[i] - la[0] - ldx * u, pz[i] - la[1] - ldz * u) < 1.4; };   // after wait.until the barrier counts as broken: members push through it
@@ -3585,7 +3588,8 @@ function horde(o = {}) {
         else if (!pin[i]) { const mx = px[i] - ox0[i], mz = pz[i] - oz0[i], sp = Math.hypot(mx, mz) / SIMDT; vx[i] = mx / SIMDT; vz[i] = mz / SIMDT; wk[i] += sp * SIMDT;
           const want = sp > 0.25 ? Math.atan2(mx, mz) : stateRaw(M[i], t - lag[i])[3], dY = ((want - yw[i] + Math.PI) % TAU + TAU) % TAU - Math.PI, tr = sp > 1 && Math.abs(dY) > 1.4 ? turn * 3 : turn; yw[i] += clamp(dY, -tr, tr); Mv[o2] = sp > 0.18 ? 1 : 0; }   // v3.19: moving fast against the way it faces → turns 3× faster (was: ran backwards for up to 0.9 s)
         X[o2] = px[i]; Zc[o2] = pz[i]; Yw[o2] = yw[i]; Wk[o2] = wk[i];
-        if (CLB && !pin[i]) { const [u, d] = lineUD(i); if (u > -0.02 && u < 1.02) { const P = Pat(u), L = rampL(P); Yy[o2] = d >= 0 ? P * clamp(1 - d / L) : relT[i] <= t ? P * (1 - EASE.in(clamp(-d / (1.1 * Math.max(1, P / 2.6))))) : 0; } } }   // v3.13: the drop on the far side grows with the wall height (16 m walls: no teleport)
+        if (CLB && !pin[i]) { const [u, d] = lineUD(i); if (u > -0.02 && u < 1.02) { const P = Pat(u), L = rampL(P); Yy[o2] = d >= 0 ? P * clamp(1 - d / L) : relT[i] <= t ? (TALL ? fallY(i, t, P) : P * (1 - EASE.in(clamp(-d / (1.1 * Math.max(1, P / 2.6)))))) : 0; }   // v3.13: the drop on the far side grows with the wall height (16 m walls: no teleport)
+          else if (TALL && xT[i] >= 0) Yy[o2] = fallY(i, t, xP[i]); } }   // v3.22: still in the air when it leaves the line's ends
       if (CLB) PH.set(Pb, s * NB);
     }
     SIM = { T0, NS, X, Zc, Yw, Wk, Mv, Yy, PH, NB, TR, trips: trips.n }; if (performance.now() - t00 > 4000) console.warn(`crowd sim ${n} members: ${Math.round(performance.now() - t00)} ms`);
@@ -3764,11 +3768,16 @@ function horde(o = {}) {
     const f = figure({ kind: human ? 'human' : 'zombie', shirt: hx(torso, i), skin: hx(head, i), pants: hx(thigh, 2 * i), hair: HEAD[i] === 1 ? hx(hairIM, i) : undefined, hairStyle: HEAD[i] === 0 ? 'bald' : undefined,
       hat: HEAD[i] === 2 ? hx(capIM, i) : undefined, hatStyle: HEAD[i] === 2 ? 'cap' : undefined, build: human ? ['man', 'woman', 'slim', 'heavy', 'teen'][Math.floor(hash(i * 3.3 + hid) * 5)] : undefined, fidget: false });
     world.add(f.root); f.root.scale.multiplyScalar(q.sc); f._crowdHero = true; q.hero = f;
-    f._posAt = t => { const r = state(q, t); return new THREE.Vector3(r[0], groundH(r[0], r[1]), r[1]); }; f._yawAt = t => state(q, t)[3];
+    f._posAt = t => { const r = state(q, t); return new THREE.Vector3(r[0], groundH(r[0], r[1]), r[1]); }; f._yawAt = t => yawS(t);
+    // v3.22: in a pressing crowd the sim's moving flag flips every frame (creeping at ~0.4 m/s) and the yaw wobbles: the hero blends idle → gait by its speed (mean of
+    // the last 0.4 s) and faces the mean heading of the last 0.24 s (was: the flag picked the mode, every flip snapped the limbs, MOTION snaps).
+    const spd = t => { const a = Math.max(q.b, t - 0.1); return t - a < 0.02 ? 1 : clamp(((state(q, t)[4] - state(q, a)[4]) / (t - a) - 0.3) / 0.7); };
+    const gaitW = t => { if (t - q.b < 0.4) return 1; let w = 0; for (let k = 0; k < 8; k++) w += spd(t - k * 0.05); return EASE.inOut(w / 8); };   // mean over 0.4 s: a switch takes ≥ 0.4 s
+    const yawS = t => { let sx = 0, sz = 0; for (let k = 0; k < 4; k++) { const y = state(q, Math.max(q.b, t - k * 0.08))[3], wk = 4 - k; sx += Math.sin(y) * wk; sz += Math.cos(y) * wk; } return Math.atan2(sx, sz); };
     tick(t => { const on = t >= q.b && !(q.down && t >= q.down.t); f.root.visible = on; if (!on) return;
-      const [x, z, moving, yaw, walked] = state(q, t), em = rise ? EASE.out(clamp((t - q.b) / 0.8)) : 1, fl = o.flee && t > tfOf(q);
+      const [x, z, , , walked] = state(q, t), yaw = yawS(t), gw = gaitW(t), em = rise ? EASE.out(clamp((t - q.b) / 0.8)) : 1, fl = o.flee && t > tfOf(q);
       f.root.position.set(x, groundH(x, z) + (q.fixed ? q.cy ?? q.y ?? 0 : 0) - (1 - em) * 1.9 + (o.lift ? o.lift(t, i) : 0) + (state(q, t)[5] ?? 0), z); f.root.rotation.y = yaw;
-      pose(f, moving ? (fl || run ? 'run' : mode) : 'idle', (q.ph / TAU + walked / q.cl) * TAU, t, { v: fl ? 4 : q.v }); });
+      const gm = fl || run ? 'run' : mode; pose(f, gm, (q.ph / TAU + walked / q.cl) * TAU, t, gw < 1 ? { v: fl ? 4 : q.v, from: 'idle', w: gw, rec: gm } : { v: fl ? 4 : q.v }); });
   }
   hordes.push(api); return api;
 }
@@ -13280,7 +13289,7 @@ ground({ color: '#C7B58B', flat: 260, hills: 0 });
   walk(you, [[3.6, -34.0], [2.4, -56], [1.0, -70], [0.2, -84], [0, -97]], { t0: 38.4, speed: 6.6, mode: 'run' });
 
   // --- the zombie wave: runs at the wall, stacks up, pours over the top and into the streets
-  horde({ kind: 'zombie', n: 420, heroes: 0, from: [0, 88], r: 30, to: [0, -34], stop: 3, pile: 4, t0: -1, t1: 0, speed: [4.2, 5.6], mode: 'run', rise: false,
+  horde({ kind: 'zombie', n: 420, heroes: 4, from: [0, 88], r: 30, to: [0, -34], stop: 3, pile: 4, t0: -1, t1: 0, speed: [4.2, 5.6], mode: 'run', rise: false,
     wait: { line: [[-40, 1.9], [40, 1.9]], stop: 0.3, pile: 3, climb: { h: 16.5, rate: 1.15 } } });
 
   // --- the last helicopter: hovers over the plaza, lowers the rope, you grab it, it lifts off
