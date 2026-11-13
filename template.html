@@ -2145,7 +2145,7 @@ function figure(o = {}) {
   if (o.hold) o.holdShape === 'board' ? box(foreR, 0.27, 0.34, 0.03, o.hold, 0, -0.62, 0.08) : box(foreR, 0.09, 0.24, 0.09, o.hold, 0, -0.6, 0.03);   // held item: flashlight/megaphone (along the forearm) or holdShape 'board' (clipboard)
   root.scale.setScalar(o.scale ?? 1);
   const f = { root, body, hips, chest, neck, head, legL, legR, shinL, shinR, footL, footR, armL, armR, foreL, foreR, mouth, brows, eyes, hat, coat, hair: hairG, hairFall, cape,
-    expr: o.expr, kind: o.kind ?? 'human', id, sd: hash(id * 7.31 + 0.5), mocap: o.mocap, look: o.look, talk: o.talk, who: o.who, M, fx: [], hands: HANDS, FC, autoFace: o.autoFace };
+    expr: o.expr, kind: o.kind ?? 'human', id, sd: hash(id * 7.31 + 0.5), mocap: o.mocap, idle: o.idle, look: o.look, talk: o.talk, who: o.who, M, fx: [], hands: HANDS, FC, autoFace: o.autoFace };
   if (coat) f.flaps = coat.Q;
   let _lookV = f.look;   // v2.31: look targets switched inside a scene tick are cross-faded (see poseProbe)
   Object.defineProperty(f, 'look', { enumerable: true, get: () => _lookV, set: v => { if (TKP) { TKP.look.set(f, v); return; } _lookV = v; if (TK && !TK._idle && !TK._poser) TK._poser = TK._redo = true; } });
@@ -2557,14 +2557,14 @@ function pose(f, mode, ph, t = 0, o = {}) {   // walk run shamble idle panic che
   }
   const mine = f._S0t === t && f._S0own === TK; if (!mine) f._S0p = f._S0t === t ? f._S0 : null;   // _S0p: what the ticks before this one showed this frame (kept when this tick runs twice)
   if (X && X.w < 1) { const A = X.from === PREVPOSE ? f._S0p : rigState(X.from, ph / TAU, t, opt); if (A) { const k = EASE.inOut(X.w); for (const key in S) S[key] = lerp(A[key], S[key], k); } }
-  f._mcq = { mode, ph, v: o.v, from: o.from, w: o.w, X };   // v3.6: mocap on figures (_mcPass)
+  f._mcq = { mode, ph, v: o.v, from: o.from, w: o.w, X, o };   // v3.6: mocap on figures (_mcPass)
   f._S0 = { ...S }; f._S0t = t; f._S0own = TK; f._m0 = m; f._o0 = o;   // what this frame shows before the acting layers — the next tick (or a fade-out) blends from it
   poseFin(f, S, m, t, o);
 }
 function poseFin(f, S, m, t, o) {
   for (const fx of f.fx) fx(t, S);
   if (o.turn) S.broll = clamp(-o.turn * (o.v ?? 0) * 0.07, -0.3, 0.3);   // lean into curves
-  applyRig(f, S); _mcPass(f, m, t, o);
+  applyRig(f, S); _mcPass(f, m, t, o, S);
   if (f.FC) { f._fq = FSEQ; f._fm = m; f._ft = t; }   // the face is drawn after the camera and the head turns: facePass()
   f._fast = (o.v ?? 0) > 2.6 ? FRAME : -1;
 }
@@ -2820,7 +2820,7 @@ function walk(obj, pts, o = {}) {
     if (obj.beast || obj.chk || obj.bird) obj._wk = me;
     if (obj.quad) animalPose(obj, moving, s * stride / sc, t, o.graze ?? 0.6, w, s);
     else if (obj.isModel) obj.pose(mode, s / ((obj.stride[mode] ?? 1.3) * sc), t, { w, from, v: vn });
-    else if (obj.legL) pose(obj, mode, TAU * s / Cl, t, { v, w, from, turn: mode === 'run' ? turn : 0 });
+    else if (obj.legL) pose(obj, mode, TAU * s / Cl, t, { v, w, from, turn: mode === 'run' ? turn : 0, dist: s / sc });
   });
 }
 
@@ -2897,11 +2897,16 @@ function anim(r, list, o = {}) {   // model rig: [[t, clip, { once, speed }], �
 // anim(f, [[t, 'Dance_Loop'], [t2, 'Wave', { once: true }], [t3, null]]) plays clips on a figure (null = back to its own poses); figure({ mocap: true }) or CFG.mocap: true
 // → idle, walk, run, sneak and the zombie shamble use mocap; face, hands, clothes, gore and ragdoll stay the figure's own. Pure function of t like everything else.
 const MOCAP = /* @MOCAP */null, _mcD = new Map(), _mcV = new THREE.Vector3();
-const MC_GAIT = { walk: 'Walk_Loop', run: 'Jog_Fwd_Loop', sneak: 'Crouch_Fwd_Loop', shamble: 'Zombie_Walk_Fwd_Loop' }, MC_STRIDE = { walk: 1.3, run: 5, sneak: 1.5, shamble: 1.4 };   // m per clip cycle (mannequin)
-const MC_UPPER = new Set(['chest', 'neck', 'armL', 'foreL', 'handL', 'armR', 'foreR', 'handR']);
-function mcClip(name) {   // clip name or short name (talk, phone, fold, dance …) → decoded clip or null
+// clip per pose mode, chosen from the scene: idle (talking → Idle_Talking_Loop), sit (Sitting_Idle / Sitting_Talking), walk, run (from 6 m/s Sprint_Loop), sneak, shamble, zombie idle,
+// panic (legs sprint, arms keep flailing). Modes without a clip (cheer, point, hold, crawl, swim, climb, float …) stay the figure's own pose.
+const MC_STRIDE = { Walk_Loop: 1.3, Jog_Fwd_Loop: 5, Sprint_Loop: 5.5, Crouch_Fwd_Loop: 1.5, Zombie_Walk_Fwd_Loop: 1.4 };   // m per clip cycle (mannequin, root-motion versions)
+const MC_REG = { hips: 'lo', legL: 'lo', shinL: 'lo', footL: 'lo', legR: 'lo', shinR: 'lo', footR: 'lo', chest: 'to', neck: 'to', armL: 'aL', foreL: 'aL', handL: 'aL', armR: 'aR', foreR: 'aR', handR: 'aR' };
+const MC_KEYS = { lo: [['lt', 1], ['lk', 1], ['lf', 1], ['lz', 1], ['rt', 1], ['rk', 1], ['rf', 1], ['rz', 1], ['hrx', 1], ['hry', 1], ['hrz', 1], ['H', 3], ['hx', 3]],
+  to: [['crx', 1], ['cry', 1], ['crz', 1], ['nrx', 1], ['nry', 1], ['nrz', 1]], aL: [['las', 1], ['laz', 1], ['lae', 1]], aR: [['ras', 1], ['raz', 1], ['rae', 1]] };
+const _mcIn = (mask, j) => !mask || (mask === 'lower') === (MC_REG[j] === 'lo');
+function mcClip(name, quiet) {   // clip name or short name (talk, phone, fold, dance …) → decoded clip or null
   if (!MOCAP || name == null) return null; const n = MOCAP.clips[name] ? name : MOCAP.alias?.[name] ?? (typeof HUMAN !== 'undefined' ? HUMAN.map[name] : null); const c = n && MOCAP.clips[n];
-  if (!c) { if (!_mcD.has('!' + name)) { _mcD.set('!' + name, 1); console.warn('mocap clip missing: ' + name + ' (not embedded or unknown — see models/mocap.json)'); } return null; }
+  if (!c) { if (!quiet && !_mcD.has('!' + name)) { _mcD.set('!' + name, 1); console.warn('mocap clip missing: ' + name + ' (not embedded or unknown — see models/mocap.json)'); } return null; }
   let D = _mcD.get(n); if (!D) { const b = atob(c.q), u = new Uint8Array(b.length); for (let i = 0; i < b.length; i++) u[i] = b.charCodeAt(i); D = { n: c.n, d: c.d, a: new Int16Array(u.buffer), name: n }; _mcD.set(n, D); } return D; }
 function mcSample(D, time, loop, out) {   // → out: { p: Vector3, q: { joint: Quaternion } } at clip time (s), linear between frames
   const W = 3 + 4 * MOCAP.joints.length, d = Math.max(D.d, 1e-3), x = loop ? (((time % d) + d) % d) : clamp(time, 0, d), f = x * MOCAP.fps, i = Math.min(D.n - 1, Math.floor(f)), j = Math.min(D.n - 1, i + 1), k = f - i, a = D.a, A = i * W, B = j * W;
@@ -2909,39 +2914,70 @@ function mcSample(D, time, loop, out) {   // → out: { p: Vector3, q: { joint: 
   MOCAP.joints.forEach((jn, m) => { const o = 3 + 4 * m, q = out.q[jn] ??= new THREE.Quaternion(); q.set(lerp(a[A + o], a[B + o], k), lerp(a[A + o + 1], a[B + o + 1], k), lerp(a[A + o + 2], a[B + o + 2], k), lerp(a[A + o + 3], a[B + o + 3], k)).normalize(); });
   return out; }
 const _mcJ = f => f._mcJ ??= Object.fromEntries((MOCAP?.joints ?? []).map(j => [j, j === 'handL' ? f.hands?.find(h => h.sx < 0)?.hd : j === 'handR' ? f.hands?.find(h => h.sx > 0)?.hd : f[j]]));
-function _mcLayer(f, mode, ph, t, v) {   // what clip a figure with mocap shows for a pose mode → [clip, time, loop] or null (the figure's own pose)
-  if (!(f.mocap ?? CFG.mocap) || !MOCAP) return null;
-  const zb = f.kind === 'zombie', g = MC_GAIT[mode];
-  if (g && (v ?? 1) > 0.05) { const D = mcClip(g); if (!D) return null; const sl = MC_STRIDE[mode] * (MOCAP.k ?? 0.9), u = ph / TAU * cycleLen(mode, v ?? (mode === 'run' ? 4.5 : mode === 'shamble' ? 0.8 : 1.4)) / sl; return [D, u * D.d, true]; }
-  if (mode === 'idle') { const D = mcClip(zb ? 'Zombie_Idle_Loop' : 'Idle_Loop'); return D ? [D, t + f.sd * 7.3, true] : null; }
-  return null; }
-function _mcApply(f, L, mask) {   // L: [[clip|null, time, loop, weight], …]; null = the figure's own pose (already on the joints) — blends the clips, then from the own pose onto them
-  let wm = 0; for (const e of L) if (e[0]) wm += e[3]; if (wm < 1e-3) return;
-  const J = _mcJ(f), S = f._mcS ??= { p: new THREE.Vector3(), q: {} }, acc = f._mcA ??= { p: new THREE.Vector3(), q: {} }; let first = true;
-  for (const e of L) { if (!e[0] || e[3] <= 0) continue; mcSample(e[0], e[1], e[2], S); const w = e[3] / wm;
-    if (first) { acc.p.copy(S.p).multiplyScalar(w); for (const j in S.q) (acc.q[j] ??= new THREE.Quaternion()).copy(S.q[j]); acc.w = w; first = false; continue; }
-    acc.p.addScaledVector(S.p, w); acc.w += w; for (const j in S.q) acc.q[j].slerp(S.q[j], w / acc.w); }
-  const k = Math.min(1, wm);
-  for (const j in J) { const g = J[j]; if (!g || !acc.q[j] || (mask === 'upper' && !MC_UPPER.has(j)) || (mask === 'lower' && MC_UPPER.has(j))) continue; g.quaternion.slerp(acc.q[j], k); }
-  if (mask !== 'upper') { const h = f.hips; _mcV.set(acc.p.x, HIP + acc.p.y, acc.p.z); h.position.lerp(_mcV, k); }
-  f._mcOn = k; }
-function _mcPass(f, m, t, o) {   // after applyRig: anim() schedule on the figure, else figure({ mocap }) gait clips
+function _mcTalk(f, t) {   // share of the last 0.5 s the figure was talking (talk: [[t0, t1]] | t => bool, or its lines in BEATS) — clips cross-fade with it
+  const on = s => (typeof f.talk === 'function' ? !!f.talk(s) : Array.isArray(f.talk) && f.talk.some(([a, b]) => s >= a && s <= b)) || (!!f.who && BEATS.some(b => b.who === f.who && s >= b.t && s <= b.t + (b.dur ?? 3)));
+  if (!f.talk && !f.who) return 0; let n = 0; for (let k = 0; k < 6; k++) n += on(t - k * 0.1) ? 1 : 0; return n / 6; }
+function _mcLayer(f, mode, ph, t, v, dist) {   // the clips a figure shows for a pose mode → [{ D, time, loop, w, mask, keepH }] (weights < 1: the rest is its own pose)
+  if (!MOCAP || !f.legL || !(f.mocap ?? CFG.mocap ?? true)) return [];
+  const zb = f.kind === 'zombie', E = (name, time, w = 1, x = {}) => { const D = mcClip(name, true); return D && w > 0 ? [{ D, time, loop: true, w, ...x }] : []; };
+  const run = mode === 'run' || (mode === 'panic' && (v ?? 0) > 0.3), g = run ? ((v ?? 4.5) >= 6 || mode === 'panic' ? 'Sprint_Loop' : 'Jog_Fwd_Loop') : { walk: 'Walk_Loop', sneak: 'Crouch_Fwd_Loop', shamble: 'Zombie_Walk_Fwd_Loop' }[mode];
+  if (g) { const D = mcClip(g, true); if (!D) return [];
+    const sl = MC_STRIDE[g] * (MOCAP.k ?? 0.9), vv = run ? 4.5 : mode === 'shamble' ? 0.8 : 1.4, u = dist != null ? dist / sl : ph / TAU * cycleLen(mode, vv) / sl;   // walk(): by distance (feet stay planted); else the figure's own cycle (phase) at the mode's usual speed → metres → clip cycles (independent of v: a tick switching modes never jumps a clip)
+    return [{ D, time: u * D.d, loop: true, w: 1, mask: mode === 'panic' || (zb && run) ? 'lower' : null }]; }   // panic / zombies running: arms stay their own
+  const tk = mode === 'idle' || mode === 'sit' ? _mcTalk(f, t) : 0, off = f.sd * 7.3;
+  if (mode === 'idle') { if (zb) return E('Zombie_Idle_Loop', t + off);
+    const base = f.idle ? (MOCAP.alias?.[f.idle] ?? f.idle) : 'Idle_Loop'; return [...E(base, t + off, 1 - tk), ...E('Idle_Talking_Loop', t + off, tk)]; }
+  if (mode === 'sit') return [...E('Sitting_Idle_Loop', t + off, 1 - tk, { keepH: true }), ...E('Sitting_Talking_Loop', t + off, tk, { keepH: true })];
+  return []; }
+function _mcApply(f, L, S, S0, q) {   // L: clips with weights. On the joints now: the pose S (own pose of the mode(s) + layers: body language, react, gestures, IK …)
+  // automatic clips (e.mode) swap their mode's own pose for the clip inside that pose: joint · (own pose of the mode → clip)^w — cross-fades with modes without a clip stay even,
+  // every layer stays on top. Clips from anim() replace the pose: slerp to clip · (S0 → S, the layers). Big layers (wave, grab, point, IK) take their limb back (R).
+  if (!L.some(e => e.w > 1e-3)) return;
+  const J = _mcJ(f), P = f._mcP ??= [], Q = f._mcQ ??= {}, Q0 = f._mcQ0 ??= {}, PM = f._mcPM ??= {}, hp = f.hips.position.clone();
+  L.forEach((e, i) => mcSample(e.D, e.time, e.loop, P[i] ??= { p: new THREE.Vector3(), q: {} }));
+  // how much the layers move each limb — now and up to 0.2 s before / after (the acting layers are pure functions of t): mocap hands a limb over ahead of a fast gesture
+  const R = {}, Sx = [[S, 1]]; if (S0 && f.fx?.length) for (let i = 1; i <= 6; i++) for (const sg of [-1, 1]) { const dt = sg * i * 0.05, T = { ...S0 }; try { for (const fx of f.fx) fx(f._mcT + dt, T); } catch (e) { continue; } Sx.push([T, 1 - i / 7]); }
+  for (const r in MC_KEYS) { let R0 = 0; if (S0) for (const [X, w] of Sx) { let d = 0; for (const [k, m] of MC_KEYS[r]) d = Math.max(d, Math.abs((X[k] ?? 0) - (S0[k] ?? 0)) * m); R0 = Math.max(R0, sm01(d / 0.8) * w); } R[r] = R0; } f._mcR = R;   // a sample further away counts less: R rises over ~0.3 s
+  for (const j in J) if (J[j]) (Q[j] ??= new THREE.Quaternion()).copy(J[j].quaternion);
+  const modes = [...new Set(L.filter(e => e.mode && e.w > 1e-3).map(e => e.mode))], opt = _poseOpt(f, q?.o ?? { v: q?.v });
+  for (const md of modes) { const Sm = rigState(md, (q?.ph ?? 0) / TAU, f._mcT, opt); applyRig(f, Sm); const M = PM[md] ??= { q: {}, p: new THREE.Vector3() }; for (const j in J) if (J[j]) (M.q[j] ??= new THREE.Quaternion()).copy(J[j].quaternion); M.p.set(Sm.hx, Sm.H, 0); }
+  const ex = L.some(e => !e.mode && e.w > 1e-3);
+  if (ex && S0) { applyRig(f, S0); for (const j in J) if (J[j]) (Q0[j] ??= new THREE.Quaternion()).copy(J[j].quaternion); }
+  if (modes.length || (ex && S0)) applyRig(f, S);
+  const I = new THREE.Quaternion(), d = new THREE.Quaternion(), out = {}, pos = hp.clone(); let on = 0;
+  for (const j in J) { if (!J[j]) continue; const o = out[j] = Q[j].clone(), keep = 1 - R[MC_REG[j]];
+    L.forEach((e, i) => { if (!e.mode || e.w <= 1e-3 || !_mcIn(e.mask, j)) return; d.copy(PM[e.mode].q[j]).invert().multiply(P[i].q[j]); o.multiply(I.clone().slerp(d, e.w * keep)); on = Math.max(on, e.w); });
+    L.forEach((e, i) => { if (e.mode || e.w <= 1e-3 || !_mcIn(e.mask, j)) return; d.copy(P[i].q[j]); if (S0) d.multiply(Q0[j].clone().invert().multiply(Q[j])); o.slerp(d.normalize(), e.w * keep); on = Math.max(on, e.w); });
+    J[j].quaternion.copy(o.normalize()); }
+  const kl = 1 - R.lo;   // hips: the same for the position
+  L.forEach((e, i) => { if (e.w <= 1e-3 || !_mcIn(e.mask, 'hips')) return; const p = P[i].p, w = e.w * kl;
+    if (e.mode) { const M = PM[e.mode].p; pos.x += (p.x - M.x) * w; if (!e.keepH) pos.y += (HIP + p.y - M.y) * w; pos.z += p.z * w; }
+    else { const dx = S0 ? S.hx - S0.hx : 0, dy = S0 ? S.H - S0.H : 0; pos.x = lerp(pos.x, p.x + dx, w); if (!e.keepH) pos.y = lerp(pos.y, HIP + p.y + dy, w); pos.z = lerp(pos.z, p.z, w); } });
+  f.hips.position.copy(pos); f._mcOn = on; }
+function _mcPass(f, m, t, o, S) {   // after applyRig: the clip of the pose mode (automatic) + anim() schedule on the figure (pure function of t)
   f._mcOn = 0; if (!MOCAP) return;
-  if (f._mcSched) { const L = f._mcSched(t); if (L) { _mcApply(f, L.list, L.mask); return; } }
-  const q = f._mcq; if (!q) return; f._mcq = null;
-  const a = _mcLayer(f, q.mode, q.ph, t, q.v), L = [[a?.[0], a?.[1], true, 1]];
-  if (q.from != null && q.w != null && q.w < 1) { const k = EASE.inOut(clamp(q.w)), b = _mcLayer(f, q.from, q.ph, t, q.v); L[0][3] = k; L.push([b?.[0], b?.[1], true, 1 - k]); }
-  if (q.X && q.X.w < 1) { const k = EASE.inOut(q.X.w), b = typeof q.X.from === 'string' && q.X.from !== PREVPOSE ? _mcLayer(f, q.X.from, q.ph, t, q.v) : null; for (const e of L) e[3] *= k; L.push([b?.[0], b?.[1], true, 1 - k]); }
-  _mcApply(f, L.map(e => [e[0], e[1], e[2], e[3]]), null); }
-function _mcAnim(f, list, o = {}) {   // anim() on a figure
+  const q = f._mcq; f._mcq = null; let L = []; f._mcT = t;
+  if (q) { const lay = (md, k) => _mcLayer(f, md, q.ph, t, q.v, q.o?.dist).map(e => ({ ...e, mode: md, w: e.w * k }));
+    let kA = 1, kB = 0; if (q.from != null && q.w != null && q.w < 1) { kA = EASE.inOut(clamp(q.w)); kB = 1 - kA; }
+    const kX = q.X && q.X.w < 1 ? EASE.inOut(q.X.w) : 1;
+    L = [...lay(q.mode, kA * kX), ...(kB ? lay(q.from, kB * kX) : [])];
+    if (kX < 1 && typeof q.X.from === 'string' && q.X.from !== PREVPOSE) L.push(...lay(q.X.from, 1 - kX)); }
+  if (f._mcSched) { const E = f._mcSched(t); if (E) for (const e of E) if (e.D) L.push(e); }   // anim() clips on top (their weight: fade in / out)
+  // the engine takes the body over (falls, held / pinned poses, ragdoll): mocap fades out 0.25 s before and back in after
+  let off = 0; if (typeof HOLDS !== 'undefined') for (const H of HOLDS) if (H.f === f) off = Math.max(off, Math.min(sm01((t - H.t0 + 0.25) / 0.25), H.t1 < 1e8 ? 1 - sm01((t - H.t1 - 0.25) / 0.35) : 1));
+  if (f._rag) off = Math.max(off, sm01((t - f._rag.t + 0.25) / 0.25));
+  if (off > 0) for (const e of L) e.w *= 1 - off;
+  _mcApply(f, L, S, f._S0t === t ? f._S0 : null, q); }
+function _mcAnim(f, list, o = {}) {   // anim() on a figure: [[t, clip | null, { once, speed, only, fade }], …]
   const L = list.map(([t, c, x = {}]) => ({ t, c, ...x })).sort((a, b) => a.t - b.t), fade = o.fade ?? 0.3;
-  const lay = (e, t) => { const D = e.c == null || e.c === 'pose' ? null : mcClip(e.c); if (!D) return [null, 0, true, 1]; const lt = (t - e.t) * (e.speed ?? 1); return [D, e.once ? Math.min(lt, D.d - 1e-3) : lt, !e.once, 1]; };
+  const lay = (e, t, w) => { const D = e.c == null || e.c === 'pose' ? null : mcClip(e.c); if (!D) return { D: null, w }; const lt = (t - e.t) * (e.speed ?? 1); return { D, time: e.once ? Math.min(lt, D.d - 1e-3) : lt, loop: !e.once, w, mask: e.only ?? o.only ?? null }; };
   f._mcSched = t => {
     let i = -1; for (let j = 0; j < L.length; j++) if (L[j].t <= t) i = j;
     if (i < 0) return null;
-    const cur = lay(L[i], t), k = i > 0 ? clamp((t - L[i].t) / (L[i].fade ?? fade)) : clamp((t - L[i].t) / (L[i].fade ?? fade)), mask = L[i].only ?? o.only ?? null;
-    if (k >= 1) return cur[0] ? { list: [cur], mask } : null;
-    const prev = i > 0 ? lay(L[i - 1], t) : [null, 0, true, 1]; cur[3] = EASE.inOut(k); prev[3] = 1 - cur[3]; return { list: [cur, prev], mask }; };
+    const k = EASE.inOut(clamp((t - L[i].t) / (L[i].fade ?? fade)));
+    if (k >= 1) return [lay(L[i], t, 1)];
+    const A = lay(L[i], t, k), B = i > 0 ? lay(L[i - 1], t, 1) : { D: null };   // the old clip under the new one: fades out as the new one fades in
+    return !A.D ? (B.D ? [{ ...B, w: 1 - k }] : []) : B.D ? [B, A] : [A]; };
   return f; }
 
 // --- mocap people: human({ sex, shirt, pants, shoes, sleeves, legs, skin, hair, hairColor, beard, scale, seed }) → model rig (walk, pose, anim, track) ---

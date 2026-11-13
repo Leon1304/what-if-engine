@@ -62,22 +62,31 @@ let bytes = 0;
 for (const an of root.listAnimations()) {
   const name = an.getName(); if (/TPose/i.test(name)) continue;
   const chs = an.listChannels(); let dur = 0; for (const c of chs) { const I = c.getSampler().getInput().getArray(); dur = Math.max(dur, I[I.length - 1]); }
-  const n = Math.max(2, Math.round(dur * FPS) + 1), D = new Int16Array(n * (3 + 4 * J.length)), prev = {};
+  const n = Math.max(2, Math.round(dur * FPS) + 1), WD = 3 + 4 * J.length, D = new Float32Array(n * WD), prev = {};
   for (let f = 0; f < n; f++) {
     const time = Math.min(dur, f / FPS), L = new Map();
     for (const c of chs) { const nd = c.getTargetNode(), R = REST.get(nd), cur = L.get(nd) ?? { t: R.t.clone(), q: R.q.clone(), s: R.s.clone() }; const v = sample(c, time), p = c.getTargetPath();
       if (p === 'rotation') cur.q.copy(v); else if (p === 'translation') cur.t.copy(v); else if (p === 'scale') cur.s.copy(v); L.set(nd, cur); }
     const W = world(L), F = {};
     let o = f * (3 + 4 * J.length); const pel = fixP(dec(W.get(need('pelvis'))).p).sub(pel0).multiplyScalar(K);
-    for (const v of [pel.x, pel.y, pel.z]) D[o++] = Math.max(-32767, Math.min(32767, Math.round(v * 1e4)));
+    for (const v of [pel.x, pel.y, pel.z]) D[o++] = v;
     const WP = n => fixP(dec(W.get(need(n))).p);
     for (const [j, b, a, c, d] of J) { F[j] = fixQ(dec(W.get(need(b))).q).multiply(Wref[j]).multiply(A[j]);
       if (c) { const now = WP(c).sub(WP(a)).normalize(), pred = d.clone().applyQuaternion(F[j]); F[j].premultiply(new THREE.Quaternion().setFromUnitVectors(pred, now)); } }   // exact direction, twist from the bone
     for (const [j] of J) { const q = PARENT[j] ? F[PARENT[j]].clone().invert().multiply(F[j]) : F[j].clone(); q.normalize();
       if (prev[j] && prev[j].dot(q) < 0) q.set(-q.x, -q.y, -q.z, -q.w); prev[j] = q;   // continuous sign: frames blend without flips
-      for (const v of [q.x, q.y, q.z, q.w]) D[o++] = Math.round(v * 32767); }
+      for (const v of [q.x, q.y, q.z, q.w]) D[o++] = v; }
   }
-  const b64 = Buffer.from(D.buffer).toString('base64'); bytes += b64.length;
+  // loops: one pass of a [1 2 1] filter across the seam — the source has single-frame knee snaps in Jog / Sprint (straight → 60° in 1/30 s) that read as pops
+  const loop = /_Loop$/.test(name) && n > 4, m = n - 1, S = Float32Array.from(D);
+  if (loop) { for (let f = 0; f < m; f++) { const a = (f + m - 1) % m, b = (f + 1) % m;
+      for (let k = 0; k < WD; k++) { const isQ = k >= 3, jq = isQ ? 3 + 4 * Math.floor((k - 3) / 4) : 0;
+        const sg = g => { if (!isQ) return 1; let d = 0; for (let c = 0; c < 4; c++) d += S[g * WD + jq + c] * S[f * WD + jq + c]; return d < 0 ? -1 : 1; };
+        D[f * WD + k] = (S[a * WD + k] * sg(a) + 2 * S[f * WD + k] + S[b * WD + k] * sg(b)) / 4; } }
+    for (let k = 0; k < WD; k++) D[m * WD + k] = D[k]; }
+  const Q16 = new Int16Array(n * WD); for (let f = 0; f < n; f++) { for (let k = 0; k < 3; k++) Q16[f * WD + k] = Math.max(-32767, Math.min(32767, Math.round(D[f * WD + k] * 1e4)));
+    for (let jj = 0; jj < J.length; jj++) { const o = f * WD + 3 + 4 * jj, l = Math.hypot(D[o], D[o + 1], D[o + 2], D[o + 3]) || 1; for (let c = 0; c < 4; c++) Q16[o + c] = Math.round(D[o + c] / l * 32767); } }
+  const b64 = Buffer.from(Q16.buffer).toString('base64'); bytes += b64.length;
   out.clips[name] = { n, d: +dur.toFixed(4), q: b64 };
 }
 fs.writeFileSync(OUT, JSON.stringify(out));

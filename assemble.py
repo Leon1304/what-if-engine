@@ -123,20 +123,22 @@ if names:
             if os.path.exists(f): found[nm] = base64.b64encode(open(f, 'rb').read()).decode(); print('model:', f); break
         else: print('model missing:', nm + '.glb')
     t = t.replace('/* @MODELS */{}', '/* @MODELS */' + json.dumps(found, separators=(',', ':')), 1)
-# v3.6 mocap on figure(): anim(f, …) / figure({ mocap: true }) / CFG.mocap → the named clips of models/mocap.json (+ the gait clips with mocap: true)
-if re.search(r'\banim\(|\bmocap\s*:', _code):
-    for d in (os.path.join(_here, 'models'), os.path.join(_here, '.engine', 'models')):
-        f = os.path.join(d, 'mocap.json')
-        if os.path.exists(f):
-            M = json.load(open(f, encoding='utf-8')); al = M.get('alias', {}); want = set()
-            for q in re.findall(r"['\"]([A-Za-z0-9_]+)['\"]", _code):
-                if q in M['clips']: want.add(q)
-                elif q in al and re.search(r"\banim\(", _code): want.add(al[q])
-            if re.search(r'\bmocap\s*:\s*true', _code): want |= {'Idle_Loop', 'Walk_Loop', 'Jog_Fwd_Loop', 'Crouch_Fwd_Loop', 'Zombie_Walk_Fwd_Loop', 'Zombie_Idle_Loop'}
-            if want:
-                M['clips'] = {k: v for k, v in M['clips'].items() if k in want}
-                t = t.replace('/* @MOCAP */null', '/* @MOCAP */' + json.dumps(M, separators=(',', ':')), 1); print('mocap clips:', ', '.join(sorted(want)))
-            break
+# v3.6 mocap on figure(): on by default (CFG.mocap: false = off) → the clips the engine picks by itself (idle, talking, sitting, walk, jog, sprint, sneak, zombie)
+# + every clip the scene names (anim(f, …), figure({ idle: … })) from models/mocap.json
+_mcoff = re.search(r'\bmocap\s*:\s*false', re.search(r'const CFG\s*=\s*\{[^\n]*', story).group(0) if re.search(r'const CFG\s*=\s*\{[^\n]*', story) else '')
+for d in (os.path.join(_here, 'models'), os.path.join(_here, '.engine', 'models')):
+    f = os.path.join(d, 'mocap.json')
+    if os.path.exists(f):
+        M = json.load(open(f, encoding='utf-8')); al = M.get('alias', {}); want = set()
+        if not _mcoff: want |= {'Idle_Loop', 'Idle_Talking_Loop', 'Sitting_Idle_Loop', 'Sitting_Talking_Loop', 'Walk_Loop', 'Jog_Fwd_Loop', 'Sprint_Loop', 'Crouch_Fwd_Loop', 'Zombie_Walk_Fwd_Loop', 'Zombie_Idle_Loop'}
+        _named = re.search(r"\banim\(|\bidle\s*:\s*['\"]", _code)
+        for q in re.findall(r"['\"]([A-Za-z0-9_]+)['\"]", _code):
+            if q in M['clips']: want.add(q)
+            elif q in al and _named: want.add(al[q])
+        if want:
+            M['clips'] = {k: v for k, v in M['clips'].items() if k in want}
+            t = t.replace('/* @MOCAP */null', '/* @MOCAP */' + json.dumps(M, separators=(',', ':')), 1); print('mocap clips:', ', '.join(sorted(want)))
+        break
 # real sound effects: sfx/<kind>.mp3 (CC0) → embedded, played for AUDIO.hits of that kind
 here_ = os.path.dirname(os.path.abspath(__file__)); sfx = {}
 for d in (os.path.join(here_, 'sfx'), os.path.join(here_, '.engine', 'sfx')):

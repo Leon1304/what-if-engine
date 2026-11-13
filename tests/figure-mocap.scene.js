@@ -11,3 +11,7 @@
   anim(p, [[0, 'phone']], { only: 'upper' });
   for (let i = 0; i < 4; i++) { const q = figure({ mocap: true }); world.add(q.root); q.root.position.set(-3 + i * 2, 0, -6); anim(q, [[0, ['Idle_FoldArms_Loop', 'Yes', 'Idle_No_Loop', 'Sitting_Idle_Loop'][i]]]); }
   tick(t => { if (t > 2 && !window._mcChk) { window._mcChk = 1; const on = [a, d, z, p].map(f => f._mcOn ?? 0); if (on.some(x => !(x > 0.5))) throw new Error('mocap not applied: ' + on.join(',')); } });
+  // v3.6 automatic: talking (Idle_Talking_Loop), sitting while talking, own pose with mocap: false, body language on top (gait / react)
+  const tk = figure({ shirt: '#8A4AD9', talk: [[1, 5], [8, 11]], expr: 'happy' }); world.add(tk.root); tk.root.position.set(-2, 0, 2.5); react(tk, 3, 'wave');
+  const st = figure({ shirt: '#2AA8B8', talk: [[2, 9]] }); world.add(st.root); st.root.position.set(2.2, 0, 2.5); tick(t => pose(st, 'sit', 0, t, { seatH: 0.45 }));
+  const off = figure({ shirt: '#5A6170', mocap: false, gait: 'proud' }); world.add(off.root); walk(off, [[-5, 3.6], [4, 3.6]], { t0: 0.5, speed: 1.4 });
