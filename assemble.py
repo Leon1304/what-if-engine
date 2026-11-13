@@ -104,11 +104,21 @@ if m:
         if os.path.exists(f):
             t = t.replace('/* @CAST */{}', '/* @CAST */' + json.dumps(json.load(open(f, encoding='utf-8')), separators=(',', ':')), 1); print('cast:', f); break
 # motion-capture models: model('name') in story/scene or "model": "name" in cast.json → models/<name>.glb embedded (base64)
-names = set(re.findall(r"model\(\s*'([^']+)'", story + scene)) | set(re.findall(r'"model"\s*:\s*"([^"]+)"', t))
+_code = re.sub(r'(?m)^\s*//.*$|\s//\s.*$', '', story + scene)   # names in comments don't count
+names = set(re.findall(r"model\(\s*'([^']+)'", _code)) | set(re.findall(r'"model"\s*:\s*"([^"]+)"', t))
+# asset library (assets/<pack>/<name>.glb): asset(p, 'pack/name', …) and model('pack/name')
+names |= set(re.findall(r"asset\(\s*[^,()]*,\s*'([^']+/[^']+)'", _code))
+# names built in lists ([x, z, 'nature/rock_2']) — any 'pack/name' string with a file in assets/ is embedded too
+_here = os.path.dirname(os.path.abspath(__file__))
+names |= {n for n in re.findall(r"['\"]([a-z0-9_]+/[a-z0-9_]+)['\"]", _code) if any(os.path.exists(os.path.join(_here, d, 'assets', n + '.glb')) for d in ('', '.engine'))}
+# human({ sex: 'f' }) → human_f.glb, every other human() call → human_m.glb (only the bodies a video uses get embedded)
+_calls, _fem = len(re.findall(r'\bhuman\(', story + scene)), len(re.findall(r"""\bsex:\s*['"]f""", story + scene))
+if _fem: names.add('human_f')
+if _calls > _fem: names.add('human_m')
 if names:
     here = os.path.dirname(os.path.abspath(__file__)); found = {}
     for nm in sorted(names):
-        for d in (os.path.join(here, 'models'), os.path.join(here, '.engine', 'models')):
+        for d in (os.path.join(here, 'models'), os.path.join(here, '.engine', 'models'), os.path.join(here, 'assets'), os.path.join(here, '.engine', 'assets')):
             f = os.path.join(d, nm + '.glb')
             if os.path.exists(f): found[nm] = base64.b64encode(open(f, 'rb').read()).decode(); print('model:', f); break
         else: print('model missing:', nm + '.glb')
