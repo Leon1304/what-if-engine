@@ -307,6 +307,7 @@ import { GTAOPass } from 'three/addons/postprocessing/GTAOPass.js';
 import { Pass, FullScreenQuad } from 'three/addons/postprocessing/Pass.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+const CAMPATHS = /* @CAMPATHS */{}, CAMFX = []; let CAMROLL = 0;   // v3.17: before the story, so CAM can use camPath() (camera paths from Blender, tools/blender_cam.py)
 
 /* ====================================================================== */
 /* STORY — written per video between the markers                       */
@@ -3057,7 +3058,17 @@ float clAA(float e, float x) { float w = max(fwidth(x), 1e-4); return smoothstep
 // asset(p, 'farm/barn', x, z, { ry, scale, h, y, tint: { materialName: hex } | hex, dyn }) → Group, real-world metres, standing on the ground.
 // Static props (buildings, trees, cars, furniture …). Rigged animals/creatures of the library go through model('dino/trex') (walk, pose, anim).
 // Each name is parsed once and cloned (shared geometry + materials); assemble.py embeds only the names a video uses.
-const ASSETS = new Map();
+const ASSETS = new Map(), _META = new Map(), WALKSURF = [];
+// v3.17 hand-over data from Blender (tools/blender_asset.py → extras.wie in the GLB): { size, parts: { name: { node, pivot, parent, ud } }, marks: { name: [x, y, z, ry] }, walk: [x, y, z × 3 per triangle] }
+// read synchronously from the GLB's JSON chunk at build time (the mesh itself loads later), so a scene can use obj.at() / obj.parts right away
+function assetMeta(name) {
+  if (_META.has(name)) return _META.get(name);
+  let m = null; const d = MODELS[name];
+  if (d) try { const hd = atob(d.slice(0, 28)), n = (hd.charCodeAt(12) | hd.charCodeAt(13) << 8 | hd.charCodeAt(14) << 16 | hd.charCodeAt(15) << 24) >>> 0;
+    const s = atob(d.slice(0, Math.ceil((20 + n) / 3) * 4)).slice(20, 20 + n);
+    m = JSON.parse(new TextDecoder().decode(Uint8Array.from(s, c => c.charCodeAt(0)))).asset?.extras?.wie ?? null; } catch (e) { console.error('asset ' + name + ': hand-over data unreadable (' + (e?.message ?? e) + ')'); }
+  _META.set(name, m); return m;
+}
 function asset(p, name, x = 0, z = 0, o = {}) {
   const root = new THREE.Group(); root.name = name; root.position.set(x, o.y ?? groundH(x, z), z); root.rotation.y = o.ry ?? 0; root.scale.setScalar(o.scale ?? 1);
   if (o.dyn) dyn(root); (p ?? world).add(root);
@@ -3066,15 +3077,60 @@ function asset(p, name, x = 0, z = 0, o = {}) {
   if (!ASSETS.has(name)) { const u8 = Uint8Array.from(atob(data), c => c.charCodeAt(0));
     const pr = new Promise(res => new GLTFLoader().parse(u8.buffer, '', g => res(g.scene), e => { console.error('asset ' + name + ': ' + (e?.message ?? e)); res(null); }));
     ASSETS.set(name, pr); PENDING.push(pr); }
+  const meta = assetMeta(name), k = o.h && meta?.size?.[1] ? o.h / meta.size[1] : 1;
+  let hold = null; root.parts = {};
+  if (meta) {   // v3.17: model inside a holder scaled synchronously (h), movable parts as groups on their pivots — usable before the mesh has loaded
+    hold = new THREE.Group(); hold.scale.setScalar(k); root.add(hold); root.userData.k = k;
+    const P = meta.parts ?? {}, mk = n => { if (root.parts[n]) return root.parts[n]; const q = P[n], g = dyn(new THREE.Group()); g.name = 'part:' + n; Object.assign(g.userData, q.ud ?? {});
+      const par = q.parent ? mk(q.parent) : hold, pp = q.parent ? P[q.parent].pivot : [0, 0, 0]; g.position.set(q.pivot[0] - pp[0], q.pivot[1] - pp[1], q.pivot[2] - pp[2]); par.add(g); return root.parts[n] = g; };
+    for (const n in P) mk(n);
+    const pick = re => Object.keys(root.parts).filter(n => re.test(n)).sort().map(n => root.parts[n]);
+    if (pick(/^door/).length) root.doors = pick(/^door/); if (pick(/^window/).length) root.windows = pick(/^window/);   // openDoor(obj, t, { i }) / openWindow(obj, t)
+    const M = meta.marks ?? {}, miss = n => console.error('asset ' + name + ': no mark "' + n + '" (has: ' + (Object.keys(M).join(', ') || 'none') + ')');
+    root.marks = Object.keys(M).sort();
+    root.at = n => { const m = M[n]; if (!m) { miss(n); return root.position.toArray(); } root.updateWorldMatrix(true, false); return v3(m[0] * k, m[1] * k, m[2] * k).applyMatrix4(root.matrixWorld).toArray(); };
+    root.dir = n => { const m = M[n]; if (!m) { miss(n); return root.rotation.y; } root.updateWorldMatrix(true, false); const d = v3(Math.sin(m[3]), 0, Math.cos(m[3])).transformDirection(root.matrixWorld); return Math.atan2(d.x, d.z); };
+    root.path = pre => root.marks.filter(n => n.startsWith(pre)).sort((a, b) => a.localeCompare(b, 'en', { numeric: true })).map(n => { const q = root.at(n); return [q[0], q[2]]; });   // marks path_a_1, path_a_2 … → [[x, z], …] for walk()
+    root.lights = (q = {}) => root.marks.filter(n => n.startsWith(q.prefix ?? 'light')).slice(0, q.max ?? 2).map(n => { const a = root.at(n); return glow(a[0], a[1], a[2], { color: '#FFD08A', intensity: 18, dist: 9, flicker: 0, ...q }); });
+    if (o.walk && meta.walk?.length) { WALKSURF.push({ root, tri: meta.walk, k });   // walk surface: figures stand on the model's stairs, roofs and walkways (groundH)
+      if (WALKSURF.length === 1) DEFER.unshift(_walkSurf); }
+  } else if (o.walk) console.warn('asset ' + name + ': no walk surface in this model');
   PENDING.push(ASSETS.get(name).then(src => {
     if (!src) return; const s = src.clone();
     s.traverse(m => { if (!m.isMesh) return; m.castShadow = o.shadow !== false; m.receiveShadow = true;
       if (o.tint) { const one = mt => { const c = typeof o.tint === 'string' ? o.tint : o.tint[mt.name]; if (!c) return mt; const k = mt.clone(); k.color.set(c); if (k.emissive && k.emissive.getHex() !== 0) k.emissive.set(c); return k; };   // v3.12: glowing parts take the tint as glow too (signal on/off)
         m.material = Array.isArray(m.material) ? m.material.map(one) : one(m.material); } });
+    if (hold) { for (const n in meta.parts ?? {}) { const nd = s.getObjectByName(THREE.PropertyBinding.sanitizeNodeName(meta.parts[n].node)); if (!nd) { console.error('asset ' + name + ': part node ' + n + ' missing'); continue; }
+        nd.removeFromParent(); nd.position.set(0, 0, 0); nd.quaternion.identity(); root.parts[n].add(nd); }
+      hold.add(s); return; }
     if (o.h) { const b = new THREE.Box3().setFromObject(s), hh = b.max.y - b.min.y; if (hh > 0) s.scale.multiplyScalar(o.h / hh); }
     root.add(s);
   }));
   return root;
+}
+function _walkSurf() {   // v3.17: groundH also sees the walk surfaces of asset(…, { walk: true }) — highest surface under (x, z), 2-m grid
+  const T = [], C = 2, grid = new Map(), A = new THREE.Vector3(), B = new THREE.Vector3(), D = new THREE.Vector3();
+  for (const S of WALKSURF) { S.root.updateWorldMatrix(true, false); const tr = S.tri, k = S.k;
+    for (let i = 0; i + 8 < tr.length; i += 9) { A.set(tr[i] * k, tr[i + 1] * k, tr[i + 2] * k).applyMatrix4(S.root.matrixWorld); B.set(tr[i + 3] * k, tr[i + 4] * k, tr[i + 5] * k).applyMatrix4(S.root.matrixWorld); D.set(tr[i + 6] * k, tr[i + 7] * k, tr[i + 8] * k).applyMatrix4(S.root.matrixWorld);
+      const t = [A.x, A.y, A.z, B.x, B.y, B.z, D.x, D.y, D.z], ti = T.push(t) - 1;
+      for (let gx = Math.floor(Math.min(A.x, B.x, D.x) / C); gx <= Math.floor(Math.max(A.x, B.x, D.x) / C); gx++)
+        for (let gz = Math.floor(Math.min(A.z, B.z, D.z) / C); gz <= Math.floor(Math.max(A.z, B.z, D.z) / C); gz++) { const key = gx + ',' + gz; (grid.get(key) ?? grid.set(key, []).get(key)).push(ti); } } }
+  const g0 = groundH;
+  groundH = (X, Z) => { let h = g0(X, Z); const L = grid.get(Math.floor(X / C) + ',' + Math.floor(Z / C)); if (!L) return h;
+    for (const i of L) { const t = T[i], d = (t[5] - t[8]) * (t[0] - t[6]) + (t[6] - t[3]) * (t[2] - t[8]); if (Math.abs(d) < 1e-9) continue;
+      const u = ((t[5] - t[8]) * (X - t[6]) + (t[6] - t[3]) * (Z - t[8])) / d, v = ((t[8] - t[2]) * (X - t[6]) + (t[0] - t[6]) * (Z - t[8])) / d, w = 1 - u - v;
+      if (u >= -1e-4 && v >= -1e-4 && w >= -1e-4) h = Math.max(h, u * t[1] + v * t[4] + w * t[7]); }
+    return h; };
+}
+// animate(node | part, [[t, { x, y, z, rx, ry, rz }], …], { e, sound }) — keyframes for a part or object, offsets from where it rests (m / rad): lids, hatches, bars,
+// wheels, turrets. Each key eases in with its own e (inOut | out | in | lin | back) or the default; a pure function of t. Doors and windows: openDoor().
+function animate(obj, keys, o = {}) {
+  const node = dyn(obj.g ?? obj.root ?? obj), r0 = { x: node.position.x, y: node.position.y, z: node.position.z, rx: node.rotation.x, ry: node.rotation.y, rz: node.rotation.z };
+  const K = keys.map(([t, v, e]) => ({ t, v, e: e ?? v.e })).sort((a, b) => a.t - b.t), F = ['x', 'y', 'z', 'rx', 'ry', 'rz'], val = (q, f) => q.v[f] ?? 0;
+  if (o.sound) for (let i = 1; i < K.length; i++) sfx(K[i - 1].t, o.sound, 0.5);
+  return tick(t => { let i = 0; while (i < K.length - 1 && K[i + 1].t <= t) i++;
+    const a = K[i], b = K[i + 1], u = !b || t <= a.t ? (t < a.t ? 0 : 1) : (EASE[b.e ?? o.e ?? 'inOut'] ?? EASE.inOut)(clamp((t - a.t) / (b.t - a.t)));
+    for (const f of F) { const v = !b || t <= a.t ? val(a, f) : lerp(val(a, f), val(b, f), u), tg = f[0] === 'r' ? node.rotation : node.position; tg[f[f.length - 1]] = r0[f] + v; } });
 }
 
 // --- interactions: people and objects — everything a pure function of t (frame-exact export) ---
@@ -11725,7 +11781,6 @@ function instrument(f, kind = 'guitar', t0 = 0, t1 = 1e9, o = {}) {
    jello, fire that spreads (burn, spreadFire), cracked glass (crackGlass), camera moves (vertigo, crashZoom, droneShot, shaky) */
 /* ====================================================================== */
 // ---- camera effects (applied after the CAM keys, before the frame is drawn) ----
-const CAMFX = []; let CAMROLL = 0;
 // vertigo(t0, t1, { amount, at }) — dolly zoom: the camera pulls back while the lens zooms in (or the reverse with amount < 0); the subject keeps its size, the world stretches
 function vertigo(t0, t1, o = {}) { const A = o.amount ?? 0.8; CAMFX.push((t, P, L, fov) => { if (t < t0 || t > t1 + (o.hold ?? 0)) return; const k = EASE.inOut(clamp((t - t0) / (t1 - t0))), s = 1 + A * k;
   P.sub(L).multiplyScalar(s).add(L); return THREE.MathUtils.radToDeg(2 * Math.atan(Math.tan(THREE.MathUtils.degToRad(fov) / 2) / s)); }); sfx(t0, 'riser', 0.6); return t1; }
@@ -11742,6 +11797,28 @@ function droneShot(t0, t1, pts, o = {}) {
 }
 // shaky(t0, t1, { amp }) — handheld action camera: jitter, bumps, small rolls
 function shaky(t0, t1, o = {}) { const a = o.amp ?? 1; CAMFX.push((t, P, L) => { if (t < t0 || t > t1) return; const e = env3(t, t0, t1, 0.2, 0.2) * a; P.x += noise1(t * 4.1) * 0.12 * e; P.y += noise1(t * 3.3 + 9) * 0.1 * e; L.x += noise1(t * 5.3 + 4) * 0.18 * e; L.y += noise1(t * 4.7 + 21) * 0.15 * e; CAMROLL += noise1(t * 2.2 + 7) * 0.04 * e; }); }
+// v3.17 camPath('name', t0, { at, speed, dur, from, to, tr, td, dir, dof, hand, fy }) — camera path planned in Blender (tools/blender_cam.py → assets/cams/<name>.json):
+// → two CAM keys (start with cut + transition, end), spread them into CAM like shot(). at: the asset the path was planned around (it follows its
+// position, turn and scale; also a track() name or [x, z, ry] — CAM in the story cannot see scene objects), without at: world coordinates. speed / dur: play faster or stretch to dur s; from / to: seconds of the path.
+// Lens and roll come from Blender too. Collision checks (CAMCLIP) and the shot audit see the real path.
+function camPath(name, t0, o = {}) {   // callable in the story's CAM: everything that needs the engine runs per frame
+  const C = CAMPATHS[name]; if (!C) { console.error('camPath: ' + name + ' missing (assets/cams/' + name + '.json)'); return []; }
+  const cl = (v, a, b) => Math.min(b, Math.max(a, v)), li = (a, b, u) => a + (b - a) * u;
+  const n = C.n, len = (n - 1) / C.fps, a = cl(o.from ?? 0, 0, len), b = cl(o.to ?? len, a, len), sp = o.dur ? (b - a) / o.dur : (o.speed ?? 1), dur = Math.round((b - a) / sp * 1e6) / 1e6;
+  const fr = t => cl(((t - t0) * sp + a) * C.fps, 0, n - 1);
+  const s3 = (A, t) => { const f = fr(t), i = Math.min(Math.floor(f), Math.max(n - 2, 0)), j = Math.min(i + 1, n - 1), u = f - i; return [li(A[3 * i], A[3 * j], u), li(A[3 * i + 1], A[3 * j + 1], u), li(A[3 * i + 2], A[3 * j + 2], u)]; };
+  const s1 = (A, t) => { const f = fr(t), i = Math.min(Math.floor(f), Math.max(n - 2, 0)), j = Math.min(i + 1, n - 1); return li(A[i], A[j], f - i); };
+  let M = null;   // model → world, resolved on first use: an object, a track() name or [x, z, ry] (on the ground there)
+  const W = q => { const at = o.at; if (at == null) return q;
+    if (Array.isArray(at)) { if (!M) { const [x, z, ry = 0] = at; M = new THREE.Matrix4().compose(new THREE.Vector3(x, groundH(x, z), z), new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), ry), new THREE.Vector3(1, 1, 1)); } return new THREE.Vector3(...q).applyMatrix4(M).toArray(); }
+    const ob = typeof at === 'string' ? TRACK[at]?.obj : (at.g ?? at.root ?? at); if (!ob) { console.error('camPath ' + name + ': at "' + at + '" unknown (track() it)'); return q; }
+    ob.updateWorldMatrix(true, false); const k = ob.userData.k ?? 1; return new THREE.Vector3(q[0] * k, q[1] * k, q[2] * k).applyMatrix4(ob.matrixWorld).toArray(); };
+  const p = t => W(s3(C.p, t)), l = t => W(s3(C.l, t)), FV = Array.isArray(C.fov) ? C.fov : null, RL = Array.isArray(C.roll) ? C.roll : null;
+  const fov0 = FV ? s1(FV, t0) : C.fov ?? 45;
+  if (FV || RL) CAMFX.push((t, P, L, f) => { if (t < t0 || t > t0 + dur) return; if (RL) CAMROLL += s1(RL, t); return FV ? f * s1(FV, t) / fov0 : undefined; });
+  const base = { p, l, fov: fov0, fy: o.fy ?? 0.5, dof: o.dof ?? 0, hand: o.hand ?? 0 };
+  return [{ t: t0, ...base, cut: true, tr: o.tr, td: o.td, dir: o.dir }, { t: t0 + dur, ...base, e: 'lin' }];
+}
 // ---- crowds ----
 // audience(p, x, z, { rows, cols, gap, rise, ry, t0, ola: { t0, t1, speed }, cheer: [[t0, t1], …], flee: { at, t, speed }, jostle, shirts }) — bleachers full of people (one instanced crowd)
 function audience(p, x, z, o = {}) {

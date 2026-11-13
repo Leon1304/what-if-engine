@@ -3,6 +3,8 @@
 # hazard stripes, caged lamp, gun slits with steel shutters, vent pipes, periscope, antenna, side ladder, conduit, back hatch, exhaust;
 # concrete damage with exposed rebar, cracks, grime streaks, moss, rubble, barbed wire on the roof edge, concertina wire, MG nest,
 # searchlight, warning sign, drain pipe, ammo crates, oil barrels, sandbag walls, steps. Front = -y in Blender = +z in three.js.
+# v3.17 hand-over: parts door (+ wheel, bars), hatch, searchlight, mg; marks door, door_out, doorway, path_door_1-3, ladder, roof, mg,
+# light_door, light_search, cam_door; walk surface on the turf roof and the steps (see docs/API.md, "Übergabe aus Blender").
 # Materials (tint keys): concrete, concrete_dark, turf, steel, steel_dark, rust, void, sandbag, hazard_y, hazard_k, lamp, wood, moss,
 # grime, barrel, white.
 # Rebuild: Blender -b --factory-startup --python tools/blender_asset.py -- assets/own/src/bunker.py
@@ -49,6 +51,7 @@ def _shell(coll):
     yd = ye + 0.28                                 # recessed face
     DW, DH, dz = 2.1, 1.95, 0.42
     add('door', box(DW, 0.12, DH, (0, yd - 0.05, dz), bevel_w=0.03), steel)
+    add('door_void', box(DW - 0.04, 0.004, DH - 0.04, (0, yd - 0.004, dz + 0.02)), void)   # v3.17: dark passage behind the door (seen when it opens)
     add('door_panel', recess(box(DW - 0.3, 0.06, DH - 0.3, (0, yd - 0.1, dz + 0.15), bevel_w=0.01), (0, -1, 0), 0.08, -0.02), steel)
     add('wheel', torus(0.3, 0.035, (0.25, yd - 0.2, dz + 1.0), seg=14, seg2=6), steel_d)
     add('wheel_hub', cyl(0.07, 0.12, (0.25, yd - 0.24, dz + 1.0), seg=8, axis='Y'), steel_d)
@@ -152,6 +155,7 @@ def build(coll):
 
     W, D, H, F = 9.0, 7.0, 2.9, 0.3
     yf, ye = -D / 2, -D / 2 - 1.6
+    ED, EW, EH = 1.6, 3.4, 2.75
     yd, DW, DH, dz = ye + 0.28, 2.1, 1.95, 0.42
     top = F + H
     bpy.context.view_layer.update()
@@ -273,4 +277,35 @@ def build(coll):
     tb = cyl(0.29, 0.88, (0, 0, 0), seg=12, axis='X'); bmesh.ops.rotate(tb, cent=(0, 0, 0), matrix=Matrix.Rotation(0.5, 3, 'Z'), verts=tb.verts)
     bmesh.ops.translate(tb, vec=(-4.3, -5.0, 0.29), verts=tb.verts); add('barrel_down', tb, barrel)
     add('spill', box(0.9, 0.7, 0.01, (-4.0, -5.5, 0.0), rz=0.4), void)
+
+    # v3.17 hand-over to the engine: movable parts (the engine animates them), anchors, walk surface
+    ofn = lambda *pre: [o for o in out if o.name.split('.')[0].startswith(pre)]
+    hat = [o for o in out if o.name.split('.')[0] == 'hatch']
+    hz = max(v.co.z for o in hat for v in o.data.vertices); yh = max(v.co.y for o in hat for v in o.data.vertices)   # top back edge of the hatch: it swings up from there
+    part(ofn('door_panel', 'rivet') + [o for o in out if o.name.split('.')[0] == 'door'], 'door', (-DW / 2, yd - 0.11, dz), sign=-1, angle=1.75)
+    part(ofn('wheel', 'wheel_hub', 'spoke'), 'wheel', (0.25, yd - 0.2, dz + 1.0), parent='door')
+    part(ofn('lockbar'), 'bars', (0, yd - 0.17, dz + 1.0), parent='door')
+    part(ofn('hatch_bar') + hat, 'hatch', (2.2, yh, hz))
+    part(ofn('sl_yoke', 'sl_housing', 'sl_lens'), 'searchlight', (sx, sy, sz))
+    part(ofn('mg_body', 'mg_barrel', 'mg_shroud', 'mg_mag'), 'mg', (cx, cy - 0.1, cz + 0.6))
+    mark('door', (0, ye - 1.2, 0), math.pi, coll)                 # in front of the steps, facing the door
+    mark('door_out', (0, ye - 1.2, 0), 0.0, coll)                 # same spot, facing out (someone stepping out)
+    mark('doorway', (0, yd - 0.35, dz), math.pi, coll)            # on the threshold, facing in: walk here, then vanish() into the dark passage
+    mark('ladder', (W / 2 + 0.9, -1.75, 0), -math.pi / 2, coll)   # foot of the east ladder, facing the wall
+    mark('roof', (0.4, 0.4, tz(0.4, 0.4)), 0.0, coll)              # middle of the turf roof
+    mark('mg', (cx, cy + 0.45, cz), 0.0, coll)                    # gunner behind the MG, facing the yard
+    mark('light_door', (0, ye - 0.45, F + EH - 0.45), 0.0, coll)   # caged lamp over the door
+    mark('light_search', (sx, sy - 0.6, sz + 0.65), 0.0, coll)    # in front of the searchlight lens
+    mark('cam_door', (1.6, ye - 6.5, 1.5), math.pi + 0.25, coll)  # camera spot: the door from the yard
+    for i, (x, y) in enumerate([(-4.5, ye - 3.0), (-1.2, ye - 2.2), (0, ye - 1.2)]):   # path_door_1…3: across the yard to the door
+        mark(f'path_door_{i + 1}', (x, y, 0), 0.0, coll)
+    # walk surface: turf roof (1-m grid on the real roof shape) and both steps — not the entrance cap: it hangs over the doorway, and
+    # groundH would lift everyone walking through the door onto it (a walk surface never lies over a passage)
+    wb = bmesh.new(); nx, ny, x0, y0, st = 9, 7, -4.2, -3.2, 0.95
+    G = [[wb.verts.new((x0 + i * st, y0 + j * st, tz(x0 + i * st, y0 + j * st) - 0.04)) for j in range(ny)] for i in range(nx)]
+    for i in range(nx - 1):
+        for j in range(ny - 1): wb.faces.new((G[i][j], G[i + 1][j], G[i + 1][j + 1], G[i][j + 1]))
+    for (cx_, cy_, w_, d_, z_) in ((0, ye - 0.6, DW + 0.8, 0.4, 0.14), (0, ye - 0.2, DW + 0.6, 0.4, 0.28)):
+        q = [wb.verts.new((cx_ + a * w_ / 2, cy_ + b * d_ / 2, z_)) for a, b in ((-1, -1), (1, -1), (1, 1), (-1, 1))]; wb.faces.new(q)
+    walk_surface(wb, coll)
     return out

@@ -123,6 +123,16 @@ if names:
             if os.path.exists(f): found[nm] = base64.b64encode(open(f, 'rb').read()).decode(); print('model:', f); break
         else: print('model missing:', nm + '.glb')
     t = t.replace('/* @MODELS */{}', '/* @MODELS */' + json.dumps(found, separators=(',', ':')), 1)
+# v3.17 camera paths from Blender: camPath('name', …) → assets/cams/<name>.json embedded
+_cams = sorted(set(re.findall(r"camPath\(\s*'([^']+)'", _code)))
+if _cams:
+    C = {}
+    for nm in _cams:
+        for d in (os.path.join(_here, 'assets', 'cams'), os.path.join(_here, '.engine', 'assets', 'cams')):
+            f = os.path.join(d, nm + '.json')
+            if os.path.exists(f): C[nm] = json.load(open(f, encoding='utf-8')); print('cam path:', f); break
+        else: print('cam path missing:', nm + '.json')
+    t = t.replace('/* @CAMPATHS */{}', '/* @CAMPATHS */' + json.dumps(C, separators=(',', ':')), 1)
 # v3.6 mocap on figure(): on by default (CFG.mocap: false = off) → the clips the engine picks by itself (idle, talking, sitting, walk, jog, sprint, sneak, zombie)
 # + every clip the scene names (anim(f, …), figure({ idle: … })) from models/mocap.json
 _mcoff = re.search(r'\bmocap\s*:\s*false', re.search(r'const CFG\s*=\s*\{[^\n]*', story).group(0) if re.search(r'const CFG\s*=\s*\{[^\n]*', story) else '')

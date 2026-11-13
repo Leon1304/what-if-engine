@@ -14,7 +14,7 @@ one() {   # one scene → its result in <name>.res (first line "ok …" or "FAIL
   s=$1
   if ! python3 assemble.py "$s" --title "Smoke test" --no-voice > "$s.log" 2>&1; then { echo "FAIL $s (assemble)"; tail -6 "$s.log"; } > "$s.res"; return; fi
   timeout 600 node render.mjs "$s.html" --shots 1,4,8 --w 270 --out "shots_$s" >> "$s.log" 2>&1
-  if grep -q "PAGE DID NOT START\|PAGE ERRORS\|model missing" "$s.log" || [ "$(ls shots_$s/*.png 2>/dev/null | wc -l)" -lt 3 ]; then { echo "FAIL $s"; grep -A10 "PAGE" "$s.log" | head -14; } > "$s.res"
+  if grep -q "PAGE DID NOT START\|PAGE ERRORS\|model missing\|cam path missing" "$s.log" || [ "$(ls shots_$s/*.png 2>/dev/null | wc -l)" -lt 3 ]; then { echo "FAIL $s"; grep -A10 "PAGE" "$s.log" | head -14; } > "$s.res"
   else echo "ok   $s  $(grep -o '"meshes":[0-9]*' "$s.log" | head -1)" > "$s.res"; fi
 }
 export -f one

@@ -289,7 +289,7 @@
 "nature/woodlog_moss":{"by":"Quaternius (CC0 1.0)","src":"Ultimate Nature Pack by Quaternius/FBX/WoodLog_Moss.fbx","size":[0.897,0.688,2.67],"min":[-0.566,-0.001,-1.498],"verts":1842,"kb":54},
 "nature/woodlog_snow":{"by":"Quaternius (CC0 1.0)","src":"Ultimate Nature Pack by Quaternius/FBX/WoodLog_Snow.fbx","size":[0.627,0.584,2.495],"min":[-0.369,-0.019,-1.174],"verts":840,"kb":22},
 "own/bench":{"by":"what-if-engine (own, CC0 1.0)","src":"assets/own/src/bench.py","size":[1.87,1.0,0.665],"min":[-0.935,0.0,-0.333],"verts":424,"tris":732,"ao":true,"kb":57},
-"own/bunker":{"by":"what-if-engine (own, CC0 1.0)","src":"assets/own/src/bunker.py","size":[9.784,6.55,11.404],"min":[-4.892,0.0,-5.702],"verts":5662,"tris":9972,"ao":true,"kb":709},
+"own/bunker":{"by":"what-if-engine (own, CC0 1.0)","src":"assets/own/src/bunker.py","size":[9.784,6.55,11.404],"min":[-4.892,0.0,-5.702],"verts":5670,"tris":9984,"ao":true,"kb":725,"parts":["bars","door","hatch","mg","searchlight","wheel"],"marks":["cam_door","door","door_out","doorway","ladder","light_door","light_search","mg","path_door_1","path_door_2","path_door_3","roof"],"walk":100},
 "own/bus_stop":{"by":"what-if-engine (own, CC0 1.0)","src":"assets/own/src/bus_stop.py","size":[4.921,2.9,1.9],"min":[-2.461,0.0,-0.95],"verts":392,"tris":664,"ao":true,"kb":55},
 "own/car_hatch":{"by":"what-if-engine (own, CC0 1.0)","src":"assets/own/src/car_hatch.py","size":[2.12,1.582,4.19],"min":[-1.06,0.0,-2.095],"verts":1086,"tris":1800,"ao":true,"kb":128},
 "own/car_van":{"by":"what-if-engine (own, CC0 1.0)","src":"assets/own/src/car_van.py","size":[2.49,2.371,5.41],"min":[-1.245,0.0,-2.705],"verts":1198,"tris":1964,"ao":true,"kb":141},
