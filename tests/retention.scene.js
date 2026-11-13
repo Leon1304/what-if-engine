@@ -34,20 +34,12 @@
   const f1 = figure({ shirt: '#C0392B', pants: '#2E3A5C', hat: '#D9B65C' }); world.add(f1.root);
   walk(f1, [[-7.6, 7.9], [-5.2, 8.5]], { t0: 2.8, t1: 12, speed: 0.8 });
   vanish(f1.root, 12.6, { dur: 0.01 });
-  const f2 = figure({ shirt: '#C0392B', pants: '#2E3A5C', hat: '#D9B65C', hold: '#30343A', expr: t => t < 15 ? 'scared' : 'happy' });
+  const f2 = figure({ shirt: '#C0392B', pants: '#2E3A5C', hat: '#D9B65C', expr: t => t < 15 ? 'scared' : 'happy' });
   const f2g = grp(world, 10.1, sl.top, -5.9, -2.3); f2g.add(f2.root);
   track('farmer', f2g);                                                                      // close-up target (CAM: shot('close', …, 'farmer'))
   glow(8.4, sl.top + 2.4, -7.6, { t0: 14, intensity: 30, dist: 7, color: '#C8D8FF', flicker: 0, rampIn: 0.01 });   // face fill light for the close-up
   tick(t => { f2g.visible = t >= 14; pose(f2, 'hold', 0, t); f2.root.rotation.y = 0.3 * Math.sin(t * 0.8); });
-  const LP = new THREE.Vector3(9.6, sl.top + 1.4, -6.2), TP = new THREE.Vector3(6.5, 0, -8.5);
-  const beam = new THREE.SpotLight('#FFF6D8', 0, 40, 0.36, 0.6, 1.2); beam.position.copy(LP); world.add(beam, beam.target);
-  const cone3 = new THREE.Mesh(new THREE.ConeGeometry(1, 1, 18, 1, true), mat('#FFF3C4', { basic: true, opacity: 0.09 })); world.add(cone3);
-  tick(t => {
-    TP.set(6.8 + 1.6 * Math.sin(t * 0.9), 0, -8.6 + 1.2 * Math.cos(t * 0.7));
-    beam.target.position.copy(TP); beam.intensity = t >= 14 ? 900 : 0; cone3.visible = t >= 14;
-    const len = LP.distanceTo(TP); cone3.scale.set(len * 0.38, len, len * 0.38);
-    cone3.position.copy(LP).add(TP).multiplyScalar(0.5); cone3.lookAt(TP); cone3.rotateX(-Math.PI / 2);
-  });
+  flashlight(f2, { t0: 14, at: t => [6.8 + 1.6 * Math.sin(t * 0.9), 0, -8.6 + 1.2 * Math.cos(t * 0.7)], arm: false, intensity: 900, dist: 40, width: 0.38, k: 0.2 });   // torch in his hand, beam sweeps the yard
 
   // hordes rise from the wheat, mass at the back fence, break through at ~12.3 s and surround the silo
   const line = [[-8, -12.6], [13, -12.6]], silo0 = [10.5, -5.5];

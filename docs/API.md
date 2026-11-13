@@ -1,8 +1,8 @@
 # what-if-engine — API-Referenz
 
-Vollständige Referenz der Szenen-API von `template.html` (Engine v2.16). Die SKILL.md des /whatif-Skills enthält nur die Regeln
-und einen Kurzüberblick; hier stehen alle Funktionen mit Optionen. Abschnitte gezielt lesen, z. B.
-`sed -n '/^## Tiere/,/^## /p' .engine/docs/API.md` oder `grep -n -A6 'ride(' .engine/docs/API.md`.
+Vollständige Referenz der Szenen-API von `template.html` (aktueller Stand: siehe `git log` bzw. die Versionskommentare in `template.html`; „Neu in vX“ unten = seit dieser Version). Die SKILL.md des /whatif-Skills enthält nur die Regeln
+und einen Kurzüberblick; hier stehen alle Funktionen mit Optionen. Pfade sind relativ zur Wurzel des Engine-Repos. Abschnitte gezielt lesen, z. B.
+`sed -n '/^## Tiere/,/^## /p' docs/API.md` oder `grep -n -A6 'ride(' docs/API.md`.
 
 Konventionen: 1 Einheit = 1 m, y nach oben, Modelle schauen nach +z, heading = `atan2(dx, dz)`. Zeiten sind Szenenzeit in s.
 Jedes Bild ist eine reine Funktion von t: alles Bewegte über `tick`, `late`, `walk`, `fly`, `sail` … nie mit Zustand zwischen Frames.
@@ -57,6 +57,38 @@ Hauptmotive anleuchten mit `glow`, `lamp`, Fenstern über `lit` und hellen, satt
 Kontaktschatten (`CFG.ao`, Standard 0.55), Glühen auf Feuer, Explosionen, Fenstern, Neon und Zombie-Augen (`CFG.bloom` 0.45, `bloomThreshold` 1.2; nur der Überschuss glüht, angestrahlte Flächen überstrahlen nicht), Sonnenschatten passend zum Bildausschnitt (in Nahaufnahmen scharf, `CFG.shadowFit`), echte Bewegungsunschärfe auf schnellen Frames (`CFG.motionBlur: 'auto'`: Schüttler, schnelle Kamera, Rennende nah an der Linse; `MBLUR = [[t0, t1]]` erzwingt sie; nur im Export, nicht in der Vorschau; Zahl der Teilbilder passt sich der Bewegung an, `CFG.mbGap` / `mbMax`, siehe **Bewegungsunschärfe passt sich an**), abgerundete, weich schattierte Figuren (`CFG.smooth`). Umgebungslicht `CFG.env: true` nur bei „beste qualität“.
 
 
+## `CFG`-Schlüssel (Übersicht der bisher nicht beschriebenen)
+
+Alle übrigen `CFG`-Schlüssel stehen bei ihrer Funktion in diesem Dokument (`grep -n 'CFG\.<name>' docs/API.md`). Standardwert in Klammern.
+
+| Schlüssel | Wirkung |
+|---|---|
+| `seed` (7) | Startwert für den Zufall (`rnd`, `rr`, `pick`); anderer Wert = anderes Layout |
+| `locale` ('en-US') | Zahlenformat aller Zähler und Karten |
+| `channel` ('@whatifthishappenedscenarios') | Kanal-Handle oben links in jedem Video; `series.handle` (sonst `series.name`) hat Vorrang, `false` = keins |
+| `badge` ('What if') | Text der Badge oben links (Erklär-, Conspiracy- und True-Crime-Videos setzen ihn selbst) |
+| `accent` ('yellow') · `accentInk` | Akzentfarbe (Name, Hex oder `auto` aus dem Titel); `accentInk` = Schriftfarbe auf dem Akzent (sonst automatisch) |
+| `filter` ('film') · `grain` (0.045) · `vignette` (0.4) | Bildlook `none` · `film` · `crt`; Körnung und Vignette (bei `none` aus) |
+| `shadows` (true) | Sonnenschatten an/aus |
+| `coverT` (1.0) | Zeitpunkt des Covers, wenn `THUMB.t` fehlt |
+| `transition` ('auto') | Übergang an Schnitten ohne `tr`: auto (whip, whip, zoom …) · whip · zoom · dip · blur · cut |
+| `karaoke` (true) · `wordRate` (0.085) | Wörter erscheinen wie gesprochen mit farbigem Kasten; schnellste Sekunden pro Wort |
+| `steveTitle` | falscher Titel unter Dr. Steves Namenskarte (jedes Video ein neuer) |
+| `cast` ({}) | weitere Namenskarten für `BEATS[].who` |
+| `statStagger` (0.45) · `countUp` (0.7) | Zähler erscheinen nacheinander (s Abstand); Zahlen zählen beim Erscheinen so lange hoch (s) |
+| `units` ('both') | Einheiten der Zähler: both (metrisch · imperial) · metric · imperial |
+| `dof` | `false` = keine Tiefenunschärfe (auch nicht automatisch in Nahaufnahmen) |
+| `bloomThreshold` (1.2) | ab welcher Helligkeit etwas glüht |
+| `aoRes` (0.5) | Auflösung der Kontaktschatten (AO) relativ zum Bild |
+| `mbThreshold` (0.02) | Bewegung pro Bild, ab der `motionBlur: 'auto'` einsetzt |
+| `softParticles` (true) | weiche Rauch-, Staub- und Feuerpartikel; `false` = alter kantiger Look |
+| `smoothSeg` (1) · `smoothCrowd` (false) | Rundungs-Segmente der Figurenteile; `smoothCrowd: true` = auch Massen gerundet (teurer) |
+| `inertia` (true) | Oberkörper reagiert beim Gehen auf Anfahren, Bremsen und Kurven |
+| `footIK` (true) · `footFloor` (true) | Füße passen sich Hängen an; stehende und gehende Figuren werden angehoben, bis die tiefste Sohle auf dem Boden steht |
+| `lod` (true) | Detailstufen: ferne Tiere, Vögel und Schiffe ohne Kleinteile (Abstand `lodFar`) |
+
+Ton-Schlüssel (`voice`, Musik und Geräusche in `AUDIO`) liest `voice.py` bzw. die Tonspur; sie stehen in der SKILL.md und werden hier nicht beschrieben.
+
 # Prüfung (v3.0)
 
 `node render.mjs page.html --audit` (läuft auch mit `--shots` und im Render-Workflow) meldet neben `MOTION:`/`HITBOX:`/`GORE:` jetzt `QA:`: Massenmitglieder ineinander oder in Props, Füße im Boden beim Stehen, Glieder, die auf Klötze zurückfallen mussten. `--video` prüft die fertigen Frames auf Streifen durchs Bild (`LINES:`, qa_lines.py). **Render-Stücke (v3.1):** Auf GitHub rendert jeder der 12 (lange Videos bis 20) Shards verschränkte Stücke von 10–30 Bildern (Stück c → Shard c % n), damit schwere Momente sich verteilen; Größe aus `whatif.plan(n, fps)` → `{ n, chunk }`. Seit v3.2 prüft der Encode-Job mit `--seams n` jede Stückgrenze der fertigen Bilder (qa_seams.py: auffälliger Bildwechsel genau an der Grenze → Bild noch einmal durchgespielt rendern und vergleichen) und meldet echte Sprünge als `SEAM:`. Ursache ist immer Zustand zwischen Bildern: aus t berechnen. Notschalter: `CFG.shard: 'block'` rendert wieder einen zusammenhängenden Block pro Shard (wie vor v3.1, langsamer). Der Render-Workflow schreibt alle Warnungen in die Zusammenfassung und hängt `<slug>-qa.txt` an das Release. `--strict` bricht bei jeder Warnung ab (Exit 3). **Regel:** Vor dem Rendern `--audit` laufen lassen und jede `QA:`-/`HITBOX:`-/`MOTION:`-Zeile beheben (seit v3.24 erzwungen: `--gate`, siehe **Qualitäts-Sperre (Gate)**).
@@ -71,6 +103,7 @@ Kontaktschatten (`CFG.ao`, Standard 0.55), Glühen auf Feuer, Explosionen, Fenst
 ## Material
 
 `mat(hex,{rough,metal,em,ei,opacity,basic,own})`. `own: true` = eigenes Material, z. B. um `emissiveIntensity` zu animieren.
+`shade(hex, dl, ds = 0)` → Hex-Farbe: dieselbe Farbe heller (`dl` > 0) oder dunkler (`dl` < 0, Helligkeit −1…1), `ds` ändert die Sättigung; gecacht. Für Farbabstufungen an einem Objekt (Kante, Schattenseite, Variation in Reihen) statt eigener Hex-Werte.
 
 ## Takt
 
@@ -95,6 +128,22 @@ Als letzte Zeile der Szene `biome(kind, {density, trees, keep: [[x, z, r]], area
 - `vehicle(p,x,z,{kind:'car'|'tractor'|'truck',color,ry})` → `{g, wheels}`
 - `lamp(p,x,z,{intensity, flicker})` – das Licht flackert leicht (`flicker: 0` = ruhig, Standard 0.05)
 - Stoff, der im Wind weht (bei Sturm stärker): `flagpole(p,x,z,{h, colors})`, `laundry(p,[[x,z],[x,z]])` (Wäscheleine), `cloth(p,{w, h, color, stripes, x, y, z, ry, pin:'left'|'top'})` (Banner, Vorhang)
+
+## Schilder, Bildschirme, Texturen aus Canvas
+
+Text und Bilder auf Schildern, Leuchtreklamen, Fernsehern und Anzeigetafeln kommen aus der Engine, nicht aus selbst gebauten Canvas-Helfern in der Szene (kein eigenes `FONT`, `panel`, `neonText`, `TEX`). **Regel:** Schilder und Bildschirme stehen mindestens 0,2 m vor dem, was dahinter ist (`wall: true` erledigt das), nie flach auf einer Wand → kein Z-Fighting; die eigene Trägerplatte gehört zum Schild (das Bild liegt mit Polygon-Offset darauf).
+- `canvasTex(w, h, draw)` → `THREE.CanvasTexture`: Canvas w × h px, `draw(ctx, w, h)` malt einmal; sRGB, Anisotropie 4. Grundbaustein für Etiketten, Fotos, Zettel, Karten (`warnSign`, `conspiracyBoard`, `warMap`, Gemälde nutzen ihn). Für eigene Materialien: `new THREE.MeshBasicMaterial({ map: canvasTex(…) })` + `dyn()`.
+- `signFont(px, font = 'block', { italic, weight })` → Canvas-Schriftangabe: `block` (Arial Black, fett) · `sans` · `serif` · `mono` · `hand` oder jede CSS-Schriftfamilie. In `canvasTex`-/`screenPanel`-Zeichnungen statt eigener `FONT`-Helfer.
+- `textSign(p, text, { w: 2, h, color: '#FFFFFF', bg: '#C62828' | false, border, radius: 0.12, font, italic, align, neon: true | '#hex', glow: 1.2, flicker: 0–1, seed, board: 0.06, frame, lit, res: 256, x, y, z, rx, ry, rz, wall, gap: 0.2 })` → `{ g, mesh, tex, at() }`: Schild mit Text (`\n` = neue Zeile), die Schrift füllt die Platte; `h` ohne Angabe aus der Textlänge. `y` = Mitte des Schilds, es schaut nach +z. `board` = Tiefe der Trägerplatte (Farbe `frame`, sonst `bg`; 0 = nur eine beidseitige Fläche). `neon` = leuchtende Röhrenschrift ohne Platte (glüht über Bloom, `flicker` lässt sie zufällig aussetzen, rein aus t), `lit: true` = selbstleuchtende Platte (Leuchtkasten). `wall: true` = (x, y, z) ist ein Punkt auf der Wandfläche, das Schild steht `gap` davor.
+- `screenPanel(p, w, h, draw, { res: 400, px: [cw, ch], fps: 30, frame: '#141518' | false, bezel: 0.04, depth: 0.05, glow, x, y, z, rx, ry, rz, wall, gap })` → `{ g, mesh, tex, at() }`: Fernseher, Monitor, LED-Wand, Anzeigetafel. `draw(ctx, cw, ch, t)` malt das Bild zur Szenenzeit t; vor jedem Zeichnen wird die Fläche schwarz gelöscht, das Bild ist also eine reine Funktion von t (neu gezeichnet, wenn sich `floor(t · fps)` ändert; `fps: 0` = einmal mit t = 0). Selbstleuchtend, mit Rahmen (`frame: false` = ohne).
+- Beispiel: `textSign(world, 'OPEN 24/7', { neon: '#FF4FB0', w: 2.6, x: 2, y: 3.3, z: -2.85, wall: true })` · `screenPanel(world, 1.6, 0.9, (c, w, h, t) => { c.fillStyle = '#FFF'; c.font = signFont(h * 0.3); c.fillText(t.toFixed(1), 20, h / 2); }, { x: 1.4, y: 1.75, z: -2.85, wall: true })`. Test: `tests/signs-beams`.
+
+## Weitere Props (Müll, Lava, Reaktor)
+
+- `trashBag(p, x, y, z, { kind: 'bag' | 'can' | 'box' | 'bottle', color, size: 1, ry })` → Gruppe: schlichter Müll ohne Marken (Müllsack mit Knoten, Dose, Karton, Flasche) für Deponien, Gassen, Vulkan-Erklärvideos.
+- `lavaLake(p, x, z, { r: 14, rim: 4, color, crust })` → `{ g, y, burn, fountain, at() }`: offener Lavasee im Krater (zackiger Felsrand, treibende schwarze Krustenplatten mit glühenden Rissen, Blasen, Hitzeflimmern, oranges Licht). `L.burn(obj, t, { from: [x, y, z], to: [x, z], h, spin })` wirft etwas im Bogen hinein: Spritzer, treibt, verkohlt, brennt, schrumpft weg. `L.fountain(t, x, z, { size })` = Lava-Fontäne mit Knall.
+- `fuelPool(p, x, z, { w: 8, d: 6, depth: 12, free: 0.6, racks: true, cut: false, hall: true, glow: 1, ry })` → `{ g, surfaceY, bottomY, rackTop, deckY, at(u, v) }`: Abklingbecken wie in Reaktorhallen (Stahlbecken, Brennelement-Gestelle am Boden mit blauem Tscherenkow-Leuchten, Laufsteg, Geländer, gelbe Kranbrücke). `cut: true` = Vorderwand (+z) aus Glas für den Querschnitt; `at(u, v)` = Anker auf der Vorderseite (u −1…1 quer, v 0 Oberfläche … 1 Boden) für Callouts.
+- Ohne eigene Testszene bisher, jetzt in `tests/props-coverage` / `tests/props-sea`: `busstop`, `trashcan`, `hydrant`, `planter`, `hedgehog`, `aedBox`, `tripodCam`, `grindSparks`, `swimPool` mit `airbed` und `divingBoard`, `portal`, `planetSet` · `rampDown`, `board`/`seatAt`, `salvo`, `paradrop`.
 
 ## Innenräume (v2.10)
 
@@ -148,6 +197,7 @@ Als letzte Zeile der Szene `biome(kind, {density, trees, keep: [[x, z, r]], area
 - Mond: `ground({color: '#8E8E94'})` + `biome('moon')` (Krater, Geröll), `lander(p,x,z,{ry})`, `flag(p,x,z,{colors})`, `crater(p,x,z,r)`, dazu die Erde am Himmel.
 - Mehrere Orte (Orbit, Mondoberfläche) mindestens 1,5 km auseinander bauen, z. B. das Orbit-Set bei x = 4000; nie übereinander, denn die Kamera sieht 1,2 km weit.
 - `rocket(p,x,z,{t0,size,acc})` → `{g, nozzle}` hebt bei t0 mit Flamme und Rauch ab; Höhe = ½·acc·(t−t0)².
+- `reentry(obj, pts, { t0, t1, breakAt, pieces: 6, size: 6, color, ease })` → `{ pos(t) }`: Satellit, Station oder Kapsel stürzt entlang `pts` (`[[x,y,z], …]`) durch die Atmosphäre: orange Plasmahülle, Feuer- und Rauchschweif; bei `breakAt` zerbricht es in brennende Teile, die auseinandertreiben und bis `t1` verglühen. Grollen bei t0, Knall bei `breakAt`.
 
 ## Action
 
@@ -271,6 +321,8 @@ Test: `tests/blender-handover`.
 
 - `walk(rig|obj, [[x,z],…], {t0, t1, speed, mode, loop, endMode, startMode, ramp})` setzt Pose und Laufrichtung automatisch: Die Figur fährt an und bremst ab (`ramp` in s, 0 = sofort), nimmt Kurven vorausschauend, legt sich beim Rennen in die Kurve und wechselt weich zwischen Laufen und Stehen. Wegen `ramp` kommt sie ca. 0,2–0,5 s später an als Weglänge/`speed`.
 - `appear(obj, t0, {from:'pop'|'rise'|'drop'})`, `vanish(obj, t0)`, `knock(obj, t0, {dir, axis})`.
+- `rigPos(rig, t, out?)` → `Vector3`: Position einer Figur zur Zeit t (bei `walk` aus dem Weg, sonst die aktuelle Position) – für Ziele, Abstände, Kamera-Funktionen, ohne Zustand.
+- `rigState(mode, u, t, { v, cl, sd, seatH, lean, tilt, dangle, armOff, zb })` → Objekt mit allen Gelenkwerten (`by`, `H`, `lt`/`lk`/`lf`, `rt`/`rk`/`rf`, `las`/`laz`/`lae`, `ras`/`raz`/`rae`, `crx`, `nrx` …): reine Pose für `mode` = walk · run · shamble · panic · cheer · point · hold · sit · float · lowg an der Zyklusstelle `u` (0–1); Figuren und Massen benutzen sie. In eigenen Haltungen über `f.fx.push((t, S) => { const A = rigState('sit', 0, t, { seatH: 0.45 }); for (const k in S) S[k] = lerp(S[k], A[k], w); })` einblenden.
 
 ## Interaktion mit Gegenständen (Pflicht: mindestens 2 pro Video)
 
@@ -279,7 +331,7 @@ Wenn die Handlung es hergibt, fassen die Figuren Dinge an, statt nur daneben zu 
 - Physik: `toss(obj, t, {from, to, h, bounces, spin, float})` fliegt im Bogen, springt auf und bleibt liegen; landet es im Wasser, spritzt es, und es geht unter oder treibt (`float`). Dazu `push(rig, obj, {t0, t1, to})` (schieben, die Figur läuft dahinter), `knockAway(obj, t, {dir, power})` (weggeschleudert), `shatter(obj, t)` (zersplittert mit Scherben und Klirren) und `wobble(obj, t, {amp})` (wackelt nach einem Treffer nach).
 - Türen: `openDoor(house | barn | car | gate, t, {i, close})`. Das Haus hat eine Tür mit dunklem Flur dahinter, die Scheune ein Schiebetor, Autos haben Fahrer- (`i: 0`) und Beifahrertür (`i: 1`). `openWindow(house, t, {i})` öffnet die vorderen Fenster, `gate(p,x,z,{w, ry})` baut ein Hoftor. Geräusche kommen automatisch.
 - Sitzen und Einsteigen: `sit(rig, t, {seat: bench | [x,y,z], t1, h})`. `enter(rig, vehicle, t, {out})`: Tür auf, einsteigen, mitfahren, mit `out` wieder aus. Danach fährt das Fahrzeug mit `drive`.
-- Licht: `flashlight(rig, {t0, t1, flicker})` mit Lichtkegel, `headlights(vehicle, {t0, t1, light})` (übrige Autos mit `light: false`, nur Kegel), `phone(rig, {t0, t1, light})` (leuchtendes Display, Kopf gesenkt; nachts `light: true` hellt das Gesicht auf), `lightning(t, {x, z})` und `lightningStorm(t0, t1, {every})` mit Blitz, Aufhellung und Donner. Gleichzeitig höchstens 3–4 echte Lichter (Spot, Glow, Lampe, Explosion).
+- Licht: `flashlight(rig, {t0, t1, flicker, at, arm, spot})` mit Lichtkegel (`at` = auf ein Ziel richten, siehe **Lichtkegel auf ein Ziel**), `headlights(vehicle, {t0, t1, light})` (übrige Autos mit `light: false`, nur Kegel), `phone(rig, {t0, t1, light})` (leuchtendes Display, Kopf gesenkt; nachts `light: true` hellt das Gesicht auf), `lightning(t, {x, z})` und `lightningStorm(t0, t1, {every})` mit Blitz, Aufhellung und Donner. Gleichzeitig höchstens 3–4 echte Lichter (Spot, Glow, Lampe, Explosion).
 - Spuren: `walk(…, {prints: true | '#hex'})` hinterlässt Fußabdrücke (Schnee, Sand, Schlamm). `drive(vehicle, pts, {t0, t1, speed, ramp, tracks, dust})` lässt die Räder drehen, die Nase beim Bremsen eintauchen und das Auto sich in Kurven neigen; dazu Reifenspuren, Bremsspuren und Staub. `splash(x, z, t, {size})` spritzt und zieht Wellenringe. Sprünge: `drive(…, {jumps: [[t, h, flugzeit]]})` (Nase hoch beim Absprung, Federn und Staub bei der Landung), `bumpy: 0–2` rüttelt im Gelände; Unfall siehe `crash()` unter Physik.
 - Bewegung auf die äußere Gruppe legen, `appear`/`vanish` auf eine innere.
 
@@ -350,6 +402,7 @@ Props sind statisch und werden beim Start zu wenigen Meshes verschmolzen (`bake`
 - `RULER = { label, show, hide, min, max, fmt, value | keys, marks: [[8849, 'Everest'], …], invert }`: Skala links mit Zeiger, Marken leuchten beim Passieren auf. Marken mindestens 8 % der Skala auseinander.
 - `FACTS`, `MYTH`, `GUESS`: Karten in der Mitte; Captions rutschen dann ins untere Drittel, Callouts und Lineal blenden aus. Pro Video 1–2 Faktenkarten, höchstens eine Mythos-Karte und eine Rate-Frage; Karten nie über das Schlüsselbild legen.
 - `STEPS = [[t, 'The heat'], …]`: nummerierter Schritt-Chip neben der Badge statt `PHASES`.
+- `conspiracyBoard(p, x, z, { ry, wall, items: [{ kind: 'photo' | 'note' | 'clip', icon, text }], links: [[i, j, snapT], …], cross: [[i, t], …], fall: t })` → `{ g, item(i) }`: Korkwand mit Fotos, Zetteln und roten Fäden; jeder Faden reißt bei `snapT`, `cross` streicht ein Element rot durch, `fall` lässt die Wand umkippen (Szenenzeit). Icons: ufo · moon · pyramid · eye · globe · bird · ship · monster · camera · rocket · question · skull. `item(i)` = Anker für `callout()`.
 - Globus (v2.7): `globeMark(planet, lat, lon, { t0 })` (Pin mit Puls-Ring), `globeArc(planet, [lat, lon], [lat, lon], { t0, t1, h })` (Bogen, der sich zeichnet: Route, Flugbahn), `globeArea(planet, [[lat, lon], …], { t0, color })` (Fläche, z. B. Bermuda-Dreieck) auf `planet()` und `layers()`; alle liefern einen Anker für `callout()`. lon 0 zeigt nach +z, die Kamera also auf die +z-Seite stellen und den Planeten mit Abstand ≥ 4 × r zeigen.
 - Größenvergleich (v2.7): `lineup(world, x, z, [{ kind, h, label }], { labels: { t, every, dur } })` stellt Dinge in echter Höhe nebeneinander (human, dog, cow, car, bus, truck, house, tree, palm, tower, lighthouse, silo, rocket, pyramid, plane, ship, whale, block), mit Höhen-Chips; `...L.shot(t, dur)` in `CAM` fährt vom Kleinsten zum Größten. Höchstes Objekt ≤ ca. 400 m, größere Vergleiche über `RULER`.
 - Zeitleiste (v2.7): Zähler `type: 'timeline'`, `from`, `to`, `marks: [[1969, 'Apollo 11'], …]`, Wert = Jahr (`fmt: 'year'`, negativ = BC).
@@ -611,6 +664,7 @@ Zusätzliche Felder in `THUMB` (je Variante), sparsam 1–2 pro Thumbnail:
 
 # Tests
 `bash tests/run.sh [name …]` baut die Beispiel-Story aus `template.html` und alle Szenen in `tests/` und rendert je drei Bilder; Seitenfehler lassen den Test scheitern. Der Workflow `test` läuft bei jeder Engine-Änderung auf GitHub. Neue Funktionen bekommen eine kleine Testszene in `tests/<thema>.story.js` + `.scene.js`.
+Cover-Stufe: Danach rendert `run.sh` die Cover (`node render.mjs <s>.html --cover cover_<s>.jpg`) für `example` und jede Szene mit A/B-`THUMB = [ … ]` (z. B. `tests/signs-beams`, erwartet `cover_<s>.jpg` + `cover_<s>-b.jpg`); fehlt eine Datei oder gibt es PAGE ERRORS, scheitert der Test. `COVERS=all` prüft jede Szene mit `THUMB`. Außerdem prüft er den Kanal-Handle (`CFG.channel`: Standard im Beispiel, eigener in `signs-beams`).
 
 # Neu in v2.27 (Feuerwerk, starrende Massen)
 
@@ -1245,6 +1299,11 @@ Gemeinsames Material für alle Lichtkegel: additiv, ohne Tiefenschreiben; hell a
 - Benutzt von: `searchlight` (Kegel beginnt jetzt an der Linse, weicher Kern statt weißer Planke; neue Optionen `soft: 7`, `dust: 0.7`; `opacity` wie bisher), `flashlight`, `headlights` (Kegel waren verkehrt herum – jetzt schmal an der Lampe), UFO-Traktorstrahl (`spaceship({ kind: 'ufo', beam })`), Leuchtturm, U-Boot-Scheinwerfer, Polizei-Hubschrauber, Wachturm am Gefängnis, Discokugel.
 
 `beamSpot(beam, { axis, len, tan, color, k, floor, spot })` → Mesh: weicher, elliptischer Lichtfleck, wo der Kegel den Boden trifft (nach dem Posieren der Figuren berechnet, verschwindet mit dem Kegel). Automatisch bei Taschenlampe, Scheinwerfern, UFO-Strahl, Polizei-Hubschrauber und Wachturm. `flashlight(…, { spot: false })` / `headlights(…, { spot: false })` = ohne.
+
+#### Lichtkegel auf ein Ziel: `flashlight({ at })` und `spotBeam`
+Keinen Lichtkegel von Hand bauen (SpotLight + ConeGeometry + eigenes Material), dafür gibt es diese beiden.
+- `flashlight(rig, { t0, t1, at, arm, intensity: 80, dist: 26, color, width: 0.36, k: 0.24, reach: 1, dy, flicker, spot })`: mit `at` dreht sich die Lampe in der Hand zum Ziel, der Kegel endet am Ziel (Lichtfleck auf dem Boden, wenn er ihn trifft). `at` = `[x, y, z]` · `t => [x, y, z]` · Track-Name (`track('dieb', rig)`; Zielhöhe 0,6 × dy des Tracks, also Brust) · Objekt · Rig; `dy` setzt die Zielhöhe über dem Objekt. `arm: false` = Armhaltung nicht ändern (z. B. bei `pose(f, 'hold')`). Ohne `at` wie bisher (Kegel entlang des Unterarms).
+- `spotBeam(p, from, to, { t0, t1, color: '#FFF3C4', k: 0.22, width: 0.38, reach: 1, intensity: 900, dist: 40, angle, penumbra: 0.6, light: true, flicker, on: t => 0…1, spot, spotK, dust, dustScale, len, dy, fromDy })` → `{ cone, light, from, to }`: freier Lichtkegel von `from` nach `to` (gleiche Formen wie `at`), jedes Bild nach dem Posieren neu ausgerichtet: Suchscheinwerfer am Mast, Bühnenspot, Strahl aus einem festen Punkt. `width` = Endradius / Länge, `reach` verlängert den Kegel über das Ziel hinaus, `light: false` = nur der sichtbare Kegel (spart ein echtes Licht), `on` blendet ein und aus. Test: `tests/signs-beams`.
 
 #### Lichtpfützen und Halos (keine echten Lichter)
 - `lightPool(p, x, y, z, { r, color, k, night, wall, ry, ignore })`: weicher Lichtschein auf dem Boden unter einer Lampe (lokal zu p). Legt sich kurz vor `bake()` über Bordsteine, Stufen, Pflaster (alles bis 0,28 m über dem Lampenfuß; Bänke, Autos und der eigene Sockel – `ignore: Gruppe` – bleiben außen vor). Alle statischen Pfützen = ein Draw-Call. Folgt der Dunkelheit (`NIGHTK`); `night: false` = immer an (Innenräume); `wall: true` = senkrecht an einer Wand (lokal +z aus der Wand).

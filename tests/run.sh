@@ -38,6 +38,16 @@ esac
 # v3.24 crowd QA by what the viewer sees (tests/crowd-qa): members inside each other close to the lens are reported, the same cram behind the camera is not
 case " $names " in *" crowd-qa "*) q=$(node render.mjs crowd-qa.html --probe 'qaCrowds()' 2>&1)
   if echo "$q" | grep -q 'crowd #0: .*close to the camera' && ! echo "$q" | grep -q 'crowd #1'; then echo "ok   crowd QA  near lens reported, off screen not"; else echo "FAIL crowd QA: $(echo "$q" | tail -5)"; fail=1; fi;; esac
+# cover stage: thumbnails (THUMB, A/B variants → cover-b.jpg …) of example + every scene with an A/B THUMB array; COVERS=all = every scene that defines THUMB
+cv=""; for s in $names; do case "$s" in example) cv="$cv $s";; *) [ -f "$s.html" ] || continue; if [ "${COVERS:-}" = all ]; then grep -q '^const THUMB' "$s.story.js" && cv="$cv $s"; else grep -q '^const THUMB = \[' "$s.story.js" && cv="$cv $s"; fi;; esac; done
+cover() { s=$1; rm -f "cover_$s.jpg" "cover_$s"-[a-h].jpg; timeout 300 node render.mjs "$s.html" --cover "cover_$s.jpg" > "cover_$s.log" 2>&1; n=$(grep -c '^const THUMB = \[' "$s.story.js" 2>/dev/null); want=$(( n > 0 ? 2 : 1 ))
+  if grep -q "PAGE ERRORS\|PAGE DID NOT START" "cover_$s.log" || [ "$(ls "cover_$s.jpg" "cover_$s"-[a-h].jpg 2>/dev/null | wc -l)" -lt "$want" ]; then echo "FAIL cover $s"; grep -A6 "PAGE" "cover_$s.log" | head -8; else echo "ok   cover $s  $(ls "cover_$s.jpg" "cover_$s"-[a-h].jpg 2>/dev/null | wc -l | tr -d ' ') image(s)"; fi; }
+export -f cover
+if [ -n "$cv" ]; then out=$(printf '%s\n' $cv | xargs -P "$J" -I{} bash -c 'cover "$1"' _ {}); echo "$out"; echo "$out" | grep -q '^FAIL' && fail=1; fi
+# channel handle: default '@whatifthishappenedscenarios' in every video, CFG.channel overrides it (tests/signs-beams)
+chan() { node render.mjs "$1.html" --probe "document.getElementById('chan').textContent" 2>&1 | tail -1; }
+case " $names " in *" example "*) c=$(chan example); case "$c" in *@whatifthishappenedscenarios*) echo "ok   channel default";; *) echo "FAIL channel default: '$c'"; fail=1;; esac;; esac
+case " $names " in *" signs-beams "*) c=$(chan signs-beams); case "$c" in *@signs.test*) echo "ok   channel CFG.channel";; *) echo "FAIL channel CFG.channel: '$c'"; fail=1;; esac;; esac
 # v2.48 narrator voice by category (no synthesis, no API call)
 cp "$R/voice.py" .
 for c in "story:Denzel" "explain:Adam" "conspiracy:Declan Sage" "horror:Storm Styles" "series:JM" "truecrime:Declan Sage"; do

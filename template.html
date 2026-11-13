@@ -3307,16 +3307,53 @@ function enter(f, v, t0, o = {}) {
   return f;
 }
 
-// light: flashlight(rig, { t0, t1, color, intensity, dist }) · headlights(vehicle, { t0, t1, light }) · phone(rig, { t0, t1, screen, light }) · lightning(t, { x, z }) · lightningStorm(t0, t1, { every })
-function flashlight(f, o = {}) {
+// _beamPt(v, t, out, dy) — a point for light beams: [x,y,z] | t => [x,y,z] (or => anything below) | Vector3 | track name (+ dy, default 0.6 × the track's dy:
+//   chest height on a person) | Object3D (+ dy, default 0) | rig / model with root or g (+ dy, default 0.9) → out (world) or null
+function _beamPt(v, t, out, dy) {
+  if (typeof v === 'function') v = v(t);
+  if (v == null) return null; if (Array.isArray(v)) return out.fromArray(v); if (v.isVector3) return out.copy(v);
+  if (typeof v === 'string') { const T = TRACK[v]; if (!T) return null; T.obj.updateWorldMatrix(true, false); T.obj.getWorldPosition(out); out.y += dy ?? (T.dy ?? 1.55) * 0.6; return out; }
+  const ob = v.isObject3D ? v : v.root ?? v.g; if (!ob?.isObject3D) return null; ob.updateWorldMatrix(true, false); ob.getWorldPosition(out); out.y += dy ?? (v.isObject3D ? 0 : 0.9); return out;
+}
+// spotBeam(p, from, to, { t0, t1, color: '#FFF3C4', k: 0.22, width: 0.38 (end radius / length), reach: 1 (× the distance), intensity: 900, dist: 40, angle, penumbra: 0.6,
+//   light: true (real SpotLight, false = only the visible cone), flicker, on: t => 0..1, spot (floor spot, false = none), dust, dustScale: 1.4, len: 1.1, dy })
+//   → { cone, light, from, to } — free light cone from a point to a target, re-aimed every frame (after the figures are posed): searchlight on a tower, torch beam
+//   from a fixed point, stage spot, police helicopter. from / to: see _beamPt (fixed point, t => point, track name, object, rig). beamMat cone + a soft spot where it meets the floor.
+function spotBeam(p, from, to, o = {}) {
+  const t0 = o.t0 ?? -1e9, t1 = o.t1 ?? 1e9, col = o.color ?? '#FFF3C4', wk = o.width ?? 0.38, k0 = o.k ?? 0.22, A = new THREE.Vector3(), B = new THREE.Vector3(), D = new THREE.Vector3(), Q = new THREE.Quaternion(), PQ = new THREE.Quaternion();
+  const bm = beamMat({ color: col, k: k0, dustScale: o.dustScale ?? 1.4, len: o.len ?? 1.1, dust: o.dust });
+  const cone = dyn(new THREE.Mesh(G('beam', () => new THREE.ConeGeometry(1, 1, 18, 1, true).translate(0, -0.5, 0)), bm)); cone.castShadow = cone.receiveShadow = false; cone.frustumCulled = false; p.add(cone);
+  let sp = null; if (o.light !== false) { sp = new THREE.SpotLight(col, 0, o.dist ?? 40, o.angle ?? Math.min(1.2, Math.atan(wk) * 1.05), o.penumbra ?? 0.6, 1.2); p.add(dyn(sp), sp.target); }
+  late(t => {
+    const f = (t >= t0 && t <= t1 ? 1 : 0) * (o.on ? clamp(o.on(t)) : 1) * (o.flicker ? 1 - 0.15 * o.flicker * (0.5 + 0.5 * noise1(t * 20 + 3.1)) : 1);
+    const a = f > 0.001 && _beamPt(from, t, A, o.fromDy ?? 0), b = a && _beamPt(to, t, B, o.dy), len = b ? A.distanceTo(B) * (o.reach ?? 1) : 0;
+    cone.visible = len > 0.05; if (sp) sp.intensity = cone.visible ? (o.intensity ?? 900) * f : 0; if (!cone.visible) return;
+    D.subVectors(B, A).normalize(); p.updateWorldMatrix(true, false); p.getWorldQuaternion(PQ).invert();
+    cone.position.copy(p.worldToLocal(A.clone())); Q.setFromUnitVectors(_UPN, D); cone.quaternion.copy(PQ).multiply(Q); cone.scale.set(len * wk, len, len * wk); bm.uniforms.uK.value = k0 * f;
+    if (sp) { sp.position.copy(cone.position); sp.target.position.copy(p.worldToLocal(B.clone())); }
+  });
+  beamSpot(cone, { axis: [0, -1, 0], tan: wk, color: col, k: o.spotK ?? 0.5, spot: o.spot, strength: () => bm.uniforms.uK.value / Math.max(1e-4, k0) });
+  return { cone, light: sp, from: A, to: B };
+}
+const _UPN = new THREE.Vector3(0, -1, 0);
+// light: flashlight(rig, { t0, t1, color, intensity, dist, at, arm, spot }) · spotBeam(p, from, to, o) · headlights(vehicle, { t0, t1, light }) · phone(rig, { t0, t1, screen, light }) · lightning(t, { x, z }) · lightningStorm(t0, t1, { every })
+function flashlight(f, o = {}) {   // at: [x,y,z] | t => [x,y,z] | 'trackName' | object / rig → the torch turns in the hand and the beam ends on the target (spotBeam); arm: false = keep the arm pose
   const t0 = o.t0 ?? 0, t1 = o.t1 ?? 1e9, fa = f.foreR, NC = { cast: false };
   const torch = dyn(grp(fa, 0, -0.42, 0.06)); cyl(torch, 0.05, 0.045, 0.28, '#2A2D33', 0, -0.14, 0, { seg: 8, ...NC }); ball(torch, 0.05, '', 0, -0.17, 0, { mat: mat('#FFF6D0', { basic: true, glow: 2 }), detail: 0, ...NC });
+  if (o.arm !== false) f.fx.push((t, S) => { const e = env3(t, t0, t1, 0.3, 0.3); if (!e) return; S.ras = lerp(S.ras, -1.4, e); S.rae = lerp(S.rae, -0.12, e); S.raz = lerp(S.raz, -0.05, e); });
+  if (o.at != null) {
+    const P = new THREE.Vector3(), T = new THREE.Vector3(), Q = new THREE.Quaternion(), PQ = new THREE.Quaternion(), tip = new THREE.Vector3();
+    late(t => { torch.visible = t >= t0 && t <= t1; if (!torch.visible) return; fa.updateWorldMatrix(true, false); torch.quaternion.identity(); torch.updateWorldMatrix(false, false); torch.getWorldPosition(P);
+      if (!_beamPt(o.at, t, T, o.dy)) return; Q.setFromUnitVectors(_UPN, T.sub(P).normalize()); fa.getWorldQuaternion(PQ).invert(); torch.quaternion.copy(PQ).multiply(Q); torch.updateWorldMatrix(false, false); });
+    const B = spotBeam(world, t => torch.localToWorld(tip.set(0, -0.2, 0)).toArray(), o.at, { t0, t1, color: o.color ?? '#FFF1D0', intensity: o.intensity ?? 80, dist: o.dist ?? 26, k: o.k ?? 0.24, width: o.width ?? 0.36,
+      angle: o.angle, dustScale: 1.6, flicker: o.flicker ? 1 : 0, spot: o.spot, dy: o.dy, reach: o.reach, on: o.on });
+    return { torch, light: B.light, beam: B.cone };
+  }
   const sp = new THREE.SpotLight(o.color ?? '#FFF1D0', 0, o.dist ?? 26, o.angle ?? 0.38, 0.55, 1.3); sp.position.set(0, -0.2, 0); torch.add(sp, sp.target); sp.target.position.set(0, -6, 0);
   const beam = new THREE.Mesh(G('beam', () => new THREE.ConeGeometry(1, 1, 18, 1, true).translate(0, -0.5, 0)), beamMat({ color: '#FFF3C4', k: 0.24, dustScale: 1.6, len: 1.1 })); beam.scale.set(2.2, 6, 2.2); beam.position.y = -0.2; torch.add(beam);   // v3.5 beamMat + spot on the ground
   beamSpot(beam, { axis: [0, -1, 0], tan: 0.36, color: '#FFF3C4', k: 0.5, spot: o.spot });
-  f.fx.push((t, S) => { const e = env3(t, t0, t1, 0.3, 0.3); if (!e) return; S.ras = lerp(S.ras, -1.4, e); S.rae = lerp(S.rae, -0.12, e); S.raz = lerp(S.raz, -0.05, e); });
   tick(t => { const on = t >= t0 && t <= t1; torch.visible = on; sp.intensity = on ? (o.intensity ?? 80) * (o.flicker ? 0.85 + 0.15 * noise1(t * 20) : 1) : 0; beam.visible = on; });
-  return { torch, light: sp };
+  return { torch, light: sp, beam };
 }
 function headlights(v, o = {}) {   // light cones (+ one real spot light unless light: false) and glowing lamps
   const g = v.g ?? v, t0 = o.t0 ?? 0, t1 = o.t1 ?? 1e9, L = v.len ?? 3.8, y = v.lampY ?? 0.62, NC = { cast: false }, cones = [];
@@ -6006,6 +6043,61 @@ function focusShot(at, t, dur, o = {}) {
 }
 // canvas texture (labels, photos, notes): draw(ctx, w, h) → THREE.CanvasTexture
 function canvasTex(w, h, draw) { const c = document.createElement('canvas'); c.width = w; c.height = h; const x = c.getContext('2d'); draw(x, w, h); const tx = new THREE.CanvasTexture(c); tx.colorSpace = THREE.SRGBColorSpace; tx.anisotropy = 4; return tx; }
+// signs and screens (text / display textures without hand-built canvas code in the scene). Rule: a sign or screen stands ≥ 0.2 m in front of what is
+//   behind it (wall: true does that), its own backing board is part of it (the picture sits on the board with a polygon offset) → no z-fighting.
+// signFont(px, font = 'block', { italic, weight }) → canvas font string. font: block (Arial Black) | sans | serif | mono | hand | any CSS font family
+const SIGNFONTS = { block: '"Arial Black", Impact, "DejaVu Sans", sans-serif', sans: 'Arial, Helvetica, "DejaVu Sans", sans-serif', serif: 'Georgia, "Liberation Serif", "DejaVu Serif", serif', mono: '"Courier New", "DejaVu Sans Mono", monospace', hand: '"Comic Sans MS", "Marker Felt", "DejaVu Sans", cursive' };
+function signFont(px, font = 'block', o = {}) { return `${o.italic ? 'italic ' : ''}${o.weight ?? (font === 'block' ? 900 : 700)} ${Math.round(px)}px ${SIGNFONTS[font] ?? font}`; }
+// shared placement: x, y (centre), z, rx, ry, rz; wall: true = (x, y, z) is a point on the wall → the sign stands `gap` (0.2 m) in front of it, along its facing (+z after ry)
+function _mountAt(p, o) { const g = grp(p, o.x ?? 0, o.y ?? 0, o.z ?? 0); g.rotation.set(o.rx ?? 0, o.ry ?? 0, o.rz ?? 0); if (o.wall) g.translateZ(o.gap ?? 0.2); return g; }
+// textSign(p, text, { w: 2, h (auto from the text), color: '#FFFFFF', bg: '#C62828' | false, border, radius: 0.12, font: 'block', italic, align: 'center',
+//   neon: true | '#hex' (glowing tube letters, no plate unless bg is set; glow: 1.2, flicker: 0..1, seed), board: 0.06 (backing box depth, colour `frame`; 0 = bare plane),
+//   lit (self-lit plate, default for neon), res: 256 px per m, x, y, z, rx, ry, rz, wall, gap }) → { g, mesh, tex, at() }
+//   text: '\n' = new line. The letters fill the plate (fit to width and height). Faces +z like every model; seen from behind it is the board (bare: the same picture).
+function textSign(p, text, o = {}) {
+  const lines = String(text).split('\n'), neon = o.neon ? (o.neon === true ? o.color ?? '#FF4FB0' : o.neon) : null, font = o.font ?? 'block', fo = { italic: o.italic, weight: o.weight };
+  const bg = o.bg !== undefined ? o.bg : neon ? false : '#C62828', col = neon ? '#FFF4FA' : o.color ?? '#FFFFFF';
+  const mc = document.createElement('canvas').getContext('2d'); mc.font = signFont(100, font, fo); const tw = Math.max(...lines.map(l => mc.measureText(l).width), 50);
+  const w = o.w ?? 2, h = o.h ?? w * (lines.length * 125 + 60) / (tw + 120), res = o.res ?? 256;
+  const cw = Math.min(2048, Math.max(64, Math.round(w * res))), ch = Math.min(2048, Math.max(32, Math.round(h * res)));
+  const tex = canvasTex(cw, ch, (c, W, H) => {
+    c.clearRect(0, 0, W, H); const r = Math.min(W, H) * (o.radius ?? 0.12), pad = Math.min(W, H) * 0.1, rr = (x0, y0, x1, y1) => { c.beginPath(); if (c.roundRect) c.roundRect(x0, y0, x1 - x0, y1 - y0, r); else c.rect(x0, y0, x1 - x0, y1 - y0); };
+    if (bg) { c.fillStyle = bg; rr(0, 0, W, H); c.fill(); }
+    if (o.border) { const lw = Math.min(W, H) * 0.05; c.strokeStyle = o.border; c.lineWidth = lw; rr(lw / 2, lw / 2, W - lw / 2, H - lw / 2); c.stroke(); }
+    const px = Math.min((H - pad * 2) / (lines.length * 1.18), 100 * (W - pad * 2) / tw);
+    c.font = signFont(px, font, fo); c.textBaseline = 'middle'; c.textAlign = o.align ?? 'center'; const ax = c.textAlign === 'left' ? pad : c.textAlign === 'right' ? W - pad : W / 2;
+    const yOf = i => H / 2 + (i - (lines.length - 1) / 2) * px * 1.18 + px * 0.04;
+    if (neon) { c.shadowColor = neon; c.fillStyle = neon; c.shadowBlur = px * 0.35; for (let k = 0; k < 4; k++) lines.forEach((l, i) => c.fillText(l, ax, yOf(i))); c.shadowBlur = px * 0.08; }
+    c.fillStyle = col; lines.forEach((l, i) => c.fillText(l, ax, yOf(i)));
+  });
+  const g = dyn(_mountAt(p, o)), bd = o.board ?? (neon && !bg ? 0 : 0.06), lit = o.lit ?? !!neon, side = bd ? THREE.FrontSide : THREE.DoubleSide;
+  const m = lit ? new THREE.MeshBasicMaterial({ map: tex, transparent: true, alphaTest: 0.02, toneMapped: false, side })
+    : new THREE.MeshStandardMaterial({ map: tex, transparent: true, alphaTest: 0.3, roughness: 0.7, emissive: '#ffffff', emissiveMap: tex, emissiveIntensity: 0.12, side });
+  if (neon) { m.color.setScalar(1 + (o.glow ?? 1.2)); m.depthWrite = false; }
+  m.polygonOffset = true; m.polygonOffsetFactor = -2; m.polygonOffsetUnits = -2;
+  if (bd) box(g, w, h, bd, o.frame ?? (bg || '#24262B'), 0, -h / 2, -bd / 2 - 0.003, { rough: 0.6 });
+  const pl = new THREE.Mesh(new THREE.PlaneGeometry(w, h), m); pl.castShadow = !neon; g.add(pl);
+  if (neon && o.flicker) { const base = m.color.r; tick(t => { const f = noise1(t * 9 + (o.seed ?? 0) * 3.7) * 0.5 + 0.5; m.color.setScalar(base * (f < o.flicker * 0.3 ? 0.35 : 1)); }); }
+  return { g, mesh: pl, tex, at: () => { g.updateWorldMatrix(true, false); return g.localToWorld(new THREE.Vector3(0, 0, 0.02)).toArray(); } };
+}
+// screenPanel(p, w, h, draw, { res: 400 px per m, px: [cw, ch], fps: 30, frame: '#141518' | false, bezel: 0.04, depth: 0.05, glow: 0, x, y, z, rx, ry, rz, wall, gap })
+//   → { g, mesh, tex, at() } — TV, monitor, LED wall, phone, scoreboard: draw(ctx, cw, ch, t) paints the picture. The canvas is cleared to black before every draw,
+//   so the picture is a pure function of the scene time t (redrawn whenever floor(t · fps) changes; fps: 0 = drawn once with t = 0). Self-lit, not shaded by the scene.
+function screenPanel(p, w, h, draw, o = {}) {
+  const res = o.res ?? 400, [cw, ch] = o.px ?? [Math.min(2048, Math.max(32, Math.round(w * res))), Math.min(2048, Math.max(32, Math.round(h * res)))];
+  const cv = document.createElement('canvas'); cv.width = cw; cv.height = ch; const ctx = cv.getContext('2d');
+  const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 4;
+  const fps = o.fps ?? 30; let key = null;
+  const paint = t => { const k = fps ? Math.floor(t * fps + 1e-6) : 0; if (k === key) return; key = k;
+    ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over'; ctx.shadowBlur = 0; ctx.fillStyle = '#000'; ctx.fillRect(0, 0, cw, ch);
+    ctx.save(); draw(ctx, cw, ch, fps ? k / fps : 0); ctx.restore(); tex.needsUpdate = true; };
+  paint(0); if (fps) tick(paint);
+  const g = dyn(_mountAt(p, o)), m = new THREE.MeshBasicMaterial({ map: tex, toneMapped: false }); if (o.glow) m.color.setScalar(1 + o.glow);
+  m.polygonOffset = true; m.polygonOffsetFactor = -2; m.polygonOffsetUnits = -2;
+  if (o.frame !== false) { const bz = o.bezel ?? 0.04, dp = o.depth ?? 0.05; box(g, w + bz * 2, h + bz * 2, dp, o.frame ?? '#141518', 0, -h / 2 - bz, -dp / 2 - 0.003, { rough: 0.4, metal: 0.3 }); }
+  const pl = new THREE.Mesh(new THREE.PlaneGeometry(w, h), m); g.add(pl);
+  return { g, mesh: pl, tex, at: () => { g.updateWorldMatrix(true, false); return g.localToWorld(new THREE.Vector3(0, 0, 0.02)).toArray(); } };
+}
 
 // --- globe tools (v2.7): markers, arcs and areas on planet() / layers() spheres. lat/lon in degrees (lon 0 faces +z, +lon towards +x). Times: scene time ---
 const geoVec = (lat, lon, rr = 1) => { const a = lat * Math.PI / 180, b = lon * Math.PI / 180; return new THREE.Vector3(rr * Math.cos(a) * Math.sin(b), rr * Math.sin(a), rr * Math.cos(a) * Math.cos(b)); };
@@ -13339,20 +13431,12 @@ const _rimW = new THREE.Color('#FFFFFF');
   const f1 = figure({ shirt: '#C0392B', pants: '#2E3A5C', hat: '#D9B65C' }); world.add(f1.root);
   walk(f1, [[-7.6, 7.9], [-5.2, 8.5]], { t0: 2.8, t1: 12, speed: 0.8 });
   vanish(f1.root, 12.6, { dur: 0.01 });
-  const f2 = figure({ shirt: '#C0392B', pants: '#2E3A5C', hat: '#D9B65C', hold: '#30343A', expr: t => t < 15 ? 'scared' : 'happy' });
+  const f2 = figure({ shirt: '#C0392B', pants: '#2E3A5C', hat: '#D9B65C', expr: t => t < 15 ? 'scared' : 'happy' });
   const f2g = grp(world, 10.1, sl.top, -5.9, -2.3); f2g.add(f2.root);
   track('farmer', f2g);                                                                      // close-up target (CAM: shot('close', …, 'farmer'))
   glow(8.4, sl.top + 2.4, -7.6, { t0: 14, intensity: 30, dist: 7, color: '#C8D8FF', flicker: 0, rampIn: 0.01 });   // face fill light for the close-up
   tick(t => { f2g.visible = t >= 14; pose(f2, 'hold', 0, t); f2.root.rotation.y = 0.3 * Math.sin(t * 0.8); });
-  const LP = new THREE.Vector3(9.6, sl.top + 1.4, -6.2), TP = new THREE.Vector3(6.5, 0, -8.5);
-  const beam = new THREE.SpotLight('#FFF6D8', 0, 40, 0.36, 0.6, 1.2); beam.position.copy(LP); world.add(beam, beam.target);
-  const cone3 = new THREE.Mesh(new THREE.ConeGeometry(1, 1, 18, 1, true), mat('#FFF3C4', { basic: true, opacity: 0.09 })); world.add(cone3);
-  tick(t => {
-    TP.set(6.8 + 1.6 * Math.sin(t * 0.9), 0, -8.6 + 1.2 * Math.cos(t * 0.7));
-    beam.target.position.copy(TP); beam.intensity = t >= 14 ? 900 : 0; cone3.visible = t >= 14;
-    const len = LP.distanceTo(TP); cone3.scale.set(len * 0.38, len, len * 0.38);
-    cone3.position.copy(LP).add(TP).multiplyScalar(0.5); cone3.lookAt(TP); cone3.rotateX(-Math.PI / 2);
-  });
+  flashlight(f2, { t0: 14, at: t => [6.8 + 1.6 * Math.sin(t * 0.9), 0, -8.6 + 1.2 * Math.cos(t * 0.7)], arm: false, intensity: 900, dist: 40, width: 0.38, k: 0.2 });   // torch in his hand, beam sweeps the yard
 
   // hordes rise from the wheat, mass at the back fence, break through at ~12.3 s and surround the silo
   const line = [[-8, -12.6], [13, -12.6]], silo0 = [10.5, -5.5];
@@ -13677,7 +13761,7 @@ if (EXPLAIN && (CFG.badge == null || CFG.badge === 'What if')) CFG.badge = tr(KI
 if (KIND === 'truecrime' && (CFG.badge == null || CFG.badge === 'What if')) CFG.badge = tr('True Crime');   // v2.49: True Crime = story format (you as witness), own badge + documentary narrator
 $('badge').textContent = SERIES?.ep && !EXPLAIN ? `${CFG.badge} #${SERIES.ep}` : CFG.badge;
 const XSTEPS = (typeof STEPS === 'undefined' || !STEPS ? [] : STEPS).map(([a, b]) => [evT(a), tr(b)]);
-$('chan').textContent = SERIES?.handle ?? SERIES?.name ?? '';
+$('chan').textContent = CFG.channel === false ? '' : SERIES?.handle ?? SERIES?.name ?? CFG.channel ?? '@whatifthishappenedscenarios';   // channel handle top-left in every video: CFG.channel (default the channel), a series handle wins, channel: false hides it
 const topEl = $('top');
 const esc = s => s.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 function markup(str) {   // *accent*  _red_  a~b keeps words together → word spans
