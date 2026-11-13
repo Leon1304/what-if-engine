@@ -12,3 +12,9 @@
   const sl = asset(world, 'own/sleigh', -12, 2, { y: 4, dyn: true }); sl.rotation.set(-0.2, -0.4, 0.1);
   // snow globe: real size is 19 cm, scaled up 20× here (3 m glass) to see the village inside
   asset(world, 'own/snow_globe', 6, 10, { scale: 20 });
+  // decorated Christmas tree with presents (front with the gift pile towards +z)
+  asset(world, 'own/xmas_tree', 10, 4);
+  // Mars base (airlock towards +z), far out on its own patch
+  asset(world, 'own/mars_habitat', -40, 40);
+  // Thanksgiving table with chairs (long side along x, front towards +z)
+  asset(world, 'own/feast_table', 16, 14);
