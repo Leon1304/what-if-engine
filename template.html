@@ -3069,7 +3069,7 @@ function asset(p, name, x = 0, z = 0, o = {}) {
   PENDING.push(ASSETS.get(name).then(src => {
     if (!src) return; const s = src.clone();
     s.traverse(m => { if (!m.isMesh) return; m.castShadow = o.shadow !== false; m.receiveShadow = true;
-      if (o.tint) { const one = mt => { const c = typeof o.tint === 'string' ? o.tint : o.tint[mt.name]; if (!c) return mt; const k = mt.clone(); k.color.set(c); return k; };
+      if (o.tint) { const one = mt => { const c = typeof o.tint === 'string' ? o.tint : o.tint[mt.name]; if (!c) return mt; const k = mt.clone(); k.color.set(c); if (k.emissive && k.emissive.getHex() !== 0) k.emissive.set(c); return k; };   // v3.12: glowing parts take the tint as glow too (signal on/off)
         m.material = Array.isArray(m.material) ? m.material.map(one) : one(m.material); } });
     if (o.h) { const b = new THREE.Box3().setFromObject(s), hh = b.max.y - b.min.y; if (hh > 0) s.scale.multiplyScalar(o.h / hh); }
     root.add(s);
