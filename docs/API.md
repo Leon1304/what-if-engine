@@ -990,3 +990,183 @@ Ist in der Sitzung kein `ELEVENLABS_API_KEY` gesetzt, aber der ElevenLabs-Connec
 1. Planen: `EL_LOG=el_log.jsonl ELEVENLABS_API_KEY=via-mcp PYTHONPATH=.engine/elmcp python3 assemble.py <slug>` → `el_log.jsonl` enthält jede Zeile (Text mit Ton-Tag, Modell, Tempo); nichts wird bezahlt.
 2. Jeden eindeutigen Text einmal mit `creative_generate_speech` erzeugen (Voice-ID der Kategorie aus `EL_VOICES`, `eleven_v4`, `generations_count: 1`, alle in einen Flow), mit `creative_get_generations` die URLs holen, laden und `{ Text: Datei }` als JSON speichern.
 3. Bauen: `.voice/el-*.npy` löschen, dann `EL_MAP=<map.json> ELEVENLABS_API_KEY=via-mcp PYTHONPATH=.engine/elmcp python3 assemble.py <slug>`. Das Tempo, das `voice.py` je Zeile verlangt, setzt der Shim per ffmpeg `atempo` um — Neu-Timing braucht keine neue Generierung.
+
+## Umgebung & Look (v3.3)
+Seit v3.3 sieht jede Szene ohne Zutun hochwertiger aus: Hintergrund, Boden-Ausstattung, Räume, Wasser, Licht, Farblook und Materialien greifen automatisch. Jeder Teil lässt sich einzeln abschalten (siehe unten). Tests: `tests/v32-*.story.js` + `.scene.js`.
+
+### Neu in v3.3: Landschaft (Hintergrund, Skyline, Boden von selbst, Bäume, Felder)
+
+Alles hier wirkt ohne Änderung an der Szene. Test: `tests/v32-landscape.story.js` + `.scene.js`.
+
+#### Hintergrund: `backdrop(kind, { coast, seed, r, r0, sector, also })`
+- `hills` · `islands` · `alps` · `snow`: statt einzelner Kegel („Pyramiden“) jetzt zwei durchgehende, weiche Hügelbänder rund um die Szene: vorn (~310 m) grüner mit Baumkante am Kamm und dunkleren Waldflecken, hinten (~450 m) bläulich. Höhe entlang des Rings aus mehreren Sinuswellen (Zufall aus dem Backdrop-Seed), Querschnitt mit Vorderhang, Kamm und Rückhang, die Kammlinie schwankt vor und zurück. In jedem 9:16-Bild stehen mehrere Hügel, nie ein einzelner Berg.
+- `alps` / `snow`: hinten eine zackige Kette (Gipfel mit Sätteln dazwischen) mit Schneekappen ab einer unregelmäßigen Schneegrenze; vorn bewaldete (bzw. verschneite) Rücken.
+- `mesa`: Tafelberge wie bisher, dazwischen und dahinter niedrige Sandrücken, damit keine Lücken im Horizont bleiben.
+- Küste (`coast`): die Bänder tauchen zur Seeseite unter den Meeresspiegel; `islands` legt flache Inseln mit Sandrand aufs Meer.
+- Dunst wie bisher (nimmt die Nebelfarbe jeder Tageszeit an). Neu: die untersten Meter jedes Bandes bekommen den echten Nebel, so endet der Boden nicht mehr in einem hellen Streifen vor klareren Hügeln.
+- `skyline`: Türme mit Rücksprüngen (2–3 Stufen), Dachaufbauten, Antennen; mehr Farben (Beton, Glas, Klinker). Fensterraster pro Fassade im Shader: am Tag dunkles Glas, ab der Dämmerung geht ein wachsender, zufälliger Anteil an (meist warm, einige kalt-weiß), gesteuert von `NIGHTK`; die Fenster leuchten durch den Dunst. Fenster unter ~2 Pixeln werden zu ihrem Mittelwert (kein Flimmern). Rote Flugwarnlichter auf Antennen blinken in Dämmerung und Nacht (reine Funktion von t).
+- `sector: [vonGrad, bisGrad]` (nur `skyline`): Türme nur in diesem Bereich des Horizonts (0° = +z, 90° = +x), z. B. eine Stadt auf einer Seite.
+- `also: true`: zusätzliche Ebene, z. B. `backdrop('skyline', { also: true, r0: 200, sector: [140, 220] })` vor den Hügeln. Zählt nicht als „Szene hat einen Hintergrund“.
+- `NIGHTU` (Uniform mit `NIGHTK`) und `BDT` (Uniform mit t) stehen für eigene Shader bereit; ein `tick` setzt sie, sobald eine Skyline gebaut ist.
+
+#### Boden kleidet sich selbst: `ground()` ohne `biome()`/`city()`/`backdrop()`
+- Bisher: endlose grüne/graue Fläche bis zum verschwommenen Horizont. Jetzt bekommt die Szene beim Backen (DEFER) eine leichte Ausstattung passend zur Bodenfarbe:
+  - grün → `plain` + `hills` (vereinzelte Laubbäume, Birken, Kiefern, Büsche, Felsen im Ring; Grasbüschel in Bodenfarbe, Kiesel, wenige Blumen auf der Spielfläche)
+  - sandfarben → `plain-sand` + `mesa` (Kiesel, wenige trockene Büsche, Felsen, vereinzelt Kakteen/tote Bäume)
+  - weiß → `plain-snow` + `snow` (Schneekiefern, Felsen, Schneewehen)
+  - grau → `plain-stone` + `skyline`; dunkelgrau/braun → `plain-stone` + `hills`
+  - bläulicher Boden, `SKY` unter Wasser, Tiefsee, Weltraum oder Planeten: nichts.
+- Der Ring beginnt hinter allem, was gebaut ist (höchstens `CFG.area` × 3), und bleibt auf dem Boden (`ground({ size })`). Wie bei `biome()` bleiben Kameras und ihre Sichtlinien, `walk`-Wege, `horde`-Bahnen, Gebäude, Fahrzeuge, Figuren frei; Seen und Fluten (`water()` ohne Küste) auch. Eigener Zufall, der globale bleibt unverändert (Layout der Szene wie vorher). Innenräume auf der Bodenplatte stehen dann im Garten.
+- Aus: `ground({ dress: false })` oder `CFG.autoDress: false`. Die Biome gibt es auch direkt: `biome('plain')`, `'plain-sand'`, `'plain-snow'`, `'plain-stone'`.
+- `runBiome(kind, { dry: true })`: hält Wasserflächen (`water()`) frei; `{ flowers: false }`: keine Blumen.
+
+#### Bäume: `tree(p, x, z, { kind: 'round' | 'birch' })`
+- Jeder Baum hat aus seiner Position eigene Form: Krone gestreckt oder gedrungen, breiter oder schmaler, leicht seitlich versetzt, 6–11 unregelmäßig verteilte, leicht gestauchte Blätterballen, 1–2 helle Kuppen oben, leichte Schräglage (Wurzeln bleiben am Boden), Farbton, Sättigung und Helligkeit leicht verschieden. Reihen gleich großer Bäume wiederholen sich nicht mehr. Seed-Layout unverändert (gleich viele `rnd()`-Aufrufe).
+
+#### Felder: `field(p, x, z, w, d, { crop })`
+- `wheat`: Büschel aus 5 Halmen mit Ähren statt eines Kegels; Boden darunter stoppelbraun (`soil` wie bisher änderbar).
+- `corn`: Stängel mit 7 gebogenen Blättern, Kolben im Hüllblatt, Fahne oben.
+- `cabbage`: fester Kopf in einer Rosette aus gewölbten Blättern.
+- Weiter instanziert, wiegen sich im Wind wie bisher (Kohl steht still), `colors` färbt wie bisher (Schattierung kommt aus Vertex-Faktoren).
+
+
+### Innenräume, Gemälde, Museum, Plätze (v3.3)
+
+#### Geschlossene Räume, die sich nach der Kamera richten
+- `interior(…, { closed: 'auto' })` (Standard): Der Raum bekommt eine **Vorderwand** (mit Fenster, Steckdosen, Fußleiste) und eine **Decke**. Beide sind nur zu sehen, solange die Kamera im Raum ist. Von außen bleibt der Raum offen wie ein Puppenhaus, von innen sieht man keinen Himmel und kein Gras mehr. Die Sichtbarkeit wird in jedem Bild aus der Kamera berechnet (reine Funktion von t), auch für Splitscreen und Cover-Kamera.
+  - Vorderwand: sichtbar, wenn die Kamera innerhalb der Grundfläche und unter Deckenhöhe steht.
+  - Decke: blendet auf dem letzten Meter vor der offenen Seite ein (`ceilFade: 1.0` m), es gibt also keinen Sprung, wenn die Kamera hineinfliegt.
+  - Beide werfen keinen Schatten. Das Licht im Raum sieht also aus wie vorher (Sonne von oben), und `bake()` fasst sie nicht mit anderen Teilen zusammen. Für die Hitboxen zählen sie nicht.
+  - `closed: true` = immer zu, `closed: false` = alter offener Schnitt. Für alle Räume: `CFG.closedRooms: false`.
+  - `front: true` und `ceiling: true` funktionieren wie bisher (feste Wand bzw. Decke mit Schatten). Mit `ceiling: true` gibt es keine Auto-Decke, mit `front: true` keine Auto-Vorderwand.
+  - `frontWindow: false | 'high'` steuert das Fenster in der Vorderwand. `ceilColor` setzt die Deckenfarbe. Ohne Hängelampe (`ceiling`/`lamps`) bekommt die Auto-Decke an den Lampenplätzen flache Deckenleuchten.
+  - Funktioniert auch mit `ry` und erhöhtem `y`. `R.frontW` und `R.ceilG` sind die Gruppen.
+- Wenn die Kamera im Raum steht und nach draußen sehen soll (Monster vor dem Haus), `closed: false` setzen.
+
+#### Türen führen in einen beleuchteten Flur
+- Die Türwand eines `interior()` hat jetzt eine echte Öffnung. Dahinter liegt ein kurzer, warm beleuchteter Flur (Dielen, Läufer, Tapete, Deckenleuchte, Bild mit Lichtkegel gegenüber der Tür, Konsole, Garderobe). Eine offene Tür (`openDoor(R, t)`) zeigt also nie mehr Schwarz oder Gras. Keller: Ziegel und Glühbirne, Bunker: Beton, Garage/Bad/Laden/Klassenzimmer: schlicht.
+  - `hall: false` (oder `CFG.halls: false`) = alte dunkle Türfläche. `hallStyle`, `hallD` (Tiefe, 1,5 m), `hallLen` (Länge entlang der Wand, 3,4 m). `R.hall` = Gruppe, `R.at('hall')` = Mitte des Flurs.
+  - `doorW`, `doorH`, `doorZ`: Maße und Lage der Tür. `doorway: true` = offener Durchgang ohne Türblatt.
+- `house()`: Hinter der Haustür liegt jetzt ein kleiner Flur (Garderobe, Bild, Lampe), der Hauskörper ist dort ausgeschnitten. `hall: false` = alte dunkle Fläche, `hallWall` = Flurfarbe.
+- `museumGallery()`: Hinter dem Durchgang bei +z liegt der nächste Saal (Bild mit Lichtkegel, Büste) statt einer schwarzen Fläche. `next: false` = alt. `M.next` = Gruppe.
+- Einzeln: `hallStub(p, x, y, z, ry, { x0, x1, d, h, style: 'home' | 'museum' | 'cellar' | 'bunker' | 'plain', wall, lit, shell, art })`. Die Öffnung liegt in der Ebene z = 0 und schaut nach +z, der Flur läuft von x0 bis x1 und d tief nach −z. Die Wände leuchten leicht selbst (kein echtes Licht). `shell: false` = nur die Innenverkleidung, wenn der Flur in einen festen Körper geschnitten ist.
+
+#### Gemälde
+- `painting(p, x, y, z, ry, { w, h, art, seed, frame, mount, lit })`: gerahmtes Gemälde mit gemaltem Bild (Canvas-Textur). y = Unterkante, z = Wandfläche (der Rahmen ist 5 cm tief).
+  - `art`: `'auto'` (Standard, je nach Position) · `'landscape'` · `'portrait'` · `'still'` (Stillleben) · `'sea'` (Seestück mit Schiff) · `'abstract'` (Raster, Farbfelder, Kreise, Drips, Quadrate) · `'child'` (Kinderzeichnung, mit Klebeband an der Wand) · `false` = altes flaches Bild.
+  - Rahmen: Gold mit Lippe und Perlstab, dunkles Holz oder schmal (Abstraktes). `frame: 'gold' | hex | 'none'`. Kleine Bilder bekommen manchmal ein Passepartout (`mount`).
+  - Leichter Firnisglanz, vergilbter Firnis, dunkle Ränder, feine Risse. `lit: 0..1` lässt die Leinwand leicht leuchten (angestrahlt).
+  - Gleiche Szene = gleiche Bilder. Texturen werden geteilt, höchstens `CFG.artMax` (28) verschiedene (zusammen ca. 7 MB). Alle Gemälde zusammen zeichnet eine einzige Funktion, `CFG.paintings: false` schaltet auf das alte flache Bild um.
+- `FURN.picture` / `R.wallPut('picture', …)` und die Bilder an Seitenwänden nutzen das automatisch, das Kinderzimmer bekommt eine Kinderzeichnung, `museumGallery()` echte Gemälde mit Bilderleuchten und Lichtkegeln, auch das große Bild an der Stirnwand statt der Farbblöcke (`paintings: false` = alt, `M.paintings`).
+- `pictureLight(p, x, y, z, ry, { w })`: Bilderleuchte aus Messing (Wandplatte, Arm, Schirm mit leuchtendem Schlitz).
+- `glowDecal(p, x, y, z, ry, { w, h, kind: 'cone' | 'round', color, i, flat })`: Lichtfleck ohne echtes Licht (additiv, kein Schatten, zählt nicht zum Lichtbudget). `'cone'` = Lichtkegel an der Wand unter einer Lampe, `'round'` = runder Fleck, `flat: true` = auf dem Boden.
+
+#### Museum
+- `interior(…, { kind: 'museum' })` (11 × 8 m, 4,6 m hoch): dunkelrote Wände, Parkett, drei Gemälde an der Rückwand (das mittlere groß, hinter einer Kordel), Bilder an den Seitenwänden, alle mit Bilderleuchte, Lichtkegel und Schildchen, zwei Vitrinen (`jewelCase`) auf Sockeln mit Kordel-Absperrung und Lichtfleck am Boden, Museumsbank, Büste und Amphore auf Sockeln, breiter offener Durchgang in den nächsten Saal (mit Flur). Die Auto-Decke hat ein Oberlicht (`skylight: false` = ohne).
+- `kind: 'gallery'`: dasselbe modern (weiße Wände, helles Parkett, abstrakte Bilder, Bronzeskulptur). `style: 'modern' | 'classic'` wählt das auch für `museum`.
+- `R.cases` (jewelCase-Objekte: `C.smash(t)`, `C.cut(t0, t1)`, `C.items`), `R.paintings`, `R.at('case0' | 'case1' | 'museumBench' | 'door' | 'hall')`, `R.seat('museumBench', i)`.
+- Bausteine für eigene Räume: `R.art(wand, u, y, { w, h, art, lit, spot: true })` hängt ein Bild an `'back'` (u = x), `'left'` / `'right'` (u = z) oder `'front'`, mit `spot` samt Leuchte, Lichtkegel und Schild. `R.rope([[x, z], …], { closed })` = Kordel-Absperrung.
+- Einzelstücke (`furnish` / `R.put`): `museumBench`, `vitrine` (jewelCase, `items`), `sculpture` (`kind: 'bust' | 'vase' | 'bronze'`), `ropeLine` (`w`, `n`). Frei: `stanchions(p, [[x, z], …], { closed, gap, color, rope, sag })`.
+
+#### Plätze
+- `plaza(p, x, z, { w: 24, d: 18, ry, y, style, fountain, benches, trees, lamps, lights: 0, bollards, gutter, props, entrance: 2.4, colors })` → P: gepflasterter Platz. Plattenmuster (`paving`), dunkleres Randband, eingelegte Bänder zu den vier Eingängen, Rosette oder Brunnen in der Mitte, Granitbordstein, Rinne mit Gullys, Poller mit Lücken an den Eingängen, Bänke um die Mitte und an den Längsseiten, Mülleimer, Laternen (`lamp()`, echtes Licht nur mit `lights: n`), Bäume in Pflanzkübeln.
+  - `style`: `'classic'` (heller Stein, Eisenpoller, Holzbänke) · `'modern'` (Beton, Stahlpoller) · `'old'` (dunkles Pflaster, Steinpoller) · `'forecourt'` (großer hellgrauer Vorplatz wie vor dem Louvre). `colors: { pave, band, inlay, curb, gutter }` überschreibt einzelne Farben.
+  - Brunnen ab 12 m kürzester Seite automatisch (`fountain: false` = Rosette).
+  - `P.top` (Pflasterhöhe 0,12 m), `P.at('center' | 'n' | 's' | 'e' | 'w' | 'fountain')`, `P.seat(i)` (Bank- und Brunnenrandplätze für `sit`), `P.toWorld(lx, lz)`, `P.lamps`, `P.benches`, `P.bins`, `P.bollards`, `P.fountain`.
+- `fountain(p, x, z, { r: 2.2, jets: 8, color, water })` → F: Steinbecken mit profiliertem Rand, Wasser mit Ringwellen, Säule mit überlaufender Schale (Wasserschleier) und Bögen aus Tropfen (instanziert, reine Funktion von t). `F.seats`, `F.seat(i)`, `F.at()` (Spitze des Strahls).
+- Einzelstücke: `FURN.bollard` (`kind: 'iron' | 'steel' | 'stone'`), `FURN.parkBench` (`kind: 'wood' | 'concrete' | 'stone'`, Sitzplätze in `userData.seats`), `FURN.litterBin` (`'iron' | 'steel'`), `FURN.treePlanter` (`size`, `tree: false` = Blumen).
+
+Test/Vorschau: `tests/v32-interiors.*` (Kamera fliegt in ein Wohnzimmer, Tür öffnet auf den Flur, Museum, gedrehte erhöhte Küche, Platz mit Brunnen, Haus mit Flur, Galerie von außen).
+
+
+### Wasser (v3.3)
+
+Alles wirkt automatisch in jedem Video; die Optionen sind nur zum Abschalten oder Feintunen.
+
+#### Oberfläche: Kräuselwellen, Himmel, Sonnenglitzern
+- `water()` (Meer, Seen, Salzseen wie der Natronsee): pro Pixel kleine laufende Wellen (Summe aus 8 Wellen mit echter Dispersion, reine Funktion von t, feine Wellen blenden mit der Entfernung aus), scharfes Sonnenglitzern, Himmelsspiegelung nach Fresnel. Ruhiges Wasser (`waves` < 0,15, also Seen) bekommt feinere, kräftigere Kräusel als das offene Meer. Von unten gesehen (Kamera unter Wasser): helles Himmelsfenster direkt über einem, außen herum die Wasserfarbe.
+  Optionen: `water({ ripples: 0.7 | false, rippleScale: 2.6, glint: 1 })` (Zahl = Stärke, `rippleScale` = längste Welle in m). Ganz aus: `CFG.ripples: false`.
+- `waterSurfaceMat({ color, opacity: 0.22, reflect: 0.9, ripples: 1.8, scale: 0.9, glint: 1, under, rough })`: Material für eine flache Wasserfläche (Pool, Teich, Becken, Tank). Auf eine waagerechte Ebene legen (`PlaneGeometry`, −90° um x). Senkrecht von oben durchsichtig, flach von der Seite ein Spiegel, mit hellen Himmelsstreifen auf den Wellen. `m.userData.water` enthält die Uniforms (z. B. `ripples`, `opacity` animieren).
+
+#### Pool
+`swimPool(p, x, z, { w, d, h, level, drain: [t0, t1], water, tiles, lanes, tileColor, bandColor, copingColor })` – wie bisher, aber mit echtem Wasser:
+- Wasseroberfläche (`P.surface`) auf `P.level(t)` mit Kräuseln, Spiegelung und Glitzern; Spritzer und Gischt über dem Wasser bleiben davor.
+- Alles unter Wasser (Boden, Wände, Figuren, Haie, Schwimmtiere) wird durch das Wasser gesehen: leicht türkis getönt und je nach Weg durchs Wasser (gerade runter, schräg, durch die Glaskante, von unter Wasser) tiefer blau. Lichtnetz (Kaustik) auf Boden, Wänden und allem im Wasser – nur unterhalb des Wasserspiegels. Helle, wackelnde Wasserlinie, wo die Oberfläche eine Wand oder einen Körper trifft. Nach dem Ablassen (`drain`) bleiben die Wände dunkel-nass.
+- Becken gefliest (Fliesenmuster, dunkles Mosaikband oben an der Wand), Bahnlinie mit T-Enden und Abflussgitter auf dem Boden, Randsteine (4 cm über dem Wasser), Leiter mit Stufen und Bügeln über den Rand.
+- `water: { color, deep: '#0B5E8E', tint: '#A6EEF6', dens: 0.16, opacity, ripples, scale }` (`dens` = wie schnell es mit der Tiefe blau wird) oder `water: false`. `tiles: false` = glatte Farben, `lanes: false` = keine Bahnlinie.
+- Rückgabe zusätzlich `surface` (die Wasserfläche).
+- Für andere Becken: `poolWater(g, { lo: [x, y, z], hi: [x, y, z], level: t => y, top, deep, tint, dens })` meldet einen quaderförmigen Wasserkörper im lokalen Raum der Gruppe `g` an (bis zu 4 im Video); dazu eine Fläche mit `waterSurfaceMat()`. Aus für ein Video: `CFG.poolWater: false`. Kaustik-Stärke: `CFG.caustics` (Standard 1).
+
+#### Unter Wasser automatisch
+Steht im `SKY` irgendwo `'underwater'` oder `'deepsea'` und die Szene ruft `underwater()` nicht selbst auf, kommt es beim Bauen von allein dazu:
+- Kaustik, Lichtstrahlen und Meeresschnee **um die Kamera herum** (immer dort, wo die Einstellung ist), tiefer = dunkler. Bei `'deepsea'` keine Lichtstrahlen und nur schwache Kaustik.
+- Tiefen-Verlauf statt einfarbigem Bild: am Horizont die Nebelfarbe, nach oben heller (Oberfläche, helles Fenster), nach unten dunkel.
+- Ohne `ground()`: sandiger Meeresgrund mit Dünen, Rippeln und Steinen knapp unter dem tiefsten Ding der Szene bzw. der tiefsten Kamera.
+- Alles folgt dem Himmel: Einstellungen über Wasser (`SKY` wechselt auf `'day'`) bleiben trocken.
+- Aus: `CFG.autoUnderwater: false`. Ein eigener `underwater()`-Aufruf ersetzt die Automatik (nie doppelt).
+- `underwater()` selbst hat jetzt auch Meeresschnee und den Tiefen-Verlauf (`snow: false`, `gradient: false` = aus) und optional `depthDark: 0.4` (tiefer = dunkler).
+- Einzeln nutzbar: `seabed({ y, color, size, at, rocks })`, `marineSnow({ n, box, size, color, opacity, k })`, `depthGradient({ k, surface })`, `lightShafts({ …, follow: true, k: t => 0 … 1 })` (Strahlen wiederholen sich um die Kamera, `k` blendet ein und aus).
+
+Test: `tests/v32-water.*` (Pool mit Figur, Hai und Ablassen, roter Salzsee, Unterwasser-Himmel ohne `underwater()`).
+
+
+### Licht & Nachbearbeitung (v3.3)
+
+Alles ist ab v3.3 automatisch an und verbessert jedes Video ohne Änderung an der Szene. Jeder Teil lässt sich einzeln abschalten. Alle Werte folgen den `SKY`-Schlüsseln und werden zwischen zwei Himmeln genauso überblendet wie Farbe, Nebel und Sonne (Tabelle `LOOK` in `template.html`, eine Zeile pro Himmel). Jedes Bild bleibt eine reine Funktion von t.
+
+| Wirkung | Was passiert | Abschalten / Stärke |
+|---|---|---|
+| **Gegenlicht (Rim)** | Zweites, schattenloses Richtungslicht hinter dem Motiv, aus Sicht der Kamera (jedes Bild neu aus der Kamera berechnet, leicht zur sonnenabgewandten Seite gedreht). Kanten, Schultern und Oberseiten fangen Licht, Figuren lösen sich vom Hintergrund. Nachts starkes kühles Mondlicht, golden/dusk warm, am Tag dezent. | `CFG.rim: false` · Zahl = × Stärke |
+| **Nacht & Sturm lesbar** | Mond als Hauptlicht (heller, kühler), kühleres Fülllicht, angehobene Bodenfarbe der Hemisphäre (Nacht `#2C3550` statt `#1C1C24`). Schattenseiten werden nicht mehr schwarz. | `CFG.nightLook: false` = alte Werte |
+| **Schattenboden** | Dunkle Bereiche werden in der Nachbearbeitung leicht geöffnet (`open`) und bekommen einen getönten Boden (`lift`): nie große, rein schwarze Flächen. Nachts blau, Dämmerung violett, Apokalypse rotbraun, im All aus. | `CFG.lift: false` · Zahl = × Stärke |
+| **Farblook je Tageszeit** | Split-Toning (Tönung der Schatten und der Lichter) plus kleine Sättigungs-/Kontrast-Korrektur je Himmel: Tag kühle Schatten/warme Lichter, golden Teal-Orange, Nacht blau, Sturm entsättigt, Apokalypse Rot-Orange. Wirkt zusätzlich zu `CFG.saturation`/`CFG.contrast`. | `CFG.grade: false` |
+| **Lichtstrahlen (God Rays)** | Strahlen von Sonne oder Mond, nur wenn sie über dem Horizont und im oder nahe am Bild stehen. Alles, was dunkler als der Himmel ist (Häuser, Bäume, Figuren), schneidet die Strahlen. Am stärksten golden, dawn, dusk; schwach am Tag und nachts; Sturm aus. Viertelauflösung, drei radiale Durchgänge: kaum Kosten. Aus bei Split-Screen. | `CFG.godrays: false` · Zahl = × Stärke |
+| **Bodennebel** | Zusätzlich zum Entfernungsnebel liegt eine niedrige Dunstschicht über dem Boden und in Senken (Höhe in Weltkoordinaten, fällt nach oben exponentiell ab, ab 12 m vor der Kamera). Leuchtet in Richtung einer tiefen Sonne. Viel bei dawn/dusk/Nacht/Sturm, wenig am Tag, unter Wasser aus. Gilt für alle eingebauten Materialien (Patch der Three.js-Fog-Chunks). | `CFG.groundFog: false` · Zahl = × Menge |
+| **Staub in der Luft** | Feine, schwebende Partikel um die Kamera (in einer Box um die Kamera umgebrochen, bleiben in der Welt stehen), im Gegenlicht heller. An bei golden/dawn/dusk/Apokalypse/unter Wasser, ein Hauch am Tag, nachts aus. In Räumen aus `interior()` automatisch an, sobald die Kamera drin ist. | `CFG.dust: false` · Zahl = × Menge · `true` = in jedem Himmel |
+| **Schatten in der Weite** | Bei weiten Einstellungen wächst die Schattenbox mit dem Abstand der Kamera bis 120 m halbe Kantenlänge (vorher fest `CFG.area`, meist 36 m) und rückt in Blickrichtung vor. Gleiche 2048er Schattenkarte; Tiefenbereich und Bias wachsen mit. Nahe Einstellungen bleiben wie bisher scharf. | `CFG.shadowFar: false` = alte Grenze · Zahl = maximale halbe Kantenlänge |
+| **Weichere Tiefenunschärfe** | Automatische Unschärfe in Nahaufnahmen schwächer (`CFG.dofAuto` Standard 0,65 statt 1), maximaler Unschärfekreis 0,009 statt 0,013: Hintergrund bleibt erkennbar, aber getrennt. Explizites `dof` in Kamera-Keys wirkt wie bisher, nur mit der neuen Obergrenze. | `CFG.dofAuto: 1` = alte Stärke |
+
+Hinweise:
+- Eigene `ShaderMaterial` mit `fog: true` bekommen den Bodennebel nur, wenn ihre Uniforms aus `THREE.UniformsLib.fog` stammen; der Vertex-Shader muss dann `#include <fog_vertex>` nach `mvPosition` enthalten (wie bei Three.js üblich).
+- Die Werte je Himmel stehen in `LOOK` (rim, sh/hl Tönung, sat, con, lift, open, rays, haze, dust); Planeten-Himmel nutzen neutrale Werte (`LOOK0`).
+- Test: `tests/v32-light` (Tag → golden → Nacht, weit und nah).
+
+
+### Neu in v3.3: Materialien, Lichtkegel, Lichtpfützen
+
+#### Material-Presets: `mat(hex, { kind })`
+`kind` = paint · glass · metal · chrome · ceramic · plastic · wood · fabric · rubber · stone. Das Preset setzt Rauheit, Metallanteil und wie stark die Fläche den Himmel spiegelt (Umgebung aus dem Himmel, seit v3.0). Gilt auch für `box`, `cyl`, `cone`, `ball`, `prism`, `plate`, `finPlate` (Option wird an `mat` durchgereicht).
+- paint = Autolack (glatt, Himmel spiegelt sich auf Motorhaube und Dach), glass = Scheibe (fast glatt, spiegelt stark), metal = gebürstetes Metall, chrome = Spiegel, ceramic = glasierte Keramik, plastic = Kunststoff mit leichtem Glanz, wood / fabric / rubber / stone = matt.
+- Glänzende Sorten (paint, glass, metal, chrome, ceramic, plastic) sind auf runden Teilen glatt schattiert (Kugeln, Zylinder). Kisten und Umrisse bleiben kantig – der Low-Poly-Look bleibt.
+- `rough`, `metal`, `flat` zusätzlich angegeben gewinnen. `env: Zahl` = Stärke der Spiegelung (1 = wie bisher), auch ohne `kind`.
+- Durchsichtiges Glas: `mat(hex, { kind: 'glass', opacity: 0.4 })`. Standard ist undurchsichtig (Autos und Häuser haben innen nichts).
+- `envK(material, k)` hebt die Spiegelung eines beliebigen Standard-Materials an (Shader-Patch, behält frühere Patches).
+- Abschalten: `CFG.materials: false` = alle Presets wie das alte matte Material.
+
+Automatisch:
+- `vehicle()`: Karosserie in Lack, Scheiben als Glas (etwas dunkler getönt, spiegeln den Himmel), Chromteile als Chrom, graue Zierteile als Metall, schwarze Stoßstangen/Grill als Kunststoff, Reifen als Gummi und Felgen als Metall (zwei Meshes pro Rad). `vehicle(…, { finish: false })` = alter matter Look.
+- `tower()`: Fensterscheiben, Schaufenster und Glastüren als Glas (beleuchtete Fenster leuchten wie bisher).
+- Straßenmöbel: Laternen- und Ampelmasten als Metall, Hydrant lackiert, Mülleimer lackiert mit Metalldeckel.
+
+#### Kugeln und Obst in Nahaufnahme
+- `ball(p, r, …)` ohne `detail`: Radius ≤ 0,35 m oder glänzende Sorte → `detail: 2` (rund statt Polyeder). Große Kugeln (Baumkronen, Felsen) bleiben `detail: 1`.
+- `food`: Apfel als gedrechselte Form mit Mulden oben und unten, glatt und leicht wachsig; Orange und Tomate feiner und glatt; Trauben rund und glänzend.
+- `fruitBowl(p, x, y, z, { color, fruit: [kind…], scale, ry })` → Gruppe: glasierte Keramikschale mit Obst (Äpfel rot und grün, Orange, Banane, Trauben), statisch, y = Tischplatte. Die Küche (`furnish(…, 'appliances')`) nutzt sie statt der fünf kantigen Kugeln.
+
+#### Lichtkegel: `beamMat(o)`
+Gemeinsames Material für alle Lichtkegel: additiv, ohne Tiefenschreiben; hell an der Lampe und zum Ende hin auslaufend, hellster Kern in der Mitte, weich zum Rand (Blickwinkel), langsam treibender Staub (Weltraum, reine Funktion von t), blendet über dem Boden aus (keine harte Kante, wo der Kegel den Boden schneidet) und im Nebel.
+- `o`: `color`, `k` (Stärke, etwa 2 × alte Deckkraft), `soft` (Kern-Schärfe, 1,6), `dust` (0–1), `dustScale` (1/m), `len` (Abfall entlang des Kegels), `floor` (Welt-y), `floorBand` (0,5 m).
+- Animieren: `m.uniforms.uK.value`.
+- Geometrie: jede `ConeGeometry`/`CylinderGeometry` (offen); Anfang = Spitze bzw. Oberseite (uv.y = 1).
+- Benutzt von: `searchlight` (Kegel beginnt jetzt an der Linse, weicher Kern statt weißer Planke; neue Optionen `soft: 7`, `dust: 0.7`; `opacity` wie bisher), `flashlight`, `headlights` (Kegel waren verkehrt herum – jetzt schmal an der Lampe), UFO-Traktorstrahl (`spaceship({ kind: 'ufo', beam })`), Leuchtturm, U-Boot-Scheinwerfer, Polizei-Hubschrauber, Wachturm am Gefängnis, Discokugel.
+
+`beamSpot(beam, { axis, len, tan, color, k, floor, spot })` → Mesh: weicher, elliptischer Lichtfleck, wo der Kegel den Boden trifft (nach dem Posieren der Figuren berechnet, verschwindet mit dem Kegel). Automatisch bei Taschenlampe, Scheinwerfern, UFO-Strahl, Polizei-Hubschrauber und Wachturm. `flashlight(…, { spot: false })` / `headlights(…, { spot: false })` = ohne.
+
+#### Lichtpfützen und Halos (keine echten Lichter)
+- `lightPool(p, x, y, z, { r, color, k, night, wall, ry, ignore })`: weicher Lichtschein auf dem Boden unter einer Lampe (lokal zu p). Legt sich kurz vor `bake()` über Bordsteine, Stufen, Pflaster (alles bis 0,28 m über dem Lampenfuß; Bänke, Autos und der eigene Sockel – `ignore: Gruppe` – bleiben außen vor). Alle statischen Pfützen = ein Draw-Call. Folgt der Dunkelheit (`NIGHTK`); `night: false` = immer an (Innenräume); `wall: true` = senkrecht an einer Wand (lokal +z aus der Wand).
+- `bulbHalo(p, x, y, z, { size, color, k, night })`: kleiner weicher Schein um eine Glühbirne, zur Kamera gedreht, etwas vor die Birne gezogen (Lampengehäuse schneiden ihn nicht). Alle statischen Halos = ein instanzierter Draw-Call.
+- Automatisch: `lamp()` (Pfütze r = 1,25 × Höhe, schwächer wenn die Lampe ein echtes Licht hat, Halo um die Birne), `streetlight()` und damit `city()` (Pfütze unter dem Kopf über der Straße, Halo unter dem Kopf).
+- Abschalten: `lamp(…, { pool: false, halo: false })`, `streetlight(p, x, z, ry, { pool: false, halo: false })`, `city({ pools: false })`, ganz: `CFG.pools: false` (auch ohne Lichtflecken der Kegel).
+
+Test: `tests/v32-materials` (Autos am Tag, Material-Kugeln, Obst auf dem Tisch, Straße in Dämmerung und Nacht mit Laternen, Suchscheinwerfer, Leuchtturm, UFO-Strahl, Taschenlampe, Scheinwerfer, kleine Stadt von oben).
+
