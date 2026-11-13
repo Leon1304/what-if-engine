@@ -446,7 +446,11 @@ if (LAND) { document.getElementById('stage').classList.add('land'); document.get
 // (CFG.nightLift), more aerial haze (CFG.haze), soft spray, wet sand along coasts, 2D map cards (MAP2D), subtitles as .srt (render.mjs --srt)
 const LONG = LAND && CFG.long !== false;
 if (LONG && CFG.burnSubs === false) document.getElementById('stage').classList.add('nosubs');   // subtitles only as .srt (YouTube CC), not in the picture
-if (LONG) { document.getElementById('stage').classList.add('long'); if (!CFG.fast) { CFG.renderScale = Math.max(CFG.renderScale ?? 1, 1); CFG.msaa = Math.max(CFG.msaa ?? 2, 4); } }
+if (LONG) document.getElementById('stage').classList.add('long');
+// v3.2 HQ: the final video (render.mjs --video without --draft, or any mode with --hq sets window.__HQ__) renders the 3D like long videos do — full resolution + 4× MSAA
+// (CFG.renderScale 0.75 / msaa 2 stay for preview, --shots and --cover: fast). CFG.fast keeps the old speed everywhere.
+const HQ = (LONG || !!window.__HQ__) && !CFG.fast;
+if (HQ) { CFG.renderScale = Math.max(CFG.renderScale ?? 1, 1); CFG.msaa = Math.max(CFG.msaa ?? 2, 4); }
 const VOICE = /* @VOICE */null;
 const SFXS = /* @SFX */{};   // real sound effects: kind → base64 mp3 (sfx/*.mp3, CC0)
 const TR = /* @TR */null;   // language version (assemble.py --lang xx + <slug>.<xx>.json): { beats: [{ text, say }], end: { q, cta, say, loop }, thumb: { text, sub }, strings: { 'Sunrise in': 'Amanecer en', … } }
@@ -13163,7 +13167,120 @@ function qaAudit() {
           if (d > 0.07) { const S = sink.get(f); if (!S || d > S.d) sink.set(f, { d, t }); } } } } }
   finally { const sk = SKINQA; SKINQA = null; for (const f of sk) out.push(`${name(f)}: arm or leg drawn as old boxes for a moment (a joint was pulled apart or a part came off) – fine for gore and ragdolls, otherwise check the pose`); }
   for (const [f, S] of sink) out.push(`${name(f)}: foot ${(S.d * 100).toFixed(0)} cm in the floor around ${S.t.toFixed(2)} s while standing – raise the figure or its floor (y) or check the pose`);
+  try { out.push(...qaLook()); } catch (e) { out.push('look QA failed: ' + e.message); }   // v3.2: DARK · EMPTY · CAMCLIP · HEADCUT
   return out;
+}
+// --- v3.2 look QA (part of qaAudit, lines "QA: DARK|EMPTY|CAMCLIP|HEADCUT – …"): what the picture looks like, from tiny frames of the middle of every camera shot and of every cover ---
+//   DARK: much of the frame near-black (not counting the sky) · EMPTY: most of the frame without any detail (flat sky / bare ground, a blob in the distance)
+//   CAMCLIP: geometry closer than 0.5 m to the lens covers a big part of the frame · HEADCUT: a close-up cuts through a face at the top edge
+//   Own small render targets and a plain renderer.render (no AO, bloom, lens effects), tone map + sRGB + contrast + vignette like the final pass; the renderer state is put back afterwards.
+const QAL = { rt: null };
+function qalSetup() {
+  if (QAL.rt) return QAL; const [w, h] = LAND ? [128, 72] : [72, 128], F = { type: THREE.HalfFloatType, samples: CFG.msaa ?? 2 };   // same format as the composer's target: SwiftShader reuses its compiled pipelines (else every material compiles again, seconds each)
+  Object.assign(QAL, { w, h, rt: new THREE.WebGLRenderTarget(w, h, F), dt: new THREE.WebGLRenderTarget(w, h, { ...F, depthTexture: new THREE.DepthTexture(w, h) }), ct: new THREE.WebGLRenderTarget(w, h),
+    px: new Uint8Array(w * h * 4), L: new Float32Array(w * h), Z: new Float32Array(w * h),
+    // one small shader: colour → tone map + sRGB + contrast + vignette like the final pass → luma (r) · depth of the opaque pass → distance from the lens (g, 0–2.55 m) and sky (b)
+    q: new FullScreenQuad(new THREE.ShaderMaterial({ uniforms: { tex: { value: null }, tDep: { value: null }, uExp: { value: 1 }, uNear: { value: 0.1 }, uFar: { value: 1200 }, uVig: { value: 0 }, uCon: { value: 1 } }, depthTest: false, depthWrite: false,
+      vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+      fragmentShader: `uniform sampler2D tex, tDep; uniform float uExp, uNear, uFar, uVig, uCon; varying vec2 vUv;
+        vec3 neutral(vec3 c){ c *= uExp; float x = min(c.r, min(c.g, c.b)), off = x < 0.08 ? x - 6.25 * x * x : 0.04; c -= off; float pk = max(c.r, max(c.g, c.b)); if (pk < 0.76) return c;
+          float np = 1.0 - 0.0576 / (pk - 0.52); c *= np / pk; return mix(c, vec3(np), 1.0 - 1.0 / (0.15 * (pk - np) + 1.0)); }
+        vec3 srgb(vec3 c){ c = clamp(c, 0.0, 1.0); return mix(c * 12.92, 1.055 * pow(c, vec3(1.0 / 2.4)) - 0.055, step(0.0031308, c)); }
+        void main(){ vec3 c = clamp((srgb(neutral(texture2D(tex, vUv).rgb)) - 0.5) * uCon + 0.5, 0.0, 1.0) * mix(1.0 - uVig, 1.0, smoothstep(0.9, 0.25, length((vUv - 0.5) * vec2(1.0, 1.2))));   // + contrast and vignette as in the final pass
+          float d = texture2D(tDep, vUv).x, z = uNear * uFar / (uFar - d * (uFar - uNear));
+          gl_FragColor = vec4(dot(c, vec3(0.2126, 0.7152, 0.0722)), clamp(z / 2.55, 0.0, 1.0), d > 0.9999995 ? 1.0 : 0.0, 1.0); }` })) });
+  return QAL;
+}
+// one tiny frame of the scene as it stands: QAL.L = luma (sRGB 0–1), QAL.Z = distance from the lens in m (2.55 = that far or more, Infinity = sky), both top row first.
+// Two plain renders with the scene's own materials (no extra shader programs to compile): colour, then the depth of the opaque geometry only
+function qalFrame(skip, depthOnly = false, vig = fin.uniforms.uVig.value) {   // depthOnly: only the distances (QAL.L keeps the last colour frame)
+  const Q = qalSetup(), r = renderer, { w, h } = Q, U = Q.q.material.uniforms, prevT = r.getRenderTarget(), ac = r.autoClear, su = r.shadowMap.autoUpdate, hid = [];
+  try {
+    camera.updateMatrixWorld(); r.autoClear = true;
+    if (!depthOnly) { r.setRenderTarget(Q.rt); r.clear(); r.render(scene, camera); }
+    // depth: smoke, glass, water, beams, particles and the sky do not count, the first-person figure's own body neither
+    scene.traverseVisible(o => { const m = o.material; if (o.isPoints || o.isLine || o.isSprite || (o.isMesh && m && (Array.isArray(m) ? m.some(x => x.transparent || x.depthWrite === false) : m.transparent || m.blending === THREE.AdditiveBlending || m.depthWrite === false))) hid.push(o); });
+    if (skip) skip.traverse(o => { if (o.visible) hid.push(o); });
+    for (const o of hid) o.visible = false;
+    r.shadowMap.autoUpdate = false; r.setRenderTarget(Q.dt); r.clear(); r.render(scene, camera);
+    U.tex.value = Q.rt.texture; U.tDep.value = Q.dt.depthTexture; U.uExp.value = r.toneMappingExposure; U.uNear.value = camera.near; U.uFar.value = camera.far; U.uVig.value = vig; U.uCon.value = fin.uniforms.uCon.value;
+    r.setRenderTarget(Q.ct); Q.q.render(r); r.readRenderTargetPixels(Q.ct, 0, 0, w, h, Q.px);
+  } finally { for (const o of hid) o.visible = true; r.shadowMap.autoUpdate = su; r.autoClear = ac; r.setRenderTarget(prevT); }
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) { const i = ((h - 1 - y) * w + x) * 4, j = y * w + x, p = Q.px;
+    Q.L[j] = p[i] / 255; Q.Z[j] = p[i + 2] > 127 ? Infinity : p[i + 1] / 100; }
+  return Q;
+}
+// measures of one frame: dark = share of pixels that are near-black geometry · dead = share of 8×8 px cells that are ≥ 90 % near-black geometry (luma < 0.06: a black slab,
+//   not the dark gaps of a busy night scene) · flat = share of cells without detail · clip = share closer than 0.5 m (cx, cy: where)
+//   fg = share closer than fgD (a big thing between the lens and a subject far behind it; fy: its height in the frame, 0 = top)
+function qalMeasure(Q, fgD = 0) {
+  const { w, h, L, Z } = Q; let dark = 0, clip = 0, cx = 0, cy = 0, cells = 0, flat = 0, fg = 0, fx = 0, fy = 0;
+  for (let j = 0; j < w * h; j++) { if (Z[j] < 1e9 && L[j] < 0.035) dark++; if (Z[j] < 0.5) { clip++; cx += j % w; cy += Math.floor(j / w); } if (Z[j] < fgD) { fg++; fx += j % w; fy += Math.floor(j / w); } }
+  const C = 8; let dead = 0; for (let y0 = 0; y0 + C <= h; y0 += C) for (let x0 = 0; x0 + C <= w; x0 += C) { let s = 0, m = 0, dk = 0;
+    for (let y = y0; y < y0 + C; y++) for (let x = x0; x < x0 + C; x++) { const j = y * w + x, v = L[j]; if (v < 0.06 && Z[j] < 1e9) dk++;
+      if (x > 0 && y > 0 && x < w - 1 && y < h - 1) { const lp = Math.abs(4 * v - L[j - 1] - L[j + 1] - L[j - w] - L[j + w]); s += lp; m = Math.max(m, lp); } }
+    cells++; if (s / (C * C) < 0.006 && m < 0.05) flat++; if (dk >= 0.9 * C * C) dead++; }
+  return { dark: dark / (w * h), dead: dead / cells, flat: flat / cells, clip: clip / (w * h), cx: clip ? cx / clip / w : 0.5, cy: clip ? cy / clip / h : 0.5, fg: fg / (w * h), fx: fg ? fx / fg / w : 0.5, fy: fg ? fy / fg / h : 0.5 };
+}
+const _ql = [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()], _qlc = new THREE.Vector3();
+// HEADCUT: a visible figure big in the frame whose head is cut by the top edge (≥ 30 % of the head above it) while its chest is in the frame — not in first person, not in macro shots on the hands
+function qalHeads(macro) {
+  const R = []; world.updateMatrixWorld(true); camera.updateMatrixWorld();
+  const ndc = v => { _qlc.copy(v).applyMatrix4(camera.matrixWorldInverse); const front = _qlc.z < -0.05; v.project(camera); return front; };
+  RIGS.forEach((f, i) => { if (!f.head || !f.chest || !f.hips || !f.neck || f === POV_ON) return;
+    let vis = true, top = f.head; for (; top; top = top.parent) { if (!top.visible) { vis = false; break; } if (top === scene) break; } if (!vis || !top) return;
+    const [T, C, N, H, B] = _ql; _ab.makeEmpty(); for (const n of [f.FC?.skull ?? f.head, f.hair]) if (n) _ab.expandByObject(n); if (_ab.isEmpty()) return; _ab.getCenter(C); T.set(C.x, _ab.max.y, C.z);   // skull + hair as drawn (big cartoon heads too; not hats, sweat drops or '?' above the head)
+    f.head.getWorldPosition(N); H.set(0, 0.3, 0); f.chest.localToWorld(H); f.hips.getWorldPosition(B);
+    if (![T, C, N, H, B].every(ndc)) return;
+    const big = (C.y - B.y) / 2, cut = (T.y - 1) / Math.max(1e-3, T.y - N.y);
+    if (big < 0.3 || T.y <= 1 || N.y >= 1 || cut < 0.3 || Math.abs(C.x) > 0.95 || Math.abs(H.x) > 0.9 || H.y > 0.92 || H.y < -1) return;
+    if (macro && _l.y < f.neck.getWorldPosition(_qlc).y - 0.25 * f.root.scale.x) return;   // a macro shot on the hands / a held thing: the head is meant to be out
+    R.push({ i, f, cut: Math.min(1, cut), big }); });
+  return R;
+}
+// samples: every cover (THUMB, all A/B variants) and the middle of every camera shot (CAM keys between cuts; split screens, full-frame map cards and the end card left out),
+// at most 30 full frames; then depth-only probes near both ends of every shot (12 / 88 %) for CAMCLIP and HEADCUT (the camera moves into things). Time budget o.budget (ms, default 25 s) for the extras and probes.
+function qaLook(o = {}) {
+  const t0 = performance.now(), budget = o.budget ?? 25000, endT = END ? END.t - 0.3 : DUR, S = [];
+  const B = [...new Set([0, ...CUTS.filter(c => c > 0.05 && c < endT)])].sort((a, b) => a - b);
+  B.forEach((a, k) => { const b = Math.min(endT, B[k + 1] ?? endT); if (b - a < 0.4) return; S.push({ t: (a + b) / 2, a, b, n: k + 1 }); });
+  const ok = t => !SPLITS.some(x => t >= x.t && t < x.t + x.dur) && map2dK(t) < 0.5, shots = S.filter(s => ok(s.t)), MAX = 30 - THV.length;
+  let pick = shots.length > MAX ? Array.from({ length: MAX }, (_, k) => shots[Math.round(k * (shots.length - 1) / (MAX - 1))]) : shots;
+  for (const s of [...pick]) if (pick.length < MAX && s.b - s.a > 3.5) pick.push({ ...s, t: s.a + (s.b - s.a) * 0.2, extra: true }, { ...s, t: s.a + (s.b - s.a) * 0.8, extra: true });   // long shots: also near both ends
+  pick = pick.slice(0, MAX);   // covers and shot middles always run (same lines on every machine); the time budget only cuts the extra samples and probes
+  const covers = THV.map((th, i) => ({ t: th.t ?? CFG.coverT, cover: i, th }));
+  const probes = o.probes === false ? [] : shots.flatMap(s => [0.12, 0.88].map(k => ({ ...s, t: s.a + (s.b - s.a) * k, probe: true })).filter(p => ok(p.t))).slice(0, 60);
+  const res = new Map(), put = (k, sev, msg) => { const x = res.get(k); if (!x || sev > x.sev) res.set(k, { sev, msg }); }, stats = [];
+  const TH0 = TH, ON0 = THUMB_ON;
+  const who = (f, i) => f.who ? `'${f.who}' #${i}` : f.kind === 'zombie' ? `zombie #${i}` : `figure #${i}`;
+  const hitName = (x, y, far) => { let nm = ''; try { const rc = new THREE.Raycaster(); rc.setFromCamera(new THREE.Vector2(x * 2 - 1, 1 - y * 2), camera); rc.far = far;   // what the lens runs into (a hint only)
+    const hit = rc.intersectObject(world, true).find(q => q.object.isMesh && !q.object.material?.transparent); for (let p = hit?.object; p && p !== world && !nm; p = p.parent) nm = p.name; } catch (e) { /* hint only */ } return nm; };
+  try {
+    for (const s of [...covers, ...pick, ...probes]) {
+      if ((s.extra || s.probe) && performance.now() - t0 > budget) break;
+      if (s.cover != null) { TH = s.th; THUMB_ON = true; } else { TH = TH0; THUMB_ON = false; }
+      const tv = s.cover != null ? s.t : teaseV(s.t); stepScene(tv);
+      let ci = 0; for (let j = 0; j < CAM.length; j++) if (CAM[j].t <= tv) ci = j; const key = CAM[ci] ?? {}, pov = !!key.pov && s.cover == null;
+      const fd = camera.position.distanceTo(_l), macro = (key.hand === 1.5 || (key.fov ?? 45) <= 30) && fd < 2.3, fgD = fd >= 4 ? Math.min(2, 0.3 * fd) : 0;
+      const where = s.cover != null ? `cover ${'ABCDEFGH'[s.cover]} (THUMB at ${s.t.toFixed(1)} s)` : `shot ${s.n} (${s.a.toFixed(1)}–${s.b.toFixed(1)} s) at ${s.t.toFixed(1)} s`, id = s.cover != null ? 'c' + s.cover : 's' + s.n;
+      if (!Number.isFinite(fd) || !Number.isFinite(camera.fov)) { put('EMPTY' + id, 2, `EMPTY – ${where}: the camera position or lens is not a number (NaN) – nothing is drawn; check the CAM key there (p, l, follow, fov) and that CFG has handheld`); continue; }
+      const M = qalMeasure(qalFrame(pov ? POV_ON?.root : null, !!s.probe, s.cover != null ? Math.max(fin.uniforms.uVig.value, 0.55) : fin.uniforms.uVig.value), fgD), darkSky = (skyNow.nk ?? 0) >= 0.75 || skyNow === SKIES.space || skyNow === SKIES.mercury;
+      const heads = pov ? [] : qalHeads(macro);
+      if (o.stats) stats.push({ where, probe: !!s.probe, fd: +fd.toFixed(1), ...Object.fromEntries(Object.entries(M).map(([k, v]) => [k, +v.toFixed(3)])), sky: Object.keys(SKIES).find(k => SKIES[k] === skyNow), heads: heads.map(x => x.i + ':' + x.cut.toFixed(2)) });
+      if (!s.probe) {
+        if (M.dead > (darkSky ? 0.6 : 0.35)) put('DARK' + id, M.dead, `DARK – ${where}: ${(M.dead * 100).toFixed(0)} % of the frame is a near-black area (not counting the sky${darkSky ? '; dark sky, limit 60 %' : ''}) – light the subject (lamp, flashlight, lit windows, CFG.nightLift), use a lighter SKY there or turn the camera off the dark wall / shadow`);
+        if (M.flat > 0.85 && M.clip < 0.2) put('EMPTY' + id, M.flat, `EMPTY – ${where}: ${(M.flat * 100).toFixed(0)} % of the frame shows no detail (flat sky, bare ground, fog or water; the subject tiny or missing) – move the camera closer (dist, fov), aim it at the subject${s.cover != null ? ' (THUMB.cam / THUMB.t)' : ''} or put something into the frame`);
+      }
+      if (!pov && M.clip > 0.2) { const nm = hitName(M.cx, M.cy, 0.8);
+        put('CAMCLIP' + id, 1 + M.clip, `CAMCLIP – ${where}: ${nm ? `'${nm}'` : 'geometry'} closer than 0.5 m to the lens covers ${(M.clip * 100).toFixed(0)} % of the frame${M.cy < 0.35 ? ' (top)' : M.cy > 0.65 ? ' (bottom)' : ''} – move the camera off it (dist, h, az, p) or move the object; the lens must not sit in a wall, a prop or a figure`); }
+      else if (!pov && M.fg > 0.35 && M.fy < 0.6) { const nm = hitName(M.fx, M.fy, fgD + 0.3);   // not the floor at the bottom edge (low angles)
+        put('CAMCLIP' + id, M.fg, `CAMCLIP – ${where}: ${nm ? `'${nm}'` : 'something'} less than ${fgD.toFixed(1)} m from the lens covers ${(M.fg * 100).toFixed(0)} % of the frame in front of the subject (${fd.toFixed(1)} m away) – move the camera past it (az, h, p) or move the object out of the way`); }
+      for (const x of heads) put('HEADCUT' + id + ':' + x.i, x.cut, `HEADCUT – ${where}: ${who(x.f, x.i)} fills the frame but ${(x.cut * 100).toFixed(0)} % of the head is above the top edge – frame lower (fy 0.4–0.5, a little more dist or fov, aim at the face: dy) or go wider`);
+    }
+  } finally { TH = TH0; THUMB_ON = ON0; }
+  if (o.stats) return stats;
+  const L = [...res.values()].sort((a, b) => b.sev - a.sev).map(x => x.msg), by = k => L.filter(m => m.startsWith(k + ' '));
+  return ['DARK', 'EMPTY', 'CAMCLIP', 'HEADCUT'].flatMap(k => { const A = by(k); return A.length > 6 ? [...A.slice(0, 6), `${k} – … and ${A.length - 6} more`] : A; });
 }
 function motionAudit(o = {}) {
   const fps = o.fps ?? 30, dt = 1 / fps, N = Math.floor(DUR * fps), L = audItems(), W = new Map(), warn = (key, sev, msg) => { const w = W.get(key); if (!w || sev > w.sev) W.set(key, { sev, msg }); };
