@@ -3465,6 +3465,7 @@ function horde(o = {}) {
   // v3.3 wall climbing (World-War-Z pile): wait: { line, climb: true | { h, rate, bodies } } — the crowd presses against the wall, the bodies pile up into a ramp
   // where the pressure is, members climb it and, once a section reaches the top (h, default 2.6 m), pour over the wall and drop down the other side.
   const CLB = o.wait?.line && o.wait.climb ? (o.wait.climb === true ? {} : o.wait.climb) : null, CH = CLB ? CLB.h ?? 2.6 : 0;
+  const TALL = CH > 3, rampL = P => TALL && P > 2.85 ? 3.85 + (P - 2.85) * 0.6 : Math.max(1.6, P * 1.35);   // v3.13: tall walls (16 m) get a steep pile (~54°) instead of a 22 m ramp
   const pinnedAt = (q, t) => t < q.b - (simOn ? 0.25 : -(rise ? 0.8 : 0)) || (q.fixed && !(o.flee && t > tfOf(q)));   // v3.3: rising members are in the sim (they make room for each other while they climb out)
   const simBake = () => {
     const t00 = performance.now(), T0 = Math.max(-0.5, Math.min(...M.map(q => q.b)) - 0.05), T1 = DUR + 0.6, NS = Math.ceil((T1 - T0) / SIMDT) + 2;
@@ -3543,7 +3544,7 @@ function horde(o = {}) {
         else if (!pin[i]) { const mx = px[i] - ox0[i], mz = pz[i] - oz0[i], sp = Math.hypot(mx, mz) / SIMDT; vx[i] = mx / SIMDT; vz[i] = mz / SIMDT; wk[i] += sp * SIMDT;
           const want = sp > 0.25 ? Math.atan2(mx, mz) : stateRaw(M[i], t - lag[i])[3], dY = ((want - yw[i] + Math.PI) % TAU + TAU) % TAU - Math.PI; yw[i] += clamp(dY, -turn, turn); Mv[o2] = sp > 0.18 ? 1 : 0; }
         X[o2] = px[i]; Zc[o2] = pz[i]; Yw[o2] = yw[i]; Wk[o2] = wk[i];
-        if (CLB && !pin[i]) { const [u, d] = lineUD(i); if (u > -0.02 && u < 1.02) { const P = Pat(u), L = Math.max(1.6, P * 1.35); Yy[o2] = d >= 0 ? P * clamp(1 - d / L) : relT[i] <= t ? P * (1 - EASE.in(clamp(-d / (1.1 * Math.max(1, P / 2.6))))) : 0; } } }   // v3.13: the drop on the far side grows with the wall height (16 m walls: no teleport)
+        if (CLB && !pin[i]) { const [u, d] = lineUD(i); if (u > -0.02 && u < 1.02) { const P = Pat(u), L = rampL(P); Yy[o2] = d >= 0 ? P * clamp(1 - d / L) : relT[i] <= t ? P * (1 - EASE.in(clamp(-d / (1.1 * Math.max(1, P / 2.6))))) : 0; } } }   // v3.13: the drop on the far side grows with the wall height (16 m walls: no teleport)
       if (CLB) PH.set(Pb, s * NB);
     }
     SIM = { T0, NS, X, Zc, Yw, Wk, Mv, Yy, PH, NB, TR, trips: trips.n }; if (performance.now() - t00 > 4000) console.warn(`crowd sim ${n} members: ${Math.round(performance.now() - t00)} ms`);
@@ -3692,16 +3693,23 @@ function horde(o = {}) {
   const MOUND = CLB && simOn ? (() => {
     const [la, lb] = o.wait.line, ldx = lb[0] - la[0], ldz = lb[1] - la[1], lL = Math.hypot(ldx, ldz) || 1, ux = ldx / lL, uz = ldz / lL, NB = Math.max(1, Math.ceil(lL));
     let nx = -uz, nz = ux; if (((sx - la[0]) * nx + (sz - la[1]) * nz) < 0) { nx = -nx; nz = -nz; }   // toward the start side
-    const Lm = Math.max(1.6, (CH + 0.25) * 1.35), K = Math.round(CLB.bodies ?? clamp(0.5 * CH * Lm / 0.2, 6, 40)), N = Math.min(NB * K, CLB.max ?? 900), rk = k => hash(k * 12.9898 + hid * 78.233);
+    const Lm = rampL(CH + 0.25), K = Math.round(CLB.bodies ?? clamp(0.5 * CH * Lm / 0.2, 6, 40)), N = Math.min(NB * K, CLB.max ?? (TALL ? 3000 : 900)), rk = k => hash(k * 12.9898 + hid * 78.233);
     const cloth = mk(_boxesG([[0.5, 0.3, 0.62, 0, 0, 0], [0.18, 0.18, 0.82, -0.12, 0, -0.72], [0.18, 0.18, 0.82, 0.12, 0, -0.72]]), N), skinB = mk(_boxesG([[0.36, 0.36, 0.36, 0, 0.02, 0.52], [0.13, 0.13, 0.62, -0.33, 0, 0.2], [0.13, 0.13, 0.62, 0.33, 0, 0.2]]), N);
     const nYaw = Math.atan2(nx, nz), th = (o.wait.thick ?? 0.35) / 2;
     const B = []; for (let k = 0; k < N; k++) { const b = k % NB, yaw = rk(k + 0.75) * TAU, ca = Math.cos(yaw - nYaw), reach = (ca < 0 ? 0.72 : 1.18) * Math.abs(ca) + 0.24 * Math.abs(Math.sin(yaw - nYaw)) + 0.3;   // body: head +0.7, feet −1.13 along its axis
       const d = th + reach + rk(k) * Math.max(0.2, Lm - 0.4 - th - reach), ymax = Math.max(0, (CH + 0.15) * (1 - d / Lm) - 0.2), y = rk(k + 0.5) * ymax;
-      const u = (b + rk(k + 0.25)) / NB; B.push({ b, d, y, x: la[0] + ldx * u + nx * d, z: la[1] + ldz * u + nz * d, yaw, rx: (rk(k + 0.1) - 0.5) * 0.7, rz: (rk(k + 0.3) - 0.5) * 1.6 });
+      const u = (b + rk(k + 0.25)) / NB; B.push({ b, d, y, u, reach, fr: rk(k), dep: rk(k + 0.5) * 0.75, x: la[0] + ldx * u + nx * d, z: la[1] + ldz * u + nz * d, yaw, rx: (rk(k + 0.1) - 0.5) * 0.7, rz: (rk(k + 0.3) - 0.5) * 1.6 });
       cloth.setColorAt(k, col.set(shirts[Math.floor(rk(k + 0.6) * shirts.length)])); skinB.setColorAt(k, col.set(skins[Math.floor(rk(k + 0.9) * skins.length)])); }
     const Mb = new THREE.Matrix4(), Qb = new THREE.Quaternion(), Eb = new THREE.Euler();
     return { update(t) { const S = SIM; if (!S) return; const u = clamp((t - S.T0) / SIMDT, 0, S.NS - 1.001), s0 = Math.floor(u), f = u - s0;
-      for (let k = 0; k < N; k++) { const Bk = B[k], P = lerp(S.PH[s0 * NB + Bk.b], S.PH[(s0 + 1) * NB + Bk.b], f), surf = P * clamp(1 - Bk.d / Math.max(1.6, P * 1.35)), v = clamp((surf - Bk.y - 0.15) / 0.45);
+      for (let k = 0; k < N; k++) { const Bk = B[k], P = lerp(S.PH[s0 * NB + Bk.b], S.PH[(s0 + 1) * NB + Bk.b], f);
+        if (TALL) {   // v3.13 tall walls: a dense layer of bodies on the current surface of the pile (it rises with the pile — a writhing heap, no floating bodies)
+          const L = rampL(P), d = th + Bk.reach + Bk.fr * Math.max(0.2, L - 0.3 - th - Bk.reach), y = P * clamp(1 - d / L) - Bk.dep - 0.2, v = clamp((y + 0.05) / 0.4);
+          if (v <= 0) { cloth.setMatrixAt(k, Z); skinB.setMatrixAt(k, Z); continue; }
+          const x = la[0] + ldx * Bk.u + nx * d, z = la[1] + ldz * Bk.u + nz * d, tilt = Math.atan2(P, L);   // bodies lie along the slope
+          Mb.compose(V.set(x, groundH(x, z) + Math.max(0, y) + 0.15, z), Qb.setFromEuler(Eb.set(Bk.rx - tilt * Math.cos(Bk.yaw - nYaw), Bk.yaw, Bk.rz + tilt * Math.sin(Bk.yaw - nYaw), 'YXZ')), SC.setScalar(0.95 * (0.4 + 0.6 * v)));
+          cloth.setMatrixAt(k, Mb); skinB.setMatrixAt(k, Mb); continue; }
+        const surf = P * clamp(1 - Bk.d / Math.max(1.6, P * 1.35)), v = clamp((surf - Bk.y - 0.15) / 0.45);
         if (v <= 0) { cloth.setMatrixAt(k, Z); skinB.setMatrixAt(k, Z); continue; }
         Mb.compose(V.set(Bk.x, groundH(Bk.x, Bk.z) + Bk.y + 0.15 - 0.45 * (1 - v), Bk.z), Qb.setFromEuler(Eb.set(Bk.rx, Bk.yaw, Bk.rz, 'YXZ')), SC.setScalar(0.95));
         cloth.setMatrixAt(k, Mb); skinB.setMatrixAt(k, Mb); }
