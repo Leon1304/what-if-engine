@@ -1,5 +1,5 @@
 {
- "updated": "2026-11-13T13:26:35Z",
+ "updated": "2026-11-13T21:09:52Z",
  "videos": [
   {
    "slug": "dday",
@@ -192,6 +192,86 @@
    "auto": true
   },
   {
+   "slug": "bus-stop-types",
+   "title": "7 types of people at every bus stop",
+   "kind": "story",
+   "dur": 57.4,
+   "aspect": "9:16",
+   "accent": "lime",
+   "series": null,
+   "ending": null,
+   "date": "2026-11-13T21:09:52Z",
+   "status": "ready",
+   "files": {
+    "mp4": {
+     "url": "https://github.com/Leon1304/what-if-engine/releases/download/render-bus-stop-types/bus-stop-types.mp4",
+     "size": 218507024
+    },
+    "coverA": {
+     "url": "https://github.com/Leon1304/what-if-engine/releases/download/render-bus-stop-types/bus-stop-types-cover.jpg",
+     "size": 357485,
+     "thumb": "covers/bus-stop-types.jpg"
+    },
+    "coverB": {
+     "url": "https://github.com/Leon1304/what-if-engine/releases/download/render-bus-stop-types/bus-stop-types-cover-b.jpg",
+     "size": 598239,
+     "thumb": "covers/bus-stop-types-b.jpg"
+    },
+    "srt": {
+     "url": "https://github.com/Leon1304/what-if-engine/releases/download/render-bus-stop-types/bus-stop-types.srt",
+     "size": 1387
+    }
+   },
+   "preview": null,
+   "captions": {
+    "youtube": {
+     "title": "7 Types of People at Every Bus Stop",
+     "description": "Seven types of people. Every bus stop. You're one of them. 🚏\nPhone caller, bench owner or the leaner? Comment A, B or C 👇\n\n#shorts #viral #trending #youtubeshorts #fyp",
+     "tags": [
+      "types of people at the bus stop",
+      "bus stop",
+      "types of people",
+      "every bus stop",
+      "bus stop types",
+      "waiting for the bus",
+      "bus never comes",
+      "bus drove past",
+      "bus stop funny",
+      "relatable",
+      "relatable comedy",
+      "types of people funny",
+      "public transport",
+      "commuter life",
+      "morning commute",
+      "buss stop",
+      "bustop",
+      "3d animation",
+      "animated comedy",
+      "funny animation",
+      "which one are you",
+      "funny shorts",
+      "comedy",
+      "bus",
+      "shorts",
+      "whatifthishappenedscenarios",
+      "what if scenarios",
+      "viral",
+      "trending",
+      "fyp"
+     ],
+     "tagChars": 466
+    },
+    "instagram": "7 types of people at every bus stop 🚏 You're one of them.\nPhone caller, bench owner or the leaner? Comment A, B or C 👇\n\n#reels #viral #explore #reelsinstagram #trending",
+    "tiktok": "7 types of people at every bus stop 🚏 Be honest.\nWhich one are you? Comment A, B or C 👇\n\n#fyp #foryou #foryoupage #viral #trending",
+    "hooks": [
+     "Every bus stop has these 7 people.",
+     "The bus is 47 minutes late. Again.",
+     "You are one of these people. Don't lie."
+    ]
+   },
+   "auto": false
+  },
+  {
    "slug": "jerusalem-zombie-wall",
    "title": "What if the zombie apocalypse reached Jerusalem?",
    "kind": "story",
@@ -205,16 +285,16 @@
    "files": {
     "mp4": {
      "url": "https://github.com/Leon1304/what-if-engine/releases/download/render-jerusalem-zombie-wall/jerusalem-zombie-wall.mp4",
-     "size": 214301285
+     "size": 214090485
     },
     "coverA": {
      "url": "https://github.com/Leon1304/what-if-engine/releases/download/render-jerusalem-zombie-wall/jerusalem-zombie-wall-cover.jpg",
-     "size": 677700,
+     "size": 979879,
      "thumb": "covers/jerusalem-zombie-wall.jpg"
     },
     "coverB": {
      "url": "https://github.com/Leon1304/what-if-engine/releases/download/render-jerusalem-zombie-wall/jerusalem-zombie-wall-cover-b.jpg",
-     "size": 402927,
+     "size": 411690,
      "thumb": "covers/jerusalem-zombie-wall-b.jpg"
     },
     "srt": {
