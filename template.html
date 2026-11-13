@@ -2145,7 +2145,7 @@ function figure(o = {}) {
   if (o.hold) o.holdShape === 'board' ? box(foreR, 0.27, 0.34, 0.03, o.hold, 0, -0.62, 0.08) : box(foreR, 0.09, 0.24, 0.09, o.hold, 0, -0.6, 0.03);   // held item: flashlight/megaphone (along the forearm) or holdShape 'board' (clipboard)
   root.scale.setScalar(o.scale ?? 1);
   const f = { root, body, hips, chest, neck, head, legL, legR, shinL, shinR, footL, footR, armL, armR, foreL, foreR, mouth, brows, eyes, hat, coat, hair: hairG, hairFall, cape,
-    expr: o.expr, kind: o.kind ?? 'human', id, sd: hash(id * 7.31 + 0.5), look: o.look, talk: o.talk, who: o.who, M, fx: [], hands: HANDS, FC, autoFace: o.autoFace };
+    expr: o.expr, kind: o.kind ?? 'human', id, sd: hash(id * 7.31 + 0.5), mocap: o.mocap, look: o.look, talk: o.talk, who: o.who, M, fx: [], hands: HANDS, FC, autoFace: o.autoFace };
   if (coat) f.flaps = coat.Q;
   let _lookV = f.look;   // v2.31: look targets switched inside a scene tick are cross-faded (see poseProbe)
   Object.defineProperty(f, 'look', { enumerable: true, get: () => _lookV, set: v => { if (TKP) { TKP.look.set(f, v); return; } _lookV = v; if (TK && !TK._idle && !TK._poser) TK._poser = TK._redo = true; } });
@@ -2540,7 +2540,7 @@ function runTickers(st) {
   for (const r of RIGS) r._lookFrom = null;
   for (const f of tickers) { TK = f; if (f._poser && POSEFADE > 0) poseProbe(f, st); f(st);
     if (f._redo) { f._redo = false; if (POSEFADE > 0) { poseProbe(f, st); f(st); } }   // first frame this tick poses a figure: once more, now with its history
-    if (f._out) for (const [r, B] of f._out) { if (r.isModel || r._S0t !== st || B.w >= 1) continue; const o = r._o0 ?? {}, A = rigState(B.from, 0, st, _poseOpt(r, o)), S = { ...r._S0 }, k = EASE.inOut(B.w); for (const key in S) S[key] = lerp(A[key], S[key], k); poseFin(r, S, r._m0, st, o); } }
+    if (f._out) for (const [r, B] of f._out) { if (r.isModel || r._S0t !== st || B.w >= 1) continue; const o = r._o0 ?? {}, A = rigState(B.from, 0, st, _poseOpt(r, o)), S = { ...r._S0 }, k = EASE.inOut(B.w); for (const key in S) S[key] = lerp(A[key], S[key], k); r._mcq = { mode: r._m0, ph: 0, v: o.v, from: B.from, w: B.w }; poseFin(r, S, r._m0, st, o); } }
   TK = null;
 }
 function pose(f, mode, ph, t = 0, o = {}) {   // walk run shamble idle panic cheer point hold — o: { v: speed m/s, w: weight of mode (0..1), from: mode blended in with 1 − w, turn }
@@ -2557,13 +2557,14 @@ function pose(f, mode, ph, t = 0, o = {}) {   // walk run shamble idle panic che
   }
   const mine = f._S0t === t && f._S0own === TK; if (!mine) f._S0p = f._S0t === t ? f._S0 : null;   // _S0p: what the ticks before this one showed this frame (kept when this tick runs twice)
   if (X && X.w < 1) { const A = X.from === PREVPOSE ? f._S0p : rigState(X.from, ph / TAU, t, opt); if (A) { const k = EASE.inOut(X.w); for (const key in S) S[key] = lerp(A[key], S[key], k); } }
+  f._mcq = { mode, ph, v: o.v, from: o.from, w: o.w, X };   // v3.6: mocap on figures (_mcPass)
   f._S0 = { ...S }; f._S0t = t; f._S0own = TK; f._m0 = m; f._o0 = o;   // what this frame shows before the acting layers — the next tick (or a fade-out) blends from it
   poseFin(f, S, m, t, o);
 }
 function poseFin(f, S, m, t, o) {
   for (const fx of f.fx) fx(t, S);
   if (o.turn) S.broll = clamp(-o.turn * (o.v ?? 0) * 0.07, -0.3, 0.3);   // lean into curves
-  applyRig(f, S);
+  applyRig(f, S); _mcPass(f, m, t, o);
   if (f.FC) { f._fq = FSEQ; f._fm = m; f._ft = t; }   // the face is drawn after the camera and the head turns: facePass()
   f._fast = (o.v ?? 0) > 2.6 ? FRAME : -1;
 }
@@ -2880,6 +2881,7 @@ function model(name, o = {}) {
   return r;
 }
 function anim(r, list, o = {}) {   // model rig: [[t, clip, { once, speed }], …] crossfaded over o.fade s — anim(robot, [[0, 'Idle'], [4, 'Wave', { once: true }], [6, 'Dance']])
+  if (!r.isModel) return _mcAnim(r, list, o);   // v3.6: figure() → retargeted mocap clips
   const L = list.map(([t, c, x = {}]) => ({ t, c, ...x })).sort((a, b) => a.t - b.t), fade = o.fade ?? 0.3;
   const lay = (e, t) => { const c = r.clip(e.c), lt = (t - e.t) * (e.speed ?? 1); return [c, e.once ? Math.min(lt, (c?.duration ?? 1) - 1e-3) : lt, 1]; };
   r.sched = t => {
@@ -2890,6 +2892,57 @@ function anim(r, list, o = {}) {   // model rig: [[t, clip, { once, speed }], �
   };
   return r;
 }
+
+// --- mocap on figure() (v3.6): the 84 clips of human() retargeted onto the figure joints (models/mocap.json, built by models/build-mocap.mjs; assemble.py embeds only the clips a scene names)
+// anim(f, [[t, 'Dance_Loop'], [t2, 'Wave', { once: true }], [t3, null]]) plays clips on a figure (null = back to its own poses); figure({ mocap: true }) or CFG.mocap: true
+// → idle, walk, run, sneak and the zombie shamble use mocap; face, hands, clothes, gore and ragdoll stay the figure's own. Pure function of t like everything else.
+const MOCAP = /* @MOCAP */null, _mcD = new Map(), _mcV = new THREE.Vector3();
+const MC_GAIT = { walk: 'Walk_Loop', run: 'Jog_Fwd_Loop', sneak: 'Crouch_Fwd_Loop', shamble: 'Zombie_Walk_Fwd_Loop' }, MC_STRIDE = { walk: 1.3, run: 5, sneak: 1.5, shamble: 1.4 };   // m per clip cycle (mannequin)
+const MC_UPPER = new Set(['chest', 'neck', 'armL', 'foreL', 'handL', 'armR', 'foreR', 'handR']);
+function mcClip(name) {   // clip name or short name (talk, phone, fold, dance …) → decoded clip or null
+  if (!MOCAP || name == null) return null; const n = MOCAP.clips[name] ? name : MOCAP.alias?.[name] ?? (typeof HUMAN !== 'undefined' ? HUMAN.map[name] : null); const c = n && MOCAP.clips[n];
+  if (!c) { if (!_mcD.has('!' + name)) { _mcD.set('!' + name, 1); console.warn('mocap clip missing: ' + name + ' (not embedded or unknown — see models/mocap.json)'); } return null; }
+  let D = _mcD.get(n); if (!D) { const b = atob(c.q), u = new Uint8Array(b.length); for (let i = 0; i < b.length; i++) u[i] = b.charCodeAt(i); D = { n: c.n, d: c.d, a: new Int16Array(u.buffer), name: n }; _mcD.set(n, D); } return D; }
+function mcSample(D, time, loop, out) {   // → out: { p: Vector3, q: { joint: Quaternion } } at clip time (s), linear between frames
+  const W = 3 + 4 * MOCAP.joints.length, d = Math.max(D.d, 1e-3), x = loop ? (((time % d) + d) % d) : clamp(time, 0, d), f = x * MOCAP.fps, i = Math.min(D.n - 1, Math.floor(f)), j = Math.min(D.n - 1, i + 1), k = f - i, a = D.a, A = i * W, B = j * W;
+  out.p.set(lerp(a[A], a[B], k) * 1e-4, lerp(a[A + 1], a[B + 1], k) * 1e-4, lerp(a[A + 2], a[B + 2], k) * 1e-4);
+  MOCAP.joints.forEach((jn, m) => { const o = 3 + 4 * m, q = out.q[jn] ??= new THREE.Quaternion(); q.set(lerp(a[A + o], a[B + o], k), lerp(a[A + o + 1], a[B + o + 1], k), lerp(a[A + o + 2], a[B + o + 2], k), lerp(a[A + o + 3], a[B + o + 3], k)).normalize(); });
+  return out; }
+const _mcJ = f => f._mcJ ??= Object.fromEntries((MOCAP?.joints ?? []).map(j => [j, j === 'handL' ? f.hands?.find(h => h.sx < 0)?.hd : j === 'handR' ? f.hands?.find(h => h.sx > 0)?.hd : f[j]]));
+function _mcLayer(f, mode, ph, t, v) {   // what clip a figure with mocap shows for a pose mode → [clip, time, loop] or null (the figure's own pose)
+  if (!(f.mocap ?? CFG.mocap) || !MOCAP) return null;
+  const zb = f.kind === 'zombie', g = MC_GAIT[mode];
+  if (g && (v ?? 1) > 0.05) { const D = mcClip(g); if (!D) return null; const sl = MC_STRIDE[mode] * (MOCAP.k ?? 0.9), u = ph / TAU * cycleLen(mode, v ?? (mode === 'run' ? 4.5 : mode === 'shamble' ? 0.8 : 1.4)) / sl; return [D, u * D.d, true]; }
+  if (mode === 'idle') { const D = mcClip(zb ? 'Zombie_Idle_Loop' : 'Idle_Loop'); return D ? [D, t + f.sd * 7.3, true] : null; }
+  return null; }
+function _mcApply(f, L, mask) {   // L: [[clip|null, time, loop, weight], …]; null = the figure's own pose (already on the joints) — blends the clips, then from the own pose onto them
+  let wm = 0; for (const e of L) if (e[0]) wm += e[3]; if (wm < 1e-3) return;
+  const J = _mcJ(f), S = f._mcS ??= { p: new THREE.Vector3(), q: {} }, acc = f._mcA ??= { p: new THREE.Vector3(), q: {} }; let first = true;
+  for (const e of L) { if (!e[0] || e[3] <= 0) continue; mcSample(e[0], e[1], e[2], S); const w = e[3] / wm;
+    if (first) { acc.p.copy(S.p).multiplyScalar(w); for (const j in S.q) (acc.q[j] ??= new THREE.Quaternion()).copy(S.q[j]); acc.w = w; first = false; continue; }
+    acc.p.addScaledVector(S.p, w); acc.w += w; for (const j in S.q) acc.q[j].slerp(S.q[j], w / acc.w); }
+  const k = Math.min(1, wm);
+  for (const j in J) { const g = J[j]; if (!g || !acc.q[j] || (mask === 'upper' && !MC_UPPER.has(j)) || (mask === 'lower' && MC_UPPER.has(j))) continue; g.quaternion.slerp(acc.q[j], k); }
+  if (mask !== 'upper') { const h = f.hips; _mcV.set(acc.p.x, HIP + acc.p.y, acc.p.z); h.position.lerp(_mcV, k); }
+  f._mcOn = k; }
+function _mcPass(f, m, t, o) {   // after applyRig: anim() schedule on the figure, else figure({ mocap }) gait clips
+  f._mcOn = 0; if (!MOCAP) return;
+  if (f._mcSched) { const L = f._mcSched(t); if (L) { _mcApply(f, L.list, L.mask); return; } }
+  const q = f._mcq; if (!q) return; f._mcq = null;
+  const a = _mcLayer(f, q.mode, q.ph, t, q.v), L = [[a?.[0], a?.[1], true, 1]];
+  if (q.from != null && q.w != null && q.w < 1) { const k = EASE.inOut(clamp(q.w)), b = _mcLayer(f, q.from, q.ph, t, q.v); L[0][3] = k; L.push([b?.[0], b?.[1], true, 1 - k]); }
+  if (q.X && q.X.w < 1) { const k = EASE.inOut(q.X.w), b = typeof q.X.from === 'string' && q.X.from !== PREVPOSE ? _mcLayer(f, q.X.from, q.ph, t, q.v) : null; for (const e of L) e[3] *= k; L.push([b?.[0], b?.[1], true, 1 - k]); }
+  _mcApply(f, L.map(e => [e[0], e[1], e[2], e[3]]), null); }
+function _mcAnim(f, list, o = {}) {   // anim() on a figure
+  const L = list.map(([t, c, x = {}]) => ({ t, c, ...x })).sort((a, b) => a.t - b.t), fade = o.fade ?? 0.3;
+  const lay = (e, t) => { const D = e.c == null || e.c === 'pose' ? null : mcClip(e.c); if (!D) return [null, 0, true, 1]; const lt = (t - e.t) * (e.speed ?? 1); return [D, e.once ? Math.min(lt, D.d - 1e-3) : lt, !e.once, 1]; };
+  f._mcSched = t => {
+    let i = -1; for (let j = 0; j < L.length; j++) if (L[j].t <= t) i = j;
+    if (i < 0) return null;
+    const cur = lay(L[i], t), k = i > 0 ? clamp((t - L[i].t) / (L[i].fade ?? fade)) : clamp((t - L[i].t) / (L[i].fade ?? fade)), mask = L[i].only ?? o.only ?? null;
+    if (k >= 1) return cur[0] ? { list: [cur], mask } : null;
+    const prev = i > 0 ? lay(L[i - 1], t) : [null, 0, true, 1]; cur[3] = EASE.inOut(k); prev[3] = 1 - cur[3]; return { list: [cur, prev], mask }; };
+  return f; }
 
 // --- mocap people: human({ sex, shirt, pants, shoes, sleeves, legs, skin, hair, hairColor, beard, scale, seed }) → model rig (walk, pose, anim, track) ---
 // Quaternius Universal Base Characters (CC0) with 86 clips of the Universal Animation Library 1 + 2 (models/human_m.glb, human_f.glb, built by
