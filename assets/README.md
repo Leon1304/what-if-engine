@@ -22,6 +22,7 @@ Every pack here is **CC0 1.0** (public domain). Only add packs whose licence all
 | `resources/` | KayKit Resource Bits 1.0 FREE | Kay Lousberg | CC0 1.0 |
 | `furniture/` | KayKit Furniture Bits 1.0 FREE | Kay Lousberg | CC0 1.0 |
 | `tools/` | KayKit RPG Tools Bits 1.0 FREE | Kay Lousberg | CC0 1.0 |
+| `own/` | built by us in Blender (`assets/own/src/*.py` → `tools/blender_asset.py`) | what-if-engine | CC0 1.0 |
 
 Changes made on import: FBX → glTF, Z-up cars rotated, scaled to metres (`tools/asset-scales.json`, animals to real length in `tools/asset-sizes.json`),
 FBX colours corrected (Blender writes linear values), textures ≤ 512 px (sci-fi 256 px), geometry quantised (KHR_mesh_quantization).

@@ -20,6 +20,7 @@ Der Skill wurde für claude.ai geschrieben. Lokal gilt diese Übersetzung:
 
 ## Engine ändern (Pflicht)
 - Neue Gegenstände, Gebäude, Fahrzeuge, Tiere, Animationen, Effekte und Geräusche immer als wiederverwendbare, detaillierte, animierte Funktion in `template.html` bauen, nicht nur in `<slug>.scene.js`. Erst `grep -n -i '<begriff>' docs/API.md`, Vorhandenes per Option/`kind` erweitern.
+- Statische Low-Poly-Objekte dürfen auch als eigenes Blender-Modell entstehen (Blender-MCP, Paket `assets/own/`, Bauskript + `tools/blender_asset.py`, siehe `docs/API.md` „Eigene Modelle aus Blender“). Bewegliche/animierte Dinge bleiben Funktionen in `template.html`.
 - Neue Funktionen in `docs/API.md` beschreiben und mit einer kleinen Testszene in `tests/` absichern.
 - Jedes Bild ist eine reine Funktion von t (kein aufaddierter Zustand zwischen Bildern).
 - Tests: `bash tests/run.sh` muss grün sein. Auf macOS die GNU-Tools vorn in den PATH nur für den Testlauf:
