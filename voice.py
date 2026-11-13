@@ -12,7 +12,7 @@
 #   of one sentence, '[gasp]' '[sigh]' are sounds, '[whoa]' '[wow]' '[ugh]' '[oh]' '[ha]' '[noway]' '[great]' '[yikes]' '[seriously]' '[comeon]' short spoken reactions. CFG.voice: { auto: false, emotion: 0..1.5 }
 #   lines spoken by an on-screen character (who: 'steve' | 'you' | any char name) get a mouth track (open/shape per 1/30 s) → lip sync in the video
 #   --lang es|fr|it|pt|hi|ja|zh + <slug>.<lang>.json (translated texts) → language version (voice + captions in that language)
-import hashlib, json, os, re, subprocess, sys, tempfile
+import math, hashlib, json, os, re, subprocess, sys, tempfile
 import numpy as np
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -394,7 +394,11 @@ for key, t0, win, say, cap, pre, vo, pace, who, tone_ in lines:
     if key == 'loop': t0 = max(last_end + 0.25, DUR - LOOP_TAIL - d)   # ends right at the seam
     ok = d <= win + 0.05
     note = 'ok' if gap == GAP and sp <= speed * pace * 1.06 else 'ok, rushed (short pauses) – shorten text or lengthen beat'
-    report.append(f"  {str(key):>3}  {d:4.2f}s / {win:4.2f}s  ×{sp:.2f}  {note if ok else 'TOO LONG – shorten text or lengthen beat'}  “{say}”")
+    fix = ''
+    if not (ok and note == 'ok'):   # v3.21: how much to cut — natural length at the planned tempo vs. the window
+        nat = d * sp / (speed * pace) + (0.1 * say.count('.') if gap != GAP else 0); over = nat - win
+        if over > 0.05: fix = f" → cut ~{max(1, math.ceil(over / (nat / max(1, len(say.split())))))} words or give the beat +{over:.1f} s"
+    report.append(f"  {str(key):>3}  {d:4.2f}s / {win:4.2f}s  ×{sp:.2f}  {note if ok else 'TOO LONG – shorten text or lengthen beat'}{fix}  “{say}”")
     lead = speak.lead
     if NOTES.get(key): report.append('       tone: ' + ' · '.join(NOTES[key]))
     if who: o_, s_ = mouth_track(a); MOUTH.append({'who': who, 't0': round(t0, 3), 'o': o_, 's': s_})

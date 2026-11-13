@@ -2,7 +2,7 @@
 # body side profile with wheel arches, glass house with A/B/C pillars, roof, bonnet and tailgate seams, door seams and handles,
 # mirrors, bumpers with grille and number plates, headlights and taillights (glowing), wipers, four wheels with rims, hubs and nuts.
 # Materials (tint keys): paint (body colour), glass, plastic, tire, rim, metal_dark, headlight, taillight, white, void.
-# Use: asset(world, 'own/car_hatch', x, z, { dyn: true, tint: { paint: '#B03A2E' } }) and drive() it.
+# Wheels are parts wheel_fl/fr/rl/rr (drive() turns them, front ones steer). Use: asset(world, 'own/car_hatch', x, z, { dyn: true, tint: { paint: '#B03A2E' } }) and drive() it.
 # Rebuild: Blender -b --factory-startup --python tools/blender_asset.py -- assets/own/src/car_hatch.py
 use('_street.py')
 AO = {'strength': 0.55, 'dist': 0.5}
@@ -34,7 +34,7 @@ def build(coll):
         add(f'mirror_arm{s}', box(0.14, 0.06, 0.05, (s * (HW + 0.05), -1.0, 0.98)), M['plastic'])
         add(f'mirror{s}', box(0.1, 0.16, 0.13, (s * (HW + 0.13), -1.0, 0.96), bevel_w=0.02), paint)
         add(f'skirt{s}', box(0.04, 1.75, 0.08, (s * (HW + 0.0), 0.02, 0.3)), M['plastic'])
-        for u in (-1.25, 1.29): wheel(out, coll, M, s * (HW - 0.12), u, side=s)
+        for u in (-1.25, 1.29): wheel(out, coll, M, s * (HW - 0.12), u, side=s, name=f"wheel_{'f' if u < 0 else 'r'}{'r' if s > 0 else 'l'}", steer=1 if u < 0 else 0)
     for u in (-1.25, 1.29):   # dark wheel wells between the wheels
         arch = [(u + 0.4 * math.cos(math.pi * j / 8), 0.3 + 0.38 * math.sin(math.pi * j / 8)) for j in range(9)]
         add(f'liner{u}', side_prism(arch, -HW + 0.24, HW - 0.24), M['plastic'])

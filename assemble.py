@@ -111,6 +111,9 @@ names |= set(re.findall(r"asset\(\s*[^,()]*,\s*'([^']+/[^']+)'", _code))
 # names built in lists ([x, z, 'nature/rock_2']) — any 'pack/name' string with a file in assets/ is embedded too
 _here = os.path.dirname(os.path.abspath(__file__))
 names |= {n for n in re.findall(r"['\"]([a-z0-9_]+/[a-z0-9_]+)['\"]", _code) if any(os.path.exists(os.path.join(_here, d, 'assets', n + '.glb')) for d in ('', '.engine'))}
+# v3.21: names put together in code ('own/' + n, `own/${n}`): every bare string literal with a file in that pack is embedded as well
+for _pk in set(re.findall(r"['\"`]([a-z0-9_]+)/['\"`]\s*\+", _code)) | set(re.findall(r"`([a-z0-9_]+)/\$\{", _code)):
+    names |= {_pk + '/' + n for n in re.findall(r"['\"]([a-z0-9_]+)['\"]", _code) if any(os.path.exists(os.path.join(_here, d, 'assets', _pk, n + '.glb')) for d in ('', '.engine'))}
 # human({ sex: 'f' }) → human_f.glb, every other human() call → human_m.glb (only the bodies a video uses get embedded)
 _calls, _fem = len(re.findall(r'\bhuman\(', _code)), len(re.findall(r"""\bsex:\s*['"]f""", _code))
 if _fem: names.add('human_f')

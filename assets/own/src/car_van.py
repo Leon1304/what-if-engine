@@ -2,7 +2,7 @@
 # steep windscreen, high box body with sliding side door and twin rear doors (seams, handles, hinges), roof rack with ladder at the back,
 # side rub strips, step, mirrors on arms, bumpers, grille, headlights and taillights (glowing), plates, four wheels.
 # Materials (tint keys): paint (body colour, white by default), glass, plastic, tire, rim, metal, metal_dark, headlight, taillight, white, void.
-# Use: asset(world, 'own/car_van', x, z, { dyn: true, tint: { paint: '#3E6E9E' } }) and drive() it.
+# Wheels are parts wheel_fl/fr/rl/rr (drive() turns them, front ones steer). Use: asset(world, 'own/car_van', x, z, { dyn: true, tint: { paint: '#3E6E9E' } }) and drive() it.
 # Rebuild: Blender -b --factory-startup --python tools/blender_asset.py -- assets/own/src/car_van.py
 use('_street.py')
 AO = {'strength': 0.55, 'dist': 0.5}
@@ -33,7 +33,7 @@ def build(coll):
         add(f'mirror_arm{s}', box(0.25, 0.04, 0.04, (s * (HW + 0.1), -1.5, 1.6)), M['plastic'])
         add(f'mirror{s}', box(0.06, 0.18, 0.32, (s * (HW + 0.24), -1.5, 1.45), bevel_w=0.02), M['plastic'])
         add(f'indicator{s}', box(0.02, 0.1, 0.05, (s * (HW + 0.005), -2.25, 0.95)), Lm['yellow'])
-        for u in (ua, ub): wheel(out, coll, M, s * (HW - 0.14), u, r=0.34, w=0.23, side=s)
+        for u in (ua, ub): wheel(out, coll, M, s * (HW - 0.14), u, r=0.34, w=0.23, side=s, name=f"wheel_{'f' if u < 0 else 'r'}{'r' if s > 0 else 'l'}", steer=1 if u < 0 else 0)
     for u in (ua, ub):
         add(f'well{u}', side_prism([(u + 0.44 * math.cos(math.pi * j / 8), 0.36 + 0.42 * math.sin(math.pi * j / 8)) for j in range(9)], -HW + 0.27, HW - 0.27), M['plastic'])
     # front

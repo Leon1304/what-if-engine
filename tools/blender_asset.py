@@ -203,6 +203,15 @@ def _glb_extras(path, extras):
     body = struct.pack('<II', len(out), 0x4E4F534A) + out + rest
     open(path, 'wb').write(struct.pack('<III', 0x46546C67, 2, 12 + len(body)) + body)
 
+def _shrink(path):
+    """Compress the exported GLB with tools/shrink_glb.mjs (gltf-transform: dedup, prune, quantise) if node and the package are there."""
+    import shutil, subprocess
+    node = shutil.which('node') or next((p for p in ('/opt/homebrew/bin/node', '/usr/local/bin/node') if os.path.exists(p)), None)
+    if not node or not os.path.isdir(os.path.join(REPO, 'node_modules', '@gltf-transform')):
+        print('shrink skipped (needs node + npm i --no-save @gltf-transform/core@4 @gltf-transform/extensions@4 @gltf-transform/functions@4)'); return
+    r = subprocess.run([node, os.path.join(REPO, 'tools', 'shrink_glb.mjs'), path], cwd=REPO, capture_output=True, text=True)
+    print((r.stdout.strip().splitlines() or ['shrink: ' + r.stderr.strip()[-200:]])[-1])
+
 def _join(objs):
     objs = [o for o in objs if o.type == 'MESH']
     bpy.ops.object.select_all(action='DESELECT')
@@ -266,6 +275,7 @@ def export_asset(objs, name, by=BY, src=None, ao=True):
               export_texcoords=False, export_materials='EXPORT', export_vertex_color='ACTIVE' if has_ao else 'NONE', export_all_vertex_colors=False, export_animations=False, export_cameras=False, export_lights=False, export_extras=False)
     props = {p.identifier for p in bpy.ops.export_scene.gltf.get_rna_type().properties}
     bpy.ops.export_scene.gltf(**{k: v for k, v in kw.items() if k in props})
+    _shrink(out)   # v3.21: quantised like the CC0 packs (about a third smaller)
     if len(meta) > 2 or parts or marks or walks: _glb_extras(out, {'wie': meta})
     # index entry in three.js axes (x, y = up, z), like the CC0 packs
     sx, sy, sz = hi.x - lo.x, hi.y - lo.y, hi.z - lo.z

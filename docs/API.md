@@ -1271,3 +1271,15 @@ Test: `tests/v35-qa.story.js` + `.scene.js` – Einstellung 2 meldet absichtlich
 - Render-Workflow: die Frame-Shards rendern automatisch in HQ; das Cover wird mit `--hq` gerendert (ein Bild, kostet kaum Zeit).
 - Mehraufwand (lokal gemessen, M-Mac, 1 Worker, `--w 1440`): reines 3D-Rendern 1,6–1,8× (coffee-test 0,8 → 1,5 s, megalodon-pool 0,93 → 1,6 s pro Bild), ganzer `--video`-Pfad inkl. Screenshot + JPEG ca. 1,5× (megalodon-pool 2,1 → 3,1 s/Bild). Der Workflow nutzt deshalb 18 statt 12 Shards (`SHARDS: 18`; GitHub-Free-Limit 20 gleichzeitige Jobs), die Wandzeit pro Video bleibt etwa gleich (Megalodon-Shards bisher 6–15 min). Job-Timeouts (Standard 6 h) mussten nicht angepasst werden.
 
+
+# Neu in v3.21 (Optimierungen aus dem Jerusalem-Video)
+- **Wasserfall über hohe Mauern:** Bei `wait.climb` mit `h` über 3 m gehen, sobald ein Abschnitt oben ist, alle auf dem Berg nacheinander über die Krone (die weiter unten etwas später) – ein dichter Strom statt Einzelner. Die Masse bremst auf den letzten ~5 m vor der Mauer ab (kein schlagartiger Stopp, keine umschnappenden Arme beim Aufprall).
+- **Räder an eigenen Fahrzeugen:** Teile namens `wheel*` (Blender: `wheel(…, name='wheel_fl', steer=1)` in `_street.py`, sonst `part(objs, 'wheel_x', nabe, steer=1)`) sammelt `asset()` als `obj.wheels`; `drive()` dreht sie mit ihrem Radius (Nabenhöhe) und lenkt die mit `steer: 1`. `own/car_hatch` und `own/car_van` haben sie.
+- **`asset(…, { mirror: true })`:** gespiegelte Kopie (links ↔ rechts) – bricht Wiederholungen in langen Reihen auf (z. B. jedes zweite `own/wall_barrier`). Teile, Markierungen und Hitbox spiegeln mit.
+- **Dunst nach Szenengröße:** Ohne `CFG.fogScale` wächst die Sichtweite bei `CFG.area` über 60 m mit (Faktor `area / 60`, höchstens 2,2) – große Sets wie Stadt + Mauer bleiben in der Ferne klar.
+- **Komprimierte Blender-Modelle:** `tools/blender_asset.py` quantisiert jede GLB nach dem Export (`tools/shrink_glb.mjs`, gltf-transform, wie die CC0-Pakete; ca. ein Drittel kleiner). Voraussetzung einmalig: `npm i --no-save @gltf-transform/core@4 @gltf-transform/extensions@4 @gltf-transform/functions@4`. Vorhandene Modelle: `node tools/shrink_glb.mjs assets/own/*.glb`. Teile behalten ihre Lage (`asset()` übernimmt den Versatz der Quantisierung).
+- **`assemble.py`:** bettet auch zusammengesetzte Namen ein (`'own/' + n`, `` `own/${n}` ``): jeder Text in der Szene, zu dem es `assets/<paket>/<text>.glb` gibt, kommt mit.
+- **`voice.py`:** zu lange Zeilen bekommen einen konkreten Vorschlag: `→ cut ~3 words or give the beat +0.9 s`.
+- **`qa_lines.py`:** eine Linie, die im nächsten Bild an derselben Stelle (± 4 px) wieder da ist, gilt als Kante der Szene (Mauerfuge, Kabel, Dachkante) und wird nicht mehr als `LINES:` gemeldet; Bildfehler flackern.
+- **Render-Workflow:** Wird eine Seite neu gepusht, während ein älterer Lauf sie noch rendert, veröffentlicht nur der neueste Lauf (der ältere meldet „superseded“ und überspringt den Upload) – kein Überschreiben eines neueren Videos mehr.
+

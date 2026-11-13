@@ -573,7 +573,7 @@ function skyEnv() {
 const NLIFT = { night: 1, storm: 0.7, dusk: 0.35, deepsea: 0.4, apocalypse: 0.3 };   // v2.30 long videos: how much darker skies get lifted
 const ENVI = { underwater: 0.2, deepsea: 0.08, day: 0.3, golden: 0.24, dusk: 0.14, night: 0.06, dawn: 0.17, storm: 0.26, apocalypse: 0.12, space: 0.04 }, WINDY = { storm: 2.6, apocalypse: 1.7, dusk: 1.1, underwater: 1.8, deepsea: 1.2 };
 scene.fog = new THREE.Fog('#000000', 40, 260);
-var FOGK = CFG.fogScale ?? 1;   // fog distance × FOGK (ship() / aircraft() raise it for huge vessels so they don't vanish in the haze)
+var FOGK = CFG.fogScale ?? Math.max(1, Math.min(2.2, (CFG.area ?? 36) / 60));   // fog distance × FOGK (ship() / aircraft() raise it for huge vessels so they don't vanish in the haze; v3.21: big sets with CFG.area > 60 m see further)
 const world = new THREE.Group(); scene.add(world);
 const tickers = [];
 const tick = f => (tickers.push(f), f);   // f(t) runs every frame; must be a pure function of t
@@ -3072,6 +3072,7 @@ function assetMeta(name) {
 }
 function asset(p, name, x = 0, z = 0, o = {}) {
   const root = new THREE.Group(); root.name = name; root.position.set(x, o.y ?? groundH(x, z), z); root.rotation.y = o.ry ?? 0; root.scale.setScalar(o.scale ?? 1);
+  if (o.mirror) root.scale.x *= -1;   // v3.21: mirrored copy (left ↔ right) — breaks up repeats in long rows of the same model
   if (o.dyn) dyn(root); (p ?? world).add(root);
   const data = MODELS[name];
   if (!data) { console.error('asset: ' + name + ' missing (assets/' + name + '.glb; see work/asset-catalog.html)'); rbox(root, 1, 1, 1, '#FF00FF'); return root; }
@@ -3087,6 +3088,7 @@ function asset(p, name, x = 0, z = 0, o = {}) {
     for (const n in P) mk(n);
     const pick = re => Object.keys(root.parts).filter(n => re.test(n)).sort().map(n => root.parts[n]);
     if (pick(/^door/).length) root.doors = pick(/^door/); if (pick(/^window/).length) root.windows = pick(/^window/);   // openDoor(obj, t, { i }) / openWindow(obj, t)
+    if (pick(/^wheel/).length) { root.wheels = pick(/^wheel/); for (const w of root.wheels) w.userData.r = (w.userData.r ?? (w.position.y || 0.35)) * k; }   // v3.21: drive() turns parts named wheel* (radius = hub height; steer: 1 = front wheels steer)
     const M = meta.marks ?? {}, miss = n => console.error('asset ' + name + ': no mark "' + n + '" (has: ' + (Object.keys(M).join(', ') || 'none') + ')');
     root.marks = Object.keys(M).sort();
     root.at = n => { const m = M[n]; if (!m) { miss(n); return root.position.toArray(); } root.updateWorldMatrix(true, false); return v3(m[0] * k, m[1] * k, m[2] * k).applyMatrix4(root.matrixWorld).toArray(); };
@@ -3102,7 +3104,8 @@ function asset(p, name, x = 0, z = 0, o = {}) {
       if (o.tint) { const one = mt => { const c = typeof o.tint === 'string' ? o.tint : o.tint[mt.name]; if (!c) return mt; const k = mt.clone(); k.color.set(c); if (k.emissive && k.emissive.getHex() !== 0) k.emissive.set(c); return k; };   // v3.12: glowing parts take the tint as glow too (signal on/off)
         m.material = Array.isArray(m.material) ? m.material.map(one) : one(m.material); } });
     if (hold) { for (const n in meta.parts ?? {}) { const nd = s.getObjectByName(THREE.PropertyBinding.sanitizeNodeName(meta.parts[n].node)); if (!nd) { console.error('asset ' + name + ': part node ' + n + ' missing'); continue; }
-        nd.removeFromParent(); nd.position.set(0, 0, 0); nd.quaternion.identity(); root.parts[n].add(nd); }
+        s.updateMatrixWorld(true); const Mn = s.matrixWorld.clone().invert().multiply(nd.matrixWorld), pv = v3(), sv = v3(); Mn.decompose(pv, new THREE.Quaternion(), sv);   // v3.21: keep a quantised mesh's offset/scale (compressed GLB)
+        nd.removeFromParent(); nd.position.copy(pv).sub(v3(...meta.parts[n].pivot)); nd.scale.copy(sv); nd.quaternion.identity(); root.parts[n].add(nd); }
       hold.add(s); return; }
     if (o.h) { const b = new THREE.Box3().setFromObject(s), hh = b.max.y - b.min.y; if (hh > 0) s.scale.multiplyScalar(o.h / hh); }
     root.add(s);
@@ -3566,10 +3569,12 @@ function horde(o = {}) {
           if (cnt >= 3 && hash(i * 91.7 + s * 0.377 + hid * 3.9) < TRR * SIMDT * 3) fell = true;
           for (const B of bodies) { if (fell || B.j === i || DOM <= 0) break; for (const [bx, bz] of B.pts) { const ex = bx - px[i], ez = bz - pz[i], dd = Math.hypot(ex, ez); if (dd < rad[i] + 0.28 && (ex * vx[i] + ez * vz[i]) > 0 && hash(i * 17.3 + B.j * 3.1 + hid) < DOM) { fell = true; break; } } }
           if (fell) { tripT[i] = t; trips.n++; (TR[i] ??= []).push(t); pin[i] = 2; continue; } }
-        if (CLB && relT[i] > 1e8) { const [u, dl] = lineUD(i); if (u > 0 && u < 1 && dl < 2.2 && t >= openB[Math.min(NB - 1, Math.floor(u * NB))] + q.dl * 0.6) relT[i] = t; }
+        if (CLB && relT[i] > 1e8) { const [u, dl] = lineUD(i); if (u > 0 && u < 1 && dl < (TALL ? rampL(Pat(u)) + 0.5 : 2.2) && t >= openB[Math.min(NB - 1, Math.floor(u * NB))] + (TALL ? q.dl * 0.25 + dl * 0.12 : q.dl * 0.6)) relT[i] = t; }   // v3.21 tall walls: the whole pile streams over
         if (relT[i] <= t) { r[0] = q.ex; r[1] = q.ez; }
         if (t < q.b + (rise ? 0.8 : 0)) { r[0] = px[i]; r[1] = pz[i]; }   // still rising / just appeared: stays put unless pushed   // released by the climb: over the wall, on to the goal
-        const dx = r[0] - px[i], dz = r[1] - pz[i], d = Math.hypot(dx, dz), vmax = Math.max(relT[i] <= t ? q.v * 1.15 : rs, q.v * (run ? 1.4 : 1)) * 1.2 + 0.15, ds = Math.min(vmax, d / 0.45);
+        let vmax = Math.max(relT[i] <= t ? q.v * 1.15 : rs, q.v * (run ? 1.4 : 1)) * 1.2 + 0.15;
+        if (TALL && relT[i] > 1e8) { const dw = lineUD(i)[1]; if (dw >= 0) vmax = Math.min(vmax, 0.25 + 0.9 * Math.max(0, dw - 0.6)); }   // v3.21: brakes over the last ~5 m to the wall (the front of the queue grows out from it) (no dead stop, no snapping arms)
+        const dx = r[0] - px[i], dz = r[1] - pz[i], d = Math.hypot(dx, dz), ds = Math.min(vmax, d / 0.45);
         let tx = d > 1e-4 ? dx / d * ds : 0, tz = d > 1e-4 ? dz / d * ds : 0;
         near(i, j => { const ex = px[i] - px[j], ez = pz[i] - pz[j], dd = Math.hypot(ex, ez), m = (rad[i] + rad[j]) * space; if (dd < m && dd > 1e-4) { const k = (m - dd) / m * 1.4; tx += ex / dd * k; tz += ez / dd * k; } });
         for (const P of obst) { const ex = px[i] - P.x, ez = pz[i] - P.z, dd = Math.hypot(ex, ez), m = rad[i] + P.r + 0.35; if (dd < m && dd > 1e-4) { const k = (m - dd) / m * 2; tx += ex / dd * k; tz += ez / dd * k; } }

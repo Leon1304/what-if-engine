@@ -129,6 +129,12 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           S=${{ steps.s.outputs.slug }}; TAG=render-$S
+          # v3.21: a newer version of this page was pushed while this run rendered → don't overwrite the newer render (it publishes itself)
+          P="${{ matrix.page }}"; R="${{ github.repository }}"
+          MINE=$(gh api "repos/$R/commits?path=$P&sha=${{ github.sha }}&per_page=1" -q '.[0].sha' 2>/dev/null || true)
+          LATEST=$(gh api "repos/$R/commits?path=$P&sha=main&per_page=1" -q '.[0].sha' 2>/dev/null || true)
+          if [ -n "$MINE" ] && [ -n "$LATEST" ] && [ "$MINE" != "$LATEST" ]; then
+            echo "superseded: $P changed on main since ${MINE:0:7} (now ${LATEST:0:7}) – the newer run publishes, this one is skipped" | tee -a "$GITHUB_STEP_SUMMARY"; exit 0; fi
           gh release view $TAG >/dev/null 2>&1 || gh release create $TAG --title "$S" --notes "Rendered by GitHub Actions (${{ github.sha }})"
           gh release upload $TAG out/$S.mp4 out/$S-cover*.jpg out/$S-qa.txt $( [ -s out/$S.srt ] && echo out/$S.srt ) --clobber
           gh release delete-asset $TAG $S-ig.mp4 -y >/dev/null 2>&1 || true
