@@ -1,7 +1,7 @@
 # Own low-poly models built in Blender → assets/own/<name>.glb + assets/index.json, used in scenes with asset(p, 'own/<name>', x, z, …).
 #
 # Every model has a build script assets/own/src/<name>.py with a function build() that creates the mesh objects (in metres, Z-up as
-# Blender is) and returns them. The script sees the helpers below: mat, mesh, box, cyl, torus, prism, bevel, recess, jitter (v3.10: detail
+# Blender is) and returns them. The script sees the helpers below: mat, mesh, box, cyl, torus, prism, bevel, recess, jitter, rotz, move, arch_pts, rect_pts, dome (v3.10: detail
 # helpers + ambient occlusion baked into vertex colours; a script sets AO = False to skip it, or AO = {'strength': .., 'dist': ..}). Rebuild headless:
 #   /Applications/Blender.app/Contents/MacOS/Blender -b --factory-startup --python tools/blender_asset.py -- assets/own/src/tree.py [more.py …]
 # Live in Blender (e.g. via the Blender MCP): run this file with exec(compile(open(p).read(), p, 'exec'), g := {'__file__': p}), then
@@ -108,6 +108,35 @@ def recess(bm, normal=(0, -1, 0), inset=0.2, depth=0.15, near=None):
     bmesh.ops.inset_region(bm, faces=[f], thickness=inset, depth=-depth, use_even_offset=True)
     return bm
 
+def rotz(bm, a, cent=(0, 0, 0)):
+    """Turn a bmesh by a radians around the vertical axis through cent."""
+    bmesh.ops.rotate(bm, cent=cent, matrix=Matrix.Rotation(a, 3, 'Z'), verts=bm.verts); return bm
+
+def move(bm, v):
+    bmesh.ops.translate(bm, vec=v, verts=bm.verts); return bm
+
+def arch_pts(w, h, x=0.0, z=0.0, seg=6):
+    """Outline of a round-arched opening w wide and h high, bottom centre at (x, z), for prism(): windows, doors, arcades."""
+    r = w / 2; zs = z + max(h - r, 0.0)
+    return [(x - r, z), (x + r, z)] + [(x + r * math.cos(math.pi * i / seg), zs + r * math.sin(math.pi * i / seg)) for i in range(seg + 1)]
+
+def rect_pts(w, h, x=0.0, z=0.0):
+    return [(x - w / 2, z), (x + w / 2, z), (x + w / 2, z + h), (x - w / 2, z + h)]
+
+def dome(r, at=(0, 0, 0), seg=16, rings=5, h=None):
+    """Hemisphere (h = height, default r) standing on `at`: domes, tanks, lamps."""
+    h = r if h is None else h; bm = bmesh.new(); rows = []
+    for i in range(rings):
+        ph = math.pi / 2 * i / rings
+        rows.append([bm.verts.new((r * math.cos(ph) * math.cos(2 * math.pi * k / seg), r * math.cos(ph) * math.sin(2 * math.pi * k / seg), h * math.sin(ph))) for k in range(seg)])
+    top = bm.verts.new((0, 0, h))
+    for i in range(rings - 1):
+        for k in range(seg): bm.faces.new((rows[i][k], rows[i][(k + 1) % seg], rows[i + 1][(k + 1) % seg], rows[i + 1][k]))
+    for k in range(seg): bm.faces.new((rows[-1][k], rows[-1][(k + 1) % seg], top))
+    bm.faces.new(list(reversed(rows[0])))
+    bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+    return move(bm, at)
+
 def bake_ao(o, strength=0.6, dist=1.2, samples=32):
     """Ambient occlusion → vertex colour 'AO' (per face corner): joints, corners and undersides darker. Ground plane under the model,
     every other object hidden for the bake; strength 0 = off, 1 = full Cycles AO. Needs Cycles (built into Blender)."""
@@ -178,10 +207,12 @@ def build_file(path, clear=False):
     if clear:
         for o in list(bpy.data.objects): bpy.data.objects.remove(o, do_unlink=True)
     g = dict(globals()); g['__file__'] = path
+    g['use'] = lambda part: exec(compile(open(os.path.join(os.path.dirname(path), part)).read(), part, 'exec'), g)   # use('_jlm.py'): shared parts
     exec(compile(open(path).read(), path, 'exec'), g)
     coll = bpy.data.collections.new('own_' + name); bpy.context.scene.collection.children.link(coll)
     objs = g['build'](coll)
     return export_asset(objs, name, src=os.path.relpath(path, REPO), ao=g.get('AO', True))
 
 if __name__ == '__main__' and '--' in sys.argv:
-    for p in sys.argv[sys.argv.index('--') + 1:]: build_file(os.path.abspath(p), clear=True)
+    for p in sys.argv[sys.argv.index('--') + 1:]:
+        if not os.path.basename(p).startswith('_'): build_file(os.path.abspath(p), clear=True)   # _*.py = shared parts, not models
