@@ -21,8 +21,9 @@ BY = 'what-if-engine (own, CC0 1.0)'
 
 def _lin(x): return ((x + 0.055) / 1.055) ** 2.4 if x > 0.04045 else x / 12.92
 
-def mat(name, hexc, rough=0.9, metal=0.0, emit=None):
-    """Principled material from an sRGB hex colour; the material name is what asset(…, { tint: { name: '#hex' } }) addresses."""
+def mat(name, hexc, rough=0.9, metal=0.0, emit=None, ei=1.0):
+    """Principled material from an sRGB hex colour; the material name is what asset(…, { tint: { name: '#hex' } }) addresses.
+    emit = glow colour, ei = glow strength (> 1 for neon that should bloom at night; exported as KHR_materials_emissive_strength)."""
     m = bpy.data.materials.get(name) or bpy.data.materials.new(name); m.use_nodes = True
     b = next(n for n in m.node_tree.nodes if n.type == 'BSDF_PRINCIPLED')
     c = tuple(_lin(int(hexc[i:i + 2], 16) / 255) for i in (1, 3, 5))
@@ -31,7 +32,7 @@ def mat(name, hexc, rough=0.9, metal=0.0, emit=None):
         e = tuple(_lin(int(emit[i:i + 2], 16) / 255) for i in (1, 3, 5))
         for k in ('Emission Color', 'Emission'):
             if k in b.inputs: b.inputs[k].default_value = (*e, 1); break
-        if 'Emission Strength' in b.inputs: b.inputs['Emission Strength'].default_value = 1.0
+        if 'Emission Strength' in b.inputs: b.inputs['Emission Strength'].default_value = ei
     m.diffuse_color = (*c, 1)
     return m
 
