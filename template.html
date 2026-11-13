@@ -3543,7 +3543,7 @@ function horde(o = {}) {
         else if (!pin[i]) { const mx = px[i] - ox0[i], mz = pz[i] - oz0[i], sp = Math.hypot(mx, mz) / SIMDT; vx[i] = mx / SIMDT; vz[i] = mz / SIMDT; wk[i] += sp * SIMDT;
           const want = sp > 0.25 ? Math.atan2(mx, mz) : stateRaw(M[i], t - lag[i])[3], dY = ((want - yw[i] + Math.PI) % TAU + TAU) % TAU - Math.PI; yw[i] += clamp(dY, -turn, turn); Mv[o2] = sp > 0.18 ? 1 : 0; }
         X[o2] = px[i]; Zc[o2] = pz[i]; Yw[o2] = yw[i]; Wk[o2] = wk[i];
-        if (CLB && !pin[i]) { const [u, d] = lineUD(i); if (u > -0.02 && u < 1.02) { const P = Pat(u), L = Math.max(1.6, P * 1.35); Yy[o2] = d >= 0 ? P * clamp(1 - d / L) : relT[i] <= t ? P * (1 - EASE.in(clamp(-d / 1.1))) : 0; } } }
+        if (CLB && !pin[i]) { const [u, d] = lineUD(i); if (u > -0.02 && u < 1.02) { const P = Pat(u), L = Math.max(1.6, P * 1.35); Yy[o2] = d >= 0 ? P * clamp(1 - d / L) : relT[i] <= t ? P * (1 - EASE.in(clamp(-d / (1.1 * Math.max(1, P / 2.6))))) : 0; } } }   // v3.13: the drop on the far side grows with the wall height (16 m walls: no teleport)
       if (CLB) PH.set(Pb, s * NB);
     }
     SIM = { T0, NS, X, Zc, Yw, Wk, Mv, Yy, PH, NB, TR, trips: trips.n }; if (performance.now() - t00 > 4000) console.warn(`crowd sim ${n} members: ${Math.round(performance.now() - t00)} ms`);
