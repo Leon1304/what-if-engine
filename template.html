@@ -3791,6 +3791,7 @@ function horde(o = {}) {
       f.root.position.set(x, groundH(x, z) + (q.fixed ? q.cy ?? q.y ?? 0 : 0) - (1 - em) * 1.9 + (o.lift ? o.lift(t, i) : 0) + (state(q, t)[5] ?? 0), z); f.root.rotation.y = yaw;
       pose(f, moving ? (fl || run ? 'run' : mode) : 'idle', (q.ph / TAU + walked / q.cl) * TAU, t, { v: fl ? 4 : q.v }); });
   }
+  api._mb = [head, farm, foot];   // v3.22: the parts mbMeasure() follows on screen (heads, forearms, feet: what smears first)
   hordes.push(api); return api;
 }
 
@@ -14271,13 +14272,55 @@ if (BLI > 0) {
 let FPS = 30;
 const CUTS = CAM.filter(k => k.cut).map(k => k.t).sort((a, b) => a - b);
 const _m1 = new THREE.Vector3(), _m2 = new THREE.Vector3(), _d1 = new THREE.Vector3(), _d2 = new THREE.Vector3();
-function mbTimes(t) {   // CFG.motionBlur: 'auto' (fast frames only) | 'all' | false — CFG.mbSamples (3), CFG.shutter (0.5 = 180°); MBLUR = [[t0, t1], …] forces it
-  const mode = CFG.motionBlur ?? 'auto'; if (!EXPORT || !mode) return null;
-  const n = CFG.mbSamples ?? (MBAUTO.some(([x, y]) => t >= x && t <= y) ? 5 : 3), sh = (CFG.shutter ?? 0.5) / FPS;   // v2.31: fast actions (swings, kicks, throws, landings) get 5 samples — a smear instead of three ghosts
+function mbTimes(t) { return mbPlan(t)?.times ?? null; }
+// CFG.motionBlur: 'auto' (fast frames only) | 'all' | false — CFG.shutter (0.5 = 180°); MBLUR = [[t0, t1], …] forces it.
+// v3.22 adaptive samples: on a blurred frame mbMeasure() finds the largest on-screen move inside the shutter (figure joints, cars / flyers, crowd members, the camera);
+// n is chosen so two sub-frame copies are at most CFG.mbGap (0.005 = 0.5 % of the frame height ≈ 13 px at 2560) apart — a smear instead of a staircase of ghosts.
+// n runs from the base (3; 5 on fast actions, MBAUTO) up to CFG.mbMax (16). Faster than that: the shutter of this frame closes down (to CFG.mbMinShutter, 0.25 of it)
+// so the copies stay touching (a shorter, solid smear); what is still too fast after that is reported by the audit (QA: GHOST). CFG.mbSamples = n fixes the count (no adapting).
+// Pure function of t: measured at lo, t and hi with stepScene, then the scene is put back at t.
+function mbPlan(t, o = {}) {
+  const mode = CFG.motionBlur ?? 'auto'; if (!(EXPORT || o.force) || !mode) return null;
+  const base = MBAUTO.some(([x, y]) => t >= x && t <= y) ? 5 : 3, sh = (CFG.shutter ?? 0.5) / FPS;   // v2.31: fast actions (swings, kicks, throws, landings) get 5 samples
   let a = 0, b = DUR + 10; for (const c of CUTS) { if (c <= t) a = c; else { b = c; break; } }
-  const lo = Math.max(a, t - sh / 2), hi = Math.min(b - 1e-4, t + sh / 2);
+  let lo = Math.max(a, t - sh / 2), hi = Math.min(b - 1e-4, t + sh / 2);
   if (mode === 'auto' && !needsMB(t, lo, hi)) return null;
-  return Array.from({ length: n }, (_, i) => lerp(lo, hi, i / (n - 1)));
+  const P = { t, base, n: CFG.mbSamples ?? base, k: 1, D: 0, gap: 0, what: '' };
+  if (CFG.mbSamples == null && CFG.mbAdapt !== false && hi - lo > 1e-4) {
+    const g = CFG.mbGap ?? 0.005, cap = Math.max(base, CFG.mbMax ?? 16), M = mbMeasure(t, lo, hi); P.D = M.D; P.what = M.what;
+    let need = Math.ceil(M.D / g - 1e-6) + 1;
+    if (need > cap) { P.k = Math.max(CFG.mbMinShutter ?? 0.25, (cap - 1) * g / M.D); lo = t - (t - lo) * P.k; hi = t + (hi - t) * P.k; need = cap; }   // too fast for the cap: shorter shutter, copies stay touching
+    P.n = Math.max(base, need); P.cap = cap;
+  } else if (CFG.mbSamples != null && o.measure) { const M = mbMeasure(t, lo, hi); P.D = M.D; P.what = M.what; P.cap = P.n; }
+  P.gap = P.D * P.k / Math.max(1, P.n - 1);   // gap between two copies (frame heights), from the measured move
+  P.times = Array.from({ length: P.n }, (_, i) => lerp(lo, hi, i / (P.n - 1)));
+  return P;
+}
+// largest on-screen path inside [lo, t, hi] in frame heights → { D, what }. Points: head, chest, hands and feet of every visible figure, every drive()/fly() mover,
+// the heads, forearms and feet of every crowd member as drawn; plus the camera's own move (pan / dolly) for the background. Expects the scene at t; leaves it there.
+const _mbV = new THREE.Vector3();
+function mbPoints() {
+  const M = new Map(), shown = o => { for (let p = o; p; p = p.parent) if (!p.visible) return false; return true; }, put = (k, v, w, nm) => M.set(k, [v.x, v.y, v.z, w, nm]);
+  RIGS.forEach((f, i) => { const r = f.root; if (!r?.parent || !shown(r)) return; const nm = f.who ? `'${f.who}'` : f.kind === 'zombie' ? `zombie #${i}` : `figure #${i}`;
+    const J = [f.head, f.chest, f.footL, f.footR, ...(f.hands ?? []).map(h => h.hd)]; if (!J.some(Boolean)) J.push(r);
+    J.forEach((j, k) => { if (j) put('r' + i + ':' + k, j.getWorldPosition(_mbV), 1, nm); }); });
+  MOVERS.forEach((Mv, i) => { if (Mv.node?.parent && shown(Mv.node)) put('m' + i, Mv.node.getWorldPosition(_mbV), 1, Mv.kind === 'fly' ? `flying object #${i}` : `car #${i}`); });
+  hordes.forEach((h, hi) => { (h._mb ?? []).forEach((im, k) => { if (!im.parent || !shown(im)) return; const A = im.instanceMatrix.array, W = im.matrixWorld;   // crowd parts as drawn (hidden = scale 0)
+    for (let i = 0; i < im.count; i++) { const o = i * 16; if (A[o] * A[o] + A[o + 1] * A[o + 1] + A[o + 2] * A[o + 2] < 1e-6) continue; put('h' + hi + ':' + k + ':' + i, _mbV.set(A[o + 12], A[o + 13], A[o + 14]).applyMatrix4(W), 1, `crowd #${hi}`); } }); });
+  return M;
+}
+function mbMeasure(t, lo, hi) {
+  const proj = () => { camera.updateMatrixWorld(); const M = mbPoints(), R = new Map(); for (const [k, p] of M) { _mbV.set(p[0], p[1], p[2]).project(camera); if (_mbV.z > -1 && _mbV.z < 1) R.set(k, [_mbV.x, _mbV.y, p[3], p[4]]); } return R; };
+  const cam = () => [camera.position.clone(), camera.getWorldDirection(new THREE.Vector3()), camera.position.distanceTo(_l), camera.fov];
+  const A = proj(), CA = cam();
+  stepScene(lo); const L = proj(), CL = cam();
+  stepScene(hi); const H = proj(), CH = cam();
+  stepScene(t);
+  const asp = camera.aspect, d = (p, q) => Math.hypot((p[0] - q[0]) * asp, p[1] - q[1]) / 2, inF = p => Math.abs(p[0]) < 1.05 && Math.abs(p[1]) < 1.05;
+  let D = (CL[1].angleTo(CH[1]) + CL[0].distanceTo(CH[0]) / Math.max(2, CA[2])) / THREE.MathUtils.degToRad(CA[3]), what = 'the camera move';
+  for (const [k, p] of A) { const q = L.get(k), r = H.get(k); if (!q || !r || !(inF(p) || inF(q) || inF(r))) continue;
+    const s = (d(q, p) + d(p, r)) * p[2]; if (s > D) { D = s; what = p[3]; } }
+  return { D, what };
 }
 function needsMB(t, lo, hi) {
   if (typeof MBLUR !== 'undefined' && MBLUR.some(([a, b]) => t >= a && t <= b)) return true;
@@ -15024,8 +15067,20 @@ function qaAudit() {
   finally { const sk = SKINQA; SKINQA = null; for (const f of sk) out.push(`${name(f)}: arm or leg drawn as old boxes for a moment (a joint was pulled apart or a part came off) – fine for gore and ragdolls, otherwise check the pose`); }
   for (const [f, S] of sink) out.push(`${name(f)}: foot ${(S.d * 100).toFixed(0)} cm in the floor around ${S.t.toFixed(2)} s while standing – raise the figure or its floor (y) or check the pose`);
   try { out.push(...qaMovers()); } catch (e) { out.push('mover QA failed: ' + e.message); }   // v3.19: VEHICLE · BACKWARD
+  try { out.push(...qaGhost()); } catch (e) { out.push('ghost QA failed: ' + e.message); }   // v3.22: GHOST (motion blur too coarse even at CFG.mbMax)
   try { out.push(...qaLook()); } catch (e) { out.push('look QA failed: ' + e.message); }   // v3.5: DARK · EMPTY · CAMCLIP · HEADCUT
   return out;
+}
+// --- v3.22 ghost QA (part of qaAudit): every 2nd video frame that gets motion blur is planned as the export plans it (mbPlan); a frame whose copies are still
+//   more than CFG.mbGap apart with CFG.mbMax samples and the shortest shutter (or with a fixed CFG.mbSamples) shows ghost copies → one line per run of such frames.
+function qaGhost(o = {}) {
+  if (!(CFG.motionBlur ?? 'auto')) return [];
+  const fps = o.fps ?? FPS, N = Math.floor(DUR * fps), g = CFG.mbGap ?? 0.005, step = o.step ?? 2, runs = []; let cur = null;   // every 2nd frame: ~half the cost, runs of ghost frames are longer than that
+  for (let i = 0; i < N; i += step) { const t = i / fps, tv = teaseV(t); FRAME++; stepScene(tv);
+    const P = mbPlan(tv, { force: true, measure: true }), bad = P && P.gap > g * 1.02;
+    if (bad) { if (!cur || cur.i1 < i - step) runs.push(cur = { i0: i, i1: i, w: P }); cur.i1 = i; if (P.gap > cur.w.gap) cur.w = P; } }
+  return runs.slice(0, 8).map(({ i0, i1, w }) => { const need = Math.ceil(w.D / g - 1e-6) + 1, pc = x => (x * 100).toFixed(1) + ' %';
+    return `GHOST – fast motion at ${(i0 / fps).toFixed(1)}${i1 > i0 ? '–' + (i1 / fps).toFixed(1) : ''} s needs ${need} blur samples (cap ${w.cap ?? w.n}) – ${w.what} moves ${pc(w.D)} of the frame height in one shutter, copies stay ${pc(w.gap)} apart${w.k < 1 ? ` even at ${Math.round(w.k * 100)} % shutter` : ''}: keep it further from the lens or slower, or raise CFG.mbMax${CFG.mbSamples != null ? ' (CFG.mbSamples fixes the count)' : ''}`; });
 }
 // --- v3.19 mover QA (part of qaAudit): the obstacle rules for things that move on their own path, checked over the whole video at 4 Hz ---
 //   VEHICLE: a car on drive() or anything on fly() (helicopter, plane, UFO …) passes through a building / prop / parked car, a standing figure or crowd members
