@@ -1006,12 +1006,12 @@ Ist in der Sitzung kein `ELEVENLABS_API_KEY` gesetzt, aber der ElevenLabs-Connec
 2. Jeden eindeutigen Text einmal mit `creative_generate_speech` erzeugen (Voice-ID der Kategorie aus `EL_VOICES`, `eleven_v4`, `generations_count: 1`, alle in einen Flow), mit `creative_get_generations` die URLs holen, laden und `{ Text: Datei }` als JSON speichern.
 3. Bauen: `.voice/el-*.npy` löschen, dann `EL_MAP=<map.json> ELEVENLABS_API_KEY=via-mcp PYTHONPATH=.engine/elmcp python3 assemble.py <slug>`. Das Tempo, das `voice.py` je Zeile verlangt, setzt der Shim per ffmpeg `atempo` um — Neu-Timing braucht keine neue Generierung.
 
-## Umgebung & Look (v3.3)
-Seit v3.3 sieht jede Szene ohne Zutun hochwertiger aus: Hintergrund, Boden-Ausstattung, Räume, Wasser, Licht, Farblook und Materialien greifen automatisch. Jeder Teil lässt sich einzeln abschalten (siehe unten). Tests: `tests/v33-*.story.js` + `.scene.js`.
+## Umgebung & Look (v3.5)
+Seit v3.5 sieht jede Szene ohne Zutun hochwertiger aus: Hintergrund, Boden-Ausstattung, Räume, Wasser, Licht, Farblook und Materialien greifen automatisch. Jeder Teil lässt sich einzeln abschalten (siehe unten). Tests: `tests/v35-*.story.js` + `.scene.js`.
 
-### Neu in v3.3: Landschaft (Hintergrund, Skyline, Boden von selbst, Bäume, Felder)
+### Neu in v3.5: Landschaft (Hintergrund, Skyline, Boden von selbst, Bäume, Felder)
 
-Alles hier wirkt ohne Änderung an der Szene. Test: `tests/v33-landscape.story.js` + `.scene.js`.
+Alles hier wirkt ohne Änderung an der Szene. Test: `tests/v35-landscape.story.js` + `.scene.js`.
 
 #### Hintergrund: `backdrop(kind, { coast, seed, r, r0, sector, also })`
 - `hills` · `islands` · `alps` · `snow`: statt einzelner Kegel („Pyramiden“) jetzt zwei durchgehende, weiche Hügelbänder rund um die Szene: vorn (~310 m) grüner mit Baumkante am Kamm und dunkleren Waldflecken, hinten (~450 m) bläulich. Höhe entlang des Rings aus mehreren Sinuswellen (Zufall aus dem Backdrop-Seed), Querschnitt mit Vorderhang, Kamm und Rückhang, die Kammlinie schwankt vor und zurück. In jedem 9:16-Bild stehen mehrere Hügel, nie ein einzelner Berg.
@@ -1045,7 +1045,7 @@ Alles hier wirkt ohne Änderung an der Szene. Test: `tests/v33-landscape.story.j
 - Weiter instanziert, wiegen sich im Wind wie bisher (Kohl steht still), `colors` färbt wie bisher (Schattierung kommt aus Vertex-Faktoren).
 
 
-### Innenräume, Gemälde, Museum, Plätze (v3.3)
+### Innenräume, Gemälde, Museum, Plätze (v3.5)
 
 #### Geschlossene Räume, die sich nach der Kamera richten
 - `interior(…, { closed: 'auto' })` (Standard): Der Raum bekommt eine **Vorderwand** (mit Fenster, Steckdosen, Fußleiste) und eine **Decke**. Beide sind nur zu sehen, solange die Kamera im Raum ist. Von außen bleibt der Raum offen wie ein Puppenhaus, von innen sieht man keinen Himmel und kein Gras mehr. Die Sichtbarkeit wird in jedem Bild aus der Kamera berechnet (reine Funktion von t), auch für Splitscreen und Cover-Kamera.
@@ -1091,10 +1091,10 @@ Alles hier wirkt ohne Änderung an der Szene. Test: `tests/v33-landscape.story.j
 - `fountain(p, x, z, { r: 2.2, jets: 8, color, water })` → F: Steinbecken mit profiliertem Rand, Wasser mit Ringwellen, Säule mit überlaufender Schale (Wasserschleier) und Bögen aus Tropfen (instanziert, reine Funktion von t). `F.seats`, `F.seat(i)`, `F.at()` (Spitze des Strahls).
 - Einzelstücke: `FURN.bollard` (`kind: 'iron' | 'steel' | 'stone'`), `FURN.parkBench` (`kind: 'wood' | 'concrete' | 'stone'`, Sitzplätze in `userData.seats`), `FURN.litterBin` (`'iron' | 'steel'`), `FURN.treePlanter` (`size`, `tree: false` = Blumen).
 
-Test/Vorschau: `tests/v33-interiors.*` (Kamera fliegt in ein Wohnzimmer, Tür öffnet auf den Flur, Museum, gedrehte erhöhte Küche, Platz mit Brunnen, Haus mit Flur, Galerie von außen).
+Test/Vorschau: `tests/v35-interiors.*` (Kamera fliegt in ein Wohnzimmer, Tür öffnet auf den Flur, Museum, gedrehte erhöhte Küche, Platz mit Brunnen, Haus mit Flur, Galerie von außen).
 
 
-### Wasser (v3.3)
+### Wasser (v3.5)
 
 Alles wirkt automatisch in jedem Video; die Optionen sind nur zum Abschalten oder Feintunen.
 
@@ -1122,12 +1122,12 @@ Steht im `SKY` irgendwo `'underwater'` oder `'deepsea'` und die Szene ruft `unde
 - `underwater()` selbst hat jetzt auch Meeresschnee und den Tiefen-Verlauf (`snow: false`, `gradient: false` = aus) und optional `depthDark: 0.4` (tiefer = dunkler).
 - Einzeln nutzbar: `seabed({ y, color, size, at, rocks })`, `marineSnow({ n, box, size, color, opacity, k })`, `depthGradient({ k, surface })`, `lightShafts({ …, follow: true, k: t => 0 … 1 })` (Strahlen wiederholen sich um die Kamera, `k` blendet ein und aus).
 
-Test: `tests/v33-water.*` (Pool mit Figur, Hai und Ablassen, roter Salzsee, Unterwasser-Himmel ohne `underwater()`).
+Test: `tests/v35-water.*` (Pool mit Figur, Hai und Ablassen, roter Salzsee, Unterwasser-Himmel ohne `underwater()`).
 
 
-### Licht & Nachbearbeitung (v3.3)
+### Licht & Nachbearbeitung (v3.5)
 
-Alles ist ab v3.3 automatisch an und verbessert jedes Video ohne Änderung an der Szene. Jeder Teil lässt sich einzeln abschalten. Alle Werte folgen den `SKY`-Schlüsseln und werden zwischen zwei Himmeln genauso überblendet wie Farbe, Nebel und Sonne (Tabelle `LOOK` in `template.html`, eine Zeile pro Himmel). Jedes Bild bleibt eine reine Funktion von t.
+Alles ist ab v3.5 automatisch an und verbessert jedes Video ohne Änderung an der Szene. Jeder Teil lässt sich einzeln abschalten. Alle Werte folgen den `SKY`-Schlüsseln und werden zwischen zwei Himmeln genauso überblendet wie Farbe, Nebel und Sonne (Tabelle `LOOK` in `template.html`, eine Zeile pro Himmel). Jedes Bild bleibt eine reine Funktion von t.
 
 | Wirkung | Was passiert | Abschalten / Stärke |
 |---|---|---|
@@ -1144,10 +1144,10 @@ Alles ist ab v3.3 automatisch an und verbessert jedes Video ohne Änderung an de
 Hinweise:
 - Eigene `ShaderMaterial` mit `fog: true` bekommen den Bodennebel nur, wenn ihre Uniforms aus `THREE.UniformsLib.fog` stammen; der Vertex-Shader muss dann `#include <fog_vertex>` nach `mvPosition` enthalten (wie bei Three.js üblich).
 - Die Werte je Himmel stehen in `LOOK` (rim, sh/hl Tönung, sat, con, lift, open, rays, haze, dust); Planeten-Himmel nutzen neutrale Werte (`LOOK0`).
-- Test: `tests/v33-light` (Tag → golden → Nacht, weit und nah).
+- Test: `tests/v35-light` (Tag → golden → Nacht, weit und nah).
 
 
-### Neu in v3.3: Materialien, Lichtkegel, Lichtpfützen
+### Neu in v3.5: Materialien, Lichtkegel, Lichtpfützen
 
 #### Material-Presets: `mat(hex, { kind })`
 `kind` = paint · glass · metal · chrome · ceramic · plastic · wood · fabric · rubber · stone. Das Preset setzt Rauheit, Metallanteil und wie stark die Fläche den Himmel spiegelt (Umgebung aus dem Himmel, seit v3.0). Gilt auch für `box`, `cyl`, `cone`, `ball`, `prism`, `plate`, `finPlate` (Option wird an `mat` durchgereicht).
@@ -1183,10 +1183,10 @@ Gemeinsames Material für alle Lichtkegel: additiv, ohne Tiefenschreiben; hell a
 - Automatisch: `lamp()` (Pfütze r = 1,25 × Höhe, schwächer wenn die Lampe ein echtes Licht hat, Halo um die Birne), `streetlight()` und damit `city()` (Pfütze unter dem Kopf über der Straße, Halo unter dem Kopf).
 - Abschalten: `lamp(…, { pool: false, halo: false })`, `streetlight(p, x, z, ry, { pool: false, halo: false })`, `city({ pools: false })`, ganz: `CFG.pools: false` (auch ohne Lichtflecken der Kegel).
 
-Test: `tests/v33-materials` (Autos am Tag, Material-Kugeln, Obst auf dem Tisch, Straße in Dämmerung und Nacht mit Laternen, Suchscheinwerfer, Leuchtturm, UFO-Strahl, Taschenlampe, Scheinwerfer, kleine Stadt von oben).
+Test: `tests/v35-materials` (Autos am Tag, Material-Kugeln, Obst auf dem Tisch, Straße in Dämmerung und Nacht mit Laternen, Suchscheinwerfer, Leuchtturm, UFO-Strahl, Taschenlampe, Scheinwerfer, kleine Stadt von oben).
 
 
-### v3.3 Bild-QA und HQ-Render (Paket P6)
+### v3.5 Bild-QA und HQ-Render (Paket P6)
 
 Zum Einmischen in `docs/API.md` (Abschnitt „Prüfung“) – Stand dieses Branches.
 
@@ -1210,7 +1210,7 @@ Nicht gemeldet: Rauch, Glas, Wasser, Strahlen, Partikel und der Himmel bei `CAMC
 
 `--strict` zählt die neuen Zeilen mit (Exit 3). Debug: `node render.mjs page.html --probe "qaLook({ stats: true, budget: 1e9 })"` liefert die Messwerte jeder Probe (`dead`, `dark`, `flat`, `clip`, `fg`, `fd` = Abstand zum Blickpunkt, `heads`); `probes: false` = ohne die Tiefen-Proben.
 
-Test: `tests/v33-qa.story.js` + `.scene.js` – Einstellung 2 meldet absichtlich `EMPTY`, Einstellung 3 `CAMCLIP`, Einstellung 4 `HEADCUT`; Einstellung 1 und das Cover bleiben still.
+Test: `tests/v35-qa.story.js` + `.scene.js` – Einstellung 2 meldet absichtlich `EMPTY`, Einstellung 3 `CAMCLIP`, Einstellung 4 `HEADCUT`; Einstellung 1 und das Cover bleiben still.
 
 **Kalibrierung (Stand dieses Branches, alte Szenen mit neuer Engine neu gebaut):**
 - `iss-falls`: `EMPTY` Cover A (96 %) und Einstellung 12 (99 %, blauer Leer-Frame); `DARK` Einstellung 11 (Globus-Nachtseite, 71 %). Feuerball-Einstellung (73 % flach) und ISS im All (76 %) bleiben still.

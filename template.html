@@ -438,7 +438,7 @@ const AUDIO = {
 /* ====================================================================== */
 /* ENGINE — core (renderer, helpers, props, particles, crowds)            */
 /* ====================================================================== */
-// v3.3: every CFG field the engine reads gets its documented default when a story leaves it out (short test stories had NaN sun / shadow box / camera → empty grey frames)
+// v3.5: every CFG field the engine reads gets its documented default when a story leaves it out (short test stories had NaN sun / shadow box / camera → empty grey frames)
 for (const [k, v] of Object.entries({ dur: 22, seed: 7, filter: 'film', grain: 0.045, vignette: 0.4, saturation: 1.08, contrast: 1.05, shadows: true, area: 36, renderScale: 0.75, msaa: 2, sunAz: -35, handheld: 0.7, coverT: 1.0 })) if (CFG[k] === undefined) CFG[k] = v;
 const TAU = Math.PI * 2, DUR = CFG.dur, EXPORT = !!window.__EXPORT__;
 const LAND = CFG.aspect === '16:9' || CFG.aspect === 'landscape', FOVK = CFG.fovScale ?? (LAND ? 0.68 : 1);   // v2.25: landscape 16:9 (normal YouTube video); vertical fov × FOVK keeps shots framed like 9:16
@@ -449,7 +449,7 @@ if (LAND) { document.getElementById('stage').classList.add('land'); document.get
 const LONG = LAND && CFG.long !== false;
 if (LONG && CFG.burnSubs === false) document.getElementById('stage').classList.add('nosubs');   // subtitles only as .srt (YouTube CC), not in the picture
 if (LONG) document.getElementById('stage').classList.add('long');
-// v3.3 HQ: the final video (render.mjs --video without --draft, or any mode with --hq sets window.__HQ__) renders the 3D like long videos do — full resolution + 4× MSAA
+// v3.5 HQ: the final video (render.mjs --video without --draft, or any mode with --hq sets window.__HQ__) renders the 3D like long videos do — full resolution + 4× MSAA
 // (CFG.renderScale 0.75 / msaa 2 stay for preview, --shots and --cover: fast). CFG.fast keeps the old speed everywhere.
 const HQ = (LONG || !!window.__HQ__) && !CFG.fast;
 if (HQ) { CFG.renderScale = Math.max(CFG.renderScale ?? 1, 1); CFG.msaa = Math.max(CFG.msaa ?? 2, 4); }
@@ -541,7 +541,7 @@ Object.assign(sun.shadow.camera, { left: -CFG.area, right: CFG.area, top: CFG.ar
 sun.shadow.camera.updateProjectionMatrix();
 sun.shadow.bias = -0.0006; sun.shadow.normalBias = 0.04;
 scene.add(hemi, sun, sun.target);
-// v3.3 rim light: a second, shadowless sun behind the subject as seen from the camera (placed every frame by rimFit(), a pure function of camera + sky) —
+// v3.5 rim light: a second, shadowless sun behind the subject as seen from the camera (placed every frame by rimFit(), a pure function of camera + sky) —
 // edges, shoulders and tops catch light and figures separate from the background. Colour and strength per sky (LOOK): strong cool moonlight at night,
 // warm at golden / dusk, subtle by day. CFG.rim: number = × strength, false = off
 const RIMK = CFG.rim === false ? 0 : typeof CFG.rim === 'number' ? CFG.rim : 1;
@@ -621,9 +621,9 @@ const SKIES = {
   neptune:    { top: '#06124A', bot: '#2E5EC8', fog: '#2448A8', near: 8, far: 80, sun: '#CFE0FF', si: 1.2, el: 50, hs: '#6A8AE0', hg: '#0A1440', hi: 0.9, stars: 0, orb: 0, glow: 0.2, exp: 1.1, nk: 0, cl: [0, 0.5, '#3A6AD8', '#1A3A90'] },
   space:      { top: '#000004', bot: '#04071A', fog: '#04071A', near: 600, far: 1100, sun: '#FFFFFF', si: 3.2, el: 20, hs: '#334455', hg: '#000000', hi: 0.15, stars: 1, orb: 0.0016, glow: 0.8, exp: 1, nk: 0, cl: [0, 0.5, '#000000', '#000000'] }
 };
-// v3.3 night & storm: a moonlit key, cooler fill and a lifted ground colour of the hemisphere → shadowed sides stay readable (CFG.nightLook: false = the old, darker values)
+// v3.5 night & storm: a moonlit key, cooler fill and a lifted ground colour of the hemisphere → shadowed sides stay readable (CFG.nightLook: false = the old, darker values)
 if (CFG.nightLook !== false) { Object.assign(SKIES.night, { sun: '#A9C1FF', si: 1.85, hs: '#7088CC', hg: '#2C3550', hi: 0.8 }); Object.assign(SKIES.storm, { si: 0.95, hs: '#93A0B4', hg: '#3C434E', hi: 0.9 }); }
-// v3.3 look per sky, blended along the SKY keys like every other sky value:
+// v3.5 look per sky, blended along the SKY keys like every other sky value:
 //   rim [colour, strength] · grade: sh / hl = [colour, amount] split toning (shadows / highlights), sat, con = × CFG.saturation / CFG.contrast,
 //   lift [colour, amount] = shadow floor (dark areas never go pure black, tinted), open = shadow gain (detail in the dark parts)
 //   rays = god rays from the sun / moon · haze = low ground fog · dust = motes floating in the light near the camera
@@ -647,7 +647,7 @@ for (const n of Object.keys(SKIES)) { const L = { ...LOOK0, ...(LOOK[n] ?? {}) }
   LOOKV[n] = { rimC: hx3(L.rim[0]), rimI: L.rim[1], sh: tint(L.sh), hl: tint(L.hl), sat: L.sat, con: L.con, lift: lc.map(v => v / lm * L.lift[1]), open: L.open, rays: L.rays, haze: L.haze, dust: L.dust }; }
 const LOOKNOW = { rimC: new THREE.Color(), rimI: 0, sh: [0, 0, 0], hl: [0, 0, 0], sat: 1, con: 1, lift: [0, 0, 0], open: 0, rays: 0, haze: 0, dust: 0, st: 0 };
 const _lk = (a, b, k) => Array.isArray(a) ? a.map((v, i) => lerp(v, b[i], k)) : lerp(a, b, k);
-// v3.3 ground haze: the distance fog gets a low layer that sits on the ground and in hollows (world height, exponential falloff) and glows toward the sun.
+// v3.5 ground haze: the distance fog gets a low layer that sits on the ground and in hollows (world height, exponential falloff) and glows toward the sun.
 //   Patched into three's fog chunks once → every built-in material (and every ShaderMaterial with fog: true) gets it. Shared uniforms (plain objects,
 //   not cloned by three): HAZE = density, height falloff (m), start distance (m), base height · HAZES = sun glow colour, glow · HAZED = sun direction.
 //   CFG.groundFog: number = × amount, false = off
@@ -714,7 +714,7 @@ function applySky(t) {
     if (lw) { hemi.intensity *= 1 + 1.1 * lw; sun.intensity *= 1 + 0.6 * lw; renderer.toneMappingExposure *= 1 + 0.28 * lw;
       skyU.bot.value.lerp(_cb.set('#4A5F8E'), 0.4 * lw); skyU.top.value.lerp(_cb.set('#16244A'), 0.35 * lw); scene.fog.color.lerp(_cb.set('#3A4A6E'), 0.4 * lw); }
     scene.fog.near *= CFG.haze ?? 0.6; }
-  { const A2 = LOOKV[na] ?? LOOKV.day, B2 = LOOKV[nb] ?? LOOKV.day, L = LOOKNOW;   // v3.3 look of this moment (rim, grade, rays, haze, dust)
+  { const A2 = LOOKV[na] ?? LOOKV.day, B2 = LOOKV[nb] ?? LOOKV.day, L = LOOKNOW;   // v3.5 look of this moment (rim, grade, rays, haze, dust)
     for (const q of ['sh', 'hl', 'lift', 'sat', 'con', 'open', 'rays', 'haze', 'dust', 'rimI']) L[q] = _lk(A2[q], B2[q], k);
     const rc = _lk(A2.rimC, B2.rimC, k); L.rimC.setRGB(rc[0], rc[1], rc[2], THREE.SRGBColorSpace); L.st = ST(t);
     rim.color.copy(L.rimC); rim.intensity = L.rimI * RIMK * (LONG ? 1 + 0.4 * lerp(NLIFT[na] ?? 0, NLIFT[nb] ?? 0, k) : 1);
@@ -726,7 +726,7 @@ function applySky(t) {
   for (const m of NIGHTGLOW) m.emissiveIntensity = 2.6 * skyU.stars.value;
   const lk = strikeK(t); if (lk) { hemi.intensity += 3 * lk; sun.intensity += 2 * lk; }
 }
-// v3.3 dust in the air: faint motes floating near the camera, lit by the sun (brighter looking into the light) — positions are a pure function of t, wrapped
+// v3.5 dust in the air: faint motes floating near the camera, lit by the sun (brighter looking into the light) — positions are a pure function of t, wrapped
 //   into a box around the camera in the vertex shader (world-fixed, they don't travel with the lens). On by sky (golden, dawn, dusk, apocalypse, under water;
 //   a trace by day) and in rooms built with interior(). CFG.dust: number = × amount, true = also in every other sky, false = off
 const DUSTROOMS = [];   // interior() adds [x, y, z, w, d, h, ry] → dust indoors when the camera is inside
@@ -839,7 +839,7 @@ function surfFx(m, kind, o = {}) {   // o.indoor: no weather (rooms) · o.sp: pa
   };
   m.customProgramCacheKey = () => 'surf' + K + (o.sp ? 's' : '') + (o.indoor ? 'i' : ''); return m;
 }
-// v3.3 material presets: mat(hex, { kind }) — paint (car lacquer) · glass · metal · chrome · wood · fabric · plastic · rubber · stone · ceramic.
+// v3.5 material presets: mat(hex, { kind }) — paint (car lacquer) · glass · metal · chrome · wood · fabric · plastic · rubber · stone · ceramic.
 //   A kind sets roughness, metalness and how strongly the surface mirrors the sky environment (env, 1 = engine default); glossy kinds are smooth-shaded on curved parts
 //   (spheres, cylinders — boxes and outlines stay crisp). rough / metal / flat / env given alongside still win. CFG.materials: false = every kind falls back to the old matte look.
 const MATK = { paint: { rough: 0.24, metal: 0.12, env: 3.6, smooth: 1 }, glass: { rough: 0.05, metal: 0.15, env: 3.2, smooth: 1 }, metal: { rough: 0.34, metal: 0.82, env: 2.4, smooth: 1 },
@@ -880,7 +880,7 @@ function mesh(p, geo, m, x, y, z, o = {}) {
 const box = (p, w, h, d, c, x = 0, y = 0, z = 0, o = {}) => mesh(p, boxG(w, h, d), o.mat ?? mat(c, o), x, y + h / 2, z, o);
 const cyl = (p, rt, rb, h, c, x = 0, y = 0, z = 0, o = {}) => { const s = o.seg ?? 8; return mesh(p, G(`c${rt}|${rb}|${h}|${s}`, () => new THREE.CylinderGeometry(rt, rb, h, s)), o.mat ?? mat(c, o), x, y + h / 2, z, o); };
 const cone = (p, r, h, c, x = 0, y = 0, z = 0, o = {}) => cyl(p, 0, r, h, c, x, y, z, o);
-const ball = (p, r, c, x = 0, y = 0, z = 0, o = {}) => { const d = o.detail ?? (r <= 0.35 || MATK[o.kind]?.smooth ? 2 : 1); return mesh(p, G(`s${r}|${d}`, () => new THREE.IcosahedronGeometry(r, d)), o.mat ?? mat(c, o), x, y, z, o); };   // v3.3: small props (fruit, knobs, bulbs) and glossy balls default to detail 2 — big crowns and rocks stay faceted
+const ball = (p, r, c, x = 0, y = 0, z = 0, o = {}) => { const d = o.detail ?? (r <= 0.35 || MATK[o.kind]?.smooth ? 2 : 1); return mesh(p, G(`s${r}|${d}`, () => new THREE.IcosahedronGeometry(r, d)), o.mat ?? mat(c, o), x, y, z, o); };   // v3.5: small props (fruit, knobs, bulbs) and glossy balls default to detail 2 — big crowns and rocks stay faceted
 function prism(p, w, h, d, c, x = 0, y = 0, z = 0, o = {}) {   // gable roof: ridge along x (length w), base depth d, height h
   const geo = G(`p${w}|${h}|${d}`, () => { const s = new THREE.Shape(); s.moveTo(-d / 2, 0); s.lineTo(d / 2, 0); s.lineTo(0, h); s.closePath(); const g = new THREE.ExtrudeGeometry(s, { depth: w, bevelEnabled: false }); g.translate(0, 0, -w / 2); g.rotateY(Math.PI / 2); return g; });
   return mesh(p, geo, o.mat ?? mat(c, o), x, y, z, o);
@@ -934,7 +934,7 @@ function groundFx(m, o = {}) {
   m.customProgramCacheKey = () => 'groundFx' + amp; return m;
 }
 function ground(o = {}) {   // colour varies in soft patches (CFG.groundDetail: false = flat colour); dirt: hex | false
-  GROUND = o; if (!_autoDressQ && o.dress !== false && CFG.autoDress !== false) { _autoDressQ = true; DEFER.push(() => autoDress()); }   // v3.3: bare ground gets a light dressing at bake time (see autoDress)
+  GROUND = o; if (!_autoDressQ && o.dress !== false && CFG.autoDress !== false) { _autoDressQ = true; DEFER.push(() => autoDress()); }   // v3.5: bare ground gets a light dressing at bake time (see autoDress)
   const size = o.size ?? 520, flat = o.flat ?? 32, hills = o.hills ?? 7, cz = o.coast, dep = o.depth ?? 4;   // coast: z where land ends (sea towards +z, add water())
   const H0 = (x, z) => { const r = Math.hypot(x, z), k = clamp((r - flat) / 70); return k * k * hills * (0.65 + 0.35 * Math.sin(x * 0.045 + 1.3) * Math.cos(z * 0.05 + 0.7) + 0.25 * Math.sin(x * 0.13 + z * 0.11)); };
   const bw = o.beach ?? 5, fl = Math.max(30, bw + 14);   // v2.25 beach: width of the sand strip in m (Omaha at low tide: 40–60)
@@ -961,7 +961,7 @@ function house(p, x, z, o = {}) {   // farmhouse: stone plinth, corner boards, f
   const w = o.w ?? 4.6, d = o.d ?? 3.8, h = o.h ?? 2.7, g = stat(grp(p, x, 0, z, o.ry ?? 0)), NC = { cast: false };
   const wall = o.wall ?? '#E9DCC4', trim = o.trim ?? '#F4EFE6', roofC = o.roof ?? '#9C3B2E', rh = o.roofH ?? 1.6, D = d + 0.7, doorC = o.door ?? '#5B3A24', shut = o.shutter ?? shade(roofC, -0.08);
   box(g, w + 0.08, 0.2, d + 0.08, o.base ?? '#8C8478', 0, 0, 0, { surf: 'stone' });
-  const SW = { surf: o.surf ?? 'siding' }, hallH = o.hall !== false && CFG.halls !== false && w >= 2.6 && d >= 2.4 && h >= 2.3;   // v3.3: a lit hall behind the front door (was: a dark slab on a solid body)
+  const SW = { surf: o.surf ?? 'siding' }, hallH = o.hall !== false && CFG.halls !== false && w >= 2.6 && d >= 2.4 && h >= 2.3;   // v3.5: a lit hall behind the front door (was: a dark slab on a solid body)
   if (!hallH) box(g, w, h, d, wall, 0, 0, 0, SW);
   else { const st = 0.12, sd = Math.min(1.3, d * 0.32), hw = Math.min(0.85, w / 2 - 0.5), hy = Math.min(h - 0.25, 2.4), zf = d / 2 - (st + sd) / 2, k = 0.01;   // pieces overlap by k (< the 2 cm hall lining): no cracks in the shadow map
     box(g, w, h, d - st - sd + k, wall, 0, 0, -(st + sd - k) / 2, SW); for (const s of [-1, 1]) box(g, w / 2 - hw + k, h, st + sd, wall, s * (hw - k + (w / 2 - hw + k) / 2), 0, zf, SW); box(g, 2 * hw + k, h - hy, st + sd, wall, 0, hy, zf, SW);
@@ -977,7 +977,7 @@ function house(p, x, z, o = {}) {   // farmhouse: stone plinth, corner boards, f
   box(g, w + 0.56, 0.1, 0.24, sh, 0, h + rh - 0.05, 0, NC);
   if (o.chimney !== false) { box(g, 0.45, 1.5, 0.45, '#7A6A5E', w * 0.26, h + 0.2, -d * 0.16, { surf: 'brick' }); box(g, 0.56, 0.1, 0.56, '#5E5048', w * 0.26, h + 1.7, -d * 0.16, NC); }
   if (!hallH) { box(g, 1.15, 1.92, 0.06, trim, 0, 0.2, d / 2 + 0.03, NC); box(g, 0.95, 1.78, 0.02, '#1A140F', 0, 0.2, d / 2 + 0.065, NC); }   // frame + dark doorway (seen when open)
-  else { for (const s of [-1, 1]) box(g, 0.1, 1.92, 0.06, trim, s * 0.525, 0.2, d / 2 + 0.03, NC); box(g, 0.95, 0.14, 0.06, trim, 0, 1.98, d / 2 + 0.03, NC); }   // v3.3: frame round the real opening
+  else { for (const s of [-1, 1]) box(g, 0.1, 1.92, 0.06, trim, s * 0.525, 0.2, d / 2 + 0.03, NC); box(g, 0.95, 0.14, 0.06, trim, 0, 1.98, d / 2 + 0.03, NC); }   // v3.5: frame round the real opening
   const door = dyn(grp(g, -0.475, 0.2, d / 2 + 0.085)); door.userData.sign = 1; door.userData.angle = 1.7;   // openDoor(house, t)
   box(door, 0.95, 1.78, 0.05, doorC, 0.475, 0, 0); for (const yy of [0.25, 1.0]) box(door, 0.6, 0.5, 0.02, shade(doorC, -0.022), 0.475, yy, 0.03, NC);   // v2.40: panels a shade darker (-0.06 turned a dark door's panels black)
   ball(door, 0.045, '#D9B65C', 0.8, 0.9, 0.06, { detail: 0, ...NC });   // v2.40: the handle had slipped into the comment above (doors had none)
@@ -1138,7 +1138,7 @@ const noise2 = (x, z) => { const xi = Math.floor(x), zi = Math.floor(z), fx = x 
 const wmat = c => mat(c, CFG.wind === 0 ? {} : { wind: 1 });   // material that sways once baked
 const _roots = (g, s, r, c, hv, M, n = 4) => { for (let i = 0; i < n; i++) { const q = grp(g, 0, 0, 0, i * TAU / n + hv(50 + i) * 0.9); const l = (0.42 + hv(60 + i) * 0.25) * s;   // v2.40: root flare — a few tapered roots running out of the trunk foot
   const m = cyl(q, 0.02 * s, r * 0.55, l, c, 0, -l / 2, 0, { ...M(c), seg: 4, cast: false }); m.rotation.z = -1.875; m.position.set(r * 0.3 + l * 0.48, 0.12 * s - 0.15 * l, 0); } };
-const _tint = (hex, dh, ds, dl) => shade(_hue(hex, Math.round(dh * 200) / 200), Math.round(dl * 100) / 100, Math.round(ds * 100) / 100);   // v3.3 hue / saturation / lightness jitter in coarse steps (few materials before bake)
+const _tint = (hex, dh, ds, dl) => shade(_hue(hex, Math.round(dh * 200) / 200), Math.round(dl * 100) / 100, Math.round(ds * 100) / 100);   // v3.5 hue / saturation / lightness jitter in coarse steps (few materials before bake)
 const _hues = new Map(), _hue = (hex, dh) => { const k = hex + dh; if (!_hues.has(k)) _hues.set(k, '#' + new THREE.Color(hex).offsetHSL(dh, 0, 0).getHexString()); return _hues.get(k); };
 function tree(p, x, z, o = {}) {   // kind: round | pine | snowpine | birch | dead | palm — returns the (static) group
   const s = o.size ?? rr(0.85, 1.25), kind = o.kind ?? 'round', y0 = groundH(x, z), g = stat(grp(p, x, y0, z, rnd() * TAU));
@@ -1178,7 +1178,7 @@ function tree(p, x, z, o = {}) {   // kind: round | pine | snowpine | birch | de
       const tw = grp(b, 0, (0.8 - i * 0.1) * s, 0, 0.6); tw.rotation.z = -0.8; cyl(tw, 0.01 * s, 0.035 * s, 0.45 * s, bark, 0, 0, 0, { ...M(bark), seg: 4 });
     }
     g.userData.wb = { y0, h: 3.2 * s };
-  } else {   // round broadleaf / birch: a cluster of blobs, lit from above, darker underneath — v3.3: every tree has its own crown shape, lean and tint (hash of its position)
+  } else {   // round broadleaf / birch: a cluster of blobs, lit from above, darker underneath — v3.5: every tree has its own crown shape, lean and tint (hash of its position)
     const c0 = o.color ?? (kind === 'birch' ? '#8DBF4E' : pick(['#4C7A3A', '#5A8A40', '#3F6E35'])), bi = kind === 'birch';
     const c = _tint(c0, (hv(90) - 0.5) * 0.045, (hv(91) - 0.5) * 0.12, (hv(92) - 0.5) * 0.08), st = (bi ? 1.15 : 0.85) + hv(93) * 0.45, wd = (bi ? 0.78 : 0.88) + hv(94) * 0.28;
     const q = grp(g), la = hv(96) * TAU, ln = (hv(95) - 0.5) * 0.14; q.rotation.set(Math.sin(la) * ln, 0, Math.cos(la) * ln);   // slight lean (roots stay on the ground)
@@ -1194,7 +1194,7 @@ function tree(p, x, z, o = {}) {   // kind: round | pine | snowpine | birch | de
       blob(rr2, cc, ox + Math.cos(a) * d, yc + (up - 0.4) * R * st * (bi ? 1.3 : 0.95), oz + Math.sin(a) * d, 0.78 + hv(i + 60) * 0.4);
     }
     for (let i = 0, nt = 1 + Math.floor(hv(3) * 2); i < nt; i++) { const a = hv(i + 64) * TAU, cc = shade(c, 0.06 + hv(i + 66) * 0.03); blob(R * (0.5 + hv(i + 68) * 0.15), cc, ox + Math.cos(a) * R * 0.25, yc + R * st * (0.55 + hv(i + 69) * 0.12), oz + Math.sin(a) * R * 0.25, 0.85); }
-    for (let i = 0; i < 4; i++) { const a = (i + 0.5) * TAU / 4 + hv(i + 70), cc = shade(c, -0.04 + hv(i + 75) * 0.04);   // v2.40: small clumps under the crown rim break the round outline (v3.3: tucked in, so none hangs loose)
+    for (let i = 0; i < 4; i++) { const a = (i + 0.5) * TAU / 4 + hv(i + 70), cc = shade(c, -0.04 + hv(i + 75) * 0.04);   // v2.40: small clumps under the crown rim break the round outline (v3.5: tucked in, so none hangs loose)
       blob((0.28 + hv(i + 80) * 0.12) * R, cc, ox + Math.cos(a) * R * 0.74, yc - R * st * (0.2 + hv(i + 85) * 0.14), oz + Math.sin(a) * R * 0.74, 0.9, 0, true); }
     g.userData.wb = { y0, h: yc + R * st * 1.3 };
   }
@@ -1288,7 +1288,7 @@ const BIOMES = {
   city:   { trees: [['round', 1]], near: { pebble: 1 }, ring: { tree: 0.15 }, grass: ['#5C8A3A'], flowers: [] },
   moon:   { trees: [], near: { pebble: 10, rock: 0.5 }, ring: { rock: 1 }, rockColor: '#8E8E94', grass: [], flowers: [], craters: [0.12, 0.05] },
   reef:   { trees: [], near: { coral: 1.4, seaweed: 1.2, rock: 0.4, shell: 2, star: 1.2, pebble: 4 }, ring: { rock: 1.2, kelp: 0.5 }, rockColor: '#8A8070', grass: [], flowers: [] },
-  // v3.3 light dressing that ground() adds by itself when a scene has no biome / city / backdrop (see autoDress) — also usable as biome('plain') …
+  // v3.5 light dressing that ground() adds by itself when a scene has no biome / city / backdrop (see autoDress) — also usable as biome('plain') …
   plain:          { trees: [['round', 0.6], ['birch', 0.15], ['pine', 0.25]], near: { tuft: 34, flower: 1.6, pebble: 3 }, ring: { tree: 0.32, bush: 0.4, rock: 0.07 },
                     grass: ['#5C8A3A', '#6E9A44', '#4E7A34', '#7FA64E'], flowers: ['#FFE15A', '#FFFFFF', '#E86AA8', '#9C7CE8'] },
   'plain-sand':   { trees: [['dead', 0.5], ['cactus', 0.5]], near: { pebble: 7, tuft: 3 }, ring: { tree: 0.05, rock: 0.18, dry: 0.18 }, grass: ['#B8A060', '#A89050'], rockColor: '#B98A5A', flowers: ['#FFD84A'] },
@@ -1318,7 +1318,7 @@ function runBiome(kind, o) {
   for (const k of CAM) if (k.follow && TRACK[k.follow] && Array.isArray(k.off)) { const v = TRACK[k.follow].obj.getWorldPosition(new THREE.Vector3()); fillSeg([v.x + k.off[0], v.z + k.off[2]], [v.x, v.z], 1.6); }
   for (const tr of Object.values(TRACK)) { const v = tr.obj.getWorldPosition(new THREE.Vector3()); fillBox(v.x - 4, v.x + 4, v.z - 4, v.z + 4); }
   for (const [x, z, r] of o.keep ?? []) fillBox(x - r, x + r, z - r, z + r);
-  const coast = GROUND.coast, wet = o.dry && waterH(0, 0, 0) > -900 ? (x, z) => groundH(x, z) < Math.max(waterH(x, z, 0), waterH(x, z, CFG.dur ?? 0)) + 0.4 : null;   // v3.3 o.dry: keep lakes / floods free
+  const coast = GROUND.coast, wet = o.dry && waterH(0, 0, 0) > -900 ? (x, z) => groundH(x, z) < Math.max(waterH(x, z, 0), waterH(x, z, CFG.dur ?? 0)) + 0.4 : null;   // v3.5 o.dry: keep lakes / floods free
   const onLand = (z, x) => (coast == null || z < coast - 1.5) && !(wet && x != null && wet(x, z));
   const mark = (x, z, r) => fillBox(x - r, x + r, z - r, z + r);
   const rockC = o.rockColor ?? B.rockColor ?? '#7D7F86', grass = o.grass ?? B.grass, flw = o.flowers === false ? [] : B.flowers;
@@ -1376,7 +1376,7 @@ function runBiome(kind, o) {
   if (o.backdrop !== false && kind !== 'moon' && kind !== 'reef') backdrop(o.backdrop ?? { forest: 'alps', snow: 'snow', desert: 'mesa', beach: 'islands' }[kind] ?? 'hills', { coast: GROUND.coast });
   if (o.life !== false) ambientLife(kind, { area: A });
 }
-// v3.3 autoDress: ground() without biome() / city() / backdrop() used to be an endless flat plane to a blurry horizon. At bake time the scene now gets a light
+// v3.5 autoDress: ground() without biome() / city() / backdrop() used to be an endless flat plane to a blurry horizon. At bake time the scene now gets a light
 // dressing that matches the ground colour (green → plain + hills · sand → plain-sand + mesa · white → plain-snow + snow · grey → plain-stone + skyline, dark grey → hills):
 // sparse trees, bushes and rocks in a ring beyond everything built, tufts, pebbles and a few flowers in the play area — cameras, paths, props and crowds stay free
 // (runBiome). Not under water, in space or on planets. Off: ground({ dress: false }) or CFG.autoDress: false. Own RNG; the global one is restored afterwards.
@@ -1404,19 +1404,19 @@ function autoDress() {
    backdrop(kind, { coast, seed, r })  kind: hills (rolling green + blue ridges) · alps (rock with snow caps) · snow · mesa (desert table mountains) ·
                                        islands (sea side) · skyline (far towers round a city) — two hazy rings beyond the ground: silhouettes that take
                                        the colour of the sky's haze, so they sit right at any time of day
-                                       v3.3: hills / islands / alps / snow are continuous noise ridge bands (no lone cones); skyline has setbacks, a
+                                       v3.5: hills / islands / alps / snow are continuous noise ridge bands (no lone cones); skyline has setbacks, a
                                        shader window grid lit by NIGHTK and blinking beacons; o.sector (skyline only), o.also (extra layer)
    ambientLife(kind, { area })         butterflies and high birds by day, fireflies at night, falling leaves in the forest, dragonflies in the swamp —
                                        instanced, every position a pure function of t
 /* ---------------------------------------------------------------------- */
-let _backdropDone = false, _dressed = false, _autoDressQ = false;   // _dressed: biome() / city() / backdrop() was called → ground() does not dress the scene by itself (v3.3)
-const NIGHTU = { value: 0 }, BDT = { value: 0 };   // v3.3 shared uniforms: darkness (NIGHTK) and time for skyline windows and beacons — set by a tick (applySky runs before the tickers)
-function backdrop(kind = 'hills', o = {}) {   // v3.3 o.also: an extra layer (e.g. a skyline in front of the hills) — ignores and keeps the one-backdrop guard
+let _backdropDone = false, _dressed = false, _autoDressQ = false;   // _dressed: biome() / city() / backdrop() was called → ground() does not dress the scene by itself (v3.5)
+const NIGHTU = { value: 0 }, BDT = { value: 0 };   // v3.5 shared uniforms: darkness (NIGHTK) and time for skyline windows and beacons — set by a tick (applySky runs before the tickers)
+function backdrop(kind = 'hills', o = {}) {   // v3.5 o.also: an extra layer (e.g. a skyline in front of the hills) — ignores and keeps the one-backdrop guard
   if (!o.also) _dressed = true;
   if (CFG.backdrop === false || (_backdropDone && !o.also)) return null; if (!o.also) _backdropDone = true;
   const g = stat(grp(world)); g.userData.cover = g.userData.noHit = true;
   let s = Math.floor(hash((o.seed ?? CFG.seed ?? 7) * 3.31 + 1.7) * 2147483646) + 1; const R = () => (s = (s * 48271) % 2147483647) / 2147483647, col = new THREE.Color(), col2 = new THREE.Color();
-  const hazeMat = (haze, flat = true, mist = 0) => { const m = new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: flat, roughness: 1 }); m.userData.own = true;   // v3.3 mist: the lowest metres take the real fog (no pale ground strip in front of clearer hills)
+  const hazeMat = (haze, flat = true, mist = 0) => { const m = new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: flat, roughness: 1 }); m.userData.own = true;   // v3.5 mist: the lowest metres take the real fog (no pale ground strip in front of clearer hills)
     m.onBeforeCompile = sh => { if (mist) sh.vertexShader = 'varying float vBdY;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n  vBdY = (modelMatrix * vec4(transformed, 1.0)).y;');
       sh.fragmentShader = (mist ? 'varying float vBdY;\n' : '') + sh.fragmentShader.replace('#include <fog_fragment>', `#ifdef USE_FOG
   gl_FragColor.rgb = mix(gl_FragColor.rgb, fogColor, ${mist ? `mix(max(smoothstep(fogNear, fogFar, vFogDepth), ${haze.toFixed(2)}), ${haze.toFixed(2)}, smoothstep(-6.0, ${(mist - 6).toFixed(1)}, vBdY))` : haze.toFixed(2)});
@@ -1428,7 +1428,7 @@ function backdrop(kind = 'hills', o = {}) {   // v3.3 o.also: an extra layer (e.
   const ring = (r0, dr, n, mk, haze, skip) => { const parts = [];
     for (let i = 0; i < n; i++) { const a = (i + R() * 0.8) / n * TAU, r = r0 + (R() - 0.5) * dr, x = Math.sin(a) * r, z = Math.cos(a) * r; if (skip?.(x, z)) { R(); R(); R(); continue; } const geo = mk(i); if (geo) parts.push(geo.rotateY(R() * TAU).translate(x, -6, z)); }
     if (!parts.length) return; const me = new THREE.Mesh(mergeGeometries(parts.map(q => { const n2 = q.index ? q.toNonIndexed() : q; n2.deleteAttribute('uv'); return n2; })), hazeMat(haze, true, 12)); me.geometry.computeVertexNormals(); me.castShadow = me.receiveShadow = false; g.add(me); };
-  // v3.3 ridge band: one continuous ring of soft hills round the scene (no more cone "pyramids"). Height along the ring = periodic noise (sum of sines, phases from
+  // v3.5 ridge band: one continuous ring of soft hills round the scene (no more cone "pyramids"). Height along the ring = periodic noise (sum of sines, phases from
   // the backdrop RNG); cross-section front foot → front slope → crest → back slope, crest line wanders in and out. Dips under the sea on a coast.
   const per = (fs, ridged = false) => { const T = fs.map(([f, a]) => [f, a, R() * TAU]), S = fs.reduce((q, [, a]) => q + a, 0);
     return ridged ? x => T.reduce((q, [f, a, p]) => q + a * (1 - Math.abs(Math.sin(f * x / 2 + p))), 0) / S : x => 0.5 + 0.5 * T.reduce((q, [f, a, p]) => q + a * Math.sin(f * x + p), 0) / S; };
@@ -1473,7 +1473,7 @@ function backdrop(kind = 'hills', o = {}) {   // v3.3 o.also: an extra layer (e.
   }
   return g;
 }
-// v3.3 skyline: far towers with setbacks, roof boxes and antennas; a window grid per facade drawn in the shader (by day dark glass, from dusk on a growing,
+// v3.5 skyline: far towers with setbacks, roof boxes and antennas; a window grid per facade drawn in the shader (by day dark glass, from dusk on a growing,
 // random share lit warm or cool, following NIGHTK, and shining through the haze); red aviation beacons blink on the antennas at dusk and night.
 function skyline(g, r0, R, sector) {   // sector: [fromDeg, toDeg] — towers only there (0° = +z, 90° = +x), e.g. a city on one side of the horizon
   const P = [], N = [], C = [], WC = [], WK = [], BC = [], BP = [], BN = [], c = new THREE.Color(), c2 = new THREE.Color();
@@ -1565,7 +1565,7 @@ function ambientLife(kind = 'farm', o = {}) {
   return out;
 }
 
-// v3.3 crop models (instanced, centred on the origin like before, vertex colours = shading factors on the instance colour):
+// v3.5 crop models (instanced, centred on the origin like before, vertex colours = shading factors on the instance colour):
 // wheat — a tuft of stalks with ears · corn — stalk, arching leaf blades, a cob in its husk, tassel · cabbage — a firm head in a rosette of cupped leaves
 const _cropG = crop => G('crop3|' + crop, () => {
   const P = [], C = [], tri = (a, b, c, f) => { P.push(...a, ...b, ...c); for (let i = 0; i < 3; i++) C.push(...f); }, quad = (a, b, c, d, f) => { tri(a, b, c, f); tri(a, c, d, f); };
@@ -1602,7 +1602,7 @@ const _cropG = crop => G('crop3|' + crop, () => {
 const _cropMat = sway => G('cropMat|' + sway, () => { const m = new THREE.MeshStandardMaterial({ color: '#ffffff', vertexColors: true, flatShading: true, roughness: 0.9, side: THREE.DoubleSide }); if (sway) windify(m, 'local'); return m; });
 function field(p, x, z, w, d, o = {}) {   // crop rows (instanced); crop: corn | wheat | cabbage
   const g = grp(p, x, 0, z, o.ry ?? 0), crop = o.crop ?? 'wheat';
-  box(g, w, 0.08, d, o.soil ?? (crop === 'wheat' ? '#6E5A36' : '#5A4330'), 0, 0, 0, { cast: false, stat: true });   // v3.3: stubble-brown under wheat (gaps don't read as dark soil)
+  box(g, w, 0.08, d, o.soil ?? (crop === 'wheat' ? '#6E5A36' : '#5A4330'), 0, 0, 0, { cast: false, stat: true });   // v3.5: stubble-brown under wheat (gaps don't read as dark soil)
   const rows = o.rows ?? Math.floor(d / (crop === 'wheat' ? 0.55 : 1.1)), cols = Math.floor(w / (crop === 'corn' ? 0.9 : crop === 'wheat' ? 0.45 : 0.7));
   const im = new THREE.InstancedMesh(_cropG(crop === 'corn' || crop === 'cabbage' ? crop : 'wheat'), _cropMat(crop !== 'cabbage' && CFG.wind !== 0), rows * cols), o3 = new THREE.Object3D(), col = new THREE.Color();
   const cs = (o.colors ?? (crop === 'corn' ? ['#6E8A3A', '#7E9A44', '#8FA04A'] : crop === 'cabbage' ? ['#6FAF5A', '#7FC06A'] : ['#D8B54A', '#C9A43E', '#E2C35A']));
@@ -1622,7 +1622,7 @@ const haybale = (p, x, z, ry = 0) => { const g = stat(grp(p, x, groundH(x, z), z
   return g; };
 // v2.40 vehicle parts: bodies from side profiles with real wheel arches, wheels with rims and tread, lamp pairs as one mesh; fuse() merges the paint work of one vehicle into a few draw calls
 const _vcM = new Map(), _vcMat = (rough = 0.88, metal = 0, env = 1, flat = true) => { const k = [rough, metal, env, flat].join('|'); if (!_vcM.has(k)) _vcM.set(k, envK(new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: flat, roughness: rough, metalness: metal }), env)); return _vcM.get(k); };
-const _vcKind = kind => { const K = CFG.materials !== false ? MATK[kind] ?? {} : {}; return _vcMat(K.rough ?? 0.82, K.metal ?? 0, K.env ?? 1, !K.smooth); };   // v3.3: vertex-coloured part with a material preset
+const _vcKind = kind => { const K = CFG.materials !== false ? MATK[kind] ?? {} : {}; return _vcMat(K.rough ?? 0.82, K.metal ?? 0, K.env ?? 1, !K.smooth); };   // v3.5: vertex-coloured part with a material preset
 const _vcGeo = (key, build) => G('vc' + key, () => { const t = new THREE.Group(), gs = []; build(t); t.updateMatrixWorld(true);   // a small model built from primitives once → one vertex-coloured geometry (shared by every copy)
   t.traverse(o => { if (!o.isMesh) return; const g = o.geometry.index ? o.geometry.toNonIndexed() : o.geometry.clone(); for (const k of Object.keys(g.attributes)) if (k !== 'position' && k !== 'normal') g.deleteAttribute(k); g.applyMatrix4(o.matrixWorld);
     const n = g.attributes.position.count, ca = new Float32Array(n * 3), c = o.material.color; for (let i = 0; i < n; i++) { ca[3 * i] = c.r; ca[3 * i + 1] = c.g; ca[3 * i + 2] = c.b; } g.setAttribute('color', new THREE.BufferAttribute(ca, 3)); gs.push(g); });
@@ -1630,7 +1630,7 @@ const _vcGeo = (key, build) => G('vc' + key, () => { const t = new THREE.Group()
 const _boxesG = list => G('bx' + JSON.stringify(list), () => mergeGeometries(list.map(([w, h, d, x, y, z]) => new THREE.BoxGeometry(w, h, d).translate(x, y, z))));   // several boxes as one geometry (a pair of lamps = one mesh, one material)
 function _vWheel(p, x, z, r, w, o = {}) {   // road wheel in a pivot that spins about x (rotation order YXZ: rotation.y steers); style: alloy | steel | lug (tractor, off-road)
   const pv = grp(p, x, r, z), st = o.style ?? 'alloy', rim = o.rim ?? '#C4CAD2'; pv.rotation.order = 'YXZ'; pv.userData.r = r; pv.userData.keep = true; pv.userData.steer = !!o.steer;
-  const ax = (t, rr, len, c, seg) => cyl(t, rr, rr, len, c, 0, -len / 2, 0, { rz: Math.PI / 2, seg });   // v3.3: rubber tyre and metal rim are two meshes (matte rubber, glossy rim)
+  const ax = (t, rr, len, c, seg) => cyl(t, rr, rr, len, c, 0, -len / 2, 0, { rz: Math.PI / 2, seg });   // v3.5: rubber tyre and metal rim are two meshes (matte rubber, glossy rim)
   const tyre = _vcGeo(`tyre|${r}|${w}|${st}`, t => { ax(t, r, w, '#1F2125', 14); ax(t, r * 0.985, w * 0.5, '#2B2E33', 14).scale.set(1.012, 1, 1.012);   // tyre + a slightly proud tread band
     if (st === 'lug') { const n = Math.max(8, Math.round(TAU * r / 0.3)); for (let i = 0; i < n; i++) { const q = grp(t); q.rotation.x = i / n * TAU; box(q, w * 0.56, 0.07, 0.1, '#17181B', (i % 2 ? 1 : -1) * w * 0.23, r - 0.03, 0, { ry: (i % 2 ? 1 : -1) * 0.5 }); } } });
   const geo = _vcGeo(`rim|${r}|${w}|${st}|${rim}`, t => {
@@ -1640,7 +1640,7 @@ function _vWheel(p, x, z, r, w, o = {}) {   // road wheel in a pivot that spins 
     for (let i = 0; i < 5; i++) { const q = grp(t); q.rotation.x = i / 5 * TAU + 0.3; box(q, w + 0.034, r * 0.58, r * 0.17, rim, 0, r * 0.08, 0); } });
   mesh(pv, tyre, _vcKind('rubber'), 0, 0, 0); mesh(pv, geo, st === 'lug' ? _vcKind('paint') : _vcKind('metal'), 0, 0, 0); return pv;
 }
-// v3.3 _vFinish: before a vehicle is fused, its plain parts get material presets — body colours → lacquer (paint), chrome trim → chrome, grey trim → metal, black trim → plastic.
+// v3.5 _vFinish: before a vehicle is fused, its plain parts get material presets — body colours → lacquer (paint), chrome trim → chrome, grey trim → metal, black trim → plastic.
 //   Only parts still on the engine's default matte material are touched (anything given its own rough / metal keeps it). vehicle({ finish: false }) = old matte look.
 const _vNorm = c => '#' + new THREE.Color(c).getHexString().toUpperCase();
 function _vFinish(root, paints, o = {}) {
@@ -1655,7 +1655,7 @@ function _vFinish(root, paints, o = {}) {
 function vehicle(p, x, z, o = {}) {   // kind: car | sports | taxi | police | van | pickup | bus | truck | tractor — returns { g, wheels, doors, headMat, … } (police: { siren } light bar)
   const kind = o.kind ?? 'car', g = grp(p, x, 0, z, o.ry ?? 0), wheels = [], NC = { cast: false };
   const c = o.color ?? (kind === 'taxi' ? '#F2C230' : kind === 'police' ? '#F2F2F2' : kind === 'bus' ? '#E3B23C' : '#3A7BD5'), c2 = shade(c, -0.09);
-  const head = mat('#FFF6D8', { em: '#FFF2C0', ei: o.lights ?? 0.6, own: true }), tail = mat('#C8202A', { em: '#FF2020', ei: o.lights ?? 0.5 }), dark = '#24272D', fin = o.finish !== false && CFG.materials !== false, glass = fin ? '#7FA3BA' : '#9FC3D9', under = '#1B1D21', chrome = '#C9CED6', amber = '#F29A1F', GL = fin ? { kind: 'glass', cast: false } : { rough: 0.25, cast: false };   // v3.3: glass mirrors the sky
+  const head = mat('#FFF6D8', { em: '#FFF2C0', ei: o.lights ?? 0.6, own: true }), tail = mat('#C8202A', { em: '#FF2020', ei: o.lights ?? 0.5 }), dark = '#24272D', fin = o.finish !== false && CFG.materials !== false, glass = fin ? '#7FA3BA' : '#9FC3D9', under = '#1B1D21', chrome = '#C9CED6', amber = '#F29A1F', GL = fin ? { kind: 'glass', cast: false } : { rough: 0.25, cast: false };   // v3.5: glass mirrors the sky
   const wheel = (wx, wz, r, w, style, rim) => { const pv = _vWheel(g, wx, wz, r, w, { style, rim, steer: wz > 0 }); wheels.push(pv); return pv; };
   const lamps = (m, list) => mesh(g, _boxesG(list), m, 0, 0, 0, NC), pair = (w, h, d, hx, y, zz) => [[w, h, d, -hx, y, zz], [w, h, d, hx, y, zz]];
   const ears = list => { const m = mesh(g, _boxesG(list), mat(dark), 0, 0, 0, NC); m.userData.keep = true; m.userData.noHit = true; return m; };   // mirrors: stick out, but are no obstacle and not part of the crash box
@@ -1832,15 +1832,15 @@ function fly(obj, pts, o = {}) {
 // --- street furniture ---
 function trafficLight(p, x, z, o = {}) {   // pole with arm and a three-lamp head (state: 'green' | 'yellow' | 'red' or t => state)
   const g = stat(grp(p, x, 0, z, o.ry ?? 0)), NC = { cast: false };
-  box(g, 0.14, 4.6, 0.14, '#2A2D33', 0, 0, 0, { kind: 'metal' }); box(g, 0.1, 0.1, 2.2, '#2A2D33', 0, 4.4, 1.1, { kind: 'metal', ...NC }); box(g, 0.36, 1.05, 0.3, '#1E2024', 0, 3.4, 2.1, { kind: 'plastic' });   // v3.3 presets
+  box(g, 0.14, 4.6, 0.14, '#2A2D33', 0, 0, 0, { kind: 'metal' }); box(g, 0.1, 0.1, 2.2, '#2A2D33', 0, 4.4, 1.1, { kind: 'metal', ...NC }); box(g, 0.36, 1.05, 0.3, '#1E2024', 0, 3.4, 2.1, { kind: 'plastic' });   // v3.5 presets
   const on = { red: '#FF3030', yellow: '#FFC020', green: '#30E060' }, st = o.state ?? 'green';
   ['red', 'yellow', 'green'].forEach((k, i) => ball(g, 0.1, '', 0, 4.25 - i * 0.32, 2.27, { detail: 0, mat: mat(st === k ? on[k] : '#3A3A3A', st === k ? { basic: true, glow: 1.2 } : {}), ...NC }));
   return g;
 }
 const bench = (p, x, z, ry = 0) => { const g = stat(grp(p, x, groundH(x, z), z, ry)); box(g, 1.6, 0.08, 0.45, '#8A6A48', 0, 0.45, 0); box(g, 1.6, 0.35, 0.06, '#8A6A48', 0, 0.62, -0.2); for (const sx of [-0.65, 0.65]) box(g, 0.08, 0.45, 0.4, '#2A2D33', sx, 0, 0); return g; };
-const hydrant = (p, x, z) => { const g = stat(grp(p, x, groundH(x, z), z)), P = { kind: 'paint' }; cyl(g, 0.14, 0.16, 0.55, '#D9342B', 0, 0, 0, { seg: 10, ...P }); ball(g, 0.15, '#D9342B', 0, 0.58, 0, { detail: 1, ...P }); cyl(g, 0.06, 0.06, 0.4, '#C02A22', 0, 0.38, 0, { rz: Math.PI / 2, seg: 8, cast: false, ...P }); return g; };   // v3.3 lacquered
+const hydrant = (p, x, z) => { const g = stat(grp(p, x, groundH(x, z), z)), P = { kind: 'paint' }; cyl(g, 0.14, 0.16, 0.55, '#D9342B', 0, 0, 0, { seg: 10, ...P }); ball(g, 0.15, '#D9342B', 0, 0.58, 0, { detail: 1, ...P }); cyl(g, 0.06, 0.06, 0.4, '#C02A22', 0, 0.38, 0, { rz: Math.PI / 2, seg: 8, cast: false, ...P }); return g; };   // v3.5 lacquered
 const trashcan = (p, x, z) => { const g = stat(grp(p, x, groundH(x, z), z)); cyl(g, 0.25, 0.22, 0.85, '#3A5A44', 0, 0, 0, { seg: 10, kind: 'paint', rough: 0.5 }); cyl(g, 0.28, 0.28, 0.06, '#2A2D33', 0, 0.85, 0, { seg: 10, cast: false, kind: 'metal' }); return g; };
-// --- v3.3 light without lights: soft beams (beamMat, beamSpot), light pools on the floor (lightPool) and halos round bulbs (bulbHalo) ---
+// --- v3.5 light without lights: soft beams (beamMat, beamSpot), light pools on the floor (lightPool) and halos round bulbs (bulbHalo) ---
 // Every look is a pure function of t: dust drifts with BEAMT, pools and halos follow the darkness (NIGHTK, set by applySky before the ticks run). CFG.pools: false = no pools / halos.
 const BEAMT = { value: 0 }, POOLK = { value: 0 }, POOLON = { value: 1 };
 tick(t => { BEAMT.value = t; POOLK.value = CFG.pools === false ? 0 : clamp((NIGHTK - 0.12) / 0.6) ** 1.3; });
@@ -1969,7 +1969,7 @@ function _buildHalos() {
   for (const h of HALOS) { if (isDyn(h.a)) { mk([h], h.a, true); continue; } const k = h.night ? 'n' : 'a'; if (!groups.has(k)) groups.set(k, []); groups.get(k).push(h); }
   for (const list of groups.values()) mk(list, world, false);
 }
-function lamp(p, x, z, o = {}) {   // post lamp with base, lantern housing and optional point light; v3.3: light pool on the ground + halo round the bulb at dusk / night (pool: false, halo: false)
+function lamp(p, x, z, o = {}) {   // post lamp with base, lantern housing and optional point light; v3.5: light pool on the ground + halo round the bulb at dusk / night (pool: false, halo: false)
   const g = stat(grp(p, x, groundH(x, z), z)), H = o.h ?? 2.6, MT = { kind: 'metal' };
   box(g, 0.24, 0.3, 0.24, '#2A2D33', 0, 0, 0, MT); box(g, 0.12, H, 0.12, '#2A2D33', 0, 0, 0, MT);
   box(g, 0.34, 0.06, 0.34, '#2A2D33', 0, H - 0.18, 0, { cast: false, ...MT }); box(g, 0.4, 0.08, 0.4, '#2A2D33', 0, H + 0.34, 0, { cast: false, ...MT });
@@ -3149,7 +3149,7 @@ function flashlight(f, o = {}) {
   const t0 = o.t0 ?? 0, t1 = o.t1 ?? 1e9, fa = f.foreR, NC = { cast: false };
   const torch = dyn(grp(fa, 0, -0.42, 0.06)); cyl(torch, 0.05, 0.045, 0.28, '#2A2D33', 0, -0.14, 0, { seg: 8, ...NC }); ball(torch, 0.05, '', 0, -0.17, 0, { mat: mat('#FFF6D0', { basic: true, glow: 2 }), detail: 0, ...NC });
   const sp = new THREE.SpotLight(o.color ?? '#FFF1D0', 0, o.dist ?? 26, o.angle ?? 0.38, 0.55, 1.3); sp.position.set(0, -0.2, 0); torch.add(sp, sp.target); sp.target.position.set(0, -6, 0);
-  const beam = new THREE.Mesh(G('beam', () => new THREE.ConeGeometry(1, 1, 18, 1, true).translate(0, -0.5, 0)), beamMat({ color: '#FFF3C4', k: 0.24, dustScale: 1.6, len: 1.1 })); beam.scale.set(2.2, 6, 2.2); beam.position.y = -0.2; torch.add(beam);   // v3.3 beamMat + spot on the ground
+  const beam = new THREE.Mesh(G('beam', () => new THREE.ConeGeometry(1, 1, 18, 1, true).translate(0, -0.5, 0)), beamMat({ color: '#FFF3C4', k: 0.24, dustScale: 1.6, len: 1.1 })); beam.scale.set(2.2, 6, 2.2); beam.position.y = -0.2; torch.add(beam);   // v3.5 beamMat + spot on the ground
   beamSpot(beam, { axis: [0, -1, 0], tan: 0.36, color: '#FFF3C4', k: 0.5, spot: o.spot });
   f.fx.push((t, S) => { const e = env3(t, t0, t1, 0.3, 0.3); if (!e) return; S.ras = lerp(S.ras, -1.4, e); S.rae = lerp(S.rae, -0.12, e); S.raz = lerp(S.raz, -0.05, e); });
   tick(t => { const on = t >= t0 && t <= t1; torch.visible = on; sp.intensity = on ? (o.intensity ?? 80) * (o.flicker ? 0.85 + 0.15 * noise1(t * 20) : 1) : 0; beam.visible = on; });
@@ -3157,7 +3157,7 @@ function flashlight(f, o = {}) {
 }
 function headlights(v, o = {}) {   // light cones (+ one real spot light unless light: false) and glowing lamps
   const g = v.g ?? v, t0 = o.t0 ?? 0, t1 = o.t1 ?? 1e9, L = v.len ?? 3.8, y = v.lampY ?? 0.62, NC = { cast: false }, cones = [];
-  const bm = beamMat({ color: '#FFF6D8', k: 0.22, dustScale: 1.2, len: 1.0, floorBand: 0.22 });   // v3.3: cones start narrow at the lamp (they were the wrong way round), beamMat, a spot on the road (spot: false = none)
+  const bm = beamMat({ color: '#FFF6D8', k: 0.22, dustScale: 1.2, len: 1.0, floorBand: 0.22 });   // v3.5: cones start narrow at the lamp (they were the wrong way round), beamMat, a spot on the road (spot: false = none)
   for (const sx of [-1, 1]) { const c = new THREE.Mesh(G('hbeam2', () => new THREE.ConeGeometry(1, 1, 18, 1, true).rotateX(-Math.PI / 2).translate(0, 0, 0.5)), bm);
     c.position.set(sx * (v.lampX ?? 0.55), y, (v.front ?? L / 2) + 0.05); c.scale.set(1.6, 1.0, 9); c.rotation.x = 0.09; g.add(c); cones.push(c); beamSpot(c, { axis: [0, 0, 1], tan: 0.16, color: '#FFEFCF', k: 0.2, spot: o.spot }); }
   let sp = null; if (o.light !== false) { sp = new THREE.SpotLight('#FFF1D0', 0, 32, 0.5, 0.6, 1.2); sp.position.set(0, y + 0.05, (v.front ?? L / 2) + 0.2); sp.target.position.set(0, 0, (v.front ?? L / 2) + 12); g.add(sp, sp.target); }
@@ -3820,7 +3820,7 @@ function tower(p, x, z, o = {}) {   // city building with depth: style glass | b
   const w = o.w ?? 6, d = o.d ?? 6, h = o.h ?? 24, g = stat(grp(p, x, 0, z, o.ry ?? 0)), c0 = o.color ?? pick(['#8A94A6', '#A7B0BE', '#6F7A8C', '#C9C1B3', '#5E6B7D', '#B5A48C']), NC = { cast: false };
   const hv = k => hash(x * 13.1 + z * 7.7 + k * 1.9), style = o.style ?? (h < 18 && hv(5) < 0.55 ? 'brick' : ['glass', 'deco', 'brick', 'glass', 'deco'][Math.floor(hv(4) * 5)]);
   const c = style === 'brick' && !o.color ? pick2(['#9C4A36', '#A8583E', '#8A3E30', '#B7704E', '#7E5A48'], hv(6)) : c0, trim = style === 'brick' ? '#D9D2C4' : shade(c, 0.08), deep = shade(c, -0.1);
-  const share = clamp((o.lit ?? (SKY.some(([, n]) => (SKIES[n]?.nk ?? 0) >= 0.5) ? 0.8 : 0)) * 0.6), dark = mat(o.glass ?? '#26324A', { rough: CFG.materials === false ? 0.3 : 0.14, metal: 0.2, kind: 'glass' }), lit = mat(o.glass ?? '#26324A', { em: '#FFD27A', ei: 1.1, rough: CFG.materials === false ? 0.3 : 0.14, kind: 'glass' });   // v3.3 kind glass: panes mirror the sky   // v2.34: windows light up by themselves when the video has a dusk or night, and follow the darkness
+  const share = clamp((o.lit ?? (SKY.some(([, n]) => (SKIES[n]?.nk ?? 0) >= 0.5) ? 0.8 : 0)) * 0.6), dark = mat(o.glass ?? '#26324A', { rough: CFG.materials === false ? 0.3 : 0.14, metal: 0.2, kind: 'glass' }), lit = mat(o.glass ?? '#26324A', { em: '#FFD27A', ei: 1.1, rough: CFG.materials === false ? 0.3 : 0.14, kind: 'glass' });   // v3.5 kind glass: panes mirror the sky   // v2.34: windows light up by themselves when the video has a dusk or night, and follow the darkness
   if (!lit.userData.nightEi) { lit.userData.nightEi = 1.1; lit.userData.dayEi = 0.03; NIGHTMATS.push(lit); }
   const lit2 = mat(o.glass ?? '#26324A', { em: '#D6E4FF', ei: 0.95, rough: CFG.materials === false ? 0.3 : 0.14, kind: 'glass' }); if (!lit2.userData.nightEi) { lit2.userData.nightEi = 0.95; lit2.userData.dayEi = 0.02; NIGHTMATS.push(lit2); }   // v2.40: some offices are lit cool white, most warm   // v2.40: by day a lit window is only a hint (0.1 made them look like brown boards)
   box(g, w, h, d, c, 0, 0, 0, style === 'glass' ? {} : { surf: style === 'brick' ? 'brick' : 'concrete' });
@@ -3900,7 +3900,7 @@ const NIGHTGLOW = [], LEAFSPOTS = [], nightGlowMat = () => NIGHTGLOW[0] ?? (NIGH
 function streetlight(p, x, z, ry = 0, o = {}) {   // tall pole, arm over the road (local +z), lamp head that lights up after dark
   const g = stat(grp(p, x, groundH(x, z), z, ry)), H = o.h ?? 6, NC = { cast: false };
   if (!NIGHTGLOW.length) NIGHTGLOW.push(mat('#FFF1C8', { em: '#FFE2A0', ei: 0, own: true }));
-  const MT = { kind: 'metal' };   // v3.3: metal pole and head; a light pool on the street and a halo under the head after dark (o.pool / o.halo: false = off)
+  const MT = { kind: 'metal' };   // v3.5: metal pole and head; a light pool on the street and a halo under the head after dark (o.pool / o.halo: false = off)
   box(g, 0.3, 0.4, 0.3, '#2A2D33', 0, 0, 0, MT); cyl(g, 0.07, 0.1, H, '#3A3D44', 0, 0, 0, { seg: 8, ...MT }); box(g, 0.08, 0.08, 1.9, '#3A3D44', 0, H - 0.1, 0.9, { ...NC, ...MT });
   box(g, 0.34, 0.14, 0.7, '#2A2D33', 0, H - 0.2, 1.8, { ...NC, ...MT }); box(g, 0.26, 0.04, 0.58, '', 0, H - 0.23, 1.8, { mat: NIGHTGLOW[0], ...NC });
   lightPool(g, 0, 0, 1.8, { r: o.poolR ?? H * 0.85, color: '#FFD9A0', k: 0.5, pool: o.pool, ignore: g }); bulbHalo(g, 0, H - 0.3, 1.8, { size: 0.75, color: '#FFE2A8', k: 0.5, halo: o.halo });
@@ -4133,7 +4133,7 @@ function busstop(p, x, z, ry = 0) {   // shelter (glass back and sides, roof, be
 }
 function city(o = {}) {   // nx × nz blocks of towers (taller in the centre), roads between, street furniture on the sidewalks; returns { loops } for traffic()
   const nx = o.nx ?? 3, nz = o.nz ?? 3, B = o.block ?? 14, S = o.street ?? 6, P = B + S, [cx, cz] = o.at ?? [0, 0];
-  const x0 = cx - (nx * P) / 2, z0 = cz - (nz * P) / 2, loops = []; _dressed = true;   // v3.3: a city is dressed → ground() adds no autoDress
+  const x0 = cx - (nx * P) / 2, z0 = cz - (nz * P) / 2, loops = []; _dressed = true;   // v3.5: a city is dressed → ground() adds no autoDress
   for (let i = 0; i <= nx; i++) road(world, [[x0 + i * P, z0], [x0 + i * P, z0 + nz * P]], { w: S });
   for (let j = 0; j <= nz; j++) road(world, [[x0, z0 + j * P], [x0 + nx * P, z0 + j * P]], { w: S });
   const streetTree = (x, z, s = 1) => { const g = stat(grp(world, x, 0.14, z)), h = hash(x * 3.1 + z * 7.9); box(g, 1.0 * s, 0.3, 1.0 * s, '#8A8C8F'); box(g, 0.86 * s, 0.04, 0.86 * s, '#4A3A2A', 0, 0.3, 0, { cast: false });
@@ -4154,7 +4154,7 @@ function city(o = {}) {   // nx × nz blocks of towers (taller in the centre), r
     if (o.props !== false) {
       const pv = shade(o.walk ?? '#9A9C9F', -0.08), ed2 = B / 2 - 0.55;
       if (CFG.surfaces === false) for (let k = 1; k < B / 1.6; k++) { box(world, 0.05, 0.01, B, pv, bx - B / 2 + k * 1.6, 0.14, bz, { cast: false, stat: true }); box(world, B, 0.01, 0.05, pv, bx, 0.14, bz - B / 2 + k * 1.6, { cast: false, stat: true }); }
-      for (const [sx, sz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) streetlight(world, bx + sx * ed, bz + sz * ed, sx < 0 ? -Math.PI / 2 : Math.PI / 2, { pool: o.pools, halo: o.pools });   // v3.3 city({ pools: false }) = no light pools / halos
+      for (const [sx, sz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) streetlight(world, bx + sx * ed, bz + sz * ed, sx < 0 ? -Math.PI / 2 : Math.PI / 2, { pool: o.pools, halo: o.pools });   // v3.5 city({ pools: false }) = no light pools / halos
       const ts = n === 4 ? 0.6 : 1;
       for (const [sx, sz] of [[0, 1], [0, -1], [1, 0], [-1, 0]]) for (const u of [-0.27, 0.27]) streetTree(bx + (sx ? sx * (B / 2 - 0.75) : u * B), bz + (sz ? sz * (B / 2 - 0.75) : u * B), ts);
       planter(world, bx - 0.1 * B, bz + ed2, 0); planter(world, bx + ed2, bz, Math.PI / 2); planter(world, bx - ed2, bz + 0.1 * B, Math.PI / 2);
@@ -4192,7 +4192,7 @@ function traffic(loops, o = {}) {   // cars driving around closed loops; until: 
 // --- sea & coast ---
 let waterH = () => -999;
 // --- sea: water (sky reflection by fresnel, sun glint, whitecaps, shore foam), underwater (caustics, light shafts, bubbles, plankton), reef (coral, seaweed, kelp), fish schools, shark, jellyfish, diver + swim(), submarine ---
-// v3.3 water look: per-pixel ripples (a sum of travelling waves with real dispersion — a pure function of t, finer waves fade out with distance), a sharp sun glint
+// v3.5 water look: per-pixel ripples (a sum of travelling waves with real dispersion — a pure function of t, finer waves fade out with distance), a sharp sun glint
 // and fresnel sky reflection. Shared by water() (sea, lakes, salt lakes) and waterSurfaceMat() (pools, ponds). water({ ripples: false }) = the old flat facets.
 const WATU = { t: { value: 0 }, sunC: { value: new THREE.Color() } };
 tick(t => { WATU.t.value = t; WATU.sunC.value.copy(sun.color).multiplyScalar(sun.intensity * 0.5 * clamp(skyU.orbDir.value.y * 6)); });
@@ -4216,7 +4216,7 @@ function water(o = {}) {   // animated low-poly sea; level: number or t => numbe
   const col = new Float32Array(n * 3); geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
   const m = mat(o.color ?? '#2F6FA8', { rough: 0.22, metal: 0.05, opacity: o.opacity ?? 0.92, own: true }); m.vertexColors = true; m.color.set('#FFFFFF'); m.side = THREE.DoubleSide;
   const pxFoam = o.foam !== false && CFG.shore !== false, uLvl = { value: 0 };   // v2.35: shore foam per pixel (a clean lapping band along the waterline instead of a few pale triangles)
-  const calm = ampF(0) < 0.15, rip = o.ripples !== false && CFG.ripples !== false;   // v3.3: calm water (lakes, salt pans) gets finer, stronger ripples than the open sea
+  const calm = ampF(0) < 0.15, rip = o.ripples !== false && CFG.ripples !== false;   // v3.5: calm water (lakes, salt pans) gets finer, stronger ripples than the open sea
   const RU = { uRipT: WATU.t, uRipA: { value: typeof o.ripples === 'number' ? o.ripples : calm ? 1 : 0.7 }, uRipS: { value: o.rippleScale ?? (calm ? 1.3 : 2.6) }, uGlint: { value: o.glint ?? 1 }, uSunD: skyU.orbDir, uSunC: WATU.sunC };
   m.onBeforeCompile = sh => { Object.assign(sh.uniforms, { uTop: skyU.top, uBot: skyU.bot, uRefl: { value: o.reflect ?? 0.45 }, uLvl, uWxT: WX.t }, rip ? RU : {});
     sh.vertexShader = 'attribute float gh; varying float vGh; varying vec2 vWxz; varying vec3 vWp3;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n  vGh = gh; vWp3 = (modelMatrix * vec4(transformed, 1.0)).xyz; vWxz = vWp3.xz;');
@@ -4229,7 +4229,7 @@ function water(o = {}) {   // animated low-poly sea; level: number or t => numbe
       { vec3 Vv = normalize(vViewPosition), Nn = normalize(normal); float fr = 0.03 + 0.97 * pow(1.0 - clamp(abs(dot(Nn, Vv)), 0.0, 1.0), 5.0);
         vec3 Rw = (vec4(reflect(-Vv, Nn), 0.0) * viewMatrix).xyz; vec3 sk = mix(uBot, uTop, smoothstep(0.0, 0.7, Rw.y));
         outgoingLight = mix(outgoingLight, sk, clamp(fr * uRefl, 0.0, 0.6)); ${rip ? WATER_GLSL.glint : ''}
-        if (!gl_FrontFacing) { float uwin = smoothstep(0.55, 0.75, clamp(abs(dot(Nn, Vv)), 0.0, 1.0));   // v3.3 seen from under water: the bright window to the sky overhead, the water colour around it
+        if (!gl_FrontFacing) { float uwin = smoothstep(0.55, 0.75, clamp(abs(dot(Nn, Vv)), 0.0, 1.0));   // v3.5 seen from under water: the bright window to the sky overhead, the water colour around it
           outgoingLight = mix(outgoingLight * 0.8, mix(uBot, uTop, 0.5) * 1.35 + vec3(0.04, 0.07, 0.08), uwin * 0.85); } }
       #include <opaque_fragment>`); };
   m.customProgramCacheKey = () => 'water' + (pxFoam ? 'f' : '') + (rip ? 'r' : '');   // the template above differs per option (toString alone would share one program)
@@ -4246,7 +4246,7 @@ function water(o = {}) {   // animated low-poly sea; level: number or t => numbe
     pos.needsUpdate = true; geo.attributes.color.needsUpdate = true; });
   return me;
 }
-// v3.3 waterSurfaceMat({ color, opacity, reflect, ripples, scale, glint, under, rough }) — material for a flat water surface (pool, pond, tank, puddle): rippling normals,
+// v3.5 waterSurfaceMat({ color, opacity, reflect, ripples, scale, glint, under, rough }) — material for a flat water surface (pool, pond, tank, puddle): rippling normals,
 //   fresnel sky reflection, sun glint; seen straight down it is see-through (opacity, default 0.22), at grazing angles a mirror. From below (camera under water):
 //   the bright sky window overhead, the water colour (under) outside it. Put it on a horizontal plane (PlaneGeometry rotated −90° about x).
 //   Returns a MeshStandardMaterial; m.userData.water holds the uniforms (ripples, scale, glint, reflect, opacity can be animated).
@@ -4267,7 +4267,7 @@ function waterSurfaceMat(o = {}) {
       #include <opaque_fragment>`); };
   m.customProgramCacheKey = () => 'waterSurf'; return m;
 }
-// v3.3 pools: everything under a pool's water is seen through the water — tinted (tint) and fading into the deep colour with the length of the way through the water
+// v3.5 pools: everything under a pool's water is seen through the water — tinted (tint) and fading into the deep colour with the length of the way through the water
 //   (exact ray–box test against the pool basin: straight down, through the glass edge or from under water), caustics dance on the floor, the walls and anything in the
 //   water (only below the level), a bright wobbling waterline where the surface meets a wall or a body, walls left wet after a drain. One shader patch on the
 //   materials after bake (POSTBAKE, like underwater caustics), up to 4 pools. Registered by swimPool(); poolWater(g, { lo, hi, level, … }) for other basins.
@@ -4339,12 +4339,12 @@ function causticPatch(m) {   // adds moving caustics to a standard material (wor
         for (int n = 0; n < 4; n++) { float tt = t * (1.0 - 3.5 / float(n + 1)); i = p + vec2(cos(tt - i.x) + sin(tt + i.y), sin(tt - i.y) + cos(tt + i.x)); c += 1.0 / length(vec2(p.x / (sin(i.x + tt) / 0.005), p.y / (cos(i.y + tt) / 0.005))); }
         c /= 4.0; c = 1.17 - pow(c, 1.4); return pow(abs(c), 8.0); }
       ` + sh.fragmentShader.replace('#include <lights_fragment_end>', `#include <lights_fragment_end>
-      if (uCausK > 0.0) { float up = clamp((vec4(normal, 0.0) * viewMatrix).y * 0.7 + 0.3, 0.0, 1.0), cd = max(uCausY - vCWP.y, 0.0), cdk = 1.0 - uCausD * smoothstep(3.0, 45.0, cd);   // v3.3: deeper = darker, weaker caustics
+      if (uCausK > 0.0) { float up = clamp((vec4(normal, 0.0) * viewMatrix).y * 0.7 + 0.3, 0.0, 1.0), cd = max(uCausY - vCWP.y, 0.0), cdk = 1.0 - uCausD * smoothstep(3.0, 45.0, cd);   // v3.5: deeper = darker, weaker caustics
         reflectedLight.directDiffuse = reflectedLight.directDiffuse * cdk + diffuseColor.rgb * uCausK * up * min(causP(vCWP.xz / uCausS, uCausT), 1.4) * 1.6 * mix(1.0, 0.35, smoothstep(4.0, 50.0, cd) * step(0.001, uCausD));
         reflectedLight.indirectDiffuse *= mix(1.0, cdk, 0.7); }`); };
   m.customProgramCacheKey = () => pk + ps + '|caus'; m.needsUpdate = true;
 }
-// v3.3 underwater by itself: SKY 'underwater' | 'deepsea' (at any key) without an underwater() call → added at bake with defaults (CFG.autoUnderwater: false = off):
+// v3.5 underwater by itself: SKY 'underwater' | 'deepsea' (at any key) without an underwater() call → added at bake with defaults (CFG.autoUnderwater: false = off):
 //   caustics, light shafts and marine snow around the camera, a depth gradient behind everything (bright towards the surface, dark below), deeper = darker,
 //   and a sandy seabed under the scene when there is no ground(). Everything fades with the sky: shots above water (SKY switching to 'day') stay dry.
 let UW = null; const _GROUND0 = GROUND, _uwV = new THREE.Vector2();
@@ -4377,7 +4377,7 @@ POSTBAKE.unshift(() => {   // auto underwater (runs first after bake: the scene,
   if (GROUND === _GROUND0) seabed({ y: y0 - 0.8, color: deep ? '#5E6A66' : '#C8B78A', at: bb.isEmpty() ? [0, 0] : [(bb.min.x + bb.max.x) / 2, (bb.min.z + bb.max.z) / 2] });
   underwater({ auto: true, surface, floor: y0, at: bb.isEmpty() ? [0, 0] : [(bb.min.x + bb.max.x) / 2, (bb.min.z + bb.max.z) / 2], plankton: false });
 });
-// seabed({ y, color, size, at, rocks }) — v3.3: sandy sea floor at height y (gentle dunes, ripples, mottling, scattered rocks); auto-underwater adds one when there is no ground()
+// seabed({ y, color, size, at, rocks }) — v3.5: sandy sea floor at height y (gentle dunes, ripples, mottling, scattered rocks); auto-underwater adds one when there is no ground()
 function seabed(o = {}) {
   const y = o.y ?? 0, size = o.size ?? 420, [cx, cz] = o.at ?? [0, 0], geo = new THREE.PlaneGeometry(size, size, 150, 150); geo.rotateX(-Math.PI / 2);
   const p = geo.attributes.position, cols = [], c = new THREE.Color(), base = new THREE.Color(o.color ?? '#C8B78A');
@@ -4390,7 +4390,7 @@ function seabed(o = {}) {
     const b = ball(world, s, shade(o.rock ?? '#6F6A60', (hash(i * 9.1) - 0.5) * 0.2), x, y + 0.25 * noise2(x * 0.14 + 7, z * 0.14 - 3) + 0.7 * noise2(x * 0.035, z * 0.035) + s * 0.25, z, { detail: 0, cast: false }); b.scale.set(1.2, 0.6, 1); b.rotation.y = hash(i) * TAU; }
   return me;
 }
-// marineSnow({ n, box, size, color, opacity, k }) — v3.3: drifting specks around the camera (box m wide, wraps seamlessly, fades at the edges) — always where the shot is.
+// marineSnow({ n, box, size, color, opacity, k }) — v3.5: drifting specks around the camera (box m wide, wraps seamlessly, fades at the edges) — always where the shot is.
 //   Pure function of t and the camera. k: t => 0 … 1 (fade, e.g. with the sky).
 function marineSnow(o = {}) {
   const n = o.n ?? 1400, B = o.box ?? 20, pos = new Float32Array(n * 3), sd = new Float32Array(n);
@@ -4409,7 +4409,7 @@ function marineSnow(o = {}) {
   POSTCAM.push(t => { const k = o.k ? o.k(t) : 1; U.uK.value = k; U.uT.value = t; pts.visible = k > 0.002; });
   return pts;
 }
-// depthGradient({ k, surface }) — v3.3: underwater backdrop around the camera: the fog colour at the horizon, brighter and greener towards the surface, a soft
+// depthGradient({ k, surface }) — v3.5: underwater backdrop around the camera: the fog colour at the horizon, brighter and greener towards the surface, a soft
 //   bright window straight up (shallow water), dark below — replaces the flat one-colour frame. Things far away still fade into the fog colour (same horizon).
 function depthGradient(o = {}) {
   const U = { uFog: { value: new THREE.Color() }, uK: { value: 0 }, uWin: { value: 1 } };
@@ -4433,7 +4433,7 @@ function lightShafts(o = {}) {   // god rays: soft additive beams slanting along
     g.add(s); ms.push([s, m, hash(i * 6.6) * 10, s.position.x, s.position.z]); }
   tick(t => { const d = skyU.orbDir.value, tl = Math.min(0.6, Math.acos(clamp(d.y, -1, 1)) * 0.6), az2 = Math.atan2(d.x, d.z);
     for (const [s, m, ph] of ms) { s.rotation.set(0, 0, 0); s.rotateY(az2); s.rotateX(-tl + 0.05 * Math.sin(t * 0.4 + ph)); m.opacity = (o.opacity ?? 0.08) * (0.6 + 0.4 * Math.sin(t * 0.7 + ph)); } });
-  if (o.follow || o.k) { const sp = o.spread ?? 30;   // v3.3: k: t => 0 … 1 fade (video time) · follow: the beams repeat every spread m around the camera (fading out before they wrap)
+  if (o.follow || o.k) { const sp = o.spread ?? 30;   // v3.5: k: t => 0 … 1 fade (video time) · follow: the beams repeat every spread m around the camera (fading out before they wrap)
     POSTCAM.push(t => { const k = o.k ? o.k(t) : 1; g.visible = k > 0.002; if (!g.visible) return; const cp = camera.position;
       for (const [s, m, , bx, bz] of ms) { let f = k; if (o.follow) { const rx = (((bx - cp.x + sp / 2) % sp) + sp) % sp - sp / 2, rz = (((bz - cp.z + sp / 2) % sp) + sp) % sp - sp / 2;
           s.position.x = cp.x + rx; s.position.z = cp.z + rz; f *= (1 - sm01((Math.max(Math.abs(rx), Math.abs(rz)) / sp - 0.3) / 0.2)) * sm01((Math.hypot(rx, rz) - 3) / 6); } m.opacity *= f; } }); }
@@ -4618,7 +4618,7 @@ function lighthouse(p, x, z, o = {}) {   // striped tower with a rotating light 
     cyl(g, 1.75, 1.75, 0.12, '#2A2D33', 0, h - 0.06, 0, { seg: 12 }); for (let i = 0; i < 12; i++) { const a = i / 12 * TAU; box(g, 0.05, 0.8, 0.05, '#2A2D33', Math.sin(a) * 1.68, h + 0.06, Math.cos(a) * 1.68, NC); }
     cyl(g, 1.72, 1.72, 0.05, '#2A2D33', 0, h + 0.84, 0, { seg: 12, ...NC }); for (let i = 0; i < 6; i++) { const a = i / 6 * TAU; box(g, 0.06, 1.6, 0.06, '#2A2D33', Math.sin(a) * 1.1, h, Math.cos(a) * 1.1, NC); } ball(g, 0.16, '#D9B65C', 0, h + 2.9, 0, { detail: 0, ...NC }); }
   cyl(g, 1.1, 1.1, 1.6, '#FFE9A8', 0, h, 0, { seg: 12, em: '#FFD27A', ei: 1.5 }); cone(g, 1.4, 1.2, '#2A2D33', 0, h + 1.6, 0, { seg: 12 });
-  const beam = dyn(grp(g, 0, h + 0.8, 0)), bm = new THREE.Mesh(G('lhbeam', () => new THREE.CylinderGeometry(0.6, 2.4, 36, 24, 1, true)), beamMat({ color: '#FFE9A8', k: (o.beam ?? 0.05) * 2.6, dustScale: 0.25, len: 1.1 }));   // v3.3 beamMat
+  const beam = dyn(grp(g, 0, h + 0.8, 0)), bm = new THREE.Mesh(G('lhbeam', () => new THREE.CylinderGeometry(0.6, 2.4, 36, 24, 1, true)), beamMat({ color: '#FFE9A8', k: (o.beam ?? 0.05) * 2.6, dustScale: 0.25, len: 1.1 }));   // v3.5 beamMat
   bm.rotation.z = Math.PI / 2; bm.position.x = 20; beam.add(bm); tick(t => { beam.rotation.y = t * 1.2; });
   return { g };
 }
@@ -4735,7 +4735,7 @@ function fuse(root) {   // merge every plain-coloured static mesh below root (no
     if (!B.has(vk)) B.set(vk, { mt, cast: o.castShadow, gs: [], ms: [] }); B.get(vk).gs.push(g); B.get(vk).ms.push([mt, bs.x * bs.y + bs.y * bs.z + bs.x * bs.z]); done.push(o);
   });
   for (const o of done) o.removeFromParent();
-  for (const [vk, b] of B) { const mk = vk.split('|').slice(0, 5).join('|'); let m = _fuseM.get(mk); if (!m) { m = envK(new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: b.mt.flatShading, roughness: b.mt.roughness, metalness: b.mt.metalness, side: b.mt.side }), b.mt.userData.envK ?? 1); _fuseM.set(mk, m); }   // v3.3: env = material preset (kind)
+  for (const [vk, b] of B) { const mk = vk.split('|').slice(0, 5).join('|'); let m = _fuseM.get(mk); if (!m) { m = envK(new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: b.mt.flatShading, roughness: b.mt.roughness, metalness: b.mt.metalness, side: b.mt.side }), b.mt.userData.envK ?? 1); _fuseM.set(mk, m); }   // v3.5: env = material preset (kind)
     const me = new THREE.Mesh(mergeGeometries(b.gs), m); me.castShadow = b.cast; me.receiveShadow = true; me.userData.fmats = b.ms; root.add(me); }   // fmats: the paints that went into this mesh (debris and rubble take their colours from them)
   return root;
 }
@@ -4822,7 +4822,7 @@ function spaceship(p, o = {}) {   // kind: shuttle | capsule | fighter | ufo | c
       const c1 = cone(2.4 * s, beamMat({ color: '#9FFFEA', k: 0.55, soft: 1.1, len: 0.45, dust: 0.5, dustScale: 1.1, floorBand: 0.3 })), c2 = cone(0.9 * s, beamMat({ color: '#FFFFFF', k: 0.42, soft: 1.8, len: 0.7, dust: 0.3, dustScale: 1.6, floorBand: 0.3 })), rings = [0, 1, 2].map(() => { const r = new THREE.Mesh(G('beamring', () => new THREE.TorusGeometry(1, 0.05, 4, 32).rotateX(PI2)), bm); bw.add(r); return r; });
       tick(t => { const on = t >= B0 && t <= B1, e = on ? Math.min(1, (t - B0) / 0.4, (B1 - t) / 0.3) : 0; bw.visible = e > 0.01; const len = L * e; c1.scale.set(1, len, 1); c2.scale.set(1, len, 1);
         rings.forEach((r, j) => { const q = ((t * 0.6 + j / 3) % 1), d = q * len; r.position.y = -d; r.scale.setScalar(Math.max(0.05, 2.4 * s * q)); r.material.opacity = 0.2; }); });
-      beamSpot(c1, { axis: [0, -1, 0], tan: 2.4 * s / L, color: '#9FFFEA', k: 0.6 }); }   // v3.3: soft beam (beamMat) and a glow where it reaches the ground
+      beamSpot(c1, { axis: [0, -1, 0], tan: 2.4 * s / L, color: '#9FFFEA', k: 0.6 }); }   // v3.5: soft beam (beamMat) and a glow where it reaches the ground
   } else if (k === 'cruiser') {   // capital ship: wedge bow, plated hull with spine and trenches, side pods with window rows, turrets, greebles, bridge tower with domes and antennas, hangar glow, engine block with main + manoeuvring engines
     box(b, 3.6, 2.4, 16, c, 0, -1.2, -2); prism(b, 3.6, 9, 2.4, c, 0, 0, 6, { rx: PI2 }); box(b, 2.4, 0.5, 13, lt, 0, 1.2, 0);
     for (let i = 0; i < 12; i++) for (const sx of [-1, 1]) box(b, 0.52, 0.05, 1.2, shade(c, (hash(i * 3.7 + sx) - 0.5) * 0.1), sx * 1.5, 1.2, 5.2 - i * 1.25, NC);
@@ -6856,7 +6856,7 @@ const _fh = (x, z, k = 0) => hash(x * 12.7 + z * 31.3 + k * 7.1);
 const _fc = (x, z, k, arr) => arr[Math.floor(_fh(x, z, k) * arr.length) % arr.length];
 const fg = (p, x, z, ry = 0) => stat(grp(p, x, 0, z, ry));
 const NCs = { cast: false };
-// ---- v3.3 procedural paintings, picture lights, light pools, halls behind doors, rope barriers ----
+// ---- v3.5 procedural paintings, picture lights, light pools, halls behind doors, rope barriers ----
 // paintTex(kind, orient, variant) → cached canvas texture (at most CFG.artMax ≈ 28 different ones, ~7 MB): landscape · portrait · still · sea · abstract · child (crayon drawing).
 //   orient 'L' 256×192 · 'P' 192×256 · 'S' 224×224. Drawn with a seeded generator → the same picture in every frame, worker and render.
 const ART = { tex: new Map(), mats: new Map(), pool: new Map() }, ART_KINDS = ['landscape', 'portrait', 'still', 'sea', 'abstract'];
@@ -7087,7 +7087,7 @@ FURN.plant = (p, x, z, ry = 0, o = {}) => { const g = fg(p, x, z, ry), s = o.siz
   for (let i = 0; i < 9; i++) { const a = i / 9 * TAU, l = (0.35 + 0.3 * _fh(x, i)) * s; const q = grp(g, 0, 0.3 * s, 0, a); box(q, 0.1 * s, 0.015, l, i % 2 ? '#3E8A3A' : '#5AA84A', 0, l * 0.35, l * 0.42, { rx: -0.75 - 0.3 * _fh(z, i), ...NCs }); } return g; };
 FURN.floorLamp = (p, x, z, ry = 0, o = {}) => { const g = fg(p, x, z, ry); cyl(g, 0.16, 0.18, 0.04, '#2A2D33', 0, 0, 0, { seg: 10 }); cyl(g, 0.018, 0.018, 1.5, '#2A2D33', 0, 0.04, 0, { seg: 6 });
   cyl(g, 0.16, 0.24, 0.3, '', 0, 1.42, 0, { mat: mat(o.shade ?? '#F2E2B8', { em: '#FFD58A', ei: o.on === false ? 0 : 0.8 }), seg: 12 }); if (o.light) { g.updateWorldMatrix(true, false); } if (o.light) glow(...g.localToWorld(v3(0, 1.4, 0)).toArray(), { intensity: 12, dist: 7, flicker: 0, color: '#FFD8A0' }); return g; };
-FURN.picture = (p, x, y, z, ry = 0, o = {}) => painting(p, x, y, z, ry, o);   // v3.3: procedural painting (art: 'auto' | kind | false = old flat picture)
+FURN.picture = (p, x, y, z, ry = 0, o = {}) => painting(p, x, y, z, ry, o);   // v3.5: procedural painting (art: 'auto' | kind | false = old flat picture)
 FURN.window = (p, x, y, z, ry = 0, o = {}) => { const g = stat(grp(p, x, y, z, ry)), w = o.w ?? 1.4, h = o.h ?? 1.2, fr = o.frame ?? '#F2F2F0';
   box(g, w, h, 0.02, '', 0, 0, 0, { mat: o.night ? mat('#16233A', { em: '#0A1428', ei: 0.4 }) : mat('#BFE2F6', { em: '#9FD2F2', ei: 0.55, rough: 0.1 }), ...NCs });
   for (const sx of [-1, 1]) box(g, 0.08, h + 0.08, 0.1, fr, sx * (w / 2), -0.04, 0.02); box(g, w + 0.08, 0.08, 0.1, fr, 0, h, 0.02); box(g, w + 0.08, 0.08, 0.1, fr, 0, -0.04, 0.02); box(g, 0.05, h, 0.06, fr, 0, 0, 0.02, NCs); box(g, w, 0.05, 0.06, fr, 0, h / 2, 0.02, NCs);
@@ -7121,7 +7121,7 @@ FURN.microwave = (p, x, z, ry = 0) => { const g = fg(p, x, z, ry); box(g, 0.5, 0
 FURN.appliances = (p, x, z, ry = 0) => { const g = fg(p, x, z, ry);   // kettle, toaster, coffee maker, fruit bowl, cutting board + knife, utensil jar
   cyl(g, 0.08, 0.1, 0.22, '#C9CED4', -0.6, 0.96, 0, { seg: 10, metal: 0.5 }); box(g, 0.02, 0.1, 0.1, '#2A2A2A', -0.5, 1.04, 0, NCs);
   box(g, 0.26, 0.17, 0.16, '#C0392B', -0.25, 0.96, 0.02); box(g, 0.2, 0.01, 0.03, '#2A2A2A', -0.25, 1.13, 0.0, NCs); box(g, 0.24, 0.36, 0.26, '#2A2D33', 0.1, 0.96, -0.05); cyl(g, 0.06, 0.06, 0.1, '#E8E8E8', 0.1, 0.98, 0.07, { seg: 8, ...NCs });
-  fruitBowl(g, 0.45, 0.96, 0.02, { fruit: ['apple', 'orange', 'apple', 'banana', 'apple'] });   // v3.3: real fruit in a glazed bowl (were five faceted balls)
+  fruitBowl(g, 0.45, 0.96, 0.02, { fruit: ['apple', 'orange', 'apple', 'banana', 'apple'] });   // v3.5: real fruit in a glazed bowl (were five faceted balls)
   box(g, 0.36, 0.025, 0.24, '#C9A06A', 0.85, 0.96, 0.05); box(g, 0.22, 0.012, 0.035, '#C9CED4', 0.85, 0.99, 0.08, { ry: 0.3, ...NCs }); cyl(g, 0.06, 0.05, 0.14, '#E8E2D4', 1.1, 0.96, -0.1, { seg: 8 }); for (let i = 0; i < 3; i++) cyl(g, 0.01, 0.01, 0.18, '#5A3A22', 1.1 + (i - 1) * 0.02, 1.06, -0.1, { rz: (i - 1) * 0.15, seg: 4, ...NCs });
   return g; };
 FURN.chair = (p, x, z, ry = 0, o = {}) => { const g = fg(p, x, z, ry), c = o.color ?? '#8A5A34'; box(g, 0.44, 0.04, 0.42, c, 0, 0.44, 0); for (const sx of [-1, 1]) for (const sz of [-1, 1]) box(g, 0.04, 0.44, 0.04, shade(c, -0.1), sx * 0.19, 0, sz * 0.18);
@@ -7206,7 +7206,7 @@ FURN.tires = (p, x, z, ry = 0) => { const g = fg(p, x, z, ry); for (let i = 0; i
 FURN.gascan = (p, x, z, ry = 0) => { const g = fg(p, x, z, ry); box(g, 0.25, 0.32, 0.15, '#C0392B', 0, 0, 0); box(g, 0.14, 0.04, 0.03, '#C0392B', 0, 0.32, 0, NCs); cyl(g, 0.025, 0.025, 0.12, '#E8C66A', 0.08, 0.3, 0, { rz: -0.6, seg: 6, ...NCs }); return g; };
 FURN.counterShop = (p, x, z, ry = 0, o = {}) => { const g = fg(p, x, z, ry), w = o.w ?? 2.4; box(g, w, 1.0, 0.6, '#3A5A8A', 0, 0, 0); box(g, w + 0.05, 0.05, 0.65, '#E8E4DC', 0, 1.0, 0); box(g, 0.4, 0.25, 0.35, '#2A2D33', -w / 2 + 0.4, 1.05, 0); box(g, 0.3, 0.2, 0.03, '', -w / 2 + 0.4, 1.32, 0.05, { mat: mat('#5AE06A', { basic: true, glow: 0.4 }), ...NCs }); return g; };
 FURN.schoolDesk = (p, x, z, ry = 0) => { const g = fg(p, x, z, ry); box(g, 0.7, 0.04, 0.5, '#C9A06A', 0, 0.72, 0); for (const sx of [-1, 1]) box(g, 0.04, 0.72, 0.04, '#5A5E66', sx * 0.3, 0, 0); box(g, 0.3, 0.02, 0.22, '#F6F6F4', 0.05, 0.76, 0.05, { ry: 0.2, ...NCs }); box(g, 0.012, 0.012, 0.16, '#E8C66A', -0.15, 0.77, 0.05, { ry: -0.5, ...NCs }); FURN.chair(g, 0, 0.5, Math.PI, { color: '#5A7A9A' }); return g; };
-// --- v3.3 museum: bench, vitrine (jewelCase), sculpture on a plinth, rope line
+// --- v3.5 museum: bench, vitrine (jewelCase), sculpture on a plinth, rope line
 FURN.museumBench = (p, x, z, ry = 0, o = {}) => { const g = fg(p, x, z, ry), w = o.w ?? 1.9, c = o.color ?? '#2A2422', ST = { mat: mat('#9AA0A6', { rough: 0.35, metal: 0.7 }) };
   for (const sx of [-1, 1]) { box(g, 0.05, 0.36, 0.05, '', sx * (w / 2 - 0.15), 0, -0.18, ST); box(g, 0.05, 0.36, 0.05, '', sx * (w / 2 - 0.15), 0, 0.18, ST); box(g, 0.05, 0.04, 0.42, '', sx * (w / 2 - 0.15), 0, 0, { ...ST, cast: false }); }
   box(g, w - 0.2, 0.04, 0.4, shade(c, 0.1), 0, 0.34, 0); rbox(g, w, 0.11, 0.52, c, 0, 0.37, 0); for (let i = 1; i < 3; i++) box(g, 0.012, 0.005, 0.5, shade(c, -0.15), -w / 2 + i * w / 3, 0.48, 0, NCs);
@@ -7220,7 +7220,7 @@ FURN.sculpture = (p, x, z, ry = 0, o = {}) => { const g = fg(p, x, z, ry), k = o
   else { mesh(g, G('sculKnot', () => new THREE.TorusKnotGeometry(0.17, 0.05, 64, 8, 2, 3)), mat('#8A5A2A', { rough: 0.35, metal: 0.8, flat: false }), 0, ph + 0.28, 0, {}); }
   return g; };
 FURN.ropeLine = (p, x, z, ry = 0, o = {}) => { const g = fg(p, x, z, ry), w = o.w ?? 3, n = Math.max(2, o.n ?? Math.round(w / 1.4) + 1); stanchions(g, Array.from({ length: n }, (_, i) => [-w / 2 + i * w / (n - 1), 0]), o); return g; };
-// --- v3.3 outdoors (plaza): bollard, park bench, litter bin, tree in a planter
+// --- v3.5 outdoors (plaza): bollard, park bench, litter bin, tree in a planter
 FURN.bollard = (p, x, z, ry = 0, o = {}) => { const g = fg(p, x, z, ry), k = o.kind ?? 'iron';
   if (k === 'steel') { const S = { mat: mat('#A8ACB0', { rough: 0.32, metal: 0.75 }) }; cyl(g, 0.1, 0.1, 0.86, '', 0, 0, 0, { ...S, seg: 12 }); cyl(g, 0.101, 0.101, 0.05, '#E8E6DA', 0, 0.68, 0, { seg: 12, em: '#5A5A50', ei: 0.4, cast: false }); cyl(g, 0.06, 0.1, 0.04, '', 0, 0.86, 0, { ...S, seg: 12, cast: false }); }
   else if (k === 'stone') { cyl(g, 0.15, 0.2, 0.62, '#BDB6A8', 0, 0, 0, { seg: 10 }); cyl(g, 0.17, 0.16, 0.06, '#C9C2B4', 0, 0.62, 0, { seg: 10, cast: false }); ball(g, 0.12, '#C9C2B4', 0, 0.7, 0, { detail: 1, cast: false }).scale.y = 0.6; }
@@ -7262,7 +7262,7 @@ const ROOMS = {
     R.put('table', 0.2, 0.7, 0, { w: 1.1, d: 0.7, chairs: false }); R.wallPut('board', 1.9, 1.5, { w: 1.0, h: 0.7, kind: 'map' }); R.beams('#4A504A'); R.bulb(0, 0); R.pipes(); } },
   classroom: { wall: '#E8E0C8', floor: 'wood', items: R => { R.wallPut('board', 0, 1.45, { w: 2.6, h: 1.1, kind: 'chalk' }); R.put('desk', R.w / 2 - 1.2, -R.d / 2 + 1.0, 0, { pc: false, color: '#9A7448' }); for (let i = 0; i < 3; i++) for (let j = 0; j < 2; j++) R.put('schoolDesk', -1.5 + i * 1.5, 0 + j * 1.3); R.ceil(-1, 0); R.ceil(1, 0); } },
   shop:     { wall: '#F2EEE6', floor: 'tiles', items: R => { for (let i = 0; i < 2; i++) R.put('shelf', -1.6 + i * 2.2, -0.6, 0, { kind: 'supplies', w: 1.8 }); R.put('counterShop', R.w / 2 - 1.4, R.d / 2 - 1.0, Math.PI); R.put('fridge', R.w / 2 - 0.45, -R.d / 2 + 0.45, 0, { color: '#DDEFF2' }); R.put('plant', -R.w / 2 + 0.4, R.d / 2 - 0.5); R.ceil(-1, 0); R.ceil(1, 0); } },
-  // v3.3 museum (alias gallery): high walls, spot-lit paintings with light pools, vitrines on plinths behind rope barriers, a bench, a sculpture, a wide doorway into the next room
+  // v3.5 museum (alias gallery): high walls, spot-lit paintings with light pools, vitrines on plinths behind rope barriers, a bench, a sculpture, a wide doorway into the next room
   museum:   { wall: '#7E3530', floor: 'wood', floorColor: '#8C5E36', wallSurf: 'plaster', w: 11, d: 8, h: 4.6, window: false, pics: false, skylight: true, ceil: '#ECE7DC',
     door: { w: 1.8, h: 3.1, open: true, frame: '#C9A24A', hall: { d: 3.4, len: 5.4, style: 'museum' } }, items: R => _museumItems(R) }
 };
@@ -7281,7 +7281,7 @@ function _museumItems(R) {
   if (!mod) R.put('sculpture', -sd * (w / 2 - 0.85), -d / 2 + 0.9, 0, { kind: 'vase' });
 }
 // interior(p, x, z, { kind, w, d, h, ry, y, wall, floor, ceiling, front, closed, hall, door: 'left'|'right'|false, window: 'back'|'high'|false, night, lamps, items }) → R
-//   v3.3: closed: 'auto' (default) → a front wall and a ceiling that only show while the camera is inside the room (cut-away look from outside, no sky or grass from inside);
+//   v3.5: closed: 'auto' (default) → a front wall and a ceiling that only show while the camera is inside the room (cut-away look from outside, no sky or grass from inside);
 //   true = always closed, false = old open dollhouse. hall: false = no lit hall behind the door (the old dark door slab).
 const ROOMVIS = [], _rvC = new THREE.Vector3();
 function roomVis(cam) {   // pure function of the camera: which camera-aware room shells show (POSTCAM + before every render: split screen, cover camera)
@@ -7295,7 +7295,7 @@ function _roomVisInit() { if (_roomVisInit.on) return; _roomVisInit.on = true; P
 function interior(p, x, z, o = {}) {
   const kind = o.kind ?? 'living', K = ROOMS[kind] ?? ROOMS.living, w = o.w ?? K.w ?? 7, d = o.d ?? K.d ?? 6, h = o.h ?? K.h ?? 2.8, ry = o.ry ?? 0, g = stat(grp(p, x, groundH(x, z) + (o.y ?? 0), z, ry));
   const wc = o.wall ?? K.wall, fl = o.floor ?? K.floor, NC = { cast: false }, R = { g, w, d, h, kind, o, K, seats: {}, anchors: {}, lamps: [], paintings: [], cases: [], _flush: [] };
-  if (p === world) DUSTROOMS.push([x, groundH(x, z) + (o.y ?? 0), z, w, d, h, ry]);   // v3.3: dust in the air while the camera is in this room
+  if (p === world) DUSTROOMS.push([x, groundH(x, z) + (o.y ?? 0), z, w, d, h, ry]);   // v3.5: dust in the air while the camera is in this room
   // floor
   const fc = o.floorColor ?? K.floorColor ?? { wood: '#B5834E', tiles: '#E8E4DC', carpet: '#7A8A9A', concrete: '#8E8A84', metal: '#5A605A' }[fl] ?? '#B5834E';
   const SF = CFG.surfaces !== false, fs = o.floorSurf ?? { wood: 'boards', tiles: 'tiles', carpet: 'carpet', concrete: 'concrete', metal: 'metal' }[fl], ws = o.wallSurf ?? K.wallSurf ?? (kind === 'cellar' ? 'brick' : { wood: 'wallpaper', carpet: 'plaster', tiles: 'plaster', concrete: 'concrete', metal: 'concrete' }[fl]);   // v2.35: floors and walls get a surface (boards, tiles, carpet, wallpaper …)
@@ -7304,7 +7304,7 @@ function interior(p, x, z, o = {}) {
   if (!SF && fl === 'tiles') for (let i = 0; i < w / 0.4; i++) for (let j = 0; j < d / 0.4; j++) if ((i + j) % 2) box(g, 0.4, 0.003, 0.4, shade(fc, -0.1), -w / 2 + 0.2 + i * 0.4, 0, -d / 2 + 0.2 + j * 0.4, NC);
   if (fl === 'concrete') for (let i = 0; i < 9; i++) box(g, 0.5 + _fh(x, i) * 1.4, 0.003, 0.3 + _fh(z, i) * 1.0, shade(fc, (_fh(i, x) - 0.5) * 0.12), (_fh(i, 3) - 0.5) * (w - 1.5), 0, (_fh(i, 7) - 0.5) * (d - 1.2), NC);
   if (fl === 'metal') for (let i = 0; i < w / 1.2; i++) box(g, 0.01, 0.003, d, shade(fc, -0.15), -w / 2 + i * 1.2, 0, 0, NC);
-  // walls: back, left, right (front and ceiling: see closed below). v3.3: the door wall has a real opening (hole) with a lit hall behind it
+  // walls: back, left, right (front and ceiling: see closed below). v3.5: the door wall has a real opening (hole) with a lit hall behind it
   const walls = { back: o.back !== false, left: o.left !== false, right: o.right !== false, front: !!o.front }, ds0 = o.door ?? K.door?.side ?? (kind === 'cellar' || kind === 'bunker' ? 'right' : 'left');
   const KD = K.door ?? {}, DW = o.doorW ?? KD.w ?? 0.92, DH = Math.min(h - 0.25, o.doorH ?? KD.h ?? 2.12), dz = o.doorZ ?? (KD.w ? d / 2 - 0.6 - DW / 2 : d / 2 - 1.1), sxd = ds0 === 'left' ? -1 : 1;
   const hasDoor = !!ds0 && (ds0 === 'left' ? walls.left : walls.right), hallOn = hasDoor && o.hall !== false && CFG.halls !== false, hole = hallOn ? { c: sxd * dz, w: DW, h: DH } : null;
@@ -7312,7 +7312,7 @@ function interior(p, x, z, o = {}) {
   const wall = (W, cx, cz, rot, side, hl) => { const q = grp(g, cx, 0, cz, rot), segs = hl ? [[-W / 2, hl.c - hl.w / 2], [hl.c + hl.w / 2, W / 2]] : [[-W / 2, W / 2]], SW = { surf: ws || undefined, indoor: true };
     const run = (y, hh, zz, dd, c, oo) => { for (const [a, b] of segs) if (b - a > 0.005) box(q, b - a, hh, dd, c, (a + b) / 2, y, zz, oo); }, inHole = (u, m = 0) => !!hl && Math.abs(u - hl.c) < hl.w / 2 + m;
     if (!hl) box(q, W, h, 0.14, wc, 0, 0, 0, SW);
-    else { const a = hl.c - hl.w / 2, b = hl.c + hl.w / 2, hh = Math.min(hl.h, h - 0.01);   // v3.3: one extruded piece with the door cut out (separate boxes left shadow-acne lines along their seams)
+    else { const a = hl.c - hl.w / 2, b = hl.c + hl.w / 2, hh = Math.min(hl.h, h - 0.01);   // v3.5: one extruded piece with the door cut out (separate boxes left shadow-acne lines along their seams)
       mesh(q, G(`wHole${W.toFixed(3)}|${h}|${a.toFixed(3)}|${b.toFixed(3)}|${hh}`, () => { const s = new THREE.Shape(); s.moveTo(-W / 2, 0); s.lineTo(a, 0); s.lineTo(a, hh); s.lineTo(b, hh); s.lineTo(b, 0); s.lineTo(W / 2, 0); s.lineTo(W / 2, h); s.lineTo(-W / 2, h); s.closePath();
         const geo = new THREE.ExtrudeGeometry(s, { depth: 0.14, bevelEnabled: false }); geo.translate(0, 0, -0.07); return geo; }), mat(wc, SW), 0, 0, 0, {}); box(q, hl.w + 0.02, 0.058, 0.18, shade(fc, -0.12), hl.c, -0.05, 0, { recv: true, cast: false }); }   // threshold across the wall: no ground showing under the opening
     run(0, 0.12, 0.085, 0.03, shade(wc, -0.25), NC); run(0.12, 0.015, 0.085, 0.04, shade(wc, -0.32), NC);
@@ -7332,7 +7332,7 @@ function interior(p, x, z, o = {}) {
   // door (side wall), window (back wall)
   if (hasDoor) { const sx = sxd, fr = grp(g, sx * (w / 2 + 0.02), 0, dz, -sx * Math.PI / 2), open = !!(o.doorway ?? KD.open), jc = KD.frame ?? '#F2F2F0', jm = KD.frame ? { mat: mat(jc, { rough: 0.3, metal: 0.8 }) } : {};
     if (!hallOn) box(fr, 1.0, 2.15, 0.16, kind === 'bunker' ? '#3A3D44' : '#2A2018', 0, 0, 0, NC);   // no hall: the old dark door slab
-    const fdp = hallOn ? 0.26 : 0.2, fzc = hallOn ? -0.005 : 0.02; for (const s2 of [-1, 1]) box(fr, 0.08, DH + 0.08, fdp, jc, s2 * (DW / 2 + 0.04), 0, fzc, jm); box(fr, DW + 0.16, 0.08, fdp, jc, 0, DH, fzc, jm);   // v3.3: the casing wraps the whole reveal
+    const fdp = hallOn ? 0.26 : 0.2, fzc = hallOn ? -0.005 : 0.02; for (const s2 of [-1, 1]) box(fr, 0.08, DH + 0.08, fdp, jc, s2 * (DW / 2 + 0.04), 0, fzc, jm); box(fr, DW + 0.16, 0.08, fdp, jc, 0, DH, fzc, jm);   // v3.5: the casing wraps the whole reveal
     if (!open) { const pv = dyn(grp(fr, -DW / 2, 0, 0.06)); pv.userData.angle = 1.4; box(pv, DW, DH - 0.02, 0.05, kind === 'bunker' ? '#5A605A' : '#9A6A44', DW / 2, 0.02, 0); box(pv, DW - 0.12, 0.85, 0.01, kind === 'bunker' ? '#4A504A' : '#8A5A38', DW / 2, 1.1, 0.03, NC);
       ball(pv, 0.035, '#C9A64A', DW - 0.1, 1.0, 0.07, { detail: 0, ...NC }); R.door = pv; R.doors = [pv]; } else R.doors = [];
     box(fr, 0.08, 0.12, 0.014, '#F4F2EC', DW / 2 + 0.26, 1.1, 0.075, NC); box(fr, 0.03, 0.05, 0.02, '#D8D6D0', DW / 2 + 0.26, 1.135, 0.075, NC); if (!open && SF && fl !== 'concrete' && fl !== 'metal') box(g, 0.75, 0.012, 0.45, '#6A5A48', sx * (w / 2 - 0.5), 0, dz, { surf: 'carpet', indoor: true, ...NC });   // v2.35: light switch, doormat
@@ -7346,17 +7346,17 @@ function interior(p, x, z, o = {}) {
   // helpers used by the room recipes
   R.put = (name, lx, lz, lry = 0, oo = {}) => { const it = FURN[name](g, lx, lz, lry, oo); if (it?.userData?.seats) R.seats[name] = (R.seats[name] ?? []).concat(it.userData.seats.map(s => [lx + Math.cos(lry) * s[0] + Math.sin(lry) * s[2], s[1], lz - Math.sin(lry) * s[0] + Math.cos(lry) * s[2]])); R.anchors[name] ??= [lx, 0, lz]; R.items = (R.items ?? []).concat({ name, it }); if (name === 'tv') R.tv = it; if (name === 'fridge') R.fridge = it; if (name === 'bed') R.bed = it; if (it?.userData?.case) R.cases.push(it.userData.case); return it; };
   R.wallPut = (name, lx, y, oo = {}) => walls.back ? FURN[name](R.backW, lx, y, 0.08, 0, oo) : null;
-  // v3.3 R.art(wall, u, y, { w, h, art, lit, spot }): painting on 'back' (u = x) or 'left' / 'right' (u = z); spot: picture lamp + light pool on the wall, small label
+  // v3.5 R.art(wall, u, y, { w, h, art, lit, spot }): painting on 'back' (u = x) or 'left' / 'right' (u = z); spot: picture lamp + light pool on the wall, small label
   R.art = (side, u, y, oo = {}) => { const q = { back: R.backW, left: R.leftW, right: R.rightW, front: R.frontW }[side]; if (!q) return null; const lx = side === 'left' ? -u : u, pw = oo.w ?? 0.9, ph = oo.h ?? 0.7;
     const P = painting(q, lx, y, 0.085, 0, oo); R.paintings.push(P);
     if (oo.spot) { pictureLight(q, lx, y + ph + 0.14, 0.07, 0, { w: pw }); glowDecal(q, lx, y + ph * 0.5 + 0.05, 0.074, 0, { kind: 'cone', w: Math.max(1.2, pw * 1.75), h: ph + 1.15, i: oo.pool ?? 0.3 }); box(q, 0.16, 0.1, 0.01, '#F2EEE4', lx + pw / 2 + 0.24, 1.3, 0.075, NC); }
     return P; };
   R.rope = (pts, oo) => stanchions(g, pts, oo);
-  R.ceil = (lx, lz) => { if (o.ceilingLamp === false) return; if (!(o.ceiling || o.lamps)) { R._flush.push([lx, lz]); return; } const L = FURN.ceilingLamp(g, lx, h, lz, { on: o.lamp !== false }); R.lamps.push(L); };   // v3.3: without a hanging lamp the camera-aware ceiling gets a flush light there
+  R.ceil = (lx, lz) => { if (o.ceilingLamp === false) return; if (!(o.ceiling || o.lamps)) { R._flush.push([lx, lz]); return; } const L = FURN.ceilingLamp(g, lx, h, lz, { on: o.lamp !== false }); R.lamps.push(L); };   // v3.5: without a hanging lamp the camera-aware ceiling gets a flush light there
   R.beams = c => { for (const bz of [-d / 4, d / 4]) box(g, w + 0.2, 0.22, 0.18, c, 0, h - 0.22, bz); };
   R.bulb = (lx, lz) => { R.lamps.push(FURN.bulb(g, lx, h - 0.22, lz < 0 ? -d / 4 : d / 4)); };
   R.pipes = () => { for (const [py, pc] of [[h - 0.18, '#8A8F96'], [h - 0.32, '#B87333']]) cyl(g, 0.05, 0.05, w, pc, 0, py - w / 2, -d / 2 + 0.2, { rz: Math.PI / 2, seg: 8, metal: 0.4 }); };   // v2.40: were w/2 above the ceiling
-  // v3.3 camera-aware shell: front wall (here, so recipes can hang things on it: R.art('front', …)) + ceiling (after the recipe: flush lights); no shadows, not merged,
+  // v3.5 camera-aware shell: front wall (here, so recipes can hang things on it: R.art('front', …)) + ceiling (after the recipe: flush lights); no shadows, not merged,
   //   visible only while the camera is inside (closed: 'auto'), always (true) or never (false)
   const cl = o.closed ?? CFG.closedRooms ?? 'auto', V = { g, w, d, h, front: null, ceil: null, mats: [], fade: o.ceilFade ?? 1.0 }, fix = cl === true;
   if (cl !== false && !walls.front) { const q = dyn(wall(w + 0.28, 0, d / 2 + 0.07, Math.PI, 'front')); const fwn = o.frontWindow ?? (kind === 'cellar' ? 'high' : kind === 'bunker' || kind === 'garage' || K.window === false ? false : true);
@@ -7382,7 +7382,7 @@ function interior(p, x, z, o = {}) {
 }
 
 /* ====================================================================== */
-/* PLAZA (v3.3) — plaza(p, x, z, { w, d, ry, style }) paved city square with curbs, gutters, drains, bollards, benches, lamps, bins, trees in planters, fountain */
+/* PLAZA (v3.5) — plaza(p, x, z, { w, d, ry, style }) paved city square with curbs, gutters, drains, bollards, benches, lamps, bins, trees in planters, fountain */
 /* ====================================================================== */
 // fountain(p, x, z, { r: 2.2, y, color, jets: 8, water }) → F: moulded stone basin, rippling water, pedestal bowl with an overflowing veil, arcs of droplets (instanced; pure function of t).
 //   F.seats: places on the rim (sit), F.at() = top of the jet
@@ -9243,7 +9243,7 @@ function archiveDesk(p, x, z, o = {}) {   // v2.47: 1950s archive corner: desk w
   return { g, folder: fo, page };
 }
 function swimPool(p, x, z, o = {}) {   // v2.46: raised terrace with an infinity pool (villa on a slope): pool w × d (x × z), deck top at h, water up to level; infinity glass edge on the +z side (P.wall: breakApart it); drain: [t0, t1] empties the pool; returns { g, wall, level(t), top, w, d, surface }
-  // v3.3: real water — rippling surface with sky reflection and sun glint (waterSurfaceMat), everything under water tinted by the depth it is seen through, caustics on
+  // v3.5: real water — rippling surface with sky reflection and sun glint (waterSurfaceMat), everything under water tinted by the depth it is seen through, caustics on
   //   floor, walls and swimmers (poolWater), tiled basin (lane line, drain grate) with a dark mosaic waterline band, stone coping, ladder with steps.
   //   o.water: { color, deep, tint, opacity, ripples, scale, dens } | false (no water) · o.tiles: false = plain colours · o.lanes: false · tileColor, bandColor, copingColor
   const w = o.w ?? 4.5, d = o.d ?? 10, H = o.h ?? 1.9, m = o.deck ?? 3, g = stat(grp(p ?? world, x, 0, z, o.ry ?? 0)), NC = { cast: false }, deck = o.deckColor ?? '#E8DCC8', stone = o.wallColor ?? '#CFC2AA';
@@ -9924,7 +9924,7 @@ function heli2(p, o = {}) {
     rotor(0, 1.6, 0.2, atk ? 6.2 : 5.4, atk ? 4 : 4); const tr = dyn(grp(B, 0.22, 1.0, -5.8)); for (let i = 0; i < 3; i++) { const q = grp(tr); q.rotation.x = i * TAU / 3; box(q, 0.04, 1.0, 0.16, '#2A2D33', 0, 0, 0, NC); } H.props.push({ pr: tr, rpm: 48, axis: 'x' });
     if (!atk) { for (const sx of [-1, 1]) { box(B, 0.08, 0.08, 3.2, '#2A2D33', sx * 0.9, -1.4, 0.3, NC); for (const zz of [-0.4, 1.0]) _seg(B, [sx * 0.65, -0.8, zz], [sx * 0.9, -1.38, zz], 0.04, 0.04, '#2A2D33', NC); } box(B, 0.04, 0.5, 0.9, '#1E2C40', 1.13, 0.1, 0.0, NC); box(B, 0.04, 0.5, 0.9, '#1E2C40', -1.13, 0.1, 0.0, NC); }
     else for (const [x, z] of [[-0.7, 1.0], [0.7, 1.0], [0, -4.9]]) { cyl(B, 0.04, 0.04, 0.6, metal, x, -1.3, z, NC); cyl(B, 0.22, 0.22, 0.18, '#1E1E1E', x, -1.3, z, { rz: Math.PI / 2, seg: 10 }); }
-    if (k === 'police') { box(B, 2.25, 0.18, 1.2, '#F2F2F2', 0, -0.15, 0.4, NC); const sp2 = dyn(grp(B, 0.6, -0.95, 1.2)); cyl(sp2, 0.18, 0.22, 0.3, metal, 0, 0, 0, { rx: Math.PI / 2, ...NC }); H.spot = sp2; const bm = new THREE.Mesh(G('hlbeam', () => new THREE.ConeGeometry(3, 30, 20, 1, true).translate(0, -15, 0)), beamMat({ color: '#FFF4C8', k: (o.beam ?? 0.06) * 2.6, dustScale: 0.5 })); sp2.add(bm); beamSpot(bm, { axis: [0, -1, 0], len: 30, tan: 0.1, color: '#FFF4C8', k: 0.35 }); }   // v3.3 beamMat + spot
+    if (k === 'police') { box(B, 2.25, 0.18, 1.2, '#F2F2F2', 0, -0.15, 0.4, NC); const sp2 = dyn(grp(B, 0.6, -0.95, 1.2)); cyl(sp2, 0.18, 0.22, 0.3, metal, 0, 0, 0, { rx: Math.PI / 2, ...NC }); H.spot = sp2; const bm = new THREE.Mesh(G('hlbeam', () => new THREE.ConeGeometry(3, 30, 20, 1, true).translate(0, -15, 0)), beamMat({ color: '#FFF4C8', k: (o.beam ?? 0.06) * 2.6, dustScale: 0.5 })); sp2.add(bm); beamSpot(bm, { axis: [0, -1, 0], len: 30, tan: 0.1, color: '#FFF4C8', k: 0.35 }); }   // v3.5 beamMat + spot
     if (k === 'news') box(B, 2.32, 0.4, 0.8, '#F2F2F2', 0, 0.0, -0.3, NC);
     if (k === 'rescue') { box(B, 2.32, 0.25, 2.0, '#F2F2F2', 0, -0.1, 0.2, NC); box(B, 0.4, 0.3, 0.6, metal, 1.2, 0.9, 0.6); const wn = dyn(grp(B, 1.45, 0.85, 0.6)); H.winch = wn; const cab = box(wn, 0.03, 1, 0.03, '#141414', 0, -1, 0, NC); H.cable = cab; cab.userData.keep = true; const hook = ball(wn, 0.12, '#E3B23C', 0, -1, 0, { detail: 0, ...NC }); H.hook = hook; hook.userData.keep = true; } }
   box(B, 0.08, 0.08, 0.08, '', 1.3, 0, 0, { mat: mat('#30FF60', { basic: true, glow: 1 }), ...NC }); box(B, 0.08, 0.08, 0.08, '', -1.3, 0, 0, { mat: mat('#FF3030', { basic: true, glow: 1 }), ...NC }); const bc = ball(B, 0.1, '', 0, k === 'transport' ? 2.2 : 1.1, -1, { mat: mat('#FF4030', { basic: true, glow: 2.5 }), detail: 0, ...NC });
@@ -10429,7 +10429,7 @@ const FD = (() => {
       return { r: 0.05, w: 0.1, h: 0.18 + cols.length * 0.07, inner: cols[0], drips: cols[0], top: 0.165 + (cols.length - 1) * 0.07 + 0.05 }; },
     popcorn: (b) => { cyl(b, 0.09, 0.065, 0.2, '#F4F1E8', 0, 0, 0, { seg: 16 }); for (let i = 0; i < 8; i++) { const a = i / 8 * TAU, q = box(b, 0.035, 0.2, 0.004, '#D8342A', Math.cos(a) * 0.079, 0, Math.sin(a) * 0.079, NC); q.rotation.y = -a + Math.PI / 2; q.rotation.z = 0.12 * 0; }
       for (let i = 0; i < 30; i++) { const a = hash(i) * TAU, r = 0.08 * Math.sqrt(hash(i * 3.1)); ball(b, 0.018, hash(i * 7) > 0.3 ? '#FFF6D8' : '#F7D27A', Math.cos(a) * r, 0.205 + 0.03 * hash(i * 5) * (1 - r / 0.09), Math.sin(a) * r, { detail: 0, ...NC }); } return { r: 0.09, w: 0.18, h: 0.24, inner: '#FFF6D8' }; },
-    apple: (b, o) => { mesh(b, G('appleL', () => new THREE.LatheGeometry([[0, 0.007], [0.012, 0.003], [0.026, 0.004], [0.037, 0.014], [0.043, 0.03], [0.044, 0.045], [0.04, 0.06], [0.031, 0.072], [0.019, 0.078], [0.009, 0.075], [0.002, 0.068], [0, 0.067]].map(([r, y]) => new THREE.Vector2(r, y)), 22)), mat(o.color ?? '#D8283A', FD.WAX), 0, 0, 0); /* v3.3: lathe apple with dimples, smooth and waxy (was a faceted ball) */ cyl(b, 0.003, 0.004, 0.025, '#5A3A1E', 0, 0.075, 0, { rz: 0.2, seg: 5 }); box(b, 0.025, 0.003, 0.012, '#3E8E3A', 0.01, 0.092, 0, { rz: 0.5, ...NC }); return { r: 0.042, w: 0.084, h: 0.08, inner: '#F7EDC8' }; },
+    apple: (b, o) => { mesh(b, G('appleL', () => new THREE.LatheGeometry([[0, 0.007], [0.012, 0.003], [0.026, 0.004], [0.037, 0.014], [0.043, 0.03], [0.044, 0.045], [0.04, 0.06], [0.031, 0.072], [0.019, 0.078], [0.009, 0.075], [0.002, 0.068], [0, 0.067]].map(([r, y]) => new THREE.Vector2(r, y)), 22)), mat(o.color ?? '#D8283A', FD.WAX), 0, 0, 0); /* v3.5: lathe apple with dimples, smooth and waxy (was a faceted ball) */ cyl(b, 0.003, 0.004, 0.025, '#5A3A1E', 0, 0.075, 0, { rz: 0.2, seg: 5 }); box(b, 0.025, 0.003, 0.012, '#3E8E3A', 0.01, 0.092, 0, { rz: 0.5, ...NC }); return { r: 0.042, w: 0.084, h: 0.08, inner: '#F7EDC8' }; },
     orange: (b) => { _ell(b, '#F28A1A', 0, 0.038, 0, 0.038, 0.037, 0.038, { detail: 3, kind: 'plastic', rough: 0.62, env: 1.1 }); box(b, 0.008, 0.004, 0.008, '#3E6A2A', 0, 0.074, 0, NC); return { r: 0.038, w: 0.076, h: 0.075, inner: '#F7B03A' }; },
     banana: (b) => { const P = [[0, 0.03, -0.09], [0, 0.02, -0.04], [0, 0.017, 0.01], [0, 0.022, 0.06], [0, 0.04, 0.1]]; _chain(b, P, 0.017, 0.012, '#F7D23A'); cyl(b, 0.005, 0.006, 0.02, '#5A4A2A', 0, 0.035, -0.105, { rx: 0.9, seg: 5 }); return { r: 0.1, w: 0.04, h: 0.05, inner: '#FFF4C8' }; },
     watermelon: (b) => { const sh = [[0, 0], [0.11, -0.06], [-0.11, -0.06]]; void sh; const w = mesh(b, G('melon', () => new THREE.CylinderGeometry(0.12, 0.12, 0.035, 16, 1, false, Math.PI * 0.75, Math.PI * 0.5)), mat('#E8404A'), 0, 0.06, 0, { rx: Math.PI / 2 });
@@ -10477,7 +10477,7 @@ const FD = (() => {
     spaghetti: (b) => { cyl(b, 0.11, 0.07, 0.04, '#F8F6F2', 0, 0, 0, { seg: 18 }); for (let i = 0; i < 9; i++) mesh(b, G('spag', () => new THREE.TorusGeometry(0.035, 0.005, 4, 12)), mat('#F2D27A'), (hash(i) - 0.5) * 0.08, 0.045 + 0.01 * hash(i * 2), (hash(i * 3) - 0.5) * 0.08, { rx: hash(i * 4) * 3, ry: hash(i * 5) * 3, cast: false });
       const s = ball(b, 0.05, '#C8402A', 0, 0.06, 0, { detail: 1 }); s.scale.set(1, 0.35, 1); for (let i = 0; i < 3; i++) ball(b, 0.016, '#7A3A22', (i - 1) * 0.03, 0.075, 0.01, { detail: 1 }); return { r: 0.11, w: 0.22, h: 0.08, inner: '#F2D27A', splat: '#C8402A' }; },
   };
-  return { B, NC, WAX: { kind: 'plastic', rough: 0.45, env: 1.3 } };   // v3.3 WAX: smooth, a little waxy sheen (apples, grapes)
+  return { B, NC, WAX: { kind: 'plastic', rough: 0.45, env: 1.3 } };   // v3.5 WAX: smooth, a little waxy sheen (apples, grapes)
 })();
 // fruitBowl(p, x, y, z, { color, fruit: [kind…], scale }) — glazed ceramic bowl heaped with fruit (apples, orange, banana, grapes); static (baked), y = table top
 function fruitBowl(p, x, y, z, o = {}) {
@@ -10975,7 +10975,7 @@ function museumGallery(p, x, z, o = {}) {
   box(g, 0.03, H - 1.6, L, '#7A2C2A', oi + side * 0.015, 1.15, 0, { surf: 'wallpaper', ...IN });
   const pal = ['#3E4A5A', '#5A4632', '#2F4A3A', '#6A3A2E', '#4A3E5A', '#556B7A'], nP = Math.max(2, Math.floor(L / 4.6));
   for (let i = 0; i < nP; i++) { const zc = -L / 2 + (i + 0.5) * L / nP, pw = 2.3 + 0.4 * hash(i * 3.1), phh = 1.7 + 0.6 * hash(i * 5.3), py = 2.0 + (2.3 - phh) / 2, c = pal[i % pal.length];
-    if (o.paintings !== false && CFG.paintings !== false) {   // v3.3: procedural paintings, each with a picture lamp and a cone of light on the damask
+    if (o.paintings !== false && CFG.paintings !== false) {   // v3.5: procedural paintings, each with a picture lamp and a cone of light on the damask
       const pr = side * Math.PI / 2, wx2 = oi + side * 0.03; M.paintings ??= []; M.paintings.push(painting(g, wx2 + side * 0.015, py - 0.12, zc, pr, { w: pw + 0.24, h: phh + 0.24, art: i % 2 ? 'portrait' : 'landscape', frame: 'gold', lit: 0.25 }));
       pictureLight(g, wx2, py + phh + 0.26, zc, pr, { w: pw }); glowDecal(g, wx2 + side * 0.004, py + phh * 0.5, zc, pr, { kind: 'cone', w: pw * 1.8, h: phh + 1.5, i: 0.28 });
     } else {
@@ -10993,13 +10993,13 @@ function museumGallery(p, x, z, o = {}) {
     if (i < nP - 1) box(g, 0.08, H - 1.3, 0.32, '', oi + side * 0.06, 1.1, zc + L / nP / 2, { mat: gold, ...NC }); }
   // end walls: big tapestry at −z, doorway at +z
   box(g, W + 0.9, H, 0.4, cream, 0, 0, -L / 2 - 0.2, { surf: 'plaster', ...IN });
-  if (o.paintings !== false && CFG.paintings !== false) { painting(g, 0, 1.4, -L / 2 + 0.015, 0, { w: 3.4, h: 3.4, art: 'landscape', frame: 'gold', lit: 0.25 }); pictureLight(g, 0, 4.95, -L / 2, 0, { w: 3.1 }); glowDecal(g, 0, 3.1, -L / 2 + 0.004, 0, { kind: 'cone', w: 5.4, h: 4.4, i: 0.28 }); }   // v3.3: a big painted landscape (was colour blocks)
+  if (o.paintings !== false && CFG.paintings !== false) { painting(g, 0, 1.4, -L / 2 + 0.015, 0, { w: 3.4, h: 3.4, art: 'landscape', frame: 'gold', lit: 0.25 }); pictureLight(g, 0, 4.95, -L / 2, 0, { w: 3.1 }); glowDecal(g, 0, 3.1, -L / 2 + 0.004, 0, { kind: 'cone', w: 5.4, h: 4.4, i: 0.28 }); }   // v3.5: a big painted landscape (was colour blocks)
   else { box(g, 3.4, 3.4, 0.06, '', 0, 1.4, -L / 2 + 0.03, { mat: gold, ...NC }); box(g, 3.1, 3.1, 0.04, '#5A3A2A', 0, 1.55, -L / 2 + 0.07, NC);
   for (let k = 0; k < 7; k++) box(g, 3.1 * (0.15 + 0.4 * hash(k * 2.7)), 3.1 * (0.1 + 0.3 * hash(k * 4.1)), 0.02, shade('#8A6A3A', 0.2 * hash(k)), 3.1 * (hash(k * 5.9) - 0.5) * 0.6, 1.8 + 2.2 * hash(k * 8.3), -L / 2 + 0.1, NC); }
   const dw = 2.6, dh = 3.8;
   for (const sx of [-1, 1]) box(g, (W + 0.9 - dw) / 2, H, 0.4, cream, sx * (dw + (W + 0.9 - dw) / 2) / 2, 0, L / 2 + 0.2, { surf: 'plaster', ...IN });
   box(g, dw, H - dh, 0.4, cream, 0, dh, L / 2 + 0.2, { surf: 'plaster', ...IN });
-  if (o.next !== false && CFG.halls !== false) { M.next = hallStub(g, 0, 0, L / 2 + 0.4, Math.PI, { x0: -2.7, x1: 2.7, d: 3.4, h: dh + 0.9, style: 'museum', wall: cream, floorColor: '#8C5E36', outer: stone, outerSurf: 'stone', lit: 0.2 });   // v3.3: the next gallery behind the doorway (was a black slab)
+  if (o.next !== false && CFG.halls !== false) { M.next = hallStub(g, 0, 0, L / 2 + 0.4, Math.PI, { x0: -2.7, x1: 2.7, d: 3.4, h: dh + 0.9, style: 'museum', wall: cream, floorColor: '#8C5E36', outer: stone, outerSurf: 'stone', lit: 0.2 });   // v3.5: the next gallery behind the doorway (was a black slab)
     if (o.facade !== false && y0 > 0.2) box(g, 5.6, y0 - 0.1, 3.5, stone, 0, -y0, L / 2 + 0.4 + 1.75, { surf: 'stone' }); }
   else box(g, dw, dh, 0.05, '#1A1512', 0, 0, L / 2 + 0.6, NC);
   for (const sx of [-1, 1]) box(g, 0.16, dh + 0.1, 0.12, '', sx * (dw / 2 + 0.08), 0, L / 2 - 0.02, { mat: gold, ...NC }); box(g, dw + 0.5, 0.2, 0.14, '', 0, dh, L / 2 - 0.02, { mat: gold, ...NC });
@@ -11468,7 +11468,7 @@ function prison(p, x, z, o = {}) {
   const tw = grp(g, 15, 0, fz); for (const [sx, sz] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) box(tw, 0.25, 7, 0.25, '#7A7E84', sx * 1.2, 0, sz * 1.2); box(tw, 3.2, 2.2, 3.2, '#B8B4AA', 0, 7, 0, { surf: 'concrete' }); box(tw, 4.4, 0.12, 4.4, '#7A7E84', 0, 6.9, 0); for (const r of [0, 1, 2, 3]) { const rq = grp(tw, 0, 7, 0, r * Math.PI / 2); box(rq, 4.4, 0.05, 0.05, '#5A5E64', 0, 1.0, 2.17, NC); box(rq, 4.4, 0.05, 0.05, '#5A5E64', 0, 0.5, 2.17, NC); for (let k = 0; k < 5; k++) box(rq, 0.05, 1.0, 0.05, '#5A5E64', -2.17 + k * 1.085, 0, 2.17, NC); }
   for (let k = 0; k < 14; k++) box(tw, 0.5, 0.04, 0.05, '#7A7E84', 0, 0.45 + k * 0.48, 1.33, NC); for (const sx of [-1, 1]) box(tw, 0.05, 7, 0.05, '#7A7E84', sx * 0.27, 0, 1.33, NC); for (const [a, b] of [[-1, 1], [1, -1]]) box(tw, 0.08, 3.6, 0.08, '#6A6E74', 0, 1.6, a * 1.2, { rz: b * 0.72, ...NC });   // ladder, cross braces
   for (const r of [0, 1, 2, 3]) box(tw, 2.6, 0.9, 0.05, '#2A3A4A', 0, 8, 0, { ry: r * Math.PI / 2, cast: false }).position.set(Math.sin(r * Math.PI / 2) * 1.62, 8.45, Math.cos(r * Math.PI / 2) * 1.62); prism(tw, 3.6, 1, 3.6, '#5A5E64', 0, 9.2, 0);
-  const sp = dyn(grp(world, x + 15, groundH(x, z) + 8.5, z + fz)); const bm = new THREE.Mesh(G('pbeam', () => new THREE.ConeGeometry(2.5, 18, 20, 1, true).translate(0, -9, 0)), beamMat({ color: '#FFF4C8', k: 0.34, dustScale: 0.6 })); sp.add(bm); beamSpot(bm, { axis: [0, -1, 0], len: 18, tan: 0.14, color: '#FFF4C8', k: 0.4 });   // v3.3 beamMat + spot
+  const sp = dyn(grp(world, x + 15, groundH(x, z) + 8.5, z + fz)); const bm = new THREE.Mesh(G('pbeam', () => new THREE.ConeGeometry(2.5, 18, 20, 1, true).translate(0, -9, 0)), beamMat({ color: '#FFF4C8', k: 0.34, dustScale: 0.6 })); sp.add(bm); beamSpot(bm, { axis: [0, -1, 0], len: 18, tan: 0.14, color: '#FFF4C8', k: 0.4 });   // v3.5 beamMat + spot
   tick(t => { sp.rotation.set(-0.6 + 0.1 * Math.sin(t * 0.7), 0, 0.5 * Math.sin(t * 0.5)); bm.visible = o.night !== false; });
   return P;
 }
@@ -11561,7 +11561,7 @@ function balloons(p, x, y, z, o = {}) {
 function discoBall(p, x, y, z, o = {}) {
   const g = dyn(grp(p ?? world, x, y, z)), NC = { cast: false }; box(g, 0.02, 1, 0.02, '#9A9EA4', 0, 0.2, 0); const b = dyn(grp(g)); ball(b, 0.32, '#C9CDD3', 0, 0, 0, { detail: 2, metal: 1, rough: 0.15 });
   for (let i = 0; i < 40; i++) { const v = v3(hash(i) - 0.5, hash(i * 3) - 0.5, hash(i * 5) - 0.5).normalize().multiplyScalar(0.325); box(b, 0.06, 0.06, 0.005, '', v.x, v.y - 0.03, v.z, { mat: mat(['#FFFFFF', '#AEE8FF', '#FFD8F8'][i % 3], { basic: true, glow: 1.5 }), ...NC }).lookAt(v.clone().multiplyScalar(3)); }
-  const beams = []; for (let i = 0; i < 6; i++) { const bm = new THREE.Mesh(G('dbeam', () => new THREE.ConeGeometry(0.4, 9, 14, 1, true).translate(0, -4.5, 0)), beamMat({ color: ['#FF4AA8', '#4AA8FF', '#7AFF6A', '#FFE14A', '#B87AFF', '#FF8A3A'][i], k: 0.42, soft: 1.2, dustScale: 1.5, len: 1.0 })); b.add(bm); beams.push(bm); }   // v3.3 beamMat
+  const beams = []; for (let i = 0; i < 6; i++) { const bm = new THREE.Mesh(G('dbeam', () => new THREE.ConeGeometry(0.4, 9, 14, 1, true).translate(0, -4.5, 0)), beamMat({ color: ['#FF4AA8', '#4AA8FF', '#7AFF6A', '#FFE14A', '#B87AFF', '#FF8A3A'][i], k: 0.42, soft: 1.2, dustScale: 1.5, len: 1.0 })); b.add(bm); beams.push(bm); }   // v3.5 beamMat
   tick(t => { b.rotation.y = t * 0.8; beams.forEach((bm, i) => bm.rotation.set(0.9 + 0.3 * Math.sin(t + i), i * TAU / 6, 0)); g.visible = t >= (o.t0 ?? 0); });
   return { g };
 }
@@ -11935,7 +11935,7 @@ function flak(o = {}) {
   return { bursts: B };
 }
 // searchlight(p, x, z, { t0, t1, az: deg | t => deg, el: deg | t => deg, len: 380, r: 9, color, opacity: 0.1, soft: 7, dust: 0.7 }) — anti-aircraft searchlight with a soft beam (no real light)
-//   v3.3: the beam starts at the lens, uses beamMat (bright core, soft edges, drifting haze, fades into the fog) instead of a flat additive cone (read as a white plank)
+//   v3.5: the beam starts at the lens, uses beamMat (bright core, soft edges, drifting haze, fades into the fog) instead of a flat additive cone (read as a white plank)
 function searchlight(p, x, z, o = {}) {
   const y = o.y ?? groundH(x, z), g = stat(grp(p, x, y, z)); cyl(g, 0.55, 0.65, 0.5, '#3C3F38', 0, 0, 0, { seg: 12 }); for (const s of [-1, 1]) box(g, 0.16, 1.3, 0.4, '#3C3F38', s * 0.62, 0.4, 0);
   const head = dyn(grp(p, x, y + 1.5, z)); head.rotation.order = 'YXZ'; cyl(head, 0.62, 0.62, 1.1, '#43473F', 0, -0.55, 0, { rx: Math.PI / 2, seg: 16 });
@@ -13067,7 +13067,7 @@ function updateCamera(t) {
   if (yaw) camera.rotateY(yaw);
   const fdist = f => f == null ? null : typeof f === 'number' ? f : Array.isArray(f) ? _p.distanceTo(_tp.fromArray(f)) : TRACK[f] ? _p.distanceTo(TRACK[f].obj.getWorldPosition(_tp).add(_tp2.set(0, TRACK[f].dy ?? 1.55, 0))) : null;
   const fd0 = _p.distanceTo(_l), focus = lerp(fdist(a.focus) ?? fd0, b && !b.cut ? fdist(b.focus) ?? fd0 : fdist(a.focus) ?? fd0, kf);   // rack focus: different focus on two keys
-  if (a.dof == null && (!b || b.cut || b.dof == null) && CFG.dof !== false) dof = (CFG.dofAuto ?? 0.65) * sm01((10 - Math.min(fd0, focus)) / 7);   // auto: close shots get a soft background (v3.3: softer, 0.65 — the background stays readable)
+  if (a.dof == null && (!b || b.cut || b.dof == null) && CFG.dof !== false) dof = (CFG.dofAuto ?? 0.65) * sm01((10 - Math.min(fd0, focus)) / 7);   // auto: close shots get a soft background (v3.5: softer, 0.65 — the background stays readable)
   camFx.dof = dof; camFx.fy = fy; camFx.focus = focus;
   sky.position.copy(camera.position);
 }
@@ -13664,13 +13664,13 @@ const FinalShader = {
     vec3 drops(vec2 uv, float t, float sc){ vec2 a = vec2(uv.x * 0.5625, uv.y) * sc, id = floor(a), f = fract(a) - 0.5; float n = hr(id), n2 = hr(id + 17.3), n3 = hr(id + 41.7), life = fract(t * (0.1 + 0.12 * n) + n2);
       vec2 c = vec2(n - 0.5, n2 - 0.5) * 0.45; c.y -= step(0.72, n) * life * life * 0.7; float r = (0.1 + 0.16 * n3) * smoothstep(0.0, 0.06, life) * (1.0 - smoothstep(0.82, 1.0, life)) * step(0.3, n3);
       vec2 d = f - c; float m = r > 0.002 ? 1.0 - smoothstep(r * 0.65, r, length(d * vec2(1.0, 0.85))) : 0.0; return vec3(-d * m * 1.3 / sc, m); }
-    float coc(vec2 p){ float d = unpackRGBAToDepth(texture2D(tDepth, p)), z = -(uNear * uFar) / ((uFar - uNear) * d - uFar); return min(uDof * 0.0105 * abs(z - uFocusD) / max(z, 0.05), 0.009); }   // circle of confusion (uv) — v3.3: capped lower, a far background stays readable
+    float coc(vec2 p){ float d = unpackRGBAToDepth(texture2D(tDepth, p)), z = -(uNear * uFar) / ((uFar - uNear) * d - uFar); return min(uDof * 0.0105 * abs(z - uFocusD) / max(z, 0.05), 0.009); }   // circle of confusion (uv) — v3.5: capped lower, a far background stays readable
     float h(vec2 p){ return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
     vec3 neutral(vec3 c){ c *= uExp; float x = min(c.r, min(c.g, c.b)), off = x < 0.08 ? x - 6.25 * x * x : 0.04; c -= off; float pk = max(c.r, max(c.g, c.b)); if (pk < 0.76) return c;
       float np = 1.0 - 0.0576 / (pk - 0.52); c *= np / pk; return mix(c, vec3(np), 1.0 - 1.0 / (0.15 * (pk - np) + 1.0)); }
     vec3 srgb(vec3 c){ c = clamp(c, 0.0, 1.0); return mix(c * 12.92, 1.055 * pow(c, vec3(1.0 / 2.4)) - 0.055, step(0.0031308, c)); }
     vec3 grade(vec3 c){ float l = dot(c, vec3(0.2126, 0.7152, 0.0722)), so = 1.0 - clamp(l / 0.42, 0.0, 1.0);
-      c *= 1.0 + uOpen * so * so;   // v3.3 per-sky look: shadow detail opened up, split toning (shadow / highlight tint), saturation, contrast, then a tinted black floor
+      c *= 1.0 + uOpen * so * so;   // v3.5 per-sky look: shadow detail opened up, split toning (shadow / highlight tint), saturation, contrast, then a tinted black floor
       c += uSh * (1.0 - smoothstep(0.0, 0.5, l)) * smoothstep(0.0, 0.06, l) + uHl * smoothstep(0.4, 1.0, l);
       l = dot(c, vec3(0.2126, 0.7152, 0.0722)); c = mix(vec3(l), c, uSat * uGSat); c = clamp((c - 0.5) * uCon * uGCon + 0.5, 0.0, 1.0);
       return uLift + c * (1.0 - uLift); }
@@ -13688,7 +13688,7 @@ const FinalShader = {
           acc += texture2D(tDiffuse, su).rgb * w; ws += w; }
         c = acc / ws;
       } else c = vec3(texture2D(tDiffuse, uv + dir * ab).r, texture2D(tDiffuse, uv).g, texture2D(tDiffuse, uv - dir * ab).b);
-      if (uRays > 0.0) c += texture2D(tRays, vUv).rgb * uRays;   // v3.3 god rays (LookPass)
+      if (uRays > 0.0) c += texture2D(tRays, vUv).rgb * uRays;   // v3.5 god rays (LookPass)
       c = grade(srgb(neutral(c * (1.0 + rmk * 0.12))));   // tone map + sRGB here: one full-screen pass less
       if (uMode > 2.5) c *= 0.8 + 0.2 * sin(uv.y * uRes.y * 1.5708);
       c *= mix(1.0 - uVig, 1.0, smoothstep(0.9, 0.25, length((vUv - 0.5) * vec2(1.0, 1.2))));
@@ -13831,11 +13831,11 @@ function dressPass() {
         q.rotation.x = q.fz > 0 ? Math.min(a, cg - q.flare) : Math.max(a, cg) + sit * Math.min(0, a); q.rotation.z = zr + q.sx * 0.03; } }
   }
 }
-// v3.3 far shadows: a camera far from what it looks at (wide shots, city from above, beach landings) gets a bigger box — up to CFG.shadowFar (120 m half size,
+// v3.5 far shadows: a camera far from what it looks at (wide shots, city from above, beach landings) gets a bigger box — up to CFG.shadowFar (120 m half size,
 //   false = the old CFG.area limit) — moved ahead into the view, with depth range and bias scaled along. Same 2048 map: wide shots show the scene small anyway.
 const _sc = new THREE.Vector3(), _sf = new THREE.Vector3(), SHFAR = CFG.shadowFar === false ? 0 : CFG.shadowFar ?? 120;
 function fitShadow() {   // the sun's shadow map follows the shot: a tight box around what the camera looks at → crisp shadows in close-ups (CFG.shadowFit: false = fixed CFG.area box)
-  rimFit();   // v3.3: rim light + dust follow the camera of this frame (also for each half of a split screen)
+  rimFit();   // v3.5: rim light + dust follow the camera of this frame (also for each half of a split screen)
   if (!CFG.shadows || CFG.shadowFit === false) return;
   const A = CFG.area ?? 36, want = camera.position.distanceTo(_l) * 1.3 + 5, half = Math.round(clamp(want, 9, Math.max(A, SHFAR))), tx = 2 * half / sun.shadow.mapSize.x, C = sun.shadow.camera;
   _sf.copy(_l); if (half > A) { camera.getWorldDirection(_rq); _rq.y = 0; if (_rq.lengthSq() > 1e-6) _sf.addScaledVector(_rq.normalize(), (half - A) * 0.35); }   // wide: the box reaches further into the view
@@ -13845,7 +13845,7 @@ function fitShadow() {   // the sun's shadow map follows the shot: a tight box a
     sun.shadow.bias = -0.0006 * 320 / far; sun.shadow.normalBias = 0.04 * Math.max(1, tx / 0.035); }
   sun.target.position.copy(_sc); sun.target.updateMatrixWorld(); sun.position.copy(skyU.orbDir.value).multiplyScalar(D).add(_sc);
 }
-// v3.3 god rays + per-sky grade: LookPass runs right before the final pass. Rays: a quarter-size mask of what is as bright as the sky round the sun (anything darker
+// v3.5 god rays + per-sky grade: LookPass runs right before the final pass. Rays: a quarter-size mask of what is as bright as the sky round the sun (anything darker
 //   in front cuts the shafts), smeared toward the sun in three radial passes (8 taps each ≈ 512 taps, no banding), added before tone mapping. Only when the sun / moon
 //   is above the horizon and on or near the screen; strength per sky (LOOK.rays: strongest golden, dawn, dusk). CFG.godrays: number = × strength, false = off.
 //   Grade: CFG.grade: false = no per-sky tint / saturation / contrast · CFG.lift: number = × shadow floor and shadow opening, false = off
@@ -14432,7 +14432,7 @@ await physicsBake();   // simulate once, then every frame plays it back
 document.querySelectorAll('.err').forEach(n => n.remove());
 // --- motion audit (v2.29) — render.mjs --shots (and --audit) runs it: whatif.audit() → list of warnings ---
 //   1) pops: every figure, animal and moving object at 30 fps — sudden jumps, joints that snap in one frame, jitter (back and forth every frame)
-//   2) purity: a frame must not depend on the frames drawn before it. The video is rendered in blocks (18 shards on GitHub since v3.3, each in a fresh page; v3.1: each shard takes interleaved chunks of 10–30 frames) and inside a block by
+//   2) purity: a frame must not depend on the frames drawn before it. The video is rendered in blocks (18 shards on GitHub since v3.5, each in a fresh page; v3.1: each shard takes interleaved chunks of 10–30 frames) and inside a block by
 //      workers that draw every 3rd frame — whatever a frame inherits from earlier ones pops at block borders or flickers. Checked at every border of 12 and 20 blocks, every shard start
 //      and 12 more moments: jumped to straight from 0 s · played frame by frame · only every 3rd frame · after jumping back · v3.2: every render chunk start, jumped forward to from the end of the shard’s previous chunk — and (render.mjs) in a second, freshly
 //      opened page. Compared: EVERY part below every figure, animal and moving object (hair, hat, coat, hands, face, held things …: place, rotation, size, visible),
@@ -14488,10 +14488,10 @@ function audPure(Q) {   // everything a frame shows of the moving things, as num
   return a;
 }
 // the moments the purity check looks at: the first frame of every render block (12 = GitHub, 20 = long videos / local shards) + 12 scattered ones
-// v3.2 render plan, the one source for render.mjs (--shard) and the audit: GitHub splits a video into n shards (18 since v3.3; long videos up to 20, see render.yml)
+// v3.2 render plan, the one source for render.mjs (--shard) and the audit: GitHub splits a video into n shards (18 since v3.5; long videos up to 20, see render.yml)
 // and shard s renders the chunks c of `chunk` frames with c % n === s, so heavy moments spread over all shards. CFG.shard: 'block' = one contiguous block
 // per shard (as before v3.1; emergency switch when a SEAM: line comes up and the cause cannot be fixed quickly).
-function shardPlan(NF, n) { n = n ?? clamp(Math.floor(Math.floor(DUR) / 15), 18, 20);   // v3.3: 18 shards minimum (render.yml SHARDS)
+function shardPlan(NF, n) { n = n ?? clamp(Math.floor(Math.floor(DUR) / 15), 18, 20);   // v3.5: 18 shards minimum (render.yml SHARDS)
   return { n, chunk: CFG.shard === 'block' ? Math.ceil(NF / n) : Math.max(10, Math.min(30, Math.floor(NF / (n * 4)))) }; }
 function audChunks(NF, N) { const { chunk } = shardPlan(NF), B = []; for (let i = chunk; i <= N; i += chunk) B.push(i);   // every chunk start (at most 80, evenly spread)
   return B.length <= 80 ? B : [...new Set(Array.from({ length: 80 }, (_, k) => B[Math.round(k * (B.length - 1) / 79)]))]; }
@@ -14524,10 +14524,10 @@ function qaAudit() {
           if (d > 0.07) { const S = sink.get(f); if (!S || d > S.d) sink.set(f, { d, t }); } } } } }
   finally { const sk = SKINQA; SKINQA = null; for (const f of sk) out.push(`${name(f)}: arm or leg drawn as old boxes for a moment (a joint was pulled apart or a part came off) – fine for gore and ragdolls, otherwise check the pose`); }
   for (const [f, S] of sink) out.push(`${name(f)}: foot ${(S.d * 100).toFixed(0)} cm in the floor around ${S.t.toFixed(2)} s while standing – raise the figure or its floor (y) or check the pose`);
-  try { out.push(...qaLook()); } catch (e) { out.push('look QA failed: ' + e.message); }   // v3.3: DARK · EMPTY · CAMCLIP · HEADCUT
+  try { out.push(...qaLook()); } catch (e) { out.push('look QA failed: ' + e.message); }   // v3.5: DARK · EMPTY · CAMCLIP · HEADCUT
   return out;
 }
-// --- v3.3 look QA (part of qaAudit, lines "QA: DARK|EMPTY|CAMCLIP|HEADCUT – …"): what the picture looks like, from tiny frames of the middle of every camera shot and of every cover ---
+// --- v3.5 look QA (part of qaAudit, lines "QA: DARK|EMPTY|CAMCLIP|HEADCUT – …"): what the picture looks like, from tiny frames of the middle of every camera shot and of every cover ---
 //   DARK: much of the frame near-black (not counting the sky) · EMPTY: most of the frame without any detail (flat sky / bare ground, a blob in the distance)
 //   CAMCLIP: geometry closer than 0.5 m to the lens covers a big part of the frame · HEADCUT: a close-up cuts through a face at the top edge
 //   Own small render targets and a plain renderer.render (no AO, bloom, lens effects), tone map + sRGB + contrast + vignette like the final pass; the renderer state is put back afterwards.

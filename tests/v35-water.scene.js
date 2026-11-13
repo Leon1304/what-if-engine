@@ -1,4 +1,4 @@
-  // v3.3 water: pool (surface, tint, caustics, waterline, tiles, coping, drain), red salt lake (ripples, glint), underwater sky without underwater() (auto)
+  // v3.5 water: pool (surface, tint, caustics, waterline, tiles, coping, drain), red salt lake (ripples, glint), underwater sky without underwater() (auto)
   ground({ color: '#B9A27E', coast: 30, depth: 8, sand: true });
   water({ level: -0.25, color: '#B4473C', shallow: '#C8563E', reflect: 0.3, waves: 0.05 });
   saltCrust(world, 6, 40, { r: 4, n: 9, y: -0.23 });
