@@ -4,7 +4,7 @@
 # blue glow, spoiler, intake grilles, side vents, panel lines, rivets, a dent and scratches, number plate with made-up glyphs,
 # roof taxi light, antenna, camera mirrors, three landing skids. In flight use asset(…, { y, dyn: true }) and move/tilt the group per frame.
 # Parts: fan_fl, fan_fr, fan_rl, fan_rr (blades, spin with ry), door_l, door_r (gull-wing, hinged at the roof edge: rz swings them up;
-# door_l opens with rz < 0, door_r with rz > 0). Marks: seat_driver, seat_pass (inside, facing forward), door_l_out, door_r_out (standing
+# door_l opens with rz < 0, door_r with rz > 0; openDoor(C, t, { i: 0 | 1 }) does it: axis 'z' in userData). Marks: seat_driver, seat_pass (inside, facing forward), door_l_out, door_r_out (standing
 # next to the doors, facing the car), light_head, light_under, thrust_l, thrust_r (thruster exits, for smoke()/glow trails).
 # Materials: paint, paint_dark, stripe, + _cyber.py (glass, metal, …) and neon.
 # Rebuild: Blender -b --factory-startup --python tools/blender_asset.py -- assets/own/src/cp_hovercar.py
@@ -43,7 +43,7 @@ def build(coll):
         sm = add(nm + '_seam', merge([side_prism([(-0.78, 0.55), (0.93, 0.55), (0.93, 0.57), (-0.78, 0.57)], min(x, x + s * 0.025), max(x, x + s * 0.025)),
                                       side_prism([(-0.78, 0.55), (-0.76, 0.55), (-0.71, 1.0), (-0.73, 1.0)], min(x, x + s * 0.025), max(x, x + s * 0.025))]), M['void'])
         hd = add(nm + '_handle', box(0.03, 0.22, 0.04, (x + s * 0.02, 0.6, 0.85)), M['steel'])
-        part([d, sm, hd], nm, pivot=(s * 0.8, 0.1, 1.08))
+        part([d, sm, hd], nm, pivot=(s * 0.8, 0.1, 1.08), axis='z', sign=s, angle=1.15)   # gull-wing: openDoor() swings it up about the roof hinge (three.js z; door_l rz < 0, door_r rz > 0)
         mark(nm + '_out', (s * 2.3, 0.1, 0.0), -s * math.pi / 2, coll)
     # fan pods: pylon, duct ring, guard, hub, blades (part)
     for nm, (sx, sy) in (('fan_fl', (-1, -1)), ('fan_fr', (1, -1)), ('fan_rl', (-1, 1)), ('fan_rr', (1, 1))):
