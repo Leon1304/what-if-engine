@@ -150,6 +150,9 @@ for d in (os.path.join(_here, 'models'), os.path.join(_here, '.engine', 'models'
         M = json.load(open(f, encoding='utf-8')); al = M.get('alias', {}); want = set()
         if not _mcoff: want |= {'Idle_Loop', 'Idle_Talking_Loop', 'Sitting_Idle_Loop', 'Sitting_Talking_Loop', 'Walk_Loop', 'Jog_Fwd_Loop', 'Sprint_Loop', 'Crouch_Fwd_Loop', 'Zombie_Walk_Fwd_Loop', 'Zombie_Idle_Loop'}
         _named = re.search(r"\banim\(|\bidle\s*:\s*['\"]", _code)
+        if not _mcoff:   # v3.26 transition clips the engine plays by itself: fall(…, getUp) → LayToIdle, sit() → Sitting_Enter / _Exit, jump() → Jump_Start / _Land, react(…, 'hit') → Hit_Chest / Hit_Head
+            for rx, cl in ((r"getUp", ['LayToIdle']), (r"\bsit\(", ['Sitting_Enter', 'Sitting_Exit']), (r"\bjump\(", ['Jump_Start', 'Jump_Land']), (r"['\"]hit['\"]", ['Hit_Chest', 'Hit_Head'])):
+                if re.search(rx, _code): want |= {c for c in cl if c in M['clips']}
         for q in re.findall(r"['\"]([A-Za-z0-9_]+)['\"]", _code):
             if q in M['clips']: want.add(q)
             elif q in al and _named: want.add(al[q])

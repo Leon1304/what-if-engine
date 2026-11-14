@@ -32,3 +32,26 @@ def light_mats():
     return dict(red=mat('light_red', '#FF3B2F', 0.3, emit='#FF2A1A'), yellow=mat('light_yellow', '#FFB52E', 0.3, emit='#FFA21A'),
                 green=mat('light_green', '#3BFF7A', 0.3, emit='#22F06A'), lamp=mat('lamp', '#FFF1C9', 0.3, emit='#FFE6A8'),
                 head=mat('headlight', '#F4F6FF', 0.2, emit='#E8EEFF'), tail=mat('taillight', '#D92A22', 0.3, emit='#C81E16'))
+
+def clip_poly(pts, u0=-1e9, u1=1e9, z1=1e9, z0=-1e9):
+    """Side profile [(u, z), …] cut to u0 ≤ u ≤ u1 and z0 ≤ z ≤ z1 (Sutherland–Hodgman): door skins and window panes from one body profile,
+    so a door part has exactly the body's outline (arches, sills, slanted pillars) and the car looks the same with the doors shut."""
+    def cut(P, f):
+        out = []
+        for i in range(len(P)):
+            a, b = P[i - 1], P[i]; fa, fb = f(a), f(b)
+            if (fa >= 0) != (fb >= 0): k = fa / (fa - fb); out.append((a[0] + (b[0] - a[0]) * k, a[1] + (b[1] - a[1]) * k))
+            if fb >= 0: out.append(b)
+        return out
+    P = list(pts)
+    for f in (lambda p: p[0] - u0, lambda p: u1 - p[0], lambda p: z1 - p[1], lambda p: p[1] - z0):
+        if P: P = cut(P, f)
+    Q = []
+    for p in P:
+        if not Q or abs(p[0] - Q[-1][0]) + abs(p[1] - Q[-1][1]) > 1e-6: Q.append(p)
+    if len(Q) > 1 and abs(Q[0][0] - Q[-1][0]) + abs(Q[0][1] - Q[-1][1]) < 1e-6: Q.pop()
+    return Q
+
+def side_x(s, HW, d0, d1):
+    """x range (xa, xb) of a layer d0 … d1 m inside the outer face of the side s = ±1 of a body with half-width HW (negative d = outside it)."""
+    return (HW - d1, HW - d0) if s > 0 else (-HW + d0, -HW + d1)

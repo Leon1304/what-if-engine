@@ -5,7 +5,7 @@
 # AC unit, cables to a junction box, rear door, crates, trash bags, a stool for the clerk, litter.
 # Hollow inside (floor 0.12 m): a clerk stands behind the counter.
 # Parts: shutter (roll shutter, y > 0 rolls it up), awning, holo (ad screen on its pole), rack (magazine rack), door (rear door,
-# hinge at +x, rz < 0 opens), stool, junk (crates, trash bags), power (junction box and cable), litter.
+# hinge at +x, opens outwards with openDoor(K, t): ry < 0 in three.js), stool, junk (crates, trash bags), power (junction box and cable), litter.
 # The booth is hollow but one obstacle: put the clerk in with noHit(clerk).
 # Marks: customer (in front of the counter, facing it), clerk (behind the counter, facing out), holo (centre of the ad screen),
 # rack (in front of the rack), back_door (outside the rear door, facing it), light_window, light_sign, light_holo, cam_front.
@@ -88,7 +88,7 @@ def build(coll):
     add('door', box(0.8, 0.04, 2.0, (0.5, D / 2 + 0.02, 0.14)), booth_d)
     add('door_handle', box(0.04, 0.05, 0.14, (0.18, D / 2 + 0.06, 1.0)), M['steel'])
     add('door_sign', box(0.3, 0.005, 0.2, (0.5, D / 2 + 0.043, 1.6)), M['hazard_y'])
-    part(out[i0:], 'door', pivot=(0.9, D / 2 + 0.02, 0.14))
+    part(out[i0:], 'door', pivot=(0.9, D / 2 + 0.02, 0.14), sign=-1, angle=1.5)   # opens outwards: openDoor(K, t)
     # hologram ad on a pole (part): frame, glowing panel, emitter box, base
     hx, hy = -W / 2 - 0.55, F - 0.3
     i0 = len(out)

@@ -5,7 +5,7 @@
 # railings on both flights with a cyan neon strip under the handrail and stickers on the posts; on the platform a gate arch with a
 # neon station sign in made-up glyphs and two lamps, three turnstiles with lit arrows, a ticket machine, a bench, cables, litter.
 # Walk surface: both flights, the landing and the platform (nothing walkable below any of them).
-# Parts: turnstile_1…3 (arms, rx turns), door (utility room door, hinge at its −y edge, rz > 0 opens outwards), sign (station sign),
+# Parts: turnstile_1…3 (arms, rx turns), door (utility room door, hinge at its −y edge, opens outwards with openDoor(S, t): ry < 0 in three.js), sign (station sign),
 # litter (cans and the puddle at the foot).
 # Marks: foot (in front of the first step, facing up), landing, top (head of the stairs), gate (in front of the turnstiles),
 # ticket (in front of the ticket machine), bench, room_door (outside the utility room door, facing it), path_1…4 (centre line foot
@@ -86,7 +86,7 @@ def build(coll):
     add('door_leaf', box(0.04, 1.0, 2.05, (dx + 0.02, dy0 + 0.55, 0.02)), door_m)
     add('door_handle', box(0.05, 0.04, 0.16, (dx + 0.06, dy0 + 0.95, 1.0)), M['steel'])
     add('door_hazard', box(0.005, 0.4, 0.3, (dx + 0.042, dy0 + 0.55, 1.5)), M['hazard_y'])
-    part(out[i0:], 'door', pivot=(dx + 0.02, dy0 + 0.05, 0.02))
+    part(out[i0:], 'door', pivot=(dx + 0.02, dy0 + 0.05, 0.02), sign=-1, angle=1.6)   # opens outwards (the room behind is solid): openDoor(S, t)
     add('door_light', box(0.12, 0.3, 0.06, (dx + 0.06, dy0 + 0.55, 2.3)), N['lamp'])
     add('vent', box(0.04, 0.6, 0.35, (dx, yt + 1.7, 2.6)), M['metal'])
     add('vent_slats', merge([box(0.05, 0.56, 0.02, (dx + 0.01, yt + 1.7, 2.65 + k * 0.07)) for k in range(4)]), M['void'])

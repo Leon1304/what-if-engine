@@ -3,6 +3,9 @@
 # mirrors, bumpers with grille and number plates, headlights and taillights (glowing), wipers, four wheels with rims, hubs and nuts.
 # Materials (tint keys): paint (body colour), glass, plastic, tire, rim, metal_dark, headlight, taillight, white, void.
 # Wheels are parts wheel_fl/fr/rl/rr (drive() turns them, front ones steer). Use: asset(world, 'own/car_hatch', x, z, { dyn: true, tint: { paint: '#B03A2E' } }) and drive() it.
+# v3.26 doors (parts, hinge at the front edge, swing out with openDoor(car, t, { i })): door_1 driver (+x in three.js), door_2 front passenger, door_3 / door_4 rear (+x / -x);
+# each carries its skin (cut from the body profile), window pane, belt trim, seam, handle and an inner door card with armrest; a dark cabin opening behind it.
+# Marks: seat_driver, seat_pass, seat_rear_1 (+x), seat_rear_2 (seat surface, facing forward), door_1_out … door_4_out (outside each door, facing the car) — enter(rig, car, t).
 # Rebuild: Blender -b --factory-startup --python tools/blender_asset.py -- assets/own/src/car_hatch.py
 use('_street.py')
 AO = {'strength': 0.55, 'dist': 0.5}
@@ -10,17 +13,48 @@ AO = {'strength': 0.55, 'dist': 0.5}
 def build(coll):
     M = street_mats(); Lm = light_mats(); out = []
     paint = mat('paint', '#9EA6AD', 0.35, 0.45)
-    add = lambda n, bm, m: out.append(mesh(n, bm, m, coll))
+    def add(n, bm, m): o = mesh(n, bm, m, coll); out.append(o); return o
     W, HW = 1.76, 0.88
+    SK = 0.06                    # side skin: the body core stops 6 cm inside each side, the sides are skin pieces (fender, two doors, quarter)
+    DR = {('f', 1): 'door_1', ('f', -1): 'door_2', ('r', 1): 'door_3', ('r', -1): 'door_4'}
+    SPAN = {'f': (-0.88, 0.38), 'r': (0.38, 1.4)}
+    D = {n: [] for n in DR.values()}
+    def dadd(key, n, bm, m): o = add(n, bm, m); D[DR[key]].append(o); return o
     # lower body (u = along the car, front at -2.0), belt line at 0.98
     body = [(-1.98, 0.30), (-1.62, 0.30), (-1.6, 0.42), (-1.5, 0.6), (-1.25, 0.66), (-1.0, 0.6), (-0.9, 0.42), (-0.88, 0.30),
             (0.92, 0.30), (0.94, 0.42), (1.04, 0.6), (1.29, 0.66), (1.54, 0.6), (1.64, 0.42), (1.66, 0.30), (1.98, 0.30),
             (2.02, 0.62), (1.98, 0.98), (-1.3, 0.98), (-1.92, 0.86), (-2.02, 0.62)]
-    add('body', side_prism(body, -HW, HW), paint)
-    add('body_bevel', side_prism([(-1.92, 0.86), (-1.3, 0.98), (1.98, 0.98), (1.96, 1.01), (-1.3, 1.01), (-1.9, 0.89)], -HW + 0.04, HW - 0.04), paint)
+    add('body', side_prism(body, -HW + SK, HW - SK), paint)
+    for s in (-1, 1):
+        for u0, u1, k in ((-2.1, -0.88, None), (-0.88, 0.38, 'f'), (0.38, 1.4, 'r'), (1.4, 2.1, None)):
+            sk = side_prism(clip_poly(body, u0, u1), *side_x(s, HW, 0, SK))
+            if k: dadd((k, s), f'door_skin{k}{s}', sk, paint)
+            else: add(f'skin{u0}{s}', sk, paint)
+        for k, (u0, u1) in SPAN.items():
+            # dark cabin behind the door opening (only seen with the door open), sill scuff plate; on the door: inner card, armrest, pull handle, speaker
+            add(f'cabin{k}{s}', box(0.025, u1 - u0 - 0.08, 0.6, (s * (HW - SK - 0.0075), (u0 + u1) / 2, 0.36)), M['void'])
+            add(f'scuff{k}{s}', box(0.05, u1 - u0 - 0.1, 0.012, (s * (HW - SK - 0.02), (u0 + u1) / 2 + 0.01, 0.335)), M['rim'])
+            x0, x1 = side_x(s, HW, SK, SK + 0.01)
+            dadd((k, s), f'door_card{k}{s}', side_prism(clip_poly(body, u0 + 0.04, u1 - 0.04, 0.95, 0.36), x0, x1), M['plastic'])
+            ax = s * (HW - SK - 0.035)
+            dadd((k, s), f'door_arm{k}{s}', box(0.05, (u1 - u0) * 0.45, 0.05, (ax, u0 + (u1 - u0) * 0.45, 0.6), bevel_w=0.01), M['plastic'])
+            dadd((k, s), f'door_pull{k}{s}', box(0.03, 0.12, 0.03, (s * (HW - SK - 0.02), u0 + 0.22, 0.78)), M['rim'])
+            dadd((k, s), f'door_speaker{k}{s}', cyl(0.07, 0.012, (s * (HW - SK - 0.007) - 0.006, u0 + 0.3, 0.46), seg=10, axis='X'), M['void'])
+    bev = [(-1.92, 0.86), (-1.3, 0.98), (1.98, 0.98), (1.96, 1.01), (-1.3, 1.01), (-1.9, 0.89)]   # belt bevel: core part + the outer 2 cm cut like the skins (the door's share rides with it)
+    add('body_bevel', side_prism(bev, -HW + SK, HW - SK), paint)
+    for s in (-1, 1):
+        for u0, u1, k in ((-2.1, -0.88, None), (-0.88, 0.38, 'f'), (0.38, 1.4, 'r'), (1.4, 2.1, None)):
+            bb = side_prism(clip_poly(bev, u0, u1), *side_x(s, HW, 0.04, SK))
+            if k: dadd((k, s), f'door_bevel{k}{s}', bb, paint)
+            else: add(f'bevel{u0}{s}', bb, paint)
     # glass house (slightly narrower) with roof and pillars
     gh = [(-1.25, 0.99), (1.92, 0.99), (1.74, 1.38), (1.2, 1.47), (-0.45, 1.47), (-1.25, 0.99)]
-    add('glass', side_prism(gh[:-1], -HW + 0.09, HW - 0.09), M['glass'])
+    add('glass', side_prism(gh[:-1], -HW + 0.15, HW - 0.15), M['glass'])
+    for s in (-1, 1):   # side panes: the door windows ride with their doors, the quarter lights stay
+        for u0, u1, k in ((-1.3, -0.88, None), (-0.88, 0.38, 'f'), (0.38, 1.4, 'r'), (1.4, 2.0, None)):
+            pn = side_prism(clip_poly(gh[:-1], u0, u1), *side_x(s, HW, 0.09, 0.15))
+            if k: dadd((k, s), f'door_pane{k}{s}', pn, M['glass'])
+            else: add(f'pane{u0}{s}', pn, M['glass'])
     add('roof', side_prism([(-0.48, 1.45), (1.22, 1.45), (1.24, 1.5), (-0.42, 1.5)], -HW + 0.12, HW - 0.12), paint)
     for s in (-1, 1):
         xa, xb = (HW - 0.095, HW - 0.065) if s > 0 else (-HW + 0.065, -HW + 0.095)   # just outside the glass
@@ -28,9 +62,9 @@ def build(coll):
         add(f'pillar_b{s}', side_prism([(0.32, 0.99), (0.44, 0.99), (0.44, 1.47), (0.32, 1.47)], xa, xb), paint)
         add(f'pillar_c{s}', side_prism([(1.55, 0.99), (1.92, 0.99), (1.74, 1.38), (1.2, 1.47), (1.12, 1.47)], xa, xb), paint)
         # door seams and handles, mirror, wheel arch liners, side skirt
-        for u in (-0.88, 0.38, 1.4):
-            add(f'seam{s}{u}', box(0.01, 0.012, 0.66, (s * (HW + 0.002), u, 0.33)), M['void'])
-        for u in (-0.2, 0.95): add(f'handle{s}{u}', box(0.03, 0.18, 0.04, (s * (HW + 0.012), u, 0.86)), M['plastic'])
+        for u, k in ((-0.88, 'f'), (0.38, 'r'), (1.4, 'r')):
+            dadd((k, s), f'seam{s}{u}', box(0.01, 0.012, 0.66, (s * (HW + 0.002), u + (-0.006 if u > 1 else 0.006), 0.33)), M['void'])
+        for u, k in ((-0.2, 'f'), (0.95, 'r')): dadd((k, s), f'handle{s}{u}', box(0.03, 0.18, 0.04, (s * (HW + 0.012), u, 0.86)), M['plastic'])
         add(f'mirror_arm{s}', box(0.14, 0.06, 0.05, (s * (HW + 0.05), -1.0, 0.98)), M['plastic'])
         add(f'mirror{s}', box(0.1, 0.16, 0.13, (s * (HW + 0.13), -1.0, 0.96), bevel_w=0.02), paint)
         add(f'skirt{s}', box(0.04, 1.75, 0.08, (s * (HW + 0.0), 0.02, 0.3)), M['plastic'])
@@ -60,9 +94,19 @@ def build(coll):
     for s in (-1, 1):
         add(f'rail{s}', box(0.04, 1.5, 0.04, (s * (HW - 0.2), 0.38, 1.55)), M['plastic'])
         for u in (-0.3, 1.05): add(f'rail_foot{s}{u}', box(0.05, 0.08, 0.06, (s * (HW - 0.2), u, 1.5)), M['plastic'])
-        add(f'trim{s}', box(0.012, 3.05, 0.025, (s * (HW - 0.085), 0.33, 0.99)), M['rim'])
+        for u0, u1, k in ((-1.195, -0.88, None), (-0.88, 0.38, 'f'), (0.38, 1.4, 'r'), (1.4, 1.855, None)):   # belt trim, cut at the door seams
+            tb = box(0.012, u1 - u0, 0.025, (s * (HW - 0.085), (u0 + u1) / 2, 0.99))
+            if k: dadd((k, s), f'trim{s}{u0}', tb, M['rim'])
+            else: add(f'trim{s}{u0}', tb, M['rim'])
         add(f'indicator{s}', box(0.02, 0.1, 0.04, (s * (HW + 0.005), -1.55, 0.78)), Lm['yellow'] if 'yellow' in Lm else M['white'])
     add('antenna', side_prism([(0.95, 1.5), (1.15, 1.5), (1.12, 1.58)], -0.03, 0.03), M['plastic'])
     add('spoiler', side_prism([(1.12, 1.47), (1.3, 1.47), (1.36, 1.44), (1.2, 1.5)], -HW + 0.14, HW - 0.14), paint)
     add('tow_hook', box(0.06, 0.08, 0.05, (0.45, -2.05, 0.2)), M['metal_d'])
+    for (k, s), n in DR.items():   # doors: hinge on the outer skin at the front edge, swing outwards
+        part(D[n], n, pivot=(s * HW, SPAN[k][0], 0.6), sign=-s, angle=1.1 if k == 'f' else 1.05)
+        mark(n + '_out', (s * (HW + 0.55), 0.15 if k == 'f' else 1.12, 0.0), -s * math.pi / 2, coll)
+    mark('seat_driver', (0.38, 0.05, 0.52), 0.0, coll)
+    mark('seat_pass', (-0.38, 0.05, 0.52), 0.0, coll)
+    mark('seat_rear_1', (0.4, 1.0, 0.52), 0.0, coll)
+    mark('seat_rear_2', (-0.4, 1.0, 0.52), 0.0, coll)
     return out

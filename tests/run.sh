@@ -9,6 +9,7 @@ sed -n '/@STORY-BEGIN/,/@STORY-END/p' template.html | sed '1d;$d' > example.stor
 sed -n '/@SCENE-BEGIN/,/@SCENE-END/p' template.html | sed '1d;$d' > example.scene.js
 cp "$R"/tests/*.story.js "$R"/tests/*.scene.js .
 names=${*:-example $(cd "$R/tests" && ls *.story.js | sed 's/\.story\.js$//')}
+names=$(echo $names)   # one line, single spaces: the " $names " checks below (gate, crowd QA, channel) also run in a full run (ls gave newlines)
 cores=$(getconf _NPROCESSORS_ONLN 2>/dev/null || echo 2); J=${SMOKE_JOBS:-$(( cores / 2 ))}; [ "$J" -lt 1 ] && J=1; [ -z "${SMOKE_JOBS:-}" ] && [ "$J" -gt 4 ] && J=4
 one() {   # one scene → its result in <name>.res (first line "ok …" or "FAIL …")
   s=$1
@@ -53,6 +54,16 @@ print('%.0f' % (e(0.5, 5) / max(1, e(9.5, 11.5))))" 2>&1)
   if [ "$pl" = "Tense 1:5500 Epic 2:3500 None 3:3000 4" ] && grep -q 'elevenlabs audio: music 12.0 s · 3 sections' elf.log && grep -q '@ELAUDIO \*/{' elf.html && ! grep -q 'PAGE ERRORS' elf_a.log && [ "${lv:-0}" -gt 10 ] 2>/dev/null; then echo "ok   elevenlabs audio  plan $pl · music on/off ${lv}×"
   else echo "FAIL elevenlabs audio: plan '$pl' · level '$lv'"; grep -E 'eleven|ELAUDIO' elf.log; tail -3 elf_a.log; fail=1; fi;;
 esac
+# cover stage: thumbnails (THUMB, A/B variants → cover-b.jpg …) of example + every scene with an A/B THUMB array; COVERS=all = every scene that defines THUMB
+cv=""; for s in $names; do case "$s" in example) cv="$cv $s";; *) [ -f "$s.html" ] || continue; if [ "${COVERS:-}" = all ]; then grep -q '^const THUMB' "$s.story.js" && cv="$cv $s"; else grep -q '^const THUMB = \[' "$s.story.js" && cv="$cv $s"; fi;; esac; done
+cover() { s=$1; rm -f "cover_$s.jpg" "cover_$s"-[a-h].jpg; timeout 300 node render.mjs "$s.html" --cover "cover_$s.jpg" > "cover_$s.log" 2>&1; n=$(grep -c '^const THUMB = \[' "$s.story.js" 2>/dev/null); want=$(( n > 0 ? 2 : 1 ))
+  if grep -q "PAGE ERRORS\|PAGE DID NOT START" "cover_$s.log" || [ "$(ls "cover_$s.jpg" "cover_$s"-[a-h].jpg 2>/dev/null | wc -l)" -lt "$want" ]; then echo "FAIL cover $s"; grep -A6 "PAGE" "cover_$s.log" | head -8; else echo "ok   cover $s  $(ls "cover_$s.jpg" "cover_$s"-[a-h].jpg 2>/dev/null | wc -l | tr -d ' ') image(s)"; fi; }
+export -f cover
+if [ -n "$cv" ]; then out=$(printf '%s\n' $cv | xargs -P "$J" -I{} bash -c 'cover "$1"' _ {}); echo "$out"; echo "$out" | grep -q '^FAIL' && fail=1; fi
+# channel handle: default '@whatifthishappenedscenarios' in every video, CFG.channel overrides it (tests/signs-beams)
+chan() { node render.mjs "$1.html" --probe "document.getElementById('chan').textContent" 2>&1 | tail -1; }
+case " $names " in *" example "*) c=$(chan example); case "$c" in *@whatifthishappenedscenarios*) echo "ok   channel default";; *) echo "FAIL channel default: '$c'"; fail=1;; esac;; esac
+case " $names " in *" signs-beams "*) c=$(chan signs-beams); case "$c" in *@signs.test*) echo "ok   channel CFG.channel";; *) echo "FAIL channel CFG.channel: '$c'"; fail=1;; esac;; esac
 # v2.48 narrator voice by category (no synthesis, no API call)
 cp "$R/voice.py" .
 for c in "story:Denzel" "explain:Adam" "conspiracy:Declan Sage" "horror:Storm Styles" "series:JM" "truecrime:Declan Sage"; do
