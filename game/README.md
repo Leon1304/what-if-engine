@@ -17,7 +17,7 @@ Tankstelle (mit kompletter Inneneinrichtung), Bach, Hochsitz, Feuerstelle und ve
 | M | Wanderkarte (wenn gefunden) |
 | Z halten | Zeit vorspulen (drinnen mit Strom, am Feuer oder mit Schlafsack) |
 | Rechte Maustaste | Fernglas |
-| Esc | Pause (Orte, Grafikstufe) |
+| Esc | Pause (Orte, Grafikstufe, Bildrate 30/60/unbegrenzt – Standard 60, im Menü 20) |
 
 Spielstand: automatisch alle 20 s im Browser.
 
@@ -41,7 +41,7 @@ Spielstand: automatisch alle 20 s im Browser.
 | `blender/build_all.py` | baut alles ohne Blender-Oberfläche und exportiert `map.glb` (+ `blender/map.blend` zum Anschauen) |
 | `blender/shrink.mjs` | komprimiert `map.glb` (gltf-transform) |
 | `js/` | das Spiel (Three.js 0.170): `world.js` Laden/Instancing/Kollision, `player.js`, `game.js` Logik, `life.js` Tiere/Auto/Feuer, `sky.js`, `audio.js`, `ui.js`, `items.js` |
-| `tools/shots.mjs` · `tools/playthrough.mjs` | Screenshots und automatischer Komplett-Durchlauf (Headless-Chromium) |
+| `tools/shots.mjs` · `tools/playthrough.mjs` · `tools/perf.mjs` | Screenshots, automatischer Komplett-Durchlauf inkl. echter Tasten (W/Shift/Leertaste/Strg), Leistungsmessung (ms, Draw Calls, Dreiecke je Ort) |
 
 ### Map neu bauen
 ```bash

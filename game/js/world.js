@@ -148,6 +148,16 @@ export async function loadWorld(scene, onProgress) {
     if (mat.name === 'Wasser') W.waterMeshes.push(mesh);
   }
   root.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+  // interactives: size → draw distance; small things (goods, mushrooms, tools) cast no sun shadow
+  const bb = new THREE.Box3(), sph = new THREE.Sphere();
+  for (const it of W.interactives) {
+    bb.setFromObject(it.node); if (bb.isEmpty()) continue; bb.getBoundingSphere(sph);
+    it.center = sph.center.clone(); it.radius = sph.radius;
+    it.drawDist = Math.min(220, 28 + sph.radius * 70);
+    if (sph.radius < .45 && !it.u.ladder) it.node.traverse(m => { if (m.isMesh) m.castShadow = false; });
+  }
+  // distance culling (called a few times per second): hides far-away small interactives via their pivot
+  W.cull = (cam) => { for (const it of W.interactives) if (it.center) { const d = it.drawDist; it.pivot.visible = it.center.distanceToSquared(cam) < d * d; } };
 
   // tree lookup grid (10 m cells)
   W.treeGrid = new Map();

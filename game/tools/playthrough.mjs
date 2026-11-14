@@ -47,6 +47,18 @@ const steps = [
   ['Bis Sonnenaufgang', 'const S=T.S(); S.time = 6.4; S.day = 2; S.abs = 30.4; S.stats.hunger=S.stats.thirst=S.stats.warmth=90; T.tick(8)', 15],
 ];
 let ok = true;
+// real keyboard: walk, sprint, jump, crouch through the page's own key handlers and render loop
+{
+  const pos = () => page.evaluate(() => { const p = window.__game.player; return { x: p.pos.x, z: p.pos.z, y: p.pos.y, st: window.__game.game.S.stats.stamina, sp: p.sprint }; });
+  await page.evaluate(() => { const s = window.__game.W.spots.spawn.pos; T.at(s.x, -s.z - 4); });
+  const a = await pos(); const kb = page.keyboard;
+  await kb.down('KeyW'); await page.waitForTimeout(600); await kb.down('ShiftLeft'); await page.waitForTimeout(400); const mid = await pos();
+  await page.waitForTimeout(1200); await kb.press('Space'); await page.waitForTimeout(500); await kb.up('ShiftLeft');
+  await kb.down('ControlLeft'); await page.waitForTimeout(600); await kb.up('ControlLeft'); await kb.up('KeyW'); await page.waitForTimeout(300);
+  const b = await pos(), d = Math.hypot(b.x - a.x, b.z - a.z);
+  const pass = d > 3 && mid.sp && b.st < a.st; ok &&= pass;
+  console.log(`${pass ? '✓' : '✗'} Tastatur W/Shift/Leertaste/Strg: ${d.toFixed(1)} m gelaufen, sprint=${mid.sp}, Ausdauer ${a.st.toFixed(0)} → ${b.st.toFixed(0)}`);
+}
 for (const [name, code, want] of steps) {
   const res = await page.evaluate(c => { let r = ''; try { eval(c); } catch (e) { r = 'EXC ' + e.message; } const g = window.__game.game;
     return { r, q: g.S.quest, toasts: [...document.querySelectorAll('.toast')].slice(-2).map(t => t.textContent).join(' / ') }; }, code);

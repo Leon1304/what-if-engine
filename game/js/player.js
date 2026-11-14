@@ -64,13 +64,13 @@ export class Player {
     const k = this.keys, fw = (k.KeyW ? 1 : 0) - (k.KeyS ? 1 : 0), st = (k.KeyD ? 1 : 0) - (k.KeyA ? 1 : 0);
     this.crouch = !!(k.ControlLeft || k.KeyC && false);
     const wantSprint = !!(k.ShiftLeft || k.ShiftRight) && fw > 0 && !this.crouch;
-    this.sprint = wantSprint && g.stats.stamina > 1;
+    this.sprint = wantSprint && g.S.stats.stamina > 1;
     const speed = this.crouch ? 1.5 : this.sprint ? 6.2 : 3.3;
     const wish = new THREE.Vector3(st, 0, -fw);
     if (wish.lengthSq() > 0) wish.normalize().applyAxisAngle(new THREE.Vector3(0, 1, 0), this.yaw).multiplyScalar(speed * g.slow);
     const acc = this.onGround ? 14 : 2.5;
     this.vel.x += (wish.x - this.vel.x) * Math.min(1, acc * dt); this.vel.z += (wish.z - this.vel.z) * Math.min(1, acc * dt);
-    if (k.Space && this.onGround && g.stats.stamina > 8) { this.vel.y = 4.8; this.onGround = false; g.stats.stamina -= 8; k.Space = false; }
+    if (k.Space && this.onGround && g.S.stats.stamina > 8) { this.vel.y = 4.8; this.onGround = false; g.S.stats.stamina -= 8; k.Space = false; }
     this.vel.y -= 18 * dt;
     const wasGround = this.onGround; this.onGround = false; this.fallV = 0;
     const N = 4;

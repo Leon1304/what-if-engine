@@ -16,11 +16,13 @@ const AUTO = Q.has('autostart');
 
 const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance', preserveDrawingBuffer: AUTO });
 renderer.setSize(innerWidth, innerHeight);
-renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap; renderer.shadowMap.autoUpdate = false;
 renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.0;
 document.body.prepend(renderer.domElement);
 const QUALITY = { hoch: [Math.min(devicePixelRatio, 2), 2048, true], mittel: [Math.min(devicePixelRatio, 1.25), 1024, true], niedrig: [.85, 512, false] };
 let quality = 'mittel'; try { quality = localStorage.getItem('waldtank_quality') || 'mittel'; } catch { }
+let fpsCap = 60; try { const f = localStorage.getItem('waldtank_fps'); if (f !== null) fpsCap = +f; } catch { }
+function applyFps(f) { fpsCap = +f; try { localStorage.setItem('waldtank_fps', f); } catch { } document.querySelectorAll('[data-fps]').forEach(b => b.classList.toggle('on', +b.dataset.fps === fpsCap)); }
 
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(72, innerWidth / innerHeight, .05, 650); scene.add(camera);
@@ -29,7 +31,7 @@ addEventListener('resize', () => { renderer.setSize(innerWidth, innerHeight); ca
 const ui = new UI(), audio = new Audio(), sky = new Sky(scene);
 function applyQuality(q) {
   quality = q; const [pr, sm, sh] = QUALITY[q]; renderer.setPixelRatio(pr);
-  sky.sun.shadow.mapSize.set(sm, sm); sky.sun.shadow.map?.dispose(); sky.sun.shadow.map = null; renderer.shadowMap.enabled = sh;
+  sky.sun.shadow.mapSize.set(sm, sm); sky.sun.shadow.map?.dispose(); sky.sun.shadow.map = null; renderer.shadowMap.enabled = sh; renderer.shadowMap.needsUpdate = true;
   scene.traverse(o => { if (o.material) for (const m of [].concat(o.material)) m.needsUpdate = true; });
   try { localStorage.setItem('waldtank_quality', q); } catch { }
   document.querySelectorAll('[data-q]').forEach(b => b.classList.toggle('on', b.dataset.q === q));
@@ -73,6 +75,7 @@ $('btn-continue').onclick = () => begin('load');
 $('btn-resume').onclick = () => { ui.show('pause', false); lock(); };
 $('btn-restart').onclick = () => { game.wipe(); location.reload(); };
 document.querySelectorAll('[data-q]').forEach(b => b.onclick = () => applyQuality(b.dataset.q));
+document.querySelectorAll('[data-fps]').forEach(b => b.onclick = () => applyFps(b.dataset.fps)); applyFps(fpsCap);
 $('btn-dead-load').onclick = () => location.reload();
 $('btn-dead-new').onclick = () => { game.wipe(); location.reload(); };
 $('btn-win-new').onclick = () => { game.wipe(); location.reload(); };
@@ -160,7 +163,17 @@ function drawMap() {
 // ---------------------------------------------------------------- loop
 const clock = new THREE.Clock(); let hudT = 0, target = null;
 const v = new THREE.Vector3();
-function frame() {
+let frameErr = 0, lastT = 0, frameN = 0, cullT = 0;
+function frame(now = 0) {
+  requestAnimationFrame(frame);           // schedule first: one exception must never freeze the game
+  // frame cap (ProMotion displays run rAF at 120 Hz); menus / pause only 20 FPS – keeps the laptop cool
+  const idle = !playing || !!panel || (!AUTO && document.pointerLockElement !== renderer.domElement);
+  const cap = idle ? 20 : fpsCap;
+  if (cap && !AUTO && now - lastT < 1000 / cap - 2) return;
+  lastT = now;
+  try { step(); } catch (e) { if (frameErr++ < 3) console.error(e); }
+}
+function step() {
   const dt = Math.min(.05, clock.getDelta());
   const active = playing && (document.pointerLockElement === renderer.domElement || AUTO) && !panel;
   if (active && !game.S.flags.dead && !game.S.flags.won) { player.update(dt, game); game.update(dt, player.keys); }
@@ -185,8 +198,10 @@ function frame() {
     ui.setMarker({ x: (x + 1) / 2 * innerWidth, y: (1 - y) / 2 * innerHeight }, tp.distanceTo(player.pos));
   } else ui.setMarker(null);
   for (const w of W.waterMeshes) { /* gentle shimmer */ w.material.opacity = .74 + .04 * Math.sin(performance.now() / 700); }
+  cullT -= dt; if (cullT < 0) { cullT = .25; W.cull(camera.position); }
+  // sun shadow map: every 2nd frame is enough (the shadow matrix stays consistent with the last shadow render)
+  renderer.shadowMap.needsUpdate = (frameN++ & 1) === 0 || dt > .03;
   renderer.render(scene, camera);
-  requestAnimationFrame(frame);
 }
 if (AUTO) { playing = true; ui.renderHotbar(game.S.inv, game.S.sel); }
 frame();
