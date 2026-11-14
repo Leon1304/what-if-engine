@@ -319,7 +319,7 @@ const CFG = {
   filter: 'film', grain: 0.05, vignette: 0.45, saturation: 0.95, contrast: 1.08,
   shadows: true, area: 60, nightLift: 0.42, renderScale: 0.75, msaa: 2, sunAz: -40, handheld: 0.5, coverT: 1.2,
   capPos: 'mid', capDodge: true, karaoke: true, wordRate: 0.085, voice: 'auto', series: null, cast: {},
-  gore: 'off', transition: 'auto'
+  gore: 'off', transition: 'cut'
 };
 const LIVE = {};
 
@@ -355,7 +355,7 @@ const CAM = [
   { t: 9.4, cut: true, p: [-0.45, 1.8, -1.95], l: [-1.05, 1.0, -4.3], fov: 46 },
   { t: 12.5, p: [-0.5, 1.75, -2.2], l: [-1.05, 1.0, -4.3], fov: 46, e: 'inOut' },
   // bourbon, cigarette, the note
-  { t: 12.5, cut: true, p: [-0.25, 1.6, -2.65], l: [-0.8, 1.12, -4.3], fov: 42 },
+  { t: 12.5, cut: true, tr: 'cut', p: [-0.25, 1.6, -2.65], l: [-0.8, 1.12, -4.3], fov: 42 },
   { t: 15.3, p: [-0.3, 1.56, -2.8], l: [-0.8, 1.1, -4.3], fov: 42, e: 'inOut' },
   { t: 15.3, cut: true, p: [0.45, 1.7, -2.1], l: [-0.3, 1.25, -4.2], fov: 54 },
   { t: 18.6, p: [0.42, 1.68, -2.3], l: [-0.3, 1.25, -4.2], fov: 54, e: 'inOut' },
