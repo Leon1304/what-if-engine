@@ -4722,6 +4722,56 @@ function generator(p, x, z, o = {}) {   // portable petrol generator in a tube f
     const tv = VT(on); if (tv >= 0 && !o.quiet) (AUDIO.hits ??= []).push({ t: tv, k: 'engine', dur: Math.min(off, on + 40) - on, v: o.vol ?? 0.45 }); }
   return { g, out: [x, 0.12, z] };
 }
+// ---- v3.31 camp-out kit: tent() (dome / ridge, pitches up, sways, door flap, snow cap, name tag), countdownScreen() (LED countdown that hits zero, glitches, flips to messages) ----
+function tent(p, x, z, o = {}) {   // kind 'dome' (default) | 'ridge'; color, fly, ry, size; pitch: t (pops up), open: t (door flap rolls up), snow: t (snow cap grows), name: 'KEVIN' (little tag on the front)
+  const g = dyn(grp(p, x, groundH(x, z), z, o.ry ?? 0)), body = grp(g, 0, 0, 0), s = o.size ?? 1, c = o.color ?? '#E8772E', fly = o.fly ?? shade(c, -0.12), NC = { cast: false }, kind = o.kind ?? 'dome';
+  const W = 2.1 * s, D = 2.3 * s, H = (kind === 'dome' ? 1.25 : 1.15) * s;
+  if (kind === 'dome') {
+    const sh = ball(body, 1, c, 0, 0, 0, { detail: 1, rough: 0.8 }); sh.scale.set(W / 2, H, D / 2);   // shell
+    const cut = box(body, W * 1.02, 0.02, D * 1.02, '#3E4A2E', 0, -0.01, 0, NC); cut.visible = true;   // ground sheet edge
+    for (const a of [0.6, -0.6]) { const pl = grp(body, 0, 0, 0, a); for (let i = 0; i <= 8; i++) { const u = i / 8 * Math.PI, px = Math.cos(u) * W / 2 * 1.01, py = Math.sin(u) * H * 1.01; ball(pl, 0.03 * s, '#2A2D33', px, py, 0, { detail: 0, ...NC }); } }   // poles over the shell
+    const fl = ball(body, 1, fly, 0, 0, 0, { detail: 1, rough: 0.8 }); fl.scale.set(W / 2 * 0.62, H * 1.03, D / 2 * 0.62);   // rain fly on top
+  } else {
+    prism(body, D, H, W, c, 0, 0, 0, { ry: Math.PI / 2 }); for (const sz of [-1, 1]) cyl(body, 0.03 * s, 0.03 * s, H + 0.12, '#2A2D33', 0, 0, sz * D / 2, { seg: 6, ...NC });
+  }
+  const dome = kind === 'dome', dh = H * (dome ? 0.66 : 0.5), dw = W * (dome ? 0.4 : 0.28), door = grp(body, 0, 0.02 * s, dome ? D / 2 - 0.06 * s : D / 2 + 0.005);
+  if (dome) door.rotation.x = -Math.atan2(D / 2 * (1 - Math.sqrt(1 - (dh / H) ** 2)), dh);   // lean the door back onto the curved shell
+  const flap = box(door, dw, dh, 0.03, shade(c, -0.3), 0, 0, 0.02, NC);
+  box(door, dw + 0.02, 0.03, 0.04, '#D8D2C2', 0, dh, 0.03, NC);   // zip line
+  for (const sx of [-1, 1]) { const px = sx * (W / 2 + 0.35 * s); cyl(body, 0.015, 0.015, 0.18, '#B8B8B8', px, 0, 0, { seg: 5, ...NC }); const L = Math.hypot(0.35 * s, H * 0.55), m = box(body, 0.01, L, 0.01, '#E8E4D8', px - sx * 0.17 * s, 0.05, 0, NC); m.rotation.z = -sx * Math.atan2(0.35 * s, H * 0.55); }   // guy lines + pegs
+  if (o.name) textSign(body, o.name, { w: 0.42 * s, h: 0.14 * s, bg: '#FFFFFF', color: '#1A1A1A', x: W * 0.28, y: H * 0.42, z: D / 2 * 0.86, board: 0.01, rx: -0.35 });
+  let cap = null; if (o.snow != null) { cap = ball(body, 1, '#F4F6FA', 0, 0, 0, { detail: 1, rough: 0.9 }); cap.scale.set(W / 2 * 1.02, H * 1.05, D / 2 * 1.02); cap.position.y = 0.01; }
+  const ups = [].concat(o.pitch ?? -1e9), away = o.away ?? [], open = o.open ?? 1e9, snow = o.snow ?? 1e9, seed = hash(x * 3.3 + z * 1.7);   // pitch: t | [t …] (pops up each time), away: [[a, b], …] (not there)
+  tick(t => { const pitch = ups.filter(u => u <= t).pop() ?? 1e9, k = away.some(([a0, b0]) => t >= a0 && t < b0) ? 0 : EASE.out(clamp((t - pitch) / 0.6)); g.visible = k > 0.01; body.scale.set(1, Math.max(0.01, k * (1 + 0.12 * (1 - k) * Math.sin((t - pitch) * 18))), 1);
+    body.scale.x = 1 + 0.008 * Math.sin(t * 2.3 + seed * 6); door.scale.y = 1 - 0.85 * EASE.inOut(clamp((t - open) / 0.8));
+    if (cap) { const u = clamp((t - snow) / (o.snowDur ?? 4)); cap.visible = u > 0.01; cap.scale.y = H * (0.25 + 0.8 * u) * 1.05; cap.material.opacity = 1; } });
+  for (const u of ups) if (u > -1e8) sfx(u, 'whoosh', 0.3);
+  return { g, door: [x, z + D / 2 + 0.6] };
+}
+function countdownScreen(p, w, h, o = {}) {   // big LED screen: label + countdown, zero, a glitch, then messages. segs: [{ from, at, remain: t => seconds, glitch }] (one per countdown; default one
+  // segment { from: -1e9, at: o.at, remain: (at − t) · scale }); msgs: [[t, title, sub, strike]] are shown outside the counting / glitch windows (strike: red line through the title).
+  // Other options go to screenPanel (x, y, z, ry, wall, frame …); accent, label, span (seconds that fill the progress bar), ticks: [t …] (tick sounds), sound: false
+  const acc = o.accent ?? '#FF8A2A', label = o.label ?? 'LAUNCH IN', msgs = o.msgs ?? [], sc = o.scale ?? 1;
+  const segs = (o.segs ?? [{ from: -1e9, at: o.at ?? 10 }]).map(q => ({ from: q.from ?? -1e9, at: q.at, gl: q.glitch ?? o.glitch ?? 0.9, rem: q.remain ?? (t => (q.at - t) * sc) }));
+  const fmt = r => { r = Math.max(0, Math.ceil(r - 1e-6)); const d = Math.floor(r / 86400), hh = Math.floor(r / 3600) % 24, mm = Math.floor(r / 60) % 60, ss = r % 60, P = n => String(n).padStart(2, '0'); return (d ? d + 'd ' : '') + P(hh) + ':' + P(mm) + ':' + P(ss); };
+  const P = screenPanel(p, w, h, (c, W, H, t) => {
+    c.fillStyle = '#05060A'; c.fillRect(0, 0, W, H); c.textAlign = 'center'; c.textBaseline = 'middle';
+    const sg = segs.find(q => t >= q.from && t < q.at + q.gl);
+    if (sg) { const r = t < sg.at ? Math.max(0, sg.rem(t)) : 0, last = r <= 10;
+      c.fillStyle = '#FFFFFF'; c.font = signFont(H * 0.11); c.fillText(label, W / 2, H * 0.2);
+      c.fillStyle = last ? acc : '#FFFFFF'; c.font = signFont(H * (last ? 0.3 : 0.22), 'mono', { weight: 700 }); c.shadowColor = acc; c.shadowBlur = H * 0.04; c.fillText(fmt(r), W / 2, H * 0.56, W * 0.86); c.shadowBlur = 0;
+      c.fillStyle = 'rgba(255,255,255,0.15)'; c.fillRect(W * 0.1, H * 0.84, W * 0.8, H * 0.025); c.fillStyle = acc; c.fillRect(W * 0.1, H * 0.84, W * 0.8 * clamp(1 - r / (o.span ?? 259200)), H * 0.025);
+      if (t >= sg.at + 0.15) { const f = Math.floor(t * 20); c.fillStyle = '#05060A'; c.globalAlpha = 0.6; c.fillRect(0, 0, W, H); for (let i = 0; i < 46; i++) { c.fillStyle = hash(i * 7.1 + f) < 0.5 ? acc : '#FFFFFF'; c.globalAlpha = 0.25 + 0.5 * hash(i * 1.9 + f); c.fillRect((hash(i * 5.7 + f) - 0.3) * W, hash(i * 3.3 + f) * H, W * (0.3 + hash(i * 2.2 + f)), H * 0.03 * hash(i + f)); } c.globalAlpha = 1; }
+      return; }
+    const m = [...msgs].reverse().find(q => t >= q[0]); if (!m) return; if (t - m[0] < 0.25) c.translate((hash(Math.floor(t * 30)) - 0.5) * W * 0.03, 0);
+    c.font = signFont(H * 0.24); const tw = Math.min(W * 0.9, c.measureText(m[1]).width);
+    c.fillStyle = m[3] ? '#9A9AA2' : acc; c.fillText(m[1], W / 2, H * 0.42, W * 0.9);
+    if (m[2]) { c.fillStyle = '#FFFFFF'; c.font = signFont(H * 0.12); c.fillText(m[2], W / 2, H * 0.72, W * 0.9); }
+    if (m[3]) { c.fillStyle = '#FF2A2A'; c.save(); c.translate(W / 2, H * 0.42); c.rotate(-0.06); c.fillRect(-tw / 2 - W * 0.02, -H * 0.022, (tw + W * 0.04) * clamp((t - m[0]) / 0.3), H * 0.044); c.restore(); }
+  }, { fps: 20, glow: 0.25, ...o });
+  if (o.sound !== false) { for (const tt of o.ticks ?? []) sfx(tt, 'tick', 0.6); for (const q of segs) sfx(q.at + 0.15, 'glitch', 0.8); }
+  return P;
+}
 // ---- v2.33.3 horror kit: convex security mirror, porthole lens (mirror / peephole view) ----
 function convexMirror(p, x, y, z, o = {}) {   // round convex shop mirror on a wall bracket; faces +z (ry turns it), rx tilts it down. → { g, at: [x, y, z] (centre) }
   const r = o.r ?? 0.42, g = stat(grp(p ?? world, x, y, z, o.ry ?? 0)); g.rotation.x = o.rx ?? 0.35;

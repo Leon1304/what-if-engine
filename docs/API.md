@@ -1487,3 +1487,11 @@ Digitaler Nachttisch-Wecker mit roter Anzeige und Snooze-Taste. Bis `ring` steht
 
 ## Notstromaggregat `generator(p, x, z, { ry, on, off, color, cable: [[x, y, z], …], quiet, vol })` → `{ g, out }`
 Tragbares Benzin-Aggregat im Rohrrahmen (Tank mit Deckel, Motor mit Kühlrippen, Auspuff, Bedienfeld mit Steckdosen, Lampe, Schalter, Seilzug, Räder). Ab `on` rüttelt es (beim Anspringen stärker), die Lampe wird grün, Abgaswölkchen steigen auf, Motorgeräusch (`engine`, bis 40 s; `quiet: true` = ohne). `cable` legt ein Stromkabel vom Bedienfeld zu den Punkten. `FURN.generator` (Kellermöbel) bleibt unbewegt.
+
+# Neu in v3.31 (Camp-out: Zelt, Countdown-Leinwand)
+
+## Zelt `tent(p, x, z, { kind: 'dome' | 'ridge', color, fly, ry, size, pitch, away, open, snow, snowDur, name })` → `{ g, door }`
+Kuppelzelt (Außenzelt, zwei Bögen mit Gestänge, Überzelt, Bodenrand) oder Firstzelt (Satteldach mit zwei Stangen), Tür mit Reißverschluss, Abspannleinen mit Heringen; der Stoff atmet leicht im Wind. `pitch: t | [t …]` = es poppt auf (federt nach, Whoosh); `away: [[a, b], …]` = in diesen Zeiten nicht da (z. B. Hook spielt später als die Vorgeschichte); `open: t` = Türplane rollt ein; `snow: t` = Schneehaube wächst über `snowDur` s (Standard 4); `name: 'KEVIN'` = kleines Namensschild vorn. `door` = Punkt vor der Tür (für `walk`).
+
+## Countdown-Leinwand `countdownScreen(p, w, h, { segs, msgs, accent, label: 'LAUNCH IN', span, ticks, sound, x, y, z, ry, wall, … })`
+LED-Leinwand (über `screenPanel`). `segs: [{ from, at, remain: t => Sekunden, glitch }]`: in jedem Abschnitt zählt sie von `from` bis `at` herunter (Anzeige `Xd HH:MM:SS`, die letzten 10 s groß in der Akzentfarbe, Fortschrittsbalken über `span` s), steht kurz auf 0 und flackert dann `glitch` s lang digital. `remain` darf beliebig sein (Zeitraffer, Sprünge zwischen Shots), Standard `(at − t) · scale`. Außerhalb der Abschnitte zeigt sie `msgs: [[t, Titel, Untertitel, strike]]` (der jüngste mit t ≤ jetzt; `strike: true` = grau mit rotem Strich durch, z. B. verschobene Termine). `ticks: [t …]` = Tick-Geräusche, beim Glitch kommt `glitch` von selbst (`sound: false` = still). Ohne Marken/Logos. Test: `tests/camp-out`.
