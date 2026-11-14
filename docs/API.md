@@ -1465,3 +1465,25 @@ Schalter für den Kino-Look, standardmäßig aus. Läuft als eigener Schritt (`C
 - **Prüfung:** `QA: HEADCUT` misst die Oberkante am Balken. Ein Kopf, der unter dem Balken verschwindet, gilt als abgeschnitten (Meldung „under the cinema bar“). Für Nahaufnahmen also `fy` etwas tiefer setzen (ca. 0,42 statt 0,36).
 - **Rezept „filmisch“** (Skill-Schlüsselwort): `cinema: true, motionBlur: 'all', grain: 0.07, vignette: 0.6, saturation: 0.96, contrast: 1.14, dofAuto: 1`, dazu ein Himmel mit tiefer Sonne (`golden`, `dusk`) oder Nacht mit vielen Lichtern (Laternen, `headlights`, Neon) – dort wirken Streifen und Halation. Gesichter nachts mit `glow` nur mäßig aufhellen (`intensity` ≤ 15 bei 2–3 m), sonst überstrahlen sie.
 - Test: `tests/cinema` (golden → dusk-Straße mit Laternen und Scheinwerfern → Nacht-Nahaufnahme mit breiter werdenden Balken).
+
+# Neu in v3.30 (Launch-Tag: Stromausfall, Konsole, Spielbildschirm, Controller, Wecker, Aggregat)
+
+## Stromausfall `blackout()` / `powerAt()`
+- `blackout({ cuts: [{ t, from: [x, z], speed, flicker: 0.7, spread: 0.35, back }] })` **vor** `city()` / `tower()` / `streetlight()` aufrufen. Dann bekommt jedes Hochhaus eigene Fenster-, Schaufenster- und Kronenmaterialien und jede Straßenlaterne einen eigenen Leuchtkopf; sie gehen als Welle von `from` aus mit `speed` m/s aus (`speed: 0` = überall gleichzeitig), flackern davor `flicker` s lang und streuen je Gebäude um `spread` s. `back`: Zeit, ab der der Strom wieder da ist. Mehrere `cuts` gehen (z. B. kurzer Blackout im Cold Open, `back` beim Schnitt in die Vorgeschichte, und der echte später).
+- Die Skyline im Hintergrund (`backdrop('skyline')`, `biome('city')`) geht als Ganzes aus, wenn die Welle den Horizont erreicht (Punkt 160 m hinter der Stadt, von `from` aus gesehen).
+- Laternen haben unter einem Stromausfall keine Lichtpfützen und Halos (die können nicht ausgehen); sonst wie gewohnt.
+- `powerAt(x, z, t)` → 0…1 für eigene Lichter, Bildschirme, Schilder: `glow(x, y, z, { env: t => powerAt(x, z, t) })`. Rückgabe von `blackout()`: `{ at, cuts, when(x, z, i) }` (`when` = Zeit, zu der die Welle (x, z) erreicht).
+- Reine Funktion von t, kein Zustand. Test: `tests/launch-day`.
+
+## Spielkonsole und Spielbildschirm
+- `gameConsole(p, x, y, z, { ry, color, light, on: t | [t0, t1] | t => bool | true, power })` → `{ g, strip, top }`: flache Konsole ohne Marke (Lüftungsschlitze, Laufwerksschlitz, USB, Power-Taste, Füße), vorn ein Lichtstreifen, der atmet, solange sie an ist. `power: t => 0..1` (Standard `powerAt` an ihrer Stelle, `false` = immer Strom).
+- `gameScreen(p, w, h, { t0, load: 5, stuck, play, on, label: 'LOADING', accent, power, x, y, z, ry, wall, … })` → wie `screenPanel`: generisches Open-World-Spiel ohne Logo. Erst Ladebildschirm mit Balken, Prozent und Spinner (`stuck: 0.99` = bleibt bei 99 % hängen), danach Spielbild (Sonnenuntergang, Neon-Skyline, Palmen, Auto auf der Straße, Minikarte, Lebensbalken), das sich bewegt. Ohne Strom (`powerAt` an `x, z` oder `power`) schwarz. Den Raum hellt man zusätzlich mit `glow(…, { color: '#B07CFF', env })` auf.
+
+## Controller in beiden Händen `gamepad(rig, { t0, t1, color, light, mash: 1, tilt, shoulder, elbow, power })`
+Generischer Controller (Griffe, zwei Sticks, vier Tasten, Steuerkreuz, Lichtleiste) mittig zwischen beiden Händen vor dem Bauch; die Arme beugen sich, Hände greifen, Kopf neigt sich zum Bildschirm, die Sticks wackeln (`mash` = Stärke). Gut mit `sit()`. **Sitzen auf einem Möbel:** `sit(f, t, { seat: [x, 0, z], h: 0.55 })` mit Boden-y und Sitzhöhe `h` (x/z aus `R.seat('sofa')`).
+
+## Wecker `alarmClock(p, x, y, z, { ry, from: '05:59', to: '06:00', ring, stop, color, digits })` → `{ g, screen }`
+Digitaler Nachttisch-Wecker mit roter Anzeige und Snooze-Taste. Bis `ring` steht `from`, dann springt er auf `to`, blinkt „ALARM“, rattelt auf dem Tisch und piept bis `stop` (Sound `beep` alle 0,5 s).
+
+## Notstromaggregat `generator(p, x, z, { ry, on, off, color, cable: [[x, y, z], …], quiet, vol })` → `{ g, out }`
+Tragbares Benzin-Aggregat im Rohrrahmen (Tank mit Deckel, Motor mit Kühlrippen, Auspuff, Bedienfeld mit Steckdosen, Lampe, Schalter, Seilzug, Räder). Ab `on` rüttelt es (beim Anspringen stärker), die Lampe wird grün, Abgaswölkchen steigen auf, Motorgeräusch (`engine`, bis 40 s; `quiet: true` = ohne). `cable` legt ein Stromkabel vom Bedienfeld zu den Punkten. `FURN.generator` (Kellermöbel) bleibt unbewegt.

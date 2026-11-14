@@ -722,7 +722,8 @@ if (CFG.groundFog !== false) {
 }
 const _ca = new THREE.Color(), _cb = new THREE.Color();
 const mixC = (out, a, b, k) => out.copy(_ca.set(a)).lerp(_cb.set(b), k);
-let skyNow = SKIES.day, NIGHTK = 0; const NIGHTMATS = [];   // materials whose glow follows the darkness (lit windows)
+let skyNow = SKIES.day, NIGHTK = 0, POWER = null; const NIGHTMATS = [];   // v3.30 POWER: power cuts from blackout() (powerAt)
+   // materials whose glow follows the darkness (lit windows)
 function applySky(t) {
   let i = 0; for (let j = 0; j < SKY.length; j++) if (SKY[j][0] <= t) i = j;
   const A = SKIES[SKY[i][1]], B = SKIES[(SKY[i + 1] ?? SKY[i])[1]];
@@ -730,7 +731,7 @@ function applySky(t) {
   skyNow = k < 0.5 ? A : B;
   mixC(skyU.top.value, A.top, B.top, k); mixC(skyU.bot.value, A.bot, B.bot, k);
   skyU.stars.value = lerp(A.stars, B.stars, k);
-  applyWeather(t); NIGHTK = lerp(A.nk ?? 0, B.nk ?? 0, k); for (const m of NIGHTMATS) m.emissiveIntensity = m.userData.nightEi * clamp((m.userData.dayEi ?? 0.1) + NIGHTK * 1.15);   // v2.34: how dark it is (0 day … 1 night) — city windows, fireflies, butterflies follow it
+  applyWeather(t); NIGHTK = lerp(A.nk ?? 0, B.nk ?? 0, k); for (const m of NIGHTMATS) m.emissiveIntensity = m.userData.nightEi * clamp((m.userData.dayEi ?? 0.1) + NIGHTK * 1.15) * (m.userData.pw ? powerAt(m.userData.pw[0], m.userData.pw[1], t) : 1);   // v2.34: how dark it is (0 day … 1 night) — city windows, fireflies, butterflies follow it
   { const ca = A.cl ?? [0], cb = B.cl ?? [0], on = CFG.clouds === false ? 0 : 1, cv = typeof CFG.clouds === 'number' ? (CFG.clouds - 1) * 0.12 : 0;
     skyU.cT.value = t; skyU.cAmt.value = lerp(ca[0], cb[0], k) * on; skyU.cCov.value = lerp(ca[1] ?? 0.5, cb[1] ?? 0.5, k) - cv;
     mixC(skyU.cLit.value, ca[2] ?? '#000000', cb[2] ?? '#000000', k); mixC(skyU.cShd.value, ca[3] ?? '#000000', cb[3] ?? '#000000', k); }
@@ -759,7 +760,7 @@ function applySky(t) {
     HAZED.value.x = o.x; HAZED.value.y = o.y; HAZED.value.z = o.z;
     const sg = clamp((o.y + 0.05) / 0.12) * (1 - clamp((o.y - 0.25) / 0.5)) * Math.min(1, sun.intensity / 1.5);   // the haze glows toward a low sun
     HAZES.value.x = sun.color.r * 0.55; HAZES.value.y = sun.color.g * 0.55; HAZES.value.z = sun.color.b * 0.55; HAZES.value.w = sg; }
-  for (const m of NIGHTGLOW) m.emissiveIntensity = 2.6 * skyU.stars.value;
+  for (const m of NIGHTGLOW) m.emissiveIntensity = 2.6 * skyU.stars.value * (m.userData.pw ? powerAt(m.userData.pw[0], m.userData.pw[1], t) : 1);   // v3.30: street lights on a cut-off block go dark
   const lk = strikeK(t); if (lk) { hemi.intensity += 3 * lk; sun.intensity += 2 * lk; }
 }
 // v3.5 dust in the air: faint motes floating near the camera, lit by the sun (brighter looking into the light) — positions are a pure function of t, wrapped
@@ -1447,6 +1448,7 @@ function autoDress() {
                                        instanced, every position a pure function of t
 /* ---------------------------------------------------------------------- */
 let _backdropDone = false, _dressed = false, _autoDressQ = false;   // _dressed: biome() / city() / backdrop() was called → ground() does not dress the scene by itself (v3.5)
+const _skyPw = t => { const [fx, fz] = POWER[0].from, L = Math.hypot(fx, fz) || 1; return powerAt(fx - fx / L * (L + 160), fz - fz / L * (L + 160), t); };   // v3.30 skyline backdrop: power at a point on the horizon beyond the city, seen from the cut's origin
 const NIGHTU = { value: 0 }, BDT = { value: 0 };   // v3.5 shared uniforms: darkness (NIGHTK) and time for skyline windows and beacons — set by a tick (applySky runs before the tickers)
 function backdrop(kind = 'hills', o = {}) {   // v3.5 o.also: an extra layer (e.g. a skyline in front of the hills) — ignores and keeps the one-backdrop guard
   if (!o.also) _dressed = true;
@@ -1570,7 +1572,7 @@ function skyline(g, r0, R, sector) {   // sector: [fromDeg, toDeg] — towers on
           vA = b * smoothstep(0.12, 0.5, uN); vec4 mv = modelViewMatrix * vec4(position, 1.0); mv.xy += cn * (ph.y > 0.5 ? 1.6 : 2.6); gl_Position = projectionMatrix * mv; }`,
       fragmentShader: `varying vec2 vC; varying float vA; void main(){ float d = dot(vC, vC); if (d > 1.0 || vA < 0.002) discard; float k = exp(-d * 6.0) + 0.9 * (1.0 - smoothstep(0.04, 0.09, d)); gl_FragColor = vec4(vec3(1.0, 0.16, 0.08) * k * vA * 1.6, 1.0); }` });
     const bme = dyn(new THREE.Mesh(bg, bm)); bme.frustumCulled = false; bme.renderOrder = 2; g.add(bme); }
-  tick(t => { BDT.value = t; NIGHTU.value = NIGHTK; });
+  tick(t => { BDT.value = t; NIGHTU.value = NIGHTK * (POWER ? _skyPw(t) : 1); });   // v3.30: under a power cut the skyline goes dark (all at once) when the wave reaches the horizon
 }
 function ambientLife(kind = 'farm', o = {}) {
   if (CFG.life === false) return null;
@@ -4518,15 +4520,17 @@ function facadeKit(g, w, h, d, o = {}) {
   for (const lx of o.lamps ?? []) { box(g, 0.14, 0.3, 0.12, '#2A2D33', lx, 2.5, d / 2 + 0.07, NC); box(g, 0.12, 0.18, 0.04, '', lx, 2.52, d / 2 + 0.14, { mat: mat('#FFE9B8', { em: '#FFD88A', ei: 1.2 }), ...NC }); }
 }
 const _crownM = () => { if (!_crownM.m) { const m = _crownM.m = mat('#2C3644', { em: '#FFE2A0', ei: 0, rough: 0.35, own: true }); m.userData.nightEi = 1.8; m.userData.dayEi = 0; NIGHTMATS.push(m); } return _crownM.m; };   // v2.40: crown strip: dark glass by day, glows with the darkness
+const _pwGlow = (m, x, z) => { if (!m.userData.nightEi) return m; const c = m.clone(); c.userData = { ...m.userData, pw: [x, z] }; NIGHTMATS.push(c); return c; };   // v3.30: own copy of a night-glow material that follows powerAt(x, z, t)
 const _spandrel = c => mat(new THREE.Color(c).lerp(new THREE.Color('#1E2836'), 0.75).getHexString().replace(/^/, '#'), { rough: 0.45, metal: 0.1 });
 const _shopMs = new Map(), _shopM = share => { const k = share > 0 ? 1 : 0; if (!_shopMs.has(k)) { const m = mat('#33465C', { em: '#FFE3A8', ei: k ? 0.9 : 0, rough: 0.25, own: true, kind: 'glass' }); if (k) { m.userData.nightEi = 0.9; m.userData.dayEi = 0.2; NIGHTMATS.push(m); } _shopMs.set(k, m); } return _shopMs.get(k); };
 function tower(p, x, z, o = {}) {   // city building with depth: style glass | brick | deco (default: varies by position); lit 0..2 = share of lit windows at night
   const w = o.w ?? 6, d = o.d ?? 6, h = o.h ?? 24, g = stat(grp(p, x, 0, z, o.ry ?? 0)), c0 = o.color ?? pick(['#8A94A6', '#A7B0BE', '#6F7A8C', '#C9C1B3', '#5E6B7D', '#B5A48C']), NC = { cast: false };
   const hv = k => hash(x * 13.1 + z * 7.7 + k * 1.9), style = o.style ?? (h < 18 && hv(5) < 0.55 ? 'brick' : ['glass', 'deco', 'brick', 'glass', 'deco'][Math.floor(hv(4) * 5)]);
   const c = style === 'brick' && !o.color ? pick2(['#9C4A36', '#A8583E', '#8A3E30', '#B7704E', '#7E5A48'], hv(6)) : c0, trim = style === 'brick' ? '#D9D2C4' : shade(c, 0.08), deep = shade(c, -0.1);
-  const share = clamp((o.lit ?? (SKY.some(([, n]) => (SKIES[n]?.nk ?? 0) >= 0.5) ? 0.8 : 0)) * 0.6), dark = mat(o.glass ?? '#26324A', { rough: CFG.materials === false ? 0.3 : 0.14, metal: 0.2, kind: 'glass' }), lit = mat(o.glass ?? '#26324A', { em: '#FFD27A', ei: 1.1, rough: CFG.materials === false ? 0.3 : 0.14, kind: 'glass' });   // v3.5 kind glass: panes mirror the sky   // v2.34: windows light up by themselves when the video has a dusk or night, and follow the darkness
+  const share = clamp((o.lit ?? (SKY.some(([, n]) => (SKIES[n]?.nk ?? 0) >= 0.5) ? 0.8 : 0)) * 0.6), dark = mat(o.glass ?? '#26324A', { rough: CFG.materials === false ? 0.3 : 0.14, metal: 0.2, kind: 'glass' }), lit = mat(o.glass ?? '#26324A', { em: '#FFD27A', ei: 1.1, rough: CFG.materials === false ? 0.3 : 0.14, kind: 'glass', own: !!POWER });   // v3.5 kind glass: panes mirror the sky   // v2.34: windows light up by themselves when the video has a dusk or night, and follow the darkness
   if (!lit.userData.nightEi) { lit.userData.nightEi = 1.1; lit.userData.dayEi = 0.03; NIGHTMATS.push(lit); }
-  const lit2 = mat(o.glass ?? '#26324A', { em: '#D6E4FF', ei: 0.95, rough: CFG.materials === false ? 0.3 : 0.14, kind: 'glass' }); if (!lit2.userData.nightEi) { lit2.userData.nightEi = 0.95; lit2.userData.dayEi = 0.02; NIGHTMATS.push(lit2); }   // v2.40: some offices are lit cool white, most warm   // v2.40: by day a lit window is only a hint (0.1 made them look like brown boards)
+  const lit2 = mat(o.glass ?? '#26324A', { em: '#D6E4FF', ei: 0.95, rough: CFG.materials === false ? 0.3 : 0.14, kind: 'glass', own: !!POWER }); if (!lit2.userData.nightEi) { lit2.userData.nightEi = 0.95; lit2.userData.dayEi = 0.02; NIGHTMATS.push(lit2); }   // v2.40: some offices are lit cool white, most warm   // v2.40: by day a lit window is only a hint (0.1 made them look like brown boards)
+  if (POWER) { lit.userData.pw = lit2.userData.pw = [x, z]; }   // v3.30: under a power cut every tower has its own window glow (powerAt)
   box(g, w, h, d, c, 0, 0, 0, style === 'glass' ? {} : { surf: style === 'brick' ? 'brick' : 'concrete' });
   const floors = []; for (let y = 2.0; y < h - 1.6; y += 3.1) floors.push([y, rnd() < share]);   // one rnd per floor, as before (layout of old episodes unchanged)
   const nx = Math.max(2, Math.round(w / 2.2)), nz = Math.max(2, Math.round(d / 2.2)), win = (f, i, on) => on || (share > 0 && hv(f * 31 + i * 3 + 7) < share * 0.45) ? (hv(f * 7 + i * 13 + 3) < 0.28 ? lit2 : lit) : dark;
@@ -4552,7 +4556,7 @@ function tower(p, x, z, o = {}) {   // city building with depth: style glass | b
       floors.forEach(([y, on], f) => { for (let i = 0; i < n; i++) { box(q, W / n - 0.5, 1.8, 0.05, '', col(i), y - 0.15, 0.005, { mat: win(f + fi * 50, i, on), ...NC }); box(q, W / n - 0.48, 0.85, 0.1, deep, col(i), y + 1.75, 0.03, NC); }
         if (f % 4 === 3) box(q, W + 0.5, 0.3, 0.38, trim, 0, y + 2.6, 0.12, NC); });
     }
-    box(q, W * 0.72, 1.25, 0.05, '', 0, 0.35, 0.1, { mat: _shopM(share), ...NC });   // shop window (v2.40: follows the darkness instead of glowing cream all day; mullions, sill, transom)
+    box(q, W * 0.72, 1.25, 0.05, '', 0, 0.35, 0.1, { mat: POWER ? _pwGlow(_shopM(share), x, z) : _shopM(share), ...NC });   // shop window (v2.40: follows the darkness instead of glowing cream all day; mullions, sill, transom)
     { const x0 = -W * 0.36, x1 = fi === 0 ? Math.min(W * 0.36, W * 0.3 - 0.78) : W * 0.36, sw = x1 - x0, nm = Math.max(1, Math.round(sw / 1.3)), fc = shade(c, -0.3);   // left of the door on the front
       if (sw > 0.5) { for (let i = 1; i < nm; i++) box(q, 0.06, 1.25, 0.04, fc, x0 + i * sw / nm, 0.35, 0.14, NC); box(q, sw, 0.06, 0.04, fc, (x0 + x1) / 2, 1.3, 0.14, NC); box(q, sw + 0.08, 0.1, 0.16, shade(c, -0.22), (x0 + x1) / 2, 0.25, 0.14, NC); } }
     if (fi === 0 || hv(fi + 20) < 0.5) { const ac = pick2(['#C0392B', '#2E86AB', '#3DA56A', '#E3B23C', '#8E5BD9', '#E07A3A'], hv(fi + 10)); box(q, W * 0.74, 0.08, 1.0, ac, 0, 1.95, 0.6, { rx: 0.25, ...NC }); box(q, W * 0.74, 0.22, 0.04, ac, 0, 1.78, 1.08, NC); }
@@ -4574,7 +4578,7 @@ function tower(p, x, z, o = {}) {   // city building with depth: style glass | b
     if (o.antenna ?? h > 30) cyl(g, 0.08, 0.12, h * 0.15, '#6A707C', 0, h + 1.4, 0);
     if (style === 'glass') { for (const sz of [-1, 1]) box(g, w - 0.6, 0.08, 0.1, '#8A9099', 0, h, sz * (d / 2 - 0.25), NC);   // v2.40: window-cleaning gantry rails, davit, crown light strip (glows at night)
       const dv = grp(g, w / 2 - 0.5, h, d / 2 - 0.4); box(dv, 0.16, 1.4, 0.16, '#B8BEC6', 0, 0, 0, NC); box(dv, 0.12, 0.12, 1.1, '#B8BEC6', 0, 1.3, 0.4, NC);
-      for (const [a, b2, ww, dd] of [[0, d / 2 + 0.06, w, 0.04], [0, -d / 2 - 0.06, w, 0.04], [w / 2 + 0.06, 0, 0.04, d], [-w / 2 - 0.06, 0, 0.04, d]]) box(g, ww, 0.1, dd, '', a, h - 0.25, b2, { mat: _crownM(), ...NC }); }
+      for (const [a, b2, ww, dd] of [[0, d / 2 + 0.06, w, 0.04], [0, -d / 2 - 0.06, w, 0.04], [w / 2 + 0.06, 0, 0.04, d], [-w / 2 - 0.06, 0, 0.04, d]]) box(g, ww, 0.1, dd, '', a, h - 0.25, b2, { mat: POWER ? _pwGlow(_crownM(), x, z) : _crownM(), ...NC }); }
   }
   return { g, h, style };
 }
@@ -4606,8 +4610,9 @@ function streetlight(p, x, z, ry = 0, o = {}) {   // tall pole, arm over the roa
   if (!NIGHTGLOW.length) NIGHTGLOW.push(mat('#FFF1C8', { em: '#FFE2A0', ei: 0, own: true }));
   const MT = { kind: 'metal' };   // v3.5: metal pole and head; a light pool on the street and a halo under the head after dark (o.pool / o.halo: false = off)
   box(g, 0.3, 0.4, 0.3, '#2A2D33', 0, 0, 0, MT); cyl(g, 0.07, 0.1, H, '#3A3D44', 0, 0, 0, { seg: 8, ...MT }); box(g, 0.08, 0.08, 1.9, '#3A3D44', 0, H - 0.1, 0.9, { ...NC, ...MT });
-  box(g, 0.34, 0.14, 0.7, '#2A2D33', 0, H - 0.2, 1.8, { ...NC, ...MT }); box(g, 0.26, 0.04, 0.58, '', 0, H - 0.23, 1.8, { mat: NIGHTGLOW[0], ...NC });
-  lightPool(g, 0, 0, 1.8, { r: o.poolR ?? H * 0.85, color: '#FFD9A0', k: 0.5, pool: o.pool, ignore: g }); bulbHalo(g, 0, H - 0.3, 1.8, { size: 0.75, color: '#FFE2A8', k: 0.5, halo: o.halo });
+  let hm = NIGHTGLOW[0]; if (POWER) { hm = mat('#FFF1C8', { em: '#FFE2A0', ei: 0, own: true }); hm.userData.pw = [x, z]; NIGHTGLOW.push(hm); }   // v3.30: own lamp glow under a power cut; no light pool / halo (they cannot go dark)
+  box(g, 0.34, 0.14, 0.7, '#2A2D33', 0, H - 0.2, 1.8, { ...NC, ...MT }); box(g, 0.26, 0.04, 0.58, '', 0, H - 0.23, 1.8, { mat: hm, ...NC });
+  lightPool(g, 0, 0, 1.8, { r: o.poolR ?? H * 0.85, color: '#FFD9A0', k: 0.5, pool: POWER ? false : o.pool, ignore: g }); bulbHalo(g, 0, H - 0.3, 1.8, { size: 0.75, color: '#FFE2A8', k: 0.5, halo: POWER ? false : o.halo });
   return g;
 }
 function planter(p, x, z, ry = 0, o = {}) {   // concrete flower trough with blooms and greenery
@@ -4616,6 +4621,106 @@ function planter(p, x, z, ry = 0, o = {}) {   // concrete flower trough with blo
   for (let i = 0; i < 7; i++) { const xx = -L / 2 + 0.15 + i * (L - 0.3) / 6; ball(g, 0.13, pick2(['#4F7F3A', '#5C8C42'], hv(i)), xx, 0.55, (hv(i + 9) - 0.5) * 0.2, { detail: 0, ...NC });
     ball(g, 0.07, pick2(o.flowers ?? ['#E8506A', '#FFD84A', '#FFFFFF', '#B070E0', '#FF8A3D'], hv(i + 20)), xx + 0.04, 0.68, (hv(i + 30) - 0.5) * 0.25, { detail: 0, ...NC }); }
   return g;
+}
+// ---- v3.30 launch-day kit: power cut (blackout / powerAt), game console, TV game screen, gamepad in both hands, alarm clock, portable generator ----
+function blackout(o = {}) {   // call BEFORE city() / tower() / streetlight(): cuts: [{ t, from: [x, z], speed (m/s, 0 = everywhere at once), flicker (s), spread (s), back (t power returns) }]
+  POWER = (o.cuts ?? [o]).map(c => ({ t: c.t ?? 0, from: c.from ?? [0, 0], speed: c.speed ?? 0, flicker: c.flicker ?? 0.7, back: c.back ?? 1e9, spread: c.spread ?? 0.35 }));
+  return { at: powerAt, cuts: POWER, when: (x, z, i = 0) => { const c = POWER[i]; return c.t + (c.speed > 0 ? Math.hypot(x - c.from[0], z - c.from[1]) / c.speed : 0); } };
+}
+function powerAt(x, z, t) {   // 1 = power on … 0 = dark at (x, z); flickers for `flicker` s before the cut arrives. Pure function of t
+  if (!POWER) return 1; let p = 1;
+  for (let i = 0; i < POWER.length; i++) { const c = POWER[i]; if (t >= c.back) continue;
+    const tc = c.t + (c.speed > 0 ? Math.hypot(x - c.from[0], z - c.from[1]) / c.speed : 0) + c.spread * (hash(x * 1.7 + z * 2.9 + i) - 0.5);
+    if (t >= tc) return 0; if (t < tc - c.flicker) continue;
+    const u = (t - tc + c.flicker) / c.flicker; p = Math.min(p, hash(Math.floor(t * 18) * 1.31 + x * 3.1 + z * 1.7 + i) < 0.2 + 0.6 * u ? 0.1 : 1); }
+  return p;
+}
+const _pw = (o, x, z) => typeof o.power === 'function' ? o.power : o.power === false ? () => 1 : t => powerAt(x, z, t);
+function gameConsole(p, x, y, z, o = {}) {   // generic home console lying flat (no brand): matte body, vented top, glowing front strip, disc slot, ports, feet; on: t | [t0, t1] | t => bool; power: t => 0..1
+  const g = stat(grp(p, x, y, z, o.ry ?? 0)), c = o.color ?? '#1E2026', tr = shade(c, 0.12), NC = { cast: false }, W = 0.42, D = 0.3, H = 0.085;
+  for (const s of [-1, 1]) for (const u of [-1, 1]) cyl(g, 0.018, 0.02, 0.012, '#0E0F12', s * (W / 2 - 0.05), 0, u * (D / 2 - 0.05), { seg: 8, ...NC });
+  box(g, W, H, D, c, 0, 0.012, 0, { rough: 0.55 }); box(g, W - 0.02, 0.006, D - 0.02, tr, 0, 0.012 + H, 0, { rough: 0.35, ...NC });
+  for (let i = 0; i < 9; i++) box(g, 0.012, 0.004, D * 0.55, '#0B0C0F', W / 2 - 0.05 - i * 0.022, 0.018 + H, -0.02, NC);   // vents
+  box(g, W * 0.5, 0.006, 0.004, '#0A0A0C', -0.04, 0.012 + H * 0.6, D / 2 + 0.002, NC);   // disc slot
+  for (const [dx, w] of [[0.12, 0.016], [0.15, 0.016]]) box(g, w, 0.008, 0.004, '#3A3D44', dx, 0.012 + H * 0.3, D / 2 + 0.002, NC);   // USB ports
+  cyl(g, 0.009, 0.009, 0.005, '#3A3D44', 0.185, 0.012 + H * 0.62, D / 2 + 0.001, { rx: Math.PI / 2, seg: 10, ...NC });   // power button
+  const lm = mat(o.light ?? '#4FB6FF', { em: o.light ?? '#4FB6FF', ei: 0, own: true }), strip = box(g, W - 0.04, 0.006, 0.004, '', 0, 0.012 + H * 0.15, D / 2 + 0.003, { mat: lm, ...NC });
+  const on = o.on ?? true, isOn = t => typeof on === 'function' ? on(t) : Array.isArray(on) ? t >= on[0] && t < on[1] : typeof on === 'number' ? t >= on : !!on, pw = _pw(o, x, z);
+  tick(t => { lm.emissiveIntensity = isOn(t) ? (1.6 + 0.35 * Math.sin(t * 2.2)) * pw(t) : 0; });
+  return { g, strip, top: [x, y + 0.012 + H + 0.006, z] };
+}
+function gameScreen(p, w, h, o = {}) {   // TV picture of a generic open-world game: 'LOADING' with bar and percent from t0 over load s (stuck: 0.99 = hangs there), then gameplay
+  // (sunset sky, neon skyline, palms, a car on the road, minimap) until power(t) drops; on: t the TV switches on. All other options go to screenPanel (x, y, z, ry, wall …)
+  const t0 = o.t0 ?? 0, ld = o.load ?? 5, play = o.stuck != null ? 1e9 : (o.play ?? t0 + ld), x0 = o.x ?? 0, z0 = o.z ?? 0, pw = _pw(o, x0, z0), ton = o.on ?? -1e9;
+  const label = o.label ?? 'LOADING', acc = o.accent ?? '#FF4FB0';
+  return screenPanel(p, w, h, (c, W, H, t) => {
+    const k = pw(t); if (k <= 0.05 || t < ton) return; c.globalAlpha = Math.min(1, k);
+    if (t < play) {   // loading screen
+      const u = clamp((t - t0) / ld), f = o.stuck != null ? Math.min(o.stuck, EASE.out(u) * 1.02) : u, gr = c.createLinearGradient(0, 0, 0, H); gr.addColorStop(0, '#120A24'); gr.addColorStop(1, '#2A0F3A'); c.fillStyle = gr; c.fillRect(0, 0, W, H);
+      c.fillStyle = 'rgba(255,79,176,0.18)'; for (let i = 0; i < 6; i++) { const bx = ((i * 0.21 + t * 0.03) % 1.2 - 0.1) * W; c.fillRect(bx, H * 0.1, W * 0.04, H * 0.55); }
+      c.fillStyle = '#FFFFFF'; c.font = signFont(H * 0.12); c.textAlign = 'left'; c.textBaseline = 'middle'; c.fillText(label + '.'.repeat(1 + ((Math.floor(t * 2) % 3) + 3) % 3), W * 0.08, H * 0.72);
+      c.fillStyle = 'rgba(255,255,255,0.18)'; c.fillRect(W * 0.08, H * 0.82, W * 0.84, H * 0.05); c.fillStyle = acc; c.fillRect(W * 0.08, H * 0.82, W * 0.84 * f, H * 0.05);
+      c.fillStyle = '#FFFFFF'; c.textAlign = 'right'; c.font = signFont(H * 0.1); c.fillText(Math.floor(f * 100) + '%', W * 0.92, H * 0.72);
+      c.strokeStyle = '#FFFFFF'; c.lineWidth = H * 0.02; c.beginPath(); c.arc(W * 0.88, H * 0.18, H * 0.06, t * 5, t * 5 + 4.2); c.stroke(); return; }
+    const s = t - play, sky = c.createLinearGradient(0, 0, 0, H * 0.7); sky.addColorStop(0, '#3B1E6E'); sky.addColorStop(0.55, '#E2508A'); sky.addColorStop(1, '#FFB04A'); c.fillStyle = sky; c.fillRect(0, 0, W, H);
+    c.fillStyle = '#FFD86A'; c.beginPath(); c.arc(W * 0.5, H * 0.58, H * 0.2, Math.PI, 0); c.fill(); c.fillStyle = '#E2508A'; for (let i = 0; i < 4; i++) c.fillRect(W * 0.3, H * (0.44 + i * 0.035), W * 0.4, H * 0.008 * (i + 1));
+    for (let i = 0; i < 16; i++) { const bw = W * (0.05 + 0.04 * hash(i * 3.1)), bh = H * (0.12 + 0.3 * hash(i * 7.7)), bx = (((i / 16) - s * 0.012) % 1 + 1) % 1 * W * 1.2 - W * 0.1;
+      c.fillStyle = '#1A0F2E'; c.fillRect(bx, H * 0.62 - bh, bw, bh); c.fillStyle = hash(i) < 0.5 ? '#4FE0FF' : '#FF4FB0'; for (let j = 0; j < 4; j++) if (hash(i * 9 + j) < 0.6) c.fillRect(bx + bw * 0.2, H * 0.62 - bh + H * 0.03 + j * H * 0.05, bw * 0.6, H * 0.012); }
+    c.fillStyle = '#26203A'; c.fillRect(0, H * 0.62, W, H * 0.38); c.fillStyle = '#FFD86A'; for (let i = 0; i < 8; i++) c.fillRect(((i / 8 - s * 0.25) % 1 + 1) % 1 * W, H * 0.8, W * 0.06, H * 0.012);
+    for (let i = 0; i < 5; i++) { const px = (((i / 5) - s * 0.06) % 1 + 1) % 1 * W * 1.2 - W * 0.1, ph = H * 0.42; c.fillStyle = '#0E0818'; c.fillRect(px, H * 0.68 - ph, W * 0.012, ph);
+      for (let j = 0; j < 5; j++) { c.beginPath(); c.ellipse(px + Math.cos(j * 1.3) * W * 0.03, H * 0.68 - ph + Math.sin(j * 1.3) * H * 0.02, W * 0.045, H * 0.015, j * 1.3, 0, TAU); c.fill(); } }
+    const cx = W * (0.42 + 0.04 * Math.sin(s * 1.3)); c.fillStyle = acc; c.fillRect(cx, H * 0.74, W * 0.16, H * 0.07); c.fillStyle = '#1A1A22'; c.fillRect(cx + W * 0.03, H * 0.7, W * 0.09, H * 0.05);
+    c.fillStyle = '#0B0B10'; for (const wx of [0.03, 0.12]) { c.beginPath(); c.arc(cx + W * wx, H * 0.81, H * 0.025, 0, TAU); c.fill(); }
+    c.globalAlpha = Math.min(1, k) * 0.85; c.fillStyle = '#0B0B10'; c.beginPath(); c.arc(W * 0.1, H * 0.84, H * 0.11, 0, TAU); c.fill(); c.strokeStyle = acc; c.lineWidth = H * 0.012; c.stroke();
+    c.fillStyle = '#4FE0FF'; c.fillRect(W * 0.08, H * 0.82, H * 0.03, H * 0.03); c.fillStyle = '#5AE06A'; c.fillRect(W * 0.04, H * 0.05, W * 0.22, H * 0.025);
+  }, { fps: 15, ...o, glow: o.glow ?? 0.15 });
+}
+function gamepad(f, o = {}) {   // generic controller held in both hands in front of the belly (grips, two sticks that wobble, four face buttons, d-pad, light bar); arms bend to hold it
+  const t0 = o.t0 ?? 0, t1 = o.t1 ?? 1e9, NC = { cast: false }, c = o.color ?? '#23262C', pad = dyn(grp(world, 0, 0, 0)), core = grp(pad, 0, 0, 0), mash = o.mash ?? 1;
+  box(core, 0.15, 0.028, 0.065, c, 0, -0.014, 0, { rough: 0.5, ...NC }); for (const s of [-1, 1]) { box(core, 0.042, 0.03, 0.085, c, s * 0.062, -0.016, 0.04, { ry: s * 0.38, rough: 0.5, ...NC }); ball(core, 0.024, c, s * 0.075, -0.004, 0.08, { detail: 1, ...NC }); }
+  const sticks = [-1, 1].map(s => { const st = grp(core, s * 0.028, 0.014, 0.018); cyl(st, 0.006, 0.006, 0.012, '#111214', 0, 0, 0, { seg: 8, ...NC }); cyl(st, 0.013, 0.013, 0.005, '#2E3138', 0, 0.012, 0, { seg: 12, ...NC }); return st; });
+  [['#5AE06A', 0, 0.012], ['#FF5A5A', 0.012, 0], ['#4FB6FF', -0.012, 0], ['#FFD23A', 0, -0.012]].forEach(([col, dx, dz]) => ball(core, 0.005, col, -0.055 + dx, 0.016, -0.008 + dz, { detail: 1, ...NC }));
+  box(core, 0.024, 0.004, 0.007, '#111214', 0.055, 0.015, -0.008, NC); box(core, 0.007, 0.004, 0.024, '#111214', 0.055, 0.015, -0.008, NC);
+  const lb = mat(o.light ?? '#4FB6FF', { em: o.light ?? '#4FB6FF', ei: 1.4, own: true }); box(core, 0.06, 0.004, 0.006, '', 0, 0.004, -0.034, { mat: lb, ...NC });
+  (f.fx ??= []).push((t, S) => { const k = env3(t, t0, t1, 0.35, 0.3); if (!k) return; S.ras = lerp(S.ras, o.shoulder ?? -0.3, k); S.las = lerp(S.las, o.shoulder ?? -0.3, k); S.rae = lerp(S.rae, o.elbow ?? -1.05, k); S.lae = lerp(S.lae, o.elbow ?? -1.05, k);
+    S.raz = lerp(S.raz, -0.32, k); S.laz = lerp(S.laz, 0.32, k); S.nrx = lerp(S.nrx, 0.28, k); S.nry *= 1 - k; });
+  hands(f, 'grip', t0, t1, { side: 'both', fade: 0.2 });
+  const _a = v3(), _b = v3();
+  late(t => { const on = t >= t0 + 0.15 && t <= t1 - 0.1; pad.visible = on; if (!on) return; f.root.updateWorldMatrix(true, true);
+    f.foreR.localToWorld(_a.set(0, -0.36, 0.07)); f.foreL.localToWorld(_b.set(0, -0.36, 0.07)); pad.position.addVectors(_a, _b).multiplyScalar(0.5);
+    pad.rotation.set(0, Math.atan2(-(_b.z - _a.z), _b.x - _a.x), 0, 'YXZ'); core.rotation.x = o.tilt ?? -0.55;
+    sticks.forEach((st, i) => { st.rotation.x = 0.25 * mash * Math.sin(t * (7 + i * 3)); st.rotation.z = 0.25 * mash * Math.sin(t * (5 + i * 4) + i); });
+    lb.emissiveIntensity = 1.4 * (o.power ? o.power(t) : 1); });
+  return { g: pad };
+}
+function alarmClock(p, x, y, z, o = {}) {   // bedside digital alarm clock: shows `from` ('05:59'), flips to `to` ('06:00') at ring, blinks, rattles and beeps until stop
+  const g = dyn(grp(p, x, y, z, o.ry ?? 0)), body = grp(g, 0, 0, 0), c = o.color ?? '#2A2D33', NC = { cast: false }, ring = o.ring ?? 1e9, stop = o.stop ?? ring + 3, from = o.from ?? '05:59', to = o.to ?? '06:00';
+  box(body, 0.2, 0.1, 0.08, c, 0, 0, 0, { rough: 0.45 }); box(body, 0.21, 0.012, 0.085, shade(c, -0.1), 0, 0, 0, NC); box(body, 0.06, 0.012, 0.03, shade(c, 0.15), 0.05, 0.1, -0.01, NC);   // snooze button
+  for (const s of [-1, 1]) box(body, 0.02, 0.008, 0.06, '#111214', s * 0.08, -0.004, 0, NC);
+  const S = screenPanel(body, 0.16, 0.06, (cx, W, H, t) => { const r = t >= ring && t < stop, on = !r || Math.floor((t - ring) * 4) % 2 === 0; if (!on) return;
+    cx.fillStyle = o.digits ?? '#FF3A2E'; cx.font = signFont(H * 0.62, 'mono', { weight: 700 }); cx.textAlign = 'center'; cx.textBaseline = 'middle'; cx.shadowColor = o.digits ?? '#FF3A2E'; cx.shadowBlur = H * 0.15;
+    cx.fillText(t >= ring ? to : from, W / 2, H * 0.58); if (r) { cx.font = signFont(H * 0.16); cx.textAlign = 'left'; cx.fillText('ALARM', W * 0.06, H * 0.13); } }, { x: 0, y: 0.05, z: 0.041, frame: false, fps: 8, glow: 0.4 });
+  tick(t => { const r = t >= ring && t < stop; body.rotation.z = r ? 0.06 * Math.sin(t * 70) : 0; body.position.x = r ? 0.004 * Math.sin(t * 53) : 0; });
+  if (ring < 1e8) for (let tt = ring; tt < stop; tt += 0.5) sfx(tt, 'beep', 0.55);
+  return { g, screen: S };
+}
+function generator(p, x, z, o = {}) {   // portable petrol generator in a tube frame: tank with cap, finned engine, muffler, panel with sockets and lamp, recoil handle, wheels.
+  // on: t → it starts (shudders, lamp green, exhaust puffs, engine sound) · off: t → stops · cable: [[x, y, z], …] runs a power cable to where it is plugged in
+  const g = dyn(grp(p, x, groundH(x, z), z, o.ry ?? 0)), b = grp(g, 0, 0, 0), c = o.color ?? '#D9A21E', fr = '#2A2D33', NC = { cast: false }, on = o.on ?? 1e9, off = o.off ?? 1e9;
+  for (const sx of [-1, 1]) for (const sz of [-1, 1]) box(b, 0.035, 0.62, 0.035, fr, sx * 0.35, 0.03, sz * 0.25, { kind: 'metal' });   // tube cage: posts, top and bottom rails
+  for (const y of [0.03, 0.62]) { for (const sz of [-1, 1]) box(b, 0.735, 0.035, 0.035, fr, 0, y, sz * 0.25, { kind: 'metal' }); for (const sx of [-1, 1]) box(b, 0.035, 0.035, 0.535, fr, sx * 0.35, y, 0, { kind: 'metal' }); }
+  box(b, 0.52, 0.16, 0.36, c, 0.02, 0.44, 0, { rough: 0.4 }); box(b, 0.5, 0.02, 0.34, shade(c, 0.12), 0.02, 0.6, 0, NC); cyl(b, 0.045, 0.045, 0.03, '#1A1A1A', 0.12, 0.6, 0.05, { seg: 12, ...NC });   // tank + cap
+  box(b, 0.3, 0.26, 0.28, '#3A3D44', -0.08, 0.12, 0, { rough: 0.6, kind: 'metal' }); for (let i = 0; i < 6; i++) box(b, 0.31, 0.012, 0.29, '#2A2C30', -0.08, 0.15 + i * 0.035, 0, NC);   // finned engine
+  cyl(b, 0.06, 0.06, 0.22, '#5A5D64', 0.2, 0.22, -0.1, { rx: Math.PI / 2, seg: 10, kind: 'metal' }); cyl(b, 0.015, 0.015, 0.08, '#2A2C30', 0.2, 0.22, -0.24, { rx: Math.PI / 2, seg: 6, ...NC });   // muffler
+  box(b, 0.2, 0.16, 0.02, '#1E2024', 0.22, 0.14, 0.15, NC); for (const dx of [-0.05, 0.05]) { box(b, 0.05, 0.05, 0.01, '#E8E4D8', 0.22 + dx, 0.12, 0.162, NC); box(b, 0.008, 0.02, 0.006, '#111', 0.22 + dx - 0.01, 0.12, 0.168, NC); box(b, 0.008, 0.02, 0.006, '#111', 0.22 + dx + 0.01, 0.12, 0.168, NC); }
+  const lm = mat('#3A3A3A', { em: '#5AE06A', ei: 0, own: true }); ball(b, 0.012, '', 0.3, 0.19, 0.162, { mat: lm, detail: 1, ...NC }); box(b, 0.05, 0.03, 0.02, '#C62828', 0.15, 0.19, 0.16, NC);   // run lamp + switch
+  cyl(b, 0.008, 0.008, 0.07, '#1A1A1A', -0.24, 0.24, 0.17, { rx: Math.PI / 2, seg: 6, ...NC }); box(b, 0.07, 0.02, 0.02, '#1A1A1A', -0.24, 0.23, 0.21, NC);   // pull cord handle
+  for (const s of [-1, 1]) cyl(b, 0.07, 0.07, 0.05, '#1A1A1A', -0.35, 0.07, s * 0.3, { rx: Math.PI / 2, seg: 12 });
+  if (o.cable) { g.updateWorldMatrix(true, false); const pts = [[0.22, 0.12, 0.17], ...o.cable.map(([cx, cy, cz]) => { const v = g.worldToLocal(v3(cx, cy, cz)); return [v.x, v.y, v.z]; })]; for (let i = 0; i < pts.length - 1; i++) { const [a, bb] = [v3(...pts[i]), v3(...pts[i + 1])], L = a.distanceTo(bb), m = mesh(g, G('cy0.012', () => new THREE.CylinderGeometry(0.012, 0.012, 1, 6)), mat('#1A1A1A'), 0, 0, 0, NC); m.scale.y = L; m.position.copy(a).add(bb).multiplyScalar(0.5); m.quaternion.setFromUnitVectors(v3(0, 1, 0), bb.clone().sub(a).normalize()); } }
+  tick(t => { const r = t >= on && t < off, st = clamp((t - on) / 0.6); b.position.set(r ? 0.004 * Math.sin(t * 91) : 0, r ? 0.003 * Math.abs(Math.sin(t * 63)) + 0.01 * (1 - st) * Math.sin(t * 40) : 0, 0); b.rotation.z = r ? 0.006 * Math.sin(t * 37) : 0; lm.emissiveIntensity = r ? 2.2 : 0; });
+  if (on < 1e8) { g.updateWorldMatrix(true, false); const ex = g.localToWorld(v3(0.2, 0.22, -0.3)); emit('smoke', { at: [ex.x, ex.y, ex.z], t0: on, t1: Math.min(off, on + 120), rate: 3, size: 0.18, jitter: 0.05 });
+    const tv = VT(on); if (tv >= 0 && !o.quiet) (AUDIO.hits ??= []).push({ t: tv, k: 'engine', dur: Math.min(off, on + 40) - on, v: o.vol ?? 0.45 }); }
+  return { g, out: [x, 0.12, z] };
 }
 // ---- v2.33.3 horror kit: convex security mirror, porthole lens (mirror / peephole view) ----
 function convexMirror(p, x, y, z, o = {}) {   // round convex shop mirror on a wall bracket; faces +z (ry turns it), rx tilts it down. → { g, at: [x, y, z] (centre) }
