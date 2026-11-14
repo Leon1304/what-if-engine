@@ -465,6 +465,12 @@ Drache: `fly(dg, [[x,y,z], …], {t0, speed})` – die Flügel schlagen im Flug,
 
 ## Schiffe sinken
 `sink(S, t, {mode, dur, depth, angle, side, lifeboats, debris, smoke, sfx})` lässt ein Schiff untergehen: `bow` (Bug zuerst, Heck steigt aus dem Wasser, Titanic) · `stern` · `list` (legt sich auf die Seite, `side` ±1) · `capsize` (kentert kieloben). Dazu Gischt entlang des Rumpfs, Strudel am Ende, Rauch, Ächzen und Gurgeln. Große Schiffe (> 60 m) setzen 4 Rettungsboote mit verängstigten Passagieren aus, die wegrudern (`lifeboats`), Trümmer und Rettungsringe treiben (`debris`). Funktioniert mit `bob` und `sail`. Totale aus ca. 1,2 × Schiffslänge.
+**Dschunke, Mastbruch, Würfel, Wrack (v3.27):**
+- `ship('junk', x, z, { ry, len, sail })`: Kriegsdschunke der Yuan-Flotte von 1281 in echter Größe (30 m wie das dritte Takashima-Wrack): schräger flacher Bug mit aufgemalten Augen, Ankerwinde und Holzanker mit Steinstock am Tau, hohes zweistöckiges Heckkastell mit Gitterfenstern (leuchten nachts), Galerie, geschwungenem Dach und Laternen, bemalter Spiegel mit zwei Goldscheiben, hängendes Ruder, Schanzkleid mit Schießscharten und Schilden, 10 Riemen (rudern bei Fahrt), drei Masten mit Lattensegeln (Latten, aufgefächerte Schoten, `sail` = Farbe), Wimpel, Wanten, Reissäcke, Kisten, Fässer, Tauwerk, Speerständer. `S.masts[i]` = `{ g, h, u, z }`, `S.rudder`, `S.seats` (8 Stehplätze an Deck für `board`). Funktioniert mit `sail`, `bob`, `sink`, `burn`.
+- `dismast(S, t, { i, side, dur })`: Mast `i` (0 = Fockmast, 1 = Großmast, 2 = Besan) bricht am Deck, zittert kurz und kippt mit Segel über die Seite `side` (±1) ins Wasser: Krachen, Gischt, wo die Spitze aufschlägt, federt nach und sackt ein Stück ab (reine Funktion von t, auch auf schwankendem Schiff).
+- `dice(p, x, y, z, { n, tiles, size, color, pip, seed })` → `{ items, dice, tiles }`: Knochenwürfel mit echten Augen (gegenüber zusammen 7) und kleine Spielsteine (`tiles`, Vorläufer der Mahjong-Steine, mit Punkten, roten Balken oder Zeichen). `size` = Kantenlänge (echt 0,02 m; für Nahaufnahmen größer). Jedes Teil ist eine eigene Gruppe: würfeln mit `toss(d, t, { from, to, h, bounces, spin })`.
+- `shipwreck(p, x, z, { len, beam, ry, y, jars, grid, weeds, seed })` → `{ g, at(u) }`: Holzwrack am Meeresgrund für Unterwasser-Archäologie: halb eingesunkener Kiel, gebrochene Spanten in verschiedenen Höhen, Plankenreste, verstreute Planken, Vorratskrüge (stehend, liegend, zerbrochen als Scherben), Steinstock eines Ankers, Sedimenthügel, Seegras (wiegt sich) und ein gelbes Vermessungsraster aus 1-m-Feldern mit Fundmarken (`grid: false` = ohne). `at(u)` = Punkt über dem Kiel (0 = Heck, 1 = Bug) für Kamera und Taucher. Unter Wasser mit `SKY` 'underwater' bzw. 'deepsea', `underwater({ surface })` und `diver()`. Test: `tests/junk-fleet`.
+
 `board(S, rig, i)`: Sitzplätze setzen die Figur automatisch hin (Ruderboot, Wikinger rudern mit), Stehplätze an Deck; das Wikingerschiff hat 12 Ruderer + Steuermann. Der Träger zeigt geparkte Jets auf dem Deck (`ship('carrier', x, z, {planes: 8})`, `0` = keine).
 
 ## Start, Landung, Bruchlandung
@@ -1148,6 +1154,7 @@ Dinge zerbrechen so, wie sie gebaut sind. Alles ist echte Physik (einmal vorab s
 | Conspiracy | `CFG.kind: 'conspiracy'` / `'debunk'` | Declan Sage | `kqVT88a5QfII1HNAEPTJ` |
 | Horror | `CFG.kind: 'horror'` | Storm Styles | `YI5bDiiDOYHHb2eLadHv` |
 | True Crime | `CFG.kind: 'truecrime'` | Declan Sage | `kqVT88a5QfII1HNAEPTJ` |
+| History | `CFG.kind: 'history'` | Adam | `wBXNqKUATyqu0RtYt25i` |
 
 - Reihenfolge: `kind` (explain / conspiracy / horror) vor Serie vor Story. Horror-Musik allein macht kein Horror-Video. `kind: 'horror'` verhält sich sonst wie `'story'` (Badge „What if“).
 - Innerhalb einer Serie bleibt die Stimme gleich, solange `kind` in allen Folgen gleich bleibt.
@@ -1168,6 +1175,7 @@ Dinge zerbrechen so, wie sie gebaut sind. Alles ist echte Physik (einmal vorab s
 - `liftTruck(p, x, z, { ry, color, ladder: 9 })` → V (ladder = Länge des Grundteils in m): Lkw mit Möbellift (Leiter auf Drehkranz, ausziehbar, waagerechte Plattform). `V.raise(t0, t1, { yaw, pitch, extend })`, `V.ride(t0, t1, { to: 0..1 })`, `V.basketAt(t)` (Weltposition des Plattformbodens: Mitfahrer dort hinstellen), `V.basketYaw(t)`.
 - `grinder()` (Trennschleifer, für `holdItem`), `grindSparks(at, t0, t1, { rate })` (Funkenfächer + Kreischen), `hivis(figur, { color })` (Warnweste), Outfit `char('you', { outfit: 'guard' })` (dunkelblaue Wachdienst-Jacke).
 - `CFG.kind: 'truecrime'`: Badge „True Crime“, sonst wie eine Story (du als Zeuge, Ende „What would you have done?“); Erzähler Declan Sage (ElevenLabs).
+- `CFG.kind: 'history'` (v3.27): Badge „History“, du mitten in einem echten Moment der Geschichte, sonst wie eine Story (Ende „What would you have done?“); Erzähler Adam (Doku-Stimme), ernst und ohne Gags, Faktenkarte mit Quelle, Zeitleiste (`type: 'timeline'`) für den Sprung in die Gegenwart.
 
 ## Eine Aufnahme pro Beat (v2.50)
 - Mit ElevenLabs spricht der Erzähler jeden Beat in **einer** Aufnahme: die Sätze fließen ineinander, der Ton jedes Satzes steht als Tag mitten im Text (`[worried] … [deadpan] …`), ` | ` wird zu einer Pause „…“. Ein Video braucht so ca. 10 statt 25 Anfragen. `CFG.voice: { el_beat: false }` = wieder eine Aufnahme pro Satz.

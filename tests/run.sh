@@ -66,7 +66,7 @@ case " $names " in *" example "*) c=$(chan example); case "$c" in *@whatifthisha
 case " $names " in *" signs-beams "*) c=$(chan signs-beams); case "$c" in *@signs.test*) echo "ok   channel CFG.channel";; *) echo "FAIL channel CFG.channel: '$c'"; fail=1;; esac;; esac
 # v2.48 narrator voice by category (no synthesis, no API call)
 cp "$R/voice.py" .
-for c in "story:Denzel" "explain:Adam" "conspiracy:Declan Sage" "horror:Storm Styles" "series:JM" "truecrime:Declan Sage"; do
+for c in "story:Denzel" "explain:Adam" "conspiracy:Declan Sage" "horror:Storm Styles" "series:JM" "truecrime:Declan Sage" "history:Adam"; do
   k=${c%%:*}; want=${c#*:}; sed -n '/@STORY-BEGIN/,/@STORY-END/p' template.html | sed '1d;$d' > "vp_$k.story.js"
   if [ "$k" = series ]; then sed -i "s#  series: null,#  series: { name: 'Test', ep: 2 },#" "vp_$k.story.js"; else sed -i "s#  kind: 'story',#  kind: '$k',#" "vp_$k.story.js"; fi
   got=$(ELEVENLABS_API_KEY=test python3 voice.py "vp_$k" --which 2>&1)

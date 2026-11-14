@@ -318,7 +318,7 @@ const CFG = {
   dur: 22,                 // seconds (15–60; with all running gags 45–50)
   seed: 7,                 // change for a different random layout
   locale: 'en-US',         // every on-screen text is English
-  kind: 'story',           // story | explain | conspiracy | horror | truecrime (badge 'Explaining' / 'Conspiracy' / 'True Crime'; horror = story badge, horror narrator) — ElevenLabs narrator by kind (v2.48)
+  kind: 'story',           // story | explain | conspiracy | horror | truecrime | history (badge 'Explaining' / 'Conspiracy' / 'True Crime' / 'History'; horror = story badge, horror narrator) — ElevenLabs narrator by kind (v2.48)
   badge: 'What if',        // explain: 'Explaining' by default
   accent: 'yellow',        // yellow | blue | red | green | orange | pink | purple | lime | cyan (or a hex) | auto (from the title) — one per series, varies between series/videos
   filter: 'film',          // none | film | crt
@@ -10326,6 +10326,7 @@ const SHIPS = {
   landing:    { L: 11, B: 3.3, D: 2.0, T: 0.9, bow: 'flat', stern: 'transom', sheer: 0, rake: 0, fb: 0.9, open: 1, deck: false, top: '#59654A', bot: '#3E4636', boot: '#2A2E26', deck: '#4A5040', flat: 1 },
   viking:     { L: 22, B: 5, D: 2.0, T: 0.8, bow: 'viking', stern: 'viking', sheer: 1.6, sheerAft: 1.6, fb: 0.6, fs: 0.4, rake: 0.4, top: '#7A5434', bot: '#5A3A22', boot: '#5A3A22', deck: '#9A7A50', planks: 0.28 },
   galleon:    { L: 38, B: 10, D: 6.5, T: 3.5, bow: 'round', stern: 'transom', sheer: 2.4, sheerAft: 3.0, rake: 0.5, fs: 0.12, top: '#6A4428', bot: '#3E2A1A', boot: '#2A1A10', deck: '#A88A5A', planks: 0.45, band: [1.2, '#C8A040'] },
+  junk:       { L: 30, B: 8.6, D: 4.0, T: 2.0, bow: 'flat', stern: 'transom', sheer: 1.3, sheerAft: 3.0, rake: 1.6, fb: 0.74, fs: 0.13, open: 0, top: '#74503A', bot: '#2C2118', boot: '#1E1812', deck: '#8C6C46', planks: 0.34, band: [0.55, '#7A2E20'] },   // v3.27: Yuan war junk 1281 (third Takashima wreck ≈ 30 m)
   ferry:      { L: 120, B: 22, D: 10, T: 5, bow: 'sharp', stern: 'transom', sheer: 2, rake: 0.4, top: '#F4F4F2', bot: '#1E3A6A', boot: '#C0392B', deck: '#8A8E92', band: [2, '#2E6FD9'] },
   cruise:     { L: 250, B: 32, D: 14, T: 8, bow: 'sharp', stern: 'transom', sheer: 2.5, rake: 0.5, top: '#F6F6F4', bot: '#1E2A4A', boot: '#2E6FD9', deck: '#B8A07A' },
   freighter:  { L: 200, B: 32, D: 18, T: 11, bow: 'round', stern: 'transom', sheer: 3, rake: 0.35, top: '#1E3A5A', bot: '#A8322A', boot: '#E8E8E8', deck: '#8A3A2A' },
@@ -10412,6 +10413,50 @@ function ship(p, kind = 'fishing', x = 0, z = 0, o = {}) {   // kind: see SHIPS 
         for (const s of [-1, 1]) for (let i = 0; i < 4; i++) _seg(b, [s * Bm * 0.48, my + 0.2, mz - 2 + i * 1.3], [s * 0.3, my + h * 0.78, mz], 0.025, 0.025, '#2A2018', NC); }
       const fl = dyn(grp(b, 0, dk(0.5) + 28 - 1, zz(0.5))); box(fl, 0.05, 1.6, 2.6, '#141414', 0, 0, -1.3); ball(fl, 0.35, '#F2F2EE', 0, 0.85, -1.2, { detail: 0, ...NC }).scale.set(0.2, 1, 1); S.flag = fl;
       for (const zl of [zs - 0.3, zz(0.95)]) S.lights.push(ball(b, 0.25, '', 0, ys + 3.4, zl, { mat: glow, detail: 0, ...NC })); break; }
+    case 'junk': {   // v3.27 Yuan war junk (1281): raked flat bow with painted eyes, high stern castle with lattice windows and lanterns, three masts with battened lug sails
+      // (fanned sheets), hanging rudder, bow windlass + wooden anchor with stone stock, bulwarks with arrow slits, sweeps, cargo, spears and shields, pennants
+      const wood = '#5E3E26', dark = '#3A2818', red = '#7A2E20', mat2 = '#A8763E', sailC = o.sail ?? '#9A6A3E', zs = zz(0.07), ys = dk(0.07);
+      { const cw = Bm * 0.8, cl = 7.2, cz = zs + 2.6;   // stern castle: two tiers, gallery railing, upturned roof, lattice windows, lanterns
+        box(b, cw, 2.5, cl, wood, 0, ys - 0.25, cz, { surf: 'plank' }); box(b, cw + 0.3, 0.22, cl + 0.3, red, 0, ys + 2.25, cz, NC);
+        box(b, cw * 0.78, 2.1, cl * 0.62, wood, 0, ys + 2.45, cz - 0.9); box(b, cw * 0.84, 0.18, cl * 0.68, red, 0, ys + 4.5, cz - 0.9, NC);
+        prism(b, cw * 0.95, 1.1, cl * 0.78, '#2E241C', 0, ys + 4.65, cz - 0.9); for (const s of [-1, 1]) cone(b, 0.18, 0.55, '#2E241C', s * cw * 0.5, ys + 4.6, cz - 0.9 + s * 0, { rz: -s * 1.1, ...NC });
+        _wins(b, [...[-1, 1].flatMap(s => _winRow(s * (cw / 2 + 0.02), ys + 1.2, cz - 2.6, cz + 2.6, 4, 0.7, 0.8, true)), ...[-1, 1].flatMap(s => _winRow(s * (cw * 0.39 + 0.02), ys + 3.3, cz - 2.6, cz + 0.6, 3, 0.6, 0.7, true)), ...[-1.6, 0, 1.6].map(x2 => [x2, ys + 1.2, cz - cl / 2 - 0.02, 0.9, 0.7, 0.04])], '#FFCF7A', { glow: 0.35 });
+        for (const s of [-1, 1]) for (let i = 0; i < 5; i++) { const zq = cz - 2.6 + i * 1.3; _seg(b, [s * (cw / 2 + 0.03), ys + 0.85, zq], [s * (cw / 2 + 0.03), ys + 1.55, zq], 0.025, 0.025, dark, NC); }   // lattice bars over the lower windows
+        for (const s of [-1, 1]) { _seg(b, [s * cw * 0.48, ys + 3.2, cz + cl / 2], [s * cw * 0.48, ys + 3.2, cz - cl / 2], 0.05, 0.05, red, NC); for (let i = 0; i <= 6; i++) cyl(b, 0.04, 0.04, 0.95, red, s * cw * 0.48, ys + 2.4, cz - cl / 2 + i * cl / 6, { seg: 5, ...NC }); }
+        for (const [lx, lz] of [[-cw * 0.5, cz + cl / 2 + 0.2], [cw * 0.5, cz + cl / 2 + 0.2], [0, zz(0) - 0.25]]) { _seg(b, [lx, ys + 4.1, lz], [lx, ys + 3.5, lz], 0.015, 0.015, dark, NC); S.lights.push(ball(b, 0.22, '', lx, ys + 3.3, lz, { mat: glow, detail: 1, ...NC })); cyl(b, 0.16, 0.16, 0.06, red, lx, ys + 3.52, lz, { seg: 8, ...NC }); }
+        box(b, Bm * 0.74, 2.4, 0.1, red, 0, ys - 1.9, zz(0) - 0.08, NC); for (const s of [-1, 1]) ball(b, 0.45, '#C8A040', s * Bm * 0.2, ys - 0.8, zz(0) - 0.14, { detail: 1, ...NC }).scale.set(1, 1, 0.15);   // painted transom with two gilt roundels
+        const rg = dyn(grp(b, 0, ys - 0.6, zz(0) - 0.35)); _seg(rg, [0, 0.4, 0], [0, -D.D - 1.2, 0], 0.16, 0.16, dark); box(rg, 0.22, 3.6, 2.4, '#4A3220', 0, -D.D - 3.0, -1.1);   // hanging rudder
+        for (let i = 0; i < 5; i++) box(rg, 0.24, 0.06, 2.3, dark, 0, -D.D - 2.8 + i * 0.75, -1.1, NC); box(rg, 0.12, 0.12, 3.2, dark, 0, 0.45, 1.6, NC); S.rudder = rg; }
+      { const e = H.edge(0.985), bz = e[2] - 0.3, by = e[1];   // flat raked bow: windlass, anchor with stone stock on its cable, painted eyes on both cheeks
+        cyl(b, 0.28, 0.28, Bm * 0.5, dark, -Bm * 0.25, by + 0.5, bz - 1.4, { rz: Math.PI / 2, seg: 10 }); for (const s of [-1, 1]) box(b, 0.25, 0.9, 0.5, wood, s * Bm * 0.27, by, bz - 1.4);
+        const an = grp(b, Bm * 0.18, by - 1.2, bz + 0.8, 0.25); _seg(an, [0, 1.6, 0], [0, -1.4, 0], 0.11, 0.11, '#4A3424'); box(an, 1.9, 0.32, 0.32, '#7A7268', 0, 0.9, 0, { rx: 0.1 }); for (const s of [-1, 1]) _seg(an, [0, -1.3, 0], [s * 0.8, -0.6, 0.25], 0.08, 0.05, '#4A3424');
+        _seg(b, [Bm * 0.05, by + 0.65, bz - 1.4], [Bm * 0.18, by + 0.4, bz + 0.8], 0.05, 0.05, '#8A7550', NC);
+        for (const s of [-1, 1]) { const ee = H.edge(0.9), ex = s * (ee[0] * 1.0 + 0.04), ey = ee[1] - 1.2, ez = ee[2] + 0.2; ball(b, 0.62, '#EDE6D4', ex, ey, ez, { detail: 1, ...NC }).scale.set(0.1, 0.8, 1.2); ball(b, 0.3, '#141010', ex + s * 0.04, ey, ez + 0.1, { detail: 1, ...NC }).scale.set(0.1, 1, 1); ball(b, 0.7, red, ex - s * 0.01, ey, ez, { detail: 1, ...NC }).scale.set(0.08, 0.95, 1.4); } }
+      for (const s of [-1, 1]) for (let j = 0; j < 14; j++) {   // bulwarks with arrow slits along both sides
+        const u0 = 0.2 + j * 0.04, a = H.edge(u0), c = H.edge(u0 + 0.04), len = Math.hypot(c[2] - a[2], c[0] - a[0]), ang = Math.atan2((c[0] - a[0]) * s, c[2] - a[2]);
+        box(b, 0.12, 1.05, len + 0.06, j % 2 ? wood : shade(wood, -0.06), s * (a[0] + c[0]) / 2, Math.min(a[1], c[1]) - 0.02, (a[2] + c[2]) / 2, { ry: ang });
+        box(b, 0.14, 0.32, 0.08, '#120C08', s * ((a[0] + c[0]) / 2 + 0.01), Math.min(a[1], c[1]) + 0.5, (a[2] + c[2]) / 2, { ry: ang, ...NC });
+        if (j % 3 === 0) { const sh = ball(b, 0.5, j % 2 ? '#7A2E20' : '#2E2A26', s * ((a[0] + c[0]) / 2 + 0.1), Math.min(a[1], c[1]) + 0.55, (a[2] + c[2]) / 2, { detail: 1, ...NC }); sh.scale.set(0.12, 1, 1); } }
+      for (let i = 0; i < 5; i++) for (const s of [-1, 1]) { const u = 0.33 + i * 0.07, e = H.edge(u), og = dyn(grp(b, s * (e[0] + 0.1), e[1] + 0.1, e[2])); _seg(og, [0, 0, 0], [s * 6.2, -3.2, 0], 0.06, 0.05, '#9A7A50'); box(og, 0.07, 0.05, 0.42, '#9A7A50', s * 6.2, -3.25, 0, { rz: s * 0.5, ...NC }); S.oars.push([og, s]); }
+      S.masts = []; S.pennants = [];
+      for (const [u, Hm, rake, wk] of [[0.83, 15, -0.12, 0.62], [0.52, 23, 0, 1], [0.26, 14, 0.05, 0.6]]) {   // masts: each one a group that dismast() can fell
+        const mg = dyn(grp(b, 0, dk(u) - 0.4, zz(u))); mg.rotation.x = rake; cyl(mg, 0.22 * wk + 0.12, 0.32 * wk + 0.16, Hm, '#6A4A2C', 0, 0, 0, { seg: 8 });
+        for (let r = 0; r < 4; r++) cyl(mg, 0.3 * wk + 0.2, 0.3 * wk + 0.2, 0.12, dark, 0, 1.2 + r * Hm * 0.22, 0, { seg: 8, ...NC });
+        const y0 = 1.6, sh = Hm - 2.6, w = sh * 0.46, sl = dyn(grp(mg, 0, y0, 0));
+        finPlate(sl, [[w * 0.22, 0], [-w * 0.78, 0], [-w * 0.86, sh * 0.92], [w * 0.18, sh]], 0.04, sailC);
+        for (let i = 0; i <= 7; i++) { const k2 = i / 7, zf = lerp(w * 0.22, w * 0.18, k2), zb = lerp(-w * 0.78, -w * 0.86, k2), yy = sh * k2 * (k2 > 0.99 ? 1 : 0.96) + (k2 > 0.99 ? -0.08 : 0);
+          for (const s of [-1, 1]) _seg(sl, [s * 0.05, yy, zf + 0.15], [s * 0.05, yy - (zf - zb) * 0.04, zb - 0.1], 0.04, 0.04, '#3A2A1C', NC);
+          if (i % 2 === 0 && i < 7) _seg(sl, [0.06, yy, zb - 0.1], [0.4, -y0 + 0.4, -w * 0.95], 0.012, 0.012, '#2A2018', NC); }   // fanned sheets to the deck
+        const pg = dyn(grp(mg, 0, Hm - 0.2, 0)); finPlate(pg, [[0, 0], [0, -0.8], [-3.6, -0.5]], 0.02, wk > 0.9 ? '#B83224' : '#2A2622'); S.pennants.push(pg);
+        S.sails.push(sl); S.masts.push({ g: mg, h: Hm, u, z: zz(u), y: dk(u) - 0.4 }); }
+      for (let i = 0; i < 4; i++) for (const s of [-1, 1]) { const mz = zz(0.52); _seg(b, [s * Bm * 0.42, dk(0.52) + 0.3, mz - 3 + i * 2], [s * 0.2, dk(0.52) + 19, mz], 0.02, 0.02, '#2A2018', NC); }   // shrouds
+      for (let i = 0; i < 9; i++) { const u = 0.36 + (i % 3) * 0.05, xx = (Math.floor(i / 3) - 1) * 1.3, sk = ball(b, 0.6, i % 4 ? '#C8B48A' : '#B8A070', xx, dk(u) + 0.25, zz(u), { detail: 1 }); sk.scale.set(1, 0.45, 0.7); }   // rice sacks
+      for (let i = 0; i < 4; i++) box(b, 1.1, 0.8, 0.9, i % 2 ? '#7A5A36' : '#6A4A2C', (i - 1.5) * 1.3, dk(0.66), zz(0.66), { surf: 'plank' });
+      for (let i = 0; i < 3; i++) cyl(b, 0.42, 0.38, 1.0, '#5A4630', -Bm * 0.3 + i * 0.95, dk(0.7), zz(0.72), { seg: 10 });
+      mesh(b, G('ropeCoil', () => new THREE.TorusGeometry(0.42, 0.12, 6, 14)), mat('#8A7550'), Bm * 0.28, dk(0.62) + 0.1, zz(0.62), { rx: Math.PI / 2, cast: false });
+      for (let i = 0; i < 6; i++) _seg(b, [Bm * 0.38 - i * 0.12, dk(0.45), zz(0.45) + i * 0.2], [Bm * 0.36 - i * 0.12, dk(0.45) + 3.2, zz(0.45) + i * 0.2 - 0.6], 0.03, 0.025, '#7A6040', NC);   // spears in a rack
+      for (const [x2, u] of [[-1.5, 0.3], [1.5, 0.3], [-1.2, 0.44], [1.2, 0.44], [0, 0.6], [-2.2, 0.6], [2.2, 0.75], [0, 0.78]]) S.seats.push([x2, dk(u), zz(u), 0]);
+      break; }
     case 'ferry': case 'cruise': { const cr = kind === 'cruise', n = cr ? 7 : 3, u0 = cr ? 0.1 : 0.15, u1 = cr ? 0.86 : 0.8, hD = 3, wins = [], bal = [];
       for (let d = 0; d < n; d++) { const uA = u0 + d * 0.012, uB = u1 - d * (cr ? 0.035 : 0.05), w = Bm * (cr ? 0.98 : 0.86) - d * (cr ? 0.6 : 1.2), y = dk(0.5) + d * hD, zc = (zz(uA) + zz(uB)) / 2, ln = zz(uB) - zz(uA);
         box(b, w, hD, ln, W, 0, y, zc); box(b, w + 0.4, 0.2, ln + 0.4, cr && d % 2 ? '#2E6FD9' : '#D8DCDE', 0, y + hD - 0.1, zc, NC);
@@ -10464,12 +10509,65 @@ function ship(p, kind = 'fishing', x = 0, z = 0, o = {}) {   // kind: see SHIPS 
     S.sails.forEach((sl, i) => { if (sl.userData.m) { sl.userData.m.scale.z = 1; sl.userData.m.position.z = 0.6 + 0.25 * Math.sin(t * 1.3 + i); sl.rotation.x = -0.12 - 0.04 * Math.sin(t * 1.1 + i * 0.7); } else sl.rotation.y = (i ? -1 : 1) * (0.12 + 0.03 * Math.sin(t * 0.9 + i)); });
     const row = clamp(v / 1.5), ph = t * TAU * 0.45; S.oars.forEach(([og, s], i) => { const a = ph + (kind === 'viking' ? 0 : i * Math.PI); og.rotation.set(0, s * (0.45 * Math.sin(a)) * row, s * (0.12 * Math.cos(a)) * row + (1 - row) * s * 0.05); });
     if (S.flag) S.flag.rotation.y = 0.25 * Math.sin(t * 3.1) + 0.1 * Math.sin(t * 7.3);
+    S.pennants?.forEach((pg, i) => { pg.rotation.y = 0.3 * Math.sin(t * 2.7 + i * 1.3) + 0.12 * Math.sin(t * 6.1 + i); });
     if (S.motor) S.motor.rotation.x = -0.25 * clamp(v / 8);
     S.guns.forEach(T => { const [yaw, pit] = T.turretAt(t); T.turret.rotation.y = yaw; T.gun.rotation.x = -pit; let rec = 0; for (const s of T.shots) { const a = t - s; if (a >= 0 && a < 2) rec = Math.max(rec, a < 0.05 ? a / 0.05 : Math.exp(-(a - 0.05) * 3)); } T.barrel.position.z = -0.6 * T.sz * rec; });
     S.lights.forEach((l, i) => { l.visible = (t * 0.8 + i * 0.3) % 1 < 0.9; });
     if (S.ramp) { let r = 0; for (const A of S.acts) if (A.k === 'ramp') r = Math.max(r, A.down ? sm01((t - A.t) / 0.9) : 1 - sm01((t - A.t) / 0.9)); const bounce = S.acts.some(A => A.k === 'ramp' && A.down) ? 0.05 * Math.exp(-3 * Math.max(0, t - (S.acts.find(A => A.k === 'ramp').t + 0.9))) * Math.sin(Math.max(0, t - S.acts.find(A => A.k === 'ramp').t - 0.9) * 14) : 0; S.ramp.rotation.x = -0.06 + 1.42 * r + bounce; } });
   // aims for idle turrets: keep them at rest
   return S;
+}
+function dismast(S, t, o = {}) {   // v3.27: a mast breaks at the deck and falls over the side (o.i mast index, o.side ±1, o.dur) — crack, sail and yard go with it, splash where the top hits the water
+  const M = S.masts?.[o.i ?? 0]; if (!M) return S; const side = o.side ?? 1, dur = o.dur ?? 1.7, k = S.k, r0 = M.g.rotation.clone(), y0 = M.g.position.y; dyn(M.g);
+  sfx(t, 'crack', 1.3); sfx(t + 0.25, 'crack', 0.8);
+  tick(tt => { if (tt < t) return; const u = (tt - t) / dur, sh = u < 0.12 ? 0.03 * Math.sin(tt * 70) * (1 - u / 0.12) : 0, fall = u < 0.12 ? 0 : 1.42 * clamp((u - 0.12) / 0.88) ** 2.2;
+    const land = Math.max(0, tt - t - dur), bounce = land > 0 ? 0.1 * Math.exp(-3 * land) * Math.sin(land * 9) : 0;
+    M.g.rotation.set(r0.x, r0.y, r0.z - side * (fall + sh - bounce)); M.g.position.y = y0 - 0.6 * clamp((u - 0.5) * 2) - 0.25 * Math.min(1, land); });
+  const tipAt = tt => worldAt(S.g, [-side * M.h * 0.8 * k, 0, M.z * k], tt);
+  for (let i = 0; i < 3; i++) { const P = tipAt(t + dur); const f = 0.35 + i * 0.3; splash(P.x + (P.x - S.g.position.x) * (f - 1) * 0.5, P.z + (P.z - S.g.position.z) * (f - 1) * 0.5, t + dur * (0.92 + i * 0.03), { size: 2.6 - i * 0.6 }); }
+  sfx(t + dur * 0.95, 'splash', 1.2); return S;
+}
+function dice(p, x = 0, y = 0, z = 0, o = {}) {   // v3.27: bone dice with pips and small game tiles (koppai / mahjong forerunners) → { items, dice, tiles } — each item is its own group for toss()
+  if (p && !p.isObject3D) { o = typeof z === 'object' ? z : o; z = y; y = x; x = p; p = world; }
+  const n = o.n ?? 2, nt = o.tiles ?? 0, s = o.size ?? 0.02, col = o.color ?? '#EDE3CC', pm = mat(o.pip ?? '#1A1410'), sd = o.seed ?? 1, out = { items: [], dice: [], tiles: [] };
+  const PIPS = { 1: [[0, 0]], 2: [[-1, -1], [1, 1]], 3: [[-1, -1], [0, 0], [1, 1]], 4: [[-1, -1], [-1, 1], [1, -1], [1, 1]], 5: [[-1, -1], [-1, 1], [0, 0], [1, -1], [1, 1]], 6: [[-1, -1], [-1, 0], [-1, 1], [1, -1], [1, 0], [1, 1]] };
+  const FACE = [[1, [0, 1, 0]], [6, [0, -1, 0]], [3, [1, 0, 0]], [4, [-1, 0, 0]], [2, [0, 0, 1]], [5, [0, 0, -1]]], q = s * 0.27, pd = s * 0.16, h = s / 2;
+  for (let i = 0; i < n; i++) { const d = grp(p, x + (hash(i * 3.7 + sd) - 0.5) * s * 7, y, z + (hash(i * 5.1 + sd) - 0.5) * s * 7), c = grp(d, 0, h, 0, hash(i + sd) * 6);   // the outer group stays unrotated, so toss() starts from its rest pose
+    box(c, s, s, s, col, 0, -h, 0, { rough: 0.55 }); const L = [];
+    for (const [v, [nx, ny, nz]] of FACE) for (const [a, b2] of PIPS[v]) { const u1 = a * q, u2 = b2 * q; L.push(nx ? [nx * (h + 0.0004), u1, u2, 0.001, pd, pd] : ny ? [u1, ny * (h + 0.0004), u2, pd, 0.001, pd] : [u1, u2, nz * (h + 0.0004), pd, pd, 0.001]); }
+    const im = inst(c, L, pm); if (im) im.castShadow = false; out.dice.push(d); out.items.push(d); }
+  for (let i = 0; i < nt; i++) { const w = s * 1.2, d2 = s * 1.7, th = s * 0.42, t2 = grp(p, x + (i % 6 - 2.5) * w * 1.25 + (hash(i * 2.3 + sd) - 0.5) * s, y, z + Math.floor(i / 6) * d2 * 1.3 + s * 4, (hash(i * 7.1 + sd) - 0.5) * 0.5);
+    box(t2, w, th, d2, col, 0, 0, 0, { rough: 0.6 }); const kk = Math.floor(hash(i * 1.9 + sd) * 3);
+    if (kk === 0) for (let j = 0; j < 1 + (i % 3); j++) box(t2, w * 0.18, 0.0012, w * 0.18, '', 0, th, (j - (i % 3) / 2) * d2 * 0.28, { mat: pm, cast: false });
+    else if (kk === 1) for (let j = 0; j < 2; j++) box(t2, w * 0.62, 0.0012, d2 * 0.07, '', 0, th, (j - 0.5) * d2 * 0.4, { mat: mat('#8A2A20'), cast: false });
+    else { box(t2, w * 0.08, 0.0012, d2 * 0.6, '', 0, th, 0, { mat: pm, cast: false }); box(t2, w * 0.55, 0.0012, d2 * 0.08, '', 0, th, -d2 * 0.12, { mat: pm, cast: false }); }
+    out.tiles.push(t2); out.items.push(t2); }
+  return out;
+}
+function shipwreck(p, x = 0, z = 0, o = {}) {   // v3.27: wooden wreck on the seabed (underwater archaeology): half-buried keel, broken ribs, planking, cargo jars and shards, stone anchor stock, sediment, seaweed, survey grid → { g, at(u) }
+  if (p && !p.isObject3D) { o = typeof z === 'object' ? z : o; z = x; x = p; p = world; }
+  const L = o.len ?? 15, B = o.beam ?? L * 0.32, y = o.y ?? groundH(x, z), g = stat(grp(p, x, y, z, o.ry ?? 0)), wd = o.color ?? '#6A5640', sd = o.seed ?? 3, R = i => hash(i * 7.31 + sd);
+  box(g, 0.45, 0.35, L, shade(wd, -0.08), 0, -0.15, 0);
+  const nr = Math.round(L / 1.1);
+  for (let i = 0; i < nr; i++) { const zr = -L / 2 + 0.6 + i * (L - 1.2) / (nr - 1), wid = B / 2 * (1 - (2 * Math.abs(zr) / L) ** 3 * 0.7);
+    for (const s of [-1, 1]) { const hgt = (0.25 + R(i * 2 + (s > 0 ? 1 : 0)) * 0.95) * B * 0.42; if (R(i + s * 11) < 0.12) continue;
+      const P = [[0, 0.1], [s * wid * 0.55, 0.12], [s * wid * 0.9, hgt * 0.45], [s * wid * 1.02, hgt]].map(([a, b2]) => [a, b2, zr]); let lim = P.length; if (hgt < B * 0.18) lim = 3;
+      for (let j = 1; j < lim; j++) _seg(g, P[j - 1], P[j], 0.09, 0.08, shade(wd, (R(i * 3 + j) - 0.5) * 0.12)); } }
+  for (const s of [-1, 1]) for (let r = 0; r < 3; r++) { const z0 = -L * 0.38 + R(r * 5 + s) * L * 0.15, ln = L * (0.35 + R(r + s * 3) * 0.35); box(g, 0.08, 0.26, ln, shade(wd, 0.06 * r), s * B * (0.3 + r * 0.06), 0.05 + r * 0.24, z0 + ln / 2, { rz: s * (0.25 + r * 0.2) }); }
+  for (let i = 0; i < 7; i++) { const a = R(i * 9) * 6, rr = R(i * 4) * B * 0.9; box(g, 0.22, 0.07, 1.2 + R(i) * 2, shade(wd, 0.08), Math.cos(a) * rr, 0, Math.sin(a) * L * 0.4, { ry: R(i * 2) * 3, rz: (R(i * 3) - 0.5) * 0.4 }); }
+  const jarC = ['#6E5A44', '#5A4A3A', '#7A6A52', '#4E5A4A'];
+  for (let i = 0; i < (o.jars ?? 9); i++) { const jx = (R(i * 13) - 0.5) * B * 0.9, jz = (R(i * 17) - 0.5) * L * 0.6, jg = grp(g, jx, 0, jz, R(i) * 6), c = jarC[i % 4];
+    if (R(i * 19) < 0.65) { const lay = R(i * 23) < 0.5; const jr = grp(jg, 0, lay ? 0.2 : 0, 0); if (lay) jr.rotation.z = Math.PI / 2 - 0.2; ball(jr, 0.26, c, 0, 0.3, 0, { detail: 1, rough: 0.35 }).scale.set(1, 1.25, 1); cyl(jr, 0.09, 0.13, 0.16, c, 0, 0.6, 0, { seg: 8, rough: 0.35 }); }
+    else for (let j = 0; j < 4; j++) box(jg, 0.14 + R(i + j) * 0.12, 0.03, 0.12, c, (R(i * 3 + j) - 0.5) * 0.6, 0, (R(i * 5 + j) - 0.5) * 0.6, { ry: R(j) * 3, rx: (R(j + i) - 0.5) * 0.6 }); }
+  { const ag = grp(g, B * 0.25, 0, L * 0.55, 0.6); box(ag, 2.2, 0.36, 0.38, '#7A7268', 0, 0, 0, { rough: 0.9 }); box(ag, 0.18, 0.12, 1.6, shade(wd, -0.1), 0, 0.3, 0.6); }
+  for (let i = 0; i < 9; i++) { const sx = (R(i * 31) - 0.5) * B * 1.6, sz = (R(i * 37) - 0.5) * L * 1.05, m = ball(g, 0.9 + R(i) * 1.4, i % 2 ? '#B8A47E' : '#A89470', sx, -0.25, sz, { detail: 1, cast: false }); m.scale.set(1, 0.22, 1.3); }
+  if (typeof seaweed === 'function' && o.weeds !== false) for (let i = 0; i < 6; i++) { const v = v3((R(i * 41) - 0.5) * B * 1.6, 0, (R(i * 43) - 0.5) * L * 0.9).applyAxisAngle(_AY, o.ry ?? 0); seaweed(p, x + v.x, z + v.z, { h: 0.6 + R(i) * 0.9 }); }   // swaying weeds stay outside the static group
+  if (o.grid !== false) { const gw = o.grid?.w ?? 4, gd = o.grid?.d ?? 3, gc = '#E8C02A', gx = -gw / 2, gz = -L * 0.05;   // archaeologists' survey grid: 1 m squares of yellow pipe on short legs
+    for (let i = 0; i <= gw; i++) _seg(g, [gx + i, 0.55, gz], [gx + i, 0.55, gz + gd], 0.025, 0.025, gc, { cast: false }); for (let j = 0; j <= gd; j++) _seg(g, [gx, 0.55, gz + j], [gx + gw, 0.55, gz + j], 0.025, 0.025, gc, { cast: false });
+    for (const [a, b2] of [[0, 0], [gw, 0], [0, gd], [gw, gd]]) _seg(g, [gx + a, -0.1, gz + b2], [gx + a, 0.55, gz + b2], 0.03, 0.03, gc, { cast: false });
+    for (let i = 0; i < 5; i++) box(g, 0.12, 0.02, 0.08, '#F2F2EE', gx + 0.5 + i * 0.8, 0.02, gz + 0.4 + (i % 3) * 0.9, { cast: false }); }
+  const at = u => { const v = v3(0, 0.4, (u - 0.5) * L).applyAxisAngle(_AY, o.ry ?? 0); return [x + v.x, y + v.y, z + v.z]; };
+  return { g, at, len: L };
 }
 function salvo(S, t, o = {}) {   // fire the ship's turrets (o.guns: indices; default all main guns) at o.at, staggered
   const list = o.guns ? o.guns.map(i => S.guns[i]).filter(Boolean) : S.guns.filter(T => T.sz >= 1.2); list.forEach((T, i) => { const r = cannon(T, t + i * (o.stagger ?? 0.18), { at: o.at, size: o.size ?? T.sz * 1.1, shake: o.shake ?? 0.25, vel: o.vel ?? 320 }); if (!o.at) splash(r.at.x, r.at.z, r.th, { size: 2 }); }); return S;
@@ -14245,7 +14343,8 @@ const SERIES = CFG.series;
 const KIND = CFG.kind === 'debunk' ? 'conspiracy' : CFG.kind ?? 'story', EXPLAIN = KIND === 'explain' || KIND === 'conspiracy';   // explainer 'Explaining' / conspiracy check 'Conspiracy': badge without episode number
 const FEWNUM = (CFG.numbers ?? (EXPLAIN ? 'few' : 'all')) === 'few';   // v2.37: explainer / conspiracy videos show few numbers — the needle of a meter speaks for itself (num: true = show the figure), no +/− pop-ups (pop: true = show); any stat: num: false = bar or needle only
 if (EXPLAIN && (CFG.badge == null || CFG.badge === 'What if')) CFG.badge = tr(KIND === 'conspiracy' ? 'Conspiracy' : 'Explaining');
-if (KIND === 'truecrime' && (CFG.badge == null || CFG.badge === 'What if')) CFG.badge = tr('True Crime');   // v2.49: True Crime = story format (you as witness), own badge + documentary narrator
+if (KIND === 'truecrime' && (CFG.badge == null || CFG.badge === 'What if')) CFG.badge = tr('True Crime');
+if (KIND === 'history' && (CFG.badge == null || CFG.badge === 'What if')) CFG.badge = tr('History');   // v3.27: History = you in a real moment of the past, own badge + documentary narrator (Adam), serious, no gags   // v2.49: True Crime = story format (you as witness), own badge + documentary narrator
 $('badge').textContent = SERIES?.ep && !EXPLAIN ? `${CFG.badge} #${SERIES.ep}` : CFG.badge;
 const XSTEPS = (typeof STEPS === 'undefined' || !STEPS ? [] : STEPS).map(([a, b]) => [evT(a), tr(b)]);
 $('chan').textContent = CFG.channel === false ? '' : SERIES?.handle ?? SERIES?.name ?? CFG.channel ?? '@whatifthishappenedscenarios';   // channel handle top-left in every video: CFG.channel (default the channel), a series handle wins, channel: false hides it
