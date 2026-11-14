@@ -1,5 +1,5 @@
 {
- "updated": "2026-11-14T02:26:35Z",
+ "updated": "2026-11-14T14:30:54Z",
  "videos": [
   {
    "slug": "dday",
@@ -127,6 +127,69 @@
    "auto": true
   },
   {
+   "slug": "sick-day-launch",
+   "title": "What if the whole world called in sick for GTA 6?",
+   "kind": "story",
+   "dur": 57.6,
+   "aspect": "9:16",
+   "accent": "purple",
+   "series": null,
+   "ending": null,
+   "date": null,
+   "status": "pending",
+   "files": {},
+   "preview": null,
+   "captions": {
+    "youtube": {
+     "title": "What if the whole world called in sick for GTA 6?",
+     "description": "6 a.m. You text the boss: “Not feeling great.” He gets it forty times.\nWould you call in sick for it? A) Already did · B) Took vacation · C) I’d go to work — Comment A, B or C 👇\n\n#shorts #viral #trending #youtubeshorts #fyp",
+     "tags": [
+      "what if the whole world called in sick for gta 6",
+      "the whole world called in sick for gta 6",
+      "sick day launch",
+      "what if story",
+      "survival",
+      "animated story",
+      "what if",
+      "what if scenarios",
+      "what if shorts",
+      "shorts",
+      "3d animation",
+      "animation",
+      "whatifthishappenedscenarios",
+      "hypothetical",
+      "viral",
+      "trending",
+      "fyp",
+      "youtube shorts",
+      "storytime",
+      "sick",
+      "day",
+      "launch",
+      "what if sick",
+      "what if launch",
+      "what would you do",
+      "would you survive",
+      "animated short",
+      "what if video",
+      "what if animation",
+      "scenario",
+      "cartoon",
+      "funny animation"
+     ],
+     "tagChars": 495
+    },
+    "instagram": "What if the whole world called in sick for GTA 6?\nWould you call in sick for it? A) Already did · B) Took vacation · C) I’d go to work — Comment A, B or C 👇\n\n#reels #viral #explore #reelsinstagram #trending",
+    "tiktok": "What if the whole world called in sick for GTA 6?\nWould you call in sick for it? A) Already did · B) Took vacation · C) I’d go to work — Comment A, B or C 👇\n\n#fyp #foryou #foryoupage #viral #trending",
+    "hooks": [
+     "6 a.m. You text the boss: “Not feeling great.” He gets it forty times.",
+     "By seven, the store line is two miles long. Nobody here looks sick.",
+     "By nine, the city… stops. Empty buses. A crane, frozen mid-lift."
+    ]
+   },
+   "auto": true
+  },
+  {
    "slug": "zombie-farm-ending",
    "title": "What if zombies attacked your farm?",
    "kind": "story",
@@ -190,6 +253,83 @@
     ]
    },
    "auto": true
+  },
+  {
+   "slug": "db-cooper-flight",
+   "title": "What if you sat next to D.B. Cooper?",
+   "kind": "story",
+   "dur": 57.0,
+   "aspect": "9:16",
+   "accent": "blue",
+   "series": null,
+   "ending": null,
+   "date": "2026-11-14T14:30:54Z",
+   "status": "ready",
+   "files": {
+    "mp4": {
+     "url": "https://github.com/Leon1304/what-if-engine/releases/download/render-db-cooper-flight/db-cooper-flight.mp4",
+     "size": 218083638
+    },
+    "coverA": {
+     "url": "https://github.com/Leon1304/what-if-engine/releases/download/render-db-cooper-flight/db-cooper-flight-cover.jpg",
+     "size": 307919,
+     "thumb": "covers/db-cooper-flight.jpg"
+    },
+    "coverB": {
+     "url": "https://github.com/Leon1304/what-if-engine/releases/download/render-db-cooper-flight/db-cooper-flight-cover-b.jpg",
+     "size": 275069,
+     "thumb": "covers/db-cooper-flight-b.jpg"
+    },
+    "srt": {
+     "url": "https://github.com/Leon1304/what-if-engine/releases/download/render-db-cooper-flight/db-cooper-flight.srt",
+     "size": 1204
+    }
+   },
+   "preview": null,
+   "captions": {
+    "youtube": {
+     "title": "What if you sat next to D.B. Cooper on his flight?",
+     "description": "Nov 24, 1971: a quiet man in a dark suit takes the seat next to you on Flight 305 – then hands the flight attendant a note. ✈️💼 55 years later, nobody knows who he was.\nHe opens the briefcase. What do you do? A) Warn the crew B) Stay silent C) Talk to him – Comment A, B or C 👇\nSources: FBI (D.B. Cooper hijacking case), Cowboy State Daily (FBI files and parachute tests, 2026)\n\n#shorts #whatif #dbcooper #hijacking #truecrime",
+     "tags": [
+      "what if you sat next to db cooper",
+      "db cooper",
+      "d.b. cooper",
+      "db cooper hijacking",
+      "db cooper case",
+      "db cooper mystery",
+      "db cooper 1971",
+      "flight 305",
+      "dan cooper",
+      "hijacker never found",
+      "unsolved hijacking",
+      "plane hijacking",
+      "1971 hijacking",
+      "boeing 727",
+      "skyjacker",
+      "parachute jump",
+      "unsolved mysteries",
+      "true crime",
+      "unsolved case",
+      "fbi cold case",
+      "db cooper money found",
+      "columbia river money",
+      "db cooper 55 years",
+      "what if",
+      "what if scenarios",
+      "true crime shorts",
+      "shorts"
+     ],
+     "tagChars": 473
+    },
+    "instagram": "A quiet man in a dark suit sits down next to you. ✈️\nNov 24, 1971 – minutes later he hands the flight attendant a note: he has a bomb. D.B. Cooper was never found.\nHe opens the briefcase. What do you do? Comment A, B or C 👇\n\n#whatif #dbcooper #hijacking #truecrime #unsolvedmysteries",
+    "tiktok": "The man next to you has a bomb in his briefcase 💼✈️\nD.B. Cooper, Flight 305, 1971 – he jumped out of the plane and was never found.\nWarn the crew, stay silent or talk to him? Comment A, B or C 👇\n\n#whatif #dbcooper #hijacking #truecrime #unsolvedmysteries",
+    "hooks": [
+     "The man in 18E has a bomb. You're in 18F.",
+     "He paid cash for his ticket. Then he asked for $200,000.",
+     "He jumped into the rain at night. Nobody ever found him."
+    ]
+   },
+   "auto": false
   },
   {
    "slug": "mongol-fleet-1281",
