@@ -131,23 +131,23 @@ def build(c):
         for sy_ in (-1.3, 1.3):
             CB.append((cyl(.33, .22, at=(sx_ * .8 - (.11 if sx_ > 0 else -.11) * 0, sy_, .33), seg=12, axis='X'), tyre))
             CB.append((cyl(.2, .23, at=(sx_ * .8, sy_, .33), seg=8, axis='X'), rim))
-    car = multi('Auto_Panne', car_local(CB), c, label='Dein Auto', interact='use', use='auto', hazard=1)
+    car = multi('Auto_Panne', car_local(CB), c, label='Dein Auto', interact='use', use='auto', hazard=1, vehicle=1)
     # trunk lid (hinged at the roof edge), driver door, hood slightly open (steam point)
     multi('Auto_Kofferraum', car_local([(box(1.74, .06, .45, at=(0, -2.02, .4), bevel_w=.02), body), (box(1.74, .82, .05, at=(0, -1.64, .82), bevel_w=.02), body),
                                         (box(.5, .02, .12, at=(0, -2.06, .45)), lp('Kennzeichen', '#f2f2ee', .5)), (box(.12, .03, .03, at=(0, -2.06, .66)), chrome)]), c,
-          pivot=tuple(Matrix.Rotation(rz, 4, 'Z') @ Vector((0, -1.24, .87)) + Vector((x0, y0, .05))), interact='lid', axis=[math.cos(rz), math.sin(rz), 0], angle=math.radians(-85), label='Kofferraum')
+          pivot=tuple(Matrix.Rotation(rz, 4, 'Z') @ Vector((0, -1.24, .87)) + Vector((x0, y0, .05))), interact='lid', axis=[math.cos(rz), math.sin(rz), 0], angle=math.radians(-85), label='Kofferraum', vehicle=1)
     multi('Auto_Fahrertuer', car_local([(box(.06, 1.05, .5, at=(-.89, .35, .3)), body), (box(.04, 1.0, .38, at=(-.82, .35, .82)), gl), (box(.04, .15, .03, at=(-.93, .05, .65)), chrome)]), c,
-          pivot=tuple(Matrix.Rotation(rz, 4, 'Z') @ Vector((-.89, .88, 0)) + Vector((x0, y0, .05))), interact='door', angle=math.radians(-70), label='Fahrertür')
+          pivot=tuple(Matrix.Rotation(rz, 4, 'Z') @ Vector((-.89, .88, 0)) + Vector((x0, y0, .05))), interact='door', angle=math.radians(-70), label='Fahrertür', vehicle=1)
     hood = [(box(1.6, 1.2, .05, at=(0, 1.4, .58)), body)]
-    hb = car_local(hood); hood_o = multi('Auto_Motorhaube', hb, c, pivot=tuple(Matrix.Rotation(rz, 4, 'Z') @ Vector((0, .8, .62)) + Vector((x0, y0, .05))))
+    hb = car_local(hood); hood_o = multi('Auto_Motorhaube', hb, c, pivot=tuple(Matrix.Rotation(rz, 4, 'Z') @ Vector((0, .8, .62)) + Vector((x0, y0, .05))), vehicle=1)
     hood_o.rotation_euler = Matrix.Rotation(math.radians(8), 4, Vector((math.cos(rz), math.sin(rz), 0))).to_euler()
     # trunk contents
     tz = .47
     multi('Rucksack', car_local([(box(.4, .25, .32, at=(-.4, -1.6, tz), bevel_w=.05, seg=2), lp('Rucksack', '#4a6b3a', .9)), (box(.3, .05, .16, at=(-.4, -1.75, tz + .08)), lp('Rucksack_d', '#36502b', .9))]),
-          c, collide=0, interact='pickup', item='rucksack', label='Rucksack')
+          c, collide=0, interact='pickup', item='rucksack', label='Rucksack', vehicle=1)
     multi('Taschenlampe', car_local([(cyl(.03, .22, at=(.15, -1.75, tz + .03), seg=8, axis='X'), blk), (cyl(.04, .05, at=(.37, -1.75, tz + .03), seg=8, axis='X'), steel)]),
-          c, collide=0, interact='pickup', item='taschenlampe', label='Taschenlampe')
-    multi('Wasserflasche_Auto', car_local([(cyl(.035, .22, at=(.55, -1.45, tz), seg=8), lp('Flasche_wasser', '#e9eef0', .3))]), c, collide=0, interact='pickup', item='wasser', label='Wasser')
+          c, collide=0, interact='pickup', item='taschenlampe', label='Taschenlampe', vehicle=1)
+    multi('Wasserflasche_Auto', car_local([(cyl(.035, .22, at=(.55, -1.45, tz), seg=8), lp('Flasche_wasser', '#e9eef0', .3))]), c, collide=0, interact='pickup', item='wasser', label='Wasser', vehicle=1)
     tri = car_local([(move(prism([(-.25, 0), (.25, 0), (0, .43)], .03), (0, -12, .05)), red), (move(prism([(-.15, .06), (.15, .06), (0, .32)], .031, y=-.001), (0, -12, .05)), lp('Waldtank_weiss', '#f1f0ea', .5))])
     multi('Warndreieck', tri, c, collide=0)
     sp = Matrix.Rotation(rz, 4, 'Z') @ Vector((-2.4, -1.0, 0)) + Vector((x0, y0, 0))

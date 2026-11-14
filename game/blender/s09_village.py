@@ -114,7 +114,7 @@ def build(c):
                 cx_, cy_ = x0 + (x1 - x0) * .7, y0 + (y1 - y0) * .3
                 P.append((box(.5, .5, 3.4, at=(cx_, cy_, zt), bevel_w=.02), lp('Ziegel_Kamin', '#8a4a38', .9, var=.08)))
                 P.append((box(.6, .6, .08, at=(cx_, cy_, zt + 3.4)), stone_d))
-        multi(name, P, c)
+        multi(name, P, c, **({} if ruin else {'indoor': [x0, y0, x1, y1, round(z - .5, 2), round(FL + 3.2, 2)]}))
         if door:
             sd, off = door; a, b = sides[sd]
             if sd in 'SN':
@@ -150,7 +150,7 @@ def build(c):
              (box(.95, 1.3, .06, at=(0, -.3, .5), bevel_w=.02), fabric[col % 3]), (box(.6, .35, .12, at=(0, .7, .5), bevel_w=.04, seg=2), white), (box(1.0, .06, .9, at=(0, .97, 0)), wood_d)]
         out = []
         for bm_, m in P: rotz(bm_, rz); move(bm_, (x, y, FL)); out.append((bm_, m))
-        multi(nm, out, c)
+        multi(nm, out, c, interact='use', use='bett', label='Bett')
     def furn_cupboard(nm, x, y, FL, rz, label, loot, found):
         P = [(box(1.0, .5, 1.9, at=(0, 0, 0), bevel_w=.02), wood_d), (box(.47, .02, 1.7, at=(-.25, -.26, .1)), wood), (box(.47, .02, 1.7, at=(.25, -.26, .1)), wood),
              (box(.03, .03, .12, at=(-.04, -.28, 1.0)), steel), (box(.03, .03, .12, at=(.04, -.28, 1.0)), steel), (box(1.06, .54, .06, at=(0, 0, 1.9)), wood)]
@@ -377,4 +377,66 @@ def build(c):
                              (box(.04, .7, .04, at=(-34.0, 161.7, Z(-34, 162) + 1.2), rz=0), lp('Pumpe_gruen', '#2f5a3a', .5, .4)), (box(.5, .3, .2, at=(-34.0, 162.4, Z(-34, 162))), stone_d)],
           c, interact='use', use='brunnen', label='Schwengelpumpe')
     multi('Misthaufen', [(ico(1.2, at=(-34.0, 166.5, Z(-34, 166.5)), sub=1, jit=.3, seed=88, sz=.45), lp('Mist', '#5a4630', .95, var=.1))], c, collide=0)
+    # chapel / barn indoor zones (wolves stay out, warm, waiting allowed)
+    obj('Kapelle_Innen', box(.01, .01, .01, at=(-48.0, 197.5, -5)), stone, c, collide=0, indoor=[-54.0, 194.0, -42.0, 201.0, -.5, 4.5])
+    obj('Scheune_Innen', box(.01, .01, .01, at=(-41.0, 158.0, -5)), stone, c, collide=0, indoor=[-46.0, 152.0, -36.0, 164.0, bz - .5, bz + 3.6])
+
+    # ------------------------------------------------------------ story notes (side quest "Das stille Dorf")
+    paper = lp('Papier', '#ffffff', .8); NOTES = [
+        ('Notiz_Lena', [(box(.2, .26, .004, at=(-75.5, 161.9, .3 + .77), rz=.3), paper)], 'Zettel auf dem Küchentisch',
+         'Liebe Oma, der Bus holt uns morgen um 7 am Dorfplatz ab. Der Bürgermeister sagt, der alte Damm über dem Steinbruch könnte nach dem Sturm brechen. Nimm nur das Nötigste mit! Kurt will nicht mit – red du mit ihm. – Lena'),
+        ('Notiz_Gaestebuch', [(box(.3, .22, .05, at=(-43.6, 197.45, .3 + 1.06)), lp('Buch_rot', '#7a2a24', .7)), (box(.28, .2, .01, at=(-43.6, 197.45, .3 + 1.11)), paper)], 'Gästebuch der Kapelle',
+         'Letzter Eintrag, 21. Oktober: „Herr, beschütze unser Dorf. Wir kommen zurück, sobald der Damm geprüft ist.“ – Familie Becker. Darunter, krakelig: „Damm? Der hält seit 1890. – K.“'),
+        ('Notiz_Aushang', [(box(.02, .42, .56, at=(-70.76, 176.0, .3 + 1.2)), paper), (box(.021, .3, .06, at=(-70.765, 176.0, .3 + 1.68)), lp('Schild_rot', '#c8262b', .5))], 'Aushang „Bekanntmachung“',
+         'BEKANNTMACHUNG der Gemeinde Tannbach: Wegen akuter Gefahr durch den beschädigten Damm oberhalb des Steinbruchs wird der Ort ab dem 22.10. vorübergehend geräumt. Busse um 7:00 Uhr am Dorfplatz. Die Firma Steinwerk Brandt übernimmt die Sicherung.'),
+        ('Notiz_Huber', [(box(.22, .3, .004, at=(-76.4, 198.3, .3 + .46), rz=-.2), paper)], 'Brief von Bauer Huber',
+         'Kurt, alter Sturkopf. Ich hab mir den Damm selbst angesehen – kein Riss, nichts. Ich glaube, die Firma Brandt will den Hang am Steinbruch sprengen, und wir sind ihr dabei nur im Weg. Pass auf dich auf. Ich hab dir Bello dagelassen, er streunt oft oben bei der Burg. – Huber'),
+    ]
+    for k, (nm, parts, label, text) in enumerate(NOTES):
+        multi(nm, parts, c, collide=0, interact='read', label=label, text=text, note=k + 1)
+
+    # ------------------------------------------------------------ car workshop „KFZ Brandt“ (east side, between house no. 2 and the square): keilriemen + tool box for your car
+    gx0, gx1, gy0, gy1 = EAST_FRONT, -48.8, 163.0, 172.0; gz = Z(-52.8, 167.5); GF = gz + .12; T = .25; GH = 3.2
+    conc = lp('Beton_Block', '#b9b6ae', .9, var=.06); G = [(box(gx1 - gx0 + .1, gy1 - gy0 + .1, .14, at=((gx0 + gx1) / 2, (gy0 + gy1) / 2, gz - .02)), lp('Beton', '#b3b0a8', .9, var=.05))]
+    G += [(wall((gx0 + T / 2, gy0 + T), (gx0 + T / 2, gy1 - T), T, GH, [(2.3, 3.4, 0, 2.7)], GF), conc), (wall((gx1 - T / 2, gy0 + T), (gx1 - T / 2, gy1 - T), T, GH, [(3.5, 1.4, 1.2, 2.2)], GF), conc),
+          (wall((gx0, gy0 + T / 2), (gx1, gy0 + T / 2), T, GH, [(3.0, 1.4, 1.2, 2.2)], GF), conc), (wall((gx0, gy1 - T / 2), (gx1, gy1 - T / 2), T, GH, (), GF), conc)]
+    G += [(box(gx1 - gx0 + .5, gy1 - gy0 + .5, .2, at=((gx0 + gx1) / 2, (gy0 + gy1) / 2, GF + GH)), lp('Dachpappe', '#3a3c40', .9, var=.05)),
+          (box(.04, 4.2, .7, at=(gx0 - .05, (gy0 + gy1) / 2, GF + 2.75)), lp('Schild_blau', '#1f5aa8', .5)), (text_bm('KFZ BRANDT', .32, at=(gx0 - .08, (gy0 + gy1) / 2, GF + 2.9), rz=-math.pi / 2, depth=.01), white),
+          (box(.02, 1.3, .9, at=(gx1 - T / 2, gy0 + T + 3.5 + .7, GF + 1.25)), gl), (box(1.3, .02, .9, at=(gx0 + 3.7, gy0 + T / 2, GF + 1.25)), gl)]
+    G += [(box(.6, 2.6, .9, at=(-49.6, 170.2, GF), bevel_w=.02), lp('Werkbank_grau', '#5b6770', .5, .4)), (box(.7, 2.7, .05, at=(-49.6, 170.2, GF + .9)), wood),
+          (box(.04, 2.6, 1.0, at=(-49.15, 170.2, GF + 1.2)), lp('Lochwand', '#c9a273', .8))] + [(box(.03, .04, .3, at=(-49.18, 169.1 + .25 * i, GF + 1.6)), steel) for i in range(9)]
+    for k in range(3): G.append((cyl(.3, .9, at=(-55.6 + .65 * k, 171.2, GF), seg=10), lp(f'Oelfass_{k}', ('#2a5aa8', '#c42a26', '#3b6b3a')[k], .5, .3)))
+    for k in range(4): G.append((torus(.32, .11, at=(-50.0, 164.2, GF + .11 + .22 * k), seg=12, seg2=5, axis='Z'), lp('Reifen', '#1b1b1c', .9)))
+    for sy_ in (-1, 1): G += [(box(.25, .25, 2.2, at=(-53.0, 167.6 + sy_ * 1.4, GF)), lp('Hebebuehne', '#c9a227', .5, .3)), (box(1.6, .15, .12, at=(-53.0, 167.6 + sy_ * 1.2, GF + .9)), lp('Hebebuehne', '#c9a227', .5, .3))]
+    multi('Werkstatt', G, c, indoor=[gx0, gy0, gx1, gy1, gz - .5, GF + GH])
+    for k, (yy, sg_) in enumerate(((gy0 + T + 2.3 + .02, 1), (gy0 + T + 2.3 + 3.4 - .02, -1))):
+        hinge = (gx0 + T / 2, yy, GF); leaf = [(box(.06, 1.68, 2.66, at=(0, sg_ * .84, 0)), lp('Tor_blau', '#2f5a8a', .5, .3)), (box(.08, .05, .2, at=(-.04, sg_ * 1.5, 1.2)), steel)]
+        multi(f'Werkstatttor_{k}', [(move(b_, hinge), m) for b_, m in leaf], c, pivot=hinge, interact='door', angle=sg_ * math.radians(-100), label='Werkstatttor')
+    pickup('Keilriemen', [(torus(.16, .015, at=(-49.18, 170.6, GF + 1.45), seg=14, seg2=3, axis='X'), lp('Gummi', '#1b1b1c', .8))], 'keilriemen', 'Keilriemen')
+    pickup('Werkzeugkasten', [(box(.5, .22, .2, at=(-49.6, 169.4, GF + .95), bevel_w=.01), lp('Werkzeug_rot', '#c42a26', .4, .3)), (box(.3, .04, .05, at=(-49.6, 169.4, GF + 1.17)), blk)], 'werkzeugkasten', 'Werkzeugkasten')
+    multi('Schrottkiste', [(box(.9, .7, .5, at=(-55.6, 164.0, GF)), lp('Gitterbox', '#6d7277', .5, .5))] + [(box(.2 + .1 * (i % 3), .15, .08, at=(-55.8 + .15 * i, 164.0 + .1 * (i % 2), GF + .5), rz=i), rust if i % 2 else steel) for i, rust in enumerate([lp('Rost', '#8a4f2a', .9, var=.1)] * 6)],
+          c, interact='pickup', item='metall', label='Schrottkiste (Metall)', infinite=1)
+    rk = [(box(.45, 1.6, .03, at=(-49.25, 166.0, GF + .5 + .45 * i)), steel) for i in range(3)] + [(box(.45, .04, 1.4, at=(-49.25, 165.2 + 1.6 * j, GF + .45)), steel) for j in range(2)]
+    multi('Werkstatt_Regal', rk, c)
+    pickup('Baustrahler', [(box(.08, .3, .24, at=(-49.3, 165.5, GF + .52)), lp('Strahler_gelb', '#e0b020', .5, .2)), (box(.02, .26, .2, at=(-49.36, 165.5, GF + .54)), lp('Lampenglas', '#e6e2c8', .3))], 'baustrahler', 'Baustrahler (Akku)')
+    pickup('Bewegungsmelder', [(box(.1, .1, .12, at=(-49.3, 166.3, GF + .97), bevel_w=.02), white), (ico(.035, at=(-49.36, 166.3, GF + 1.05), sub=1), lp('Sensor', '#3a3c40', .3))], 'bewegungsmelder', 'Bewegungsmelder')
+    pickup('Solarlader', [(box(.04, .35, .25, at=(-49.3, 166.2, GF + 1.42)), lp('Solarzelle', '#203a6a', .2, .4)), (box(.05, .1, .06, at=(-49.3, 166.45, GF + 1.42)), blk)], 'solarlader', 'Solar-Ladegerät')
+    pickup('Patronen_Werkstatt', [(box(.12, .08, .06, at=(-49.6, 171.0, GF + .95), bevel_w=.005), lp('Munition_0', '#3a5a3a', .6))], 'patronen_gewehr', 'Gewehrpatronen')
+
+    # ------------------------------------------------------------ Kurt, the shopkeeper who stayed (behind the counter of the village shop, facing west)
+    def person(cx, cy, cz, rz, shirt, apron=None):
+        P = []
+        for s_ in (-1, 1):
+            P += [(box(.15, .17, .82, at=(0, s_ * .11, .08), bevel_w=.03), lp('Hose', '#3a4a5c', .9)), (box(.28, .15, .1, at=(-.05, s_ * .11, 0), bevel_w=.03), lp('Stiefel', '#3a2a1c', .7))]
+            arm = box(.13, .13, .62, at=(0, 0, 0), bevel_w=.04); bmesh.ops.rotate(arm, cent=(0, 0, .62), matrix=Matrix.Rotation(-.9, 3, 'Y'), verts=arm.verts)
+            P += [(move(arm, (-.02, s_ * .29, .82)), shirt), (ico(.065, at=(-.44, s_ * .25, 1.05), sub=1), lp('Haut', '#e0b08a', .7))]
+        P += [(box(.3, .48, .62, at=(0, 0, .86), bevel_w=.06, seg=2), shirt), (box(.12, .16, .1, at=(0, 0, 1.46)), lp('Haut', '#e0b08a', .7)),
+              (ico(.14, at=(0, 0, 1.64), sub=2, sz=1.15), lp('Haut', '#e0b08a', .7)), (ico(.13, at=(-.06, 0, 1.55), sub=1, sz=.8, jit=.15, seed=4), lp('Bart', '#d8d4cc', .9)),
+              (cyl(.15, .08, at=(0, 0, 1.74), seg=10), lp('Muetze', '#2f4a3a', .8)), (box(.14, .3, .03, at=(-.12, 0, 1.77)), lp('Muetze', '#2f4a3a', .8)),
+              (box(.02, .2, .04, at=(-.135, 0, 1.66)), blk)]
+        if apron: P.append((box(.04, .4, .7, at=(-.16, 0, .55)), apron))
+        out = []
+        for b_, m in P: rotz(b_, rz); move(b_, (cx, cy, cz)); out.append((b_, m))
+        return out
+    multi('Kurt', person(-71.15, 177.2, .3, 0, lp('Hemd_kariert', '#8a3b32', .9, var=.12), lp('Schuerze', '#3f6a4a', .8)), c, interact='trade', label='Kurt (Händler)', collide=1)
     spot('ziel_dorf', (VILLAGE[0] + 14, VILLAGE[1], .2), quest='dorf')

@@ -65,8 +65,14 @@ Bäume fällen, Felder (3 Pflanzen), Waffen (Messer, Pistole, Schrotflinte, Jagd
 Schwierigkeit (keine Feinde/leicht/mittel/schwer), Speicherplätze + Datei-Export, versionsfeste Spielstände, Wanderkarte mit
 gefundenen Orten + Wegmarkern, freies Spiel nach der Rettung.
 
+## Ausbau 2 (14.11.2026, nachts)
+Level/EP + 11 Nebenaufgaben (Story um die Räumung von Tannbach, 5 Notizen), Hausausbau in 3 Stufen, Möbel und Geräte (Werkbank-Rezepte inkl. Munition),
+Lichter (Fackelhalter, Laterne, Solarlampe, Baustrahler), Zäune mit Tor gegen Tiere, Schlafen bis zum Morgen, Händler Kurt (Euro), Auto reparieren + fahren,
+Waldsee mit Steg + Anglerhütte, Angeln, Kaninchen + Fallen, Hund Bello, Jahreszeiten + Wetter (Schnee, Nebel, Gewitter), Kompass, abgelegte Gegenstände bleiben liegen,
+Taschenlampe per Links-/Rechtsklick, mehr Munition (Säcke, Händler, Werkbank).
+
 ## Später (weitere Maps / Ausbau)
-Auto reparieren (Keilriemen aus der Werkstatt), Angeln am Bach/See, Forsthaus, Funkturm, Nebel, Schnee/Jahreszeiten, Tierfallen, Händler-NPC im Dorf, Controller-Steuerung.
+Forsthaus, Funkturm, Boot fahren auf dem See, Krankheiten/Erkältung, Vorräte verderben, zweite Karte (Gebirge), Controller-Steuerung, Mehrspieler.
 
 ## Technik
 - Blender: jedes benutzbare Ding ist ein eigenes Objekt mit Eigenschaften (`interact`, `label`, `item`, `angle`, `slide`, `group` …),

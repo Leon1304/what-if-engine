@@ -1,5 +1,5 @@
 // HUD and panels (plain DOM; markup + styles live in index.html).
-import { ITEMS, RECIPES } from './items.js';
+import { ITEMS, RECIPES, TRADE } from './items.js';
 
 const $ = id => document.getElementById(id);
 export class UI {
@@ -45,6 +45,31 @@ export class UI {
     this.hotbar.innerHTML = h;
     const s = inv[sel]; $('selname').textContent = s ? ITEMS[s.id].name + (ITEMS[s.id].use ? ' – Q: benutzen' : '') : '';
   }
+  xp(n, why) {
+    const d = document.createElement('div'); d.className = 'xpfly'; d.textContent = `+${n} EP${why ? ' · ' + why : ''}`; $('xpbox').appendChild(d);
+    setTimeout(() => d.remove(), 1800); while ($('xpbox').children.length > 4) $('xpbox').firstChild.remove();
+  }
+  level(L, pct, xp) { const k = L + '|' + Math.round(pct); if (k === this._lv) return; this._lv = k; $('lvl').innerHTML = `<b>⭐ Level ${L}</b><div class="tr" title="${xp} EP"><div class="fl" style="width:${pct}%"></div></div>`; }
+  fade() { const f = $('fade'); f.classList.remove('on'); void f.offsetWidth; f.classList.add('on'); }
+  renderTrade(g) {
+    const S = g.S, eur = v => v.toFixed(2).replace('.', ',') + ' €', talk = [];
+    talk.push(S.flags.metKurtTalk ? 'Kurt nickt dir zu. „Was brauchst du?“' : '„Na, auch noch da? Ich bin Kurt. Die anderen sind alle weg – wegen dem Damm, sagen sie. Ich glaub da nicht dran. Ich hab noch Vorräte. Bezahlt wird in Euro – oder ich kauf dir Felle, Fleisch, Fisch und Gemüse ab.“');
+    S.flags.metKurtTalk = 1;
+    if (!S.dog?.tame) talk.push('„Mein Hund Bello ist mir ausgebüxt. Er streunt oben bei der Burgruine herum. Mit einem Stück Fleisch kriegst du ihn rum.“');
+    if (!S.car?.fixed) talk.push('„Dein Auto ist liegengeblieben? Drüben in der Werkstatt von Brandt hängen Keilriemen, und Werkzeug liegt da auch.“');
+    const notes = Object.keys(S.notes || {}).length;
+    if (notes >= 5 && !S.flags.kurtStory) talk.push('<button data-talk="story">📜 Erzähl Kurt, was in den Notizen steht</button>');
+    else if (S.flags.kurtStory) talk.push('„Brandt und seine Sprengungen … Danke, dass du das rausgefunden hast. Das erzähl ich allen, wenn sie zurückkommen.“');
+    else if (notes) talk.push(`„Du liest die Zettel der Leute? (${notes}/5) Wenn du alles weißt, erzähl's mir.“`);
+    let h = `<h2>🧔 Kurt – Dorfladen <small>Dein Geld: <b>${eur(S.money || 0)}</b></small></h2><div class="talk">${talk.map(t => `<p>${t}</p>`).join('')}</div><div class="tradecols"><div><h3>Kaufen</h3>`;
+    for (const [id, pr] of Object.entries(TRADE.buy)) { const it = ITEMS[id]; if (!it) continue;
+      h += `<div class="trow"><i>${it.icon}</i><span>${it.name}${it.ammo ? ` (${it.ammo[1]} Schuss)` : ''}</span><em>${eur(pr)}</em><button data-buy="${id}" ${S.money >= pr ? '' : 'disabled'}>Kaufen</button></div>`; }
+    h += `</div><div><h3>Verkaufen</h3>`; let any = false;
+    for (const [id, pr] of Object.entries(TRADE.sell)) { const n = g.count(id); if (!n) continue; any = true; const it = ITEMS[id];
+      h += `<div class="trow"><i>${it.icon}</i><span>${it.name} ×${n}</span><em>${eur(pr)}</em><button data-sell="${id}">1</button><button data-sellall="${id}" class="sec">Alle</button></div>`; }
+    if (!any) h += `<p class="hint">Kurt kauft: Felle, Fleisch, Fisch, Gemüse, Goldmünzen, Trockenfleisch, Bretter, Holz, Mehl.</p>`;
+    h += `</div></div><p class="hint">E / Esc schließen</p>`; $('tradepanel').innerHTML = h;
+  }
   hitmark() { const c = $('cross'); c.classList.remove('hit'); void c.offsetWidth; c.classList.add('hit'); }
   renderInventory(g) {
     const inv = g.S.inv, cap = g.capacity(), chest = g.build?.chest;
@@ -64,12 +89,14 @@ export class UI {
         : `<div class="cell empty"></div>`;
     }
     h += `</div><h2>Herstellen <small>C</small></h2><div class="recipes">`;
+    const bench = g.build.hasBench(g.P.pos), L = g.progress.level;
     for (const r of RECIPES) {
+      if (r.bench && !bench) continue;
       const ok = g.canCraft(r);
       const need = r.desc || Object.entries(r.needs).map(([k, v]) => `${v}× ${ITEMS[k]?.name || k}`).join(' + ');
-      h += `<div class="recipe ${ok ? 'ok' : ''}"><div><b>${r.name}</b><small>${need}${r.tools ? ' · Werkzeug: ' + r.tools.map(t => ITEMS[t].name).join(', ') : ''}${r.anyTool ? ' · Werkzeug: ' + r.anyTool.map(t => ITEMS[t].name).join(' oder ') : ''}</small></div><button data-craft="${r.id}" ${ok ? '' : 'disabled'}>Herstellen</button></div>`;
+      h += `<div class="recipe ${ok ? 'ok' : ''}"><div><b>${r.name}</b><small>${need}${r.tools ? ' · Werkzeug: ' + r.tools.map(t => ITEMS[t].name).join(', ') : ''}${r.anyTool ? ' · Werkzeug: ' + r.anyTool.map(t => ITEMS[t].name).join(' oder ') : ''}</small></div>${r.lvl && L < r.lvl ? `<span class="lock">🔒 Level ${r.lvl}</span>` : `<button data-craft="${r.id}" ${ok ? '' : 'disabled'}>Herstellen</button>`}</div>`;
     }
-    h += `</div><p class="hint">Tab / Esc schließen</p>`;
+    h += `</div><p class="hint">${bench ? '🛠️ Werkbank in der Nähe: Munition, Angel, Profi-Axt, großer Rucksack, Kerzen.' : 'Mehr Rezepte (Munition, Angel, Profi-Axt …) an einer Werkbank (G → Nützliches).'} · Tab / Esc schließen</p>`;
     $('invpanel').innerHTML = h;
   }
   show(id, on) { $(id).classList.toggle('show', on); }

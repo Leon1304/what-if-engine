@@ -16,7 +16,7 @@ def tree_ok(x, y, r):
     if abs(x - VILLAGE[0]) < 40 + r and abs(y - VILLAGE[1]) < 36 + r: return False
     for sx, sy, _ in SACKS:
         if math.hypot(x - sx, y - sy) < 1.6 + r: return False
-    for c_, rr in ((TOWER, 9), (RUIN, 15), (QUARRY, 19), (MILL, 10)):
+    for c_, rr in ((TOWER, 9), (RUIN, 15), (QUARRY, 19), (MILL, 10), (LAKE, 21)):
         if math.hypot(x - c_[0], y - c_[1]) < rr + r: return False
     return MAP_X0 + 2 < x < MAP_X1 - 2 and MAP_Y0 + 2 < y < MAP_Y1 - 2
 

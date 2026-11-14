@@ -58,7 +58,8 @@ def build(c):
          (box(.5, .5, .4, at=(.75, -L / 2 + .35, FZ)), fabric), (box(.5, .5, .4, at=(.75, -L / 2 + 1.65, FZ)), fabric),
          (box(.6, 1.6, .9, at=(Wd / 2 - .38, .7, FZ)), wood), (box(.62, 1.62, .04, at=(Wd / 2 - .38, .7, FZ + .9)), lp('Arbeitsplatte', '#3a3c3f', .4)),
          (box(.35, .35, .02, at=(Wd / 2 - .38, .5, FZ + .94)), lp('Spuele', '#b9bdc0', .3, .8)), (box(.6, .4, .5, at=(Wd / 2 - .38, .7, FZ + 1.5)), wood)]
-    multi('Wohnwagen_Innen', T(I), c)
+    multi('Wohnwagen_Innen', T(I), c, indoor=[cx - 2.4, cy - 2.4, cx + 2.4, cy + 2.4, z0 - .5, z0 + FZ + H])          # (rotated 15°: the box is a little generous)
+    multi('Wohnwagen_Bett', T([(box(Wd - .32, 1.15, .02, at=(0, L / 2 - .75, FZ + .601)), lp('Wolldecke', '#8a3b32', .95))]), c, collide=0, interact='use', use='bett', label='Bett')
     multi('Wohnwagen_Schrank', T([(box(.6, .5, .9, at=(-Wd / 2 + .38, 1.3, FZ)), wood), (box(.02, .2, .03, at=(-Wd / 2 + .69, 1.3, FZ + .7)), steel)]), c,
           interact='search', item='dosenbohnen', label='Schrank', found='Zwei Dosen Bohnen – und ganz hinten ein Gaskocher!', bonus='gaskocher')
     multi('Schlafsack', T([(box(.8, 1.0, .18, at=(-.2, L / 2 - .9, FZ + .6), bevel_w=.06, seg=2), lp('Schlafsack', '#b5512b', .9))]), c, collide=0,

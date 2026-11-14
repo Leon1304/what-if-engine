@@ -83,6 +83,31 @@ export const ITEMS = {
   patronen_schrot: { name: 'Schrotpatronen', icon: '📦', desc: '10 Patronen für die Schrotflinte.', ammo: ['schrotflinte', 10] },
   patronen_gewehr: { name: 'Gewehrpatronen', icon: '📦', desc: '10 Patronen für das Jagdgewehr.', ammo: ['gewehr', 10] },
   pfeil:           { name: 'Pfeil', icon: '➶', desc: 'Für den Bogen.', mat: 1 },
+  // crafting materials, car, fishing, trapping
+  metall:          { name: 'Metallschrott', icon: '🔩', desc: 'Werkbank: Munition, Haken, Laterne. Schrottkiste (Werkstatt), Steinbruch.', mat: 1 },
+  schwarzpulver:   { name: 'Sprengpulver', icon: '🧨', desc: 'Werkbank: Munition herstellen.', mat: 1 },
+  keilriemen:      { name: 'Keilriemen', icon: '➰', desc: 'Ersatzteil für dein Auto.' },
+  werkzeugkasten:  { name: 'Werkzeugkasten', icon: '🧰', desc: 'Zum Reparieren des Autos.', tool: 1 },
+  angel:           { name: 'Angelrute', icon: '🎣', desc: 'Auswählen, aufs Wasser zielen, Linksklick = auswerfen. Beißt einer: schnell klicken!', tool: 1 },
+  fisch:           { name: 'Forelle', icon: '🐟', use: { hunger: 8, health: -5 }, poison: 1, desc: 'Am Feuer braten.' },
+  fisch_gebraten:  { name: 'Gebratener Fisch', icon: '🍣', use: { hunger: 38, warmth: 5 } },
+  kaninchen:       { name: 'Kaninchen', icon: '🐇', desc: 'Am Feuer braten.' },
+  kaninchen_gebraten: { name: 'Kaninchenbraten', icon: '🍗', use: { hunger: 45, warmth: 6 } },
+  trockenfleisch:  { name: 'Trockenfleisch', icon: '🥓', use: { hunger: 30, thirst: -4 }, desc: 'Vom Trockengestell. Hält ewig.' },
+  rucksack_gross:  { name: 'Großer Rucksack', icon: '🎒', desc: '+8 Plätze (24).', equip: 'bigbag' },
+  profiaxt:        { name: 'Profi-Axt', icon: '🪓', desc: 'Fällt Bäume in 3 Schlägen.', tool: 1 },
+  // modern gadgets (placeable with G)
+  solarlampe:      { name: 'Solarlampe', icon: '💡', desc: 'G → Licht: aufstellen. Leuchtet nachts von selbst.' },
+  baustrahler:     { name: 'Baustrahler (Akku)', icon: '🔦', desc: 'G → Licht: aufstellen. Sehr hell, braucht Batterien.' },
+  bewegungsmelder: { name: 'Bewegungsmelder', icon: '📡', desc: 'G → Nützliches: warnt, wenn sich Tiere nähern.' },
+  solarlader:      { name: 'Solar-Ladegerät', icon: '🔋', desc: 'G → Nützliches: lädt tagsüber, E lädt die Taschenlampe.' },
+};
+
+// trader Kurt (village shop): buy / sell prices in euro
+export const TRADE = {
+  buy: { patronen_pistole: 12, patronen_schrot: 14, patronen_gewehr: 18, pfeil: 2, saat_kartoffel: 3, saat_karotte: 3, saat_kuerbis: 4, dosensuppe: 4, wasser: 2, sandwich: 5,
+         batterien: 5, seil: 4, metall: 3, schwarzpulver: 9, kerze: 2, verband: 6, angel: 12, solarlampe: 15, baustrahler: 28, bewegungsmelder: 20, rucksack_gross: 40 },
+  sell: { fell: 8, fleisch: 3, fleisch_gebraten: 5, fisch: 4, fisch_gebraten: 6, kaninchen: 4, kartoffel: 1, karotte: 1, kuerbis: 4, goldmuenze: 25, trockenfleisch: 6, brett: 1, holz: 1, mehl: 2 },
 };
 
 // weapons: damage per hit, range (m), shots per magazine, reload (s), cooldown (s), spread (rad), pellets; ammo = inventory item (bow: pfeil)
@@ -101,18 +126,39 @@ export const CROPS = {
   kuerbis:   { name: 'Kürbis', hours: 12, gives: { kuerbis: 2, saat_kuerbis: 1 } },
 };
 
-// blueprints (G): cost, tool, footprint (w × d m), template(s) bp_<id>; the cabin is built in stages (E at the site with the materials)
+// blueprints (G): category, minimum level, cost, tools, footprint (w × d m), template(s) bp_<id>.
+// The cabin is built in stages (E at the site), later extended (Anbau / Veranda / Werkstatt) – each extension needs a level.
+export const BP_CATS = [['bau', '🏗️ Bauwerke'], ['ein', '🪑 Einrichtung'], ['licht', '💡 Licht'], ['zaun', '🚧 Zäune'], ['nutz', '🛠️ Nützliches']];
 export const BLUEPRINTS = [
-  { id: 'unterstand', name: 'Unterstand', icon: '⛺', desc: 'Schutz vor Regen. Darunter darfst du warten (Z).', cost: { stamm: 2, ast: 4, seil: 1 }, tools: [], size: [2.8, 2.4] },
-  { id: 'feuerstelle', name: 'Feuerstelle', icon: '🔥', desc: 'Dauerhafte Feuerstelle mit Sitzstämmen. Holz nachlegen, kochen.', cost: { stein: 6, holz: 1 }, tools: [], size: [2.2, 2.2] },
-  { id: 'huette', name: 'Blockhütte', icon: '🛖', desc: 'In 4 Bauabschnitten: Fundament → Wände → Dach → Kamin. Drinnen: sicher vor Wölfen, warm, Warten erlaubt.', tools: ['hammer'], size: [5.2, 4.8],
-    stages: [{ name: 'Fundament', cost: { stein: 8, stamm: 3 } }, { name: 'Wände', cost: { stamm: 10 } }, { name: 'Dach', cost: { brett: 10, stamm: 1 } }, { name: 'Kamin', cost: { stein: 10, brett: 1 } }] },
-  { id: 'bett', name: 'Bett', icon: '🛏️', desc: 'Schlafen (Z) heilt und wärmt – am besten in der Hütte.', cost: { brett: 4, stamm: 1, seil: 1 }, tools: ['hammer'], size: [1.2, 2.2] },
-  { id: 'kiste', name: 'Vorratskiste', icon: '📦', desc: '20 Plätze Lager. E zum Öffnen.', cost: { brett: 5 }, tools: ['hammer'], size: [1.0, .7] },
-  { id: 'regentonne', name: 'Regentonne', icon: '🛢️', desc: 'Sammelt Regen: sauberes Trinkwasser, füllt den Topf.', cost: { brett: 4, stein: 1 }, tools: ['hammer'], size: [1.0, 1.0] },
-  { id: 'zaun', name: 'Zaun (2 m)', icon: '🚧', desc: 'Grenzt Felder und Lager ab.', cost: { ast: 2, brett: 1 }, tools: [], size: [2.1, .3] },
-  { id: 'feld', name: 'Feld (2 × 2 m)', icon: '🌱', desc: 'Saat pflanzen (E), Regen oder Gießen lässt es schneller wachsen, dann ernten.', cost: { ast: 2 }, tools: ['spaten'], size: [2.1, 2.1] },
+  { id: 'unterstand', cat: 'bau', lvl: 1, name: 'Unterstand', icon: '⛺', desc: 'Schutz vor Regen. Darunter darfst du warten (Z).', cost: { stamm: 2, ast: 4, seil: 1 }, tools: [], size: [2.8, 2.4] },
+  { id: 'feuerstelle', cat: 'bau', lvl: 1, name: 'Feuerstelle', icon: '🔥', desc: 'Dauerhafte Feuerstelle mit Sitzstämmen. Holz nachlegen, kochen.', cost: { stein: 6, holz: 1 }, tools: [], size: [2.2, 2.2] },
+  { id: 'huette', cat: 'bau', lvl: 1, name: 'Blockhütte', icon: '🛖', desc: 'In 4 Bauabschnitten: Fundament → Wände → Dach → Kamin. Später ausbauen: Anbau (Level 3), Veranda (Level 5), Werkstatt (Level 7).', tools: ['hammer'], size: [5.2, 4.8],
+    stages: [{ name: 'Fundament', cost: { stein: 8, stamm: 3 } }, { name: 'Wände', cost: { stamm: 10 } }, { name: 'Dach', cost: { brett: 10, stamm: 1 } }, { name: 'Kamin', cost: { stein: 10, brett: 1 } }],
+    ext: [{ name: 'Anbau (2. Zimmer)', lvl: 3, cost: { stamm: 8, brett: 6, stein: 4 }, off: [4.2, 0], size: [4.4, 4.6] }, { name: 'Veranda', lvl: 5, cost: { brett: 12, stamm: 4, stein: 2 }, off: [1.9, -3.2], size: [8.8, 2.4] },
+          { name: 'Werkstatt-Anbau', lvl: 7, cost: { stamm: 6, brett: 8, stein: 4, metall: 2 }, off: [-4.0, 0], size: [3.6, 4.6] }] },
+  { id: 'feld', cat: 'bau', lvl: 1, name: 'Feld (2 × 2 m)', icon: '🌱', desc: 'Saat pflanzen (E), Regen oder Gießen lässt es schneller wachsen, dann ernten.', cost: { ast: 2 }, tools: ['spaten'], size: [2.1, 2.1] },
+  { id: 'falle', cat: 'bau', lvl: 2, name: 'Kaninchenfalle', icon: '🐇', desc: 'Fängt mit der Zeit Kaninchen (nicht direkt neben Häusern). E: Beute nehmen.', cost: { ast: 3, seil: 1 }, tools: [], size: [.9, .6] },
+  { id: 'bett', cat: 'ein', lvl: 1, name: 'Bett', icon: '🛏️', desc: 'E: schlafen bis zum Morgen (ab 18 Uhr). Heilt.', cost: { brett: 4, stamm: 1, seil: 1 }, tools: ['hammer'], size: [1.2, 2.2] },
+  { id: 'kiste', cat: 'ein', lvl: 1, name: 'Vorratskiste', icon: '📦', desc: '20 Plätze Lager. E zum Öffnen.', cost: { brett: 5 }, tools: ['hammer'], size: [1.0, .7] },
+  { id: 'tisch', cat: 'ein', lvl: 2, name: 'Tisch & Hocker', icon: '🪑', desc: 'Gemütlich: Essen am Tisch macht etwas mehr satt.', cost: { brett: 4 }, tools: ['hammer'], size: [1.4, 1.8] },
+  { id: 'teppich', cat: 'ein', lvl: 2, name: 'Fellteppich', icon: '🟫', desc: 'Warm unter den Füßen: drinnen etwas weniger Wärmeverlust.', cost: { fell: 2 }, tools: [], size: [1.6, 1.1], flat: 1 },
+  { id: 'regal', cat: 'ein', lvl: 3, name: 'Regal', icon: '🗄️', desc: '12 Plätze Lager.', cost: { brett: 6 }, tools: ['hammer'], size: [1.3, .5] },
+  { id: 'werkbank', cat: 'nutz', lvl: 2, name: 'Werkbank', icon: '🛠️', desc: 'In der Nähe (3 m) gibt es mehr Rezepte: Munition, Angel, Profi-Axt, großer Rucksack …', cost: { brett: 6, stamm: 2 }, tools: ['hammer'], size: [1.7, .8] },
+  { id: 'herd', cat: 'nutz', lvl: 4, name: 'Steinofen', icon: '♨️', desc: 'Kochen und heizen – auch in der Hütte. Holz nachlegen wie beim Feuer.', cost: { stein: 8, metall: 2, brett: 1 }, tools: ['hammer'], size: [1.1, .9] },
+  { id: 'trockengestell', cat: 'nutz', lvl: 3, name: 'Trockengestell', icon: '🥓', desc: 'Rohes Fleisch aufhängen (E) → nach 6 Stunden Trockenfleisch.', cost: { ast: 6, seil: 1 }, tools: [], size: [1.6, .6] },
+  { id: 'regentonne', cat: 'nutz', lvl: 2, name: 'Regentonne', icon: '🛢️', desc: 'Sammelt Regen: sauberes Trinkwasser, füllt den Topf.', cost: { brett: 4, stein: 1 }, tools: ['hammer'], size: [1.0, 1.0] },
+  { id: 'bewegungsmelder', cat: 'nutz', lvl: 1, name: 'Bewegungsmelder', icon: '📡', desc: 'Piept und meldet, wenn Tiere näher als 20 m kommen.', cost: { bewegungsmelder: 1 }, tools: [], size: [.4, .4] },
+  { id: 'solarlader', cat: 'nutz', lvl: 1, name: 'Solar-Ladegerät', icon: '🔋', desc: 'Lädt tagsüber. E: Taschenlampe auf 100 %.', cost: { solarlader: 1 }, tools: [], size: [.9, .6] },
+  { id: 'fackelhalter', cat: 'licht', lvl: 1, name: 'Fackelhalter', icon: '🔥', desc: 'E mit Feuerzeug: brennt 8 Stunden, hält Wölfe fern. Mit Ast neu anzünden.', cost: { ast: 2, lappen: 1 }, tools: [], size: [.5, .5] },
+  { id: 'laterne', cat: 'licht', lvl: 3, name: 'Laterne', icon: '🏮', desc: 'Leuchtet jede Nacht von selbst (Kerze + Metall).', cost: { metall: 2, kerze: 1 }, tools: ['hammer'], size: [.8, .5] },
+  { id: 'solarlampe', cat: 'licht', lvl: 1, name: 'Solarlampe', icon: '💡', desc: 'Modern: lädt am Tag, leuchtet nachts.', cost: { solarlampe: 1 }, tools: [], size: [.4, .4] },
+  { id: 'baustrahler', cat: 'licht', lvl: 1, name: 'Baustrahler', icon: '🔦', desc: 'Sehr hell, schreckt Wölfe ab. Mit Batterien (E) 3 Nächte.', cost: { baustrahler: 1 }, tools: [], size: [.9, .8] },
+  { id: 'zaun', cat: 'zaun', lvl: 1, name: 'Holzzaun (2 m)', icon: '🚧', desc: 'Grenzt Felder ab – Tiere kommen nicht durch.', cost: { ast: 2, brett: 1 }, tools: [], size: [2.1, .3], fence: 1 },
+  { id: 'gartentor', cat: 'zaun', lvl: 2, name: 'Gartentor', icon: '🚪', desc: 'Tor im Zaun (E: öffnen / schließen).', cost: { brett: 3, ast: 2 }, tools: ['hammer'], size: [1.6, .3], fence: 1 },
+  { id: 'palisade', cat: 'zaun', lvl: 3, name: 'Palisade (2 m)', icon: '🪵', desc: 'Hoher Holzwall gegen Wölfe und Bären.', cost: { stamm: 2 }, tools: ['hammer'], size: [2.1, .4], fence: 1 },
+  { id: 'steinmauer', cat: 'zaun', lvl: 4, name: 'Steinmauer (2 m)', icon: '🧱', desc: 'Massive Mauer.', cost: { stein: 6 }, tools: [], size: [2.1, .5], fence: 1 },
 ];
+
 
 export const RECIPES = [
   { id: 'fackel', name: 'Fackel', needs: { ast: 1, lappen: 1 }, tools: ['feuerzeug'], gives: { fackel: 1 } },
@@ -123,5 +169,14 @@ export const RECIPES = [
   { id: 'bogen', name: 'Bogen', needs: { ast: 2, seil: 1 }, tools: ['messer'], gives: { bogen: 1 } },
   { id: 'pfeile', name: '5 Pfeile', needs: { ast: 2, stein: 1 }, tools: ['messer'], gives: { pfeil: 5 } },
   { id: 'fellmantel', name: 'Fellmantel', needs: { fell: 2, seil: 1 }, gives: { fellmantel: 1 } },
+  { id: 'steinaxt', name: 'Steinaxt', needs: { ast: 1, stein: 2, seil: 1 }, gives: { axt: 1 }, desc: 'Ast + 2 Steine + Seil – wenn du keine Axt hast' },
+  // workbench (within 3 m of a Werkbank or the cabin's workshop) – some need a level
+  { id: 'mun_pistole', name: '8 Pistolenpatronen', needs: { metall: 1, schwarzpulver: 1 }, bench: 1, lvl: 4, gives: { patronen_pistole: 1 }, ammoN: 8 },
+  { id: 'mun_schrot', name: '5 Schrotpatronen', needs: { metall: 1, schwarzpulver: 1 }, bench: 1, lvl: 4, gives: { patronen_schrot: 1 }, ammoN: 5 },
+  { id: 'mun_gewehr', name: '5 Gewehrpatronen', needs: { metall: 2, schwarzpulver: 1 }, bench: 1, lvl: 6, gives: { patronen_gewehr: 1 }, ammoN: 5 },
+  { id: 'angel', name: 'Angelrute', needs: { ast: 2, seil: 1, metall: 1 }, bench: 1, lvl: 2, gives: { angel: 1 } },
+  { id: 'profiaxt', name: 'Profi-Axt', needs: { axt: 1, metall: 3 }, bench: 1, lvl: 5, gives: { profiaxt: 1 } },
+  { id: 'rucksack_gross', name: 'Großer Rucksack (+8)', needs: { fell: 3, seil: 2 }, bench: 1, lvl: 4, gives: { rucksack_gross: 1 } },
+  { id: 'kerze', name: '2 Kerzen', needs: { fleisch: 1, lappen: 1 }, bench: 1, gives: { kerze: 2 }, desc: 'Talg aus Fleisch + Docht' },
   { id: 'lagerfeuer', name: 'Lagerfeuer (vor dir)', needs: { brenn: 3 }, tools: ['feuerzeug'], place: 'fire', desc: '3 × Ast oder Brennholz' },
 ];

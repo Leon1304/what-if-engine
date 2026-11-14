@@ -9,6 +9,7 @@ import { Audio } from './audio.js';
 import { UI } from './ui.js';
 import { Game, SLOTS } from './game.js';
 import { DIFF, MAP } from './life.js';
+import { LEVELS, SIDE } from './progress.js';
 import { Handbook } from './handbook.js';
 import { roadX, creekX } from './life.js';
 import { ITEMS, WEAPONS } from './items.js';
@@ -134,10 +135,11 @@ function openPanel(name) {
   if (name === 'inv') { game.ui.renderInventory(game); ui.show('invpanel', true); }
   if (name === 'map') { drawMap(); ui.show('mappanel', true); }
   if (name === 'build') { $('buildpanel').innerHTML = game.build.menuHtml(); ui.show('buildpanel', true); }
+  if (name === 'trade') { ui.renderTrade(game); ui.show('tradepanel', true); }
   if (name === 'book') book.show(true);
 }
 function closePanel(silent) {
-  if (!panel) return; book.show(false); ui.show('invpanel', false); ui.show('mappanel', false); ui.show('reader', false); ui.show('buildpanel', false); game.build.chest = null; panel = null; if (!silent) lock();
+  if (!panel) return; book.show(false); ui.show('invpanel', false); ui.show('mappanel', false); ui.show('reader', false); ui.show('buildpanel', false); ui.show('tradepanel', false); game.build.chest = null; panel = null; if (!silent) lock();
 }
 $('invpanel').addEventListener('click', e => {
   const b = e.target.closest('button'); if (!b) return;
@@ -149,7 +151,12 @@ $('invpanel').addEventListener('click', e => {
   if (b.dataset.get) game.build.chestMove(-1, +b.dataset.get);
   game.ui.renderInventory(game);
 });
-$('buildpanel').addEventListener('click', e => { const b = e.target.closest('[data-bp]'); if (!b) return; closePanel(); game.build.start(b.dataset.bp); });
+$('buildpanel').addEventListener('click', e => {
+  const c = e.target.closest('[data-cat]'); if (c) { game.build.cat = c.dataset.cat; $('buildpanel').innerHTML = game.build.menuHtml(); return; }
+  const b = e.target.closest('[data-bp]'); if (!b) return; closePanel(); game.build.start(b.dataset.bp); });
+$('tradepanel').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return;
+  if (b.dataset.buy) game.buy(b.dataset.buy); if (b.dataset.sell) game.sell(b.dataset.sell); if (b.dataset.sellall) game.sell(b.dataset.sellall, true); if (b.dataset.talk) game.talk(b.dataset.talk);
+  ui.renderTrade(game); });
 // reader opened by the game (notes, radio)
 new MutationObserver(() => { if ($('reader').classList.contains('show') && panel !== 'reader') { panel = 'reader'; document.exitPointerLock?.(); } }).observe($('reader'), { attributes: true });
 
@@ -178,7 +185,7 @@ addEventListener('keydown', e => {
     case 'KeyX': { const t = game.findTarget(); if (t?.build) game.build.dismantle(t.build); break; }
     case 'KeyN': addMark(player.pos.x, -player.pos.z); break;
     case 'KeyF': if (game.has('taschenlampe')) { if (game.S.battery <= 0) ui.toast('Batterie leer.'); else { game.S.flags.flashOn = !game.S.flags.flashOn; audio.sfx('switch'); } } else ui.toast('Du hast keine Taschenlampe.'); break;
-    case 'Tab': case 'KeyC': openPanel('inv'); break;
+    case 'Tab': case 'KeyC': if (game.vehicle.driving && e.code === 'KeyC') { game.vehicle.inside = !game.vehicle.inside; break; } openPanel('inv'); break;
     case 'KeyM': if (game.has('karte')) openPanel('map'); else ui.toast('Du hast keine Karte. Vielleicht gibt es im Laden eine?'); break;
     case 'KeyQ': game.useSlot(game.S.sel); break;
     case 'KeyB': openPanel('book'); break;
@@ -191,8 +198,9 @@ addEventListener('mousemove', e => { if (document.pointerLockElement === rendere
 let rmb = false, lmb = false;
 addEventListener('mousedown', e => {
   if (!document.pointerLockElement || panel) return;
-  if (e.button === 2) { rmb = true; if (game.has('fernglas') && !game.combat.weapon()) player.zoom = true; }
-  if (e.button === 0) { lmb = true; if (game.build.ghost) game.build.place(); else game.combat.fire(); }
+  if (game.vehicle.driving) return;
+  if (e.button === 2) { rmb = true; if (!game.combat.secondary() && game.has('fernglas') && !game.combat.weapon()) player.zoom = true; }
+  if (e.button === 0) { lmb = true; if (game.build.ghost) game.build.place(); else game.combat.primary(); }
 });
 addEventListener('mouseup', e => { if (e.button === 2) { rmb = false; player.zoom = false; } if (e.button === 0) lmb = false; });
 addEventListener('contextmenu', e => e.preventDefault());
@@ -256,6 +264,19 @@ function drawMap() {
   const nf = game.places.filter(p => S.found[p.id]).length; x.font = '12px system-ui'; x.fillText(`Entdeckt: ${nf}/${game.places.length} · Klick = Wegmarker setzen/löschen · N = Marker hier`, 14, Ht - 14);
 }
 
+// ---------------------------------------------------------------- compass (top centre): directions, quest star, waypoints
+let compassKey = '';
+function drawCompass() {
+  if (!playing) return; const yaw = game.vehicle.driving ? game.vehicle.yaw + (player.yaw - game.vehicle.enterYaw) : player.yaw;
+  const head = ((-yaw * 180 / Math.PI) % 360 + 360) % 360, items = [];
+  const add = (deg, html, cls = '') => { let d = ((deg - head + 540) % 360) - 180; if (Math.abs(d) < 70) items.push(`<span class="${cls}" style="left:${50 + d / 70 * 50}%">${html}</span>`); };
+  [['N', 0], ['NO', 45], ['O', 90], ['SO', 135], ['S', 180], ['SW', 225], ['W', 270], ['NW', 315]].forEach(([n, d]) => add(d, n, n.length === 1 ? 'big' : ''));
+  const bearing = (x, by) => (Math.atan2(x - player.pos.x, by + player.pos.z) * 180 / Math.PI + 360) % 360;
+  const q = game.quests[game.S.quest], tp = q?.target?.(); if (tp) add(bearing(tp.x, -tp.z), '★', 'star');
+  for (const m of game.S.marks) add(bearing(m.x, m.y), `<i style="background:${m.c}"></i>`, 'mk');
+  const k = items.join(''); if (k !== compassKey) { compassKey = k; $('compass').innerHTML = k; }
+}
+
 // ---------------------------------------------------------------- loop
 const clock = new THREE.Clock(); let hudT = 0, target = null;
 const v = new THREE.Vector3();
@@ -272,7 +293,7 @@ function frame(now = 0) {
 function step() {
   const dt = Math.min(.05, clock.getDelta());
   const active = playing && (document.pointerLockElement === renderer.domElement || AUTO) && !panel;
-  if (active && !game.S.flags.dead && !game.S.flags.won) { player.update(dt, game); game.update(dt, player.keys); }
+  if (active && !game.S.flags.dead && !game.S.flags.won) { if (game.vehicle.driving) game.vehicle.update(dt, player.keys); else player.update(dt, game); game.update(dt, player.keys); }
   else if (AUTO && !playing) { game.update(dt, {}); player.sync(); }
   if (active) game.combat.update(dt, 1 - sky.darkness(game.S.time), rmb); else game.combat.update(0, 1 - sky.darkness(game.S.time), false);
   const wantFov = player.zoom ? 20 : game.combat.scope ? 18 : game.combat.aim > .5 ? 58 : 72;
@@ -283,8 +304,11 @@ function step() {
   if (hudT < 0) {
     hudT = .1;
     ui.stats(game.S.stats);
-    const extra = (game.strom() ? ' · ⚡' : '') + (game.S.flags.flashOn ? ` · 🔦${Math.round(game.S.battery)}%` : '') + (game.torchOn ? ' · 🔥' : '') + (game.waiting ? ' · ⏩' : '') + (game.roof ? ' · 🏠' : '');
-    $('weaponhud').textContent = game.combat.hud();
+    const extra = ` · ${game.seasons.label()}` + (game.S.money ? ` · ${game.S.money.toFixed(2).replace('.', ',')} €` : '') + (game.strom() ? ' · ⚡' : '') + (game.S.flags.flashOn ? ` · 🔦${Math.round(game.S.battery)}%` : '') + (game.torchOn ? ' · 🔥' : '') + (game.waiting ? ' · ⏩' : '') + (game.roof ? ' · 🏠' : '');
+    $('weaponhud').textContent = game.vehicle.hud() || game.combat.hud();
+    const L = game.progress.level, lo = LEVELS[L - 1] || 0, hi = LEVELS[L]; ui.level(L, hi ? (game.S.xp - lo) / (hi - lo) * 100 : 100, game.S.xp);
+    const sq = game.S.quest >= 12 ? game.progress.active()[0] : null;
+    $('sidequest').innerHTML = sq ? `<b>Nebenaufgabe:</b> ${sq.t}${game.progress.progressText(sq)}` : '';
     $('buildhint').style.display = game.build.ghost ? 'block' : 'none';
     if (game.build.ghost) $('buildhint').textContent = `${game.build.bp.icon} ${game.build.bp.name} – ${game.build.valid ? 'Linksklick / E: hier bauen' : game.build.why} · R / Mausrad: drehen · X: abbrechen`;
     game.highlight(target, player.pos);
@@ -308,6 +332,7 @@ function step() {
     ph += `<div class="pin" style="left:${(v.x + 1) / 2 * innerWidth}px;top:${(1 - v.y) / 2 * innerHeight}px;--c:${m.c}"><i></i><span>${m.label} · ${Math.round(d)} m</span></div>`;
   }
   if (pins.innerHTML !== ph) pins.innerHTML = ph;
+  drawCompass();
   for (const w of W.waterMeshes) { /* gentle shimmer */ w.material.opacity = .74 + .04 * Math.sin(performance.now() / 700); }
   cullT -= dt; if (cullT < 0) { cullT = .25; W.cull(camera.position); }
   // sun shadow map: every 2nd frame is enough (the shadow matrix stays consistent with the last shadow render)

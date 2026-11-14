@@ -33,7 +33,7 @@
   .bar.low .tr { animation: blink 1s infinite; } @keyframes blink { 50% { border-color: var(--bad); } }
   #bar-health { background: #d9493a; } #bar-hunger { background: #d99a3a; } #bar-thirst { background: #3a9ad9; } #bar-warmth { background: #e0703a; } #bar-stamina { background: #c9d94a; }
   #clock { position: absolute; right: 16px; top: 14px; padding: 6px 12px; border-radius: 8px; background: var(--bg); font-weight: 600; }
-  #quest { position: absolute; left: 16px; top: 14px; max-width: 380px; padding: 10px 14px; border-radius: 10px; background: var(--bg); border-left: 3px solid var(--acc); }
+  #quest { position: absolute; left: 16px; top: 14px; max-width: min(380px, calc(50vw - 175px)); padding: 10px 14px; border-radius: 10px; background: var(--bg); border-left: 3px solid var(--acc); }
   #quest:empty { display: none; } #quest .qt { font-weight: 700; color: var(--acc); display: flex; justify-content: space-between; gap: 10px; } #quest .qt span { color: var(--mut); font-weight: 400; font-size: 12px; }
   #quest .qx { font-size: 14px; } #quest.pulse { animation: pulse .8s; } @keyframes pulse { 0% { transform: scale(1.04); box-shadow: 0 0 0 3px var(--acc); } 100% { transform: none; box-shadow: none; } }
   #toasts { position: absolute; left: 50%; top: 18%; transform: translateX(-50%); display: grid; gap: 6px; justify-items: center; width: min(560px, 90vw); }
@@ -103,6 +103,23 @@
   .bpc.ok { opacity: 1; } .bpc i { font-style: normal; font-size: 28px; text-align: center; } .bpc small { display: block; color: var(--mut); font-size: 12px; }
   .slotrow { display: grid; grid-template-columns: 110px 1fr auto auto; gap: 8px; align-items: center; font-size: 13px; } .slotrow span { color: var(--mut); } .slotrow button { padding: 5px 10px; font-size: 12px; margin: 3px 0; }
   .diff button { padding: 7px 12px; font-size: 13px; }
+  /* level, compass, side quest, trade, fade */
+  #lvl { position: absolute; left: 16px; bottom: 150px; width: 230px; font-size: 13px; } #lvl b { color: var(--acc); } #lvl .tr { height: 6px; border-radius: 3px; background: rgba(0,0,0,.45); overflow: hidden; margin-top: 3px; border: 1px solid rgba(255,255,255,.12); }
+  #lvl .fl { height: 100%; background: linear-gradient(90deg, #e2a83c, #ffd77a); transition: width .4s; }
+  #xpbox { position: absolute; left: 16px; bottom: 180px; display: grid; gap: 2px; } .xpfly { color: #ffd77a; font-weight: 700; font-size: 13px; text-shadow: 0 1px 2px #000; animation: xpf 1.8s forwards; }
+  @keyframes xpf { 0% { opacity: 0; transform: translateY(8px); } 15% { opacity: 1; transform: none; } 80% { opacity: 1; } 100% { opacity: 0; transform: translateY(-10px); } }
+  #compass { position: absolute; left: 50%; top: 12px; transform: translateX(-50%); width: min(300px, 28vw); height: 26px; border-radius: 6px; background: var(--bg); overflow: hidden; }
+  #compass span { position: absolute; top: 5px; transform: translateX(-50%); font-size: 11px; color: var(--mut); font-weight: 700; } #compass span.big { color: var(--fg); font-size: 13px; top: 4px; }
+  #compass span.star { color: var(--acc); font-size: 15px; top: 2px; } #compass span.mk i { display: block; width: 9px; height: 9px; border-radius: 50%; border: 1px solid #fff; margin-top: 3px; }
+  #compass::after { content: ""; position: absolute; left: 50%; top: 0; bottom: 0; width: 2px; background: var(--acc); opacity: .7; }
+  #sidequest { position: absolute; right: 16px; top: 52px; text-align: right; max-width: 380px; font-size: 13px; color: var(--mut); background: var(--bg); padding: 5px 10px; border-radius: 8px; } #sidequest:empty { display: none; } #sidequest b { color: #9fd47a; }
+  #fade { position: absolute; inset: 0; background: #000; opacity: 0; pointer-events: none; } #fade.on { animation: fadeio 2.6s; } @keyframes fadeio { 0% { opacity: 0; } 35%, 60% { opacity: 1; } 100% { opacity: 0; } }
+  .tabs { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 10px; } .tabs button { margin: 0; padding: 6px 10px; font-size: 13px; } .lock { color: #e0a060; font-size: 12px; font-weight: 600; margin-left: 6px; }
+  .talk p { background: rgba(255,255,255,.06); border-left: 3px solid var(--acc); padding: 8px 12px; border-radius: 6px; margin: 6px 0; font-size: 14px; }
+  .tradecols { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; } .tradecols h3 { margin: 8px 0; }
+  .trow { display: grid; grid-template-columns: 28px 1fr auto auto auto; align-items: center; gap: 6px; padding: 3px 0; font-size: 13px; border-bottom: 1px solid rgba(255,255,255,.06); }
+  .trow i { font-style: normal; font-size: 18px; } .trow em { font-style: normal; color: var(--acc); font-weight: 700; } .trow button { padding: 3px 9px; font-size: 12px; margin: 0; }
+  @media (max-width: 700px) { .tradecols { grid-template-columns: 1fr; } #compass { top: 54px; } }
   #found { list-style: none; padding: 0; columns: 2; color: var(--mut); } #found li.on { color: var(--fg); }
   @media (max-width: 700px) { #bars { width: 160px; } #quest { max-width: 60vw; font-size: 13px; } .slot { width: 44px; height: 44px; } }
 </style>
@@ -127,9 +144,9 @@
     <div class="bar" title="Wärme">🌡️<div class="tr"><div class="fl" id="bar-warmth"></div></div></div>
     <div class="bar" title="Ausdauer">⚡<div class="tr"><div class="fl" id="bar-stamina"></div></div></div>
   </div>
-  <div id="pins"></div><div id="scope"></div>
+  <div id="pins"></div><div id="scope"></div><div id="compass"></div><div id="sidequest"></div><div id="lvl"></div><div id="xpbox"></div>
   <div id="selname"></div><div id="hotbar"></div><div id="bookhint"><kbd>B</kbd> Handbuch · <kbd>G</kbd> Bauen</div><div id="weaponhud"></div><div id="buildhint"></div>
-  <div id="frost"></div><div id="vignette"></div>
+  <div id="frost"></div><div id="vignette"></div><div id="fade"></div>
 </div>
 
 <div class="ov show" id="loading"><div class="card"><h1>WALDTANK<small>Überleben im Nordwald</small></h1><p id="loadtext">Lade …</p><div class="bar"><div id="loadbar"></div></div></div></div>
@@ -144,7 +161,7 @@
     <b>E</b><span>benutzen, öffnen, aufheben</span><b>F</b><span>Taschenlampe</span><b>Tab / C</b><span>Rucksack &amp; Herstellen</span>
     <b>1–5 · Mausrad · Q</b><span>Schnellleiste wählen · essen/trinken/benutzen</span><b>M</b><span>Karte (wenn du eine hast)</span>
     <b>Z (halten)</b><span>Zeit vergehen lassen – drinnen mit Strom, am Feuer, im Unterstand, am Bett oder mit Schlafsack</span>
-    <b>Linksklick · R · rechte Maustaste</b><span>Waffe benutzen · nachladen · zielen / Fernglas</span><b>G · X</b><span>Baumenü · Gebautes abbauen</span><b>N</b><span>Wegmarker setzen</span>
+    <b>Linksklick · R · rechte Maustaste</b><span>Waffe: schießen · nachladen · zielen — ohne Waffe: Taschenlampe an · aus (Fernglas)</span><b>G · X</b><span>Baumenü · Gebautes abbauen</span><b>N</b><span>Wegmarker setzen</span>
     <b>B</b><span>Handbuch: alle Tasten, Rezepte, Tipps</span><b>Esc</b><span>Pause, Speichern, Schwierigkeit</span>
   </div>
 </div></div>
@@ -172,6 +189,7 @@
 <div class="panel" id="book"></div>
 <div class="panel" id="mappanel"><canvas id="mapcanvas" width="440" height="680"></canvas><p class="hint">Klick = Wegmarker setzen / löschen · M / Esc schließen</p></div>
 <div class="panel" id="buildpanel"></div>
+<div class="panel" id="tradepanel"></div>
 
 <script type="module" src="js/main.js"></script>
 </body>

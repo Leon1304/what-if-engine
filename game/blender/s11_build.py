@@ -41,32 +41,35 @@ def build(c):
     P.append((box(1.0, .6, .22, at=(-.83, -Y - .3, 0)), plank_d))
     bp('huette_1', P, label='Fundament')
     # walls: stacked logs, openings cut out
-    DOOR = (-1.3, -.35, FH, FH + 2.0); WIN_F = (.6, 1.4, 1.3, 2.1); WIN_E = (-.5, .5, 1.3, 2.1)
-    P = []; r = .125; n = int((WT - FH) / (2 * r))
-    for i in range(n):
-        zc = FH + r + 2 * r * i
-        for sy in (-1, 1):                         # front / back walls along x (logs stick out .15 at the corners)
-            segs = [(-X - .15, X + .15)]
-            if sy < 0:
-                cut = []
-                if DOOR[2] <= zc <= DOOR[3]: cut.append((DOOR[0], DOOR[1]))
-                if WIN_F[2] <= zc <= WIN_F[3]: cut.append((WIN_F[0], WIN_F[1]))
-                segs = []; cur = -X - .15
-                for a, b in sorted(cut): segs.append((cur, a)); cur = b
-                segs.append((cur, X + .15))
-            for a, b in segs:
-                if b - a > .05: P.append((cyl(r, b - a, at=(a, sy * (Y - r), zc), seg=7, axis='X'), log)); P.append((cyl(r * .85, .02, at=(a - .01, sy * (Y - r), zc), seg=7, axis='X'), log_end))
-        for sx in (-1, 1):
-            segs = [(-Y + 2 * r, Y - 2 * r)]
-            if sx > 0 and WIN_E[2] <= zc <= WIN_E[3]: segs = [(-Y + 2 * r, WIN_E[0]), (WIN_E[1], Y - 2 * r)]
-            for a, b in segs: P.append((cyl(r, b - a, at=(sx * (X - r), a, zc), seg=7, axis='Y'), log))
-    P += [(box(.08, .3, 2.0, at=(DOOR[0] - .04, -Y + r, FH)), plank_d), (box(.08, .3, 2.0, at=(DOOR[1] + .04, -Y + r, FH)), plank_d), (box(1.05, .3, .1, at=((DOOR[0] + DOOR[1]) / 2, -Y + r, DOOR[3])), plank_d)]
-    for (a, b, zb, zt) in (WIN_F,):
-        P += [(box(b - a + .1, .3, .08, at=((a + b) / 2, -Y + r, zb - .08)), plank_d), (box(b - a + .1, .3, .08, at=((a + b) / 2, -Y + r, zt)), plank_d),
-              (box(b - a - .04, .02, zt - zb, at=((a + b) / 2, -Y + r, zb)), glass('Glas_Huette', '#bcd3dc', .3))]
-    P += [(box(.3, WIN_E[1] - WIN_E[0] + .1, .08, at=(X - r, 0, WIN_E[2] - .08)), plank_d), (box(.3, WIN_E[1] - WIN_E[0] + .1, .08, at=(X - r, 0, WIN_E[3])), plank_d),
-          (box(.02, WIN_E[1] - WIN_E[0] - .04, WIN_E[3] - WIN_E[2], at=(X - r, 0, WIN_E[2])), glass('Glas_Huette', '#bcd3dc', .3))]
-    bp('huette_2', P, label='Wände')
+    DOOR = (-1.3, -.35, FH, FH + 2.0); WIN_F = (.6, 1.4, 1.3, 2.1); WIN_E = (-.5, .5, 1.3, 2.1); r = .125
+    def cabin_walls(east_door):
+        P = []; n = int((WT - FH) / (2 * r)); WE = (-.5, .5, FH, FH + 2.0) if east_door else WIN_E
+        for i in range(n):
+            zc = FH + r + 2 * r * i
+            for sy in (-1, 1):                         # front / back walls along x (logs stick out .15 at the corners)
+                segs = [(-X - .15, X + .15)]
+                if sy < 0:
+                    cut = []
+                    if DOOR[2] <= zc <= DOOR[3]: cut.append((DOOR[0], DOOR[1]))
+                    if WIN_F[2] <= zc <= WIN_F[3]: cut.append((WIN_F[0], WIN_F[1]))
+                    segs = []; cur = -X - .15
+                    for a, b in sorted(cut): segs.append((cur, a)); cur = b
+                    segs.append((cur, X + .15))
+                for a, b in segs:
+                    if b - a > .05: P.append((cyl(r, b - a, at=(a, sy * (Y - r), zc), seg=7, axis='X'), log)); P.append((cyl(r * .85, .02, at=(a - .01, sy * (Y - r), zc), seg=7, axis='X'), log_end))
+            for sx in (-1, 1):
+                segs = [(-Y + 2 * r, Y - 2 * r)]
+                if sx > 0 and WE[2] <= zc <= WE[3]: segs = [(-Y + 2 * r, WE[0]), (WE[1], Y - 2 * r)]
+                for a, b in segs: P.append((cyl(r, b - a, at=(sx * (X - r), a, zc), seg=7, axis='Y'), log))
+        P += [(box(.08, .3, 2.0, at=(DOOR[0] - .04, -Y + r, FH)), plank_d), (box(.08, .3, 2.0, at=(DOOR[1] + .04, -Y + r, FH)), plank_d), (box(1.05, .3, .1, at=((DOOR[0] + DOOR[1]) / 2, -Y + r, DOOR[3])), plank_d)]
+        for (a, b, zb, zt) in (WIN_F,):
+            P += [(box(b - a + .1, .3, .08, at=((a + b) / 2, -Y + r, zb - .08)), plank_d), (box(b - a + .1, .3, .08, at=((a + b) / 2, -Y + r, zt)), plank_d),
+                  (box(b - a - .04, .02, zt - zb, at=((a + b) / 2, -Y + r, zb)), glass('Glas_Huette', '#bcd3dc', .3))]
+        if east_door: P += [(box(.3, .08, 2.0, at=(X - r, WE[0] - .04, FH)), plank_d), (box(.3, .08, 2.0, at=(X - r, WE[1] + .04, FH)), plank_d), (box(.3, 1.1, .1, at=(X - r, 0, WE[3])), plank_d)]
+        else: P += [(box(.3, WIN_E[1] - WIN_E[0] + .1, .08, at=(X - r, 0, WIN_E[2] - .08)), plank_d), (box(.3, WIN_E[1] - WIN_E[0] + .1, .08, at=(X - r, 0, WIN_E[3])), plank_d),
+              (box(.02, WIN_E[1] - WIN_E[0] - .04, WIN_E[3] - WIN_E[2], at=(X - r, 0, WIN_E[2])), glass('Glas_Huette', '#bcd3dc', .3))]
+        return P
+    bp('huette_2', cabin_walls(False), label='Wände'); bp('huette_2t', cabin_walls(True), label='Wände')
     # roof (ridge along x), gables of planks
     P = []; ov = .45; half = Y + ov; pitch = math.radians(35); rh = half * math.tan(pitch); zr = WT - ov * math.tan(pitch)
     for s in (-1, 1):
@@ -91,6 +94,97 @@ def build(c):
     P += [(box(.9, .06, .12, at=(.48, -.035, .3)), plank_d), (box(.9, .06, .12, at=(.48, -.035, 1.6)), plank_d), (beam((.1, -.04, .4), (.86, -.04, 1.55), .04), plank_d),
           (box(.04, .1, .04, at=(.82, -.06, .95)), steel)]
     bp('huette_tuer', P, hinge=[DOOR[0] + .02, -Y + r, FH], label='Hüttentür')
+
+    # ---------------- cabin extensions (level 3 / 5 / 7): side room east, veranda in front, open workshop west
+    X2 = 6.1; P = []
+    for px in (X + .4, (X + X2) / 2, X2 - .25):
+        for py in (-Y + .25, Y - .25): P.append((box(.5, .5, 1.45, at=(px, py, -1.2), bevel_w=.04), stone))
+    for i in range(13): P.append((box(.285, 2 * Y - .1, .06, at=(X + .1 + .286 * i + .14, 0, FH - .06)), plank if i % 2 else plank_d))
+    WS = (3.6, 4.4, 1.3, 2.1)
+    for i in range(int((WT - FH) / (2 * r))):
+        zc = FH + r + 2 * r * i
+        for sy in (-1, 1):
+            segs = [(X + .15, X2 + .15)]
+            if sy < 0 and WS[2] <= zc <= WS[3]: segs = [(X + .15, WS[0]), (WS[1], X2 + .15)]
+            for a_, b_ in segs: P.append((cyl(r, b_ - a_, at=(a_, sy * (Y - r), zc), seg=7, axis='X'), log)); P.append((cyl(r * .85, .02, at=(b_ - .01, sy * (Y - r), zc), seg=7, axis='X'), log_end))
+        segs = [(-Y + 2 * r, Y - 2 * r)] if not (WIN_E[2] <= zc <= WIN_E[3]) else [(-Y + 2 * r, WIN_E[0]), (WIN_E[1], Y - 2 * r)]
+        for a_, b_ in segs: P.append((cyl(r, b_ - a_, at=(X2 - r, a_, zc), seg=7, axis='Y'), log))
+    P += [(box(WS[1] - WS[0] - .04, .02, WS[3] - WS[2], at=((WS[0] + WS[1]) / 2, -Y + r, WS[2])), glass('Glas_Huette', '#bcd3dc', .3)),
+          (box(.02, .96, .8, at=(X2 - r, 0, WIN_E[2])), glass('Glas_Huette', '#bcd3dc', .3))]
+    p30 = math.radians(30); rh2 = (Y + ov) * math.tan(p30); zr2 = WT - ov * math.tan(p30)
+    for sy in (-1, 1): P.append((solid([(X, sy * (Y + ov), zr2), (X2 + ov, sy * (Y + ov), zr2), (X2 + ov, 0, zr2 + rh2), (X, 0, zr2 + rh2)], (0, 0, .08)), shingle))
+    P.append((solid([(X2 - .02, -Y, WT), (X2 - .02, Y, WT), (X2 - .02, 0, WT + Y * math.tan(p30))], (-.08, 0, 0)), plank))
+    bp('huette_x1', P, label='Anbau')
+    P = []; VY0, VY1 = -Y, -Y - 2.2
+    for i in range(int((X2 + X + .4) / .3)): P.append((box(.28, 2.2, .06, at=(-X - .2 + .15 + .3 * i, (VY0 + VY1) / 2, FH - .06)), plank if i % 2 else plank_d))
+    for px in (-X - .1, -.1, 2.0, 4.1, X2 + .1):
+        P += [(box(.16, .16, 1.65 + FH, at=(px, VY1 + .15, -1.2 + .0)), log), (box(.5, .5, 1.2, at=(px, VY1 + .15, -1.2)), stone)]
+        P.append((box(.14, .14, 2.25 - FH, at=(px, VY1 + .15, FH)), log))
+    P.append((solid([(-X - .4, VY0 - ov, zr - .02), (X2 + .4, VY0 - ov, zr - .02), (X2 + .4, VY1 - .3, 2.2), (-X - .4, VY1 - .3, 2.2)], (0, 0, .08)), shingle))
+    P.append((box(2 * X + X2 - X + .8, .16, .16, at=((X2 - X) / 2, VY1 + .15, 2.12)), log))
+    for (a_, b_) in ((-X - .1, -1.5), (-.1, X2 + .1)):
+        P += [(box(b_ - a_, .08, .08, at=((a_ + b_) / 2, VY1 + .15, FH + .9)), plank_d), (box(b_ - a_, .06, .06, at=((a_ + b_) / 2, VY1 + .15, FH + .45)), plank_d)]
+    P += [(box(1.1, .6, .15, at=(-.83, VY1 - .3, 0)), stone), (box(1.1, .3, .15, at=(-.83, VY1 - .15, .15)), stone)]
+    P += [(box(1.5, .42, .05, at=(3.2, VY1 + .6, FH + .42)), plank), (box(1.5, .05, .4, at=(3.2, VY1 + .4, FH + .5)), plank_d)] + [(box(.07, .4, .42, at=(3.2 + s_ * .65, VY1 + .6, FH)), plank_d) for s_ in (-1, 1)]
+    bp('huette_x2', P, label='Veranda')
+    P = []; WX0 = -X - 3.3
+    P.append((box(3.3, 2 * Y, .1, at=((WX0 - X) / 2, 0, 0)), plank_d))
+    for py in (-Y + .1, Y - .1): P += [(box(.16, .16, 2.15, at=(WX0 + .1, py, 0)), log), (box(.5, .5, .6, at=(WX0 + .1, py, -.55)), stone)]
+    P.append((solid([(-X + .02, -Y - .3, 2.7), (-X + .02, Y + .3, 2.7), (WX0 - .3, Y + .3, 2.1), (WX0 - .3, -Y - .3, 2.1)], (0, 0, .08)), shingle))
+    P.append((box(.16, 2 * Y + .2, .16, at=(WX0 + .1, 0, 2.08)), log))
+    P += [(box(.7, 1.8, .06, at=(WX0 + .5, .6, .9)), plank), (box(.6, .08, .8, at=(WX0 + .5, -.25, .1)), plank_d), (box(.6, .08, .8, at=(WX0 + .5, 1.45, .1)), plank_d),
+          (box(.04, 1.8, 1.0, at=(-X - .1, .6, 1.2)), plank), (box(.12, .12, .14, at=(WX0 + .5, 1.3, .96)), steel), (cyl(.3, .5, at=(WX0 + 1.8, -1.2, .1), seg=8), log),
+          (cyl(.29, .02, at=(WX0 + 1.8, -1.2, .6), seg=8), log_end)] + [(box(.03, .03, .3, at=(-X - .14, -.1 + .25 * i, 1.5)), steel) for i in range(6)]
+    bp('huette_x3', P, label='Werkstatt')
+
+    # ---------------- furniture
+    bp('tisch', [(box(1.2, .8, .05, at=(0, 0, .72), bevel_w=.01), plank)] + [(box(.07, .07, .72, at=(sx * .52, sy * .32, 0)), plank_d) for sx in (-1, 1) for sy in (-1, 1)] +
+       [(cyl(.18, .04, at=(sx * .3, sy * .7, .44), seg=8), plank) for sx in (-1, 1) for sy in (-1, 1)] + [(cyl(.03, .44, at=(sx * .3, sy * .7, 0), seg=5), plank_d) for sx in (-1, 1) for sy in (-1, 1)], label='Tisch')
+    bp('regal', [(box(1.2, .45, .04, at=(0, 0, .05 + .43 * i)), plank) for i in range(5)] + [(box(.05, .45, 1.8, at=(sx * .58, 0, 0)), plank_d) for sx in (-1, 1)] +
+       [(box(1.2, .02, 1.8, at=(0, .22, 0)), plank_d)] + [(box(.22, .3, .28, at=(-.35 + .35 * i, -.02, .48 + .43 * (i % 2)), bevel_w=.02), lp('Karton', '#b98b5a', .9, var=.08)) for i in range(3)], label='Regal')
+    bp('teppich', [(box(1.6, 1.1, .02, at=(0, 0, .005), bevel_w=.01), lp('Fellteppich', '#8a6a4a', .95, var=.12)), (box(1.3, .8, .021, at=(0, 0, .006)), lp('Fellteppich_hell', '#a8865e', .95, var=.1))], label='Fellteppich')
+    W_ = [(box(1.6, .7, .07, at=(0, 0, .86)), plank), (box(1.5, .06, .4, at=(0, .3, .2)), plank_d)] + [(box(.08, .08, .86, at=(sx * .72, sy * .28, 0)), log) for sx in (-1, 1) for sy in (-1, 1)]
+    W_ += [(box(1.6, .04, .9, at=(0, .35, .93)), plank_d), (box(.14, .2, .1, at=(.6, -.2, .93)), steel), (box(.04, .26, .06, at=(.6, -.35, .98)), steel),
+           (box(.5, .02, .12, at=(-.3, .32, 1.4)), steel), (box(.03, .25, .03, at=(.1, .32, 1.5)), plank), (box(.06, .06, .1, at=(.1, .3, 1.38)), steel)]
+    bp('werkbank', W_, label='Werkbank')
+    H_ = [(box(.9, .7, .8, at=(0, 0, 0), bevel_w=.03), stone), (box(1.0, .8, .08, at=(0, 0, .8)), lp('Herdplatte', '#2b2d30', .4, .5)), (box(.45, .02, .3, at=(0, -.36, .2)), lp('Ofentuer', '#232426', .4, .5)),
+          (cyl(.08, 1.6, at=(.3, .25, .88), seg=8), lp('Ofenrohr', '#3a3c40', .5, .5)), (cyl(.16, .02, at=(-.2, -.1, .88), seg=8), lp('Herdplatte', '#2b2d30', .4, .5))]
+    bp('herd', H_, label='Steinofen', fire=[0, -.15, .12])
+    T_ = [(box(.08, .08, 1.6, at=(sx * .7, 0, 0)), log) for sx in (-1, 1)] + [(cyl(.03, 1.5, at=(-.75, 0, .9 + .3 * i), seg=5, axis='X'), log) for i in range(3)]
+    T_ += [(box(.3, .3, .04, at=(sx * .7, 0, 0)), stone) for sx in (-1, 1)]
+    bp('trockengestell', T_, label='Trockengestell')
+    bp('trocken_fleisch', [(box(.08, .02, .3, at=(-.5 + .25 * i, 0, 1.4 - .3 * (i % 2) - .28)), lp('Trockenfleisch', '#7a2f22', .8, var=.1)) for i in range(5)])
+    F_ = lambda: [(box(.7, .35, .02, at=(0, 0, 0)), plank_d), (box(.7, .02, .35, at=(0, -.17, 0)), plank_d), (box(.7, .02, .35, at=(0, .17, 0)), plank_d), (box(.02, .35, .35, at=(.34, 0, 0)), plank_d),
+          (box(.7, .35, .02, at=(0, 0, .35)), plank)]
+    bp('falle', F_() + [(box(.02, .35, .3, at=(-.34, 0, .35)), plank), (beam((-.3, 0, .02), (-.4, 0, .5), .015), log)], label='Kaninchenfalle')
+    rab = [(ico(.12, at=(.05, 0, .13), sub=1, sz=.8), lp('Kaninchen', '#9a8a7a', .9)), (ico(.07, at=(-.1, 0, .2), sub=1), lp('Kaninchen', '#9a8a7a', .9)), (box(.03, .02, .1, at=(-.12, .03, .28)), lp('Kaninchen', '#9a8a7a', .9)),
+           (box(.03, .02, .1, at=(-.12, -.03, .28)), lp('Kaninchen', '#9a8a7a', .9)), (ico(.035, at=(.17, 0, .14), sub=1), lp('Bluete_weiss', '#f1efe6', .8))]
+    bp('falle_voll', F_() + [(box(.02, .35, .35, at=(-.34, 0, 0)), plank)] + rab, label='Kaninchenfalle')
+    # ---------------- fences and gate (2 m segments along x)
+    bp('palisade', [(cyl(.12, 2.0, at=(-.9 + .3 * i, 0, -.2), seg=6), log) for i in range(7)] + [(cone(.12, .3, at=(-.9 + .3 * i, 0, 1.8), seg=6), log) for i in range(7)] +
+       [(box(2.0, .06, .12, at=(0, -.13, h_)), plank_d) for h_ in (.5, 1.4)], label='Palisade')
+    bp('steinmauer', [(box(.48, .45, .3, at=(-.76 + .5 * i - (.25 if row % 2 else 0) + (.5 if row % 2 and i == 0 else 0), 0, .3 * row), bevel_w=.04), stone if (i + row) % 2 else stone_d) for row in range(3) for i in range(4)], label='Steinmauer')
+    bp('gartentor', [(box(.14, .14, 1.4, at=(sx * .72, 0, -.15)), log) for sx in (-1, 1)] + [(cone(.1, .15, at=(sx * .72, 0, 1.25), seg=4), log) for sx in (-1, 1)], label='Gartentor')
+    bp('gartentor_tuer', [(box(1.28, .05, .1, at=(.64, 0, h_)), plank) for h_ in (.25, .85)] + [(box(.1, .05, 1.0, at=(.06 + .29 * i, 0, .15)), plank_d) for i in range(5)] +
+       [(beam((.1, 0, .3), (1.2, 0, .9), .025), plank_d)], hinge=[-.65, 0, 0], label='Gartentor')
+    # ---------------- lights + modern gadgets
+    iron = lp('Eisen', '#3a3c3e', .5, .6)
+    bp('fackelhalter', [(cyl(.04, 1.5, at=(0, 0, -.1), seg=6), log), (cyl(.12, .18, at=(0, 0, 1.4), seg=6, r2=.16), iron), (cyl(.05, .15, at=(0, 0, 1.45), seg=5), lp('Holzkohle', '#1f1c1a', .9))], light=[0, 0, 1.75], label='Fackelhalter')
+    bp('laterne', [(cyl(.05, 2.0, at=(0, 0, 0), seg=6), iron), (box(.4, .06, .06, at=(.18, 0, 1.95)), iron), (box(.2, .2, .28, at=(.33, 0, 1.6), bevel_w=.01), glass('Laternenglas', '#ffe6a8', .5)),
+                   (cone(.16, .12, at=(.33, 0, 1.88), seg=4), iron), (box(.22, .22, .03, at=(.33, 0, 1.58)), iron)], light=[.33, 0, 1.72], label='Laterne')
+    bp('solarlampe', [(cyl(.025, .55, at=(0, 0, -.05), seg=6), steel), (cyl(.07, .12, at=(0, 0, .45), seg=8), glass('Lampenglas_s', '#f0f2e8', .6)), (box(.16, .16, .02, at=(0, 0, .58)), lp('Solarzelle', '#203a6a', .2, .4))],
+       light=[0, 0, .52], label='Solarlampe')
+    bp('baustrahler', [(beam((sx * .35, sy * .3, 0), (0, 0, 1.4), .025), lp('Strahler_gelb', '#e0b020', .5, .2)) for sx, sy in ((-1, -1), (1, -1), (0, 1))] +
+       [(box(.36, .14, .28, at=(0, -.05, 1.38)), lp('Strahler_gelb', '#e0b020', .5, .2)), (box(.32, .02, .24, at=(0, -.13, 1.4)), lp('Lampenglas', '#e6e2c8', .3))], light=[0, -.4, 1.5], label='Baustrahler')
+    bp('bewegungsmelder', [(cyl(.03, 1.2, at=(0, 0, 0), seg=6), plank_d), (box(.1, .1, .12, at=(0, -.05, 1.1), bevel_w=.02), lp('Weiss_glanz', '#f4f4f1', .3)),
+                           (ico(.035, at=(0, -.11, 1.17), sub=1), lp('Sensor', '#3a3c40', .3)), (box(.02, .02, .02, at=(.03, -.11, 1.2)), lp('LED_rot', '#ff3a2a', .3, emit='#ff3a2a', ei=2))], label='Bewegungsmelder')
+    bp('solarlader', [(beam((sx * .25, .2, 0), (sx * .25, 0, .7), .02), steel) for sx in (-1, 1)] + [(solid([(-.35, -.05, .55), (.35, -.05, .55), (.35, .25, .85), (-.35, .25, .85)], (0, 0, .03)), lp('Solarzelle', '#203a6a', .2, .4)),
+                      (box(.12, .08, .1, at=(0, .05, .1)), lp('Kunststoff_schwarz', '#232426', .6))], label='Solar-Ladegerät')
+    # ---------------- held tools: flashlight, fishing rod, float
+    bp('w_taschenlampe', [(cyl(.022, .19, at=(0, -.05, 0), seg=8, axis='Y'), lp('Kunststoff_schwarz', '#232426', .6)), (cyl(.032, .05, at=(0, .13, 0), seg=8, axis='Y'), steel),
+                          (cyl(.028, .005, at=(0, .181, 0), seg=8, axis='Y'), lp('Lampenglas_l', '#fff6d8', .2, emit='#fff6d8', ei=3)), (box(.012, .02, .01, at=(0, .0, .024)), lp('Schalter_rot', '#c42a26', .5))])
+    bp('w_angel', [(beam((0, -.1, -.05), (0, 1.6, .9), .012), lp('Angelrute', '#3a2a1c', .6)), (cyl(.035, .05, at=(.03, .05, .02), seg=8, axis='X'), steel), (box(.03, .1, .03, at=(0, -.05, -.06)), lp('Griffschale', '#3a3028', .7))])
+    bp('pose', [(ico(.04, at=(0, 0, .0), sub=1, sz=1.3), lp('Pose_rot', '#d23a2a', .5)), (ico(.035, at=(0, 0, -.04), sub=1, sz=1.0), lp('Weiss_glanz', '#f4f4f1', .3)), (cyl(.005, .1, at=(0, 0, .04), seg=4), lp('Kunststoff_schwarz', '#232426', .6))])
 
     # lean-to: two forked posts, slanted roof of poles + leaf cover, fern bed
     P = [(cyl(.07, 1.85, at=(sx, -1.0, 0), seg=6), bark) for sx in (-1.2, 1.2)] + [(cyl(.06, 2.6, at=(-1.3, -1.0, 1.8), seg=6, axis='X'), bark)]

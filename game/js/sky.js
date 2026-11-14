@@ -44,7 +44,14 @@ export class Sky {
     const rg = new THREE.BufferGeometry(); rg.setAttribute('position', new THREE.BufferAttribute(rp, 3));
     this.rain = new THREE.LineSegments(rg, new THREE.LineBasicMaterial({ color: '#a9bfd6', transparent: true, opacity: .45 }));
     this.rain.visible = false; this.rain.frustumCulled = false; scene.add(this.rain);
-    this.rainAmount = 0; this.fogBoost = 0;
+    this.rainAmount = 0; this.fogBoost = 0; this.snow = false; this.flash = 0;
+  }
+  // rain streaks ↔ snow flakes (short, white, slow)
+  setSnow(on) {
+    if (on === this.snow) return; this.snow = on;
+    const arr = this.rain.geometry.attributes.position.array, L = on ? .06 : .5;
+    for (let i = 0; i < arr.length; i += 6) { arr[i + 3] = arr[i] + (on ? .04 : 0); arr[i + 4] = arr[i + 1] - L; arr[i + 5] = arr[i + 2]; }
+    this.rain.geometry.attributes.position.needsUpdate = true; this.rain.material.color.set(on ? '#ffffff' : '#a9bfd6');
   }
   sample(h) {
     for (let i = 0; i < KEYS.length - 1; i++) {
@@ -61,7 +68,9 @@ export class Sky {
     this.scene.background.copy(sky).lerp(C('#59606a'), wet * .6 * Math.min(1, sunI));
     this.scene.fog.color.copy(fog).lerp(C('#6c737c'), wet * .6 * Math.min(1, sunI));
     const night = 1 - Math.min(1, hemiI / .35);
-    this.scene.fog.near = 20 - 12 * night - 10 * wet; this.scene.fog.far = 260 - 170 * night - 120 * wet - 60 * this.fogBoost;
+    const fb = this.fogBoost; this.scene.fog.near = Math.max(2, 20 - 12 * night - 10 * wet - 16 * fb); this.scene.fog.far = Math.max(30, 260 - 170 * night - 120 * wet - 190 * fb);
+    if (fb > .05) this.scene.fog.color.lerp(C('#b9c0c4'), fb * .7 * Math.min(1, sunI + .2));
+    this.flash = Math.max(0, this.flash - dt * 3);
     // sun path: rises east (+x), sets west, low in autumn (max 38°)
     const a = (h - 6.3) / (18.6 - 6.3) * Math.PI;
     const el = Math.sin(a) * .66, az = a;
@@ -72,14 +81,16 @@ export class Sky {
     const md = new THREE.Vector3(-Math.cos(az), Math.max(.15, -el + .2), .4).normalize();
     this.moon.position.copy(playerPos).addScaledVector(md, 120); this.moon.target.position.copy(playerPos);
     this.moon.intensity = .16 * night * (1 - wet); this.moonDisc.position.copy(playerPos).addScaledVector(md, 400); this.moonDisc.visible = night > .3 && wet < .5;
-    this.hemi.intensity = hemiI * (1 - .3 * wet); this.hemi.color.copy(sky).lerp(C('#ffffff'), .5);
+    this.hemi.intensity = hemiI * (1 - .3 * wet) + this.flash * 2.5; this.hemi.color.copy(sky).lerp(C('#ffffff'), .5 + .5 * this.flash);
+    if (this.flash > .01) this.scene.background.lerp(C('#e8ecff'), this.flash * .8);
     this.stars.material.opacity = Math.max(0, night - .3) * (1 - wet); this.stars.position.copy(playerPos);
     // rain streaks follow the player and fall
-    this.rain.visible = wet > .02; this.rain.material.opacity = .45 * wet;
+    this.rain.visible = wet > .02; this.rain.material.opacity = (this.snow ? .9 : .45) * wet;
     if (this.rain.visible) {
       const p = this.rain.geometry.attributes.position, arr = p.array;
       for (let i = 0; i < arr.length; i += 6) {
-        arr[i + 1] -= 22 * dt; arr[i + 4] -= 22 * dt;
+        const sp = this.snow ? 2.2 : 22; arr[i + 1] -= sp * dt; arr[i + 4] -= sp * dt;
+        if (this.snow) { const wx = Math.sin(arr[i + 1] * .7 + i) * .4 * dt; arr[i] += wx; arr[i + 3] += wx; }
         if (arr[i + 1] < -2) { arr[i + 1] += 30; arr[i + 4] += 30; }
       }
       p.needsUpdate = true; this.rain.position.set(playerPos.x, playerPos.y - 5, playerPos.z);

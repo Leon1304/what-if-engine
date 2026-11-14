@@ -18,6 +18,7 @@ export class Audio {
     this.loop('fridge', null, 'lowpass', 300, 0, 1, 50);
     this.loop('generator', null, 'lowpass', 400, 0, 1, 38, 'sawtooth');
     this.loop('radio', this.noiseBuf, 'bandpass', 1500, 0, .7);
+    this.loop('engine', null, 'lowpass', 600, 0, 1, 42, 'sawtooth');
   }
   loop(name, buf, ftype, freq, vol, q = 1, osc = 0, wave = 'sine') {
     const ctx = this.ctx, g = ctx.createGain(); g.gain.value = vol;
@@ -27,8 +28,9 @@ export class Audio {
     else { src = ctx.createOscillator(); src.type = wave; src.frequency.value = osc;
       const lfo = ctx.createOscillator(), lg = ctx.createGain(); lfo.frequency.value = 7; lg.gain.value = osc * .03; lfo.connect(lg); lg.connect(src.frequency); lfo.start(); }
     src.connect(f); f.connect(g); g.connect(this.master); src.start();
-    this.loops[name] = { g, f };
+    this.loops[name] = { g, f, src };
   }
+  engineRate(v) { const l = this.loops.engine; if (l?.src) l.src.frequency.setTargetAtTime(38 + v * 3.2, this.ctx.currentTime, .1); }
   set(name, vol) { const l = this.loops[name]; if (l) l.g.gain.setTargetAtTime(Math.max(0, vol), this.ctx.currentTime, .3); }
   env(node, t, a, peak, dur) { node.gain.setValueAtTime(0, t); node.gain.linearRampToValueAtTime(peak, t + a); node.gain.exponentialRampToValueAtTime(.0005, t + dur); }
   noise(dur, ftype, freq, vol, q = 1, delay = 0, sweep = 0) {
@@ -100,6 +102,14 @@ export class Audio {
       case 'thud': this.noise(.9, 'lowpass', 220, 1.0, 1, 0, .4); this.tone(45, .8, .4, 'sine', 0, .6); break;
       case 'dig': this.noise(.3, 'lowpass', 700, .35, 1, 0, .6); break;
       case 'rustle': this.noise(.4, 'bandpass', 2500, .2, 1, 0, .7); break;
+      case 'levelup': [523, 659, 784, 1046, 1318].forEach((f, i) => this.tone(f, .25, .12, 'triangle', i * .09)); break;
+      case 'alarm': for (let i = 0; i < 3; i++) this.tone(1800, .12, .1, 'square', i * .25); break;
+      case 'sleep': this.tone(392, .8, .08, 'sine', 0, .8); this.tone(330, 1.2, .07, 'sine', .4, .8); break;
+      case 'cast': this.noise(.35, 'bandpass', 3000, .15, 2, 0, .4); this.noise(.15, 'lowpass', 800, .2, 1, .45); break;
+      case 'splash': this.noise(.3, 'lowpass', 1400, .35, 1, 0, .5); this.noise(.2, 'bandpass', 2400, .2, 1, .12); break;
+      case 'bark': for (let i = 0; i < 2; i++) { this.tone(420, .09, .2, 'sawtooth', i * .22, .6); this.noise(.08, 'bandpass', 900, .25, 1, i * .22); } break;
+      case 'thunder': this.noise(2.5, 'lowpass', 160, 1.0, 1, 0, .4); this.noise(.4, 'lowpass', 900, .5, 1, 0, .3); this.tone(38, 2, .25, 'sine', 0, .6); break;
+      case 'coins': for (let i = 0; i < 3; i++) this.tone(1500 + i * 300, .08, .08, 'triangle', i * .07); break;
     }
   }
 }

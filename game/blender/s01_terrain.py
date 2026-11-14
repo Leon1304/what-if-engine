@@ -12,6 +12,7 @@ def forest_w(x, y):
     vx = max(0.0, abs(x - VILLAGE[0]) - 36); vy = max(0.0, abs(y - VILLAGE[1]) - 32)       # village: meadows
     w = min(w, (math.hypot(vx, vy) - 2 + n) / 5)
     w = min(w, (math.hypot(x - MILL[0], y - MILL[1]) - 9 + n) / 4, (math.hypot(x - TOWER[0], y - TOWER[1]) - 8 + n) / 4)
+    w = min(w, (math.hypot(x - LAKE[0], y - LAKE[1]) - 17 + n) / 4)
     return min(1.0, max(0.0, w))
 
 def build(c):
@@ -35,6 +36,7 @@ def build(c):
                 w = forest_w(p.x, p.y) + r.uniform(-.25, .25)
                 if math.hypot(p.x - QUARRY[0], p.y - QUARRY[1]) < 17.5 + r.uniform(-1, 1): f.material_index = 7
                 elif abs(p.x - creek_x(p.y)) < 2.6 + r.uniform(-.4, .4): f.material_index = 6
+                elif math.hypot(p.x - LAKE[0], p.y - LAKE[1]) < 15.5 + r.uniform(-.8, .8): f.material_index = 6
                 elif trail_dist(p.x, p.y) < .9 + r.uniform(-.25, .25): f.material_index = 5
                 elif w < .5: f.material_index = 1 if noise.noise(Vector((p.x * .2, p.y * .2, 2.0))) > .25 else 0
                 else:

@@ -17,7 +17,8 @@ Aussichtsturm, Burgruine, Steinbruch und Wassermühle. Bauen (Blockhütte, Felde
 | 1–5 · Mausrad · Q | Schnellleiste wählen · essen / trinken / benutzen |
 | M | Wanderkarte (wenn gefunden) |
 | Z halten | Zeit vorspulen (drinnen mit Strom, am Feuer oder mit Schlafsack) |
-| Linksklick · R · rechte Maustaste | Waffe: schießen/zustechen · nachladen · zielen (Gewehr: Zielfernrohr); ohne Waffe: Fernglas |
+| Linksklick · R · rechte Maustaste | Waffe: schießen/zustechen · nachladen · zielen (Gewehr: Zielfernrohr); ohne Waffe: Taschenlampe an · aus (Fernglas mit rechter Taste, wenn die Lampe aus ist); Angel: auswerfen · einholen |
+| E am Auto | reparieren, tanken, einsteigen/aussteigen – fahren mit W S A D, Maus = umsehen, C = Fahrersicht |
 | G · X | Baumenü (Linksklick/E setzen, R/Mausrad drehen, X abbrechen) · Gebautes abbauen |
 | N | Wegmarker an deiner Stelle (auf der Karte: Klick setzt/löscht) |
 | B | Handbuch: Tasten, Werte, Essen, Rezepte, Ausrüstung, Aktionen, Gefahren, Orte, Aufgaben (←/→ blättern) |
@@ -40,7 +41,15 @@ neuere – Unbekanntes wird übersprungen, Neues startet im Grundzustand, steht 
 - **Bauen (G):** Unterstand, Feuerstelle, Blockhütte in 4 Abschnitten (Fundament, Wände, Dach, Kamin – mit Tür), Bett, Vorratskiste (20 Plätze),
   Regentonne, Zaun, Feld. Bäume mit der Axt fällen (kippen um), Stamm zu Baumstämmen zerlegen, Bretter sägen, Steine im Steinbruch.
 - **Felder:** Kartoffeln, Karotten, Kürbis (Saatgut: Dorfladen, Scheune, Säcke), Regen/Gießen beschleunigt, drei Wachstumsstufen.
-- **Säcke:** 18 Jutesäcke mit Beute über die Karte verteilt; Gegenstände in der Nähe glitzern leicht.
+- **Säcke:** 24 Jutesäcke mit Beute (auch Munition) über die Karte verteilt; Gegenstände in der Nähe glitzern leicht. Weggeworfenes bleibt als Bündel liegen (gespeichert).
+- **Level & Erfahrung:** EP für Aufgaben, Orte, Fällen, Bauen, Herstellen, Ernten, Jagen, Angeln, Notizen; Level schalten Baupläne, Werkbank-Rezepte und Hausausbauten frei.
+  11 Nebenaufgaben (Story „Das stille Dorf“ mit 5 Notizen, Kurts Hund Bello, Auto reparieren, Angeln, Fallen, Hausausbau …).
+- **Hausausbau:** Blockhütte → Anbau (2. Zimmer, Level 3) → Veranda (Level 5) → Werkstatt (Level 7, zählt als Werkbank). Möbel stehen auch drinnen:
+  Bett (schlafen bis 7 Uhr), Kiste, Regal, Tisch, Fellteppich, Steinofen, Trockengestell, Werkbank (Munition, Angel, Profi-Axt, großer Rucksack, Kerzen).
+- **Licht & Zäune:** Fackelhalter, Laterne, Solarlampe, Baustrahler (Akku); Bewegungsmelder, Solar-Ladegerät; Holzzaun, Gartentor, Palisade, Steinmauer (Tiere kommen nicht durch).
+- **Händler Kurt** (Dorfladen): kauft Felle/Fleisch/Fisch/Gemüse/Gold, verkauft Munition, Saatgut, Gadgets. **Auto**: Keilriemen + Werkzeugkasten aus der Werkstatt, Kanister tanken, fahren.
+- **Angeln** am Bach und am neuen Waldsee (Steg, Anglerhütte), **Kaninchenfallen**, **Hund Bello** (warnt vor Raubtieren, beißt Wölfe).
+- **Jahreszeiten** (alle 4 Tage: Herbst, Winter mit Schnee und Frost, Frühling, Sommer) und **Wetter** (Regen, Nebel, Gewitter, Schnee); Kompass oben.
 - **Ereignisse:** nachts fährt ab und zu ein Auto vorbei (hält und hupt, wenn du auf der Straße stehst).
 - **Herstellen:** Fackel, Verband, Lagerfeuer überall; kochen am Feuer, in der Mikrowelle oder mit dem Gaskocher.
 - **Strom:** Licht, Kühlregale, Kaffeemaschine, Kasse, Geldautomat, Zapfsäulen und Schiebetür funktionieren erst mit dem Aggregat (Tank hält ~10 Spielstunden).
@@ -51,13 +60,13 @@ neuere – Unbekanntes wird übersprungen, Neues startet im Grundzustand, steht 
 | Pfad | Inhalt |
 |---|---|
 | `blender/core.py` | Helfer: Low-Poly-Materialien (Farbe je Facette als Vertex-Farbe), Wände, Texte, Lichter, Kartenlayout (Straße, Bach, Pfade) |
-| `blender/s00_world.py` … `s11_build.py` | die Map in Abschnitten: Welt, Gelände, Straße, Vorplatz, Gebäude, Einrichtung, Wald, Hof & Auto, Wohnwagen, Dorf, Sehenswürdigkeiten + Säcke, Baupläne/Pflanzen/Waffen (`bp_*`-Vorlagen bei z −200, vom Spiel geklont) |
+| `blender/s00_world.py` … `s11_build.py` | die Map in Abschnitten: Welt, Gelände, Straße, Vorplatz, Gebäude, Einrichtung, Wald, Hof & Auto, Wohnwagen, Dorf (+ Werkstatt, Kurt, Notizen), Sehenswürdigkeiten + Säcke, Baupläne/Ausbauten/Möbel/Lichter/Pflanzen/Waffen (`bp_*`-Vorlagen bei z −200, vom Spiel geklont), Waldsee |
 | `blender/build_all.py` | baut alles ohne Blender-Oberfläche und exportiert `map.glb` (+ `blender/map.blend` zum Anschauen) |
 | `blender/shrink.mjs` | komprimiert `map.glb` (gltf-transform) |
-| `js/` | das Spiel (Three.js 0.170): `world.js` Laden/Instancing/Kollision/Vorlagen, `player.js`, `game.js` Logik + Speichern, `life.js` Tiere/Schwierigkeit/Auto/Feuer, `build.js` Bauen/Fällen/Felder, `combat.js` Waffen, `sky.js`, `audio.js`, `ui.js`, `items.js` (Gegenstände, Rezepte, Waffen, Pflanzen, Baupläne), `handbook.js` |
-| `tools/routes.mjs` · `tools/plan.mjs` | 19 Laufwege mit echter Kollision (Tankstelle, Dorfhäuser, Kapelle, Scheune, Mühle, Bauwagen, Turmtreppe bis oben …) · Grundriss der Hindernisse als PNG |
+| `js/` | das Spiel (Three.js 0.170): `world.js` Laden/Instancing/Kollision/Vorlagen, `player.js`, `game.js` Logik + Speichern, `life.js` Tiere/Hund/Schwierigkeit/Feuer, `build.js` Bauen/Fällen/Felder/Möbel/Licht, `combat.js` Waffen/Taschenlampe/Angeln, `progress.js` Level + Nebenaufgaben, `vehicle.js` Auto, `seasons.js` Jahreszeiten + Wetter, `sky.js`, `audio.js`, `ui.js`, `items.js` (Gegenstände, Rezepte, Waffen, Pflanzen, Baupläne), `handbook.js` |
+| `tools/routes.mjs` · `tools/plan.mjs` | 22 Laufwege mit echter Kollision (Tankstelle, Dorfhäuser, Kapelle, Scheune, Mühle, Bauwagen, Turmtreppe bis oben …) · Grundriss der Hindernisse als PNG |
 | `tools/pickups.mjs` | Sichtbarkeit: jeder Gegenstand / jeder Behälter muss von einer begehbaren Stelle aus zu sehen sein (nicht in Regalen/Kartons versteckt) |
-| `tools/features.mjs` · `tools/smoke.mjs` | Säcke, Baum fällen, Hütte bauen + Tür + Kamin, Feld, Kiste, Pistole gegen Wolf + Zerlegen, Schwierigkeit, Wegmarker, Speichern → Neustart → Laden, alter Spielstand · schneller Ladetest |
+| `tools/features.mjs` · `tools/smoke.mjs` | Säcke, Baum fällen, Hütte bauen + Tür + Kamin, Feld, Kiste, Pistole gegen Wolf + Zerlegen, Schwierigkeit, Wegmarker, Level, Hausausbau + Möbel drinnen, Werkbank-Munition, Lichter, Falle, Zaun, Ablegen, Händler, Story, Bello, Auto fahren, Angeln, Taschenlampe per Klick, Schlafen, Winter, Speichern → Neustart → Laden, alter Spielstand · schneller Ladetest |
 | `tools/shots.mjs` · `tools/playthrough.mjs` · `tools/perf.mjs` | Screenshots, automatischer Komplett-Durchlauf inkl. echter Tasten (W/Shift/Leertaste/Strg), Leistungsmessung (ms, Draw Calls, Dreiecke je Ort) |
 
 ### Map neu bauen

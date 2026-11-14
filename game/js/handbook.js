@@ -2,6 +2,8 @@
 // places and the current task. Food, recipes and tools are generated from ITEMS / RECIPES so the book never goes stale.
 import { ITEMS, RECIPES, BLUEPRINTS, WEAPONS, CROPS } from './items.js';
 import { DIFF } from './life.js';
+import { LEVELS, SIDE } from './progress.js';
+import { SEASONS, SEASON_DAYS } from './seasons.js';
 
 const STAT = { hunger: 'Hunger', thirst: 'Durst', warmth: 'Wärme', health: 'Gesundheit', stamina: 'Ausdauer' };
 const fx = use => Object.entries(use).map(([k, v]) => `<span class="${v > 0 ? 'pos' : 'neg'}">${STAT[k]} ${v > 0 ? '+' : '−'}${Math.abs(v)}</span>`).join(' ');
@@ -18,10 +20,10 @@ export function chapters(g) {
         ${keyRow('W A S D', 'laufen')}${keyRow('Maus', 'umschauen')}${keyRow('Shift', 'sprinten (kostet Ausdauer)')}
         ${keyRow('Leertaste', 'springen')}${keyRow('Strg', 'ducken (leise, langsam)')}
         ${keyRow('E', 'benutzen · öffnen · aufheben · durchsuchen · klettern')}
-        ${keyRow('F', 'Taschenlampe an/aus')}${keyRow('Tab / C', 'Rucksack und Herstellen')}
+        ${keyRow('F', 'Taschenlampe an/aus')}${keyRow('Linksklick / Rechtsklick', 'ohne Waffe: Taschenlampe an / aus · mit Angel: auswerfen / einholen')}${keyRow('Tab / C', 'Rucksack und Herstellen')}
         ${keyRow('1 – 5 / Mausrad', 'Gegenstand in der Schnellleiste wählen')}${keyRow('Q', 'gewählten Gegenstand essen, trinken oder benutzen')}
         ${keyRow('M', 'Wanderkarte (wenn du sie hast)')}${keyRow('Z (halten)', 'Zeit vorspulen – nur an sicheren Orten')}
-        ${keyRow('Linksklick', 'Waffe: schießen / zustechen · beim Bauen: setzen')}${keyRow('R', 'nachladen · beim Bauen: drehen')}
+        ${keyRow('Linksklick', 'Waffe: schießen / zustechen · beim Bauen: setzen')}${keyRow('E (am Auto)', 'reparieren · tanken · einsteigen / aussteigen; fahren: W S A D')}${keyRow('R', 'nachladen · beim Bauen: drehen')}
         ${keyRow('Rechte Maustaste', 'zielen (Gewehr: Zielfernrohr) · ohne Waffe: Fernglas')}${keyRow('G', 'Baumenü')}${keyRow('X', 'Gebautes abbauen · Bauen abbrechen')}
         ${keyRow('N', 'Wegmarker an deiner Stelle setzen')}${keyRow('B', 'dieses Handbuch')}${keyRow('Esc', 'Pause: Speichern, Laden, Schwierigkeit, Grafik')}
       </table>
@@ -62,8 +64,22 @@ export function chapters(g) {
     { id: 'waffen', icon: '🔫', t: 'Waffen & Jagd', h: `
       <p>Wähle eine Waffe in der Schnellleiste (<kbd>1</kbd>–<kbd>5</kbd>). <b>Linksklick</b> schießt, <kbd>R</kbd> lädt nach, die <b>rechte Maustaste</b> zielt genauer (Jagdgewehr: Zielfernrohr).</p>
       <table class="list">${Object.entries(WEAPONS).map(([id, w]) => `<tr><td>${ITEMS[id].icon} <b>${w.name}</b></td><td>${ITEMS[id].desc}<br><small>Schaden ${w.pellets ? w.pellets + ' × ' : ''}${w.dmg} · Reichweite ${w.range} m${w.mag ? ' · Magazin ' + w.mag : ''}</small></td></tr>`).join('')}</table>
-      <h4>Wo finde ich was?</h4><ul><li>🔪 Messer: Küche in Haus Nr. 3 (Dorf)</li><li>🔫 Pistole: Spind im Büro der Tankstelle</li><li>🔫 Schrotflinte: an der Wand in der Scheune</li><li>🎯 Jagdgewehr: in Bernds Hochsitz</li><li>🏹 Bogen und Pfeile: selbst herstellen (Messer, Äste, Seil, Steine)</li><li>📦 Munition: neben den Waffen, in Säcken und Schränken</li></ul>
+      <h4>Wo finde ich was?</h4><ul><li>🔪 Messer: Küche in Haus Nr. 3 (Dorf)</li><li>🔫 Pistole: Spind im Büro der Tankstelle</li><li>🔫 Schrotflinte: an der Wand in der Scheune</li><li>🎯 Jagdgewehr: in Bernds Hochsitz</li><li>🏹 Bogen und Pfeile: selbst herstellen (Messer, Äste, Seil, Steine)</li><li>📦 Munition: neben den Waffen, in vielen Säcken, Spind im Bauwagen, Werkstatt, Anglerhütte, Burg-Truhe · bei Kurt kaufen · selbst machen an der Werkbank (Metall + Sprengpulver, ab Level 4)</li></ul>
       <p class="tip">Erlegte Tiere zerlegst du mit dem Messer (<kbd>E</kbd>): Fleisch (am Feuer braten!) und Felle (2 Felle + Seil = Fellmantel). Schüsse sind laut: Rehe und Wölfe fliehen – Wildschweine und Bären werden wütend.</p>` },
+    { id: 'level', icon: '⭐', t: `Level ${g.progress.level} & Nebenaufgaben`, h: `
+      <p>Für fast alles bekommst du <b>Erfahrung (EP)</b>: Aufgaben, neue Orte, Bäume fällen, bauen, herstellen, ernten, jagen, angeln, Notizen lesen. Mit jedem Level werden neue Baupläne, Rezepte und Hausausbauten frei.</p>
+      <p>Du hast <b>${g.S.xp} EP</b> – Level ${g.progress.level}${g.progress.next() ? `, nächstes Level bei ${g.progress.next()} EP` : ' (Maximum)'}.</p>
+      <table class="list">${[2, 3, 4, 5, 6, 7].map(l => `<tr><td>Level ${l} (${LEVELS[l - 1]} EP)</td><td>${g.progress.unlocks(l).replace('Neu: ', '') || '–'}</td></tr>`).join('')}</table>
+      <h4>Nebenaufgaben</h4><ul class="quests">${SIDE.map(q => `<li class="${g.S.side[q.id] ? 'done' : 'now'}">${g.S.side[q.id] ? '✔' : '◻'} <b>${q.t}</b>${g.progress.progressText(q)} – ${q.x} <small>(+${q.xp} EP)</small></li>`).join('')}</ul>` },
+    { id: 'welt', icon: '🌦️', t: 'Händler, Auto, Wetter', h: `
+      <dl><dt>🧔 Kurt (Dorfladen)</dt><dd>Kauft Felle, Fleisch, Fisch, Gemüse, Goldmünzen – verkauft Munition, Saatgut, Werkzeug, Solarlampen, Baustrahler … Das Wechselgeld aus der Kasse der Tankstelle ist dein Startkapital. Du hast <b>${(g.S.money || 0).toFixed(2).replace('.', ',')} €</b>.</dd>
+      <dt>🚗 Dein Auto</dt><dd>Keilriemen + Werkzeugkasten aus der Werkstatt „KFZ Brandt“ im Dorf, dann einen vollen Kanister tanken. E = einsteigen, W/S/A/D fahren, E = aussteigen. Auf der Straße schnell, im Wald langsam.</dd>
+      <dt>🐕 Bello</dt><dd>Kurts Hund streunt bei der Burgruine. Gib ihm Fleisch – dann folgt er dir, warnt vor Raubtieren und verbeißt Wölfe. E: „Bleib!“ / „Komm!“</dd>
+      <dt>🛏️ Schlafen</dt><dd>Im eigenen Bett, in Betten im Dorf, im Wohnwagen oder in der Anglerhütte: E ab 18 Uhr → du wachst um 7 Uhr auf, geheilt. Nicht, wenn Raubtiere in der Nähe sind (außer drinnen).</dd>
+      <dt>🎣 Angeln</dt><dd>Angel auswählen, aufs Wasser (Bach oder Waldsee) zielen, Linksklick. Zuckt die Pose: sofort klicken!</dd>
+      <dt>🐇 Fallen</dt><dd>Kaninchenfalle weit weg von deiner Hütte aufstellen – mit der Zeit sitzt ein Kaninchen drin. Kaninchen am Feuer braten.</dd>
+      <dt>🍂 Jahreszeiten</dt><dd>Alle ${SEASON_DAYS} Tage: ${SEASONS.join(' → ')}. Im Winter Schnee, große Kälte und kein Wachstum auf den Feldern; im Frühling und Sommer wächst alles schneller. Jetzt: <b>${g.seasons.season || ''}</b>.</dd>
+      <dt>⛈️ Wetter</dt><dd>Regen, Nebel (kurze Sicht), Gewitter (Blitz und Donner), im Winter Schnee.</dd></dl>` },
     { id: 'tun', icon: '✋', t: 'Was du tun kannst', h: `
       <p>Schau ein Ding an – erscheint unten ein Hinweis mit <kbd>E</kbd>, kannst du etwas damit machen.</p>
       <ul>

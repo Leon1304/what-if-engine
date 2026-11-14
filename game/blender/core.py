@@ -181,14 +181,18 @@ TOWER = (30.0, 122.0)            # wooden lookout tower on a hill
 RUIN = (-86.0, 74.0)             # castle ruin on a hill west of the road
 QUARRY = (28.0, 178.0)           # old quarry (pit) – stones for building
 MILL = (64.0, 140.0)             # water mill on the west bank of the creek
+LAKE = (-86.0, 18.0)             # forest lake west of the road (fishing, jetty, angler's hut)
+LAKE_Z = -.55                    # its water level
 # jute sacks with loot, spread over the map (x, y, loot); s06 keeps trees away from them, s10 builds them
 SACKS = [
-    (24.0, -62.0, [['stein', 2], ['wasser', 1], ['lappen', 1]]), (-30.0, -72.0, [['saat_kartoffel', 1], ['kekse', 1]]), (-38.0, -26.0, [['batterien', 1], ['ast', 2]]),
-    (58.5, -33.0, [['holz', 2], ['dosensuppe', 1]]), (82.0, 18.0, [['topf', 1], ['stein', 2]]), (57.0, 60.0, [['schokolade', 1], ['saat_karotte', 1]]),
-    (-26.0, 42.0, [['verband', 1], ['wasser', 1]]), (12.0, 86.0, [['stein', 3], ['brett', 2]]), (-74.0, 78.0, [['goldmuenze', 1], ['cola', 1]]),
-    (20.5, 175.0, [['stein', 3], ['hammer', 1]]), (-12.0, 205.0, [['saat_kuerbis', 1], ['sandwich', 1]]), (-96.0, 150.0, [['brett', 3], ['lappen', 1]]),
-    (92.0, 188.0, [['dosenbohnen', 1], ['energy', 1], ['stein', 2]]), (88.0, -92.0, [['batterie_9v_leer', 1], ['chips', 1]]), (-92.0, -92.0, [['kerze', 2], ['fladenbrot', 1]]),
-    (-52.0, 112.0, [['wasser', 1], ['saat_kartoffel', 1]]), (95.0, 100.0, [['stamm', 1], ['seil', 1]]), (-100.0, 20.0, [['seil', 1], ['mehl', 1]]),
+    (24.0, -62.0, [['stein', 2], ['wasser', 1], ['patronen_pistole', 1]]), (-30.0, -72.0, [['saat_kartoffel', 1], ['kekse', 1]]), (-38.0, -26.0, [['batterien', 1], ['ast', 2]]),
+    (58.5, -33.0, [['holz', 2], ['dosensuppe', 1], ['patronen_schrot', 1]]), (82.0, 18.0, [['topf', 1], ['stein', 2]]), (57.0, 60.0, [['schokolade', 1], ['saat_karotte', 1], ['patronen_gewehr', 1]]),
+    (-26.0, 42.0, [['verband', 1], ['wasser', 1]]), (12.0, 86.0, [['stein', 3], ['brett', 2], ['metall', 2]]), (-74.0, 78.0, [['goldmuenze', 1], ['cola', 1], ['patronen_pistole', 1]]),
+    (20.5, 175.0, [['stein', 3], ['hammer', 1], ['schwarzpulver', 1]]), (-12.0, 205.0, [['saat_kuerbis', 1], ['sandwich', 1], ['solarlampe', 1]]), (-96.0, 150.0, [['brett', 3], ['lappen', 1], ['patronen_schrot', 1]]),
+    (92.0, 188.0, [['dosenbohnen', 1], ['energy', 1], ['patronen_gewehr', 1]]), (88.0, -92.0, [['batterie_9v_leer', 1], ['chips', 1], ['metall', 1]]), (-92.0, -92.0, [['kerze', 2], ['fladenbrot', 1]]),
+    (-52.0, 112.0, [['wasser', 1], ['saat_kartoffel', 1], ['patronen_pistole', 1]]), (95.0, 100.0, [['stamm', 1], ['seil', 1], ['schwarzpulver', 1]]), (-100.0, 20.0, [['seil', 1], ['mehl', 1]]),
+    (-62.0, 30.0, [['angel', 1], ['wasser', 1]]), (40.0, 100.0, [['patronen_schrot', 1], ['goldmuenze', 1]]), (-100.0, 200.0, [['bewegungsmelder', 1], ['verband', 1]]),
+    (70.0, 210.0, [['patronen_gewehr', 1], ['metall', 2]]), (-20.0, -100.0, [['solarlampe', 1], ['seil', 1]]), (100.0, 40.0, [['schwarzpulver', 1], ['patronen_pistole', 1]]),
 ]
 
 def road_x(y):
@@ -222,6 +226,8 @@ def terrain_h(x, y):
     for c_, r_, R_, H_ in ((TOWER, 6.0, 30.0, 7.0), (RUIN, 12.0, 34.0, 8.5)):       # hills with a flat top
         dd = math.hypot(x - c_[0], y - c_[1])
         if dd < R_: t_ = 1 - max(0.0, dd - r_) / (R_ - r_); h += H_ * t_ * t_ * (3 - 2 * t_); h -= n * k * (1 if dd < r_ else 0) * .9
+    wl = _pad(x, y, LAKE, 12, 7)                                                               # forest lake: bowl down to −2.3
+    if wl > 0: h = h * (1 - wl) + (-2.3) * wl
     west = abs(abs(math.atan2(y - QUARRY[1], x - QUARRY[0])) - math.pi) < .3                       # ramp into the pit from the west
     wq = _pad(x, y, QUARRY, 13, 16 if west else 5); h -= 4.5 * wq
     wm = _pad(x, y, MILL, 7, 8); h = h * (1 - wm) + .9 * wm
@@ -251,7 +257,8 @@ def trail_pts():
     pts5 = [(TOWER[0] + 4.0, TOWER[1] + 2.0), (45.0, 130.0), (MILL[0] - 6.0, MILL[1] - 1.0)]                                  # tower → mill
     pts6 = [(road_x(176) + 6.0, 176.0), (-35.0, 178.0), (0.0, 177.0), (QUARRY[0] - 13.0, QUARRY[1])]                         # village → quarry
     pts7 = [(road_x(80) - 5.0, 80.0), (-40.0, 79.0), (-62.0, 76.0), (RUIN[0] + 8.0, RUIN[1] + 1.0)]                          # road → ruin
-    return [pts, pts2, pts3, pts4, pts5, pts6, pts7]
+    pts8 = [(road_x(16) - 5.0, 16.0), (-30.0, 18.0), (-50.0, 21.0), (LAKE[0] + 22.0, LAKE[1] + 3.0)]                       # road → lake
+    return [pts, pts2, pts3, pts4, pts5, pts6, pts7, pts8]
 
 def trail_dist(x, y):
     best = 1e9

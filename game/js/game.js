@@ -1,16 +1,19 @@
 // Game logic: state, survival values, interactions (E), items, crafting, quests / tutorial, discoveries, power, lights, weather,
 // campfires, save / load. The map's interactive objects come from Blender (userData.interact, see game/blender/core.py).
 import * as THREE from 'three';
-import { ITEMS, RECIPES, WEAPONS } from './items.js';
+import { ITEMS, RECIPES, WEAPONS, BLUEPRINTS, TRADE } from './items.js';
 import { B, Bv } from './world.js';
 import { Life, roadX, creekX, DIFF } from './life.js';
 import { Build } from './build.js';
 import { Combat } from './combat.js';
+import { Progress } from './progress.js';
+import { Vehicle } from './vehicle.js';
+import { Seasons } from './seasons.js';
 
 // Save games: slots auto / 1 / 2 / 3 in localStorage (+ export / import as a file). Everything is stored by name or id, so a newer
 // version of the map or the game can load an older save: unknown objects / items are skipped, new ones start in their default state.
 export const SLOTS = ['auto', '1', '2', '3'];
-const SAVE_PREFIX = 'waldtank_save_', OLD_SAVE = 'waldtank_save_v1', SAVE_VERSION = 2;
+const SAVE_PREFIX = 'waldtank_save_', OLD_SAVE = 'waldtank_save_v1', SAVE_VERSION = 3;
 const POOL = 8;
 const clamp = (v, a = 0, b = 100) => Math.max(a, Math.min(b, v));
 const MOVING = new Set(['door', 'slide', 'lid', 'drawer']);
@@ -33,17 +36,35 @@ export class Game {
     this.hazardMats = []; scene.traverse(o => { if (o.isMesh) for (const m of [].concat(o.material)) if (m.name === 'Warnblinker' && !this.hazardMats.includes(m)) this.hazardMats.push(m); });
     this.quests = this.makeQuests(); this.places = this.makePlaces();
     this.chop = 0; this.saveT = 0; this.tipT = 0; this.birdT = 3; this.heartT = 0; this.candleT = 0;
-    this.build = new Build(this); this.combat = new Combat(this);
+    this.progress = new Progress(this); this.build = new Build(this); this.combat = new Combat(this);
+    this.vehicle = new Vehicle(this); this.seasons = new Seasons(this); this.drops = []; this.secT = 0;
     try { this.S.diff = localStorage.getItem('waldtank_diff') || 'mittel'; } catch { }
   }
   fresh() {
     return { time: 17.0, day: 1, abs: 17, stats: { health: 100, hunger: 78, thirst: 72, warmth: 85, stamina: 100 }, inv: [], sel: 0,
       battery: 65, genFuel: 0, quest: 0, flags: {}, found: {}, known: {}, marks: [], felled: {}, ammo: {}, mag: {}, diff: 'mittel',
+      xp: 0, side: {}, stat: {}, notes: {}, money: 0, car: { fixed: 0, fuel: 0 }, dog: { tame: 0, sit: 0 }, drops: [], weather: 'klar',
       rain: 0, rainUntil: 0, nextRain: 19 + Math.random() * 6, rescueAt: 0 };
   }
 
   // ---------------------------------------------------------------- inventory
-  capacity() { return this.S.flags.bag ? 16 : 4; }
+  capacity() { return this.S.flags.bag ? (this.S.flags.bigbag ? 24 : 16) : 4; }
+  hasAxe() { return this.has('axt') || this.has('profiaxt'); }
+  blueprints() { return BLUEPRINTS; } recipes() { return RECIPES; }
+  // several items at once – only if all fit
+  addAll(gives) {
+    const need = Object.entries(gives).filter(([k]) => !ITEMS[k]?.ammo && !ITEMS[k]?.equip), free = this.capacity() - this.S.inv.length;
+    const newSlots = need.reduce((a, [k, n]) => { const max = ITEMS[k]?.mat ? 30 : 10, room = this.S.inv.filter(s => s.id === k).reduce((b, s) => b + max - s.n, 0); return a + Math.max(0, Math.ceil((n - room) / max)); }, 0);
+    if (newSlots > free) { this.ui.toast('Dein Rucksack ist voll.', 'warn'); this.audio.sfx('error'); return false; }
+    for (const [k, n] of Object.entries(gives)) this.add(k, n, true); return true;
+  }
+  // inside a building (shop, village houses, chapel, mill, trailer, caravan, your cabin)? → warm-ish, dry, safe from animals
+  indoor(p) {
+    if (this.insideShop(p)) return 'shop';
+    const bx = p.x, by = -p.z, bz = p.y;
+    for (const r of this.W.indoor) if (bx > r.x0 && bx < r.x1 && by > r.y0 && by < r.y1 && bz > r.z0 && bz < r.z1) return r.name;
+    return this.build.indoor(p) ? 'cabin' : null;
+  }
   count(id) { return this.S.inv.filter(s => s.id === id).reduce((a, s) => a + s.n, 0); }
   has(id) { return this.count(id) > 0; }
   brenn() { return this.count('ast') + this.count('holz'); }
@@ -53,6 +74,8 @@ export class Game {
     if (it?.equip === 'jacket') { this.S.flags.jacket = true; if (!quiet) this.ui.toast('🧥 Jacke angezogen – du frierst nur noch halb so schnell.'); return true; }
     if (it?.battery && this.has('taschenlampe')) { this.S.battery = 100; if (!quiet) this.ui.toast('🔋 Taschenlampe aufgeladen.'); return true; }
     if (it?.ammo) { for (let i = 0; i < n; i++) this.combat.addAmmo(id); return true; }
+    if (it?.equip === 'bigbag') { this.S.flags.bag = true; this.S.flags.bigbag = true; if (!quiet) this.ui.toast('🎒 Großer Rucksack – jetzt 24 Plätze.', 'good'); return true; }
+    if (id === 'geld') { this.S.money = +(this.S.money + 43.2 * n).toFixed(2); if (!quiet) this.ui.toast('💶 43,20 € eingesteckt. Im Dorf gibt es einen Händler …'); return true; }
     if (it?.equip === 'fur') { this.S.flags.fur = true; if (!quiet) this.ui.toast('🧥 Fellmantel angezogen – dir wird so schnell nicht mehr kalt.'); return true; }
     const max = it?.mat ? 30 : 10, inv = this.S.inv;
     const room = inv.filter(s => s.id === id).reduce((a, s) => a + max - s.n, 0) + (this.capacity() - inv.length) * max;
@@ -76,15 +99,58 @@ export class Game {
     if (it.battery && this.has('taschenlampe')) { this.take(s.id); this.S.battery = 100; return this.ui.toast('🔋 Taschenlampe aufgeladen.'); }
     if (!it.use) return this.ui.toast(it.desc || 'Damit kann man so nichts anfangen.');
     const st = this.S.stats;
-    for (const [k, v] of Object.entries(it.use)) st[k] = clamp(st[k] + v);
+    const table = this.build.near('tisch', this.P.pos, 2.2) ? 1.2 : 1;
+    for (const [k, v] of Object.entries(it.use)) st[k] = clamp(st[k] + (k === 'hunger' && v > 0 ? v * table : v));
     if (it.use.hunger > 0) this.S.flags.ate = 1; if (it.use.thirst > 0) this.S.flags.drank = 1;
     if (it.boost) this.boostT = it.boost;
     this.audio.sfx(it.use.thirst > it.use.hunger || it.use.thirst > 0 && !it.use.hunger ? 'drink' : 'eat');
     this.take(s.id); if (it.after) this.add(it.after, 1, true);
     if (it.msg) this.ui.toast(it.msg, it.poison ? 'warn' : ''); if (it.poison) this.ui.damage();
   }
-  drop(i) { const s = this.S.inv[i]; if (!s) return; this.S.inv.splice(i, 1); this.ui.toast(`${ITEMS[s.id].name} weggeworfen.`); this.ui.renderHotbar(this.S.inv, this.S.sel); }
+  // dropped items stay on the ground (saved) – E picks them up again
+  drop(i) {
+    const s = this.S.inv[i]; if (!s) return; this.S.inv.splice(i, 1);
+    const f = this.P.forward(new THREE.Vector3()); f.y = 0; f.normalize(); const p = this.P.pos.clone().addScaledVector(f, .9);
+    const fl = this.build.room(p)?.floor; p.y = fl ?? this.W.groundY(p.x, p.z, this.P.pos.y + 1.2);
+    this.addDrop({ id: s.id, n: s.n, p: p.toArray().map(v => +v.toFixed(2)) });
+    this.ui.toast(`${ITEMS[s.id].icon} ${ITEMS[s.id].name} abgelegt – mit E wieder aufheben.`); this.ui.renderHotbar(this.S.inv, this.S.sel);
+  }
+  addDrop(d) {
+    const it = ITEMS[d.id]; if (!it) return; const g = new THREE.Group(); g.position.fromArray(d.p);
+    const bag = new THREE.Mesh(new THREE.DodecahedronGeometry(.13, 0), new THREE.MeshStandardMaterial({ color: '#b08d57', flatShading: true, roughness: .95 })); bag.scale.set(1.2, .7, 1); bag.position.y = .08; bag.castShadow = true; g.add(bag);
+    const c = document.createElement('canvas'); c.width = c.height = 64; const x = c.getContext('2d'); x.font = '48px system-ui'; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText(it.icon, 32, 36);
+    const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(c), depthWrite: false })); sp.scale.setScalar(.32); sp.position.y = .42; g.add(sp);
+    this.scene.add(g); const rec = { ...d, g }; this.drops.push(rec); this.S.drops = this.drops.map(({ id, n, p }) => ({ id, n, p }));
+  }
+  takeDrop(r) { if (!this.add(r.id, r.n)) return; this.scene.remove(r.g); this.drops.splice(this.drops.indexOf(r), 1); this.S.drops = this.drops.map(({ id, n, p }) => ({ id, n, p })); this.audio.sfx('pickup'); }
+  dropTarget(o, f) { let best = null, ba = .2; for (const r of this.drops) { const d = r.g.position.clone().add(new THREE.Vector3(0, .15, 0)).sub(o), L = d.length(); if (L > 2.6) continue; const a = d.normalize().angleTo(f); if (a < ba) { ba = a; best = r; } } return best; }
+  // trader Kurt
+  buy(id) { const pr = TRADE.buy[id]; if (!pr || this.S.money < pr) return; if (!this.add(id, 1)) return; this.S.money = +(this.S.money - pr).toFixed(2); this.audio.sfx('coins'); this.progress.add(2, ''); }
+  sell(id, all) { const pr = TRADE.sell[id], n = all ? this.count(id) : Math.min(1, this.count(id)); if (!pr || !n) return; this.take(id, n); this.S.money = +(this.S.money + pr * n).toFixed(2);
+    this.progress.stat('sold_' + id, n); this.audio.sfx('coins'); this.ui.toast(`💶 ${n}× ${ITEMS[id].name} verkauft: +${(pr * n).toFixed(2).replace('.', ',')} €`); }
+  talk(what) { if (what === 'story' && Object.keys(this.S.notes).length >= 5) { this.S.flags.kurtStory = 1; this.add('patronen_gewehr', 1, true); this.ui.toast('Kurt: „Brandt! Hab ich’s doch gewusst. Hier, nimm die Patronen – für alle Fälle.“', 'good'); } }
+  // sleep in a bed until 7:00 (from 18:00): time passes, you heal, fields grow, the night's animals are gone
+  sleep(bed) {
+    const S = this.S, ui = this.ui, P = this.P;
+    if (S.time > 6 && S.time < 18) return ui.toast('Du bist nicht müde. Schlafen geht ab 18 Uhr.');
+    const foe = this.life.animals.some(a => ['wolf', 'boar', 'bear'].includes(a.kind) && a.state !== 'dead' && a.pos.distanceTo(P.pos) < 30);
+    if (foe && !this.indoor(P.pos)) { this.audio.sfx('error'); return ui.toast('Zu gefährlich – Raubtiere in der Nähe!', 'warn'); }
+    const hours = S.time >= 18 ? 24 - S.time + 7 : 7 - S.time;
+    ui.fade?.(); this.audio.sfx('sleep');
+    setTimeout(() => {
+      S.time += hours; if (S.time >= 24) { S.time -= 24; S.day++; } S.abs = (S.day - 1) * 24 + S.time;
+      const st = S.stats, warm = this.indoor(P.pos) || this.life.fires.some(f => f.on && f.pos.distanceTo(P.pos) < 5);
+      st.hunger = clamp(st.hunger - hours * 1.6); st.thirst = clamp(st.thirst - hours * 2.1); st.warmth = warm ? Math.max(st.warmth, 70) : clamp(st.warmth - hours * 3 * (S.flags.fur ? .25 : 1));
+      st.health = clamp(st.health + (bed?.type === 'bett' ? 45 : 30)); st.stamina = 100;
+      if (S.genFuel > 0) S.genFuel = Math.max(0, S.genFuel - hours);
+      for (const f of this.life.fires) { f.fuel -= hours; if (f.fuel <= 0) { f.fuel = 0; f.on = false; } }
+      this.build.update(0, hours); this.life.clear(); this.S.flags.slept = 1;
+      ui.toast(`☀️ Gut geschlafen. Tag ${S.day}, 7:00 Uhr.${st.hunger < 30 || st.thirst < 30 ? ' Du hast Hunger und Durst.' : ''}`, 'good'); this.save();
+    }, 1200);
+  }
   canCraft(r) {
+    if (r.bench && !this.build.hasBench(this.P.pos)) return false;
+    if (r.lvl && this.progress.level < r.lvl) return false;
     for (const t of r.tools || []) if (!this.has(t)) return false;
     if (r.anyTool && !r.anyTool.some(t => this.has(t))) return false;
     for (const [k, v] of Object.entries(r.needs)) if ((k === 'brenn' ? this.brenn() : this.count(k)) < v) return false;
@@ -98,7 +164,11 @@ export class Game {
     if (r.place === 'fire') {
       const f = this.P.forward(); f.y = 0; f.normalize(); const p = this.P.pos.clone().addScaledVector(f, 1.6); p.y = this.W.groundY(p.x, p.z, this.P.pos.y + 1);
       this.life.addFire(p, 6); this.audio.sfx('fire'); this.ui.toast('🔥 Lagerfeuer brennt. E = Holz nachlegen, kochen.');
-    } else { for (const [k, v] of Object.entries(r.gives)) this.add(k, r.id === 'bretter' && this.has('saege') ? 4 : v, true); this.audio.sfx('craft'); this.ui.toast(`🛠️ ${r.name} hergestellt.`); }
+    } else {
+      if (r.ammoN) { const w = ITEMS[Object.keys(r.gives)[0]].ammo[0]; this.S.ammo[w] = (this.S.ammo[w] || 0) + r.ammoN; }
+      else for (const [k, v] of Object.entries(r.gives)) this.add(k, r.id === 'bretter' && this.has('saege') ? 4 : v, true);
+      this.audio.sfx('craft'); this.ui.toast(`🛠️ ${r.name} hergestellt.`); this.progress.add(r.bench ? 8 : 4, r.name);
+    }
     this.ui.renderInventory(this);
   }
   read(id) {
@@ -130,6 +200,9 @@ export class Game {
     const cam = this.camera, f = this.P.forward(), o = cam.position;
     if (this.P.climb) return null;
     for (const fi of this.life.fires) if (fi.owned) { const d = fi.pos.clone().sub(o); if (d.length() < 2.4 && d.normalize().angleTo(f) < .35) return { fire: fi }; }   // fireplace inside a structure
+    if (this.vehicle.driving) return { exit: true };
+    const dog = this.life.dogTarget(o, f); if (dog) return { dog };
+    const dr = this.dropTarget(o, f); if (dr) return { drop: dr };
     const bt = this.build.target(o, f);
     this.ray.set(o, f); this.ray.far = 2.8;
     const hits = this.ray.intersectObjects(this.intMeshes, false).filter(h => { const it = h.object.userData._it; return it && it.node.visible && !it.state.taken; });
@@ -149,7 +222,7 @@ export class Game {
     for (const fi of this.life.fires) { const d = fi.pos.clone().sub(o); if (d.length() < 2.6 && d.normalize().angleTo(f) < .5) return { fire: fi }; }
     if (this.onHochsitz) return { down: true };
     // trees (axe)
-    if (this.has('axt')) for (const t of this.W.treesNear(o.x, o.z)) {
+    if (this.hasAxe()) for (const t of this.W.treesNear(o.x, o.z)) {
       if (t.kind === 'stumpf') continue;
       const dx = t.x - o.x, dz = t.z - o.z, dist = Math.hypot(dx, dz); if (dist > 2.2) continue;
       const fl = Math.hypot(f.x, f.z) || 1; if ((dx * f.x + dz * f.z) / (dist * fl) > .92) return { tree: t };
@@ -159,8 +232,11 @@ export class Game {
   verb(t) {
     if (!t) return '';
     if (t.down) return '[E] Runterklettern';
-    if (t.tree) return t.tree.fixed || t.tree.kind === 'Linde' ? 'Ein mächtiger Baum' : `[E] Baum fällen (Axt) ${t.tree.hits || 0}/${this.has('saege') ? 3 : 6}`;
+    if (t.tree) return t.tree.fixed || t.tree.kind === 'Linde' ? 'Ein mächtiger Baum' : `[E] Baum fällen (Axt) ${t.tree.hits || 0}/${this.build.chopsNeeded()}`;
     if (t.build || t.log) return this.build.verb(t);
+    if (t.exit) return this.vehicle.verb();
+    if (t.dog) return this.life.dogVerb();
+    if (t.drop) return `[E] ${ITEMS[t.drop.id].icon} ${ITEMS[t.drop.id].name}${t.drop.n > 1 ? ' ×' + t.drop.n : ''} aufheben`;
     if (t.carcass) return this.has('messer') ? '[E] Zerlegen (Messer)' : 'Erlegtes Tier – ein Messer zum Zerlegen fehlt';
     if (t.fire) { const f = t.fire;
       if (!f.on) return this.brenn() && this.has('feuerzeug') ? '[E] Feuer wieder anzünden' : 'Feuer aus – Holz + Feuerzeug nötig';
@@ -176,6 +252,8 @@ export class Game {
       case 'pickup': return `[E] ${L} aufheben`;
       case 'pump': return `[E] ${L} benutzen`;
       case 'read': return `[E] ${L} lesen`;
+      case 'trade': return `[E] Mit ${L.split(' ')[0]} reden / handeln`;
+      case 'use': if (u.use === 'auto') return this.vehicle.verb(); if (u.use === 'bett') return `[E] ${L}: schlafen`; break;
     }
     if (u.ladder) return this.onHochsitz ? '[E] Runterklettern' : '[E] Leiter hochklettern';
     return `[E] ${L}`;
@@ -186,6 +264,9 @@ export class Game {
     if (t.down) return this.climbDown();
     if (t.tree) return this.build.chopTree(t.tree);
     if (t.build || t.log) return this.build.interact(t);
+    if (t.exit) return this.vehicle.exit();
+    if (t.dog) return this.life.dogUse();
+    if (t.drop) return this.takeDrop(t.drop);
     if (t.carcass) return this.life.butcher(t.carcass);
     if (t.fire) return this.fireAction(t.fire);
     const it = t.it, u = it.u;
@@ -231,7 +312,9 @@ export class Game {
         if (this.add(u.item, u.item === 'dosenbohnen' ? 2 : 1, true)) { it.state.searched = 1; if (u.bonus) this.add(u.bonus, 1, true); ui.toast(u.found || `Gefunden: ${ITEMS[u.item].name}`); A.sfx('pickup'); }
         return;
       }
+      case 'trade': this.S.flags.metKurt = 1; return this.openPanel?.('trade');
       case 'read':
+        if (u.note && !this.S.notes[u.note]) { this.S.notes[u.note] = 1; this.progress.add(15, 'Notiz'); setTimeout(() => ui.toast(`📜 Notiz ${Object.keys(this.S.notes).length}/5 gefunden (Nebenaufgabe „Das stille Dorf“).`, 'good'), 400); }
         if (u.reveal) { const ids = u.reveal === 'all' ? this.places.map(p => p.id) : u.reveal.split(','); let n = 0;
           for (const id of ids) if (!this.S.known[id] && !this.S.found[id]) { this.S.known[id] = 1; n++; }
           if (n) setTimeout(() => ui.toast(`🗺️ ${n} Orte auf deiner Karte eingetragen.`, 'good'), 300); }
@@ -283,7 +366,8 @@ export class Game {
         if (this.has('topf')) { this.swap('topf', 'topf_klar'); A.sfx('water'); return ui.toast('🫕 Topf mit klarem Brunnenwasser gefüllt.'); }
         A.sfx('drink'); this.S.stats.thirst = clamp(this.S.stats.thirst + 35); this.S.flags.drank = 1; return ui.toast('Klares, kaltes Brunnenwasser.');
       case 'wasserhahn': A.sfx('water'); this.S.stats.thirst = clamp(this.S.stats.thirst + 30); this.S.flags.drank = 1; return ui.toast('Du trinkst Leitungswasser.');
-      case 'auto': A.sfx('error'); return ui.toast(S.flags.carTried ? 'Keilriemen gerissen. Ohne Werkstatt geht hier nichts.' : (S.flags.carTried = 1, 'Der Anlasser orgelt – nichts. Unter der Haube riecht es verbrannt.'));
+      case 'auto': return this.vehicle.use();
+      case 'bett': return this.sleep(it);
       case 'bachwasser':
         if (this.has('topf')) { this.swap('topf', 'topf_wasser'); A.sfx('water'); return ui.toast('Topf mit Bachwasser gefüllt. Am Feuer abkochen!'); }
         A.sfx('drink'); this.S.stats.thirst = clamp(this.S.stats.thirst + 25); this.S.flags.drank = 1;
@@ -380,6 +464,7 @@ export class Game {
       { id: 'hof', name: 'Bauernhof mit Scheune', pos: B(-38, 158, 0), r: 12, icon: '🌾' }, { id: 'turm', name: 'Aussichtsturm Hirschkopf', pos: sp.ziel_turm?.pos, r: 12, icon: '🗼', flat: 1 },
       { id: 'ruine', name: 'Burgruine Falkenstein', pos: sp.ziel_ruine?.pos, r: 14, icon: '🏰' }, { id: 'steinbruch', name: 'Alter Steinbruch', pos: sp.ziel_steinbruch?.pos, r: 18, icon: '⛏️' },
       { id: 'muehle', name: 'Alte Mühle', pos: sp.ziel_muehle?.pos, r: 10, icon: '⚙️' },
+      { id: 'see', name: 'Waldsee', pos: sp.ziel_see?.pos, r: 18, icon: '🎣', flat: 1 }, { id: 'werkstatt', name: 'Werkstatt „KFZ Brandt“', pos: B(-52.8, 167.5, 0), r: 7, icon: '🔧' },
     ].map(p => { if (p.flat && p.pos) p.test = q => Math.hypot(q.x - p.pos.x, q.z - p.pos.z) < p.r; return p; });
   }
   win() {
@@ -398,31 +483,29 @@ export class Game {
     const S = this.S, st = S.stats, P = this.P;
     if (S.flags.dead || S.flags.won) return;
     // time (1 real second = 1 game minute; Z = wait faster where it is safe and warm)
-    const wolfNear = this.life.animals.some(a => a.kind !== 'deer' && a.state !== 'dead' && a.pos.distanceTo(P.pos) < 45);
-    const roof = this.build.shelter(P.pos), bed = this.build.near('bett', P.pos, 2.5);
-    this.roof = roof; this.bed = bed;
+    const wolfNear = this.life.animals.some(a => ['wolf', 'boar', 'bear'].includes(a.kind) && a.state !== 'dead' && a.pos.distanceTo(P.pos) < 45);
+    const roof = this.build.shelter(P.pos), bed = this.build.near('bett', P.pos, 2.5), indoor = this.indoor(P.pos);
+    this.roof = roof || indoor; this.bed = bed; this.inside = indoor;
     const safe = (this.insideShop(P.pos) && this.strom()) || this.life.fires.some(f => f.on && f.pos.distanceTo(P.pos) < 4) || ((this.has('schlafsack') || roof || bed) && !wolfNear)
-      || (roof?.type === 'huette' && roof.stage >= 3);
-    if (keys.KeyZ && !safe && !this._waitTip) { this._waitTip = 1; this.ui.toast(wolfNear ? 'Zu gefährlich – Raubtiere in der Nähe!' : 'Warten geht drinnen mit Strom, am Feuer, im Unterstand, am Bett oder mit Schlafsack.', 'warn'); setTimeout(() => this._waitTip = 0, 4000); }
+      || (indoor && indoor !== 'shop');
+    if (keys.KeyZ && !safe && !this._waitTip) { this._waitTip = 1; this.ui.toast(wolfNear ? 'Zu gefährlich – Raubtiere in der Nähe!' : 'Warten geht in Häusern, in deiner Hütte, am Feuer, im Unterstand, am Bett oder mit Schlafsack.', 'warn'); setTimeout(() => this._waitTip = 0, 4000); }
     const waiting = this.waiting = !!keys.KeyZ && safe; const scale = waiting ? 30 : 1;
     S.time += dt * scale / 60; S.abs = (S.day - 1) * 24 + S.time;
     if (S.time >= 24) { S.time -= 24; S.day++; this.ui.toast(`Tag ${S.day} beginnt.`); }
     const dark = this.sky.darkness(S.time);
-    // weather: an occasional shower
-    if (S.abs > S.nextRain && !S.rainUntil) { S.rainUntil = S.abs + 1 + Math.random() * 2; this.ui.toast('🌧️ Es fängt an zu regnen.'); }
-    if (S.rainUntil && S.abs > S.rainUntil) { S.rainUntil = 0; S.nextRain = S.abs + 5 + Math.random() * 8; }
-    this.sky.rainAmount += ((S.rainUntil ? 1 : 0) - this.sky.rainAmount) * Math.min(1, dt * .2);
+    // seasons + weather (seasons.js)
+    this.seasons.update(dt * scale);
     const rain = this.sky.rainAmount * (this.roof ? 0 : 1);
     this.build.update(dt, dt * scale / 60);
     for (const sp of this.W.spinners) sp.pivot.rotateOnAxis(sp.axis, sp.speed * dt);
     // generator fuel
     if (S.genFuel > 0) { S.genFuel -= dt * scale / 60; if (S.genFuel <= 0) { S.genFuel = 0; this.ui.toast('⚠️ Das Aggregat stottert und geht aus. Tank leer!', 'warn'); } }
     // survival
-    const drain = waiting ? scale * .35 : 1, inside = this.insideShop(P.pos);
+    const drain = waiting ? scale * .35 : 1, inside = !!indoor, shop = indoor === 'shop';
     st.hunger = clamp(st.hunger - dt * drain * .075 * (P.sprint ? 1.8 : 1));
     st.thirst = clamp(st.thirst - dt * drain * .1 * (P.sprint ? 2 : 1));
-    const cabin = this.roof?.type === 'huette';
-    let env = inside ? (this.strom() ? .35 : -.02 - .04 * dark) : cabin ? -.02 - .03 * dark : -.03 - .2 * dark - .15 * rain;
+    let env = shop ? (this.strom() ? .35 : -.02 - .04 * dark) : inside ? -.02 - .03 * dark : -.03 - .2 * dark - .15 * rain + this.seasons.warmth(dark);
+    if (inside && this.build.near('teppich', P.pos, 4)) env += .015;
     if (this.onHochsitz) env *= .6;
     for (const f of this.life.fires) if (f.on) { const d = f.pos.distanceTo(P.pos); if (d < 4.5) env = Math.max(env, 1.2 * (1 - d / 4.5) + .2); }
     if (this.torchOn) env += .06;
@@ -459,12 +542,14 @@ export class Game {
     const hs = this.W.spots.ziel_hochsitz; this.onHochsitz = !!hs && Math.hypot(P.pos.x - hs.pos.x, P.pos.z - hs.pos.z) < 1.3 && P.pos.y > hs.pos.y - 1;
     this.life.update(dt, P, dark);
     this.updateLights(dt, dark);
-    this.updateAudio(dt, dark, inside, rain);
+    this.updateAudio(dt, dark, shop, rain);
     // quests + discoveries
     const q = this.quests[S.quest];
-    if (q && q.done()) { S.quest++; this.audio.sfx('quest'); q.onDone?.(); this.save(); }
+    if (q && q.done()) { S.quest++; this.audio.sfx('quest'); this.progress.add(50, q.t); q.onDone?.(); this.save(); }
     for (const pl of this.places) if (!S.found[pl.id] && (pl.test ? pl.test(P.pos) : pl.pos && pl.pos.distanceTo(P.pos) < pl.r)) {
-      S.found[pl.id] = 1; this.ui.toast(`📍 Entdeckt: ${pl.name} (${Object.keys(S.found).length}/${this.places.length})`, 'good'); }
+      S.found[pl.id] = 1; this.progress.add(40, pl.name); this.ui.toast(`📍 Entdeckt: ${pl.name} (${Object.keys(S.found).length}/${this.places.length})`, 'good'); }
+    this.secT -= dt; if (this.secT < 0) { this.secT = 1; this.progress.update(); }
+    for (const r of this.drops) r.g.children[1].position.y = .42 + .04 * Math.sin(performance.now() / 400 + r.p[0]);
     // tips
     this.tipT -= dt;
     if (this.tipT < 0) {
@@ -511,7 +596,7 @@ export class Game {
   }
   die() {
     this.S.flags.dead = 1; this.audio.sfx('hurt'); document.exitPointerLock?.();
-    const cause = { Bär: 'Der Bär war stärker.', Wildschwein: 'Das Wildschwein hat dich erwischt.', Wolf: 'Die Wölfe waren schneller.', Kälte: 'Du bist erfroren.', Durst: 'Du bist verdurstet.', Hunger: 'Du bist verhungert.', Sturz: 'Ein böser Sturz.', Bachwasser: 'Das Bachwasser war keine gute Idee.' }[this.lastCause] || 'Die Nacht war zu lang.';
+    const cause = { Bär: 'Der Bär war stärker.', Wildschwein: 'Das Wildschwein hat dich erwischt.', Wolf: 'Die Wölfe waren schneller.', Kälte: 'Du bist erfroren.', Durst: 'Du bist verdurstet.', Hunger: 'Du bist verhungert.', Sturz: 'Ein böser Sturz.', Bachwasser: 'Das Bachwasser war keine gute Idee.', Unfall: 'Ein schwerer Unfall.' }[this.lastCause] || 'Die Nacht war zu lang.';
     document.getElementById('deadcause').textContent = cause; this.ui.show('dead', true);
   }
 
@@ -520,7 +605,7 @@ export class Game {
     const its = {};
     for (const it of this.W.interactives) if (!it.built && (it.target || Object.keys(it.state).length)) its[it.name] = { t: it.target, s: it.state };
     this.S.questId = this.quests[this.S.quest]?.t || '';
-    return { v: SAVE_VERSION, at: Date.now(), S: this.S, its, build: this.build.save(),
+    return { v: SAVE_VERSION, at: Date.now(), S: this.S, its, build: this.build.save(), car: this.vehicle.ok ? this.vehicle.save() : null,
       fires: this.life.fires.filter(f => f.on && !f.owned).map(f => ({ p: f.pos.toArray(), fuel: f.fuel })), pos: this.P.pos.toArray(), yaw: this.P.yaw, torch: this.torchOn ? this.torchT : 0 };
   }
   save(slot = 'auto') {
@@ -541,7 +626,7 @@ export class Game {
     if (!d || !d.S) return false;
     // state: defaults first, then the saved values (keys a newer version added keep their defaults)
     const F = this.fresh();
-    this.S = Object.assign(F, d.S); for (const k of ['stats', 'flags', 'found', 'known', 'ammo', 'mag', 'felled']) this.S[k] = Object.assign(this.fresh()[k], d.S[k] || {});
+    this.S = Object.assign(F, d.S); for (const k of ['stats', 'flags', 'found', 'known', 'ammo', 'mag', 'felled', 'side', 'stat', 'notes', 'car', 'dog']) this.S[k] = Object.assign(this.fresh()[k], d.S[k] || {});
     this.S.marks = Array.isArray(d.S.marks) ? d.S.marks : []; this.S.flags.dead = 0;
     this.S.inv = (d.S.inv || []).filter(x => ITEMS[x.id] && x.n > 0);           // items removed in a newer version
     if (!DIFF[this.S.diff]) this.S.diff = 'mittel';
@@ -551,6 +636,8 @@ export class Game {
     }
     for (const f of d.fires || []) this.life.addFire(new THREE.Vector3().fromArray(f.p), f.fuel);
     this.build.load(d.build);
+    if (d.car) this.vehicle.load(d.car);
+    for (const r of [...this.drops]) this.scene.remove(r.g); this.drops = []; for (const x of d.S.drops || []) this.addDrop(x);
     // quest by name (robust against inserted quest steps)
     this.quests = this.makeQuests(); const qi = this.quests.findIndex(q => q.t === d.S.questId); if (qi >= 0) this.S.quest = qi;
     const p = new THREE.Vector3().fromArray(d.pos || [0, 0, 0]);

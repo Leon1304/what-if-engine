@@ -91,7 +91,7 @@ def build(c):
     obj('Burg_Brunnen', merge(*[box(.45, .3, .7, at=(rx + 2.5 + 1.0 * math.cos(6.283 * i / 10), ry - 2.5 + 1.0 * math.sin(6.283 * i / 10), Z(rx + 2.5, ry - 2.5) - .05), rz=6.283 * i / 10 + math.pi / 2) for i in range(10)]), stone_d, c)
     multi('Burg_Truhe', [(box(.9, .55, .5, at=(tx, ty + .6, tz), bevel_w=.02), lp('Truhe', '#6b4630', .8)), (box(.94, .59, .08, at=(tx, ty + .6, tz + .5)), lp('Truhe_d', '#4a3020', .8)),
                          (box(.94, .05, .06, at=(tx, ty + .3, tz + .25)), rust), (box(.1, .03, .12, at=(tx, ty + .31, tz + .38)), lp('Gold', '#d4a83a', .3, .8))], c,
-          interact='search', label='Alte Truhe', item='goldmuenze', loot=[['goldmuenze', 2], ['verband', 1], ['kerze', 2]], found='Zwei alte Goldmünzen, ein Verband und Kerzen!')
+          interact='search', label='Alte Truhe', item='goldmuenze', loot=[['goldmuenze', 2], ['verband', 1], ['kerze', 2], ['patronen_schrot', 1]], found='Zwei alte Goldmünzen, ein Verband, Kerzen und Schrotpatronen!')
     multi('Burg_Schutt', [(ico(.9, at=(rx - 3.0, ry - 5.0, Z(rx - 3, ry - 5)), sub=1, jit=.35, seed=950, sz=.45), stone), (ico(.6, at=(rx - 2.2, ry - 5.4, Z(rx - 2.2, ry - 5.4)), sub=1, jit=.35, seed=951, sz=.5), moss)], c,
           interact='pickup', item='stein', label='Mauerschutt (Steine)', infinite=1)
     spot('ziel_ruine', (rx, ry, rz0), quest='ruine')
@@ -124,12 +124,19 @@ def build(c):
     for sy_ in (-1.8, 1.8): BW.append((cyl(.35, .25, at=(wx - 1.1, wy + sy_, wz + .35), seg=10, axis='X'), lp('Reifen', '#1b1b1c', .9))); BW.append((cyl(.35, .25, at=(wx + .85, wy + sy_, wz + .35), seg=10, axis='X'), lp('Reifen', '#1b1b1c', .9)))
     BW += [(box(.6, 1.2, .23, at=(wx - 1.5, wy - 2.5 + 1.65, wz)), lp('Beton', '#b3b0a8', .9)), (box(.3, 1.2, .23, at=(wx - 1.35, wy - 2.5 + 1.65, wz + .23)), lp('Beton', '#b3b0a8', .9))]
     BW += [(box(1.0, .6, .05, at=(wx + .6, wy + 1.6, wz + 1.45)), lp('Holz_Tresen', '#9c6b43', .7)), (box(.06, .06, .75, at=(wx + .6, wy + 1.6, wz + .7)), steel)]
-    multi('Bauwagen', BW, c)
+    multi('Bauwagen', BW, c, indoor=[wx - 1.2, wy - 2.5, wx + 1.2, wy + 2.5, wz, wz + 3.0])
     hinge = (wx - 1.2 + T / 2, wy - 2.5 + 1.2 + .03, wz + .7)
     multi('Bauwagen_Tuer', [(move(box(.05, .86, 1.97, at=(0, .43, 0)), hinge), lp('Bauwagen_Tuer', '#2f5a2f', .6)), (move(box(.08, .03, .12, at=(-.03, .74, .95)), hinge), steel)], c,
           pivot=hinge, interact='door', angle=math.radians(-100), label='Bauwagentür')
     multi('Bauwagen_Spind', [(box(.5, .5, 1.8, at=(wx + .85, wy - 1.9, wz + .7), bevel_w=.01), lp('Spind', '#5c7a8a', .5, .4)), (box(.02, .3, .05, at=(wx + .59, wy - 1.9, wz + 2.2)), steel)], c,
-          interact='search', label='Spind', item='dosenbohnen', loot=[['dosenbohnen', 1], ['seil', 1], ['batterien', 1]], found='Bohnen, ein Seil und Batterien.')
+          interact='search', label='Spind', item='dosenbohnen', loot=[['dosenbohnen', 1], ['seil', 1], ['batterien', 1], ['schwarzpulver', 2]], found='Bohnen, ein Seil, Batterien – und zwei Dosen Sprengpulver.')
+    multi('Notiz_Brandt', [(box(.21, .3, .004, at=(wx + .55, wy + 1.55, wz + 1.505), rz=.15), paper)], c, collide=0, interact='read', note=5, label='Sprengprotokoll',
+          text='Steinwerk Brandt – Sprengprotokoll, Abschnitt C. „Damm geprüft: stabil, keine Gefahr.“ Darunter handschriftlich: „Die Räumung verschafft uns vier Wochen Ruhe ohne Beschwerden der Anwohner. Sprengung 10.11. Kein Wort zur Gemeinde! – H. Brandt“')
+    multi('Sprengstoffkiste', [(box(.7, .45, .4, at=(qx + 6.0, qy - 4.0, Z(qx + 6, qy - 4) - .02), bevel_w=.01), lp('Kiste_oliv', '#4a5a3a', .7)), (box(.4, .46, .12, at=(qx + 6.0, qy - 4.0, Z(qx + 6, qy - 4) + .15)), lp('Schild_rot', '#c8262b', .5))], c,
+          interact='search', label='Kiste „Sprengmittel“', item='schwarzpulver', loot=[['schwarzpulver', 3], ['metall', 2]], found='Sprengpulver und Metallteile – daraus lässt sich Munition machen (Werkbank).')
+    multi('Schrotthaufen', [(box(.6 + .1 * i, .3, .15, at=(qx - 6.0 + .3 * i, qy - 7.5 + .2 * i, Z(qx - 6, qy - 7.5) + .1 * i), rz=i * .7), lp('Rost', '#8a4f2a', .9, var=.1)) for i in range(5)], c,
+          interact='pickup', item='metall', label='Schrotthaufen (Metall)', infinite=1)
+    spot('ziel_bello', (rx + 3.0, ry + 2.0, Z(rx + 3, ry + 2)), quest='bello')
     multi('Steinbruch_Schild', [(box(.1, .1, 1.6, at=(qx - 16.0, qy + 2.0, Z(qx - 16, qy + 2) - .05)), steel), (box(.05, 1.0, .6, at=(qx - 16.0, qy + 2.0, Z(qx - 16, qy + 2) + 1.0)), lp('Schild_weiss', '#f2f2ee', .5))], c)
     obj('Steinbruch_Text', text_bm('STEINBRUCH – BETRETEN VERBOTEN', .05, at=(qx - 16.04, qy + 2.0, Z(qx - 16, qy + 2) + 1.27), rz=-math.pi / 2, depth=.01), lp('Schild_rot', '#c8262b', .5), c, collide=0)
     spot('ziel_steinbruch', (qx, qy, qz), quest='steinbruch')
@@ -146,7 +153,7 @@ def build(c):
           (cyl(.08, 1.2, at=(mx + .5, my + .8, FL + .6), seg=6), wood), (cyl(.1, 2.8, at=(x1 - 1.4, my + .3, FL + 1.5), seg=8, axis='X'), wood_d)]
     P += [(box(.4, 4.5, .4, at=(x1 + 1.6, my + 2.0, mz + 2.3)), wood), (box(.08, 4.5, .4, at=(x1 + 1.4, my + 2.0, mz + 2.5)), wood_d), (box(.08, 4.5, .4, at=(x1 + 1.8, my + 2.0, mz + 2.5)), wood_d)]   # flume
     for sy_ in (-1, 1): P.append((box(.2, .2, 3.0, at=(x1 + 1.6, my + 3.0 + sy_ * .9, Z(x1 + 1.6, my + 3) - .3)), wood_d))
-    multi('Muehle', P, c)
+    multi('Muehle', P, c, indoor=[x0, y0, x1, y1, mz - .5, FL + Hm])
     hinge = (x0 + T / 2, y0 + 2.0 + .03, FL)
     multi('Muehle_Tuer', [(move(box(.06, .95, 2.15, at=(0, .47, 0)), hinge), lp('Haustuer', '#5e3a22', .7)), (move(box(.08, .04, .14, at=(-.03, .8, 1.0)), hinge), steel)], c, pivot=hinge, interact='door', angle=math.radians(-100), label='Mühlentür')
     WH = []; wr = 2.0; axle = (x1 + 1.6, my - .6, FL + 1.9)
