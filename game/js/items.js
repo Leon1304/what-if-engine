@@ -1,5 +1,6 @@
-// Items (ids match userData.item in map.glb) and crafting recipes.
+// Items (ids match userData.item / loot in map.glb), crafting recipes, weapons and building blueprints.
 // use: hunger / thirst / warmth / health / stamina change when eaten or drunk (Q or click in the backpack).
+// mat: building material (stacks to 30). weapon: id in WEAPONS. seed: crop id in CROPS.
 export const ITEMS = {
   rucksack:        { name: 'Rucksack', icon: '🎒', desc: 'Mehr Platz: 16 statt 4 Plätze.', equip: 'bag' },
   taschenlampe:    { name: 'Taschenlampe', icon: '🔦', desc: 'F = an/aus. Verbraucht Batterie.', tool: 1 },
@@ -45,12 +46,82 @@ export const ITEMS = {
   gaskocher:       { name: 'Gaskocher', icon: '🔥', desc: 'Kochen ohne Feuer: Suppe erwärmen, Wasser abkochen (C).', tool: 1 },
   dosenbohnen:     { name: 'Bohnen in Tomatensoße', icon: '🥫', use: { hunger: 30, thirst: -4 } },
   fackel:          { name: 'Fackel', icon: '🔥', desc: 'Leuchtet und hält Wölfe fern. Brennt 4 Minuten. Mit 2 auswählen/halten.', tool: 1 },
+  kerze:           { name: 'Kerze', icon: '🕯️', desc: 'Q: anzünden (Feuerzeug nötig). Kleines Licht für 3 Minuten.' },
+  // building materials + tools
+  stein:           { name: 'Stein', icon: '🪨', desc: 'Baumaterial: Fundament, Kamin, Feuerstelle. Steinhaufen im Steinbruch, Mauerschutt an der Burg.', mat: 1 },
+  stamm:           { name: 'Baumstamm', icon: '🪵', desc: 'Aus gefällten Bäumen. Baumaterial – oder mit Axt/Säge zu Brettern (C).', mat: 1 },
+  brett:           { name: 'Bretter', icon: '🟫', desc: 'Baumaterial für Dach, Tür, Möbel.', mat: 1 },
+  seil:            { name: 'Seil', icon: '🪢', desc: 'Für Bogen, Unterstand und Bett.', mat: 1 },
+  spaten:          { name: 'Spaten', icon: '⛏️', desc: 'Damit legst du Felder an (G → Feld).', tool: 1 },
+  hammer:          { name: 'Hammer', icon: '🔨', desc: 'Werkzeug zum Bauen (G = Baumenü).', tool: 1 },
+  saege:           { name: 'Säge', icon: '🪚', desc: 'Bäume fällst du doppelt so schnell, aus einem Stamm werden 4 Bretter statt 2.', tool: 1 },
+  goldmuenze:      { name: 'Alte Goldmünze', icon: '🪙', desc: 'Sehr alt. Hier draußen leider nur schön.' },
+  // farming
+  saat_kartoffel:  { name: 'Saatkartoffeln', icon: '🥔', desc: 'Auf ein Feld pflanzen (E am Feld).', seed: 'kartoffel' },
+  saat_karotte:    { name: 'Karottensamen', icon: '🥕', desc: 'Auf ein Feld pflanzen (E am Feld).', seed: 'karotte' },
+  saat_kuerbis:    { name: 'Kürbissamen', icon: '🎃', desc: 'Auf ein Feld pflanzen (E am Feld).', seed: 'kuerbis' },
+  kartoffel:       { name: 'Kartoffel', icon: '🥔', use: { hunger: 8 }, desc: 'Roh mäßig. Am Feuer: Ofenkartoffel.' },
+  ofenkartoffel:   { name: 'Ofenkartoffel', icon: '🥔', use: { hunger: 30, warmth: 8 } },
+  karotte:         { name: 'Karotte', icon: '🥕', use: { hunger: 12, thirst: 5 } },
+  kuerbis:         { name: 'Kürbis', icon: '🎃', use: { hunger: 15 }, desc: 'Am Feuer mit Topf: Kürbissuppe.' },
+  kuerbissuppe:    { name: 'Kürbissuppe', icon: '🍲', use: { hunger: 50, thirst: 10, warmth: 30 }, after: 'topf', msg: 'Heiß und sättigend.' },
+  mehl:            { name: 'Mehl', icon: '🌾', desc: 'Am Feuer mit Wasser: Fladenbrot.' },
+  fladenbrot:      { name: 'Fladenbrot', icon: '🫓', use: { hunger: 35 } },
+  topf_klar:       { name: 'Topf mit Brunnenwasser', icon: '🫕', use: { thirst: 50 }, after: 'topf' },
+  // hunting
+  fleisch:         { name: 'Rohes Fleisch', icon: '🥩', use: { hunger: 10, health: -10 }, poison: 1, msg: 'Roh … dir wird flau.', desc: 'Am Feuer braten!' },
+  fleisch_gebraten:{ name: 'Gebratenes Fleisch', icon: '🍖', use: { hunger: 55, warmth: 6 }, msg: 'Endlich richtig satt.' },
+  fell:            { name: 'Fell', icon: '🧶', desc: 'Warm. 2 Felle + Seil = Fellmantel (C).' },
+  fellmantel:      { name: 'Fellmantel', icon: '🧥', desc: 'Angezogen: Wärmeverlust nur noch ein Viertel.', equip: 'fur' },
+  // weapons + ammo
+  messer:          { name: 'Messer', icon: '🔪', desc: 'Nahkampf (Linksklick). Zerlegt erlegte Tiere.', weapon: 'messer' },
+  pistole:         { name: 'Pistole', icon: '🔫', desc: 'Linksklick schießen, R nachladen. 8 Schuss.', weapon: 'pistole' },
+  schrotflinte:    { name: 'Schrotflinte', icon: '💥', desc: 'Kurz, aber gewaltig. 2 Schuss, R nachladen.', weapon: 'schrotflinte' },
+  gewehr:          { name: 'Jagdgewehr', icon: '🎯', desc: 'Weit und präzise, rechte Maustaste = Zielfernrohr. 5 Schuss.', weapon: 'gewehr' },
+  bogen:           { name: 'Bogen', icon: '🏹', desc: 'Leise. Pfeile kann man aufsammeln.', weapon: 'bogen' },
+  patronen_pistole:{ name: 'Pistolenmunition', icon: '📦', desc: '16 Schuss für die Pistole.', ammo: ['pistole', 16] },
+  patronen_schrot: { name: 'Schrotpatronen', icon: '📦', desc: '10 Patronen für die Schrotflinte.', ammo: ['schrotflinte', 10] },
+  patronen_gewehr: { name: 'Gewehrpatronen', icon: '📦', desc: '10 Patronen für das Jagdgewehr.', ammo: ['gewehr', 10] },
+  pfeil:           { name: 'Pfeil', icon: '➶', desc: 'Für den Bogen.', mat: 1 },
 };
+
+// weapons: damage per hit, range (m), shots per magazine, reload (s), cooldown (s), spread (rad), pellets; ammo = inventory item (bow: pfeil)
+export const WEAPONS = {
+  messer:       { name: 'Messer', dmg: 34, range: 2.2, mag: 0, reload: 0, cd: .55, melee: 1 },
+  pistole:      { name: 'Pistole', dmg: 30, range: 60, mag: 8, reload: 1.4, cd: .28, spread: .012, sound: 'pistol' },
+  schrotflinte: { name: 'Schrotflinte', dmg: 16, range: 28, mag: 2, reload: 2.2, cd: .7, spread: .07, pellets: 8, sound: 'shotgun' },
+  gewehr:       { name: 'Jagdgewehr', dmg: 95, range: 160, mag: 5, reload: 2.6, cd: 1.1, spread: .002, sound: 'rifle', scope: 1 },
+  bogen:        { name: 'Bogen', dmg: 55, range: 70, mag: 1, reload: .9, cd: .9, spread: .006, sound: 'bow', ammoItem: 'pfeil' },
+};
+
+// crops: hours to grow (game time) and harvest
+export const CROPS = {
+  kartoffel: { name: 'Kartoffeln', hours: 8, gives: { kartoffel: 4, saat_kartoffel: 1 } },
+  karotte:   { name: 'Karotten', hours: 6, gives: { karotte: 4, saat_karotte: 1 } },
+  kuerbis:   { name: 'Kürbis', hours: 12, gives: { kuerbis: 2, saat_kuerbis: 1 } },
+};
+
+// blueprints (G): cost, tool, footprint (w × d m), template(s) bp_<id>; the cabin is built in stages (E at the site with the materials)
+export const BLUEPRINTS = [
+  { id: 'unterstand', name: 'Unterstand', icon: '⛺', desc: 'Schutz vor Regen. Darunter darfst du warten (Z).', cost: { stamm: 2, ast: 4, seil: 1 }, tools: [], size: [2.8, 2.4] },
+  { id: 'feuerstelle', name: 'Feuerstelle', icon: '🔥', desc: 'Dauerhafte Feuerstelle mit Sitzstämmen. Holz nachlegen, kochen.', cost: { stein: 6, holz: 1 }, tools: [], size: [2.2, 2.2] },
+  { id: 'huette', name: 'Blockhütte', icon: '🛖', desc: 'In 4 Bauabschnitten: Fundament → Wände → Dach → Kamin. Drinnen: sicher vor Wölfen, warm, Warten erlaubt.', tools: ['hammer'], size: [5.2, 4.8],
+    stages: [{ name: 'Fundament', cost: { stein: 8, stamm: 3 } }, { name: 'Wände', cost: { stamm: 10 } }, { name: 'Dach', cost: { brett: 10, stamm: 1 } }, { name: 'Kamin', cost: { stein: 10, brett: 1 } }] },
+  { id: 'bett', name: 'Bett', icon: '🛏️', desc: 'Schlafen (Z) heilt und wärmt – am besten in der Hütte.', cost: { brett: 4, stamm: 1, seil: 1 }, tools: ['hammer'], size: [1.2, 2.2] },
+  { id: 'kiste', name: 'Vorratskiste', icon: '📦', desc: '20 Plätze Lager. E zum Öffnen.', cost: { brett: 5 }, tools: ['hammer'], size: [1.0, .7] },
+  { id: 'regentonne', name: 'Regentonne', icon: '🛢️', desc: 'Sammelt Regen: sauberes Trinkwasser, füllt den Topf.', cost: { brett: 4, stein: 1 }, tools: ['hammer'], size: [1.0, 1.0] },
+  { id: 'zaun', name: 'Zaun (2 m)', icon: '🚧', desc: 'Grenzt Felder und Lager ab.', cost: { ast: 2, brett: 1 }, tools: [], size: [2.1, .3] },
+  { id: 'feld', name: 'Feld (2 × 2 m)', icon: '🌱', desc: 'Saat pflanzen (E), Regen oder Gießen lässt es schneller wachsen, dann ernten.', cost: { ast: 2 }, tools: ['spaten'], size: [2.1, 2.1] },
+];
 
 export const RECIPES = [
   { id: 'fackel', name: 'Fackel', needs: { ast: 1, lappen: 1 }, tools: ['feuerzeug'], gives: { fackel: 1 } },
   { id: 'verband', name: 'Verband', needs: { lappen: 1, desinfektion: 1 }, gives: { verband: 1 } },
   { id: 'suppe_kocher', name: 'Suppe erwärmen (Gaskocher)', needs: { dosensuppe: 1 }, tools: ['gaskocher'], gives: { suppe_warm: 1 } },
   { id: 'wasser_kocher', name: 'Wasser abkochen (Gaskocher)', needs: { topf_wasser: 1 }, tools: ['gaskocher'], gives: { topf_abgekocht: 1 } },
+  { id: 'bretter', name: 'Bretter sägen', needs: { stamm: 1 }, anyTool: ['saege', 'axt'], gives: { brett: 2 }, desc: '1 Baumstamm → 2 Bretter (mit Säge 4)' },
+  { id: 'bogen', name: 'Bogen', needs: { ast: 2, seil: 1 }, tools: ['messer'], gives: { bogen: 1 } },
+  { id: 'pfeile', name: '5 Pfeile', needs: { ast: 2, stein: 1 }, tools: ['messer'], gives: { pfeil: 5 } },
+  { id: 'fellmantel', name: 'Fellmantel', needs: { fell: 2, seil: 1 }, gives: { fellmantel: 1 } },
   { id: 'lagerfeuer', name: 'Lagerfeuer (vor dir)', needs: { brenn: 3 }, tools: ['feuerzeug'], place: 'fire', desc: '3 × Ast oder Brennholz' },
 ];

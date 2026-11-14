@@ -93,6 +93,6 @@ def build(c):
         bmesh.ops.rotate(bm_, cent=(0, 0, 0), matrix=Matrix.Rotation(1.3, 3, 'Y'), verts=bm_.verts); move(bm_, (Wd / 2 + 1.2, -1.0, .05)); bk.append((bm_, m))
     multi('Fahrrad', T(bk), c, collide=0)
     for i in range(4):
-        b = cyl(.06, .9, seg=5, axis='X'); rotz(b, i * .7); move(b, W(-Wd / 2 - 3.6 + .2 * i, -2.8 + .1 * i, .06))
+        b = cyl(.06, .9, at=(-.45, 0, 0), seg=5, axis='X'); rotz(b, i * .7); p_ = W(-Wd / 2 - 3.6 + .35 * i, -2.8 + .25 * i, 0); move(b, (p_[0], p_[1], max(terrain_h(p_[0] + .4, p_[1]), terrain_h(p_[0] - .4, p_[1]), p_[2]) + .1))
         obj(f'Ast_Camp_{i}', b, lp('Rinde', '#5a4030', .9), c, collide=0, interact='pickup', item='ast', label='Trockener Ast')
     spot('ziel_wohnwagen', W(0, 0, FZ), quest='wohnwagen')

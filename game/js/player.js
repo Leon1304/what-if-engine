@@ -1,4 +1,4 @@
-// First-person player: capsule (r 0.32, 1.75 m) against the static BVH, the movers' own BVHs (doors …) and tree trunks.
+// First-person player: capsule (r 0.32, 1.75 m) against the static BVH, the movers' own BVHs (doors …), built structures and tree trunks.
 // WASD, mouse look, Shift sprint (stamina), Ctrl crouch, Space jump, head bob, footsteps per surface, fall damage, ladders.
 import * as THREE from 'three';
 
@@ -22,6 +22,22 @@ export class Player {
   look(dx, dy) {
     const s = this.zoom ? .0007 : .0022;
     this.yaw -= dx * s; this.pitch = Math.max(-1.5, Math.min(1.5, this.pitch - dy * s));
+  }
+  // is the capsule at pos free of static geometry? (used after loading an older save into a changed map)
+  free(pos = this.pos) {
+    const r = this.r - .02, bvh = this.W.collider.geometry.boundsTree; seg.start.set(pos.x, pos.y + r + .05, pos.z); seg.end.set(pos.x, pos.y + this.h - r, pos.z);
+    box.makeEmpty(); box.expandByPoint(seg.start); box.expandByPoint(seg.end); box.min.addScalar(-r); box.max.addScalar(r);
+    let hit = false;
+    bvh.shapecast({ intersectsBounds: b => b.intersectsBox(box), intersectsTriangle: tri => { if (tri.closestPointToSegment(seg, tp, cp) < r) { hit = true; return true; } } });
+    return !hit;
+  }
+  unstick() {
+    const p0 = this.pos.clone(), q = new THREE.Vector3();
+    for (let rad = .5; rad < 14; rad += .5) for (let a = 0; a < 6.283; a += .5 / rad) {
+      q.set(p0.x + Math.cos(a) * rad, 0, p0.z + Math.sin(a) * rad); q.y = this.W.groundY(q.x, q.z, p0.y + 2.5) + .02;
+      if (Math.abs(q.y - p0.y) < 3 && this.free(q)) { this.setPose(q, this.yaw); return true; }
+    }
+    return false;
   }
   forward(out = new THREE.Vector3()) { return out.set(0, 0, -1).applyQuaternion(this.cam.quaternion); }
   collide(bvh, matrix) {
@@ -60,6 +76,10 @@ export class Player {
       if (!it.bvhGeo || it.node.visible === false) continue;
       if (it.pivot.position.distanceToSquared(this.pos) > 36) continue;
       this.collide(it.bvhGeo.boundsTree, it.pivot.matrixWorld);
+    }
+    for (const c of this.W.dyn) {                     // built structures (cabin, fence, chest …)
+      const rr = c.r + 2; if (c.pos.distanceToSquared(this.pos) > rr * rr) continue;
+      this.collide(c.geo.boundsTree, c.obj.matrixWorld);
     }
     for (const t of this.W.treesNear(this.pos.x, this.pos.z)) {
       const dx = this.pos.x - t.x, dz = this.pos.z - t.z, d = Math.hypot(dx, dz), m = t.r + this.r;

@@ -1,11 +1,16 @@
 // Game logic: state, survival values, interactions (E), items, crafting, quests / tutorial, discoveries, power, lights, weather,
 // campfires, save / load. The map's interactive objects come from Blender (userData.interact, see game/blender/core.py).
 import * as THREE from 'three';
-import { ITEMS, RECIPES } from './items.js';
+import { ITEMS, RECIPES, WEAPONS } from './items.js';
 import { B, Bv } from './world.js';
-import { Life, roadX, creekX } from './life.js';
+import { Life, roadX, creekX, DIFF } from './life.js';
+import { Build } from './build.js';
+import { Combat } from './combat.js';
 
-const SAVE = 'waldtank_save_v1';
+// Save games: slots auto / 1 / 2 / 3 in localStorage (+ export / import as a file). Everything is stored by name or id, so a newer
+// version of the map or the game can load an older save: unknown objects / items are skipped, new ones start in their default state.
+export const SLOTS = ['auto', '1', '2', '3'];
+const SAVE_PREFIX = 'waldtank_save_', OLD_SAVE = 'waldtank_save_v1', SAVE_VERSION = 2;
 const POOL = 8;
 const clamp = (v, a = 0, b = 100) => Math.max(a, Math.min(b, v));
 const MOVING = new Set(['door', 'slide', 'lid', 'drawer']);
@@ -27,11 +32,14 @@ export class Game {
     this.byName = Object.fromEntries(W.interactives.map(it => [it.name, it]));
     this.hazardMats = []; scene.traverse(o => { if (o.isMesh) for (const m of [].concat(o.material)) if (m.name === 'Warnblinker' && !this.hazardMats.includes(m)) this.hazardMats.push(m); });
     this.quests = this.makeQuests(); this.places = this.makePlaces();
-    this.chop = 0; this.saveT = 0; this.tipT = 0; this.birdT = 3; this.heartT = 0;
+    this.chop = 0; this.saveT = 0; this.tipT = 0; this.birdT = 3; this.heartT = 0; this.candleT = 0;
+    this.build = new Build(this); this.combat = new Combat(this);
+    try { this.S.diff = localStorage.getItem('waldtank_diff') || 'mittel'; } catch { }
   }
   fresh() {
     return { time: 17.0, day: 1, abs: 17, stats: { health: 100, hunger: 78, thirst: 72, warmth: 85, stamina: 100 }, inv: [], sel: 0,
-      battery: 65, genFuel: 0, quest: 0, flags: {}, found: {}, rain: 0, rainUntil: 0, nextRain: 19 + Math.random() * 6, rescueAt: 0 };
+      battery: 65, genFuel: 0, quest: 0, flags: {}, found: {}, known: {}, marks: [], felled: {}, ammo: {}, mag: {}, diff: 'mittel',
+      rain: 0, rainUntil: 0, nextRain: 19 + Math.random() * 6, rescueAt: 0 };
   }
 
   // ---------------------------------------------------------------- inventory
@@ -44,10 +52,14 @@ export class Game {
     if (it?.equip === 'bag') { this.S.flags.bag = true; if (!quiet) this.ui.toast('🎒 Rucksack aufgesetzt – jetzt 16 Plätze. Tab öffnet ihn.'); return true; }
     if (it?.equip === 'jacket') { this.S.flags.jacket = true; if (!quiet) this.ui.toast('🧥 Jacke angezogen – du frierst nur noch halb so schnell.'); return true; }
     if (it?.battery && this.has('taschenlampe')) { this.S.battery = 100; if (!quiet) this.ui.toast('🔋 Taschenlampe aufgeladen.'); return true; }
-    let s = this.S.inv.find(s => s.id === id && s.n < 10);
-    if (!s) { if (this.S.inv.length >= this.capacity()) { this.ui.toast(this.S.flags.bag ? 'Dein Rucksack ist voll.' : 'Kein Platz mehr – du brauchst einen Rucksack.', 'warn'); this.audio.sfx('error'); return false; }
-      s = { id, n: 0 }; this.S.inv.push(s); }
-    s.n += n; if (!quiet) this.ui.toast(`+ ${it?.icon || ''} ${it?.name || id}`); this.ui.renderHotbar(this.S.inv, this.S.sel); return true;
+    if (it?.ammo) { for (let i = 0; i < n; i++) this.combat.addAmmo(id); return true; }
+    if (it?.equip === 'fur') { this.S.flags.fur = true; if (!quiet) this.ui.toast('🧥 Fellmantel angezogen – dir wird so schnell nicht mehr kalt.'); return true; }
+    const max = it?.mat ? 30 : 10, inv = this.S.inv;
+    const room = inv.filter(s => s.id === id).reduce((a, s) => a + max - s.n, 0) + (this.capacity() - inv.length) * max;
+    if (room < n) { this.ui.toast(this.S.flags.bag ? 'Dein Rucksack ist voll.' : 'Kein Platz mehr – du brauchst einen Rucksack.', 'warn'); this.audio.sfx('error'); return false; }
+    let left = n;
+    while (left > 0) { let s = inv.find(s => s.id === id && s.n < max); if (!s) { s = { id, n: 0 }; inv.push(s); } const k = Math.min(left, max - s.n); s.n += k; left -= k; }
+    if (!quiet) this.ui.toast(`+ ${n > 1 ? n + '× ' : ''}${it?.icon || ''} ${it?.name || id}`); this.ui.renderHotbar(inv, this.S.sel); return true;
   }
   take(id, n = 1) {
     for (let i = this.S.inv.length - 1; i >= 0 && n > 0; i--) { const s = this.S.inv[i]; if (s.id !== id) continue; const k = Math.min(n, s.n); s.n -= k; n -= k; if (!s.n) this.S.inv.splice(i, 1); }
@@ -59,6 +71,8 @@ export class Game {
     if (s.id === 'fackel') { if (this.torchOn) return this.ui.toast('Die Fackel brennt schon.'); if (!this.has('feuerzeug')) return this.ui.toast('Du brauchst ein Feuerzeug.');
       this.take('fackel'); this.torchOn = true; this.torchT = 240; this.audio.sfx('fire'); return this.ui.toast('🔥 Fackel angezündet (4 Minuten).'); }
     if (it.read) return this.read(s.id);
+    if (it.weapon) return this.ui.toast(`${it.icon} ${it.name}: Linksklick = ${WEAPONS[it.weapon].melee ? 'zustechen' : 'schießen, R = nachladen, rechte Maustaste = zielen'}.`);
+    if (s.id === 'kerze') { if (!this.has('feuerzeug')) return this.ui.toast('Du brauchst ein Feuerzeug.'); this.take('kerze'); this.candleT = 180; return this.ui.toast('🕯️ Die Kerze brennt.'); }
     if (it.battery && this.has('taschenlampe')) { this.take(s.id); this.S.battery = 100; return this.ui.toast('🔋 Taschenlampe aufgeladen.'); }
     if (!it.use) return this.ui.toast(it.desc || 'Damit kann man so nichts anfangen.');
     const st = this.S.stats;
@@ -72,6 +86,7 @@ export class Game {
   drop(i) { const s = this.S.inv[i]; if (!s) return; this.S.inv.splice(i, 1); this.ui.toast(`${ITEMS[s.id].name} weggeworfen.`); this.ui.renderHotbar(this.S.inv, this.S.sel); }
   canCraft(r) {
     for (const t of r.tools || []) if (!this.has(t)) return false;
+    if (r.anyTool && !r.anyTool.some(t => this.has(t))) return false;
     for (const [k, v] of Object.entries(r.needs)) if ((k === 'brenn' ? this.brenn() : this.count(k)) < v) return false;
     return !(r.place === 'fire' && this.insideShop(this.P.pos));
   }
@@ -83,7 +98,7 @@ export class Game {
     if (r.place === 'fire') {
       const f = this.P.forward(); f.y = 0; f.normalize(); const p = this.P.pos.clone().addScaledVector(f, 1.6); p.y = this.W.groundY(p.x, p.z, this.P.pos.y + 1);
       this.life.addFire(p, 6); this.audio.sfx('fire'); this.ui.toast('🔥 Lagerfeuer brennt. E = Holz nachlegen, kochen.');
-    } else { for (const [k, v] of Object.entries(r.gives)) this.add(k, v, true); this.audio.sfx('craft'); this.ui.toast(`🛠️ ${r.name} hergestellt.`); }
+    } else { for (const [k, v] of Object.entries(r.gives)) this.add(k, r.id === 'bretter' && this.has('saege') ? 4 : v, true); this.audio.sfx('craft'); this.ui.toast(`🛠️ ${r.name} hergestellt.`); }
     this.ui.renderInventory(this);
   }
   read(id) {
@@ -114,10 +129,14 @@ export class Game {
   findTarget() {
     const cam = this.camera, f = this.P.forward(), o = cam.position;
     if (this.P.climb) return null;
+    for (const fi of this.life.fires) if (fi.owned) { const d = fi.pos.clone().sub(o); if (d.length() < 2.4 && d.normalize().angleTo(f) < .35) return { fire: fi }; }   // fireplace inside a structure
+    const bt = this.build.target(o, f);
     this.ray.set(o, f); this.ray.far = 2.8;
     const hits = this.ray.intersectObjects(this.intMeshes, false).filter(h => { const it = h.object.userData._it; return it && it.node.visible && !it.state.taken; });
     const wall = this.W.rayHit(o, f, 2.8);
-    if (hits.length && (!wall || hits[0].distance <= wall.distance + .05)) return { it: hits[0].object.userData._it };
+    if (hits.length && (!wall || hits[0].distance <= wall.distance + .05) && (!bt || hits[0].distance < bt.d)) return { it: hits[0].object.userData._it };
+    if (bt && (!wall || bt.d <= wall.distance + .05)) return bt;
+    const carc = this.life.carcass(o, f); if (carc) return { carcass: carc };
     // small pickups: forgiving cone
     let best = null, ba = .13;
     for (const it of this.W.interactives) {
@@ -131,6 +150,7 @@ export class Game {
     if (this.onHochsitz) return { down: true };
     // trees (axe)
     if (this.has('axt')) for (const t of this.W.treesNear(o.x, o.z)) {
+      if (t.kind === 'stumpf') continue;
       const dx = t.x - o.x, dz = t.z - o.z, dist = Math.hypot(dx, dz); if (dist > 2.2) continue;
       const fl = Math.hypot(f.x, f.z) || 1; if ((dx * f.x + dz * f.z) / (dist * fl) > .92) return { tree: t };
     }
@@ -139,11 +159,12 @@ export class Game {
   verb(t) {
     if (!t) return '';
     if (t.down) return '[E] Runterklettern';
-    if (t.tree) return '[E] Holz hacken (Axt)';
+    if (t.tree) return t.tree.fixed || t.tree.kind === 'Linde' ? 'Ein mächtiger Baum' : `[E] Baum fällen (Axt) ${t.tree.hits || 0}/${this.has('saege') ? 3 : 6}`;
+    if (t.build || t.log) return this.build.verb(t);
+    if (t.carcass) return this.has('messer') ? '[E] Zerlegen (Messer)' : 'Erlegtes Tier – ein Messer zum Zerlegen fehlt';
     if (t.fire) { const f = t.fire;
       if (!f.on) return this.brenn() && this.has('feuerzeug') ? '[E] Feuer wieder anzünden' : 'Feuer aus – Holz + Feuerzeug nötig';
-      if (this.has('dosensuppe')) return '[E] Suppe am Feuer erwärmen'; if (this.has('topf_wasser')) return '[E] Wasser abkochen';
-      if (this.has('steinpilz')) return '[E] Pilze braten'; if (this.brenn()) return '[E] Holz nachlegen'; return 'Lagerfeuer – wärmt dich'; }
+      const c = this.cookable(); if (c) return `[E] ${c[2]}`; if (this.brenn()) return '[E] Holz nachlegen'; return 'Lagerfeuer – wärmt dich'; }
     const it = t.it, u = it.u, L = it.label;
     switch (u.interact) {
       case 'door': case 'lid': case 'slide': case 'drawer':
@@ -152,6 +173,7 @@ export class Game {
       case 'switch': return `[E] ${L} (${this.S.flags.lightsOff ? 'an' : 'aus'})`;
       case 'pickup': return `[E] ${L} aufheben`;
       case 'search': return it.state.searched ? L + ' (leer)' : `[E] ${L} durchsuchen`;
+      case 'pickup': return `[E] ${L} aufheben`;
       case 'pump': return `[E] ${L} benutzen`;
       case 'read': return `[E] ${L} lesen`;
     }
@@ -162,7 +184,9 @@ export class Game {
     if (!t) return;
     const S = this.S, A = this.audio, ui = this.ui;
     if (t.down) return this.climbDown();
-    if (t.tree) { A.sfx('chop'); this.chop++; if (this.chop >= 3) { this.chop = 0; this.add('holz'); } return; }
+    if (t.tree) return this.build.chopTree(t.tree);
+    if (t.build || t.log) return this.build.interact(t);
+    if (t.carcass) return this.life.butcher(t.carcass);
     if (t.fire) return this.fireAction(t.fire);
     const it = t.it, u = it.u;
     if (u.ladder) {
@@ -193,11 +217,25 @@ export class Game {
           if (u.item === 'notiz_hochsitz') this.read('notiz_hochsitz');
         }
         return;
-      case 'search':
+      case 'search': {
         if (it.state.searched) return ui.toast('Hier ist nichts mehr.');
-        A.sfx('door'); if (this.add(u.item, u.item === 'dosenbohnen' ? 2 : 1, true)) { it.state.searched = 1; if (u.bonus) this.add(u.bonus, 1, true); ui.toast(u.found || `Gefunden: ${ITEMS[u.item].name}`); A.sfx('pickup'); }
+        A.sfx(it.name.startsWith('Sack') ? 'rustle' : 'door');
+        if (u.loot) {                    // loot list: hand out what fits, the rest stays inside
+          const left = (it.state.left || u.loot).filter(([id]) => ITEMS[id]); const keep = [];
+          for (const [id, n] of left) if (!this.add(id, n, true)) keep.push([id, n]);
+          const got = left.filter(x => !keep.includes(x));
+          if (got.length) ui.toast(u.found && !keep.length && !it.state.left ? u.found : 'Gefunden: ' + got.map(([id, n]) => `${n > 1 ? n + '× ' : ''}${ITEMS[id].icon} ${ITEMS[id].name}`).join(', '), 'good');
+          if (keep.length) { it.state.left = keep; ui.toast('Dein Rucksack ist voll – der Rest bleibt hier.', 'warn'); } else { it.state.searched = 1; delete it.state.left; this.emptySack(it); }
+          if (got.length) A.sfx('pickup'); return;
+        }
+        if (this.add(u.item, u.item === 'dosenbohnen' ? 2 : 1, true)) { it.state.searched = 1; if (u.bonus) this.add(u.bonus, 1, true); ui.toast(u.found || `Gefunden: ${ITEMS[u.item].name}`); A.sfx('pickup'); }
         return;
-      case 'read': return ui.read(it.label, u.text || '');
+      }
+      case 'read':
+        if (u.reveal) { const ids = u.reveal === 'all' ? this.places.map(p => p.id) : u.reveal.split(','); let n = 0;
+          for (const id of ids) if (!this.S.known[id] && !this.S.found[id]) { this.S.known[id] = 1; n++; }
+          if (n) setTimeout(() => ui.toast(`🗺️ ${n} Orte auf deiner Karte eingetragen.`, 'good'), 300); }
+        return ui.read(it.label, u.text || '');
       case 'pump':
         if (!this.strom()) { A.sfx('error'); return ui.toast('Das Display bleibt dunkel. Ohne Strom pumpt hier nichts.'); }
         if (this.has('kanister')) { A.sfx('fuel'); this.swap('kanister', 'kanister_voll'); return ui.toast('⛽ Kanister mit Diesel gefüllt.'); }
@@ -241,6 +279,9 @@ export class Game {
         A.sfx('micro'); this.take('dosensuppe'); setTimeout(() => this.add('suppe_warm'), 3000); return ui.toast('Die Suppe dreht sich …');
       case 'atm': if (!on) return ui.toast('Der Bildschirm ist schwarz.'); A.sfx('beep'); return ui.toast('„Verbindung zur Bank nicht möglich.“');
       case 'spuelen': A.sfx('flush'); return;
+      case 'brunnen':
+        if (this.has('topf')) { this.swap('topf', 'topf_klar'); A.sfx('water'); return ui.toast('🫕 Topf mit klarem Brunnenwasser gefüllt.'); }
+        A.sfx('drink'); this.S.stats.thirst = clamp(this.S.stats.thirst + 35); this.S.flags.drank = 1; return ui.toast('Klares, kaltes Brunnenwasser.');
       case 'wasserhahn': A.sfx('water'); this.S.stats.thirst = clamp(this.S.stats.thirst + 30); this.S.flags.drank = 1; return ui.toast('Du trinkst Leitungswasser.');
       case 'auto': A.sfx('error'); return ui.toast(S.flags.carTried ? 'Keilriemen gerissen. Ohne Werkstatt geht hier nichts.' : (S.flags.carTried = 1, 'Der Anlasser orgelt – nichts. Unter der Haube riecht es verbrannt.'));
       case 'bachwasser':
@@ -262,11 +303,36 @@ export class Game {
   fireAction(f) {
     const ui = this.ui;
     if (!f.on) { if (this.brenn() && this.has('feuerzeug')) { this.takeBrenn(1); f.on = true; f.fuel = 3; this.audio.sfx('fire'); return ui.toast('🔥 Wieder angezündet.'); } return; }
-    if (this.has('dosensuppe')) { this.swap('dosensuppe', 'suppe_warm'); this.audio.sfx('fire'); return ui.toast('🍲 Heiße Suppe!'); }
-    if (this.has('topf_wasser')) { this.swap('topf_wasser', 'topf_abgekocht'); this.audio.sfx('fire'); return ui.toast('Wasser abgekocht – jetzt sicher trinkbar.'); }
-    if (this.has('steinpilz')) { this.swap('steinpilz', 'pilz_gebraten'); this.audio.sfx('fire'); return ui.toast('🍳 Pilze gebraten.'); }
+    const c = this.cookable();
+    if (c) { const [from, to, , msg] = c; for (const [k, n] of Object.entries(from)) this.take(k, n); this.add(to, 1, true); this.audio.sfx('fire'); return ui.toast(msg); }
     if (this.brenn()) { this.takeBrenn(1); f.fuel += this.has('holz') ? 3 : 2; this.audio.sfx('fire'); return ui.toast('Holz nachgelegt.'); }
   }
+  // what can be cooked at a fire right now: [needs, gives, verb, message]
+  cookable() {
+    const water = ['topf_klar', 'topf_abgekocht', 'wasser'].find(k => this.has(k));
+    const L = [[{ dosensuppe: 1 }, 'suppe_warm', 'Suppe am Feuer erwärmen', '🍲 Heiße Suppe!'], [{ topf_wasser: 1 }, 'topf_abgekocht', 'Wasser abkochen', 'Wasser abgekocht – jetzt sicher trinkbar.'],
+      [{ fleisch: 1 }, 'fleisch_gebraten', 'Fleisch braten', '🍖 Fleisch gebraten.'], [{ steinpilz: 1 }, 'pilz_gebraten', 'Pilze braten', '🍳 Pilze gebraten.'],
+      [{ kartoffel: 1 }, 'ofenkartoffel', 'Kartoffel in die Glut legen', '🥔 Ofenkartoffel!'], [{ kuerbis: 1, topf: 1 }, 'kuerbissuppe', 'Kürbissuppe kochen', '🍲 Kürbissuppe!'],
+      water && [{ mehl: 1, [water]: 1 }, 'fladenbrot', 'Fladenbrot backen', '🫓 Fladenbrot gebacken.']].filter(Boolean);
+    return L.find(([need]) => Object.entries(need).every(([k, n]) => this.count(k) >= n));
+  }
+  // pickups glow softly when you are close, the target under the crosshair glows brighter (Pause → "Gegenstände hervorheben")
+  highlight(t, pos) {
+    const now = performance.now() / 1000, on = this.hlOn !== false, tgt = t?.it;
+    for (const it of this.W.interactives) {
+      const u = it.u; if (u.interact !== 'pickup' && u.interact !== 'search') continue;
+      let k = 0;
+      if (it.node.visible && !it.state.taken && it.center) {
+        const d = it.center.distanceTo(pos);
+        if (it === tgt && !(u.interact === 'search' && it.state.searched)) k = .5 + .15 * Math.sin(now * 6);
+        else if (on && d < 6 && ((u.interact === 'pickup' && !u.infinite) || (u.interact === 'search' && it.name.startsWith('Sack') && !it.state.searched))) k = (.16 + .1 * Math.sin(now * 3 + it.center.x)) * (1 - d / 6);
+      }
+      if (Math.abs(k - (it.hlK || 0)) < .005) continue;
+      if (!it.hlMats) { it.hlMats = []; it.node.traverse(m => { if (m.isMesh) { m.material = m.material.clone(); m.material.emissive = new THREE.Color('#ffe2a0'); it.hlMats.push(m.material); } }); }
+      for (const m of it.hlMats) m.emissiveIntensity = k; it.hlK = k;
+    }
+  }
+  emptySack(it) { if (it.name.startsWith('Sack')) it.node.scale.set(1.15, .4, 1.15); }
   climbDown() {
     const lad = this.W.ladders[0]; if (!lad) return;
     const bot = Bv(lad.u.bottom); bot.y = this.W.groundY(bot.x, bot.z, bot.y + 2) + .05; this.P.startClimb(this.P.pos.clone(), bot);
@@ -310,7 +376,11 @@ export class Game {
       { id: 'schuppen', name: 'Schuppen', pos: B(44, -12, 0), r: 5 }, { id: 'bach', name: 'Der Bach', test: p => Math.abs(p.x - creekX(-p.z)) < 5 },
       { id: 'hochsitz', name: 'Bernds Hochsitz', pos: sp.ziel_hochsitz?.pos, r: 10 }, { id: 'feuer', name: 'Alte Feuerstelle', pos: sp.ziel_feuerstelle?.pos, r: 7 },
       { id: 'bus', name: 'Bushaltestelle', pos: B(roadX(40) - 5.2, 40, 0), r: 7 }, { id: 'camp', name: 'Verlassener Wohnwagen', pos: sp.ziel_wohnwagen?.pos, r: 10 },
-    ];
+      { id: 'dorf', name: 'Dorf Tannbach', pos: B(-60, 182, 0), r: 24, icon: '🏘️' }, { id: 'kapelle', name: 'Kapelle Tannbach', pos: B(-48, 197.5, 0), r: 8, icon: '⛪' },
+      { id: 'hof', name: 'Bauernhof mit Scheune', pos: B(-38, 158, 0), r: 12, icon: '🌾' }, { id: 'turm', name: 'Aussichtsturm Hirschkopf', pos: sp.ziel_turm?.pos, r: 12, icon: '🗼', flat: 1 },
+      { id: 'ruine', name: 'Burgruine Falkenstein', pos: sp.ziel_ruine?.pos, r: 14, icon: '🏰' }, { id: 'steinbruch', name: 'Alter Steinbruch', pos: sp.ziel_steinbruch?.pos, r: 18, icon: '⛏️' },
+      { id: 'muehle', name: 'Alte Mühle', pos: sp.ziel_muehle?.pos, r: 10, icon: '⚙️' },
+    ].map(p => { if (p.flat && p.pos) p.test = q => Math.hypot(q.x - p.pos.x, q.z - p.pos.z) < p.r; return p; });
   }
   win() {
     this.S.flags.won = 1; this.audio.sfx('win'); this.life.clear();
@@ -318,15 +388,22 @@ export class Game {
     document.getElementById('winstats').innerHTML = `Überlebt bis Tag ${st.day}, ${String(Math.floor(st.time)).padStart(2, '0')}:${String(Math.floor(st.time % 1 * 60)).padStart(2, '0')} · Orte entdeckt: ${found}/${this.places.length}`;
     this.ui.show('win', true); document.exitPointerLock?.(); this.save();
   }
+  freePlay() {          // after the rescue: keep living in the forest (building, farming, exploring)
+    this.S.flags.won = 0; this.S.flags.free = 1; this.S.quest = this.quests.length; this.ui.show('win', false);
+    this.ui.toast('Freies Spiel: Die Bergwacht wartet unten im Tal. Bau dir eine Hütte, leg Felder an, erkunde alles.', 'good');
+  }
 
   // ---------------------------------------------------------------- per frame
   update(dt, keys) {
     const S = this.S, st = S.stats, P = this.P;
     if (S.flags.dead || S.flags.won) return;
     // time (1 real second = 1 game minute; Z = wait faster where it is safe and warm)
-    const wolfNear = this.life.animals.some(a => a.kind === 'wolf' && a.pos.distanceTo(P.pos) < 45);
-    const safe = (this.insideShop(P.pos) && this.strom()) || this.life.fires.some(f => f.on && f.pos.distanceTo(P.pos) < 4) || (this.has('schlafsack') && !wolfNear);
-    if (keys.KeyZ && !safe && !this._waitTip) { this._waitTip = 1; this.ui.toast(wolfNear ? 'Zu gefährlich – Wölfe in der Nähe!' : 'Warten geht nur drinnen mit Strom, am Feuer oder mit Schlafsack.', 'warn'); setTimeout(() => this._waitTip = 0, 4000); }
+    const wolfNear = this.life.animals.some(a => a.kind !== 'deer' && a.state !== 'dead' && a.pos.distanceTo(P.pos) < 45);
+    const roof = this.build.shelter(P.pos), bed = this.build.near('bett', P.pos, 2.5);
+    this.roof = roof; this.bed = bed;
+    const safe = (this.insideShop(P.pos) && this.strom()) || this.life.fires.some(f => f.on && f.pos.distanceTo(P.pos) < 4) || ((this.has('schlafsack') || roof || bed) && !wolfNear)
+      || (roof?.type === 'huette' && roof.stage >= 3);
+    if (keys.KeyZ && !safe && !this._waitTip) { this._waitTip = 1; this.ui.toast(wolfNear ? 'Zu gefährlich – Raubtiere in der Nähe!' : 'Warten geht drinnen mit Strom, am Feuer, im Unterstand, am Bett oder mit Schlafsack.', 'warn'); setTimeout(() => this._waitTip = 0, 4000); }
     const waiting = this.waiting = !!keys.KeyZ && safe; const scale = waiting ? 30 : 1;
     S.time += dt * scale / 60; S.abs = (S.day - 1) * 24 + S.time;
     if (S.time >= 24) { S.time -= 24; S.day++; this.ui.toast(`Tag ${S.day} beginnt.`); }
@@ -335,24 +412,28 @@ export class Game {
     if (S.abs > S.nextRain && !S.rainUntil) { S.rainUntil = S.abs + 1 + Math.random() * 2; this.ui.toast('🌧️ Es fängt an zu regnen.'); }
     if (S.rainUntil && S.abs > S.rainUntil) { S.rainUntil = 0; S.nextRain = S.abs + 5 + Math.random() * 8; }
     this.sky.rainAmount += ((S.rainUntil ? 1 : 0) - this.sky.rainAmount) * Math.min(1, dt * .2);
-    const rain = this.sky.rainAmount;
+    const rain = this.sky.rainAmount * (this.roof ? 0 : 1);
+    this.build.update(dt, dt * scale / 60);
+    for (const sp of this.W.spinners) sp.pivot.rotateOnAxis(sp.axis, sp.speed * dt);
     // generator fuel
     if (S.genFuel > 0) { S.genFuel -= dt * scale / 60; if (S.genFuel <= 0) { S.genFuel = 0; this.ui.toast('⚠️ Das Aggregat stottert und geht aus. Tank leer!', 'warn'); } }
     // survival
     const drain = waiting ? scale * .35 : 1, inside = this.insideShop(P.pos);
     st.hunger = clamp(st.hunger - dt * drain * .075 * (P.sprint ? 1.8 : 1));
     st.thirst = clamp(st.thirst - dt * drain * .1 * (P.sprint ? 2 : 1));
-    let env = inside ? (this.strom() ? .35 : -.02 - .04 * dark) : -.03 - .2 * dark - .15 * rain;
+    const cabin = this.roof?.type === 'huette';
+    let env = inside ? (this.strom() ? .35 : -.02 - .04 * dark) : cabin ? -.02 - .03 * dark : -.03 - .2 * dark - .15 * rain;
     if (this.onHochsitz) env *= .6;
     for (const f of this.life.fires) if (f.on) { const d = f.pos.distanceTo(P.pos); if (d < 4.5) env = Math.max(env, 1.2 * (1 - d / 4.5) + .2); }
     if (this.torchOn) env += .06;
-    if (env < 0 && S.flags.jacket) env *= .5;
+    if (env < 0 && S.flags.fur) env *= .25; else if (env < 0 && S.flags.jacket) env *= .5;
+    if (this.candleT > 0) { this.candleT -= dt; env += .02; }
     if (env < 0 && waiting && this.has('schlafsack')) env *= .3;
     st.warmth = clamp(st.warmth + env * dt * (waiting ? scale * .35 : 1));
     if (this.boostT > 0) this.boostT -= dt;
     st.stamina = clamp(st.stamina + (P.sprint ? -15 * (this.boostT > 0 ? .4 : 1) : 11) * dt);
     let hp = 0; if (st.hunger <= 0) hp -= .3; if (st.thirst <= 0) hp -= .4; if (st.warmth <= 0) hp -= .5;
-    if (st.hunger > 40 && st.thirst > 40 && st.warmth > 35) hp += .12;
+    if (st.hunger > 40 && st.thirst > 40 && st.warmth > 35) hp += .12 * (waiting && this.bed ? 6 : 1);
     st.health = clamp(st.health + hp * dt * drain);
     if (hp < 0 && st.health < 100) this.lastCause = st.warmth <= 0 ? 'Kälte' : st.thirst <= 0 ? 'Durst' : 'Hunger';
     this.slow = (st.warmth < 15 ? .85 : 1) * (st.health < 25 ? .85 : 1);
@@ -362,7 +443,7 @@ export class Game {
     const flick = S.battery < 15 ? (Math.random() < .1 ? .2 : 1) : 1;
     P.flash.intensity = S.flags.flashOn ? 45 * flick : 0;
     if (this.torchOn) { this.torchT -= dt; if (this.torchT <= 0) { this.torchOn = false; this.ui.toast('Die Fackel ist heruntergebrannt.'); } }
-    P.torch.intensity = this.torchOn ? 9 + 3 * Math.sin(performance.now() / 60) : 0;
+    P.torch.intensity = this.torchOn ? 9 + 3 * Math.sin(performance.now() / 60) : this.candleT > 0 ? 2.2 + .4 * Math.sin(performance.now() / 90) : 0;
     // movers (doors …) ease to their target; automatic door opens with power when someone is near
     for (const it of this.W.movers) {
       if (it.u.auto) it.target = this.strom() && it.pivot.position.distanceTo(P.pos) < 3.2 ? 1 : (this.strom() ? 0 : it.target);
@@ -430,31 +511,54 @@ export class Game {
   }
   die() {
     this.S.flags.dead = 1; this.audio.sfx('hurt'); document.exitPointerLock?.();
-    const cause = { Wolf: 'Die Wölfe waren schneller.', Kälte: 'Du bist erfroren.', Durst: 'Du bist verdurstet.', Hunger: 'Du bist verhungert.', Sturz: 'Ein böser Sturz.', Bachwasser: 'Das Bachwasser war keine gute Idee.' }[this.lastCause] || 'Die Nacht war zu lang.';
+    const cause = { Bär: 'Der Bär war stärker.', Wildschwein: 'Das Wildschwein hat dich erwischt.', Wolf: 'Die Wölfe waren schneller.', Kälte: 'Du bist erfroren.', Durst: 'Du bist verdurstet.', Hunger: 'Du bist verhungert.', Sturz: 'Ein böser Sturz.', Bachwasser: 'Das Bachwasser war keine gute Idee.' }[this.lastCause] || 'Die Nacht war zu lang.';
     document.getElementById('deadcause').textContent = cause; this.ui.show('dead', true);
   }
 
   // ---------------------------------------------------------------- save / load (browser storage; works without it too)
-  save() {
-    if (this.S.flags.dead) return;
+  snapshot() {
     const its = {};
-    for (const it of this.W.interactives) if (it.target || Object.keys(it.state).length) its[it.name] = { t: it.target, s: it.state };
-    const data = { S: this.S, its, fires: this.life.fires.filter(f => f.on).map(f => ({ p: f.pos.toArray(), fuel: f.fuel })), pos: this.P.pos.toArray(), yaw: this.P.yaw, torch: this.torchOn ? this.torchT : 0 };
-    try { localStorage.setItem(SAVE, JSON.stringify(data)); } catch { }
+    for (const it of this.W.interactives) if (!it.built && (it.target || Object.keys(it.state).length)) its[it.name] = { t: it.target, s: it.state };
+    this.S.questId = this.quests[this.S.quest]?.t || '';
+    return { v: SAVE_VERSION, at: Date.now(), S: this.S, its, build: this.build.save(),
+      fires: this.life.fires.filter(f => f.on && !f.owned).map(f => ({ p: f.pos.toArray(), fuel: f.fuel })), pos: this.P.pos.toArray(), yaw: this.P.yaw, torch: this.torchOn ? this.torchT : 0 };
   }
-  hasSave() { try { return !!localStorage.getItem(SAVE); } catch { return false; } }
-  load() {
-    let d; try { d = JSON.parse(localStorage.getItem(SAVE)); } catch { return false; }
-    if (!d) return false;
-    this.S = Object.assign(this.fresh(), d.S); this.S.flags.dead = 0;
+  save(slot = 'auto') {
+    if (this.S.flags.dead) return false;
+    try { localStorage.setItem(SAVE_PREFIX + slot, JSON.stringify(this.snapshot())); return true; } catch { return false; }
+  }
+  slotInfo(slot) {
+    try { const d = this.readSlot(slot); if (!d) return null; return { at: d.at || 0, day: d.S?.day || 1, time: d.S?.time || 0, diff: d.S?.diff || 'mittel' }; } catch { return null; }
+  }
+  readSlot(slot) {
+    let raw = null; try { raw = localStorage.getItem(SAVE_PREFIX + slot); if (!raw && slot === 'auto') raw = localStorage.getItem(OLD_SAVE); } catch { }
+    return raw ? JSON.parse(raw) : null;
+  }
+  latestSlot() { let best = null, t = -1; for (const s of SLOTS) { const i = this.slotInfo(s); if (i && i.at >= t) { t = i.at; best = s; } } return best; }
+  hasSave() { return !!this.latestSlot(); }
+  load(slot) {
+    let d; try { d = typeof slot === 'object' ? slot : this.readSlot(slot || this.latestSlot()); } catch { return false; }
+    if (!d || !d.S) return false;
+    // state: defaults first, then the saved values (keys a newer version added keep their defaults)
+    const F = this.fresh();
+    this.S = Object.assign(F, d.S); for (const k of ['stats', 'flags', 'found', 'known', 'ammo', 'mag', 'felled']) this.S[k] = Object.assign(this.fresh()[k], d.S[k] || {});
+    this.S.marks = Array.isArray(d.S.marks) ? d.S.marks : []; this.S.flags.dead = 0;
+    this.S.inv = (d.S.inv || []).filter(x => ITEMS[x.id] && x.n > 0);           // items removed in a newer version
+    if (!DIFF[this.S.diff]) this.S.diff = 'mittel';
     for (const it of this.W.interactives) {
-      const s = d.its[it.name]; if (!s) continue; it.state = s.s || {}; it.target = s.t || 0; it.open = it.target ? .999 : 0;
-      if (it.state.taken) it.node.visible = false;
+      if (it.built) continue; const s = d.its?.[it.name]; if (!s) continue; it.state = s.s || {}; it.target = s.t || 0; it.open = it.target ? .999 : 0;
+      if (it.state.taken) it.node.visible = false; if (it.state.searched) this.emptySack(it);
     }
     for (const f of d.fires || []) this.life.addFire(new THREE.Vector3().fromArray(f.p), f.fuel);
-    this.P.setPose(new THREE.Vector3().fromArray(d.pos), d.yaw); if (d.torch) { this.torchOn = true; this.torchT = d.torch; }
-    this.quests = this.makeQuests(); this.ui.renderHotbar(this.S.inv, this.S.sel);
+    this.build.load(d.build);
+    // quest by name (robust against inserted quest steps)
+    this.quests = this.makeQuests(); const qi = this.quests.findIndex(q => q.t === d.S.questId); if (qi >= 0) this.S.quest = qi;
+    const p = new THREE.Vector3().fromArray(d.pos || [0, 0, 0]);
+    this.P.setPose(p, d.yaw || 0); if (!this.P.free()) this.P.unstick();          // the map may have changed under the saved position
+    if (d.torch) { this.torchOn = true; this.torchT = d.torch; }
+    this.ui.renderHotbar(this.S.inv, this.S.sel);
     return true;
   }
-  wipe() { try { localStorage.removeItem(SAVE); } catch { } }
+  exportSave() { return JSON.stringify(this.snapshot()); }
+  wipe() { try { localStorage.removeItem(SAVE_PREFIX + 'auto'); localStorage.removeItem(OLD_SAVE); } catch { } }
 }

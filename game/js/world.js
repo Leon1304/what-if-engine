@@ -42,7 +42,7 @@ function floatGeo(src, matrix, keep = ['position', 'normal', 'color']) {
 export async function loadWorld(scene, onProgress) {
   const gltf = await new GLTFLoader().loadAsync('map.glb', e => onProgress?.(Math.min(1, e.loaded / (e.total || 6e6))));
   const root = gltf.scene; root.userData._root = true; scene.add(root); root.updateMatrixWorld(true);
-  const W = { root, byName: {}, interactives: [], movers: [], lights: [], spots: {}, trees: [], ladders: [], glow: {}, waterMeshes: [], colliders: [] };
+  const W = { root, byName: {}, interactives: [], movers: [], lights: [], spots: {}, trees: [], ladders: [], glow: {}, waterMeshes: [], colliders: [], bp: {}, spinners: [], dyn: [] };
 
   // parse JSON strings from Blender custom properties
   root.traverse(o => {
@@ -50,13 +50,19 @@ export async function loadWorld(scene, onProgress) {
     if (o.name) W.byName[o.name] = o;
   });
 
-  // ---------------- nodes: light markers, quest points, interactives (wrapped in pivots), trees
+  // ---------------- blueprints (bp_*, built at z −200 in Blender): templates for building, crops, felled trees and weapon models
+  // (keep the node's own transform: the GLB is quantised, its dequantisation offset/scale lives in that transform – only undo the −200 m)
+  for (const n of [...root.children]) if (n.name.startsWith('bp_')) { n.removeFromParent(); n.position.y += 200; n.updateMatrixWorld(true); W.bp[n.name.slice(3)] = n; }
+
+  // ---------------- nodes: light markers, quest points, interactives (wrapped in pivots), trees, spinning parts (mill wheel)
   const nodes = []; root.traverse(o => { if (o !== root && o.parent === root) nodes.push(o); });
   for (const n of nodes) {
     const u = n.userData;
+    if (u.spin) { const pivot = new THREE.Group(); pivot.position.copy(Bv(u.pivot_w || [0, 0, 0])); root.add(pivot); pivot.updateMatrixWorld(true); pivot.attach(n);
+      const a = u.spin_axis || [1, 0, 0]; W.spinners.push({ pivot, axis: new THREE.Vector3(a[0], a[2], -a[1]).normalize(), speed: u.spin_speed || 1 }); continue; }
     if (n.name.startsWith('light_')) { W.lights.push({ pos: n.getWorldPosition(new THREE.Vector3()), color: new THREE.Color(u.color || '#ffffff'), power: u.power || 30, group: u.group || '', kind: u.kind || 'point', name: n.name }); continue; }
     if (n.name === 'spawn' || n.name.startsWith('ziel_')) { W.spots[n.name] = { pos: n.getWorldPosition(new THREE.Vector3()), quat: n.getWorldQuaternion(new THREE.Quaternion()), ...u }; continue; }
-    if (u.collide_r && u.pos_w) { const p = Bv(u.pos_w); W.trees.push({ x: p.x, z: p.z, r: u.collide_r }); }
+    if (u.collide_r && u.pos_w) { const p = Bv(u.pos_w); const t = { x: p.x, z: p.z, y: p.y, r: u.collide_r, kind: u.tree || '', name: n.name, parts: [] }; W.trees.push(t); u._tree = t; }
     if (u.interact || u.ladder) {
       const pivot = new THREE.Group(); pivot.name = n.name + '_pivot';
       pivot.position.copy(u.pivot_w ? Bv(u.pivot_w) : n.getWorldPosition(new THREE.Vector3()));
@@ -125,17 +131,17 @@ export async function loadWorld(scene, onProgress) {
 
   // ---------------- instancing (repeated models) + static batching per material (everything else that never moves)
   const staticMeshes = [];
-  root.traverse(o => { if (o.isMesh && !o.userData._it && !ud(o).glow_group) staticMeshes.push(o); });
+  root.traverse(o => { if (o.isMesh && !o.userData._it && !ud(o).glow_group && !W.spinners.some(s => s.pivot === o.parent?.parent || s.pivot === o.parent)) staticMeshes.push(o); });
   const byGeo = new Map();
   for (const m of staticMeshes) { const k = m.geometry.uuid + '|' + m.material.uuid; (byGeo.get(k) || byGeo.set(k, []).get(k)).push(m); }
   const batch = new Map();
   for (const list of byGeo.values()) {
     if (list.length >= 4) {
       const im = new THREE.InstancedMesh(list[0].geometry, list[0].material, list.length);
-      list.forEach((m, i) => im.setMatrixAt(i, m.matrixWorld));
+      list.forEach((m, i) => { im.setMatrixAt(i, m.matrixWorld); const t = ud(m)._tree; if (t) t.parts.push({ im, i, m: m.matrixWorld.clone() }); });
       im.instanceMatrix.needsUpdate = true; im.castShadow = true; im.receiveShadow = true; im.computeBoundingSphere();
       im.userData.instanced = true; scene.add(im);
-    } else for (const m of list) (batch.get(m.material) || batch.set(m.material, []).get(m.material)).push(m);
+    } else for (const m of list) { const t = ud(m)._tree; if (t) t.fixed = 1; (batch.get(m.material) || batch.set(m.material, []).get(m.material)).push(m); }
     for (const m of list) m.removeFromParent();
   }
   for (const [mat, list] of batch) {
@@ -164,6 +170,21 @@ export async function loadWorld(scene, onProgress) {
   for (const t of W.trees) { const k = Math.floor(t.x / 10) + ',' + Math.floor(t.z / 10); (W.treeGrid.get(k) || W.treeGrid.set(k, []).get(k)).push(t); }
   W.treesNear = (x, z) => { const out = []; const cx = Math.floor(x / 10), cz = Math.floor(z / 10);
     for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) { const l = W.treeGrid.get((cx + i) + ',' + (cz + j)); if (l) out.push(...l); } return out; };
+  W.addTree = t => { const k = Math.floor(t.x / 10) + ',' + Math.floor(t.z / 10); (W.treeGrid.get(k) || W.treeGrid.set(k, []).get(k)).push(t); };
+  W.removeTree = t => { const k = Math.floor(t.x / 10) + ',' + Math.floor(t.z / 10), l = W.treeGrid.get(k); const i = l ? l.indexOf(t) : -1; if (i >= 0) l.splice(i, 1); };
+  const zero = new THREE.Matrix4().makeScale(0, 0, 0);
+  W.hideTree = t => { for (const p of t.parts) { p.im.setMatrixAt(p.i, zero); p.im.instanceMatrix.needsUpdate = true; p.im.computeBoundingSphere(); } };
+
+  // ---------------- dynamic colliders (built structures): BVH in the object's local space, the player tests them when near
+  W.addCollider = (obj) => {
+    obj.updateMatrixWorld(true); const inv = obj.matrixWorld.clone().invert(), gs = [];
+    obj.traverse(m => { if (m.isMesh && !m.userData.noCollide) gs.push(floatGeo(m.geometry, inv.clone().multiply(m.matrixWorld), ['position'])); });
+    if (!gs.length) return null;
+    const g = mergeGeometries(gs, false); g.boundsTree = new MeshBVH(g); const c = { obj, geo: g, pos: new THREE.Vector3().setFromMatrixPosition(obj.matrixWorld), r: 0 };
+    g.computeBoundingSphere(); c.r = g.boundingSphere.radius + g.boundingSphere.center.length(); W.dyn.push(c); return c;
+  };
+  W.removeCollider = (c) => { const i = W.dyn.indexOf(c); if (i >= 0) W.dyn.splice(i, 1); c?.geo.dispose(); };
+  W.floatGeo = floatGeo;
 
   // ground height via the collision BVH (straight down)
   const ray = new THREE.Ray(), down = new THREE.Vector3(0, -1, 0);

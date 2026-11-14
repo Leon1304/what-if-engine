@@ -45,21 +45,29 @@ export class UI {
     this.hotbar.innerHTML = h;
     const s = inv[sel]; $('selname').textContent = s ? ITEMS[s.id].name + (ITEMS[s.id].use ? ' – Q: benutzen' : '') : '';
   }
+  hitmark() { const c = $('cross'); c.classList.remove('hit'); void c.offsetWidth; c.classList.add('hit'); }
   renderInventory(g) {
-    const inv = g.S.inv, cap = g.capacity();
-    let h = `<h2>Rucksack <small>${inv.length}/${cap} Plätze${g.S.flags.jacket ? ' · 🧥 Jacke an' : ''}</small></h2><div class="grid">`;
+    const inv = g.S.inv, cap = g.capacity(), chest = g.build?.chest;
+    let h = '';
+    if (chest) {
+      h += `<h2>📦 Vorratskiste <small>${chest.inv.length}/20 Plätze · ← nimmt, → legt hinein</small></h2><div class="grid">`;
+      for (let i = 0; i < 20; i++) { const s = chest.inv[i], it = s && ITEMS[s.id];
+        h += it ? `<div class="cell"><i>${it.icon}</i><div>${it.name}${s.n > 1 ? ' ×' + s.n : ''}</div><button data-get="${i}">← Nehmen</button></div>` : `<div class="cell empty"></div>`; }
+      h += `</div>`;
+    }
+    h += `<h2>Rucksack <small>${inv.length}/${cap} Plätze${g.S.flags.fur ? ' · 🧥 Fellmantel an' : g.S.flags.jacket ? ' · 🧥 Jacke an' : ''}</small></h2><div class="grid">`;
     for (let i = 0; i < cap; i++) {
       const s = inv[i], it = s && ITEMS[s.id];
       h += it ? `<div class="cell" data-i="${i}" title="${it.desc || ''}"><i>${it.icon}</i><div>${it.name}${s.n > 1 ? ' ×' + s.n : ''}</div>
         <small>${it.desc || (it.use ? Object.entries(it.use).map(([k, v]) => ({ hunger: 'Hunger', thirst: 'Durst', warmth: 'Wärme', health: 'Gesundheit', stamina: 'Ausdauer' }[k] + (v > 0 ? ' +' : ' ') + v)).join(', ') : '')}</small>
-        ${it.use ? `<button data-use="${i}">Benutzen</button>` : it.read ? `<button data-read="${i}">Lesen</button>` : ''}<button data-drop="${i}" class="drop">Wegwerfen</button></div>`
+        ${chest ? `<button data-put="${i}">→ In die Kiste</button>` : it.use ? `<button data-use="${i}">Benutzen</button>` : it.read ? `<button data-read="${i}">Lesen</button>` : ''}<button data-drop="${i}" class="drop">Wegwerfen</button></div>`
         : `<div class="cell empty"></div>`;
     }
     h += `</div><h2>Herstellen <small>C</small></h2><div class="recipes">`;
     for (const r of RECIPES) {
       const ok = g.canCraft(r);
       const need = r.desc || Object.entries(r.needs).map(([k, v]) => `${v}× ${ITEMS[k]?.name || k}`).join(' + ');
-      h += `<div class="recipe ${ok ? 'ok' : ''}"><div><b>${r.name}</b><small>${need}${r.tools ? ' · Werkzeug: ' + r.tools.map(t => ITEMS[t].name).join(', ') : ''}</small></div><button data-craft="${r.id}" ${ok ? '' : 'disabled'}>Herstellen</button></div>`;
+      h += `<div class="recipe ${ok ? 'ok' : ''}"><div><b>${r.name}</b><small>${need}${r.tools ? ' · Werkzeug: ' + r.tools.map(t => ITEMS[t].name).join(', ') : ''}${r.anyTool ? ' · Werkzeug: ' + r.anyTool.map(t => ITEMS[t].name).join(' oder ') : ''}</small></div><button data-craft="${r.id}" ${ok ? '' : 'disabled'}>Herstellen</button></div>`;
     }
     h += `</div><p class="hint">Tab / Esc schließen</p>`;
     $('invpanel').innerHTML = h;

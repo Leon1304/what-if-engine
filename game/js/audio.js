@@ -85,6 +85,21 @@ export class Audio {
       case 'quest': this.tone(523, .15, .12, 'triangle'); this.tone(659, .15, .12, 'triangle', .14); this.tone(784, .3, .12, 'triangle', .28); break;
       case 'win': [523, 659, 784, 1046].forEach((f, i) => this.tone(f, .5, .14, 'triangle', i * .2)); break;
       case 'hazard': this.tone(1200, .04, .03, 'square'); break;
+      // weapons
+      case 'pistol': this.noise(.18, 'lowpass', 2500, .9, 1, 0, .3); this.tone(140, .12, .3, 'square', 0, .4); break;
+      case 'shotgun': this.noise(.45, 'lowpass', 1800, 1.0, 1, 0, .2); this.tone(70, .3, .4, 'sawtooth', 0, .4); this.noise(.12, 'bandpass', 900, .3, 1, .5); break;
+      case 'rifle': this.noise(.35, 'lowpass', 3500, 1.0, 1, 0, .15); this.tone(110, .25, .35, 'square', 0, .3); this.noise(.9, 'lowpass', 500, .25, 1, .15, .5); break;
+      case 'bow': this.noise(.15, 'bandpass', 600, .25, 2); this.tone(220, .12, .08, 'triangle', 0, .6); break;
+      case 'reload': this.noise(.05, 'highpass', 2500, .3); this.noise(.05, 'highpass', 2000, .3, 1, .25); this.tone(900, .04, .06, 'square', .5); break;
+      case 'click': this.noise(.03, 'highpass', 4000, .25); break;
+      case 'swing': this.noise(.18, 'bandpass', 1200, .25, 1, 0, 2.5); break;
+      case 'roar': this.tone(70, 1.2, .35, 'sawtooth', 0, .7); this.noise(1.0, 'lowpass', 400, .35, 1, 0, .6); break;
+      case 'grunt': for (let i = 0; i < 3; i++) this.tone(110, .12, .2, 'sawtooth', i * .14, .7); break;
+      // building, farming, loot
+      case 'build': for (let i = 0; i < 3; i++) { this.noise(.06, 'lowpass', 1800, .45, 1, i * .2); this.tone(260, .06, .12, 'square', i * .2, .6); } break;
+      case 'thud': this.noise(.9, 'lowpass', 220, 1.0, 1, 0, .4); this.tone(45, .8, .4, 'sine', 0, .6); break;
+      case 'dig': this.noise(.3, 'lowpass', 700, .35, 1, 0, .6); break;
+      case 'rustle': this.noise(.4, 'bandpass', 2500, .2, 1, 0, .7); break;
     }
   }
 }

@@ -23,10 +23,13 @@ def build(c):
     def pickup(name, parts, item, label, **kw):
         return multi(name, parts, c, collide=0, interact='pickup', item=item, label=label, **kw)
 
-    def goods_row(x0, x1, y, z, face, kind, seed, depth=.32):
-        """One shelf level of goods between x0 and x1 at height z, front edge at y, facing face (−1 = −y, +1 = +y)."""
+    def goods_row(x0, x1, y, z, face, kind, seed, depth=.32, avoid=()):
+        """One shelf level of goods between x0 and x1 at height z, front edge at y; face = direction from the front edge into the shelf.
+        avoid: x intervals kept free for pickups (they stand in the front row and must stay visible)."""
         r = random.Random(seed); x = x0 + .03
         while x < x1 - .08:
+            hit = next(((a, b) for a, b in avoid if a - .22 < x < b), None)
+            if hit: x = hit[1] + .02; continue
             m = r.choice(PAL)
             if kind == 'snack':        # chip bags (puffy) and chocolate bars
                 w, h, d = r.choice(((.2, .3, .08), (.16, .24, .07), (.1, .16, .03)))
@@ -41,7 +44,7 @@ def build(c):
                 w, h, d = r.choice(((.18, .26, .06), (.12, .2, .08), (.22, .1, .15))); n = 2
             face_cnt = max(1, int(r.uniform(.6, 1.0) * depth / (d + .01)))
             for k in range(min(n, face_cnt)):
-                yy = y - face * (d / 2 + .02 + k * (d + .01))
+                yy = y + face * (d / 2 + .02 + k * (d + .01))
                 if kind in ('cans', 'bottles'):
                     b = cyl(w / 2, h, at=(x + w / 2, yy, z), seg=8)
                     if kind == 'bottles': b = merge(b, cyl(w / 5, .06, at=(x + w / 2, yy, z + h), seg=6))
@@ -94,6 +97,20 @@ def build(c):
     multi('Ueberwachungsmonitor', [(box(.4, .06, .28, at=(28.2, 9.6, F + 2.3), rz=0), blk), (box(.36, .01, .22, at=(28.2, 9.56, F + 2.33)), screen)], c, collide=0, glow_group='strom')
 
     # ================================================================ gondolas (3 rows along x, double sided)
+    # pickups on the gondola shelves: front row, the filler goods leave their x range free (see avoid)
+    P = [('Chips_1', 'chips', 'Chips', PAL[0], (25.3, -4.62, F + .535), (.2, .08, .3)), ('Chips_2', 'chips', 'Chips', PAL[1], (28.6, -3.78, F + .905), (.2, .08, .3)),
+         ('Schokolade_1', 'schokolade', 'Schokolade', PAL[5], (26.1, -4.62, F + 1.275), (.16, .03, .1)), ('Schokolade_2', 'schokolade', 'Schokolade', PAL[9], (29.2, -3.78, F + .165), (.16, .03, .1)),
+         ('Kekse', 'kekse', 'Kekse', PAL[6], (27.2, -4.62, F + .165), (.2, .06, .14)),
+         ('Batterien_AA', 'batterien', 'Batterien (AA)', PAL[1], (25.8, 2.22, F + 1.275), (.1, .03, .16)), ('Verbandskasten', 'verband', 'Verbandskasten', lp('Erste_Hilfe', '#2f9e44', .5), (28.9, 2.22, F + .535), (.3, .1, .2)),
+         ('Eiskratzer', 'eiskratzer', 'Eiskratzer', PAL[2], (27.9, 1.38, F + .905), (.12, .03, .25)), ('Taschenlampe_Laden', 'taschenlampe2', 'Taschenlampe', blk, (26.5, 1.38, F + 1.275), (.06, .2, .06))]
+    SOUP = [(25.6, -1.62), (27.0, -.78), (29.1, -1.62)]
+    LEVELS = (.165, .535, .905, 1.275); GY = (-4.2, -1.2, 1.8)
+    avoid = {}
+    def slot(x, y, z, w):
+        gi = min(range(3), key=lambda i: abs(GY[i] - y)); s_ = 1 if y > GY[gi] else -1; li = min(range(4), key=lambda i: abs(LEVELS[i] - (z - F)))
+        avoid.setdefault((gi, s_, li), []).append((x - w / 2, x + w / 2)); return GY[gi] + s_ * .42 - s_ * .02
+    for nm, it, lb, m, (x, y, z), (w, d, h) in P: slot(x, y, z, w)
+    for x, y in SOUP: slot(x, y, F + .905, .1)
     kinds = (('snack', 'snack'), ('cans', 'other'), ('car', 'other'))
     for gi, gy in enumerate((-4.2, -1.2, 1.8)):
         g = [(box(5.5, .9, .12, at=(27.25, gy, F), bevel_w=.01), grey), (box(5.5, .04, 1.55, at=(27.25, gy, F + .12)), shelf_m)]
@@ -109,21 +126,17 @@ def build(c):
         multi(f'Regal_{gi + 1}_Kopf', [(box(.45, .85, 1.2, at=(24.25, gy, F)), red), (box(.5, .9, .3, at=(24.25, gy, F + 1.6)), grn)], c)
         for s in (-1, 1):
             for li, zz in enumerate((.165, .535, .905, 1.275)):
-                goods_row(24.6, 29.9, gy + s * .42, F + zz, -s, kinds[gi][0 if s < 0 else 1], 100 + gi * 10 + li * 2 + (s > 0))
+                goods_row(24.6, 29.9, gy + s * .42, F + zz, -s, kinds[gi][0 if s < 0 else 1], 100 + gi * 10 + li * 2 + (s > 0), avoid=avoid.get((gi, s, li), ()))
         flush(f'Waren_{gi + 1}')
         for k in range(3):
             add(PAL[(gi * 4 + k) % len(PAL)], box(.35, .35, .3, at=(24.25, gy + (k - 1) * .27, F + 1.2)))
         flush(f'Waren_Kopf_{gi + 1}')
-    # pickups placed on gondola shelves (front row)
-    P = [('Chips_1', 'chips', 'Chips', PAL[0], (25.3, -4.62, F + .535), (.2, .08, .3)), ('Chips_2', 'chips', 'Chips', PAL[1], (28.6, -3.78, F + .905), (.2, .08, .3)),
-         ('Schokolade_1', 'schokolade', 'Schokolade', PAL[5], (26.1, -4.62, F + 1.275), (.16, .03, .1)), ('Schokolade_2', 'schokolade', 'Schokolade', PAL[9], (29.2, -3.78, F + .165), (.16, .03, .1)),
-         ('Kekse', 'kekse', 'Kekse', PAL[6], (27.2, -4.62, F + .165), (.2, .06, .14)),
-         ('Batterien_AA', 'batterien', 'Batterien (AA)', PAL[1], (25.8, 2.22, F + 1.275), (.1, .03, .16)), ('Verbandskasten', 'verband', 'Verbandskasten', lp('Erste_Hilfe', '#2f9e44', .5), (28.9, 2.22, F + .535), (.3, .1, .2)),
-         ('Eiskratzer', 'eiskratzer', 'Eiskratzer', PAL[2], (27.9, 1.38, F + .905), (.12, .03, .25)), ('Taschenlampe_Laden', 'taschenlampe2', 'Taschenlampe', blk, (26.5, 1.38, F + 1.275), (.06, .2, .06))]
     for nm, it, lb, m, (x, y, z), (w, d, h) in P:
-        pickup(nm, [(box(w, d, h, at=(x, y, z), bevel_w=.006), m), (box(w * .7, d + .004, h * .25, at=(x, y, z + h * .5)), PAL[7])], it, lb)
-    for k, (x, y) in enumerate(((25.6, -1.62), (27.0, -.78), (29.1, -1.62))):
-        pickup(f'Dosensuppe_{k + 1}', [(cyl(.05, .12, at=(x, y, F + .905), seg=10), lp('Dose_rot', '#c8382c', .4, .4)), (cyl(.051, .02, at=(x, y, F + .955), seg=10), PAL[7])], 'dosensuppe', 'Dosensuppe')
+        gi = min(range(3), key=lambda i: abs(GY[i] - y)); s_ = 1 if y > GY[gi] else -1; yy = GY[gi] + s_ * (.42 - .03 - d / 2)
+        pickup(nm, [(box(w, d, h, at=(x, yy, z), bevel_w=.006), m), (box(w * .7, d + .004, h * .25, at=(x, yy, z + h * .5)), PAL[7])], it, lb)
+    for k, (x, y) in enumerate(SOUP):
+        gi = min(range(3), key=lambda i: abs(GY[i] - y)); s_ = 1 if y > GY[gi] else -1; yy = GY[gi] + s_ * (.42 - .03 - .05)
+        pickup(f'Dosensuppe_{k + 1}', [(cyl(.05, .12, at=(x, yy, F + .905), seg=10), lp('Dose_rot', '#c8382c', .4, .4)), (cyl(.051, .02, at=(x, yy, F + .955), seg=10), PAL[7])], 'dosensuppe', 'Dosensuppe')
 
     # ================================================================ fridges (x 32.1 … 32.875, y −5.9 … 0.1), 8 glass doors hinged on the south side
     FX0, FX1, FY0 = 32.0, 32.875, -5.9
@@ -157,13 +170,16 @@ def build(c):
         pickup(f'Sandwich_{k + 1}', [(prism([(-.08, 0), (.08, 0), (-.08, .12)], .08, y=-.04), lp('Sandwich', '#e9d8a6', .6)), (box(.01, .08, .12, at=(-.075, 0, 0)), lp('Folie', '#cfe3ea', .2))], 'sandwich', 'Sandwich').location = (FX0 + .1, y, F + 1.66)
 
     # ================================================================ ice cream chest with sliding lid
-    multi('Eistruhe', [(box(1.5, .75, .85, at=(29.6, 3.6, F), bevel_w=.04), white), (box(1.52, .77, .05, at=(29.6, 3.6, F + .85)), lp('Eis_blau', '#2d7dd2', .5)),
+    multi('Eistruhe', [(box(1.5, .75, .45, at=(29.6, 3.6, F), bevel_w=.04), white), (box(1.5, .06, .4, at=(29.6, 3.255, F + .45)), white), (box(1.5, .06, .4, at=(29.6, 3.945, F + .45)), white),
+                       (box(.06, .63, .4, at=(28.88, 3.6, F + .45)), white), (box(.06, .63, .4, at=(30.32, 3.6, F + .45)), white), (box(1.38, .63, .01, at=(29.6, 3.6, F + .45)), lp('Kuehl_innen', '#dfe6ea', .4, var=.02)),
+                       (box(1.52, .06, .05, at=(29.6, 3.25, F + .85)), lp('Eis_blau', '#2d7dd2', .5)), (box(1.52, .06, .05, at=(29.6, 3.95, F + .85)), lp('Eis_blau', '#2d7dd2', .5)),
                        (text_bm('EIS', .16, at=(29.6, 3.215, F + .5), depth=.01), lp('Eis_blau', '#2d7dd2', .5))], c)
-    for k in range(18): add(PAL[k % len(PAL)], box(.12, .2, .06, at=(29.0 + .14 * (k % 9), 3.45 + .3 * (k // 9), F + .75)))
+    for k in range(18):
+        if k != 1: add(PAL[k % len(PAL)], box(.12, .2, .06, at=(29.0 + .14 * (k % 9), 3.45 + .3 * (k // 9), F + .46 + .07 * (k % 2))))
     flush('Eis')
     multi('Eistruhe_Deckel', [(box(.74, .7, .03, at=(29.24, 3.6, F + .9)), gl), (box(.76, .72, .02, at=(29.24, 3.6, F + .89)), white)], c,
           pivot=(29.24, 3.6, F + .9), interact='slide', slide=[.7, 0, .03], label='Eistruhe')
-    pickup('Eis_Stiel', [(box(.04, .1, .03, at=(29.1, 3.45, F + .82)), lp('Eis_pink', '#e86a92', .5))], 'eis', 'Eis am Stiel')
+    pickup('Eis_Stiel', [(box(.07, .16, .05, at=(29.14, 3.45, F + .46)), lp('Eis_pink', '#e86a92', .5)), (box(.02, .05, .01, at=(29.14, 3.55, F + .51)), lp('Holz_hell', '#c9a273', .8))], 'eis', 'Eis am Stiel')
 
     # ================================================================ coffee corner (south wall) + bistro
     cc = [(box(3.2, .65, .9, at=(27.2, -9.42, F), bevel_w=.02), wood), (box(3.3, .7, .04, at=(27.2, -9.42, F + .9)), top), (box(3.2, .3, .7, at=(27.2, -9.65, F + 1.7)), wood)]
@@ -219,6 +235,7 @@ def build(c):
                           (cyl(.06, .1, at=(32.85, -8.9, F + .7), seg=8, axis='X'), white), (cyl(.15, .4, at=(31.6, -9.6, F), seg=8), steel)], c, collide=0)
     multi('Erste_Hilfe_Schrank', [(box(.4, .15, .45, at=(32.75, -7.6, F + 1.3)), white), (box(.02, .2, .06, at=(32.67, -7.6, F + 1.5)), lp('Erste_Hilfe', '#2f9e44', .5)),
                                   (box(.02, .06, .2, at=(32.67, -7.6, F + 1.45)), lp('Erste_Hilfe', '#2f9e44', .5))], c, collide=0)
+    obj('WC_Ablage', box(.3, .18, .02, at=(32.75, -7.6, F + 1.08)), lp('Weiss_glanz', '#f4f4f1', .3, var=.02), c, collide=0)
     pickup('Desinfektion', [(cyl(.03, .15, at=(32.7, -7.6, F + 1.1), seg=8), lp('Desinfekt', '#e9eef0', .3)), (cyl(.012, .04, at=(32.7, -7.6, F + 1.25), seg=6), PAL[2])], 'desinfektion', 'Desinfektionsmittel')
 
     # ================================================================ office (x 33.1 … 36.9, y 3.1 … 9.9)
@@ -237,15 +254,17 @@ def build(c):
                                (box(.03, .4, .05, at=(33.43, 4.2, F + 1.4)), blk), (box(.03, .4, .05, at=(33.43, 4.2, F + 1.55)), blk)], c, collide=0,
           interact='use', use='sicherung', label='Sicherungskasten')
     multi('Spind', [(box(.5, .5, 1.9, at=(36.6, 4.5, F), bevel_w=.01), lp('Spind', '#5c7a8a', .5, .4)), (box(.02, .3, .05, at=(36.34, 4.5, F + 1.7)), grey),
-                    (box(.02, .02, .15, at=(36.34, 4.7, F + 1.0)), steel)], c)
-    pickup('Jacke', [(box(.4, .12, .6, at=(36.75, 6.0, F + 1.1), bevel_w=.03), lp('Jacke', '#b5512b', .9)), (box(.06, .06, .06, at=(36.85, 6.0, F + 1.72)), steel)], 'jacke', 'Warme Jacke')
-    multi('Pinnwand', [(box(.03, 1.0, .7, at=(36.86, 7.6, F + 1.3)), lp('Kork', '#b8875a', .9))] + [(box(.01, .2, .15, at=(36.84, 7.25 + .25 * i, F + 1.5 - .2 * (i % 2))), PAL[(i * 3) % 14]) for i in range(4)], c, collide=0)
+                    (box(.02, .02, .15, at=(36.34, 4.7, F + 1.0)), steel)], c,
+          interact='search', label='Spind', item='pistole', loot=[['pistole', 1], ['patronen_pistole', 1]], found='Im Spind: eine alte Dienstpistole und eine Schachtel Munition. Bernd war wohl vorsichtig.')
+    pickup('Jacke', [(box(.1, .45, .65, at=(36.68, 6.0, F + 1.05), bevel_w=.03), lp('Jacke', '#b5512b', .9)), (box(.1, .04, .04, at=(36.7, 6.0, F + 1.7)), steel)], 'jacke', 'Warme Jacke')
+    multi('Pinnwand', [(box(.03, 1.0, .7, at=(36.73, 7.6, F + 1.3)), lp('Kork', '#b8875a', .9))] + [(box(.01, .2, .15, at=(36.71, 7.25 + .25 * i, F + 1.5 - .2 * (i % 2))), PAL[(i * 3) % 14]) for i in range(4)], c, collide=0)
     multi('Aktenschrank', [(box(.5, .6, 1.2, at=(33.5, 8.8, F)), shelf_g)] + [(box(.02, .1, .02, at=(33.76, 8.8, F + .2 + .3 * i)), steel) for i in range(4)], c)
     multi('Telefon', [(box(.18, .2, .06, at=(36.3, 9.4, F + .78)), lp('Telefon', '#e4e4df', .4)), (box(.05, .2, .04, at=(36.22, 9.4, F + .84)), lp('Telefon', '#e4e4df', .4))], c, collide=0,
           interact='use', use='telefon', label='Telefon')
 
     # ================================================================ storage (x 33.1 … 36.9, y −9.9 … 2.9)
-    def heavy_shelf(name, x, y, w, d, rz, seed):
+    def heavy_shelf(name, x, y, w, d, rz, seed, gaps=()):
+        """Steel shelf with cartons; gaps = [(level z, local x0, local x1)] stay empty for pickups."""
         parts = []
         for sx in (-w / 2 + .03, w / 2 - .03):
             for sy in (-d / 2 + .03, d / 2 - .03): parts.append((box(.05, .05, 2.0, at=(sx, sy, 0)), lp('Regal_blau', '#2a63b8', .5, .3)))
@@ -255,18 +274,19 @@ def build(c):
             xx = -w / 2 + .05
             while xx < w / 2 - .3:
                 bw = rr.uniform(.25, .5); bh = rr.uniform(.2, .45)
+                if any(abs(gz - zz) < .01 and xx < g1 and xx + bw > g0 for gz, g0, g1 in gaps): xx += .1; continue
                 parts.append((box(bw, d * .8, bh, at=(xx + bw / 2, 0, zz), bevel_w=.01), lp('Karton', '#b98b5a', .9, var=.08))); xx += bw + .03
         bms = []
         for bm, m in parts: rotz(bm, rz); move(bm, (x, y, F)); bms.append((bm, m))
         return multi(name, bms, c)
-    heavy_shelf('Lagerregal_1', 36.55, -7.55, 2.9, .6, math.pi / 2, 1)          # south of the back door (y −4.6 … −3.7) – keeps the way in free
+    heavy_shelf('Lagerregal_1', 36.55, -7.55, 2.9, .6, math.pi / 2, 1, gaps=[(1.33, .4, .9), (.73, -1.0, -.5)])          # south of the back door (y −4.6 … −3.7) – keeps the way in free
     heavy_shelf('Lagerregal_2', 33.55, -7.0, 2.4, .6, math.pi / 2, 2)
-    heavy_shelf('Lagerregal_3', 35.0, -9.5, 2.0, .6, 0, 3)
+    heavy_shelf('Lagerregal_3', 35.0, -9.5, 2.0, .6, 0, 3, gaps=[(1.33, .0, .4)])
     pickup('Kanister', [(box(.18, .35, .45, at=(33.6, 1.3, F), bevel_w=.03), red), (box(.06, .2, .05, at=(33.6, 1.25, F + .47)), red), (cyl(.025, .06, at=(33.6, 1.48, F + .45), seg=6), blk)],
            'kanister', 'Benzinkanister (leer)')
-    pickup('Lappen', [(box(.25, .2, .03, at=(36.4, -6.9, F + 1.33)), lp('Lappen', '#d9c38a', .95))], 'lappen', 'Lappen')
-    pickup('Topf', [(cyl(.13, .14, at=(36.5, -8.3, F + .73), seg=10), steel), (box(.12, .03, .02, at=(36.5, -8.48, F + .84)), blk)], 'topf', 'Kochtopf')
-    pickup('Taschenlampe_Batterie_9V', [(box(.05, .03, .045, at=(35.2, -9.55, F + 1.93)), PAL[12])], 'batterie_9v_leer', '9-V-Block (leer)')
+    pickup('Lappen', [(box(.25, .2, .03, at=(36.35, -6.9, F + 1.36)), lp('Lappen', '#d9c38a', .95))], 'lappen', 'Lappen')
+    pickup('Topf', [(cyl(.13, .14, at=(36.4, -8.3, F + .76), seg=10), steel), (box(.03, .12, .02, at=(36.22, -8.3, F + .87)), blk)], 'topf', 'Kochtopf')
+    pickup('Taschenlampe_Batterie_9V', [(box(.07, .04, .06, at=(35.2, -9.3, F + 1.36)), PAL[12])], 'batterie_9v_leer', '9-V-Block (leer)')
     for k in range(3):
         for j in range(2 - (k > 1)):
             add(lp('Kiste_rot', '#c8382c', .6), box(.4, .3, .28, at=(33.55 + .45 * j, -4.9, F + .28 * k), bevel_w=.01))

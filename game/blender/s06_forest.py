@@ -13,7 +13,12 @@ def tree_ok(x, y, r):
     if math.hypot(x - HOCHSITZ[0], y - HOCHSITZ[1]) < 8: return False
     if math.hypot(x - FEUERSTELLE[0], y - FEUERSTELLE[1]) < 5.5: return False
     if math.hypot(x - CAMP[0], y - CAMP[1]) < 9 + r: return False
-    return abs(x) < 108 and abs(y) < 108
+    if abs(x - VILLAGE[0]) < 40 + r and abs(y - VILLAGE[1]) < 36 + r: return False
+    for sx, sy, _ in SACKS:
+        if math.hypot(x - sx, y - sy) < 1.6 + r: return False
+    for c_, rr in ((TOWER, 9), (RUIN, 15), (QUARRY, 19), (MILL, 10)):
+        if math.hypot(x - c_[0], y - c_[1]) < rr + r: return False
+    return MAP_X0 + 2 < x < MAP_X1 - 2 and MAP_Y0 + 2 < y < MAP_Y1 - 2
 
 def build(c):
     bark = lp('Rinde', '#5a4030', .9, var=.08); bark_d = lp('Rinde_dunkel', '#463226', .9, var=.08)
@@ -67,8 +72,8 @@ def build(c):
 
     # ---------------- place trees on a jittered grid (density rises with distance from the road)
     R = random.Random(2024); n = 0; trees = coll('Bäume', c)
-    for gx in range(-108, 108, 5):
-        for gy in range(-108, 108, 5):
+    for gx in range(int(MAP_X0) + 2, int(MAP_X1) - 2, 5):
+        for gy in range(int(MAP_Y0) + 2, int(MAP_Y1) - 2, 5):
             x, y = gx + R.uniform(0, 5), gy + R.uniform(0, 5)
             if not tree_ok(x, y, .5): continue
             d = abs(x - road_x(y))
@@ -101,41 +106,41 @@ def build(c):
     for lg in logs:
         for v in lg.data.vertices: v.co.z += .28; v.co.x -= 2.5
     R = random.Random(77); k = 0
-    for i in range(1400):
-        x, y = R.uniform(-108, 108), R.uniform(-108, 108)
+    for i in range(2200):
+        x, y = R.uniform(MAP_X0 + 2, MAP_X1 - 2), R.uniform(MAP_Y0 + 2, MAP_Y1 - 2)
         d = abs(x - road_x(y))
-        if d < 4.6 or (-3 < x < 48 and -26 < y < 28) or abs(x - creek_x(y)) < 2.4 or trail_dist(x, y) < .9 or math.hypot(x - CAMP[0], y - CAMP[1]) < 7: continue
+        if d < 4.6 or (-3 < x < 48 and -26 < y < 28) or (abs(x - VILLAGE[0]) < 38 and abs(y - VILLAGE[1]) < 34) or abs(x - creek_x(y)) < 2.4 or trail_dist(x, y) < .9 or math.hypot(x - CAMP[0], y - CAMP[1]) < 7: continue
         z = terrain_h(x, y)
         if d < 9: src = R.choice(tuft)          # verge: grass tufts only
         else:
             src = R.choice(bush * 3 + fern * 4 + tuft * 3 + rocks + [stump])
             if src in rocks + [stump] + bush and not tree_ok(x, y, 0): continue
         inst(src, f'{src.name}_{k}', (x, y, z - .05), R.uniform(0, 6.28), R.uniform(.7, 1.3), c=ug); k += 1
-    for i in range(14):
-        x, y = R.uniform(-100, 100), R.uniform(-100, 100)
+    for i in range(20):
+        x, y = R.uniform(-100, 100), R.uniform(-100, 220)
         if tree_ok(x, y, 3): lg = R.choice(logs); inst(lg, f'Baumstamm_{i}', (x, y, terrain_h(x, y) - .1), R.uniform(0, 6.28), 1.0, c=ug)
 
     # ---------------- mushrooms (pickups): red fly agaric = poisonous, brown = edible
     mush_ok = lp('Pilz_braun', '#8a5a34', .8); mush_bad = lp('Pilz_rot', '#d23a2a', .7); stem = lp('Pilz_Stiel', '#efe8d8', .8)
     R = random.Random(5); k = 0
-    while k < 24:
-        x, y = R.uniform(-100, 100), R.uniform(-100, 100)
+    while k < 34:
+        x, y = R.uniform(-100, 100), R.uniform(-100, 220)
         if not tree_ok(x, y, 0) or abs(x - road_x(y)) < 15: continue
         bad = k % 3 == 0; z = terrain_h(x, y)
         parts = [(cyl(.03, .1, at=(x, y, z - .02), seg=6), stem), (dome(.08, at=(x, y, z + .08), seg=8, rings=3, h=.06), mush_bad if bad else mush_ok)]
         multi(f'Pilz_{k}', parts, ug, collide=0, interact='pickup', item='fliegenpilz' if bad else 'steinpilz', label='Roter Pilz' if bad else 'Brauner Pilz'); k += 1
     # dry branches (pickups for the fire) along the paths
     R = random.Random(6)
-    for k in range(18):
-        pts = trail_pts()[k % 2]; i = R.randrange(len(pts) - 1); (ax, ay), (bx, by) = pts[i], pts[i + 1]; t = R.random()
+    for k in range(30):
+        pts = trail_pts()[k % 7]; i = R.randrange(len(pts) - 1); (ax, ay), (bx, by) = pts[i], pts[i + 1]; t = R.random()
         x, y = ax + (bx - ax) * t + R.uniform(-3, 3), ay + (by - ay) * t + R.uniform(-3, 3); z = terrain_h(x, y)
-        br = cyl(.04, 1.1, at=(0, 0, 0), seg=5, axis='X'); rotz(br, R.uniform(0, 6)); move(br, (x, y, z + .05))
+        br = cyl(.04, 1.1, at=(-.55, 0, 0), seg=5, axis='X'); rotz(br, R.uniform(0, 6)); move(br, (x, y, max(z, terrain_h(x + .5, y), terrain_h(x - .5, y)) + .1))
         obj(f'Ast_{k}', br, bark, ug, collide=0, interact='pickup', item='ast', label='Trockener Ast')
 
     # ---------------- creek: water surface strip + stepping stones + drink spot
     water = lp('Wasser', '#4f8fae', .05, 0, alpha=.75, var=.03)
     bm = bmesh.new(); rows = []
-    for y in range(-110, 111, 2):
+    for y in range(int(MAP_Y0), int(MAP_Y1) + 1, 2):
         cx, cz = creek_x(y), creek_z(y)
         rows.append([bm.verts.new((cx + o, y, cz)) for o in (-2.2, -.7, .7, 2.2)])
     for r0, r1 in zip(rows, rows[1:]):
@@ -144,8 +149,8 @@ def build(c):
     for i, y in enumerate((12.0, 12.9, 13.7)):
         st = ico(.45, at=(creek_x(y) - 1.0 + i * 1.0, y, creek_z(y) - .25), sub=1, jit=.2, seed=300 + i, sz=.6)
         obj(f'Trittstein_{i}', st, rock_m[0], c)
-    for i in range(30):
-        y = R.uniform(-105, 105); s = R.choice((-1, 1)); x = creek_x(y) + s * R.uniform(1.8, 3.2)
+    for i in range(44):
+        y = R.uniform(-105, 225); s = R.choice((-1, 1)); x = creek_x(y) + s * R.uniform(1.8, 3.2)
         inst(rocks[R.randrange(2)], f'Uferstein_{i}', (x, y, terrain_h(x, y) - .1), R.uniform(0, 6), R.uniform(.5, 1.0), c=ug)
 
     # ---------------- hunter's stand (Hochsitz) at the clearing, looking east over the creek

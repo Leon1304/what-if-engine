@@ -54,7 +54,10 @@ def build(c):
                        (box(1.3, .02, .8, at=(sx - .6, sy + 1.25, 1.3)), lp('Lochwand', '#c9a273', .8))] +
           [(box(.04, .02, .3, at=(sx - 1.1 + .25 * i, sy + 1.22, 1.5)), steel) for i in range(5)], c)
     multi('Brecheisen', [(box(.04, .04, .7, at=(sx - .2, sy + 1.2, 1.0), rz=0), red)], c, collide=0, interact='pickup', item='brecheisen', label='Brecheisen')
-    multi('Schaufel', [(box(.04, .04, 1.1, at=(sx - 1.3, sy + .4, .3)), wood), (box(.22, .02, .3, at=(sx - 1.3, sy + .4, .12)), steel)], c, collide=0)
+    multi('Spaten', [(box(.04, .04, 1.1, at=(sx - 1.3, sy + .4, .3)), wood), (box(.22, .02, .3, at=(sx - 1.3, sy + .4, .12)), steel), (box(.16, .05, .04, at=(sx - 1.3, sy + .4, 1.4)), wood)], c,
+          collide=0, interact='pickup', item='spaten', label='Spaten')
+    multi('Hammer', [(box(.3, .03, .03, at=(sx - .9, sy + 1.0, 1.0)), lp('Axtstiel', '#b08a5a', .8)), (box(.05, .05, .12, at=(sx - .76, sy + 1.0, .98)), steel)], c,
+          collide=0, interact='pickup', item='hammer', label='Hammer')
 
     # ---- woodpile with axe + chopping block (trail starts behind it)
     wx, wy = 43.0, 5.5; W = [(box(3.4, 1.1, .1, at=(wx, wy, 0)), wood_d), (box(3.6, 1.4, .08, at=(wx, wy, 1.6)), lp('Wellblech', '#7b8287', .5, .5))]
@@ -73,7 +76,7 @@ def build(c):
         bmesh.ops.rotate(bm_, cent=(0, 0, 0), matrix=Matrix.Rotation(.5, 3, 'X'), verts=bm_.verts); move(bm_, (wx + .5, wy - 1.75, .45)); ab.append((bm_, m))
     multi('Axt', ab, c, collide=0, interact='pickup', item='axt', label='Axt')
     for i in range(3):
-        b = cyl(.08, .4, seg=5, axis='X'); rotz(b, i * 1.3); move(b, (wx + 1.1 + .1 * i, wy - 1.9 + .2 * i, .05))
+        b = cyl(.08, .4, at=(-.2, 0, 0), seg=5, axis='X'); rotz(b, i * 1.3); move(b, (wx + 1.1 + .25 * i, wy - 1.9 + .3 * i, .1))
         obj(f'Holzscheit_{i}', b, cut, c, collide=0, interact='pickup', item='holz', label='Holzscheit')
     obj('Wegweiser_Pfad', merge(box(.1, .1, 1.4, at=(46.2, 4.4, 0)), box(.6, .05, .18, at=(46.5, 4.4, 1.15), rz=.3)), wood, c)
     obj('Wegweiser_Text', text_bm('HOCHSITZ', .08, at=(46.5, 4.33, 1.2), rz=.3, depth=.01), lp('Waldtank_weiss', '#f1f0ea', .5), c, collide=0)

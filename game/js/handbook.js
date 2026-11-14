@@ -1,6 +1,7 @@
 // Survival handbook (key B): a book with chapters – controls, survival values, food, crafting, tools, actions, dangers,
 // places and the current task. Food, recipes and tools are generated from ITEMS / RECIPES so the book never goes stale.
-import { ITEMS, RECIPES } from './items.js';
+import { ITEMS, RECIPES, BLUEPRINTS, WEAPONS, CROPS } from './items.js';
+import { DIFF } from './life.js';
 
 const STAT = { hunger: 'Hunger', thirst: 'Durst', warmth: 'Wärme', health: 'Gesundheit', stamina: 'Ausdauer' };
 const fx = use => Object.entries(use).map(([k, v]) => `<span class="${v > 0 ? 'pos' : 'neg'}">${STAT[k]} ${v > 0 ? '+' : '−'}${Math.abs(v)}</span>`).join(' ');
@@ -10,7 +11,7 @@ const keyRow = (k, t) => `<tr><td><kbd>${k.split(' / ').join('</kbd> / <kbd>')}<
 export function chapters(g) {
   const S = g.S, found = g.places.filter(p => S.found[p.id]).length;
   const food = Object.entries(ITEMS).filter(([, it]) => it.use);
-  const tools = Object.entries(ITEMS).filter(([, it]) => (it.tool || it.equip || it.battery) && !it.use);
+  const tools = Object.entries(ITEMS).filter(([, it]) => (it.tool || it.equip || it.battery) && !it.use && !it.weapon);
   return [
     { id: 'tasten', icon: '⌨️', t: 'Steuerung', h: `
       <table class="ktab">
@@ -20,7 +21,9 @@ export function chapters(g) {
         ${keyRow('F', 'Taschenlampe an/aus')}${keyRow('Tab / C', 'Rucksack und Herstellen')}
         ${keyRow('1 – 5 / Mausrad', 'Gegenstand in der Schnellleiste wählen')}${keyRow('Q', 'gewählten Gegenstand essen, trinken oder benutzen')}
         ${keyRow('M', 'Wanderkarte (wenn du sie hast)')}${keyRow('Z (halten)', 'Zeit vorspulen – nur an sicheren Orten')}
-        ${keyRow('Rechte Maustaste', 'Fernglas (wenn du es hast)')}${keyRow('B', 'dieses Handbuch')}${keyRow('Esc', 'Pause, Grafik, Bildrate')}
+        ${keyRow('Linksklick', 'Waffe: schießen / zustechen · beim Bauen: setzen')}${keyRow('R', 'nachladen · beim Bauen: drehen')}
+        ${keyRow('Rechte Maustaste', 'zielen (Gewehr: Zielfernrohr) · ohne Waffe: Fernglas')}${keyRow('G', 'Baumenü')}${keyRow('X', 'Gebautes abbauen · Bauen abbrechen')}
+        ${keyRow('N', 'Wegmarker an deiner Stelle setzen')}${keyRow('B', 'dieses Handbuch')}${keyRow('Esc', 'Pause: Speichern, Laden, Schwierigkeit, Grafik')}
       </table>
       <p class="tip">Im Buch: <kbd>←</kbd> <kbd>→</kbd> blättern, <kbd>B</kbd> oder <kbd>Esc</kbd> schließen.</p>` },
     { id: 'werte', icon: '❤️', t: 'Überleben', h: `
@@ -46,6 +49,21 @@ export function chapters(g) {
     { id: 'dinge', icon: '🎒', t: 'Ausrüstung', h: `
       <table class="list">${tools.map(([, it]) => `<tr><td>${it.icon} ${it.name}</td><td>${it.desc || ''}</td></tr>`).join('')}</table>
       <p class="tip">Ohne Rucksack hast du nur 4 Plätze, mit Rucksack 16. Mit <kbd>Tab</kbd> kannst du Dinge benutzen oder wegwerfen.</p>` },
+    { id: 'bauen', icon: '🔨', t: 'Bauen & Felder', h: `
+      <p>Mit <kbd>G</kbd> öffnest du das Baumenü. Wähle einen Bauplan: vor dir erscheint ein Umriss – <b style="color:#2f6b3a">grün</b> = passt, <b style="color:#a33224">rot</b> = geht nicht (der Grund steht unten).
+      <kbd>R</kbd> oder Mausrad dreht, Linksklick oder <kbd>E</kbd> baut, <kbd>X</kbd> bricht ab. Später baut <kbd>X</kbd> ein Bauwerk wieder ab (halbes Material zurück).</p>
+      <table class="list">${BLUEPRINTS.map(b => `<tr><td>${b.icon} <b>${b.name}</b><br><small>${b.desc}</small></td><td>${b.stages ? b.stages.map((st, i) => `${i + 1}. ${st.name}: ${Object.entries(st.cost).map(([k, n]) => `${n}× ${ITEMS[k].name}`).join(', ')}`).join('<br>') : Object.entries(b.cost).map(([k, n]) => `${n}× ${ITEMS[k].name}`).join(', ')}${b.tools.length ? `<br><small>Werkzeug: ${b.tools.map(t => ITEMS[t].name).join(', ')}</small>` : ''}</td></tr>`).join('')}</table>
+      <h4>Material</h4><ul><li><b>Baumstämme:</b> Baum mit der 🪓 Axt fällen (E, 6 Schläge – mit 🪚 Säge 3). Der Baum kippt um; den Stamm am Boden zerlegst du mit E in Baumstämme und Äste.</li>
+      <li><b>Bretter:</b> im Rucksack (C) aus einem Baumstamm sägen – mit Axt 2, mit Säge 4.</li><li><b>Steine:</b> Steinhaufen im alten Steinbruch, Mauerschutt an der Burgruine, Säcke.</li>
+      <li><b>Werkzeug:</b> 🔨 Hammer (Schuppen, Scheune) · ⛏️ Spaten (Schuppen, Scheune) · 🪚 Säge (Haus Nr. 7 im Dorf).</li></ul>
+      <h4>Felder</h4><p>Feld bauen (Spaten), dann mit Saatgut in der Hand <kbd>E</kbd>: pflanzen. Regen oder Gießen (Wasser, Topf) lässt es schneller wachsen. Reif = <kbd>E</kbd> ernten.</p>
+      <table class="list">${Object.values(CROPS).map(c => `<tr><td>${c.name}</td><td>${c.hours} Spielstunden · Ernte: ${Object.entries(c.gives).map(([k, n]) => `${n}× ${ITEMS[k].name}`).join(', ')}</td></tr>`).join('')}</table>
+      <p class="tip">Die fertige Blockhütte ist dein Zuhause: drinnen greifen keine Tiere an, der Kamin wärmt, du kannst warten (Z) – mit Bett heilt Schlaf schnell.</p>` },
+    { id: 'waffen', icon: '🔫', t: 'Waffen & Jagd', h: `
+      <p>Wähle eine Waffe in der Schnellleiste (<kbd>1</kbd>–<kbd>5</kbd>). <b>Linksklick</b> schießt, <kbd>R</kbd> lädt nach, die <b>rechte Maustaste</b> zielt genauer (Jagdgewehr: Zielfernrohr).</p>
+      <table class="list">${Object.entries(WEAPONS).map(([id, w]) => `<tr><td>${ITEMS[id].icon} <b>${w.name}</b></td><td>${ITEMS[id].desc}<br><small>Schaden ${w.pellets ? w.pellets + ' × ' : ''}${w.dmg} · Reichweite ${w.range} m${w.mag ? ' · Magazin ' + w.mag : ''}</small></td></tr>`).join('')}</table>
+      <h4>Wo finde ich was?</h4><ul><li>🔪 Messer: Küche in Haus Nr. 3 (Dorf)</li><li>🔫 Pistole: Spind im Büro der Tankstelle</li><li>🔫 Schrotflinte: an der Wand in der Scheune</li><li>🎯 Jagdgewehr: in Bernds Hochsitz</li><li>🏹 Bogen und Pfeile: selbst herstellen (Messer, Äste, Seil, Steine)</li><li>📦 Munition: neben den Waffen, in Säcken und Schränken</li></ul>
+      <p class="tip">Erlegte Tiere zerlegst du mit dem Messer (<kbd>E</kbd>): Fleisch (am Feuer braten!) und Felle (2 Felle + Seil = Fellmantel). Schüsse sind laut: Rehe und Wölfe fliehen – Wildschweine und Bären werden wütend.</p>` },
     { id: 'tun', icon: '✋', t: 'Was du tun kannst', h: `
       <p>Schau ein Ding an – erscheint unten ein Hinweis mit <kbd>E</kbd>, kannst du etwas damit machen.</p>
       <ul>
@@ -59,11 +77,17 @@ export function chapters(g) {
         <li><b>Leitern</b> hochklettern (E), oben noch einmal E zum Runterklettern.</li>
         <li><b>Lesen:</b> Zettel, Tagebuch, Fahrplan – sie verraten Hinweise.</li>
         <li><b>Warten</b> (<kbd>Z</kbd> halten): drinnen mit Strom, am brennenden Feuer oder mit 🛌 Schlafsack, wenn keine Wölfe in der Nähe sind.</li>
-        <li><b>Erkunden:</b> ${g.places.length} Orte gibt es zu entdecken.</li>
+        <li><b>Säcke:</b> Überall im Wald liegen Jutesäcke mit nützlichen Sachen – E zum Durchsuchen. In der Nähe glitzern Gegenstände leicht.</li>
+        <li><b>Brunnen:</b> im Dorf und am Bauernhof gibt es sauberes Wasser (auch für den Topf).</li>
+        <li><b>Erkunden:</b> ${g.places.length} Orte gibt es zu entdecken – im Norden das Dorf Tannbach, ein Aussichtsturm, eine Burgruine, ein Steinbruch und eine alte Mühle.</li>
+        <li><b>Speichern:</b> <kbd>Esc</kbd> → Spielstand: 3 Speicherplätze + automatisch. Auch nach Updates kannst du weiterspielen.</li>
       </ul>` },
     { id: 'gefahr', icon: '🐺', t: 'Gefahren', h: `
       <dl>
-        <dt>🐺 Wölfe</dt><dd>Kommen nachts aus dem Wald, umkreisen dich, beißen zu und ziehen sich kurz zurück. Sie fürchten Licht: leuchte sie mit der 🔦 Lampe an, trag eine Fackel oder bleib am Feuer. In der Tankstelle und oben auf dem Hochsitz greifen sie nicht an.</dd>
+        <dt>🐺 Wölfe</dt><dd>Kommen nachts aus dem Wald, umkreisen dich, beißen zu und ziehen sich kurz zurück. Sie fürchten Licht: leuchte sie mit der 🔦 Lampe an, trag eine Fackel oder bleib am Feuer. In Gebäuden, deiner Hütte und oben auf dem Hochsitz greifen sie nicht an.</dd>
+        <dt>🐗 Wildschweine</dt><dd>Tagsüber im Wald. Kommst du zu nah, greifen sie an – kurz und heftig.</dd>
+        <dt>🐻 Bären</dt><dd>Selten, vor allem im Norden. Sehr stark, Licht schreckt sie nicht – nur Feuer. Lieber ausweichen oder mit dem Gewehr.</dd>
+        <dt>⚙️ Schwierigkeit</dt><dd>${Object.values(DIFF).map(d => `<b>${d.name}</b>`).join(' · ')} – jetzt: <b>${DIFF[g.S.diff]?.name || ''}</b>. Ändern im Startmenü oder mit <kbd>Esc</kbd>.</dd>
         <dt>🥶 Kälte</dt><dd>Nachts und bei Regen draußen sinkt die Wärme schnell. Bei wenig Wärme wirst du langsamer.</dd>
         <dt>🍄 Rote Pilze</dt><dd>Fliegenpilze sind giftig (−35 Gesundheit). Nur braune Pilze essen.</dd>
         <dt>💧 Bachwasser</dt><dd>Ungekocht wird dir oft schlecht. Abkochen!</dd>
@@ -71,8 +95,8 @@ export function chapters(g) {
         <dt>🔦 Batterie</dt><dd>Die Taschenlampe verbraucht Batterie. Batterien gibt es im Laden.</dd>
       </dl>` },
     { id: 'orte', icon: '🗺️', t: `Orte (${found}/${g.places.length})`, h: `
-      <ul class="places">${g.places.map(p => `<li class="${S.found[p.id] ? 'on' : ''}">${S.found[p.id] ? '📍 ' + p.name : '❔ noch nicht entdeckt'}</li>`).join('')}</ul>
-      <p class="tip">Mit der 🗺️ Wanderkarte (liegt im Laden beim Zeitungsständer) siehst du alle Orte mit <kbd>M</kbd>.</p>` },
+      <ul class="places">${g.places.map(p => `<li class="${S.found[p.id] ? 'on' : ''}">${S.found[p.id] ? '📍 ' + p.name : S.known[p.id] ? '🗺️ ' + p.name + ' (noch nicht besucht)' : '❔ noch nicht entdeckt'}</li>`).join('')}</ul>
+      <p class="tip">Mit der 🗺️ Wanderkarte (Laden, Zeitungsständer) zeigt <kbd>M</kbd> alle Orte, die du gefunden hast. Klick auf die Karte setzt einen Wegmarker, <kbd>N</kbd> setzt einen an deiner Stelle – Marker siehst du im Spiel mit Entfernung. Infotafeln (Dorfplatz, Aussichtsturm) tragen weitere Orte ein.</p>` },
     { id: 'aufgabe', icon: '⭐', t: 'Aufgaben', h: `
       <ol class="quests">${g.quests.map((q, i) => i < S.quest ? `<li class="done">✔ ${q.t}</li>` : i === S.quest ? `<li class="now"><b>${q.t}</b><br>${q.x()}</li>` : '').join('')}</ol>
       <p class="tip">Der Stern ◇ auf dem Bildschirm zeigt die Richtung zum nächsten Ziel.</p>` },

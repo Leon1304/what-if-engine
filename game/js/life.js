@@ -1,4 +1,6 @@
-// Creatures and events: wolves (night), deer (day), a car passing on the road at night, campfires.
+// Creatures and events: wolves (night), wild boars (day, charge when you come close), bears (rare, strong), deer (prey),
+// a car passing on the road at night, campfires. Difficulty (DIFF) sets how many enemies come and how hard they bite.
+// Animals have hit points: weapons (combat.js) hurt them, dead ones stay as carcass (E with a knife = meat + fur).
 // All built from low-poly primitives with flat shading (same look as the Blender map).
 import * as THREE from 'three';
 import { B } from './world.js';
@@ -9,6 +11,22 @@ function bx(w, h, d, m, x = 0, y = 0, z = 0) { const g = new THREE.Mesh(new THRE
 // road centre (Blender x as a function of Blender y) – same as core.py road_x
 export function roadX(y) { if (y > 30) return -6 - 0.006 * (y - 30) ** 2; if (y < -30) return -6 + 0.0045 * (y + 30) ** 2; return -6; }
 export function creekX(y) { return 70 + 6 * Math.sin(y / 22); }
+export const MAP = { x0: -108, x1: 108, y0: -108, y1: 228 };         // walkable map in Blender x / y (ground: −110 … 110, −110 … 230)
+
+// difficulty: max wolves (night), boars, bears; damage factor; boar aggression distance; wolves also at dusk
+export const DIFF = {
+  aus:    { name: 'Keine Feinde', wolves: 0, boars: 0, bears: 0, dmg: 0, boarAggro: 0, dusk: false },
+  leicht: { name: 'Leicht', wolves: 1, boars: 1, bears: 0, dmg: .6, boarAggro: 0, dusk: false },
+  mittel: { name: 'Mittel', wolves: 3, boars: 2, bears: 1, dmg: 1, boarAggro: 6, dusk: false },
+  schwer: { name: 'Schwer', wolves: 5, boars: 3, bears: 2, dmg: 1.4, boarAggro: 10, dusk: true },
+};
+const KIND = {          // hit points, bite damage, run speed, body length / height / radius (hit test), loot when butchered
+  wolf: { hp: 60, dmg: 9, run: 5.5, len: .9, hy: .65, r: .42, loot: { fleisch: 2, fell: 1 } },
+  boar: { hp: 90, dmg: 13, run: 6.2, len: 1.0, hy: .55, r: .45, loot: { fleisch: 4 } },
+  bear: { hp: 260, dmg: 24, run: 5.0, len: 1.6, hy: 1.0, r: .8, loot: { fleisch: 6, fell: 2 } },
+  deer: { hp: 50, dmg: 0, run: 7.5, len: 1.0, hy: 1.0, r: .45, loot: { fleisch: 3, fell: 1 } },
+};
+export { KIND };
 
 // ---------------------------------------------------------------- animals
 function buildAnimal(kind) {
@@ -20,6 +38,18 @@ function buildAnimal(kind) {
       const e = new THREE.Mesh(new THREE.SphereGeometry(.025, 6, 4), eye); e.position.set(s * .08, .86, -.81); g.add(e); }
     const tail = bx(.1, .1, .5, dark, 0, .62, .65); tail.rotation.x = .6; g.add(tail);
     for (const [x, z] of [[-.12, -.35], [.12, -.35], [-.12, .35], [.12, .35]]) { const p = new THREE.Group(); p.position.set(x, .5, z); p.add(bx(.1, .5, .1, dark, 0, -.25, 0)); g.add(p); legs.push(p); }
+  } else if (kind === 'boar') {
+    const fur = M('#4a3a2e'), dark = M('#2a211b'), tusk = M('#efe6d0'), snout = M('#8a6a5a');
+    g.add(bx(.5, .5, 1.0, fur, 0, .55, 0), bx(.52, .58, .45, fur, 0, .6, -.3), bx(.36, .36, .38, fur, 0, .55, -.68), bx(.2, .16, .14, snout, 0, .48, -.9), bx(.08, .5, .9, dark, 0, .86, -.05));
+    for (const s of [-1, 1]) { const t = new THREE.Mesh(new THREE.ConeGeometry(.025, .14, 4), tusk); t.position.set(s * .1, .55, -.86); t.rotation.x = -.6; g.add(t);
+      const ear = new THREE.Mesh(new THREE.ConeGeometry(.06, .14, 4), dark); ear.position.set(s * .13, .78, -.6); g.add(ear); }
+    const tail = bx(.04, .04, .22, dark, 0, .62, .55); tail.rotation.x = .9; g.add(tail);
+    for (const [x, z] of [[-.15, -.32], [.15, -.32], [-.15, .32], [.15, .32]]) { const p = new THREE.Group(); p.position.set(x, .35, z); p.add(bx(.1, .35, .1, dark, 0, -.17, 0)); g.add(p); legs.push(p); }
+  } else if (kind === 'bear') {
+    const fur = M('#5a3f2a'), dark = M('#3a2818'), snout = M('#8a6a4a');
+    g.add(bx(.9, .9, 1.6, fur, 0, 1.05, 0), bx(.95, 1.0, .7, fur, 0, 1.15, -.5), bx(.6, .55, .6, fur, 0, 1.25, -1.05), bx(.3, .26, .3, snout, 0, 1.15, -1.4), bx(.12, .1, .08, dark, 0, 1.2, -1.56));
+    for (const s of [-1, 1]) { const ear = bx(.16, .16, .1, dark, s * .22, 1.6, -1.0); g.add(ear); }
+    for (const [x, z] of [[-.3, -.5], [.3, -.5], [-.3, .55], [.3, .55]]) { const p = new THREE.Group(); p.position.set(x, .7, z); p.add(bx(.26, .7, .3, dark, 0, -.35, 0)); g.add(p); legs.push(p); }
   } else {
     const fur = M('#8a5a34'), light = M('#e8dcc4'), dark = M('#3a2a1c');
     g.add(bx(.4, .45, 1.1, fur, 0, .95, 0), bx(.26, .5, .26, fur, 0, 1.3, -.55), bx(.22, .24, .38, fur, 0, 1.55, -.72), bx(.16, .14, .1, light, 0, .98, .55));
@@ -38,44 +68,93 @@ export class Life {
     for (let i = 0; i < 30; i++) {
       const a = Math.random() * 6.283, d = rmin + Math.random() * (rmax - rmin);
       const x = near.x + Math.cos(a) * d, z = near.z + Math.sin(a) * d, by = -z;
-      if (Math.abs(x) > 105 || Math.abs(z) > 105) continue;
-      if (Math.abs(x - roadX(by)) < 9 || (x > -6 && x < 50 && by > -30 && by < 32)) continue;
+      if (x < MAP.x0 + 3 || x > MAP.x1 - 3 || by < MAP.y0 + 3 || by > MAP.y1 - 3) continue;
+      if (Math.abs(x - roadX(by)) < 9 || (x > -6 && x < 50 && by > -30 && by < 32) || (x > -100 && x < -28 && by > 146 && by < 218)) continue;
       return new THREE.Vector3(x, this.W.groundY(x, z), z);
     }
     return null;
   }
-  spawn(kind, near) {
-    const p = this.forestSpot(near, kind === 'wolf' ? 45 : 25, kind === 'wolf' ? 65 : 70); if (!p) return;
+  spawn(kind, near, at) {
+    const p = at || this.forestSpot(near, kind === 'deer' ? 25 : 45, kind === 'deer' ? 70 : 70); if (!p) return;
     const mesh = buildAnimal(kind); mesh.position.copy(p); this.scene.add(mesh);
-    this.animals.push({ kind, mesh, pos: p, heading: Math.random() * 6.28, speed: 0, state: 'roam', t: 0, cool: 0, wander: Math.random() * 6.28, phase: 0 });
+    const a = { kind, mesh, pos: p, heading: Math.random() * 6.28, speed: 0, state: 'roam', t: 0, cool: 0, wander: Math.random() * 6.28, phase: 0, hp: KIND[kind].hp, angry: 0 };
+    this.animals.push(a); return a;
+  }
+  diff() { return DIFF[this.g.S.diff] || DIFF.mittel; }
+  // weapon hit (combat.js): damage, reaction, death → carcass
+  hit(a, dmg) {
+    if (a.state === 'dead') return;
+    a.hp -= dmg; a.angry = 20; this.g.audio.sfx(a.kind === 'bear' ? 'roar' : a.kind === 'deer' ? 'none' : 'growl');
+    if (a.hp <= 0) { a.state = 'dead'; a.dead = 0; a.speed = 0; a.rotTo = (Math.random() < .5 ? 1 : -1) * Math.PI / 2; this.g.S.flags.hunted = 1; return true; }
+    if (a.kind === 'deer') { a.state = 'flee'; a.t = 6; }
+    else if (a.kind === 'wolf' && Math.random() < .5) { a.state = 'flee'; a.t = 3; }
+    return false;
+  }
+  noise(pos, r) {          // a gunshot: deer and wolves run, boars and bears come for you (not on easy)
+    const D = this.diff();
+    for (const a of this.animals) { if (a.state === 'dead') continue; const d = a.pos.distanceTo(pos); if (d > r) continue;
+      if (a.kind === 'deer' || (a.kind === 'wolf' && this.g.S.diff !== 'schwer')) { a.state = 'flee'; a.t = 4 + Math.random() * 3; }
+      else if (D.boarAggro && (a.kind === 'boar' || a.kind === 'bear') && d < r * .6) a.angry = 12; }
+  }
+  carcass(o, f) {          // dead animal in front of the player (for E)
+    for (const a of this.animals) { if (a.state !== 'dead') continue; const c = a.pos.clone(); c.y += .3; const d = c.sub(o); if (d.length() < 2.8 && d.normalize().angleTo(f) < .45) return a; }
+    return null;
+  }
+  butcher(a) {
+    const g = this.g; if (!g.has('messer')) return g.ui.toast('Zum Zerlegen brauchst du ein Messer.');
+    const loot = a.left || { ...KIND[a.kind].loot, ...(a.arrows ? { pfeil: a.arrows } : {}) }, got = [], left = {};
+    for (const [k, n] of Object.entries(loot)) { if (g.add(k, n, true)) got.push(`${n}× ${k === 'fleisch' ? 'Fleisch' : k === 'fell' ? 'Fell' : 'Pfeil'}`); else left[k] = n; }
+    g.audio.sfx('chop'); if (got.length) g.ui.toast(`🔪 Zerlegt: ${got.join(', ')}`);
+    if (Object.keys(left).length) { a.left = left; g.ui.toast('Dein Rucksack ist voll – der Rest bleibt liegen.', 'warn'); } else this.remove(a);
+  }
+  sheltered(P) {           // where enemies do not attack: in the shop, high up, inside a cabin with walls
+    const g = this.g; if (g.insideShop(P.pos) || g.onHochsitz) return true;
+    const s = g.build?.list.find(s => s.type === 'huette' && s.stage >= 2 && Math.hypot(s.x - P.pos.x, s.z - P.pos.z) < 2.2); return !!s;
   }
   scared(a, P) {      // is the player defending himself?
     const g = this.g, toA = a.pos.clone().sub(P.pos), d = toA.length();
+    if (a.kind === 'bear') { for (const f of this.fires) if (f.on && f.pos.distanceTo(a.pos) < 7) return true; return false; }
     if (g.S.flags.flashOn && g.S.battery > 0 && d < 20) { const f = P.forward(); toA.y = 0; f.y = 0; if (f.normalize().dot(toA.normalize()) > .93) return true; }
     if (g.torchOn && d < 10) return true;
     for (const f of this.fires) if (f.on && f.pos.distanceTo(a.pos) < 7) return true;
     return false;
   }
   update(dt, P, dark) {
-    const g = this.g, inside = g.insideShop(P.pos), high = P.pos.y - this.W.groundY(P.pos.x, P.pos.z, P.pos.y - .5) > 2.5 || g.onHochsitz;
-    // spawning
-    const wolves = this.animals.filter(a => a.kind === 'wolf'), deer = this.animals.filter(a => a.kind === 'deer');
+    const g = this.g, D = this.diff(), inside = this.sheltered(P), high = P.pos.y - this.W.groundY(P.pos.x, P.pos.z, P.pos.y - .5) > 2.5 || g.onHochsitz;
+    // spawning (difficulty)
+    const live = k => this.animals.filter(a => a.kind === k && a.state !== 'dead').length;
     const grace = g.S.day === 1 && g.S.time > 12 && g.S.time < 21;          // first evening: time for the tutorial
-    const maxW = dark > .75 && !grace ? Math.min(4, 2 + (g.S.day - 1)) : 0;
-    if (wolves.length < maxW && Math.random() < dt * .05) { this.spawn('wolf', P.pos); if (!g.S.flags.wolfIntro) { g.S.flags.wolfIntro = 1; g.audio.sfx('howl'); g.ui.toast('Ein Heulen im Wald … Wölfe! Bleib im Licht, leuchte sie mit der Lampe an oder geh nach drinnen.', 'warn'); } }
-    if (dark < .35 && deer.length < 3 && Math.random() < dt * .1) this.spawn('deer', P.pos);
-    this.howlT -= dt; if (wolves.length && this.howlT < 0) { this.howlT = 25 + Math.random() * 40; g.audio.sfx('howl'); }
+    const night = dark > (D.dusk ? .45 : .75);
+    const maxW = night && !grace ? Math.min(D.wolves + (D.wolves ? Math.min(2, g.S.day - 1) : 0), D.wolves + 2) : 0;
+    if (live('wolf') < maxW && Math.random() < dt * .05) { this.spawn('wolf', P.pos); if (!g.S.flags.wolfIntro) { g.S.flags.wolfIntro = 1; g.audio.sfx('howl'); g.ui.toast('Ein Heulen im Wald … Wölfe! Bleib im Licht, leuchte sie mit der Lampe an oder geh nach drinnen.', 'warn'); } }
+    if (!grace && live('boar') < D.boars && dark < .8 && Math.random() < dt * .02) this.spawn('boar', P.pos);
+    if (!grace && live('bear') < D.bears && (-P.pos.z > 60 || g.S.diff === 'schwer') && Math.random() < dt * .006) { this.spawn('bear', P.pos); g.ui.toast('Irgendwo im Wald bricht Unterholz. Etwas Großes ist unterwegs …', 'warn'); }
+    if (dark < .35 && live('deer') < 3 && Math.random() < dt * .1) this.spawn('deer', P.pos);
+    this.howlT -= dt; if (live('wolf') && this.howlT < 0) { this.howlT = 25 + Math.random() * 40; g.audio.sfx('howl'); }
     for (const a of [...this.animals]) {
-      const to = P.pos.clone().sub(a.pos); to.y = 0; const d = to.length(); a.t -= dt; a.cool -= dt;
-      let want = 0, dirA = a.heading;
-      if (a.kind === 'wolf') {
-        if (dark < .5) a.state = 'leave';
+      const to = P.pos.clone().sub(a.pos); to.y = 0; const d = to.length(); a.t -= dt; a.cool -= dt; a.angry -= dt;
+      let want = 0, dirA = a.heading; const K = KIND[a.kind];
+      if (a.state === 'dead') { a.dead += dt; a.mesh.rotation.z += ((a.rotTo || 0) - a.mesh.rotation.z) * Math.min(1, dt * 6); if (a.dead > 600 || d > 160) this.remove(a); continue; }
+      if (a.kind === 'boar' || a.kind === 'bear') {
+        const aggro = a.kind === 'bear' ? (D.boarAggro ? 14 + D.boarAggro : 0) : D.boarAggro;
+        if (this.scared(a, P)) { a.state = 'flee'; a.t = 3; }
+        else if (a.state === 'flee' && a.t > 0) { }
+        else if (!inside && !high && !g.S.flags.won && D.dmg && (d < aggro || a.angry > 0) && d < 50) a.state = 'hunt';
+        else a.state = 'roam';
+        if (a.state === 'hunt') { dirA = Math.atan2(to.x, to.z); want = K.run;
+          if (d < 1.4 + K.len / 2) { want = 0; if (a.cool < 0) { a.cool = a.kind === 'bear' ? 1.6 : 1.3; g.hurt(K.dmg * D.dmg, a.kind === 'bear' ? 'Bär' : 'Wildschwein'); g.audio.sfx(a.kind === 'bear' ? 'roar' : 'grunt');
+            if (a.kind === 'boar') { a.state = 'flee'; a.t = 1.2; } } } }
+        else if (a.state === 'flee') { dirA = Math.atan2(-to.x, -to.z); want = K.run * .8; }
+        else { if (Math.random() < dt * .3) a.wander += (Math.random() - .5) * 2; dirA = a.wander; want = Math.sin(performance.now() / 4000 + a.mesh.id) > .2 ? 1.1 : 0; if (d > 120) { this.remove(a); continue; } }
+      } else if (a.kind === 'wolf') {
+        if (!D.dmg) a.state = 'leave';
+        else if (dark < (D.dusk ? .3 : .5)) a.state = 'leave';
         else if (this.scared(a, P)) { if (a.state !== 'flee') g.audio.sfx('growl'); a.state = 'flee'; a.t = 4; }
         else if (a.state === 'flee' && a.t > 0) { }
         else if (!inside && !high && d < 55 && !g.S.flags.won) a.state = 'hunt';
         else a.state = d < 30 ? 'circle' : 'roam';
         if (a.state === 'hunt') { dirA = Math.atan2(to.x, to.z); want = d > 8 ? 5.5 : 3.2;
-          if (d < 1.6) { want = 0; if (a.cool < 0) { a.cool = 2; g.hurt(9, 'Wolf'); g.audio.sfx('bite'); a.state = 'flee'; a.t = 1.8 + Math.random(); } } }   // hit and run
+          if (d < 1.6) { want = 0; if (a.cool < 0) { a.cool = 2; g.hurt(K.dmg * D.dmg, 'Wolf'); g.audio.sfx('bite'); a.state = 'flee'; a.t = 1.8 + Math.random(); } } }   // hit and run
         else if (a.state === 'flee' || a.state === 'leave') { dirA = Math.atan2(-to.x, -to.z); want = 6.5; if (d > 80) { this.remove(a); continue; } }
         else if (a.state === 'circle') { dirA = Math.atan2(to.x, to.z) + Math.PI / 2 * (d < 12 ? 1.4 : 1); want = 2.2; }
         else { if (Math.random() < dt * .3) a.wander += (Math.random() - .5) * 2; dirA = a.wander; want = 1.4; if (d > 110) { this.remove(a); continue; } }
@@ -95,7 +174,9 @@ export class Life {
       if (a.pos.x > 20.3 && a.pos.x < 37.7 && a.pos.z > -10.7 && a.pos.z < 10.7) { // keep out of the shop
         const ex = [a.pos.x - 20.3, 37.7 - a.pos.x, a.pos.z + 10.7, 10.7 - a.pos.z], i = ex.indexOf(Math.min(...ex));
         if (i === 0) a.pos.x = 20.3; else if (i === 1) a.pos.x = 37.7; else if (i === 2) a.pos.z = -10.7; else a.pos.z = 10.7; }
-      a.pos.x = Math.max(-108, Math.min(108, a.pos.x)); a.pos.z = Math.max(-108, Math.min(108, a.pos.z));
+      for (const s of g.build?.list || []) { if (s.type === 'feld' || s.type === 'zaun') continue; const dx = a.pos.x - s.x, dz = a.pos.z - s.z, dd = Math.hypot(dx, dz), m = s.type === 'huette' ? 3.0 : 1.2;
+        if (dd < m && dd > 1e-4) { a.pos.x = s.x + dx / dd * m; a.pos.z = s.z + dz / dd * m; } }
+      a.pos.x = Math.max(MAP.x0, Math.min(MAP.x1, a.pos.x)); a.pos.z = Math.max(-MAP.y1, Math.min(-MAP.y0, a.pos.z));
       a.pos.y += (this.W.groundY(a.pos.x, a.pos.z, a.pos.y + 1.5) - a.pos.y) * Math.min(1, dt * 10);
       a.mesh.position.copy(a.pos); a.mesh.rotation.y = a.heading + Math.PI;
       a.phase += a.speed * dt * 3.2; const sw = Math.min(.7, a.speed * .12);
@@ -120,7 +201,7 @@ export class Life {
     const g = this.g;
     if (!this.car && dark > .7 && g.S.abs > this.nextCarAbs) {
       const north = Math.random() < .5, mesh = this.buildCar(); this.scene.add(mesh);
-      this.car = { mesh, y: north ? 108 : -108, dir: north ? -1 : 1, v: 16, honk: 0 };
+      this.car = { mesh, y: north ? MAP.y1 : MAP.y0, dir: north ? -1 : 1, v: 16, honk: 0 };
       this.nextCarAbs = g.S.abs + 1.5 + Math.random() * 2.5; g.audio.sfx('car');
     }
     if (!this.car) { this.carLight.intensity = 0; return; }
@@ -137,7 +218,7 @@ export class Life {
     c.mesh.updateMatrixWorld(); this.carLight.intensity = 80;
     this.carLight.position.copy(new THREE.Vector3(0, .8, -2.3).applyMatrix4(c.mesh.matrixWorld));
     this.carLight.target.position.copy(new THREE.Vector3(0, 0, -16).applyMatrix4(c.mesh.matrixWorld));
-    if (Math.abs(c.y) > 112) { this.scene.remove(c.mesh); this.car = null; }
+    if (c.y > MAP.y1 + 4 || c.y < MAP.y0 - 4) { this.scene.remove(c.mesh); this.car = null; }
   }
 
   // ---------------------------------------------------------------- campfires

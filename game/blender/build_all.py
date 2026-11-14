@@ -4,7 +4,7 @@
 import bpy, os, sys, time, json
 HERE = os.path.dirname(os.path.abspath(__file__))
 p = os.path.join(HERE, 'core.py'); G = {'__file__': p}; exec(compile(open(p).read(), p, 'exec'), G)
-SECTIONS = ['s00_world', 's01_terrain', 's02_road', 's03_forecourt', 's04_building', 's05_interior', 's06_forest', 's07_props', 's08_camp']
+SECTIONS = ['s00_world', 's01_terrain', 's02_road', 's03_forecourt', 's04_building', 's05_interior', 's06_forest', 's07_props', 's08_camp', 's09_village', 's10_sights', 's11_build']
 args = sys.argv[sys.argv.index('--') + 1:] if '--' in sys.argv else []
 want = [a for a in args if not a.startswith('--')] or SECTIONS
 for o in list(bpy.data.objects): bpy.data.objects.remove(o, do_unlink=True)
@@ -21,7 +21,7 @@ def export(path):
     for o in keep:
         o.select_set(True)
         if o.get('collide_r'): o['pos_w'] = json.dumps([round(v, 3) for v in o.location])
-        if o.get('interact') or o.get('ladder'): o['pivot_w'] = json.dumps([round(v, 4) for v in o.location])   # hinge in Blender world axes (survives quantisation)
+        if o.get('interact') or o.get('ladder') or o.get('spin'): o['pivot_w'] = json.dumps([round(v, 4) for v in o.location])   # hinge in Blender world axes (survives quantisation)
     kw = dict(filepath=path, export_format='GLB', use_selection=True, export_extras=True, export_apply=True, export_yup=True,
               export_lights=False, export_cameras=False, export_animations=False, export_texcoords=False, export_normals=True)
     props = bpy.ops.export_scene.gltf.get_rna_type().properties

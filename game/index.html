@@ -89,7 +89,20 @@
   #bookhint kbd { background: rgba(255,255,255,.15); border-radius: 4px; padding: 0 5px; color: #fff; font: 600 11px system-ui; }
   #reader p { white-space: pre-wrap; font-size: 17px; font-family: "Bradley Hand", "Segoe Print", cursive; background: #f6efc6; color: #2a2414; padding: 18px; border-radius: 6px; }
   #reader small { color: var(--mut); }
-  #mappanel { width: min(560px, 94vw); text-align: center; } #mapcanvas { width: 100%; max-width: 520px; border-radius: 8px; }
+  #mappanel { width: auto; text-align: center; } #mapcanvas { height: min(76vh, 680px); width: auto; max-width: 90vw; border-radius: 8px; cursor: crosshair; }
+  /* weapons, building, waypoints */
+  #cross.hit { animation: hitm .25s; } @keyframes hitm { 0% { transform: scale(3.2); background: #ff5a4a; } 100% { transform: none; } }
+  #weaponhud { position: absolute; right: 18px; bottom: 40px; padding: 5px 12px; border-radius: 8px; background: var(--bg); font-weight: 700; font-size: 14px; }
+  #weaponhud:empty { display: none; }
+  #buildhint { position: absolute; left: 50%; top: calc(50% + 60px); transform: translateX(-50%); padding: 6px 14px; border-radius: 8px; background: var(--bg); border: 1px solid var(--acc); display: none; white-space: nowrap; font-size: 14px; }
+  #scope { position: absolute; inset: 0; display: none; background: radial-gradient(circle at center, transparent 0 33vmin, #000 33.5vmin); }
+  #scope::before, #scope::after { content: ""; position: absolute; background: rgba(0,0,0,.85); } #scope::before { left: 50%; top: 17vmin; bottom: 17vmin; width: 2px; } #scope::after { top: 50%; left: calc(50% - 33vmin); right: calc(50% - 33vmin); height: 2px; }
+  .pin { position: absolute; transform: translate(-50%, -100%); text-align: center; font-size: 11px; font-weight: 700; color: #fff; text-shadow: 0 1px 2px #000; white-space: nowrap; }
+  .pin i { display: block; width: 12px; height: 12px; margin: 0 auto 2px; border-radius: 50% 50% 50% 0; transform: rotate(-45deg); background: var(--c); border: 2px solid #fff; }
+  .bps { display: grid; gap: 8px; } .bpc { display: grid; grid-template-columns: 40px 1fr auto; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 9px; background: rgba(255,255,255,.05); opacity: .6; }
+  .bpc.ok { opacity: 1; } .bpc i { font-style: normal; font-size: 28px; text-align: center; } .bpc small { display: block; color: var(--mut); font-size: 12px; }
+  .slotrow { display: grid; grid-template-columns: 110px 1fr auto auto; gap: 8px; align-items: center; font-size: 13px; } .slotrow span { color: var(--mut); } .slotrow button { padding: 5px 10px; font-size: 12px; margin: 3px 0; }
+  .diff button { padding: 7px 12px; font-size: 13px; }
   #found { list-style: none; padding: 0; columns: 2; color: var(--mut); } #found li.on { color: var(--fg); }
   @media (max-width: 700px) { #bars { width: 160px; } #quest { max-width: 60vw; font-size: 13px; } .slot { width: 44px; height: 44px; } }
 </style>
@@ -114,7 +127,8 @@
     <div class="bar" title="Wärme">🌡️<div class="tr"><div class="fl" id="bar-warmth"></div></div></div>
     <div class="bar" title="Ausdauer">⚡<div class="tr"><div class="fl" id="bar-stamina"></div></div></div>
   </div>
-  <div id="selname"></div><div id="hotbar"></div><div id="bookhint"><kbd>B</kbd> Handbuch</div>
+  <div id="pins"></div><div id="scope"></div>
+  <div id="selname"></div><div id="hotbar"></div><div id="bookhint"><kbd>B</kbd> Handbuch · <kbd>G</kbd> Bauen</div><div id="weaponhud"></div><div id="buildhint"></div>
   <div id="frost"></div><div id="vignette"></div>
 </div>
 
@@ -124,32 +138,40 @@
   <h1>WALDTANK<small>Überleben im Nordwald</small></h1>
   <p class="story">Herbst, später Nachmittag. Mitten im Nordwald bleibt dein Auto liegen. Kein Netz. Ein Stück die Straße hinauf steht eine Tankstelle – dunkel und verlassen. Bald wird es Nacht, kalt … und du bist nicht allein im Wald.</p>
   <button id="btn-new">Neues Spiel</button><button id="btn-continue" class="sec">Weiterspielen</button><button id="btn-book-start" class="sec">📖 Handbuch</button>
+  <div class="diff"><b>Schwierigkeit:</b> <button class="sec" data-diff="aus">Keine Feinde</button><button class="sec" data-diff="leicht">Leicht</button><button class="sec" data-diff="mittel">Mittel</button><button class="sec" data-diff="schwer">Schwer</button></div>
   <div class="keys">
     <b>WASD · Maus</b><span>laufen · umschauen</span><b>Shift · Leertaste · Strg</b><span>sprinten · springen · ducken</span>
     <b>E</b><span>benutzen, öffnen, aufheben</span><b>F</b><span>Taschenlampe</span><b>Tab / C</b><span>Rucksack &amp; Herstellen</span>
     <b>1–5 · Mausrad · Q</b><span>Schnellleiste wählen · essen/trinken/benutzen</span><b>M</b><span>Karte (wenn du eine hast)</span>
-    <b>Z (halten)</b><span>Zeit vergehen lassen – drinnen mit Strom, am Feuer oder mit Schlafsack</span><b>Rechte Maustaste</b><span>Fernglas</span><b>B</b><span>Handbuch: alle Tasten, Rezepte, Tipps</span><b>Esc</b><span>Pause</span>
+    <b>Z (halten)</b><span>Zeit vergehen lassen – drinnen mit Strom, am Feuer, im Unterstand, am Bett oder mit Schlafsack</span>
+    <b>Linksklick · R · rechte Maustaste</b><span>Waffe benutzen · nachladen · zielen / Fernglas</span><b>G · X</b><span>Baumenü · Gebautes abbauen</span><b>N</b><span>Wegmarker setzen</span>
+    <b>B</b><span>Handbuch: alle Tasten, Rezepte, Tipps</span><b>Esc</b><span>Pause, Speichern, Schwierigkeit</span>
   </div>
 </div></div>
 
 <div class="ov" id="pause"><div class="card">
   <h2>Pause</h2>
   <button id="btn-resume">Weiter</button><button id="btn-book" class="sec">📖 Handbuch (B)</button><button id="btn-restart" class="sec">Neu beginnen</button>
+  <h2>Spielstand</h2><div id="slots"></div>
+  <button class="sec" id="btn-export">⬇️ Spielstand als Datei sichern</button><button class="sec" id="btn-import">⬆️ Datei laden</button><input type="file" id="importfile" accept=".json,application/json" hidden>
+  <h2>Schwierigkeit</h2><div class="diff"><button class="sec" data-diff="aus">Keine Feinde</button><button class="sec" data-diff="leicht">Leicht</button><button class="sec" data-diff="mittel">Mittel</button><button class="sec" data-diff="schwer">Schwer</button></div>
   <h2>Orte</h2><ul id="found"></ul>
   <h2>Grafik</h2><button class="sec" data-q="hoch">Hoch</button><button class="sec" data-q="mittel">Mittel</button><button class="sec" data-q="niedrig">Niedrig</button>
   <h2>Bildrate</h2><button class="sec" data-fps="30">30 FPS (Akku)</button><button class="sec" data-fps="60">60 FPS</button><button class="sec" data-fps="0">Unbegrenzt</button>
-  <p class="hint">Das Spiel speichert automatisch alle 20 Sekunden in diesem Browser.</p>
+  <h2>Hilfen</h2><button class="sec" id="btn-hl">✨ Gegenstände hervorheben: an</button>
+  <p class="hint">Automatisch gespeichert wird alle 20 Sekunden in diesem Browser. Spielstände bleiben bei Updates erhalten – neue Orte und Gegenstände kommen einfach dazu. Mit „Als Datei sichern“ hast du eine Kopie auf deinem Rechner.</p>
 </div></div>
 
 <div class="ov" id="dead"><div class="card"><h1 style="color:var(--bad)">Du bist gestorben<small id="deadcause"></small></h1>
   <button id="btn-dead-load">Letzten Spielstand laden</button><button id="btn-dead-new" class="sec">Neues Spiel</button></div></div>
 <div class="ov" id="win"><div class="card"><h1 style="color:var(--good)">Gerettet!<small>Im Morgengrauen rumpelt der Geländewagen der Bergwacht auf den Hof.</small></h1>
-  <p id="winstats"></p><button id="btn-win-new">Noch einmal</button></div></div>
+  <p id="winstats"></p><button id="btn-win-free">Weiterspielen (freies Spiel)</button><button id="btn-win-new" class="sec">Noch einmal</button></div></div>
 
 <div class="panel" id="invpanel"></div>
 <div class="panel" id="reader"></div>
 <div class="panel" id="book"></div>
-<div class="panel" id="mappanel"><canvas id="mapcanvas" width="520" height="520"></canvas><p class="hint">M / Esc schließen</p></div>
+<div class="panel" id="mappanel"><canvas id="mapcanvas" width="440" height="680"></canvas><p class="hint">Klick = Wegmarker setzen / löschen · M / Esc schließen</p></div>
+<div class="panel" id="buildpanel"></div>
 
 <script type="module" src="js/main.js"></script>
 </body>

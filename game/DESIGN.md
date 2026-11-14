@@ -57,8 +57,16 @@ vorbeifahrendes Auto nachts, verlassener Wohnwagen (Schlafsack, Gaskocher, Tageb
 Speichern/Laden im Browser, Grafikstufen, Bildratenbegrenzung, Survival-Handbuch (B), Stufen/Bordsteine begehbar,
 automatischer Test-Durchlauf (`tools/playthrough.mjs`) und Laufweg-Prüfung (`tools/routes.mjs`).
 
+## Ausbau 14.11.2026 (Abend)
+Gegenstände sichtbar (Füllware lässt Platz, `tools/pickups.mjs`), Glitzern in der Nähe; Karte nach Norden erweitert: Dorf Tannbach
+(6 Häuser, Dorfladen, Kapelle, Bauernhof mit Scheune und Feld, Brunnen, Telefonzelle, Infotafel), Aussichtsturm Hirschkopf,
+Burgruine Falkenstein, Steinbruch mit Bauwagen, Wassermühle; 18 Säcke mit Beute; Bauen (8 Baupläne, Blockhütte in 4 Abschnitten),
+Bäume fällen, Felder (3 Pflanzen), Waffen (Messer, Pistole, Schrotflinte, Jagdgewehr, Bogen), Wildschwein, Bär, Jagd + Zerlegen,
+Schwierigkeit (keine Feinde/leicht/mittel/schwer), Speicherplätze + Datei-Export, versionsfeste Spielstände, Wanderkarte mit
+gefundenen Orten + Wegmarkern, freies Spiel nach der Rettung.
+
 ## Später (weitere Maps / Ausbau)
-Auto reparieren (Keilriemen aus der Werkstatt), weitere Orte (Forsthaus, Funkturm, See), Nebel, Schnee, Bär, mehrere Tage mit Vorräten, Controller-Steuerung.
+Auto reparieren (Keilriemen aus der Werkstatt), Angeln am Bach/See, Forsthaus, Funkturm, Nebel, Schnee/Jahreszeiten, Tierfallen, Händler-NPC im Dorf, Controller-Steuerung.
 
 ## Technik
 - Blender: jedes benutzbare Ding ist ein eigenes Objekt mit Eigenschaften (`interact`, `label`, `item`, `angle`, `slide`, `group` …),

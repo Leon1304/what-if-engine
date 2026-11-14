@@ -1,7 +1,8 @@
 # Waldtank – Überleben im Nordwald
 
-Survival-Erkundungsspiel aus der Ich-Perspektive im Low-Poly-Stil: ein Stück Herbstwald mit Landstraße, einer verlassenen
-Tankstelle (mit kompletter Inneneinrichtung), Bach, Hochsitz, Feuerstelle und verlassenem Wohnwagen.
+Survival-Erkundungsspiel aus der Ich-Perspektive im Low-Poly-Stil: ein Stück Herbstwald (220 × 340 m) mit Landstraße, einer verlassenen
+Tankstelle (mit kompletter Inneneinrichtung), Bach, Hochsitz, Feuerstelle, verlassenem Wohnwagen – und im Norden das Dorf Tannbach,
+Aussichtsturm, Burgruine, Steinbruch und Wassermühle. Bauen (Blockhütte, Felder …), Bäume fällen, Waffen, Jagd, mehrere Gegnerarten.
 
 **Spielen:** https://leon1304.github.io/what-if-engine/game/ (Chrome, Edge, Firefox oder Safari; Maus + Tastatur)
 
@@ -10,17 +11,22 @@ Tankstelle (mit kompletter Inneneinrichtung), Bach, Hochsitz, Feuerstelle und ve
 |---|---|
 | W A S D · Maus | laufen · umschauen |
 | Shift · Leertaste · Strg | sprinten · springen · ducken |
-| E | benutzen, öffnen, aufheben, durchsuchen, klettern, Holz hacken |
+| E | benutzen, öffnen, aufheben, durchsuchen, klettern, Baum fällen, bauen, pflanzen/ernten, zerlegen |
 | F | Taschenlampe |
 | Tab / C | Rucksack & Herstellen |
 | 1–5 · Mausrad · Q | Schnellleiste wählen · essen / trinken / benutzen |
 | M | Wanderkarte (wenn gefunden) |
 | Z halten | Zeit vorspulen (drinnen mit Strom, am Feuer oder mit Schlafsack) |
-| Rechte Maustaste | Fernglas |
+| Linksklick · R · rechte Maustaste | Waffe: schießen/zustechen · nachladen · zielen (Gewehr: Zielfernrohr); ohne Waffe: Fernglas |
+| G · X | Baumenü (Linksklick/E setzen, R/Mausrad drehen, X abbrechen) · Gebautes abbauen |
+| N | Wegmarker an deiner Stelle (auf der Karte: Klick setzt/löscht) |
 | B | Handbuch: Tasten, Werte, Essen, Rezepte, Ausrüstung, Aktionen, Gefahren, Orte, Aufgaben (←/→ blättern) |
-| Esc | Pause (Orte, Grafikstufe, Bildrate 30/60/unbegrenzt – Standard 60, im Menü 20) |
+| Esc | Pause: Speicherplätze, Datei sichern/laden, Schwierigkeit, Orte, Grafik, Bildrate, „Gegenstände hervorheben“ |
 
-Spielstand: automatisch alle 20 s im Browser.
+**Spielstand:** automatisch alle 20 s + 3 Speicherplätze im Browser, Export/Import als Datei. Gespeichert wird alles über Namen und Ids
+(Objekte, Gegenstände, Aufgaben, gefällte Bäume, Bauwerke) mit Versionsnummer: ein Spielstand aus einer älteren Version lädt in eine
+neuere – Unbekanntes wird übersprungen, Neues startet im Grundzustand, steht man nach einem Update in einer Wand, wird man freigeschoben.
+**Schwierigkeit:** Keine Feinde · Leicht · Mittel · Schwer (Start- und Pausenmenü).
 
 ## Inhalt
 - **Tutorial (12 Schritte)** führt vom liegengebliebenen Auto zur Tankstelle, durch Hintereingang, Essen, Sicherungskasten,
@@ -28,21 +34,30 @@ Spielstand: automatisch alle 20 s im Browser.
   bis Sonnenaufgang überleben → Rettung.
 - **Werte:** Gesundheit, Hunger, Durst, Wärme, Ausdauer. Kälte nachts und bei Regen, Wärme drinnen mit Strom, am Feuer, mit Jacke.
 - **Tag/Nacht** (1 s = 1 Spielminute), Regenschauer, Sterne, Mond.
-- **Tiere:** Wölfe nachts (fliehen vor Taschenlampe, Fackel, Feuer; kommen nicht in den Shop), Rehe am Tag.
+- **Tiere:** Wölfe nachts (fliehen vor Taschenlampe, Fackel, Feuer; kommen nicht in Gebäude/Hütte), Wildschweine (greifen aus der Nähe an),
+  Bären (selten, im Norden, nur Feuer schreckt sie), Rehe. Erlegte Tiere mit dem Messer zerlegen: Fleisch (braten), Felle (Fellmantel).
+- **Waffen:** Messer, Pistole (Büro-Spind), Schrotflinte (Scheune), Jagdgewehr mit Zielfernrohr (Hochsitz), Bogen + Pfeile (selbst gebaut); Munition in Säcken/Schränken.
+- **Bauen (G):** Unterstand, Feuerstelle, Blockhütte in 4 Abschnitten (Fundament, Wände, Dach, Kamin – mit Tür), Bett, Vorratskiste (20 Plätze),
+  Regentonne, Zaun, Feld. Bäume mit der Axt fällen (kippen um), Stamm zu Baumstämmen zerlegen, Bretter sägen, Steine im Steinbruch.
+- **Felder:** Kartoffeln, Karotten, Kürbis (Saatgut: Dorfladen, Scheune, Säcke), Regen/Gießen beschleunigt, drei Wachstumsstufen.
+- **Säcke:** 18 Jutesäcke mit Beute über die Karte verteilt; Gegenstände in der Nähe glitzern leicht.
 - **Ereignisse:** nachts fährt ab und zu ein Auto vorbei (hält und hupt, wenn du auf der Straße stehst).
 - **Herstellen:** Fackel, Verband, Lagerfeuer überall; kochen am Feuer, in der Mikrowelle oder mit dem Gaskocher.
 - **Strom:** Licht, Kühlregale, Kaffeemaschine, Kasse, Geldautomat, Zapfsäulen und Schiebetür funktionieren erst mit dem Aggregat (Tank hält ~10 Spielstunden).
-- **Erkunden:** 8 Orte, Wanderkarte, Fernglas, Pilze (rote sind giftig), Bachwasser (abkochen!), Axt zum Holzhacken an jedem Baum.
+- **Erkunden:** 15 Orte; die Wanderkarte zeigt nur, was du gefunden hast (Infotafeln im Dorf und am Turm tragen Orte ein), bis zu 8 Wegmarker
+  (auch im Spiel sichtbar mit Entfernung). Brunnen = sauberes Wasser. Nach der Rettung: freies Spiel.
 
 ## Aufbau
 | Pfad | Inhalt |
 |---|---|
 | `blender/core.py` | Helfer: Low-Poly-Materialien (Farbe je Facette als Vertex-Farbe), Wände, Texte, Lichter, Kartenlayout (Straße, Bach, Pfade) |
-| `blender/s00_world.py` … `s08_camp.py` | die Map in Abschnitten: Welt, Gelände, Straße, Vorplatz, Gebäude, Einrichtung, Wald, Hof & Auto, Wohnwagen |
+| `blender/s00_world.py` … `s11_build.py` | die Map in Abschnitten: Welt, Gelände, Straße, Vorplatz, Gebäude, Einrichtung, Wald, Hof & Auto, Wohnwagen, Dorf, Sehenswürdigkeiten + Säcke, Baupläne/Pflanzen/Waffen (`bp_*`-Vorlagen bei z −200, vom Spiel geklont) |
 | `blender/build_all.py` | baut alles ohne Blender-Oberfläche und exportiert `map.glb` (+ `blender/map.blend` zum Anschauen) |
 | `blender/shrink.mjs` | komprimiert `map.glb` (gltf-transform) |
-| `js/` | das Spiel (Three.js 0.170): `world.js` Laden/Instancing/Kollision, `player.js`, `game.js` Logik, `life.js` Tiere/Auto/Feuer, `sky.js`, `audio.js`, `ui.js`, `items.js` |
-| `tools/routes.mjs` · `tools/plan.mjs` | Laufwege mit echter Kollision ablaufen (Türen, Gänge, Stufen – nichts darf im Weg stehen) · Grundriss der Hindernisse als PNG |
+| `js/` | das Spiel (Three.js 0.170): `world.js` Laden/Instancing/Kollision/Vorlagen, `player.js`, `game.js` Logik + Speichern, `life.js` Tiere/Schwierigkeit/Auto/Feuer, `build.js` Bauen/Fällen/Felder, `combat.js` Waffen, `sky.js`, `audio.js`, `ui.js`, `items.js` (Gegenstände, Rezepte, Waffen, Pflanzen, Baupläne), `handbook.js` |
+| `tools/routes.mjs` · `tools/plan.mjs` | 19 Laufwege mit echter Kollision (Tankstelle, Dorfhäuser, Kapelle, Scheune, Mühle, Bauwagen, Turmtreppe bis oben …) · Grundriss der Hindernisse als PNG |
+| `tools/pickups.mjs` | Sichtbarkeit: jeder Gegenstand / jeder Behälter muss von einer begehbaren Stelle aus zu sehen sein (nicht in Regalen/Kartons versteckt) |
+| `tools/features.mjs` · `tools/smoke.mjs` | Säcke, Baum fällen, Hütte bauen + Tür + Kamin, Feld, Kiste, Pistole gegen Wolf + Zerlegen, Schwierigkeit, Wegmarker, Speichern → Neustart → Laden, alter Spielstand · schneller Ladetest |
 | `tools/shots.mjs` · `tools/playthrough.mjs` · `tools/perf.mjs` | Screenshots, automatischer Komplett-Durchlauf inkl. echter Tasten (W/Shift/Leertaste/Strg), Leistungsmessung (ms, Draw Calls, Dreiecke je Ort) |
 
 ### Map neu bauen
@@ -51,11 +66,14 @@ Spielstand: automatisch alle 20 s im Browser.
 node game/blender/shrink.mjs game/map.glb
 node game/tools/playthrough.mjs        # muss mit PLAYTHROUGH OK enden
 node game/tools/routes.mjs             # muss mit ROUTES OK enden (neue Möbel/Türen: Route ergänzen)
+node game/tools/pickups.mjs            # muss mit PICKUPS OK enden (kein Gegenstand versteckt)
+node game/tools/features.mjs           # muss mit FEATURES OK enden
 ```
 Live in Blender (MCP): `core.py` ausführen und `section('s03_forecourt')` aufrufen – baut nur diesen Abschnitt neu.
 
 ### Interaktive Objekte (Blender → Spiel)
 Eigenschaften am Objekt landen als glTF-Extras im Spiel: `interact` = `door` | `slide` | `lid` | `drawer` | `switch` | `pickup` |
-`search` | `use` | `read` | `pump`, dazu `label`, `item`, `angle`, `axis`, `slide`, `needs`, `locked`/`key`, `text`, `glow_group`.
+`search` | `use` | `read` | `pump`, dazu `label`, `item`, `loot` (Liste [[id, n], …] für Säcke/Schränke), `angle`, `axis`, `slide`, `needs`,
+`locked`/`key`, `text`, `reveal` (Orte auf der Karte eintragen), `glow_group`; `spin` (+ `spin_axis`, `spin_speed`) dreht sich im Spiel (Mühlrad).
 Der Drehpunkt ist der Objekt-Ursprung (`pivot_w` beim Export). Lichter sind Empties `light_*` (`color`, `power`, `group`),
 Spielpunkte `spawn` und `ziel_*`. `collide = 0` = begehbar, `collide_r` = Baumstamm-Radius.

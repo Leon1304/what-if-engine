@@ -2,7 +2,7 @@
 # edge lines, repaired patches and cracks, reflector posts (Leitpfosten) every 25 m, guard rails on the outside of the bends,
 # signs (speed limit, fuel station ahead, bend warnings). The station's driveways (y −24 … 26, east side) are left open for s03.
 COLL = '02 Straße'
-Y0, Y1, DY = -110.0, 110.0, 2.0
+Y0, Y1, DY = MAP_Y0, MAP_Y1, 2.0
 GAP = (-24.0, 26.0)            # east side: no shoulder / edge line here (forecourt + driveways from s03)
 
 def tangent(y):
@@ -73,6 +73,7 @@ def build(c):
     k = 0
     for y in frange(Y0 + 2, Y1 - 2, 25.0):
         t, n = tangent(y); p = Vector((road_x(y), y, 0)); rz = math.atan2(t.y, t.x) - math.pi / 2
+        if VILLAGE[1] - 36 < y < VILLAGE[1] + 40: continue                       # village: kerbs instead of posts
         for side in (-1, 1):
             if side > 0 and GAP[0] - 4 < y < GAP[1] + 4: continue
             q = p + n * side * (hw + .8); inst(post, f'Leitpfosten_{k}', (q.x, q.y, terrain_h(q.x, q.y) + .03), rz + (math.pi if side < 0 else 0), c=c); k += 1
