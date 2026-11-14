@@ -35,7 +35,7 @@ Badge „History“, Du-Perspektive mitten im echten Moment („What if you were
 ## Neue Kategorie „True Crime“ (ab 12.11.2026, von Leon gewünscht)
 Badge „True Crime“, du als Zeuge mittendrin (Wachmann, Passagier, Mithäftling), Countdown/Uhrzeit-Zähler, Faktenkarte mit Quelle, Documentary-Erzähler, ohne Gags. Auswahl: Coups, Ausbrüche, ungelöste Rätsel ohne Mordopfer; in laufenden Verfahren keine Verdächtigen-Namen. (Formatvorschlag von Claude.)
 - TC1 What if you were the guard during the Louvre heist? – 19.10.2025, unter 8 Min., ca. 100 Mio. $, Schmuck ein Jahr später weiter verschwunden, 4 Verdächtige warten auf Prozess (Tribune/AFP 20.10.2026); sofort
-- TC2 What if you sat next to D.B. Cooper on his flight? – 24.11.1971, 55. Jahrestag Di 24.11.2026, neue Spuren 2026
+- TC2 What if you sat next to D.B. Cooper on his flight? – 24.11.1971, 55. Jahrestag Di 24.11.2026, neue Spuren 2026 ✅ auf GitHub (db-cooper-flight, 14.11.)
 - TC3 What if you walked into a museum where 13 masterpieces vanished? – Gardner-Museum Boston 1990, ungelöst; Dez.
 - TC4 What if you shared a cell block with the men who escaped Alcatraz? – 1962, nie gefunden
 - TC5 What if you saw the Mona Lisa disappear? – 1911, Diebstahl machte sie berühmt

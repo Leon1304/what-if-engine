@@ -55,5 +55,7 @@ Erklärungen deutsch, Tags und Captions englisch: **Kategorie**, die 5 Tags je P
 | planets-lined-up | Conspiracy | #whatif #planetparade #planetaryalignment #mythbusting #space | gleich | #shorts #whatif #planetparade #planetaryalignment #mythbusting |
 | robot-fight | Story | #whatif #robotfight #robotboxing #whatifscenario #humanoidrobot | gleich | #shorts #whatif #robotfight #robotboxing #humanoidrobot |
 | sperm-whale | Series (Swallowed Alive) | #whatif #swallowedalive #spermwhale #whales #oceantok | #oceanlife statt #oceantok | #shorts #whatif #swallowedalive #spermwhale #whales |
+| mongol-fleet-1281 (14.11.) | History | #whatif #mongolempire #shipwreck #historytok #history | #historyfacts statt #historytok | #shorts #whatif #mongolempire #shipwreck #history |
+| db-cooper-flight (14.11.) | True Crime | #whatif #dbcooper #hijacking #truecrime #unsolvedmysteries | gleich | #shorts #whatif #dbcooper #hijacking #truecrime |
 
 Tag-Größen geprüft: nur #robotfight (5,2K) und #robotboxing (1,6K); die übrigen beim nächsten Upload in den Studio-Vorschlägen nachsehen und hier eintragen.
