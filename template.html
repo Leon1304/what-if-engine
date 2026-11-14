@@ -4236,7 +4236,7 @@ function fireworks(o = {}) {   // o: from [x,y,z] launch point · at [x,y,z] cen
   if (o.light !== false) {   // one shared light jumps to the newest burst (colour + flash): the light budget stays at one
     L = new THREE.PointLight('#ffffff', 0, o.dist ?? 90, 1.4); world.add(L); const I = typeof o.light === 'number' ? o.light : 900;
     tick(t => { let best = null, bv = 0; for (const b of B) { const a = t - b.t; if (a >= 0 && a < 1.4) { const v = Math.exp(-a * 3) * Math.min(1, a / 0.05); if (v > bv) { bv = v; best = b; } } }
-      L.intensity = I * bv; if (best) { L.position.set(best.p[0], best.p[1], best.p[2]); L.color.set(best.color); } });
+      L.intensity = I * bv; if (best) { L.position.set(best.p[0], best.p[1], best.p[2]); L.color.set(best.color); } else { L.position.set(fx, fy + 20, fz); L.color.set('#ffffff'); } });   // v3.25: nothing left over from earlier frames
   }
   if (o.sound !== false) { const v = typeof o.sound === 'number' ? o.sound : 1; for (const b of B) (AUDIO.hits ??= []).push({ t: VT(b.t), k: 'fireworks', v: v * (0.55 + 0.3 * hash(b.t * 13.7)) }); }
   return { bursts: B, light: L };
