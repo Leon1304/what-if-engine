@@ -7,6 +7,7 @@ import { Player } from './player.js';
 import { Audio } from './audio.js';
 import { UI } from './ui.js';
 import { Game } from './game.js';
+import { Handbook } from './handbook.js';
 import { roadX, creekX } from './life.js';
 import { ITEMS } from './items.js';
 
@@ -64,12 +65,17 @@ $('btn-continue').style.display = game.hasSave() ? '' : 'none';
 ui.show('start', !AUTO);
 function lock() { if (!AUTO) renderer.domElement.requestPointerLock?.(); }
 function begin(load) {
-  audio.start(); ui.show('start', false); ui.show('pause', false);
+  audio.start(); book.show(false); ui.show('start', false); ui.show('pause', false);
   if (load === 'new') { game.wipe(); }
   else if (load === 'load') game.load();
   playing = true; ui.renderHotbar(game.S.inv, game.S.sel); lock();
   if (load === 'new') ui.toast('Verdammt. Der Motor ist aus. Kein Netz. Und es wird bald dunkel …');
 }
+const book = new Handbook(game);
+$('btn-book').onclick = () => { ui.show('pause', false); openPanel('book'); };
+$('btn-book-start').onclick = () => book.show(true, 0);
+book.el.addEventListener('click', e => { if (e.target.closest('[data-close]')) { if (panel === 'book') closePanel(); else book.show(false); } });
+if (Q.has('book')) { panel = 'book'; book.show(true, +Q.get('book') || 0); }      // test aid: open the handbook at chapter n
 $('btn-new').onclick = () => begin('new');
 $('btn-continue').onclick = () => begin('load');
 $('btn-resume').onclick = () => { ui.show('pause', false); lock(); };
@@ -92,9 +98,10 @@ function openPanel(name) {
   closePanel(true); panel = name; document.exitPointerLock?.();
   if (name === 'inv') { game.ui.renderInventory(game); ui.show('invpanel', true); }
   if (name === 'map') { drawMap(); ui.show('mappanel', true); }
+  if (name === 'book') book.show(true);
 }
 function closePanel(silent) {
-  if (!panel) return; ui.show('invpanel', false); ui.show('mappanel', false); ui.show('reader', false); panel = null; if (!silent) lock();
+  if (!panel) return; book.show(false); ui.show('invpanel', false); ui.show('mappanel', false); ui.show('reader', false); panel = null; if (!silent) lock();
 }
 $('invpanel').addEventListener('click', e => {
   const b = e.target.closest('button'); if (!b) return;
@@ -110,6 +117,13 @@ new MutationObserver(() => { if ($('reader').classList.contains('show') && panel
 // ---------------------------------------------------------------- input
 addEventListener('keydown', e => {
   if (e.code === 'Tab') e.preventDefault();
+  if (book.open && (panel === 'book' || !playing)) {                        // handbook: flip with arrows / A D, close with B / Esc
+    if (['ArrowLeft', 'KeyA'].includes(e.code)) book.flip(-1);
+    if (['ArrowRight', 'KeyD'].includes(e.code)) book.flip(1);
+    if (['ArrowUp', 'ArrowDown'].includes(e.code)) { e.preventDefault(); book.flip(e.code === 'ArrowUp' ? -1 : 1); }
+    if (['KeyB', 'Escape'].includes(e.code)) { if (panel === 'book') closePanel(); else book.show(false); }
+    return;
+  }
   if (!playing || game.S.flags.dead || game.S.flags.won) return;
   if (panel) {
     if (['Tab', 'Escape', 'KeyC', 'KeyM', 'KeyE'].includes(e.code)) { if (e.code === 'KeyC' && panel === 'inv') return; closePanel(); }
@@ -123,6 +137,7 @@ addEventListener('keydown', e => {
     case 'Tab': case 'KeyC': openPanel('inv'); break;
     case 'KeyM': if (game.has('karte')) openPanel('map'); else ui.toast('Du hast keine Karte. Vielleicht gibt es im Laden eine?'); break;
     case 'KeyQ': game.useSlot(game.S.sel); break;
+    case 'KeyB': openPanel('book'); break;
     case 'Digit1': case 'Digit2': case 'Digit3': case 'Digit4': case 'Digit5': game.S.sel = +e.code.slice(5) - 1; ui.renderHotbar(game.S.inv, game.S.sel); break;
   }
 });

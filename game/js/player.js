@@ -3,6 +3,7 @@
 import * as THREE from 'three';
 
 const tp = new THREE.Vector3(), cp = new THREE.Vector3(), dir = new THREE.Vector3(), inv = new THREE.Matrix4();
+const STEP = .36;   // highest step / curb the player walks up without jumping
 const box = new THREE.Box3(), seg = new THREE.Line3(), s0 = new THREE.Vector3(), w0 = new THREE.Vector3(), w1 = new THREE.Vector3();
 
 export class Player {
@@ -11,7 +12,7 @@ export class Player {
     this.pos = new THREE.Vector3(); this.vel = new THREE.Vector3();
     this.yaw = 0; this.pitch = 0; this.r = .32; this.h = 1.75; this.eyeH = 1.62; this.eye = 1.62;
     this.keys = {}; this.onGround = false; this.stepAcc = 0; this.bob = 0; this.crouch = false; this.sprint = false;
-    this.locked = false; this.climb = null; this.fallV = 0; this.zoom = false;
+    this.locked = false; this.climb = null; this.fallV = 0; this.zoom = false; this.stepOk = false; this.stepUp = 0; this.camLag = 0;
     this.flash = new THREE.SpotLight('#fff2d8', 0, 34, .45, .45, 1.4); this.flash.castShadow = false;
     this.flash.position.set(.18, -.15, 0); this.flash.target.position.set(0, -.1, -5);
     camera.add(this.flash); camera.add(this.flash.target);
@@ -36,7 +37,13 @@ export class Player {
         const d = tri.closestPointToSegment(seg, tp, cp);
         if (d < r) {
           const depth = r - d; dir.subVectors(cp, tp).normalize();
+          const feet = seg.start.y - r, rise = tp.y - feet;
           if (dir.y > .62) { seg.start.y += depth / dir.y; seg.end.y += depth / dir.y; ground = true; }      // walkable: push straight up, no sliding
+          else if (this.stepOk && dir.y > .12 && rise > .01 && rise < STEP && Math.abs(cp.y - seg.start.y) < 1e-3) {
+            // step / curb edge touching the lower sphere: lift onto it instead of blocking (stairs, curbs, door sills)
+            const hd = Math.hypot(cp.x - tp.x, cp.z - tp.z), lift = tp.y + Math.sqrt(Math.max(0, r * r - hd * hd)) - seg.start.y + .002;
+            if (lift > 0) { seg.start.y += lift; seg.end.y += lift; ground = true; this.stepUp += lift; }
+          }
           else { seg.start.addScaledVector(dir, depth); seg.end.addScaledVector(dir, depth); }
         }
       }
@@ -72,9 +79,10 @@ export class Player {
     this.vel.x += (wish.x - this.vel.x) * Math.min(1, acc * dt); this.vel.z += (wish.z - this.vel.z) * Math.min(1, acc * dt);
     if (k.Space && this.onGround && g.S.stats.stamina > 8) { this.vel.y = 4.8; this.onGround = false; g.S.stats.stamina -= 8; k.Space = false; }
     this.vel.y -= 18 * dt;
-    const wasGround = this.onGround; this.onGround = false; this.fallV = 0;
+    const wasGround = this.onGround; this.stepOk = wasGround || this.vel.y <= 0; this.onGround = false; this.fallV = 0; this.stepUp = 0;
     const N = 4;
     for (let i = 0; i < N; i++) { this.pos.addScaledVector(this.vel, dt / N); this.resolve(); }
+    this.camLag = Math.min(.5, this.camLag + this.stepUp); this.camLag *= Math.max(0, 1 - dt * 12);
     if (this.fallV < -10.5) g.hurt((-this.fallV - 10.5) * 9, 'Sturz');
     if (this.pos.y < -30) g.respawnFall();
     // eye height (crouch), head bob, footsteps
@@ -90,7 +98,7 @@ export class Player {
   }
   sync() {
     const bobY = Math.sin(this.bob * 2) * .035 * (this.sprint ? 1.6 : 1), bobX = Math.cos(this.bob) * .025;
-    this.cam.position.set(this.pos.x, this.pos.y + this.eye + bobY, this.pos.z);
+    this.cam.position.set(this.pos.x, this.pos.y + this.eye + bobY - this.camLag, this.pos.z);
     this.cam.rotation.set(this.pitch, this.yaw, 0, 'YXZ');
     this.cam.translateX(bobX);
   }

@@ -276,7 +276,7 @@ export class Game {
   makeQuests() {
     const S = this.S, g = this;
     return [
-      { t: 'Gestrandet', x: () => 'Dein Auto ist liegen geblieben. Schau dich mit der <b>Maus</b> um und lauf mit <b>W A S D</b>.', target: () => null,
+      { t: 'Gestrandet', x: () => 'Dein Auto ist liegen geblieben. Schau dich mit der <b>Maus</b> um und lauf mit <b>W A S D</b>. <b>B</b> öffnet dein Handbuch mit allen Tasten und Tipps.', target: () => null,
         done: () => g.P.pos.distanceTo(g.W.spots.spawn.pos) > 4 },
       { t: 'Kofferraum', x: () => 'Öffne den Kofferraum deines Autos: hinsehen und <b>E</b> drücken.', target: () => g.posOf('Auto_Kofferraum'), done: () => g.byName.Auto_Kofferraum?.target === 1 },
       { t: 'Ausrüstung', x: () => 'Nimm <b>Rucksack</b> und <b>Taschenlampe</b> mit (E). <b>Tab</b> öffnet den Rucksack, <b>F</b> schaltet die Lampe ein.',

@@ -17,6 +17,7 @@ Tankstelle (mit kompletter Inneneinrichtung), Bach, Hochsitz, Feuerstelle und ve
 | M | Wanderkarte (wenn gefunden) |
 | Z halten | Zeit vorspulen (drinnen mit Strom, am Feuer oder mit Schlafsack) |
 | Rechte Maustaste | Fernglas |
+| B | Handbuch: Tasten, Werte, Essen, Rezepte, Ausrüstung, Aktionen, Gefahren, Orte, Aufgaben (←/→ blättern) |
 | Esc | Pause (Orte, Grafikstufe, Bildrate 30/60/unbegrenzt – Standard 60, im Menü 20) |
 
 Spielstand: automatisch alle 20 s im Browser.
@@ -41,6 +42,7 @@ Spielstand: automatisch alle 20 s im Browser.
 | `blender/build_all.py` | baut alles ohne Blender-Oberfläche und exportiert `map.glb` (+ `blender/map.blend` zum Anschauen) |
 | `blender/shrink.mjs` | komprimiert `map.glb` (gltf-transform) |
 | `js/` | das Spiel (Three.js 0.170): `world.js` Laden/Instancing/Kollision, `player.js`, `game.js` Logik, `life.js` Tiere/Auto/Feuer, `sky.js`, `audio.js`, `ui.js`, `items.js` |
+| `tools/routes.mjs` · `tools/plan.mjs` | Laufwege mit echter Kollision ablaufen (Türen, Gänge, Stufen – nichts darf im Weg stehen) · Grundriss der Hindernisse als PNG |
 | `tools/shots.mjs` · `tools/playthrough.mjs` · `tools/perf.mjs` | Screenshots, automatischer Komplett-Durchlauf inkl. echter Tasten (W/Shift/Leertaste/Strg), Leistungsmessung (ms, Draw Calls, Dreiecke je Ort) |
 
 ### Map neu bauen
@@ -48,6 +50,7 @@ Spielstand: automatisch alle 20 s im Browser.
 /Applications/Blender.app/Contents/MacOS/Blender -b --factory-startup --python game/blender/build_all.py
 node game/blender/shrink.mjs game/map.glb
 node game/tools/playthrough.mjs        # muss mit PLAYTHROUGH OK enden
+node game/tools/routes.mjs             # muss mit ROUTES OK enden (neue Möbel/Türen: Route ergänzen)
 ```
 Live in Blender (MCP): `core.py` ausführen und `section('s03_forecourt')` aufrufen – baut nur diesen Abschnitt neu.
 

@@ -27,7 +27,10 @@ def build(c):
     for yy in (.2, 1.6): P.append((box(.08, .6, .7, at=(-Wd / 2 + .04, yy, FZ + .9)), cream))
     roof = box(Wd + .1, L + .1, .12, at=(0, 0, FZ + H), bevel_w=.05, seg=2)
     P += [(roof, cream), (box(.6, .6, .15, at=(0, .5, FZ + H + .12), bevel_w=.03), lp('Dachluke', '#cfd2d2', .5))]
-    P += [(box(Wd + .02, L + .02, .14, at=(0, 0, FZ + .65)), brown)]
+    # brown stripe: four thin bands on the outer walls (not a slab through the interior), gap at the door (y −1.5 … −0.7)
+    sz = FZ + .65
+    P += [(box(.02, L + .02, .14, at=(Wd / 2 + .01, 0, sz)), brown), (box(Wd + .02, .02, .14, at=(0, -L / 2 - .01, sz)), brown), (box(Wd + .02, .02, .14, at=(0, L / 2 + .01, sz)), brown),
+          (box(.02, L / 2 - 1.5 + .01, .14, at=(-Wd / 2 - .01, (-L / 2 - 1.5) / 2, sz)), brown), (box(.02, L / 2 + .7 + .01, .14, at=(-Wd / 2 - .01, (L / 2 - .7) / 2, sz)), brown)]
     P += [(box(Wd - .2, L - .4, .45, at=(0, 0, .1)), lp('Schuerze', '#6f6a60', .9))]
     # windows glass + frames
     P += [(box(.03, 1.1, .6, at=(Wd / 2 - .04, -L / 2 + 1.45, FZ + .95)), gl), (box(.03, 1.1, .6, at=(Wd / 2 - .04, L / 2 - 1.45, FZ + .95)), gl),
@@ -45,7 +48,9 @@ def build(c):
     door = [(box(.05, .66, 1.85, at=(-Wd / 2 - .01, -1.15, FZ + .05)), cream), (box(.05, .66, .1, at=(-Wd / 2 - .01, -1.15, FZ + .7)), brown),
             (box(.04, .3, .35, at=(-Wd / 2 - .02, -1.15, FZ + 1.2)), gl), (box(.06, .1, .03, at=(-Wd / 2 - .05, -.9, FZ + 1.0)), steel)]
     multi('Wohnwagen_Tuer', T(door), c, pivot=W(-Wd / 2 - .01, -1.48, 0), interact='door', angle=math.radians(-100), label='Wohnwagentür')
-    obj('Wohnwagen_Stufe', T([(box(.5, .7, .28, at=(-Wd / 2 - .3, -1.15, 0)), lp('Beton', '#b3b0a8', .9))])[0][0], lp('Beton', '#b3b0a8', .9), c)
+    # two steps up to the floor (.55): rises ≈ .18 each, sunk into the slope so the lower one never floats
+    st = [(box(.42, .8, .55, at=(-Wd / 2 - .27, -1.15, -.18)), lp('Beton', '#b3b0a8', .9)), (box(.4, .8, .51, at=(-Wd / 2 - .68, -1.15, -.32)), lp('Beton', '#b3b0a8', .9))]
+    multi('Wohnwagen_Stufe', T(st), c, walk=1)
     # interior: bed at the back (+y), dinette at the front, kitchenette on the east side
     I = [(box(Wd - .2, 1.3, .45, at=(0, L / 2 - .75, FZ)), wood), (box(Wd - .3, 1.2, .15, at=(0, L / 2 - .75, FZ + .45)), fabric),
          (box(.6, .35, .12, at=(-.5, L / 2 - .3, FZ + .6)), lp('Kissen', '#e9e4d8', .9)), (box(.6, .35, .12, at=(.5, L / 2 - .3, FZ + .6)), lp('Kissen', '#e9e4d8', .9)),

@@ -199,7 +199,7 @@ def build(c):
     pickup('Karte_Region', [(box(.2, .02, .28, at=(22.55, -3.2, F + 1.12)), lp('Karte', '#e9c46a', .6)), (box(.16, .021, .12, at=(22.55, -3.2, F + 1.2)), PAL[3])], 'karte', 'Wanderkarte')
     for i in range(3):
         for j in range(4 - i):
-            add(lp('Kanister_blau', '#4aa3df', .4), box(.25, .14, .32, at=(22.4 + .27 * j + .135 * i, 3.6, F + .32 * i), bevel_w=.02))
+            add(lp('Kanister_blau', '#4aa3df', .4), box(.25, .14, .32, at=(21.5 + .27 * j + .135 * i, 3.6, F + .32 * i), bevel_w=.02))
     flush('Scheibenwischwasser', collide=1)
     for k, (x, y) in enumerate(((22.0, -5.5), (31.0, 5.0))):
         multi(f'Abfalleimer_{k}', [(cyl(.22, .7, at=(x, y, F), seg=10), grn), (dome(.23, at=(x, y, F + .7), seg=10, rings=3, h=.12), steel)], c)
@@ -259,19 +259,19 @@ def build(c):
         bms = []
         for bm, m in parts: rotz(bm, rz); move(bm, (x, y, F)); bms.append((bm, m))
         return multi(name, bms, c)
-    heavy_shelf('Lagerregal_1', 36.55, -5.5, 3.0, .6, math.pi / 2, 1)
+    heavy_shelf('Lagerregal_1', 36.55, -7.55, 2.9, .6, math.pi / 2, 1)          # south of the back door (y −4.6 … −3.7) – keeps the way in free
     heavy_shelf('Lagerregal_2', 33.55, -7.0, 2.4, .6, math.pi / 2, 2)
     heavy_shelf('Lagerregal_3', 35.0, -9.5, 2.0, .6, 0, 3)
-    pickup('Kanister', [(box(.18, .35, .45, at=(34.4, 1.5, F), bevel_w=.03), red), (box(.06, .2, .05, at=(34.4, 1.45, F + .47)), red), (cyl(.025, .06, at=(34.4, 1.68, F + .45), seg=6), blk)],
+    pickup('Kanister', [(box(.18, .35, .45, at=(33.6, 1.3, F), bevel_w=.03), red), (box(.06, .2, .05, at=(33.6, 1.25, F + .47)), red), (cyl(.025, .06, at=(33.6, 1.48, F + .45), seg=6), blk)],
            'kanister', 'Benzinkanister (leer)')
-    pickup('Lappen', [(box(.25, .2, .03, at=(36.4, -5.0, F + 1.33)), lp('Lappen', '#d9c38a', .95))], 'lappen', 'Lappen')
-    pickup('Topf', [(cyl(.13, .14, at=(36.5, -6.2, F + .73), seg=10), steel), (box(.12, .03, .02, at=(36.5, -6.38, F + .84)), blk)], 'topf', 'Kochtopf')
+    pickup('Lappen', [(box(.25, .2, .03, at=(36.4, -6.9, F + 1.33)), lp('Lappen', '#d9c38a', .95))], 'lappen', 'Lappen')
+    pickup('Topf', [(cyl(.13, .14, at=(36.5, -8.3, F + .73), seg=10), steel), (box(.12, .03, .02, at=(36.5, -8.48, F + .84)), blk)], 'topf', 'Kochtopf')
     pickup('Taschenlampe_Batterie_9V', [(box(.05, .03, .045, at=(35.2, -9.55, F + 1.93)), PAL[12])], 'batterie_9v_leer', '9-V-Block (leer)')
     for k in range(3):
         for j in range(2 - (k > 1)):
-            add(lp('Kiste_rot', '#c8382c', .6), box(.4, .3, .28, at=(34.0 + .45 * j, -2.5, F + .28 * k), bevel_w=.01))
+            add(lp('Kiste_rot', '#c8382c', .6), box(.4, .3, .28, at=(33.55 + .45 * j, -4.9, F + .28 * k), bevel_w=.01))
             for bx_ in range(4):
-                for by_ in range(3): add(lp('Flasche_braun', '#6b3a1e', .3), cyl(.03, .26, at=(33.85 + .45 * j + .1 * bx_, -2.6 + .1 * by_, F + .28 * k + .02), seg=6))
+                for by_ in range(3): add(lp('Flasche_braun', '#6b3a1e', .3), cyl(.03, .26, at=(33.4 + .45 * j + .1 * bx_, -5.0 + .1 * by_, F + .28 * k + .02), seg=6))
     flush('Getraenkekisten', collide=1)
     multi('Wischeimer', [(cyl(.18, .3, at=(36.4, 1.6, F), seg=10), lp('Eimer_gelb', '#e8b923', .5)), (cyl(.015, 1.3, at=(36.45, 1.7, F + .2), seg=5), steel),
                          (box(.3, .12, .1, at=(36.45, 1.7, F + .1)), lp('Mopp', '#e4e4df', .95))], c)

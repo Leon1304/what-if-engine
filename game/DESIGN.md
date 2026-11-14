@@ -22,7 +22,7 @@ Tag-Nacht-Wechsel: Ein Spieltag dauert ca. 24 Minuten. Nachts ist es draußen st
 
 ## Steuerung
 WASD laufen · Maus umschauen · Shift sprinten · Strg ducken · Leertaste springen · **E** benutzen/aufheben ·
-**F** Taschenlampe · **Tab** Rucksack · **1–5** Schnellleiste · **Q** essen/trinken aus der Hand · **C** herstellen · **M** Karte · **Z** warten · **Esc** Pause
+**F** Taschenlampe · **B** Handbuch · **Tab** Rucksack · **1–5** Schnellleiste · **Q** essen/trinken aus der Hand · **C** herstellen · **M** Karte · **Z** warten · **Esc** Pause
 
 ## Tutorial (Aufgabenkette, führt durch die Map)
 1. **Aufwachen** am Auto am Straßenrand (Süden). Lerne: umschauen, laufen.
@@ -54,7 +54,8 @@ WASD laufen · Maus umschauen · Shift sprinten · Strg ducken · Leertaste spri
 ## Umgesetzt (Stand 14.11.2026)
 Alles oben, dazu: Wölfe nachts (Hit-and-Run, fliehen vor Licht/Feuer; erste Nacht erst ab 21 Uhr), Rehe am Tag, Regenschauer,
 vorbeifahrendes Auto nachts, verlassener Wohnwagen (Schlafsack, Gaskocher, Tagebuch), Fernglas, Wanderkarte, Holzhacken mit Axt,
-Speichern/Laden im Browser, Grafikstufen, automatischer Test-Durchlauf (`tools/playthrough.mjs`).
+Speichern/Laden im Browser, Grafikstufen, Bildratenbegrenzung, Survival-Handbuch (B), Stufen/Bordsteine begehbar,
+automatischer Test-Durchlauf (`tools/playthrough.mjs`) und Laufweg-Prüfung (`tools/routes.mjs`).
 
 ## Später (weitere Maps / Ausbau)
 Auto reparieren (Keilriemen aus der Werkstatt), weitere Orte (Forsthaus, Funkturm, See), Nebel, Schnee, Bär, mehrere Tage mit Vorräten, Controller-Steuerung.

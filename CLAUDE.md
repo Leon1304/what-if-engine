@@ -50,5 +50,5 @@ Immer den GitHub-Download-Link mit ausgeben: Release-Seite `https://github.com/L
 ## Spiel „Waldtank“ (game/)
 Survival-Erkundungsspiel (POV, Low-Poly, Three.js), unabhängig von der Video-Engine. Map entsteht aus Blender-Skripten `game/blender/s*.py`
 (headless: `Blender -b --factory-startup --python game/blender/build_all.py`, dann `node game/blender/shrink.mjs game/map.glb`), Spiel in `game/js/`.
-Vor dem Push `node game/tools/playthrough.mjs` → `PLAYTHROUGH OK`. GitHub Pages (Workflow `game-pages`): https://leon1304.github.io/what-if-engine/game/ — Details `game/README.md`.
+Vor dem Push `node game/tools/playthrough.mjs` → `PLAYTHROUGH OK` und `node game/tools/routes.mjs` → `ROUTES OK` (Laufwege mit echter Kollision; Möbel nie vor Türen/in Gänge). GitHub Pages (Workflow `game-pages`): https://leon1304.github.io/what-if-engine/game/ — Details `game/README.md`.
 Blender nur live öffnen, wenn Leon zuschauen will (Mac wird warm); Viewport dann Solid + Vertex-Farben statt Materialvorschau.

@@ -62,6 +62,31 @@
   .recipe { display: flex; justify-content: space-between; align-items: center; padding: 8px 10px; border-radius: 8px; background: rgba(255,255,255,.05); margin-bottom: 6px; opacity: .6; }
   .recipe.ok { opacity: 1; } .recipe small { display: block; color: var(--mut); font-size: 12px; }
   .hint { color: var(--mut); font-size: 12px; }
+  /* handbook (B) */
+  #book { width: min(980px, 96vw); padding: 0; background: #3b2a1c; border: 0; box-shadow: 0 20px 60px rgba(0,0,0,.6); }
+  .book { display: grid; grid-template-columns: 215px 1fr; height: min(660px, 84vh); }
+  #book.panel { overflow: hidden; max-height: none; }
+  .book nav { background: linear-gradient(90deg, #4a3423, #5b402b); padding: 18px 10px; display: flex; flex-direction: column; gap: 4px; border-right: 3px solid #2b1d12; }
+  .book nav::before { content: "📖 Survival-Handbuch"; color: #f1dfb9; font-weight: 800; font-size: 15px; padding: 0 8px 12px; }
+  .book nav button { text-align: left; background: transparent; color: #e8d3aa; padding: 8px 10px; font-size: 14px; border-radius: 7px; margin: 0; }
+  .book nav button.on { background: #f3e7c9; color: #3b2a1c; }
+  .book article { background: #f3e7c9 linear-gradient(90deg, rgba(0,0,0,.08), transparent 4%); color: #2e2416; padding: 24px 30px 14px; overflow: hidden; min-height: 0;
+                  font-family: Georgia, "Iowan Old Style", serif; font-size: 15px; line-height: 1.5; display: flex; flex-direction: column; }
+  .book .pg { flex: 1; overflow: auto; min-height: 0; padding-right: 6px; }
+  .book h3 { margin: 0 0 12px; font-size: 24px; border-bottom: 2px solid #c9b48a; padding-bottom: 6px; } .book h4 { margin: 14px 0 4px; }
+  .book table { border-collapse: collapse; width: 100%; } .book td { padding: 5px 8px; border-bottom: 1px solid #dccaa2; vertical-align: top; }
+  .book td:first-child { white-space: nowrap; font-weight: 600; } .book table.list td:first-child { white-space: normal; width: 42%; }
+  .book kbd { display: inline-block; background: #fffaf0; border: 1px solid #a8916a; border-bottom-width: 3px; border-radius: 5px; padding: 0 7px; font: 600 13px system-ui, sans-serif; color: #2e2416; }
+  .book dt { font-weight: 700; margin-top: 8px; } .book dd { margin: 2px 0 0 0; }
+  .book .pos { color: #2f6b3a; font-weight: 600; margin-right: 6px; } .book .neg { color: #a33224; font-weight: 600; margin-right: 6px; }
+  .book .tip { background: #e8d9b3; border-left: 4px solid #b08a4a; padding: 8px 12px; border-radius: 4px; font-size: 14px; }
+  .book ul, .book ol { padding-left: 20px; } .book li { margin: 4px 0; } .book .places { list-style: none; padding: 0; columns: 2; } .book .places li { color: #9a8a6a; } .book .places li.on { color: #2e2416; font-weight: 600; }
+  .book .quests { list-style: none; padding: 0; } .book .quests .done { color: #7a6a4a; } .book .quests .now { background: #fffaf0; padding: 8px 10px; border-radius: 6px; }
+  .book footer { padding-top: 10px; border-top: 1px solid #dccaa2; gap: 8px; display: flex; justify-content: space-between; align-items: center; color: #7a6a4a; font: 13px system-ui, sans-serif; }
+  .book footer button { background: #5b402b; color: #f3e7c9; padding: 4px 14px; margin: 0; }
+  @media (max-width: 700px) { .book { grid-template-columns: 1fr; } .book nav { flex-direction: row; flex-wrap: wrap; } .book nav::before { width: 100%; } }
+  #bookhint { position: absolute; right: 18px; bottom: 18px; color: rgba(255,255,255,.55); font-size: 12px; }
+  #bookhint kbd { background: rgba(255,255,255,.15); border-radius: 4px; padding: 0 5px; color: #fff; font: 600 11px system-ui; }
   #reader p { white-space: pre-wrap; font-size: 17px; font-family: "Bradley Hand", "Segoe Print", cursive; background: #f6efc6; color: #2a2414; padding: 18px; border-radius: 6px; }
   #reader small { color: var(--mut); }
   #mappanel { width: min(560px, 94vw); text-align: center; } #mapcanvas { width: 100%; max-width: 520px; border-radius: 8px; }
@@ -89,7 +114,7 @@
     <div class="bar" title="Wärme">🌡️<div class="tr"><div class="fl" id="bar-warmth"></div></div></div>
     <div class="bar" title="Ausdauer">⚡<div class="tr"><div class="fl" id="bar-stamina"></div></div></div>
   </div>
-  <div id="selname"></div><div id="hotbar"></div>
+  <div id="selname"></div><div id="hotbar"></div><div id="bookhint"><kbd>B</kbd> Handbuch</div>
   <div id="frost"></div><div id="vignette"></div>
 </div>
 
@@ -98,18 +123,18 @@
 <div class="ov" id="start"><div class="card">
   <h1>WALDTANK<small>Überleben im Nordwald</small></h1>
   <p class="story">Herbst, später Nachmittag. Mitten im Nordwald bleibt dein Auto liegen. Kein Netz. Ein Stück die Straße hinauf steht eine Tankstelle – dunkel und verlassen. Bald wird es Nacht, kalt … und du bist nicht allein im Wald.</p>
-  <button id="btn-new">Neues Spiel</button><button id="btn-continue" class="sec">Weiterspielen</button>
+  <button id="btn-new">Neues Spiel</button><button id="btn-continue" class="sec">Weiterspielen</button><button id="btn-book-start" class="sec">📖 Handbuch</button>
   <div class="keys">
     <b>WASD · Maus</b><span>laufen · umschauen</span><b>Shift · Leertaste · Strg</b><span>sprinten · springen · ducken</span>
     <b>E</b><span>benutzen, öffnen, aufheben</span><b>F</b><span>Taschenlampe</span><b>Tab / C</b><span>Rucksack &amp; Herstellen</span>
     <b>1–5 · Mausrad · Q</b><span>Schnellleiste wählen · essen/trinken/benutzen</span><b>M</b><span>Karte (wenn du eine hast)</span>
-    <b>Z (halten)</b><span>Zeit vergehen lassen – drinnen mit Strom, am Feuer oder mit Schlafsack</span><b>Rechte Maustaste</b><span>Fernglas</span><b>Esc</b><span>Pause</span>
+    <b>Z (halten)</b><span>Zeit vergehen lassen – drinnen mit Strom, am Feuer oder mit Schlafsack</span><b>Rechte Maustaste</b><span>Fernglas</span><b>B</b><span>Handbuch: alle Tasten, Rezepte, Tipps</span><b>Esc</b><span>Pause</span>
   </div>
 </div></div>
 
 <div class="ov" id="pause"><div class="card">
   <h2>Pause</h2>
-  <button id="btn-resume">Weiter</button><button id="btn-restart" class="sec">Neu beginnen</button>
+  <button id="btn-resume">Weiter</button><button id="btn-book" class="sec">📖 Handbuch (B)</button><button id="btn-restart" class="sec">Neu beginnen</button>
   <h2>Orte</h2><ul id="found"></ul>
   <h2>Grafik</h2><button class="sec" data-q="hoch">Hoch</button><button class="sec" data-q="mittel">Mittel</button><button class="sec" data-q="niedrig">Niedrig</button>
   <h2>Bildrate</h2><button class="sec" data-fps="30">30 FPS (Akku)</button><button class="sec" data-fps="60">60 FPS</button><button class="sec" data-fps="0">Unbegrenzt</button>
@@ -123,6 +148,7 @@
 
 <div class="panel" id="invpanel"></div>
 <div class="panel" id="reader"></div>
+<div class="panel" id="book"></div>
 <div class="panel" id="mappanel"><canvas id="mapcanvas" width="520" height="520"></canvas><p class="hint">M / Esc schließen</p></div>
 
 <script type="module" src="js/main.js"></script>

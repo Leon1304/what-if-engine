@@ -59,6 +59,17 @@ let ok = true;
   const pass = d > 3 && mid.sp && b.st < a.st; ok &&= pass;
   console.log(`${pass ? '✓' : '✗'} Tastatur W/Shift/Leertaste/Strg: ${d.toFixed(1)} m gelaufen, sprint=${mid.sp}, Ausdauer ${a.st.toFixed(0)} → ${b.st.toFixed(0)}`);
 }
+// handbook: B opens, arrows flip through every chapter, B closes
+{
+  const kb = page.keyboard; await kb.press('KeyB'); await page.waitForTimeout(150);
+  const info = await page.evaluate(() => ({ open: document.getElementById('book').classList.contains('show'), n: document.querySelectorAll('#book nav button').length }));
+  const titles = [];
+  for (let i = 0; i < info.n; i++) { titles.push(await page.evaluate(() => document.querySelector('#book h3')?.textContent.trim())); await kb.press('ArrowRight'); }
+  await kb.press('KeyB'); await page.waitForTimeout(100);
+  const closed = await page.evaluate(() => !document.getElementById('book').classList.contains('show'));
+  const pass = info.open && info.n >= 8 && closed && titles.every(Boolean); ok &&= pass;
+  console.log(`${pass ? '✓' : '✗'} Handbuch (B): ${info.n} Kapitel – ${titles.join(' · ')}`);
+}
 for (const [name, code, want] of steps) {
   const res = await page.evaluate(c => { let r = ''; try { eval(c); } catch (e) { r = 'EXC ' + e.message; } const g = window.__game.game;
     return { r, q: g.S.quest, toasts: [...document.querySelectorAll('.toast')].slice(-2).map(t => t.textContent).join(' / ') }; }, code);
