@@ -49,3 +49,9 @@ Badge „True Crime“, du als Zeuge mittendrin (Wachmann, Passagier, Mithäftli
 - V25 Where did the water in your glass come from? (Erklärung, Rate-Frage Kometen? → evtl. in der heißen Ur-Atmosphäre entstanden; ScienceDaily Nov. 2026)
 - V26 What will be left of our Solar System? (Erklärung; Doppelring aus Planetentrümmern um einen toten Stern, ScienceDaily 6.11.2026)
 - Bewusst ausgelassen: Alligator-Angriff, Sekten-Urteil Kenia, Krebs-/Alzheimer-Studien, Trunkenheitsfahrt (ernst bzw. Gesundheit/Alkohol).
+
+## GTA-6-Launch (19.11.2026, gebaut 14.11.2026)
+Einzelvideos zum Launch, ohne Gerald/Steve, ohne Logos oder Figuren aus dem Spiel. Ergänzen die Serie NPC Life (Folge 2 am Launch-Tag).
+- L1 What if the whole world called in sick for GTA 6? – Story, Krankmeldungen, Schlange, leere Stadt, Stromausfall, Pizzabote mit Aggregat ✅ auf GitHub (sick-day-launch, 14.11.)
+- L2 What if GTA 6 got delayed again, live on launch day? – Story, Countdown springt auf „Delayed to 2027“, Zelt Kevin, ein Jahr später 2028 ✅ auf GitHub (delayed-launch-day, 14.11.)
+- L3 What if Vice City was real for 24 hours? – Erklärvideo über das echte Miami: Kreuzfahrthafen, Alligatoren, fallende Leguane ✅ auf GitHub (vice-city-real, 14.11.)

@@ -1,5 +1,5 @@
 {
- "updated": "2026-11-14T14:30:54Z",
+ "updated": "2026-11-14T15:36:25Z",
  "videos": [
   {
    "slug": "dday",
@@ -127,69 +127,6 @@
    "auto": true
   },
   {
-   "slug": "sick-day-launch",
-   "title": "What if the whole world called in sick for GTA 6?",
-   "kind": "story",
-   "dur": 57.6,
-   "aspect": "9:16",
-   "accent": "purple",
-   "series": null,
-   "ending": null,
-   "date": null,
-   "status": "pending",
-   "files": {},
-   "preview": null,
-   "captions": {
-    "youtube": {
-     "title": "What if the whole world called in sick for GTA 6?",
-     "description": "6 a.m. You text the boss: “Not feeling great.” He gets it forty times.\nWould you call in sick for it? A) Already did · B) Took vacation · C) I’d go to work — Comment A, B or C 👇\n\n#shorts #viral #trending #youtubeshorts #fyp",
-     "tags": [
-      "what if the whole world called in sick for gta 6",
-      "the whole world called in sick for gta 6",
-      "sick day launch",
-      "what if story",
-      "survival",
-      "animated story",
-      "what if",
-      "what if scenarios",
-      "what if shorts",
-      "shorts",
-      "3d animation",
-      "animation",
-      "whatifthishappenedscenarios",
-      "hypothetical",
-      "viral",
-      "trending",
-      "fyp",
-      "youtube shorts",
-      "storytime",
-      "sick",
-      "day",
-      "launch",
-      "what if sick",
-      "what if launch",
-      "what would you do",
-      "would you survive",
-      "animated short",
-      "what if video",
-      "what if animation",
-      "scenario",
-      "cartoon",
-      "funny animation"
-     ],
-     "tagChars": 495
-    },
-    "instagram": "What if the whole world called in sick for GTA 6?\nWould you call in sick for it? A) Already did · B) Took vacation · C) I’d go to work — Comment A, B or C 👇\n\n#reels #viral #explore #reelsinstagram #trending",
-    "tiktok": "What if the whole world called in sick for GTA 6?\nWould you call in sick for it? A) Already did · B) Took vacation · C) I’d go to work — Comment A, B or C 👇\n\n#fyp #foryou #foryoupage #viral #trending",
-    "hooks": [
-     "6 a.m. You text the boss: “Not feeling great.” He gets it forty times.",
-     "By seven, the store line is two miles long. Nobody here looks sick.",
-     "By nine, the city… stops. Empty buses. A crane, frozen mid-lift."
-    ]
-   },
-   "auto": true
-  },
-  {
    "slug": "zombie-farm-ending",
    "title": "What if zombies attacked your farm?",
    "kind": "story",
@@ -253,6 +190,247 @@
     ]
    },
    "auto": true
+  },
+  {
+   "slug": "sick-day-launch",
+   "title": "What if the whole world called in sick for GTA 6?",
+   "kind": "story",
+   "dur": 57.6,
+   "aspect": "9:16",
+   "accent": "purple",
+   "series": null,
+   "ending": null,
+   "date": "2026-11-14T15:36:25Z",
+   "status": "ready",
+   "files": {
+    "mp4": {
+     "url": "https://github.com/Leon1304/what-if-engine/releases/download/render-sick-day-launch/sick-day-launch.mp4",
+     "size": 219327478
+    },
+    "coverA": {
+     "url": "https://github.com/Leon1304/what-if-engine/releases/download/render-sick-day-launch/sick-day-launch-cover.jpg",
+     "size": 413102,
+     "thumb": "covers/sick-day-launch.jpg"
+    },
+    "coverB": {
+     "url": "https://github.com/Leon1304/what-if-engine/releases/download/render-sick-day-launch/sick-day-launch-cover-b.jpg",
+     "size": 351681,
+     "thumb": "covers/sick-day-launch-b.jpg"
+    },
+    "srt": {
+     "url": "https://github.com/Leon1304/what-if-engine/releases/download/render-sick-day-launch/sick-day-launch.srt",
+     "size": 1318
+    }
+   },
+   "preview": null,
+   "captions": {
+    "youtube": {
+     "title": "What if the whole world called in sick for GTA 6?",
+     "description": "Launch day. You're not sick. Neither is anyone else. 🎮\n400 million sick days, two-mile lines, a frozen city… and then the power grid gives up.\nWould you call in sick for it? Comment A, B or C 👇\n\n#shorts #whatif #launchday #blackout #gamer",
+     "tags": [
+      "what if everyone called in sick",
+      "calling in sick",
+      "sick day",
+      "launch day",
+      "game launch day",
+      "everyone called in sick",
+      "power outage",
+      "blackout",
+      "city blackout",
+      "power grid",
+      "power grid failure",
+      "grid down",
+      "consoles",
+      "video game launch",
+      "gamer",
+      "gamers",
+      "gaming",
+      "pizza guy",
+      "generator",
+      "empty city",
+      "line outside store",
+      "empty office",
+      "sick note",
+      "what if",
+      "what if scenarios",
+      "3d animation",
+      "funny animation",
+      "shorts",
+      "whatifthishappenedscenarios",
+      "calling in sik",
+      "blackot"
+     ],
+     "tagChars": 460
+    },
+    "instagram": "Launch day. You're not sick. Neither is anyone else. 🎮⚡\nThe whole world calls in sick, the city stops, and the power grid can't take it.\nWould you call in sick for it? Comment A, B or C 👇\n\n#whatif #launchday #callinginsick #blackout #gamer",
+    "tiktok": "Launch day. Nobody is sick. Everybody called in sick. 🎮⚡\nThen the power grid gives up. Would you call in sick for it? Comment A, B or C 👇\n\n#whatif #launchday #callinginsick #blackout #gamer",
+    "hooks": [
+     "400 million people called in sick on the same day.",
+     "The game came out. The power grid didn't survive.",
+     "Only one window in the city is still lit."
+    ]
+   },
+   "auto": false
+  },
+  {
+   "slug": "delayed-launch-day",
+   "title": "What if GTA 6 got delayed again, live on launch day?",
+   "kind": "story",
+   "dur": 56.4,
+   "aspect": "9:16",
+   "accent": "orange",
+   "series": null,
+   "ending": null,
+   "date": "2026-11-14T15:32:17Z",
+   "status": "ready",
+   "files": {
+    "mp4": {
+     "url": "https://github.com/Leon1304/what-if-engine/releases/download/render-delayed-launch-day/delayed-launch-day.mp4",
+     "size": 214454727
+    },
+    "coverA": {
+     "url": "https://github.com/Leon1304/what-if-engine/releases/download/render-delayed-launch-day/delayed-launch-day-cover.jpg",
+     "size": 471320,
+     "thumb": "covers/delayed-launch-day.jpg"
+    },
+    "coverB": {
+     "url": "https://github.com/Leon1304/what-if-engine/releases/download/render-delayed-launch-day/delayed-launch-day-cover-b.jpg",
+     "size": 372354,
+     "thumb": "covers/delayed-launch-day-b.jpg"
+    },
+    "srt": {
+     "url": "https://github.com/Leon1304/what-if-engine/releases/download/render-delayed-launch-day/delayed-launch-day.srt",
+     "size": 1203
+    }
+   },
+   "preview": null,
+   "captions": {
+    "youtube": {
+     "title": "What if GTA 6 got delayed again, live on launch day?",
+     "description": "Three seconds to launch. Ten thousand fans. Then the countdown flips. ⏳\nYou camp outside the store. Your tent is called Kevin. The release date has other plans.\nHow long would you wait? Comment A, B or C 👇\n\n#shorts #whatif #launchday #countdown #gamer",
+     "tags": [
+      "what if the game got delayed",
+      "game delayed again",
+      "delayed on launch day",
+      "launch day",
+      "release date delay",
+      "countdown",
+      "launch countdown",
+      "delayed to 2027",
+      "camping outside store",
+      "tent",
+      "waiting in line",
+      "fans waiting",
+      "line outside store",
+      "midnight launch",
+      "video game hype",
+      "gamer",
+      "gamers",
+      "gaming",
+      "video game delay",
+      "still waiting",
+      "one year later",
+      "what if",
+      "what if scenarios",
+      "3d animation",
+      "funny animation",
+      "shorts",
+      "whatifthishappenedscenarios",
+      "delaid",
+      "delayd"
+     ],
+     "tagChars": 459
+    },
+    "instagram": "Three seconds to launch… and the countdown flips. ⏳😭\nYou camped outside the store for days. Your tent is named Kevin. The release date has other plans.\nHow long would you wait? Comment A, B or C 👇\n\n#whatif #launchday #countdown #gamedelay #gamer",
+    "tiktok": "Three seconds to launch. Then the countdown flips. ⏳\nHow long would you wait outside the store? Comment A, B or C 👇\n\n#whatif #launchday #countdown #gamedelay #gamer",
+    "hooks": [
+     "The countdown hit zero. The screen said: delayed.",
+     "He camped outside the store for 365 days.",
+     "My tent's name is Kevin. Kevin has seen things."
+    ]
+   },
+   "auto": false
+  },
+  {
+   "slug": "vice-city-real",
+   "title": "What if Vice City was real for 24 hours?",
+   "kind": "explain",
+   "dur": 41.6,
+   "aspect": "9:16",
+   "accent": "cyan",
+   "series": null,
+   "ending": null,
+   "date": "2026-11-14T15:31:32Z",
+   "status": "ready",
+   "files": {
+    "mp4": {
+     "url": "https://github.com/Leon1304/what-if-engine/releases/download/render-vice-city-real/vice-city-real.mp4",
+     "size": 151507314
+    },
+    "coverA": {
+     "url": "https://github.com/Leon1304/what-if-engine/releases/download/render-vice-city-real/vice-city-real-cover.jpg",
+     "size": 265758,
+     "thumb": "covers/vice-city-real.jpg"
+    },
+    "coverB": {
+     "url": "https://github.com/Leon1304/what-if-engine/releases/download/render-vice-city-real/vice-city-real-cover-b.jpg",
+     "size": 513988,
+     "thumb": "covers/vice-city-real-b.jpg"
+    },
+    "srt": {
+     "url": "https://github.com/Leon1304/what-if-engine/releases/download/render-vice-city-real/vice-city-real.srt",
+     "size": 923
+    }
+   },
+   "preview": null,
+   "captions": {
+    "youtube": {
+     "title": "What if Vice City was real for 24 hours?",
+     "description": "Spoiler: it basically is. It's called Miami. 🌴\nThe world's busiest cruise port, about 1.3 million alligators in Florida, and iguanas that freeze and fall out of palm trees on cold nights.\nWhich one surprised you? Comment A, B or C 👇\n\nSources: PortMiami (8.2M cruise passengers, FY2024) · Florida Fish and Wildlife Conservation Commission (alligators) · National Weather Service Miami (falling iguanas)\n\n#shorts #whatif #miami #fallingiguanas #floridawildlife",
+     "tags": [
+      "what if miami was a video game",
+      "miami",
+      "miami facts",
+      "real miami",
+      "miami beach",
+      "ocean drive",
+      "art deco",
+      "neon",
+      "falling iguanas",
+      "frozen iguanas",
+      "iguanas falling from trees",
+      "cold stunned iguana",
+      "florida",
+      "florida wildlife",
+      "weird florida facts",
+      "cold snap",
+      "alligators",
+      "florida alligators",
+      "alligator in pool",
+      "cruise port",
+      "port miami",
+      "cruise ships",
+      "busiest cruise port",
+      "science facts",
+      "explained",
+      "what if",
+      "3d animation",
+      "shorts",
+      "whatifthishappenedscenarios",
+      "iguana",
+      "iguanna"
+     ],
+     "tagChars": 473
+    },
+    "instagram": "Neon hotels, cruise ships, alligators in the pool… and iguanas falling out of palm trees. 🌴🦎 This is real Miami.\nWhich one surprised you? Comment A, B or C 👇\n\n#whatif #miami #fallingiguanas #floridawildlife #sciencefacts",
+    "tiktok": "Real Miami has iguanas that fall out of palm trees. 🌴🦎\nCruise port, gators or falling iguanas: which one surprised you? Comment A, B or C 👇\n\n#whatif #miami #fallingiguanas #floridawildlife #sciencetok",
+    "hooks": [
+     "In Miami, it can rain iguanas.",
+     "Florida has about 1.3 million alligators. Some check into the pool.",
+     "The busiest cruise port on Earth is in Miami."
+    ]
+   },
+   "auto": false
   },
   {
    "slug": "db-cooper-flight",
