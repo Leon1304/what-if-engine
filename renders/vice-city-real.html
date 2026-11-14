@@ -320,7 +320,7 @@ const CFG = {
   filter: 'film', grain: 0.035, vignette: 0.35, saturation: 1.12, contrast: 1.05,
   shadows: true, area: 40, sunAz: 200, handheld: 0.5,
   capPos: 'mid', karaoke: true, voice: 'auto', series: null,
-  transition: 'auto'
+  transition: 'cut'
 };
 const LIVE = {};
 
@@ -342,12 +342,12 @@ const CAM = [
   { t: 3.0, p: [-10, 2.0, 10.0], l: [6, 5.2, -2], fov: 52, e: 'lin' },
   ...shot('wide', 3.0, 5.0, [0, 6, 0], { az: 25, dist: 40, h: 16, turn: 10 }),
   // the port
-  { t: 8.1, cut: true, tr: 'whip', p: [2, 2.0, 30], l: [40, 14, 320], fov: 46 },
+  { t: 8.1, cut: true, tr: 'cut', p: [2, 2.0, 30], l: [40, 14, 320], fov: 46 },
   { t: 11.0, p: [6, 2.1, 30], l: [46, 14, 320], fov: 44, e: 'lin' },
   { t: 11.0, cut: true, p: [-60, 22, 270], l: [40, 14, 320], fov: 50 },
   { t: 14.0, p: [-55, 24, 262], l: [44, 14, 320], fov: 50, e: 'lin' },
   // the gators
-  ...shot('mid', 14.0, 3.0, 'croc', { az: 40, dist: 6, h: 2.2, dy: 0.4, tr: 'whip' }),
+  ...shot('mid', 14.0, 3.0, 'croc', { az: 40, dist: 6, h: 2.2, dy: 0.4, tr: 'cut' }),
   ...shot('mid', 17.0, 3.1, [0, 1, -24], { az: 160, dist: 9, h: 3.5 }),
   // the cold snap
   ...shot('wide', 20.1, 2.6, [0, 4, 0], { az: 15, dist: 34, h: 10, tr: 'dip' }),
