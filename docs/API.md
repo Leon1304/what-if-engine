@@ -1495,3 +1495,11 @@ Kuppelzelt (Außenzelt, zwei Bögen mit Gestänge, Überzelt, Bodenrand) oder Fi
 
 ## Countdown-Leinwand `countdownScreen(p, w, h, { segs, msgs, accent, label: 'LAUNCH IN', span, ticks, sound, x, y, z, ry, wall, … })`
 LED-Leinwand (über `screenPanel`). `segs: [{ from, at, remain: t => Sekunden, glitch }]`: in jedem Abschnitt zählt sie von `from` bis `at` herunter (Anzeige `Xd HH:MM:SS`, die letzten 10 s groß in der Akzentfarbe, Fortschrittsbalken über `span` s), steht kurz auf 0 und flackert dann `glitch` s lang digital. `remain` darf beliebig sein (Zeitraffer, Sprünge zwischen Shots), Standard `(at − t) · scale`. Außerhalb der Abschnitte zeigt sie `msgs: [[t, Titel, Untertitel, strike]]` (der jüngste mit t ≤ jetzt; `strike: true` = grau mit rotem Strich durch, z. B. verschobene Termine). `ticks: [t …]` = Tick-Geräusche, beim Glitch kommt `glitch` von selbst (`sound: false` = still). Ohne Marken/Logos. Test: `tests/camp-out`.
+
+# Neu in v3.32 (Strandstadt: Art-déco-Hotel, Kältestarre)
+
+## Art-déco-Hotel `decoHotel(p, x, z, { color, trim, neon, name, floors: 3, w: 14, d: 10, ry, corner: 'round' | false, flicker })` → `{ g, door, top }`
+Pastellfarbenes Strandhotel im Stil der 1930er (Ocean-Drive-Look, ohne echte Namen): Putzfassade mit Sockel, Fensterreihen mit Rahmen und Sprosse, „Augenbrauen“-Gesimse über jedem Geschoss, Bullauge, gestufte Krone, abgerundete Ecke mit Bändern (`corner: false` = eckig), senkrechte Finne mit Neon-Namen (Buchstaben untereinander, `neon` = Farbe, flackert leicht), Vordach auf Säulen mit Neonleiste, Glastür, Terrasse. Fenster und Neon leuchten bei Dämmerung/Nacht von selbst. Front nach +z; die Vorderkante liegt bei z, das Gebäude reicht nach −z, Vordach und Terrasse bis z + 3,6.
+
+## Kältestarre `coldFall(tier, t, { from: [x, y, z], to: [x, z], ry, spin, climb, thud })` → `{ land }`
+Ein kältestarres Tier (Leguan aus `lizard({ scale: 4 })`, Eidechse, Vogel) klammert sich bis `t` mit dem Kopf nach oben an einen Stamm (`from`; `climb: false` = waagerecht auf einem Ast), lässt dann steif los, fällt mit echter Fallzeit, dreht sich dabei auf den Rücken (`spin` = Drehung um die Hochachse), federt einmal und bleibt rücklings bei `to` liegen (Aufprall-Sound). Reine Funktion von t. `land` = Zeitpunkt der Landung (für `react()` daneben). Test: `tests/beach-city`.

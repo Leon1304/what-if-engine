@@ -4772,6 +4772,35 @@ function countdownScreen(p, w, h, o = {}) {   // big LED screen: label + countdo
   if (o.sound !== false) { for (const tt of o.ticks ?? []) sfx(tt, 'tick', 0.6); for (const q of segs) sfx(q.at + 0.15, 'glitch', 0.8); }
   return P;
 }
+// ---- v3.32 beach-city kit: decoHotel() (pastel art-deco hotel with neon name, eyebrows, fin, porthole windows, porch), coldFall() (a cold-stunned animal drops stiff from a tree) ----
+function decoHotel(p, x, z, o = {}) {   // front +z; color (pastel), trim, neon ('#FF4FB0'), name ('PALMS' — fictional), floors (3), w, d, ry, corner: 'round' | false. Neon and windows glow at dusk / night
+  const g = stat(grp(p, x, groundH(x, z), z, o.ry ?? 0)), c = o.color ?? '#F2B8C6', tr = o.trim ?? '#FFFFFF', nc = o.neon ?? '#FF4FB0', F = o.floors ?? 3, W = o.w ?? 14, D = o.d ?? 10, fh = 3.2, H = F * fh + 1.2, NC = { cast: false };
+  box(g, W, H, D, c, 0, 0, -D / 2, { surf: 'plaster' }); box(g, W + 0.3, 0.5, D + 0.3, shade(c, -0.12), 0, 0, -D / 2, { surf: 'concrete' });   // body + plinth
+  box(g, W + 0.4, 0.35, D + 0.4, tr, 0, H, -D / 2); box(g, W * 0.4, 1.2, 0.5, tr, -W * 0.18, H + 0.35, -0.3);   // parapet + stepped crown
+  box(g, W * 0.26, 1.8, 0.5, c, -W * 0.18, H + 1.55, -0.3); box(g, W * 0.12, 1.0, 0.5, tr, -W * 0.18, H + 3.35, -0.3);
+  if (o.corner !== false) { const cr = cyl(g, 2.0, 2.0, H, c, W / 2 - 0.4, 0, -0.9, { seg: 14, surf: 'plaster' }); for (let f = 1; f <= F; f++) cyl(g, 2.25, 2.25, 0.16, tr, W / 2 - 0.4, f * fh - 0.1, -0.9, { seg: 14, ...NC }); }   // rounded corner with ribbons
+  const win = mat('#2A3A4A', { em: '#FFE3A8', ei: 0, kind: 'glass', own: true }); win.userData.nightEi = 0.9; win.userData.dayEi = 0.02; NIGHTMATS.push(win);
+  for (let f = 0; f < F; f++) { const y = 1.0 + f * fh;
+    box(g, W - 1.2, 0.14, 0.7, tr, -0.6, y + 1.9, 0.35, NC);   // eyebrow over the windows
+    for (let i = 0; i < 4; i++) { const wx = -W / 2 + 1.6 + i * (W - 4.2) / 3; box(g, 1.6, 1.4, 0.06, '', wx, y + 0.3, 0.02, { mat: win, ...NC }); box(g, 1.75, 0.1, 0.18, tr, wx, y + 0.22, 0.08, NC); box(g, 0.06, 1.4, 0.08, tr, wx, y + 0.3, 0.06, NC); }
+    cyl(g, 0.38, 0.38, 0.06, '', W / 2 - 3.1, y + 0.95, 0.03, { mat: win, rx: Math.PI / 2, seg: 14, ...NC }); }   // porthole
+  box(g, 0.5, H + 0.6, 1.2, tr, -W / 2 + 0.9, 0.4, 0.6); const nm = o.name ?? 'PALMS';   // vertical fin with the neon name
+  textSign(g, nm.split('').join('\n'), { w: 0.75, h: Math.min(H - 1, nm.length * 1.05), neon: nc, x: -W / 2 + 0.9, y: (H + 1) / 2 + 0.6, z: 1.25, board: 0, flicker: o.flicker ?? 0.05, seed: x });
+  box(g, W * 0.45, 0.25, 3.2, tr, 0.6, 3.0, 1.6); for (const sx of [-1, 1]) cyl(g, 0.12, 0.12, 3.0, tr, 0.6 + sx * W * 0.2, 0, 3.0, { seg: 8 });   // porch canopy on columns
+  box(g, W * 0.45, 0.04, 0.05, '', 0.6, 2.95, 3.2, { mat: mat(nc, { basic: true, glow: 1.4 }), ...NC });   // neon strip under the canopy
+  box(g, 2.2, 2.5, 0.08, '#24323E', 0.6, 0.5, 0.03, { kind: 'glass', ...NC }); box(g, W * 0.6, 0.12, 3.6, '#D8D2C2', 0.6, 0.01, 1.8, NC);   // door + terrace
+  return { g, door: [x, z + 2.4], top: H };
+}
+function coldFall(obj, t, o = {}) {   // a cold-stunned animal (iguana, lizard, bird) lets go: before t it clings at `from` (body still), then drops stiff, turns over, bounces once and lies belly-up at `to`
+  // o: from [x, y, z], to [x, z] (default straight down), ry, spin (turns while falling), thud (sound volume)
+  const n = dyn(obj.root ?? obj.g ?? obj), [fx, fy, fz] = o.from ?? [n.position.x, 3, n.position.z], [tx, tz] = o.to ?? [fx, fz], gy = groundH(tx, tz), Tf = Math.sqrt(2 * Math.max(0.2, fy - gy) / 9.81), ry = o.ry ?? n.rotation.y, sp = o.spin ?? 1.4;
+  late(tt => { if (tt < t) { n.position.set(fx, fy, fz); n.rotation.set(-Math.PI / 2 * (o.climb !== false ? 1 : 0), ry, 0, 'YXZ'); return; }   // clinging head-up on the trunk
+    const u = tt - t, k = clamp(u / Tf), b = u > Tf ? Math.max(0, Math.sin(Math.min(1, (u - Tf) / 0.3) * Math.PI)) * 0.12 * (fy - gy > 1 ? 1 : 0) : 0;
+    n.position.set(lerp(fx, tx, k), u < Tf ? fy - 0.5 * 9.81 * u * u : gy + b, lerp(fz, tz, k));
+    const r = clamp(u / (Tf + 0.3)); n.rotation.set(lerp(o.climb !== false ? -Math.PI / 2 : 0, 0, r), ry + sp * r, Math.PI * EASE.out(r), 'YXZ'); });
+  sfx(t + Tf, 'impact', o.thud ?? 0.5);
+  return { land: t + Tf };
+}
 // ---- v2.33.3 horror kit: convex security mirror, porthole lens (mirror / peephole view) ----
 function convexMirror(p, x, y, z, o = {}) {   // round convex shop mirror on a wall bracket; faces +z (ry turns it), rx tilts it down. → { g, at: [x, y, z] (centre) }
   const r = o.r ?? 0.42, g = stat(grp(p ?? world, x, y, z, o.ry ?? 0)); g.rotation.x = o.rx ?? 0.35;
