@@ -25,7 +25,7 @@ Formeln und Saison:
 
 ## Neues Format „History“ (ab 12.11.2026, von Leon gewünscht)
 Badge „History“, Du-Perspektive mitten im echten Moment („What if you were there?“), Jahres-Zähler oder Zeitleiste, eine Faktenkarte mit Quelle, Mythos-Karte nur bei echtem Mythos, Documentary-Erzähler, 45–55 s, Quellen unter „Sources:“. Ernste Themen ohne Gags. (Formatvorschlag von Claude, von Leon noch nicht bestätigt.)
-- HI1 What if you sailed with the biggest invasion fleet in history? – Mongolen 1281, Taifun „kamikaze“; Aufhänger: Würfel und Spielkarten im dritten Wrack vor Takashima (Ende Okt. 2026, Ancient Origins)
+- HI1 What if you sailed with the biggest invasion fleet in history? – Mongolen 1281, Taifun „kamikaze“; Aufhänger: Würfel und Spielkarten im dritten Wrack vor Takashima (Ende Okt. 2026, Ancient Origins) ✅ auf GitHub (mongol-fleet-1281, 14.11.)
 - HI2 What if you opened Tutankhamun's tomb? – Jahrestag 26.11.1922; Mythos „Fluch“ → FALSE (Carter lebte bis 1939); Slot Do 26.11.
 - HI3 What if you drank from a Roman cup that changes color? – Lycurgus-Becher, Gold-/Silber-Nanoteilchen; Sheffield-Nachbau (GreekReporter 27.10.2026), Live Science 2.11.
 - HI4 What if your city's favorite color was poisoning you? – Maya, Zinnober/Quecksilber in Seen (Science Advances, Nov. 2026)

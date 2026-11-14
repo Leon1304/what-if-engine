@@ -1,5 +1,5 @@
 {
- "updated": "2026-11-13T21:09:52Z",
+ "updated": "2026-11-14T02:26:35Z",
  "videos": [
   {
    "slug": "dday",
@@ -192,6 +192,79 @@
    "auto": true
   },
   {
+   "slug": "mongol-fleet-1281",
+   "title": "What if you sailed with the biggest invasion fleet in history?",
+   "kind": "history",
+   "dur": 57.0,
+   "aspect": "9:16",
+   "accent": "yellow",
+   "series": null,
+   "ending": null,
+   "date": "2026-11-14T02:26:35Z",
+   "status": "ready",
+   "files": {
+    "mp4": {
+     "url": "https://github.com/Leon1304/what-if-engine/releases/download/render-mongol-fleet-1281/mongol-fleet-1281.mp4",
+     "size": 216149364
+    },
+    "coverA": {
+     "url": "https://github.com/Leon1304/what-if-engine/releases/download/render-mongol-fleet-1281/mongol-fleet-1281-cover.jpg",
+     "size": 476037,
+     "thumb": "covers/mongol-fleet-1281.jpg"
+    },
+    "coverB": {
+     "url": "https://github.com/Leon1304/what-if-engine/releases/download/render-mongol-fleet-1281/mongol-fleet-1281-cover-b.jpg",
+     "size": 242802,
+     "thumb": "covers/mongol-fleet-1281-b.jpg"
+    },
+    "srt": {
+     "url": "https://github.com/Leon1304/what-if-engine/releases/download/render-mongol-fleet-1281/mongol-fleet-1281.srt",
+     "size": 1310
+    }
+   },
+   "preview": null,
+   "captions": {
+    "youtube": {
+     "title": "What if you sailed with the biggest invasion fleet in history?",
+     "description": "1281: 4,400 ships, 140,000 men – and a typhoon nobody saw coming. 🌊⚓ Divers just found dice in one of the wrecks off Takashima.\nThe typhoon hits. Where are you? A) Below deck B) Holding the mast C) Cutting the chains – Comment A, B or C 👇\nSources: Fukuoka Now & Archaeology Magazine (third Takashima wreck, Oct/Nov 2026), World History Encyclopedia (Mongol invasions of Japan)\n\n#shorts #whatif #mongolempire #shipwreck #history",
+     "tags": [
+      "what if you sailed with the biggest invasion fleet",
+      "biggest invasion fleet in history",
+      "mongol invasion of japan",
+      "mongol invasion 1281",
+      "mongol fleet",
+      "mongol shipwreck",
+      "takashima shipwreck",
+      "battle of koan",
+      "divine wind typhoon",
+      "kamikaze wind",
+      "typhoon 1281",
+      "yuan dynasty fleet",
+      "mongol empire",
+      "samurai vs mongols",
+      "medieval shipwreck",
+      "underwater archaeology",
+      "dice found in shipwreck",
+      "mongolian invasion japan",
+      "mongal invasion",
+      "what if",
+      "what if scenarios",
+      "history shorts",
+      "shorts"
+     ],
+     "tagChars": 493
+    },
+    "instagram": "4,400 ships. 140,000 men. One typhoon. 🌊\nIn 1281 the Mongol fleet anchored off Japan – and divers just found dice in one of its wrecks.\nThe typhoon hits. Where are you? Comment A, B or C 👇\n\n#whatif #mongolempire #shipwreck #historyfacts #history",
+    "tiktok": "You're on the biggest invasion fleet in history – and a typhoon is coming 🌊\nMongol invasion of Japan, 1281. Divers just found dice in a shipwreck.\nBelow deck, holding the mast or cutting the chains? Comment A, B or C 👇\n\n#whatif #mongolempire #shipwreck #historytok #history",
+    "hooks": [
+     "4,400 ships. 140,000 men. One night in August.",
+     "Divers found their dice 745 years later.",
+     "They chained their ships together. That was the mistake."
+    ]
+   },
+   "auto": false
+  },
+  {
    "slug": "bus-stop-types",
    "title": "7 types of people at every bus stop",
    "kind": "story",
@@ -226,7 +299,7 @@
    "captions": {
     "youtube": {
      "title": "7 Types of People at Every Bus Stop",
-     "description": "Seven types of people. Every bus stop. You're one of them. 🚏\nPhone caller, bench owner or the leaner? Comment A, B or C 👇\n\n#shorts #viral #trending #youtubeshorts #fyp",
+     "description": "Seven types of people. Every bus stop. You're one of them. 🚏\nPhone caller, bench owner or the leaner? Comment A, B or C 👇\n\n#shorts #whatif #typesofpeople #busstop #relatable",
      "tags": [
       "types of people at the bus stop",
       "bus stop",
@@ -254,15 +327,12 @@
       "bus",
       "shorts",
       "whatifthishappenedscenarios",
-      "what if scenarios",
-      "viral",
-      "trending",
-      "fyp"
+      "what if scenarios"
      ],
-     "tagChars": 466
+     "tagChars": 447
     },
-    "instagram": "7 types of people at every bus stop 🚏 You're one of them.\nPhone caller, bench owner or the leaner? Comment A, B or C 👇\n\n#reels #viral #explore #reelsinstagram #trending",
-    "tiktok": "7 types of people at every bus stop 🚏 Be honest.\nWhich one are you? Comment A, B or C 👇\n\n#fyp #foryou #foryoupage #viral #trending",
+    "instagram": "7 types of people at every bus stop 🚏 You're one of them.\nPhone caller, bench owner or the leaner? Comment A, B or C 👇\n\n#whatif #typesofpeople #busstop #relatable #3danimation",
+    "tiktok": "7 types of people at every bus stop 🚏 Be honest, you're one of them.\nPhone caller, bench owner or the leaner? Comment A, B or C 👇\n\n#whatif #typesofpeople #busstop #relatable #3danimation",
     "hooks": [
      "Every bus stop has these 7 people.",
      "The bus is 47 minutes late. Again.",
@@ -285,16 +355,16 @@
    "files": {
     "mp4": {
      "url": "https://github.com/Leon1304/what-if-engine/releases/download/render-jerusalem-zombie-wall/jerusalem-zombie-wall.mp4",
-     "size": 214090485
+     "size": 213887407
     },
     "coverA": {
      "url": "https://github.com/Leon1304/what-if-engine/releases/download/render-jerusalem-zombie-wall/jerusalem-zombie-wall-cover.jpg",
-     "size": 979879,
+     "size": 980151,
      "thumb": "covers/jerusalem-zombie-wall.jpg"
     },
     "coverB": {
      "url": "https://github.com/Leon1304/what-if-engine/releases/download/render-jerusalem-zombie-wall/jerusalem-zombie-wall-cover-b.jpg",
-     "size": 411690,
+     "size": 411656,
      "thumb": "covers/jerusalem-zombie-wall-b.jpg"
     },
     "srt": {
@@ -306,7 +376,7 @@
    "captions": {
     "youtube": {
      "title": "What if the zombie apocalypse reached Jerusalem?",
-     "description": "Sixteen meters of concrete. Thousands of zombies. They don't climb – they stack. 🧟‍♂️🧱\nYou have three minutes to reach the last helicopter.\nWhere would YOU have gone? Comment A, B or C 👇\n\n#shorts #fyp #viral #trending #youtubeshorts",
+     "description": "Sixteen meters of concrete. Thousands of zombies. They don't climb – they stack. 🧟‍♂️🧱\nYou have three minutes to reach the last helicopter.\nWhere would YOU have gone? Comment A, B or C 👇\n\n#shorts #whatif #zombiehorde #zombieapocalypse #zombiesurvival",
      "tags": [
       "what if zombies reached jerusalem",
       "zombie apocalypse jerusalem",
@@ -333,15 +403,12 @@
       "whatifthishappenedscenarios",
       "survival story",
       "helicopter escape",
-      "last helicopter",
-      "viral",
-      "trending",
-      "fyp"
+      "last helicopter"
      ],
-     "tagChars": 478
+     "tagChars": 459
     },
-    "instagram": "A 16-meter wall. Thousands of zombies. They don't climb – they stack. 🧟‍♂️🧱\nWhere would you have gone: the wall, a basement or the helicopter rope? Comment A, B or C 👇\n\n#reels #viral #reelsinstagram #explore #trending",
-    "tiktok": "They don't climb the wall. They STACK. 🧟‍♂️🧱\nWall, basement or helicopter rope? Comment A, B or C 👇\n\n#fyp #foryou #foryoupage #viral #trending",
+    "instagram": "Jerusalem. A 16-meter wall. Thousands of zombies. They don't climb – they stack. 🧟‍♂️🧱\nWhere would you have gone: the wall, a basement or the helicopter rope? Comment A, B or C 👇\n\n#whatif #zombiehorde #zombiewall #zombieapocalypse #zombiesurvival",
+    "tiktok": "What if the zombie apocalypse reached Jerusalem? They don't climb the wall. They STACK. 🧟‍♂️🧱\nWall, basement or helicopter rope? Comment A, B or C 👇\n\n#whatif #zombiehorde #zombiewall #zombieapocalypse #zombiesurvival",
     "hooks": [
      "Sixteen meters of concrete vs. thousands of zombies. Guess who wins.",
      "The safest city on Earth had one weakness: teamwork.",
@@ -469,7 +536,7 @@
    "captions": {
     "youtube": {
      "title": "What if you were the guard during the Louvre heist?",
-     "description": "Paris, October 19, 2025. Two \"workers\" ride a furniture lift up to the Apollo Gallery — and in under 8 minutes, nine crown jewels are gone. One crown was dropped on the way. The other eight are still missing.\nYou're the guard. What do you do? Comment A, B or C 👇\nSources: AFP (Oct 20, 2026 – jewels still missing, suspects await trial) · Paris prosecutor via AFP (about €88M / $102M, under 8 minutes) · ABC News (Empress Eugénie's crown recovered, gallery reopened July 2026)\n#shorts #viral #trending #youtubeshorts #fyp",
+     "description": "Paris, October 19, 2025. Two \"workers\" ride a furniture lift up to the Apollo Gallery — and in under 8 minutes, nine crown jewels are gone. One crown was dropped on the way. The other eight are still missing.\nYou're the guard. What do you do? Comment A, B or C 👇\nSources: AFP (Oct 20, 2026 – jewels still missing, suspects await trial) · Paris prosecutor via AFP (about €88M / $102M, under 8 minutes) · ABC News (Empress Eugénie's crown recovered, gallery reopened July 2026)\n#shorts #whatif #louvreheist #louvre #truecrime",
      "tags": [
       "louvre heist",
       "what if you were the guard during the louvre heist",
@@ -494,15 +561,12 @@
       "what if scenarios",
       "shorts",
       "3d animation",
-      "whatifthishappenedscenarios",
-      "viral",
-      "trending",
-      "fyp"
+      "whatifthishappenedscenarios"
      ],
-     "tagChars": 463
+     "tagChars": 444
     },
-    "instagram": "You're the museum guard. A disc cutter screams through the window — 8 minutes later, the crown jewels are gone. 💎\nWhat do YOU do? Comment A, B or C 👇\n\n#reels #viral #explore #reelsinstagram #trending",
-    "tiktok": "POV: you're the guard during the Louvre heist 💎\n9 jewels. Under 8 minutes. 8 still missing. What do you do? Comment A, B or C 👇\n\n#fyp #foryou #foryoupage #viral #trending",
+    "instagram": "You're the guard at the Louvre. A disc cutter screams through the window — 8 minutes later, the crown jewels are gone. 💎\nWhat do YOU do? Comment A, B or C 👇\n\n#whatif #louvreheist #louvre #truecrime #heist",
+    "tiktok": "POV: you're the guard during the Louvre heist 💎\n9 crown jewels. Under 8 minutes. 8 still missing. What do you do? Comment A, B or C 👇\n\n#whatif #louvreheist #louvre #truecrime #heist",
     "hooks": [
      "Two 'workers' rode a furniture lift into the Louvre. Nobody looked twice.",
      "Eight minutes. Nine crown jewels. One dropped crown.",
@@ -549,7 +613,7 @@
    "captions": {
     "youtube": {
      "title": "What if a Megalodon was in your pool? 🦈",
-     "description": "60 seconds of air. One leaking float. And a shark that doesn't fit.\nWhich monster comes back next? Comment A, B or C 👇 Most votes decides part 2.\nPart 1 of Monsters Are Back.\n\n#shorts #youtubeshorts #viral #trending #fyp",
+     "description": "60 seconds of air. One leaking float. And a shark that doesn't fit.\nWhich monster comes back next? Comment A, B or C 👇 Most votes decides part 2.\nPart 1 of Monsters Are Back.\n\n#shorts #whatif #monstersareback #megalodon #sharks",
      "tags": [
       "what if a megalodon was in your pool",
       "megalodon in my pool",
@@ -574,14 +638,12 @@
       "funny animation",
       "shorts",
       "whatifthishappenedscenarios",
-      "monsters are back part 1",
-      "viral",
-      "fyp"
+      "monsters are back part 1"
      ],
-     "tagChars": 480
+     "tagChars": 470
     },
-    "instagram": "A Megalodon in your pool. 60 seconds of air. 🦈\n\nWhich monster comes back next? A) A T. rex in the city B) Mammoths at the mall C) A kraken in the harbor – comment your pick, most votes decides part 2 👇\n\n#reels #reelsinstagram #explore #viral #trending",
-    "tiktok": "A Megalodon is in your pool… and your float is leaking 🦈\nWhich monster comes back next? Comment A, B or C 👇 Follow for part 2\n\n#fyp #foryou #foryoupage #viral #trending",
+    "instagram": "A Megalodon in your pool. 60 seconds of air. 🦈\n\nWhich monster comes back next? A) A T. rex in the city B) Mammoths at the mall C) A kraken in the harbor – comment your pick, most votes decides part 2 👇\n\n#whatif #monstersareback #megalodon #sharks #prehistoric",
+    "tiktok": "What if a Megalodon was in your pool? 🦈 And your float is leaking…\nWhich prehistoric monster comes back next? A) T. rex in the city B) Mammoths at the mall C) Kraken in the harbor – comment 👇 Follow for part 2\n\n#whatif #monstersareback #megalodon #sharktok #prehistoric",
     "hooks": [
      "What if a Megalodon was right under you?",
      "It’s bigger than your pool",
@@ -625,7 +687,7 @@
    "captions": {
     "youtube": {
      "title": "What if you stood on every planet without a suit? 🪐",
-     "description": "A portal, an ice cream and five very bad vacation spots.\nDid you guess right? Comment A, B or C 👇\n\nSources: WorldAtlas (survival times per planet) · NASA Solar System Exploration\n\n#shorts #youtubeshorts #viral #trending #fyp",
+     "description": "A portal, an ice cream and five very bad vacation spots.\nDid you guess right? Comment A, B or C 👇\n\nSources: WorldAtlas (survival times per planet) · NASA Solar System Exploration\n\n#shorts #whatif #planets #solarsystem #space",
      "tags": [
       "what if you stood on every planet",
       "every planet without a spacesuit",
@@ -650,15 +712,12 @@
       "explained",
       "3d animation",
       "shorts",
-      "whatifthishappenedscenarios",
-      "viral",
-      "trending",
-      "fyp"
+      "whatifthishappenedscenarios"
      ],
-     "tagChars": 481
+     "tagChars": 462
     },
-    "instagram": "How long would you last on every planet? 🪐\n\nIs there a planet where you'd last more than 2 minutes? A) Yes, Mars B) Yes, a gas giant C) Nowhere – comment your pick 👇\n\n#reels #reelsinstagram #explore #viral #trending",
-    "tiktok": "How long would you last on every planet without a suit? 🪐\nComment A, B or C 👇\n\n#fyp #foryou #foryoupage #viral #trending",
+    "instagram": "How long would you last on every planet? 🪐\n\nIs there a planet where you'd last more than 2 minutes? A) Yes, Mars B) Yes, a gas giant C) Nowhere – comment your pick 👇\n\n#whatif #planets #solarsystem #space #astronomy",
+    "tiktok": "How long would you last on every planet in the solar system without a space suit? 🪐\nAnywhere you'd last more than 2 minutes? A) Yes, Mars B) Yes, a gas giant C) Nowhere – comment your pick 👇\n\n#whatif #planets #solarsystem #space #sciencetok",
     "hooks": [
      "How long would you last on every planet?",
      "Which planet kills you fastest?",
@@ -702,7 +761,7 @@
    "captions": {
     "youtube": {
      "title": "What happens when your heart stops? 💔",
-     "description": "Seconds, minutes, and the one thing that keeps you alive: someone who pushes hard and fast.\nCould you do CPR? Comment A or B 👇\n\nCardiac arrest: call your emergency number (112 in Europe, 911 in the US), push hard and fast in the center of the chest, use an AED if there is one. Learn CPR in a local first-aid course.\n\nSources: American Heart Association · The Conversation (why flatlines aren't shocked) · ProTrainings\n\n#shorts #youtubeshorts #viral #trending #fyp",
+     "description": "Seconds, minutes, and the one thing that keeps you alive: someone who pushes hard and fast.\nCould you do CPR? Comment A or B 👇\n\nCardiac arrest: call your emergency number (112 in Europe, 911 in the US), push hard and fast in the center of the chest, use an AED if there is one. Learn CPR in a local first-aid course.\n\nSources: American Heart Association · The Conversation (why flatlines aren't shocked) · ProTrainings\n\n#shorts #whatif #cpr #cardiacarrest #firstaid",
      "tags": [
       "what happens when your heart stops",
       "heart stops",
@@ -728,15 +787,12 @@
       "explained",
       "3d animation",
       "shorts",
-      "whatifthishappenedscenarios",
-      "viral",
-      "trending",
-      "fyp"
+      "whatifthishappenedscenarios"
      ],
-     "tagChars": 467
+     "tagChars": 448
     },
-    "instagram": "Your heart stops. The clock starts. 💔\n\nCould you do CPR? A) Yes B) No – comment your pick 👇\nEmergency: call 112 / 911, push hard and fast, use an AED.\n\n#reels #reelsinstagram #explore #viral #trending",
-    "tiktok": "What happens when your heart stops 💔\nCould you do CPR? Comment A or B 👇\n\n#fyp #foryou #foryoupage #viral #trending",
+    "instagram": "Your heart stops. The clock starts. 💔\n\nCould you do CPR? A) Yes B) No – comment your pick 👇\nEmergency: call 112 / 911, push hard and fast, use an AED.\n\n#whatif #cpr #cardiacarrest #firstaid #savealife",
+    "tiktok": "What happens when your heart stops? 💔 Cardiac arrest – the clock starts.\nCould you do CPR? Comment A or B 👇\nEmergency: call 112 / 911, push hard and fast, use an AED.\n\n#whatif #cpr #cardiacarrest #firstaid #learnontiktok",
     "hooks": [
      "What if your heart stopped at a bus stop?",
      "Why doctors don’t shock a flatline",
@@ -780,7 +836,7 @@
    "captions": {
     "youtube": {
      "title": "What if you fell into the lake that turns animals to stone? 🦩",
-     "description": "The internet says Lake Natron turns you to stone. It doesn't – but it's still a terrible place for a swim.\nDid the myth fool you? Comment A or B 👇\n\nSources: NASA Earth Observatory (Lake Natron, pH up to 10.5) · National Geographic (Nick Brandt's posed photos) · Smithsonian Magazine\n\n#shorts #youtubeshorts #viral #trending #fyp",
+     "description": "The internet says Lake Natron turns you to stone. It doesn't – but it's still a terrible place for a swim.\nDid the myth fool you? Comment A or B 👇\n\nSources: NASA Earth Observatory (Lake Natron, pH up to 10.5) · National Geographic (Nick Brandt's posed photos) · Smithsonian Magazine\n\n#shorts #whatif #lakenatron #tanzania #mythbusting",
      "tags": [
       "what if you fell into lake natron",
       "lake natron",
@@ -804,15 +860,12 @@
       "explained",
       "3d animation",
       "shorts",
-      "whatifthishappenedscenarios",
-      "viral",
-      "trending",
-      "fyp"
+      "whatifthishappenedscenarios"
      ],
-     "tagChars": 481
+     "tagChars": 462
     },
-    "instagram": "The lake that turns animals to stone… or does it? 🦩\n\nDid the myth fool you? A) Yes, totally B) Nope – comment your pick 👇\n\n#reels #reelsinstagram #explore #viral #trending",
-    "tiktok": "You fell into the lake that turns animals to stone 🦩\nDid the myth fool you? Comment A or B 👇\n\n#fyp #foryou #foryoupage #viral #trending",
+    "instagram": "Lake Natron: the lake that turns animals to stone… or does it? 🦩\n\nDid the myth fool you? A) Yes, totally B) Nope – comment your pick 👇\n\n#whatif #lakenatron #tanzania #mythbusting #sciencefacts",
+    "tiktok": "You fell into Lake Natron, the lake that \"turns animals to stone\" 🦩 Myth or science?\nDid the myth fool you? Comment A or B 👇\n\n#whatif #lakenatron #tanzania #mythbusting #sciencetok",
     "hooks": [
      "Touch this lake and you turn to stone? Not quite.",
      "The stone flamingos were posed. Here's the real story.",
@@ -859,7 +912,7 @@
    "captions": {
     "youtube": {
      "title": "What if a sperm whale swallowed you? 🐋",
-     "description": "90 seconds of air. One very confused whale. And Gerald is still eating popcorn.\nWhat swallows you next? Comment A, B or C 👇 Most votes decides part 2.\nPart 1 of Swallowed Alive.\n\n#shorts #youtubeshorts #viral #trending #fyp",
+     "description": "90 seconds of air. One very confused whale. And Gerald is still eating popcorn.\nWhat swallows you next? Comment A, B or C 👇 Most votes decides part 2.\nPart 1 of Swallowed Alive.\n\n#shorts #whatif #swallowedalive #spermwhale #whales",
      "tags": [
       "what if a sperm whale swallowed you",
       "swallowed by a whale",
@@ -884,14 +937,12 @@
       "funny animation",
       "shorts",
       "whatifthishappenedscenarios",
-      "swallowed alive part 1",
-      "viral",
-      "fyp"
+      "swallowed alive part 1"
      ],
-     "tagChars": 498
+     "tagChars": 488
     },
-    "instagram": "Swallowed alive. 90 seconds of air. 🐋\n\nWhat swallows you next? A) A T. rex B) A giant frog C) A washing machine – comment your pick, most votes decides part 2 👇\n\n#reels #reelsinstagram #explore #viral #trending",
-    "tiktok": "A sperm whale swallowed you… and you have 90 seconds of air 🐋\nWhat swallows you next? Comment A, B or C 👇 Follow for part 2\n\n#fyp #foryou #foryoupage #viral #trending",
+    "instagram": "Swallowed alive by a sperm whale. 90 seconds of air. 🐋\n\nWhat swallows you next? A) A T. rex B) A giant frog C) A washing machine – comment your pick, most votes decides part 2 👇\n\n#whatif #swallowedalive #spermwhale #whales #oceanlife",
+    "tiktok": "What if a sperm whale swallowed you? 🐋 You have 90 seconds of air.\nWhat swallows you next? A) T. rex B) Giant frog C) Washing machine – comment 👇 Follow for part 2\n\n#whatif #swallowedalive #spermwhale #whales #oceantok",
     "hooks": [
      "You went whale watching. The whale went people watching.",
      "What if you had 90 seconds to escape a whale's stomach?",
@@ -935,7 +986,7 @@
    "captions": {
     "youtube": {
      "title": "What if you had to fight a robot? 🤖🥊",
-     "description": "Three rounds. One steel cage. And it doesn't need its head to keep fighting.\nHow would YOU beat it? Comment A, B or C 👇\n\n#shorts #youtubeshorts #viral #trending #fyp",
+     "description": "Three rounds. One steel cage. And it doesn't need its head to keep fighting.\nHow would YOU beat it? Comment A, B or C 👇\n\n#shorts #whatif #robotfight #robotboxing #humanoidrobot",
      "tags": [
       "what if you had to fight a robot",
       "robot fight",
@@ -962,15 +1013,12 @@
       "3d animation",
       "shorts",
       "funny animation",
-      "whatifthishappenedscenarios",
-      "viral",
-      "trending",
-      "fyp"
+      "whatifthishappenedscenarios"
      ],
-     "tagChars": 442
+     "tagChars": 423
     },
-    "instagram": "It lost its head. It kept fighting. 🤖\n\nHow would you beat the robot? A) Kick the head B) Unplug it C) Run – comment your pick 👇\n\n#reels #viral #reelsinstagram #explore #trending",
-    "tiktok": "It lost its head… and kept fighting 🤖\nHow would YOU beat it? Comment A, B or C 👇\n\n#fyp #foryou #foryoupage #viral #trending",
+    "instagram": "It lost its head. It kept fighting. 🤖\n\nHow would you beat the robot? A) Kick the head B) Unplug it C) Run – comment your pick 👇\n\n#whatif #robotfight #robotboxing #whatifscenario #humanoidrobot",
+    "tiktok": "What if you had to fight a robot? 🤖 It lost its head… and kept fighting. Three rounds in a steel cage vs a humanoid robot.\nHow would YOU beat it? A) Kick the head B) Unplug it C) Run – comment your pick 👇\n\n#whatif #robotfight #robotboxing #whatifscenario #humanoidrobot",
     "hooks": [
      "What if your opponent didn't need its head?",
      "What if the robot kept fighting… without its head?",
@@ -1014,7 +1062,7 @@
    "captions": {
     "youtube": {
      "title": "What if all the planets lined up? 🪐",
-     "description": "This week, four planets line up in the morning sky. The internet says their gravity could tear Earth apart. Did you believe it? Comment A or B 👇\n\nSources: NASA (via TIME) – planetary tides ~1/25 mm · NASA NSSDCA, \"The Planetary Alignment of 5 May 2000\" · \"The Jupiter Effect\" (1974) · Forbes, 10 Nov 2026\n\n#shorts #youtubeshorts #viral #trending #fyp",
+     "description": "This week, four planets line up in the morning sky. The internet says their gravity could tear Earth apart. Did you believe it? Comment A or B 👇\n\nSources: NASA (via TIME) – planetary tides ~1/25 mm · NASA NSSDCA, \"The Planetary Alignment of 5 May 2000\" · \"The Jupiter Effect\" (1974) · Forbes, 10 Nov 2026\n\n#shorts #whatif #planetparade #planetaryalignment #mythbusting",
      "tags": [
       "what if all the planets lined up",
       "planets lined up",
@@ -1040,15 +1088,12 @@
       "what if scenarios",
       "3d animation",
       "shorts",
-      "whatifthishappenedscenarios",
-      "viral",
-      "trending",
-      "fyp"
+      "whatifthishappenedscenarios"
      ],
-     "tagChars": 470
+     "tagChars": 451
     },
-    "instagram": "Four planets line up this week. Should you panic? 🪐\n\nDid you believe it? A) Yes B) Not for a second – comment below 👇\n\n#reels #viral #reelsinstagram #explore #trending",
-    "tiktok": "4 planets line up this week… should you worry? 🪐\nDid you believe it? Comment A or B 👇\n\n#fyp #foryou #foryoupage #viral #trending",
+    "instagram": "Four planets line up this week. Should you panic? 🪐\n\nDid you believe it? A) Yes B) Not for a second – comment below 👇\n\n#whatif #planetparade #planetaryalignment #mythbusting #space",
+    "tiktok": "4 planets line up this week… should you worry? 🪐 The planet parade, fact-checked.\nDid you believe it? Comment A or B 👇\n\n#whatif #planetparade #planetaryalignment #mythbusting #space",
     "hooks": [
      "What if this week's planet parade could move your ocean?",
      "What if eight planets pulled on Earth at once?",

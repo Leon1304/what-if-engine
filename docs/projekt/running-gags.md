@@ -22,7 +22,7 @@ Wird vom /whatif-Skill vor jedem Video gelesen und danach aktualisiert.
 ## Fester Satz „And that’s when it got worse.“ (Joker, nicht in jedem Video)
 - Regel: höchstens in jedem dritten Video, nie in zwei Videos hintereinander, nur vor dem größten Absturz des Videos. Pro Serie 1–2 Mal.
 - Bisherige Einsätze: ZF1–ZF6 (alle, noch nach der alten Regel) · Video 7 (NL1): nein · E19 (gerendert 10.11., Posting Sa 16.1.): ja, vor dem Erdkern · E24 (gerendert 10.11., Posting Mi 3.2.): nein · E1 (gerendert 11.11., Posting Mi 18.11.): nein, Ersatzsatz „One red light. The worst kind.“ · E6 (gerendert 11.11., Posting Sa 21.11.): nein · Bouncing Betty (Erklärvideo, gerendert 11.11., ernstes Thema): nein, Wende über „The war ended in 1945. Not all mines did.“ · Groundskeeper (Einzelvideo, gerendert 11.11., Posting offen): ja, vor dem Wanddurchbruch · D-Day (normales YouTube-Video 16:9 + Short, gerendert 11.11., ernstes Thema ohne Running Gags): nein, zählt wie E14 nicht für die Abstände · Zombie Farm mit Ende (Einzelvideo, gerendert 11.11., Posting offen): nein, Wende über „Then the barn catches fire …“ · EG1 Earth Glitch „Gravity off for 5 seconds“ (11.11.): nein, Wende über „Then gravity remembered you.“ · T24 nuke-mariana-trench (Erklärvideo, 11.11.): nein, Wende über das Bild (Kuppel statt Welle) und „But this warm water is now radioactive.“ · T21 nuclear-pool, T23 oxygen-5-seconds, T22 volcano-trash, T25 iss-falls (Erklärvideos, 11.11.): alle nein, Wende jeweils über die Fakten · H1 night-shift-customer (11.11.): nein, Wende „Then the lights flicker. All three turn to the mirror.“ · H2 mom-came-home-twice (11.11.): nein, Wende „Then the knocking stops. On both doors.“ · ZC1 Zombie City (11.11.): nein, Wende „Then the gates start closing.“ · H7 underground-radio (11.11.): ja, vor der Funkstimme „You can turn around now.“ · robot-fight (Trend-Video, 12.11.): nein, Wende „It can’t see you. So it punches everything.“ · planets-lined-up (Trend-Video, Conspiracy, 12.11.): nein, Wende über die Fakten · SA1 sperm-whale (12.11.): ja, vor dem Magen · E47 lake-natron (Erklärvideo, 12.11.): nein, Wende über die Fakten · E43 heart-stops (Erklärvideo, ernst, 12.11.): nein, Wende „Then someone stops.“ · E46 every-planet (Erklärvideo, 12.11.): nein, Wende „So you try the last place on the list.“ · MB1 megalodon-pool (12.11.): nein, Wende „Then the pool wall cracks.“ · TC1 louvre-heist-guard (True Crime, ernst, 12.11.): nein, Wende über Bild und Ton („A disc cutter screams through the window glass.“), zählt wie D-Day nicht für die Abstände · jerusalem-zombie-wall (Einzelvideo, 13.11.): ja, vor dem Moment, in dem der Zombie-Stapel die Mauerkrone erreicht · bus-stop-types (Testformat, 13.11.): nein, Wende über den Bus, der durchfährt
-- Letzter Einsatz in Render-Reihenfolge: jerusalem-zombie-wall (13.11.); die nächsten zwei gebauten Videos ohne festen Satz. In Posting-Reihenfolge: E1, E6, E17, E18, E20 und E21 ohne festen Satz; E16 und E22 passen (je 3 Videos Abstand); Groundskeeper, H7 und SA1 beim Einplanen nicht direkt neben ein anderes Joker-Video legen
+- Letzter Einsatz in Render-Reihenfolge: jerusalem-zombie-wall (13.11.); die nächsten zwei gebauten Videos ohne festen Satz (bus-stop-types und mongol-fleet-1281 ohne – danach wieder möglich). In Posting-Reihenfolge: E1, E6, E17, E18, E20 und E21 ohne festen Satz; E16 und E22 passen (je 3 Videos Abstand); Groundskeeper, H7 und SA1 beim Einplanen nicht direkt neben ein anderes Joker-Video legen
 - Geplant NPC Life: nur im Weg „Leave Vice City“ (Hurrikan) und im Weg „Go viral“ (neuer Spielstand); vor dem Rendern Abstand prüfen
 - E33–E40 (Trend-Slots So 15.11.–So 27.12., zwischen der Reihe gepostet): alle ohne festen Satz, damit die Abstände der Joker-Videos E1, E7, E4, E10 und E13 halten; jedes Skript hat einen eigenen Wende-Satz
 - Erklärvideos T21–T25: alle ohne festen Satz (Erklär-Formel, Wende über Fakten)
@@ -64,6 +64,7 @@ Wird vom /whatif-Skill vor jedem Video gelesen und danach aktualisiert.
 | louvre-heist-guard (TC1, True Crime, gerendert 12.11.) | red |
 | jerusalem-zombie-wall (Einzelvideo, gerendert 13.11., erstes Video mit eigenen Blender-Modellen) | orange |
 | bus-stop-types (Testformat „Types of people“, kein What-if, 13.11.) | lime |
+| mongol-fleet-1281 (HI1, History, gerendert 14.11.) | yellow |
 | nächste Serie | Vorschlag: orange (danach z. B. pink) |
 
 ## Dr. Steve (nur Serien)
@@ -160,6 +161,7 @@ Trend-Slots dazwischen (E33–E40, virale Trends Stand 11.11.2026, zuerst render
 | H7 underground-radio | orange | ja | geschlossen mit Twist (Funk war die ganze Nacht tot) | ✅ 56,8 s |
 
 ## True Crime TC1–TC5 (Themenliste, Kategorie ab 12.11.2026)
+
 | Video | Farbe | Fester Satz | Ende | Status |
 |---|---|---|---|---|
 | TC1 louvre-heist-guard | red | nein | geschlossen · Endcard Chase them / Get everyone out / Hit every alarm | ✅ gerendert 12.11. (56,3 s, Engine v2.50) |
@@ -262,6 +264,7 @@ MB1 Megalodon in your pool ✔ gebaut → Abstimmung: A T. rex in the city · B 
 - TC1 louvre-heist-guard (True Crime, Doku-Stimme Declan Sage, ernst, keine Witze): „Nobody looks twice.“ · „You hear it before you see it.“ · „Protocol says: people first.“ · „A year later — still missing.“
 - jerusalem-zombie-wall (leicht genervt): „On paper.“ · „You relax. First mistake.“ · „Nobody is writing tickets today.“ · „Seats are overrated.“
 - bus-stop-types (leicht genervt, Testformat): „Classic.“ · „It’s sunny.“ · „That railing is load-bearing.“
+- mongol-fleet-1281 (History, ernst, kein genervter Erzähler): –
 
 ## Benutzte Dr.-Steve-Tipps
 - ZF1: „Walk like a zombie. Zero sus.“
@@ -300,6 +303,7 @@ MB1 Megalodon in your pool ✔ gebaut → Abstimmung: A T. rex in the city · B 
 - TC1: – (kein Slang)
 - jerusalem-zombie-wall: – (kein Slang)
 - bus-stop-types: – (kein Slang)
+- mongol-fleet-1281: – (kein Slang)
 
 ## Gerald-Momente
 - ZF1: Heuballen, Funken fliegen vorbei · ZF2: Kellertür, tanzt zur Musik · ZF3: Silo, isst den letzten Mais
@@ -336,6 +340,7 @@ Die Bewertungskarte ist seit 11.11.2026 abgeschafft; jedes Video endet mit Endca
 - TC1 louvre-heist-guard: „So ask yourself —“
 - jerusalem-zombie-wall: „Tour guides still ask:“
 - bus-stop-types: „Because at every bus stop, there are —“
+- mongol-fleet-1281: „Which is why historians still ask:“
 - Archiv der alten Bewertungskarten (Pointen nicht wiederverwenden): ZF1 „Barn: gone. Vibes: immaculate.“ · ZF2 „Great acoustics. Terrible neighbors.“ · ZF3 „Corn every day. Would not recommend.“ · ZF4 „Loud. Smelly. Better than walking.“ · ZF5 „Warm. Way too warm.“ · ZF6 „Great views. Zero fuel.“ · NL1 „Great weather. Zero free will.“ · E19 „Forty-two minutes. No snacks.“ · E24 „Twenty years. Zero lasers.“ · E1 „Perfect landing. Terrible snacks.“ · E6 „Sixty hours, lost to a grandma.“ · Bouncing Betty „Built to jump. Still in the ground.“ · Groundskeeper „Great traps. Cellar smells terrible.“
 
 ## Video-Log
@@ -376,3 +381,4 @@ Die Bewertungskarte ist seit 11.11.2026 abgeschafft; jedes Video endet mit Endca
 | 2026-11-12 | What if a Megalodon was in your pool? (MB1, Monsters Are Back Folge 1, 58,0 s, green, Engine v2.46 mit swimPool, airbed, floatie, divingBoard; Infinity-Pool, Luftmatratze mit Loch, Hai zu lang für den Pool, Steves Planschtipp falsch, Sprungbrett, Glaskante bricht, Wasser spült den Hai ins Meer, Gerald landet auf dem Flamingo im leeren Becken; Render läuft) | MB1 | 11 | Abstimmung · Endcard A T. rex in the city / Mammoths at the mall / A kraken in the harbor · Loop „Next morning, the pool is full again —“ | nein |
 | 2026-11-12 | What if you were the guard during the Louvre heist? (TC1 louvre-heist-guard, erstes True-Crime-Video, 56,3 s, red, Engine v2.49/v2.50 mit museumGallery, jewelCase, jewel, liftTruck, grinder, hivis, Outfit guard; Erzähler Declan Sage per ElevenLabs, eine Aufnahme pro Beat; Kai mit Palastflügel, Möbellift zum Balkon, Trennschleifer am Fenster, Besucher werden evakuiert, zwei Vitrinen zerspringen (Zeitlupe), Flucht auf zwei Motorrollern, Krone auf dem Gehweg, Polizei zu spät, Faktenkarte €88M (Paris prosecutor via AFP); Thumbnails A/B, Posting offen) | TC1 | – | geschlossen · Endcard Chase them / Get everyone out / Hit every alarm · Loop „So ask yourself —“ | nein |
 | 2026-11-13 | What if the zombie apocalypse reached Jerusalem? (jerusalem-zombie-wall, Einzelvideo, 56 s, orange, Engine v3.13 mit eigenem Blender-Set: Jerusalem-Häuser, Kuppelbau, Schutzmauer mit Wachtürmen, Straßen, Autos, Ampeln; Zombiewelle rennt gegen die 16-m-Mauer, stapelt sich hoch und quillt drüber, Flucht über die rote Ampel, Seil des letzten Hubschraubers; Stimme Denzel; Thumbnails A/B, Posting offen) | – | – | Abstimmung · Endcard Up the wall / Into a basement / Onto the rope · Loop „Tour guides still ask:“ | ja |
+| 2026-11-14 | What if you sailed with the biggest invasion fleet in history? (mongol-fleet-1281, HI1, erstes History-Video: `CFG.kind: 'history'`, Badge „History“, Erzähler Adam, 57 s, yellow, Engine v3.28: Yuan-Dschunken `ship('junk')`, Mastbruch, Würfel, Wrack mit Vermessungsraster; ohne festen Satz, ohne Gags; Zeitleiste 1281 → 2026, Faktenkarte Takashima-Wrack) |
