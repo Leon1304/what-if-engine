@@ -3248,7 +3248,7 @@ function knockAway(obj, t0, o = {}) { const node = obj.g ?? obj.root ?? obj, p =
 function shatter(obj, t0, o = {}) {
   const node = obj.g ?? obj.root ?? obj; node.updateWorldMatrix(true, false); const w = new THREE.Vector3().setFromMatrixPosition(node.matrixWorld);
   vanish(node, t0, { dur: 0.02 });
-  emit('debris', { at: [w.x, w.y + (o.dy ?? 0.3), w.z], t0, burst: o.pieces ?? 45, colors: o.colors ?? ['#DDEFF8', '#B8DCEC', '#FFFFFF'], size: o.size ?? 0.11, speed: o.power ?? 5, spread: 1.3, basic: true, life: 1.8 });
+  emit('debris', { at: [w.x, w.y + (o.dy ?? 0.3), w.z], t0, burst: o.pieces ?? 45, colors: o.colors ?? ['#DDEFF8', '#B8DCEC', '#FFFFFF'], size: (o.size ?? 0.11) * 1.4, speed: o.power ?? 5, spread: 1.3, geo: o.geo ?? 'shard', basic: false, life: 1.8, spin: 9 });   // v3.25: flat glossy shards (geo: 'box' = the old cubes)
   sfx(t0, 'crack', 0.9); sfx(t0 + 0.04, 'ding', 0.35); return node;
 }
 // wobble(obj, t0, { amp, dur, axis }) — after a hit things rock back and forth and settle
@@ -3336,13 +3336,23 @@ function phone(f, o = {}) {
   return ph;
 }
 const STRIKES = [];   // lightning: brightens the sky light for a few frames (applySky)
+// v3.25 lightning: a jagged main channel (midpoint displacement, 33 points) with forks off its upper part (o.branches, default 3; thinner, fading out) and a flash of
+//   light at the strike point through the light pool (o.light: intensity | false, o.lightDist). Same strobe (flash – dark – flash) as before.
+const _boltOn = u => u >= 0 && u < 0.32 && (u < 0.08 || (u > 0.14 && u < 0.2) || u > 0.26);
 function lightning(t0, o = {}) {
-  const x = o.x ?? 0, z = o.z ?? -60, top = o.h ?? 70, gy = groundH(x, z), pts = [[x + (o.dx ?? 8), gy + top, z]];
-  for (let i = 1; i <= 9; i++) { const k = i / 9; pts.push([lerp(pts[0][0], x, k) + (hash(t0 * 7 + i) - 0.5) * 7 * (1 - k), lerp(gy + top, gy, k), z + (hash(t0 * 3 + i * 2) - 0.5) * 4]); }
-  const bolt = dyn(grp(world)), m = mat('#E6EEFF', { basic: true, glow: 3 });
-  for (let i = 1; i < pts.length; i++) { const a = new THREE.Vector3(...pts[i - 1]), b = new THREE.Vector3(...pts[i]), L = a.distanceTo(b), me = new THREE.Mesh(G('bolt', () => new THREE.CylinderGeometry(0.12, 0.12, 1, 5)), m);
-    me.scale.set(1, L, 1); me.position.copy(a).add(b).multiplyScalar(0.5); me.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), b.clone().sub(a).normalize()); bolt.add(me); }
-  tick(t => { const u = t - t0; bolt.visible = u >= 0 && u < 0.32 && (u < 0.08 || (u > 0.14 && u < 0.2) || u > 0.26); });
+  const x = o.x ?? 0, z = o.z ?? -60, top = o.h ?? 70, gy = groundH(x, z), sd = t0 * 7.13 + x * 0.37 + z * 0.11, H = k => hash(sd + k * 1.913), V = (a, b, c) => new THREE.Vector3(a, b, c);
+  const jag = (A, B, lv, amp, k0) => { let P = [A, B]; for (let l = 0; l < lv; l++) { const Q = [P[0]]; for (let i = 1; i < P.length; i++) { const a = P[i - 1], b = P[i], L = a.distanceTo(b), k = k0 + l * 97 + i * 3.1;
+      Q.push(a.clone().add(b).multiplyScalar(0.5).add(V((H(k) - 0.5) * L * amp, (H(k + 1) - 0.5) * L * amp * 0.25, (H(k + 2) - 0.5) * L * amp * 0.6)), b); } P = Q; } return P; };
+  const main = jag(V(x + (o.dx ?? 8), gy + top, z), V(x, gy, z), 5, 0.42, 1);
+  const bolt = dyn(grp(world)), m = mat('#E6EEFF', { basic: true, glow: 3 }), parts = [], M4 = new THREE.Matrix4(), Qb = new THREE.Quaternion(), seg = (a, b, r) => { const L = a.distanceTo(b); if (L < 1e-3) return;
+    parts.push(new THREE.CylinderGeometry(1, 1, 1, 5, 1, true).applyMatrix4(M4.compose(a.clone().add(b).multiplyScalar(0.5), Qb.setFromUnitVectors(_eUp, b.clone().sub(a).normalize()), V(r, L * 1.04, r)))); };   // one merged mesh per bolt
+  for (let i = 1; i < main.length; i++) seg(main[i - 1], main[i], (o.width ?? 0.13) * (1 - 0.35 * i / main.length));
+  for (let b = 0; b < (o.branches ?? 3); b++) { const i0 = 2 + Math.floor(H(50 + b) * main.length * 0.55), A = main[i0], L = top * (0.14 + 0.18 * H(60 + b)), an = H(70 + b) * TAU;
+    const Bp = jag(A, A.clone().add(V(Math.cos(an) * L * 0.7, -L * (0.6 + 0.3 * H(80 + b)), Math.sin(an) * L * 0.5)), 3, 0.5, 200 + b * 31);
+    for (let i = 1; i < Bp.length; i++) seg(Bp[i - 1], Bp[i], (o.width ?? 0.13) * 0.5 * (1 - 0.7 * i / Bp.length)); }
+  const me = new THREE.Mesh(mergeGeometries(parts), m); me.castShadow = false; me.frustumCulled = false; bolt.add(me); parts.forEach(q => q.dispose());
+  tick(t => { bolt.visible = _boltOn(t - t0); });
+  if (o.light !== false) glow(x, gy + 4, z, { env: t => { const u = t - t0; return _boltOn(u) ? (u < 0.08 ? 1 : 0.55) : 0; }, intensity: typeof o.light === 'number' ? o.light : 1400, dist: o.lightDist ?? 90, color: '#D8E4FF', flicker: 0 });
   STRIKES.push(t0); FLASHES.push({ t: t0, dur: 0.3, a: o.flash ?? 0.45, color: '#E8F0FF' }); sfx(t0, 'crack', 0.8); sfx(t0 + (o.delay ?? 0.7), 'thunder', o.loud ?? 1);
   return bolt;
 }
@@ -3867,29 +3877,119 @@ function softMaterial(e, kind, norot) {
   const add = kind === 'fire', m = new THREE.MeshBasicMaterial({ map: puffTex(add ? 'fire' : 'smoke'), transparent: true, depthWrite: false, opacity: add ? 1 : 1, blending: add ? THREE.AdditiveBlending : THREE.NormalBlending, fog: !add });
   m.onBeforeCompile = sh => {
     sh.uniforms.uLight = add ? { value: 1 } : SOFT_LIGHT;
-    sh.vertexShader = 'attribute float aFade; varying float vFade;\n' + sh.vertexShader.replace('#include <project_vertex>', `
+    sh.vertexShader = 'attribute float aFade, aGy; varying float vFade, vGy, vWy, vRad;\n' + sh.vertexShader.replace('#include <project_vertex>', `
       vFade = aFade;
       vec4 mvPosition = modelViewMatrix * instanceMatrix * vec4(0.0, 0.0, 0.0, 1.0);
       float sc = length(instanceMatrix[0].xyz), ra = ${norot ? '0.0' : 'fract(sin(float(gl_InstanceID) * 12.9898) * 43758.5453) * 6.2832'};
+      float rad = 0.85 * sc; vFade *= smoothstep(0.1 + 0.25 * rad, 0.2 + 1.5 * rad, -mvPosition.z);   // v3.25: a puff right in front of the lens fades out (no blob over the frame)
       mvPosition.xy += mat2(cos(ra), sin(ra), -sin(ra), cos(ra)) * position.xy * sc;
+      vGy = aGy; vRad = rad; vWy = ((mvPosition.xyz - viewMatrix[3].xyz) * mat3(viewMatrix)).y;   // world height of this corner (inverse view)
       gl_Position = projectionMatrix * mvPosition;`);
-    sh.fragmentShader = 'uniform float uLight; varying float vFade;\n' + sh.fragmentShader.replace('#include <alphatest_fragment>', '#include <alphatest_fragment>\n  diffuseColor.a *= vFade; diffuseColor.rgb *= uLight;');
+    sh.fragmentShader = 'uniform float uLight; varying float vFade, vGy, vWy, vRad;\n' + sh.fragmentShader.replace('#include <alphatest_fragment>', '#include <alphatest_fragment>\n  diffuseColor.a *= vFade * smoothstep(vGy, vGy + clamp(vRad * 0.35, 0.08, 1.0), vWy); diffuseColor.rgb *= uLight;');   // v3.25: soft where the puff meets the ground (no hard cut line)
   };
+  m.customProgramCacheKey = () => 'soft25|' + (add ? 1 : 0) + (norot ? 1 : 0);   // v3.25: the variants compile apart (fogBank's unrotated puffs shared the program of the first soft emitter)
   return m;
 }
-function softGeo(n) { const g = new THREE.PlaneGeometry(1.7, 1.7), a = new THREE.InstancedBufferAttribute(new Float32Array(n), 1); a.setUsage(THREE.DynamicDrawUsage); g.setAttribute('aFade', a); return g; }
+function softGeo(n) { const g = new THREE.PlaneGeometry(1.7, 1.7), a = new THREE.InstancedBufferAttribute(new Float32Array(n), 1), b = new THREE.InstancedBufferAttribute(new Float32Array(n).fill(-1e4), 1); a.setUsage(THREE.DynamicDrawUsage); b.setUsage(THREE.DynamicDrawUsage); g.setAttribute('aFade', a); g.setAttribute('aGy', b); return g; }   // aGy: ground height under each puff (-1e4: no ground fade)
+// v3.25 lens guard for hard particles (boxes, streaks, chunks, drops, shards): seen from close up a particle shrinks to at most LENSFX.cap of the frame height
+//   and is gone in the last 0.3 m in front of the lens (was: rain streaks and debris passing the lens became big grey bars). Pure: only the camera of this frame.
+const LENSFX = { cap: { value: 0.12 } };
+function _lensGuard(m, axisY) {
+  m.onBeforeCompile = sh => { sh.uniforms.uLensCap = LENSFX.cap;
+    sh.vertexShader = 'uniform float uLensCap;\n' + sh.vertexShader.replace('#include <project_vertex>', `
+      vec4 mvPosition = vec4(transformed, 1.0);
+      #ifdef USE_INSTANCING
+        mvPosition = instanceMatrix * mvPosition;
+      #endif
+      mvPosition = modelViewMatrix * mvPosition;
+      #ifdef USE_INSTANCING
+      { vec4 cMV = modelViewMatrix * instanceMatrix * vec4(0.0, 0.0, 0.0, 1.0); float S = ${axisY ? 'length(instanceMatrix[1].xyz)' : 'max(length(instanceMatrix[0].xyz), max(length(instanceMatrix[1].xyz), length(instanceMatrix[2].xyz)))'}, dz = -cMV.z, sz = S * projectionMatrix[1][1] / max(0.02, 2.0 * dz);
+        mvPosition.xyz = cMV.xyz + (mvPosition.xyz - cMV.xyz) * min(1.0, uLensCap / max(sz, 1e-5)) * smoothstep(0.08, 0.3, dz); }
+      #endif
+      gl_Position = projectionMatrix * mvPosition;`); };
+  m.customProgramCacheKey = () => 'lensGuard25|' + (axisY ? 1 : 0);
+  return m;
+}
 // --- weather & light: fogBank (low drifting fog), lensRain (drops on the lens), lightShafts (in sea.js) ---
 function fogBank(o = {}) {   // low fog: big soft puffs drifting with the wind near the ground — at [x,z], r, h, n, color, density, drift [dx,dz] m/s
   const n = o.n ?? 46, [cx, cz] = o.at ?? [0, 0], R = o.r ?? 30, geo = softGeo(n), m = softMaterial({}, 'smoke', true), im = new THREE.InstancedMesh(geo, m, n), o3 = new THREE.Object3D(), col = new THREE.Color(o.color ?? '#DCE3EA');
   im.frustumCulled = false; im.castShadow = false; im.renderOrder = 2; world.add(dyn(im)); const [dx, dz] = o.drift ?? [0.4, 0.1];
   for (let i = 0; i < n; i++) { im.setColorAt(i, col); geo.attributes.aFade.array[i] = (o.density ?? 0.32) * (0.5 + 0.5 * hash(i * 9.1)); }
   tick(t => { for (let i = 0; i < n; i++) { const sz = (o.size ?? 9) * (0.6 + 0.8 * hash(i * 2.3)), w = 2 * R, x = ((hash(i * 1.1) * w + dx * t) % w + w) % w - R + cx, z = ((hash(i * 3.7) * w + dz * t) % w + w) % w - R + cz;
-      o3.position.set(x, groundH(x, z) + sz * 0.42 + (o.h ?? 0.3) * hash(i * 5.3), z); o3.scale.setScalar(sz); o3.updateMatrix(); im.setMatrixAt(i, o3.matrix); } im.instanceMatrix.needsUpdate = true; });
+      const gy = groundH(x, z); geo.attributes.aGy.array[i] = gy; o3.position.set(x, gy + sz * 0.42 + (o.h ?? 0.3) * hash(i * 5.3), z); o3.scale.setScalar(sz); o3.updateMatrix(); im.setMatrixAt(i, o3.matrix); } im.instanceMatrix.needsUpdate = true; geo.attributes.aGy.needsUpdate = true; });
   geo.attributes.aFade.needsUpdate = true; return im;
 }
 const LENSRAIN = [];
 function lensRain(t0, t1 = DUR, amt = 1) { LENSRAIN.push([t0, t1, amt]); }   // rain drops on the lens (refraction, some run down); fades in/out 0.5 s
 const lensRainAt = t => LENSRAIN.reduce((a, [t0, t1, k]) => Math.max(a, k * clamp((t - t0) / 0.5) * clamp((t1 - t) / 0.5)), 0);
+// v3.25 heatShimmer(at, { t0, t1, r, k, h }) — hot air wobbles the picture above a fire, an exhaust, a road in the sun: at = [x,y,z] | object | rig | t => [x,y,z];
+//   r: radius of the hot column (m, default 1.2), h: how far above the point it centres (default r), k: strength 0..1 (default 0.6). A screen-space shimmer in the final
+//   pass (smooth, a few pixels at most, no edges), up to 4 at once (the biggest on screen); fades in / out over 0.5 s. Pure: this frame's camera.
+const HEAT = [];
+function heatShimmer(at, o = {}) { const H = { at, r: o.r ?? 1.2, h: o.h, k: o.k ?? 0.6, t0: o.t0 ?? -1, t1: o.t1 ?? DUR + 1 }; HEAT.push(H); if (HEAT.length === 1) POSTCAM.push(_heatPass); return H; }
+const _htV = new THREE.Vector3(), _htW = new THREE.Vector3();
+function _heatPass(tv) {
+  let U = null; try { U = fin.uniforms; } catch (e) {} if (!U?.uHeat) return; const st = ST(tv), L = [];
+  camera.updateMatrixWorld(); const P11 = camera.projectionMatrix.elements[5];
+  for (const H of HEAT) { const e = clamp((st - H.t0) / 0.5) * clamp((H.t1 - st) / 0.5); if (e <= 0) continue;
+    const a = typeof H.at === 'function' ? H.at(st) : H.at; if (!a) continue;
+    if (a.isObject3D || a.g || a.root) worldAt(a, [0, 0, 0], st, undefined, _htW); else _htW.set(a.x ?? a[0], a.y ?? a[1], a.z ?? a[2]);
+    _htW.y += H.h ?? H.r; _htV.copy(_htW).applyMatrix4(camera.matrixWorldInverse); const dz = -_htV.z; if (dz < 0.3) continue;
+    const rs = H.r * P11 / (2 * dz); if (rs < 0.012) continue; _htV.copy(_htW).project(camera); if (Math.abs(_htV.x) > 1 + 2 * rs || Math.abs(_htV.y) > 1 + 2 * rs) continue;
+    L.push([rs * H.k * e, (_htV.x + 1) / 2, (_htV.y + 1) / 2, Math.min(rs, 0.6), H.k * e * (1 - clamp((rs - 0.45) / 0.4))]); }
+  L.sort((p, q) => q[0] - p[0]); U.uHeatN.value = Math.min(4, L.length); for (let i = 0; i < 4; i++) { const q = L[i]; if (q) U.uHeat.value[i].set(q[1], q[2], q[3], q[4]); else U.uHeat.value[i].set(0, 0, 0, 0); }
+}
+// v3.25 sandstorm({ t0, t1, from: [dx, dz], speed, r, h, color, density, light }) — a towering wall of sand rolls in from the side `from` points to (front of soft sand
+//   clouds, base churning), reaches the middle of the set after r / speed s, then everything is wrapped in drifting sand: the fog closes in and turns sand-coloured,
+//   the sky and the sun dim, gusts of sand blow past the camera. Fades out after t1 (2 s). Returns { k(t) } (0..1: how deep inside the storm the set is).
+function sandstorm(o = {}) {
+  const t0 = o.t0 ?? 0, t1 = o.t1 ?? DUR, col = new THREE.Color(o.color ?? '#C49A62'), dens = o.density ?? 1, [fx, fz] = o.from ?? [1, 0], Lf = Math.hypot(fx, fz) || 1, ux = fx / Lf, uz = fz / Lf;
+  const sp = o.speed ?? 9, R = o.r ?? 60, Hh = o.h ?? 26, W = o.w ?? 2 * R, front = t => R - sp * (t - t0);   // front: distance of the wall from the centre, along `from`
+  const k = t => t < t0 ? 0 : sm01((8 - front(t)) / 22) * (1 - sm01((t - t1) / 2));
+  const sh = d => '#' + col.clone().offsetHSL(0, d < 0 ? -0.04 : 0, d).getHexString(), vel = [-ux * sp, 0.4, -uz * sp], NW = 7, ok = { lensOk: true };   // lensOk: the storm is meant to swallow the camera
+  for (let i = 0; i < NW; i++) for (const [yy, sz, cl] of [[3, 9, [sh(-0.12), sh(-0.06)]], [Hh * 0.5, 12, [sh(-0.03), sh(0.02)]], [Hh * 0.95, 13, [sh(0.05), sh(0.1)]]]) { const off = (i / (NW - 1) - 0.5) * W;   // the wall: soft clouds born on the moving front — dark at the base, sunlit billows on top
+    emit('sand', { ...ok, at: tt => { const d = front(tt) + 3, x = ux * d - uz * off, z = uz * d + ux * off; return [x, groundH(x, z) + yy, z]; }, t0: t0 - 2, t1: t1, rate: 3.2 * dens, size: sz, grow: 0.8, life: 5, jitter: W / NW * 0.6, speed: 1.2, spread: 0.9, vel, wind: [0, 0], opacity: 0.9, colors: cl, pick: true }); }
+  for (let i = 0; i < NW; i++) { const off = (i / (NW - 1) - 0.5) * W; emit('dust', { ...ok, at: tt => { const d = front(tt) + 1, x = ux * d - uz * off, z = uz * d + ux * off; return [x, groundH(x, z) + 0.6, z]; }, t0: t0 - 2, t1, rate: 4 * dens, size: 2.6, grow: 1.6, life: 2.6, jitter: W / NW * 0.5, speed: 2.4, spread: 1.2, vel, colors: [sh(-0.1), sh(-0.04)], opacity: 0.6 }); }   // churning base
+  emit('sand', { ...ok, area: [70, 70], height: 1.2, wrap: true, t0: t0 + Math.max(0, (R - 8) / sp), t1, rate: 26 * dens, size: 2.2, grow: 1.2, life: 3, speed: 0.6, spread: 1.2, vel: [-ux * sp * 0.8, 0.3, -uz * sp * 0.8], wind: [0, 0], opacity: 0.4, colors: [sh(0), sh(-0.05)] });   // gusts round the camera
+  const fc = col.clone().multiplyScalar(0.85), sk = col.clone().multiplyScalar(0.7);
+  tick(t => { const q = k(t); if (q <= 0) return; const f = scene.fog; f.color.lerp(fc, 0.85 * q); f.near = lerp(f.near, 0.5, q); f.far = lerp(f.far, Math.max(16, 55 / dens), q);
+    skyU.bot.value.lerp(sk, 0.75 * q); skyU.top.value.lerp(sk, 0.55 * q); if (o.light !== false) { sun.intensity *= 1 - 0.6 * q; hemi.intensity *= 1 - 0.25 * q; } });
+  return { k };
+}
+// v3.25 tsunami({ from: [x, z], to: [x, z], t0, t1, h, w, y, color, foam }) — a wall of water travels from → to (t0 → t1): it rises out of the sea, grows to h (m),
+//   its crest curls over and breaks into foam along the front (peeling from one end), spray flies off the lip and mist hangs behind it. y: sea level (default 0).
+//   Returns { g, front(t) → [x, z], height(t) }. Pure function of t (the mesh is rebuilt from t every frame).
+function tsunami(o = {}) {
+  const [x0, z0] = o.from ?? [0, -140], [x1, z1] = o.to ?? [0, 10], t0 = o.t0 ?? 0, t1 = o.t1 ?? t0 + 9, Hm = o.h ?? 14, W = o.w ?? 140, Y = o.y ?? 0, ang = Math.atan2(x1 - x0, z1 - z0), sd = o.seed ?? 3;
+  const s = t => clamp((t - t0) / (t1 - t0)), fx = t => lerp(x0, x1, s(t)), fz = t => lerp(z0, z1, s(t)), height = t => Hm * sm01(s(t) / 0.3) * (1 - 0.3 * sm01((s(t) - 0.88) / 0.12));
+  const curlAt = (t, u) => sm01((s(t) - 0.38 - 0.18 * u) / 0.4);   // the break peels along the front (u: 0..1 across)
+  const g = dyn(grp(world)), NX = 56, NU = 30, deep = new THREE.Color(o.color ?? '#0F4C5E'), midC = new THREE.Color('#1F7F8C'), lip = new THREE.Color('#79D3CB'), foam = new THREE.Color(o.foam ?? '#F2FAFC'), sea = new THREE.Color(o.sea ?? '#3A93B0'), _c = new THREE.Color();
+  const mk = () => { const geo = new THREE.BufferGeometry(), n = (NX + 1) * (NU + 1), idx = []; geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(n * 3), 3)); geo.setAttribute('color', new THREE.BufferAttribute(new Float32Array(n * 3), 3));
+    for (let i = 0; i < NX; i++) for (let j = 0; j < NU; j++) { const a = i * (NU + 1) + j, b = a + NU + 1; idx.push(a, b, a + 1, b, b + 1, a + 1); } geo.setIndex(idx); return geo; };
+  const m = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.12, metalness: 0.05, side: THREE.DoubleSide, flatShading: false, envMapIntensity: 1.4 });
+  const body = new THREE.Mesh(mk(), m), lipM = new THREE.Mesh(mk(), m); for (const q of [body, lipM]) { q.frustumCulled = false; q.castShadow = false; q.receiveShadow = true; g.add(q); }
+  // body: from the back (low, far behind) up over the crest and down the front face to the sea · lip: from the crest forward, curling over (c 0..1) and down
+  const prof = (u, H, c, out) => { if (u < 0.55) { const v = u / 0.55; out[0] = -5.5 * H * (1 - v) ** 1.6; out[1] = H * Math.pow(Math.sin(v * Math.PI / 2), 1.4); }
+      else { const v = (u - 0.55) / 0.45; out[0] = H * (0.06 + (0.35 - 0.2 * c) * Math.pow(v, 1.5)) ; out[1] = H * (1 - v) * (1 - 0.12 * c * Math.sin(v * Math.PI)); } return out; };
+  const lipP = (u, H, c, out) => { const R = H * 0.36, ph = u * (0.35 + 0.75 * c) * Math.PI, cz = H * 0.06; out[0] = cz + R * (1 + 0.8 * c) * Math.sin(ph) + 1.4 * R * c * ph / Math.PI; out[1] = H - R + R * Math.cos(ph); return out; };   // curls forward and over: the barrel
+  const q2 = [0, 0], cA = Math.cos(ang), sA = Math.sin(ang);
+  const build = (me, t, isLip) => { const P = me.geometry.attributes.position.array, C = me.geometry.attributes.color.array, H0 = height(t), X = fx(t), Z = fz(t);
+    for (let i = 0; i <= NX; i++) { const u = i / NX, lx = (u - 0.5) * W, end = sm01(Math.min(u, 1 - u) / 0.18), H = H0 * end * (1 + 0.1 * Math.sin(u * 9 + sd) + 0.05 * Math.sin(u * 23 + t * 0.7)), c = curlAt(t, u) * end;
+      for (let j = 0; j <= NU; j++) { const v = j / NU, k = (i * (NU + 1) + j) * 3; if (isLip) lipP(v, H, c, q2); else prof(v, H, c, q2);
+        const wob = 0.04 * H * Math.sin(lx * 0.21 + t * 1.3 + v * 3) * (isLip ? 1 : v), lz = q2[0] + wob, ly = Math.max(0, q2[1]);
+        P[k] = X + lx * cA + lz * sA; P[k + 1] = Y + ly - 0.05; P[k + 2] = Z - lx * sA + lz * cA;
+        const hv = H > 0.01 ? ly / H : 0, fm = isLip ? sm01((v - 0.35) / 0.5) * (0.4 + 0.6 * c) : sm01((hv - 0.9) / 0.1) * 0.5 * c;   // foam on the lip and the crest
+        _c.copy(deep).lerp(midC, sm01(hv / 0.6)).lerp(lip, sm01((hv - 0.55) / 0.4) * 0.7).lerp(foam, clamp(fm + 0.25 * noise2(lx * 0.3 + t, v * 4) * fm)); if (!isLip) _c.lerp(sea, 1 - sm01(hv / 0.15));   /* the foot blends into the sea */ C[k] = _c.r; C[k + 1] = _c.g; C[k + 2] = _c.b; } }
+    me.geometry.attributes.position.needsUpdate = true; me.geometry.attributes.color.needsUpdate = true; me.geometry.computeVertexNormals(); };
+  tick(t => { const on = t >= t0 - 0.01 && t <= t1 + 3; g.visible = on; if (!on) return; build(body, t, false); build(lipM, t, true); lipM.visible = curlAt(t, 0.5) > 0.02 || curlAt(t, 0) > 0.02; });
+  const NS = 6; for (let i = 0; i < NS; i++) { const u = (i + 0.5) / NS, lx = (u - 0.5) * W;   // spray off the lip, mist behind the crest
+    const lipAt = tt => { const H = height(tt) * sm01(Math.min(u, 1 - u) / 0.18), c = curlAt(tt, u); lipP(0.85, H, c, q2); return [fx(tt) + lx * cA + q2[0] * sA, Y + Math.max(0.2, q2[1]), fz(tt) - lx * sA + q2[0] * cA]; };
+    emit('spray', { at: lipAt, t0: t0 + (t1 - t0) * (0.42 + 0.18 * u), t1: t1 + 1, rate: 50, soft: true, size: 0.6 + Hm * 0.04, grow: 2.2, speed: 4, spread: 0.7, g: -3, life: 1.4, jitter: W / NS * 0.4, colors: ['#FFFFFF', '#E6F4F8'], opacity: 0.7 });
+    emit('spray', { at: tt => { const H = height(tt) * sm01(Math.min(u, 1 - u) / 0.18), c = curlAt(tt, u), d = H * (0.06 + 0.35 - 0.2 * c); return [fx(tt) + lx * cA + d * sA, Y + 0.3, fz(tt) - lx * sA + d * cA]; }, t0: t0 + (t1 - t0) * 0.15, t1: t1 + 1, rate: 45, soft: true,
+      size: 0.8 + Hm * 0.06, grow: 2, speed: 2.5, spread: 0.8, g: -1.5, life: 1.6, jitter: W / NS * 0.45, colors: ['#FFFFFF', '#DDEFF4'], opacity: 0.75 });   // white water at the foot of the wave
+    emit('steam', { at: tt => { const H = height(tt); return [fx(tt) + lx * cA - H * 0.6 * sA, Y + H * 0.85, fz(tt) - lx * sA - H * 0.6 * cA]; }, t0: t0 + (t1 - t0) * 0.3, t1: t1 + 1, rate: 5, size: 3 + Hm * 0.2, grow: 1.4, life: 2.6, jitter: W / NS * 0.5, opacity: 0.35, wind: [0, 0], speed: 0.6 }); }
+  return { g, front: t => [fx(t), fz(t)], height };
+}
 const PART = {
   fire:     { rate: 45, life: 0.85, speed: 2.4, spread: 0.35, g: 1.5, size: 0.45, grow: -0.75, colors: ['#FFF0A8', '#FFA733', '#E5421B', '#5A1A0A'], basic: true, jitter: 0.5 },
   smoke:    { rate: 9, life: 4.5, speed: 1.4, spread: 0.25, g: 0.25, size: 0.8, grow: 2.6, colors: ['#3A3634', '#77716C', '#A8A39E'], opacity: 0.6, jitter: 0.4, wind: [0.7, 0] },
@@ -3901,27 +4001,49 @@ const PART = {
   rain:     { rate: 420, life: 0.9, fall: 26, area: [70, 70], height: 22, size: 0.9, grow: 0, colors: ['#AFC4DA'], basic: true, geo: 'streak', opacity: 0.55 },
   spray:    { rate: 12, life: 0.7, speed: 2, spread: 0.6, g: -9.8, size: 0.07, grow: -0.3, colors: ['#F4FAFF', '#CFEAF6'], basic: true, opacity: 0.8, jitter: 0.25 },
   bubble:   { rate: 6, life: 3.5, speed: 1.6, spread: 0.25, g: 0.4, size: 0.07, grow: 0.4, colors: ['#E8FBFF', '#BFEFFF'], basic: true, opacity: 0.7, jitter: 0.15, drag: 0.6 },
-  snow:     { rate: 140, life: 8, fall: 2.4, area: [70, 70], height: 18, size: 0.1, grow: 0, colors: ['#FFFFFF'], basic: true, wind: [0.15, 0.05] }
+  snow:     { rate: 140, life: 8, fall: 2.4, area: [70, 70], height: 18, size: 0.1, grow: 0, colors: ['#FFFFFF'], basic: true, wind: [0.15, 0.05] },
+  hail:     { rate: 260, life: 1.6, fall: 17, area: [60, 60], height: 24, size: 0.07, grow: 0, colors: ['#F4FAFF', '#DCEAF4', '#FFFFFF'], geo: 'ice', bounce: 0.35, pick: true },   // v3.25: ice balls that hop once on the ground and lie there
+  sand:     { rate: 30, life: 3.2, speed: 1.2, spread: 1.3, g: 0.05, size: 1.6, grow: 1.4, colors: ['#C9A46A', '#B88F58', '#D8B884'], opacity: 0.55, jitter: 1.5, soft: true, wind: [3, 0] }   // v3.25: drifting sand / dust clouds (sandstorm())
 };
 const emitters = []; let _eid = 1;
 function emit(kind, o = {}) {   // o: at:[x,y,z] or t => [x,y,z], t0, t1, plus any PART field; burst = all at once
-  const e = { ...PART[kind], ...o, id: _eid++ }; e.t0 = e.t0 ?? 0; e.t1 = e.t1 ?? DUR;
+  const e = { ...PART[kind], ...o, id: _eid++, kind }; e.t0 = e.t0 ?? 0; e.t1 = e.t1 ?? DUR;
   if (o.cover !== false && !o.burst) { if (kind === 'rain') WETWIN.push([e.t0, e.t1, clamp((e.rate ?? 420) / 300, 0.4, 1), 5, 25]); else if (kind === 'snow' && !o.colors) SNOWWIN.push([e.t0, e.t1, clamp((e.rate ?? 140) / 160, 0.4, 1), 16, 60]); }   // v2.35: rain wets the ground, snow settles
   if (typeof e.at === 'function') { e.atFn = e.at; e.at = null; }   // moving source: at(t) → [x,y,z] at birth time
   e.lifeMax = e.life * 1.3; e.n = e.burst ?? Math.min(e.max ?? 2500, Math.ceil(e.rate * e.lifeMax) + 1);
   if (LONG && kind === 'spray' && o.soft == null && !o.geo) { e.soft = true; e.size = (o.size ?? e.size) * 2.6; }   // v2.30: soft mist instead of little boxes
   e.soft = e.soft ?? (CFG.softParticles !== false && (kind === 'smoke' || kind === 'dust' || kind === 'fire') && !e.geo);
-  const geo = e.soft ? softGeo(e.n) : e.geo === 'box' ? boxG(1, 1, 1) : e.geo === 'flat' ? boxG(1, 0.12, 0.6) : e.geo === 'streak' ? boxG(0.03, 1, 0.03) : G('ico0', () => new THREE.IcosahedronGeometry(0.5, 0));
-  const tr = e.opacity != null;
-  const m = e.basic ? new THREE.MeshBasicMaterial({ transparent: tr, opacity: e.opacity ?? 1, depthWrite: !tr }) : new THREE.MeshStandardMaterial({ roughness: 1, flatShading: true, transparent: tr, opacity: e.opacity ?? 1, depthWrite: !tr });
-  e.im = new THREE.InstancedMesh(geo, e.soft ? softMaterial(e, kind) : m, e.n); if (e.soft) { e.fade = geo.attributes.aFade; e.fk = kind === 'fire' ? 1.15 : 0.85; e.im.castShadow = false; e.im.renderOrder = 2; } e.im.frustumCulled = false; e.im.castShadow = !!e.cast; e.im.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+  const geo = e.soft ? softGeo(e.n) : e.geo === 'box' ? boxG(1, 1, 1) : e.geo === 'flat' ? boxG(1, 0.12, 0.6) : e.geo === 'streak' ? boxG(0.03, 1, 0.03) : e.geo === 'shard' ? _shardGeo() : e.geo === 'ice' ? G('ico1', () => new THREE.IcosahedronGeometry(0.5, 1)) : G('ico0', () => new THREE.IcosahedronGeometry(0.5, 0));
+  const tr = e.opacity != null || e.geo === 'shard';
+  const m = e.geo === 'shard' ? new THREE.MeshStandardMaterial({ roughness: 0.05, metalness: 0.55, transparent: true, opacity: e.opacity ?? 0.82, depthWrite: false, side: THREE.DoubleSide, envMapIntensity: 1.6 })   // v3.25 glass shards: flat glossy triangles that catch the sky
+    : e.geo === 'ice' ? new THREE.MeshStandardMaterial({ roughness: 0.22, metalness: 0.05, transparent: tr, opacity: e.opacity ?? 1, depthWrite: !tr })
+    : e.basic ? new THREE.MeshBasicMaterial({ transparent: tr, opacity: e.opacity ?? 1, depthWrite: !tr }) : new THREE.MeshStandardMaterial({ roughness: 1, flatShading: true, transparent: tr, opacity: e.opacity ?? 1, depthWrite: !tr });
+  if (!e.soft) _lensGuard(m, e.geo === 'streak');
+  e.im = new THREE.InstancedMesh(geo, e.soft ? softMaterial(e, kind) : m, e.n); if (e.soft) { e.fade = geo.attributes.aFade; e.gyA = geo.attributes.aGy; e.fk = kind === 'fire' ? 1.15 : 0.85; e.im.castShadow = false; e.im.renderOrder = 2; } else e.im.userData.fxPart = true; e.im.frustumCulled = false; e.im.castShadow = !!e.cast; e.im.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+  const a0 = e.at ?? [0, 0, 0]; e.wrap = e.wrap ?? (!!e.fall && !!e.area && Math.min(e.area[0], e.area[1]) >= 30 && !e.atFn && Math.abs(a0[0]) + Math.abs(a0[2]) < 1e-6);   // v3.25: rain / snow round the origin follow the camera (wrapped field)
   e.im.setColorAt(0, new THREE.Color()); e.cols = e.colors.map(c => new THREE.Color(c).multiplyScalar(e.basic && (kind === 'fire' || kind === 'spark') ? 2.2 : 1));   // fire and sparks glow (bloom)
   (e.parent ?? world).add(e.im); emitters.push(e); return e;
 }
-const _o = new THREE.Object3D(), _pc = new THREE.Color();
+const _o = new THREE.Object3D(), _pc = new THREE.Color(), _eFwd = new THREE.Vector3(), _eV = new THREE.Vector3(), _eUp = new THREE.Vector3(0, 1, 0), _eq = [0, 0, 0], _W0 = [0, 0];
+const _wrapC = (v, c, A) => c + ((((v - c) % A) + 1.5 * A) % A) - A / 2;   // v moved by whole periods A into [c − A/2, c + A/2): a periodic copy of the same field
+function _shardGeo() { return G('shard', () => { const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute([0, 0.55, 0, -0.42, -0.3, 0.03, 0.48, -0.22, -0.03], 3)); g.computeVertexNormals(); return g; }); }   // v3.25: glass shard (flat triangle)
+// particle kinematics at age a (pure): birth point b*, start velocity d*, e.vel (constant drift), wind accelerates puffs (½ w a²), streaks of falling rain drift with it (w a)
+function _ePos(e, bx, by, bz, dx, dy, dz, a, out) { const ta = e.drag ? (1 - Math.exp(-e.drag * a)) / e.drag : a, w = e.wind ?? _W0, wl = e.geo === 'streak' && e.fall ? a : a * a * 0.5, V = e.vel;
+  out[0] = bx + dx * ta + w[0] * wl + (V ? V[0] * a : 0); out[1] = by + dy * ta + 0.5 * (e.g ?? 0) * a * a + (V ? V[1] * a : 0); out[2] = bz + dz * ta + w[1] * wl + (V ? V[2] * a : 0); return out; }
+// v3.25: age at which a floor particle (debris, goo, crumbs, shards) first reaches the ground — found once per particle (a pure function of the particle, kept in a memo);
+//   from then on it lies still where it landed (was: only y was clamped, chunks kept sliding and spinning on the ground)
+function _eLand(e, i, bx, by, bz, dx, dy, dz, life, fl) { const M = e.landM ??= new Map(); let L = M.get(i); if (L !== undefined) return L;
+  const q = _eq; let lo = 0, hi = -1, up = by > groundH(bx, bz) + fl;
+  for (let a = 0.04; a <= life + 0.04; a += 0.04) { _ePos(e, bx, by, bz, dx, dy, dz, a, q); const below = q[1] <= groundH(q[0], q[2]) + fl; if (!up) { if (!below) up = true; lo = a; continue; } if (below) { hi = a; break; } lo = a; }
+  if (hi < 0) L = up ? 1e9 : 0; else { for (let k = 0; k < 10; k++) { const m = (lo + hi) / 2; _ePos(e, bx, by, bz, dx, dy, dz, m, q); if (q[1] <= groundH(q[0], q[2]) + fl) hi = m; else lo = m; } L = hi; }
+  if (M.size > 6000) M.clear(); M.set(i, L); return L; }
 function updateEmitters(t) {
+  _WA_K++; const cp = camera.position; _eFwd.set(0, 0, -1).applyQuaternion(camera.quaternion); _eFwd.y = 0; if (_eFwd.lengthSq() < 1e-6) _eFwd.set(0, 0, -1); _eFwd.normalize();   // v3.25: runs after the camera (stepScene): wrapped fields sit round this frame's camera
   for (const e of emitters) {
-    const at0 = e.at ?? [0, 0, 0];
+    const on = t >= e.t0 - 1e-6 && t <= (e.burst ? e.t0 + (e.burstSpread ?? 0.06) : e.t1) + e.lifeMax + 1e-6;   // v3.25: outside its time nothing is touched or uploaded
+    e.im.visible = on; if (!on) continue;
+    const at0 = e.at ?? [0, 0, 0], wrap = !!(e.wrap && e.area), A0 = wrap ? e.area[0] : 0, A1 = wrap ? e.area[1] : 0, wcx = wrap ? cp.x + _eFwd.x * 0.3 * A0 : 0, wcz = wrap ? cp.z + _eFwd.z * 0.3 * A1 : 0;   // wrapped field: from ~0.2 A behind the camera to ~0.8 A in front
+    const fl0 = e.geo === 'ice' ? e.size * 0.5 : 0.05, W = e.wind;
     for (let j = 0; j < e.n; j++) {
       let i, b;
       if (e.burst) { i = j; b = e.t0 + hash(e.id * 977 + i) * (e.burstSpread ?? 0.06); }
@@ -3930,43 +4052,140 @@ function updateEmitters(t) {
       if (i < 0 || age < 0 || age > life) { if (e.fade) e.fade.array[j] = 0; _o.position.set(0, -999, 0); _o.scale.setScalar(0); _o.rotation.set(0, 0, 0); _o.updateMatrix(); e.im.setMatrixAt(j, _o.matrix); continue; }
       const h1 = hash(e.id * 17 + i * 1.7), h2 = hash(e.id * 29 + i * 2.3), h3 = hash(e.id * 41 + i * 3.9), h4 = hash(e.id * 53 + i * 5.3), k = age / life;
       const [ox, oy, oz] = e.atFn ? e.atFn(b) : at0;
-      let px = ox, py = oy, pz = oz, dx = 0, dy = 0, dz = 0;
+      let px = ox, py = oy, pz = oz, dx = 0, dy = 0, dz = 0, a = age;   // a: age the motion is evaluated at (stops when it lands)
       if (e.area) { px += (h1 - 0.5) * e.area[0]; pz += (h2 - 0.5) * e.area[1]; py += e.height ?? 0; }
-      else { const a = h1 * TAU, r = Math.sqrt(h2) * (e.jitter ?? 0); px += Math.cos(a) * r; pz += Math.sin(a) * r; }
+      else { const an = h1 * TAU, r = Math.sqrt(h2) * (e.jitter ?? 0); px += Math.cos(an) * r; pz += Math.sin(an) * r; }
       if (e.fall) dy = -e.fall;
-      else { const a = h3 * TAU, sp = e.spread * Math.sqrt(h4), v = e.speed * (0.6 + 0.8 * hash(e.id * 7 + i)); dx = Math.cos(a) * Math.sin(sp) * v; dz = Math.sin(a) * Math.sin(sp) * v; dy = Math.cos(sp) * v; }
-      const ta = e.drag ? (1 - Math.exp(-e.drag * age)) / e.drag : age, [wx, wz] = e.wind ?? [0, 0];
-      px += dx * ta + wx * age * age * 0.5; py += dy * ta + 0.5 * (e.g ?? 0) * age * age; pz += dz * ta + wz * age * age * 0.5;
-      if (e.floor) py = Math.max(py, groundH(px, pz) + 0.05);
+      else { const an = h3 * TAU, sp = e.spread * Math.sqrt(h4), v = e.speed * (0.6 + 0.8 * hash(e.id * 7 + i)); dx = Math.cos(an) * Math.sin(sp) * v; dz = Math.sin(an) * Math.sin(sp) * v; dy = Math.cos(sp) * v; }
+      if (e.fall && e.bounce) {   // v3.25 hail: lands where its column meets the ground, hops once, lies there
+        _ePos(e, px, py, pz, 0, dy, 0, age, _eq); let qx = _eq[0], qz = _eq[2]; if (wrap) { qx = _wrapC(qx, wcx, A0); qz = _wrapC(qz, wcz, A1); }
+        const gy = groundH(qx, qz), aL = Math.max(0, (py - gy - fl0) / e.fall);
+        if (age <= aL) { px = qx; py = _eq[1]; pz = qz; }
+        else { const u = Math.min(age - aL, 2 * Math.min(3.5, e.bounce * e.fall) / 9.8), v = Math.min(3.5, e.bounce * e.fall); px = qx + (h3 - 0.5) * 1.2 * u; pz = qz + (h4 - 0.5) * 1.2 * u; py = groundH(px, pz) + fl0 + Math.max(0, v * u - 4.9 * u * u); a = aL; }
+      } else {
+        if (e.floor) { const L = _eLand(e, i, px, py, pz, dx, dy, dz, life, fl0); if (age > L) a = L; }
+        _ePos(e, px, py, pz, dx, dy, dz, a, _eq); px = _eq[0]; py = _eq[1]; pz = _eq[2];
+        if (e.floor) py = Math.max(py, groundH(px, pz) + fl0);
+        if (wrap) { px = _wrapC(px, wcx, A0); pz = _wrapC(pz, wcz, A1); }
+      }
       const s = e.soft ? e.size * Math.max(0.05, 1 + e.grow * k) * (0.55 + 0.45 * Math.min(1, age / 0.25)) : e.size * Math.max(0.03, 1 + e.grow * k) * Math.min(1, age / 0.06) * (k > 0.8 ? (1 - k) / 0.2 : 1);
       if (e.fade) e.fade.array[j] = (e.opacity ?? 1) * Math.min(1, age / 0.12) * (1 - sm01((k - 0.45) / 0.55)) * (e.fk ?? 0.85);
+      if (e.gyA) e.gyA.array[j] = groundH(px, pz);   // v3.25: puffs fade where they meet the ground
       _o.position.set(px, py, pz);
-      if (e.geo === 'streak') _o.scale.set(1, s, 1); else _o.scale.setScalar(s);
-      if (e.spin) _o.rotation.set(age * e.spin * (h1 - 0.5), age * e.spin * (h2 - 0.5), age * e.spin * (h3 - 0.5) * 0.5); else _o.rotation.set(0, 0, 0);
+      if (e.geo === 'streak') { _o.scale.set(1, s, 1); if (e.fall && W && (W[0] || W[1])) _o.quaternion.setFromUnitVectors(_eUp, _eV.set(-W[0], e.fall, -W[1]).normalize()); else _o.rotation.set(0, 0, 0); }   // v3.25: streaks lean with the wind they fall in
+      else { _o.scale.setScalar(s); if (e.spin) _o.rotation.set(a * e.spin * (h1 - 0.5), a * e.spin * (h2 - 0.5), a * e.spin * (h3 - 0.5) * 0.5); else _o.rotation.set(0, 0, 0); }
       _o.updateMatrix(); e.im.setMatrixAt(j, _o.matrix);
       if (e.pick || e.cols.length === 1) _pc.copy(e.cols[Math.floor(h2 * e.cols.length) % e.cols.length]);
       else { const cf = k * (e.cols.length - 1), ci = Math.min(e.cols.length - 2, Math.floor(cf)); _pc.copy(e.cols[ci]).lerp(e.cols[ci + 1], cf - ci); }
       e.im.setColorAt(j, _pc);
     }
-    e.im.instanceMatrix.needsUpdate = true; e.im.instanceColor.needsUpdate = true; if (e.fade) e.fade.needsUpdate = true;
+    e.im.instanceMatrix.needsUpdate = true; e.im.instanceColor.needsUpdate = true; if (e.fade) e.fade.needsUpdate = true; if (e.gyA) e.gyA.needsUpdate = true;
   }
   SOFT_LIGHT.value = clamp(0.18 + 0.82 * (hemi.intensity * 0.55 + sun.intensity * 0.2) / (1.15 * 0.55 + 2.8 * 0.2), 0.15, 1.15);   // smoke follows the light (dark at night)
 }
-function glow(x, y, z, o = {}) {   // flickering point light for fires, explosions, torches
-  const L = new THREE.PointLight(o.color ?? '#FF8A3A', 0, o.dist ?? 22, 1.6); L.position.set(x, y, z); world.add(L);
+// v3.25 worldAt(obj, local, tt, owner?) — where a point given in obj's own frame ([x,y,z] or Vector3) is at time tt, as a pure function of tt. The pose comes from the
+//   physics record (phys / crash / breakApart), fly() (_fly) or walk() / drive() (_posAt / _yawAt) of obj or of the nearest parent that has one (owner: the rig or vehicle
+//   whose root that is, e.g. worldAt(f.head, [0, 0.45, 0], tt, f)); what sits in between (a chimney on the engine, the head on the rig) and the little extras of this frame
+//   (lean, bounce, offsets) are taken from the frame being drawn. Without any moving source: the chain as it stands. No updateWorldMatrix.
+//   Emitters with a moving source use it (at: tt => worldAt(…, tt).toArray()): smoke and dust born earlier stay behind instead of riding along with the object.
+let _WA_T = 0, _WA_K = 0; tick(st => { _WA_T = st; _WA_K++; });
+const _waA = new THREE.Matrix4(), _waB = new THREE.Matrix4(), _waC = new THREE.Matrix4(), _waL = new THREE.Matrix4(), _waQ = new THREE.Quaternion(), _waE = new THREE.Euler(), _waP = new THREE.Vector3(), _pfW = [new THREE.Vector3(), new THREE.Quaternion()];
+function _waPose(n, own, tt, out) {   // world matrix of n at tt from its own pure motion, or null
+  const B = n.userData.physB;
+  if (B && B.rec && tt >= B.t0) { physFrame(B.rec, tt, _pfW); return out.compose(_pfW[0], _pfW[1], n.scale); }
+  if (n._fly) { const [p, rx, ry, rz] = n._fly(tt); return out.compose(_waP.set(p[0], p[1], p[2]), _waQ.setFromEuler(_waE.set(rx, ry, rz, 'YXZ')), n.scale); }
+  const src = own && (own.root === n || own.g === n) && own._posAt ? own : n._posAt ? n : null;
+  if (src) { const p = src._posAt(tt); return out.compose(_waP.set(p.x, p.y, p.z), _waQ.setFromEuler(_waE.set(0, src._yawAt ? src._yawAt(tt) : n.rotation.y, 0)), n.scale); }
+  if (B && B.p0) return out.compose(B.p0, B.q0, n.scale);   // a body before its start: where the bake found it
+  return null;
+}
+const _waChain = (n, out) => { out.identity(); for (let q = n; q; q = q.parent) out.premultiply(_waC.compose(q.position, q.quaternion, q.scale)); return out; };
+function worldAt(obj, local, tt, owner, out = new THREE.Vector3()) {
+  const own = owner ?? (obj && (obj.g || obj.root) ? obj : null), n0 = obj?.g ?? obj?.root ?? obj;
+  if (Array.isArray(local)) out.set(local[0] ?? 0, local[1] ?? 0, local[2] ?? 0); else if (local?.isVector3) out.copy(local); else out.set(0, 0, 0);
+  if (!n0?.isObject3D) return out;
+  _waL.identity();
+  for (let n = n0; n; n = n.parent) {
+    if (_waPose(n, own, tt, _waA)) {
+      const ud = n.userData; let R = ud._waR;   // residual of this frame in the anchor's own frame: pose(now)⁻¹ × matrix(now) — cached per frame
+      if (ud._waK !== _WA_K) { R = ud._waR ??= new THREE.Matrix4(); if (_waPose(n, own, _WA_T, _waB)) R.copy(_waB.invert()).multiply(_waChain(n, _waA.clone())); else R.identity(); ud._waK = _WA_K; }
+      return out.applyMatrix4(_waL).applyMatrix4(R).applyMatrix4(_waA);
+    }
+    _waL.premultiply(_waC.compose(n.position, n.quaternion, n.scale));
+  }
+  return out.applyMatrix4(_waL);   // no moving source: the chain as it stands (already world)
+}
+// v3.25 light budget: glow() with a time window (t0 / t1) or a moving source (at) no longer makes its own PointLight — fires, explosions, burning things, landmines and
+//   lightning are sources in FXL; a pool of CFG.fxLights (default 4) real lights goes each frame to the strongest sources near this frame's camera (envelope × intensity,
+//   weighted by distance: a pure function of t). The last light fades by its lead over the next source, so swapping sources never pops. spreadFire over 10 objects = 4 lights.
+//   Steady lamps (glow without t0 / t1) and glow(…, { pool: false }) keep their own light as before.
+const FXL = { src: [], lights: [] };
+function glow(x, y, z, o = {}) {   // flickering point light for fires, explosions, torches · o: t0, t1, intensity, dist, color, flicker, rampIn, at: t => [x,y,z] (moving), env: t => 0..1 (own envelope), pool
   const t0 = o.t0 ?? 0, t1 = o.t1 ?? DUR + 1, I = o.intensity ?? 60, fl = o.flicker ?? 1;
-  tick(t => { const on = span(t, t0, o.rampIn ?? 0.6, 'out') * (1 - span(t, t1, 0.8)); L.intensity = I * on * (1 + fl * (0.12 * Math.sin(t * 17.3) + 0.08 * Math.sin(t * 31.7 + 1.3))); });
+  const env = o.env ?? (t => span(t, t0, o.rampIn ?? 0.6, 'out') * (1 - span(t, t1, 0.8))), fk = t => 1 + fl * (0.12 * Math.sin(t * 17.3) + 0.08 * Math.sin(t * 31.7 + 1.3));
+  if (o.pool ?? (o.t0 != null || o.t1 != null || !!o.at || !!o.env)) {   // a pooled source looks like a light to the scene: position, color, distance, intensity (a scene tick may still move it or scale its intensity)
+    const S = { id: FXL.src.length, pooled: true, position: new THREE.Vector3(x, y, z), at: o.at, color: new THREE.Color(o.color ?? '#FF8A3A'), distance: o.dist ?? 22, intensity: 0, fk };
+    FXL.src.push(S); if (FXL.lights.length < (CFG.fxLights ?? 4)) { const L = new THREE.PointLight('#FF8A3A', 0, 22, 1.6); world.add(L); FXL.lights.push(L); if (FXL.lights.length === 1) POSTCAM.push(_fxlAssign); }
+    tick(t => { S.intensity = I * env(t) * fk(t); });
+    return S;
+  }
+  const L = new THREE.PointLight(o.color ?? '#FF8A3A', 0, o.dist ?? 22, 1.6); L.position.set(x, y, z); world.add(L);
+  tick(t => { L.intensity = I * env(t) * fk(t); });
   return L;
+}
+function _fxlAssign(tv) {   // POSTCAM: the camera of this frame is set
+  _WA_K++; const st = ST(tv), cp = camera.position, C = [];
+  for (const S of FXL.src) { if (!(S.intensity > 1e-4)) continue; const p = S.at ? S.at(st) : S.position; if (!p) continue; const px = p.x ?? p[0], py = p.y ?? p[1], pz = p.z ?? p[2];
+    const d2 = (px - cp.x) ** 2 + (py - cp.y) ** 2 + (pz - cp.z) ** 2; C.push({ w: S.intensity / Math.max(0.5, S.fk(st)) / (1 + d2 / (S.distance * S.distance)), S, px, py, pz }); }   // rank without the flicker: no swapping every frame
+  C.sort((a, b) => b.w - a.w || a.S.id - b.S.id);
+  const N = FXL.lights.length;
+  for (let k = 0; k < N; k++) { const L = FXL.lights[k], c = C[k]; if (!c) { L.intensity = 0; L.position.set(0, -50, 0); L.color.set(0xFF8A3A); L.distance = 22; continue; }   // an idle light keeps nothing from earlier frames
+    const lead = k === N - 1 && C.length > N ? clamp((c.w - C[N].w) / (0.3 * c.w + 1e-9)) : 1;
+    L.position.set(c.px, c.py, c.pz); L.color.copy(c.S.color); L.distance = c.S.distance; L.intensity = c.S.intensity * lead; }
 }
 
 // --- explosions & meteors: add their own shake, flash and sound to the story ---
-function explode(x, y, z, t0, o = {}) {   // fireball, debris, smoke, light, crater
-  const s = o.size ?? 1;
+// v3.25 look: soft scorch mark draped over the ground (was a hard dark 12-gon), a dust shock ring racing out over the ground, a ring of dust thrown sideways, a burst of
+//   sparks; the light goes through the light pool. Off with { crater: false } (no scorch) or { ring: false } (no shock ring / dust ring).
+const _fxTex = {};
+function fxTex(kind) {   // soft canvas textures: 'scorch' (burnt patch, ragged soft edge) · 'ring' (soft shock ring)
+  if (_fxTex[kind]) return _fxTex[kind];
+  const S = 256, cv = document.createElement('canvas'); cv.width = cv.height = S; const x = cv.getContext('2d'), C = S / 2;
+  if (kind === 'scorch') {
+    x.filter = 'blur(4px)';
+    for (let i = 0; i < 90; i++) { const a = hash(i * 3.1 + 0.7) * TAU, d = Math.pow(hash(i * 5.7 + 1.3), 0.8) * C * 0.62, r = C * (0.12 + hash(i * 7.9) * 0.22), cx = C + Math.cos(a) * d, cy = C + Math.sin(a) * d, g = x.createRadialGradient(cx, cy, 0, cx, cy, r);
+      const al = 0.55 * (1 - d / (C * 0.8)); g.addColorStop(0, `rgba(18,14,11,${al.toFixed(3)})`); g.addColorStop(1, 'rgba(18,14,11,0)'); x.fillStyle = g; x.beginPath(); x.arc(cx, cy, r, 0, TAU); x.fill(); }
+    for (let i = 0; i < 22; i++) { const a = i / 22 * TAU + hash(i * 2.3) * 0.25, l = C * (0.55 + 0.35 * hash(i * 4.1)), g = x.createLinearGradient(C, C, C + Math.cos(a) * l, C + Math.sin(a) * l);   // soot rays thrown out by the blast
+      g.addColorStop(0, 'rgba(22,17,13,0.4)'); g.addColorStop(1, 'rgba(22,17,13,0)'); x.strokeStyle = g; x.lineWidth = 3 + 6 * hash(i * 6.7); x.beginPath(); x.moveTo(C, C); x.lineTo(C + Math.cos(a) * l, C + Math.sin(a) * l); x.stroke(); }
+    const g = x.createRadialGradient(C, C, 0, C, C, C * 0.3); g.addColorStop(0, 'rgba(10,8,6,0.85)'); g.addColorStop(1, 'rgba(10,8,6,0)'); x.fillStyle = g; x.fillRect(0, 0, S, S);
+  } else {
+    const g = x.createRadialGradient(C, C, 0, C, C, C); g.addColorStop(0, 'rgba(255,255,255,0)'); g.addColorStop(0.55, 'rgba(255,255,255,0)'); g.addColorStop(0.8, 'rgba(255,255,255,0.9)'); g.addColorStop(0.9, 'rgba(255,255,255,0.35)'); g.addColorStop(1, 'rgba(255,255,255,0)'); x.fillStyle = g; x.fillRect(0, 0, S, S);
+  }
+  x.filter = 'none'; x.globalCompositeOperation = 'destination-in'; const m = x.createRadialGradient(C, C, 0, C, C, C - 1); m.addColorStop(0, 'rgba(0,0,0,1)'); m.addColorStop(0.7, 'rgba(0,0,0,1)'); m.addColorStop(1, 'rgba(0,0,0,0)'); x.fillStyle = m; x.fillRect(0, 0, S, S);   // never a hard edge
+  const tx = new THREE.CanvasTexture(cv); tx.colorSpace = THREE.SRGBColorSpace; return (_fxTex[kind] = tx);
+}
+function _drapeDisc(x, z, R, dy = 0.03, n = 12) {   // a square patch 2R × 2R that follows the ground (no hard line where a flat disc would cut into a slope)
+  const g = new THREE.PlaneGeometry(2 * R, 2 * R, n, n); g.rotateX(-Math.PI / 2); const P = g.attributes.position, gy = groundH(x, z);
+  for (let i = 0; i < P.count; i++) P.setY(i, groundH(x + P.getX(i), z + P.getZ(i)) - gy + dy); g.computeVertexNormals(); return [g, gy];
+}
+function explode(x, y, z, t0, o = {}) {   // fireball, debris, smoke, light, scorch mark, shock ring, sparks
+  const s = o.size ?? 1, gy = groundH(x, z), low = y <= gy + 0.5, near = y <= gy + 1.5 * s;
   emit('fire', { at: [x, y + 0.5 * s, z], t0, t1: t0 + 0.6 * s, rate: 160, size: 0.9 * s, speed: 4 * s, spread: 1.2, jitter: s });
   emit('debris', { at: [x, y + 0.3, z], t0, burst: Math.round(30 * Math.min(3, s)), speed: 6 * Math.sqrt(s), size: 0.25 * s });
   emit('smoke', { at: [x, y + s, z], t0: t0 + 0.2, t1: t0 + 4, rate: 10, size: 1.2 * s, jitter: s });
+  emit('spark', { at: [x, y + 0.4 * s, z], t0, burst: Math.round(36 * Math.min(2.5, s)), burstSpread: 0.05, speed: 11 * Math.sqrt(s), spread: 1.35, life: 0.8, g: -9.8, drag: 0.6, size: 0.07 * Math.sqrt(s), colors: ['#FFF6C0', '#FFC24A', '#FF8A2A'], pick: true });
   glow(x, y + 2 * s, z, { t0, t1: t0 + 1.2, intensity: 300 * s, dist: 40 * s, rampIn: 0.05, color: '#FFB060' });
-  if (o.crater !== false && y <= groundH(x, z) + 0.5) appear(cyl(world, 2 * s, 2.4 * s, 0.06, '#2A2420', x, groundH(x, z) + 0.02, z, { seg: 12, cast: false }), t0, { dur: 0.15 });
+  if (o.crater !== false && low) {   // scorch: soft burnt patch draped over the ground, darkens in 0.12 s
+    const R = 2.6 * s, [geo] = _drapeDisc(x, z, R, 0.025), m = new THREE.MeshStandardMaterial({ map: fxTex('scorch'), transparent: true, depthWrite: false, roughness: 1, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
+    const sc = new THREE.Mesh(geo, m); sc.position.set(x, gy, z); sc.rotation.y = hash(x * 3.1 + z) * TAU; sc.receiveShadow = true; sc.renderOrder = 1; world.add(dyn(sc));
+    tick(t => { const k = clamp((t - t0) / 0.12); sc.visible = k > 0; m.opacity = k; });
+  }
+  if (o.ring !== false && near) {   // shock ring: a soft dusty ring that races out over the ground and thins away
+    const R = 7.5 * s, [geo] = _drapeDisc(x, z, R, 0.06), tx = fxTex('ring').clone(); tx.needsUpdate = true; tx.wrapS = tx.wrapT = THREE.ClampToEdgeWrapping;
+    const m = new THREE.MeshBasicMaterial({ map: tx, color: '#E6D8BE', transparent: true, depthWrite: false, opacity: 0 }), rg = new THREE.Mesh(geo, m); rg.position.set(x, gy, z); rg.renderOrder = 2; world.add(dyn(rg));
+    tick(t => { const u = t - t0, k = Math.max(0.04, EASE.out(clamp(u / 0.6))); rg.visible = u > 0 && u < 0.75; if (!rg.visible) return; tx.repeat.set(1 / k, 1 / k); tx.offset.set(0.5 - 0.5 / k, 0.5 - 0.5 / k); m.opacity = 0.55 * Math.pow(1 - clamp(u / 0.75), 1.5) * clamp(u / 0.04); });
+    emit('dust', { at: [x, gy + 0.25, z], t0: t0 + 0.03, burst: Math.round(clamp(22 * s, 14, 70)), burstSpread: 0.08, jitter: 1.4 * s, speed: 3.2 * Math.sqrt(s), spread: 1.45, g: 0.05, drag: 0.9, size: clamp(0.8 * s, 0.5, 4), grow: 1.6, life: 2.8, colors: ['#A89E8A', '#8A806E', '#C4BBA8'] });   // dust thrown sideways
+  }
   if (o.fx !== false) { const tv = VT(t0); SHAKES.push({ t: tv, amp: Math.min(0.8, 0.3 * s), dur: 0.9 }); FLASHES.push({ t: tv, dur: 0.35, a: 0.6, color: '#FFD0A0' }); (AUDIO.hits ??= []).push({ t: tv, k: 'explosion' }); }
 }
 function meteor(o = {}) {   // from/to [x,y,z], t0 → t1 (impact), size: burning rock with trail, then explode()
@@ -4927,7 +5146,7 @@ function spaceSky(o = {}) {   // deep space backdrop: nebula clouds, Milky Way b
   for (let i = 0; i < N; i++) { const a = hash(i * 1.7) * TAU, b = Math.acos(hash(i * 3.3) * 2 - 1); o3.position.set(Math.sin(b) * Math.cos(a), Math.cos(b), Math.sin(b) * Math.sin(a)).multiplyScalar(R * 0.97); o3.scale.setScalar(0.6 + 2.2 * hash(i * 9.1) ** 6); o3.updateMatrix(); sg.setMatrixAt(i, o3.matrix);
     sg.setColorAt(i, col.set(pick2(['#FFFFFF', '#FFFFFF', '#CFE0FF', '#FFE6C8', '#FFD0D0'], hash(i * 5.7))).multiplyScalar(1.6)); }
   sg.frustumCulled = false; scene.add(sg);
-  tick(t => { sky.position.copy(camera.position); sg.position.copy(camera.position); });
+  POSTCAM.push(() => { sky.position.copy(camera.position); sg.position.copy(camera.position); });   // v3.25: after the camera of this frame (a tick saw the last frame's camera: stars jumped after cuts and at chunk starts)
   return { sky, stars: sg };
 }
 function astronaut(o = {}) {   // spacesuit rig: helmet shell with tinted visor (face visible), life-support pack, chest panel, gloves, mission patch — walk (mode 'lowg' on the Moon), pose, react, carry, floatIn …
@@ -5205,9 +5424,9 @@ function localBox(node, skip) {   // bounding box in the node's own frame (unsca
   return B.isEmpty() ? B.set(new THREE.Vector3(-0.25, 0, -0.25), new THREE.Vector3(0.25, 0.5, 0.25)) : B;
 }
 // phys(obj, { t0, shape: 'box' | 'sphere' | 'cyl', mass, vel: [x,y,z], spin: [x,y,z], bounce, friction }) — obj is simulated from t0 (falls, tumbles, bounces, gets pushed by blasts and other bodies)
-function phys(obj, o = {}) { const node = dyn(obj.g ?? obj.root ?? obj), B = { node, o, t0: o.t0 ?? 0 }; PHYS.bodies.push(B); PHYS.t0 = Math.min(PHYS.t0, B.t0); return B; }
+function phys(obj, o = {}) { const node = dyn(obj.g ?? obj.root ?? obj), B = { node, o, t0: o.t0 ?? 0 }; node.userData.physB = B; PHYS.bodies.push(B); PHYS.t0 = Math.min(PHYS.t0, B.t0); return B; }
 // blast(x, y, z, t, { power, r, up }) — pushes every simulated body (and ragdoll) within r away from the point; explode() adds one automatically
-function blast(x, y, z, t, o = {}) { PHYS.blasts.push({ p: [x, y, z], t, power: o.power ?? 9, r: o.r ?? 9, up: o.up ?? 0.45 }); }
+function blast(x, y, z, t, o = {}) { PHYS.blasts.push({ p: [x, y, z], t, power: o.power ?? 9, r: o.r ?? 9, up: o.up ?? 0.45, rag: o.rag ?? 1 }); }   // v3.25 rag: how hard ragdolls get pushed (pelvis + chest; 0 = not at all)
 // collider(obj, { moving }) — solid obstacle for simulated bodies (houses, barns, silos, towers and vehicles are solid automatically); moving: follows walk()/drive()/fly()
 function collider(obj, o = {}) { const node = obj.g ?? obj.root ?? obj; node.userData.solid = true; if (o.moving) PHYS.kin.push({ node, src: obj }); return obj; }
 // breakApart(obj, t, { n: [nx, ny, nz], power, from: [x,y,z], spin }) — obj shatters into chunks (its own colours) that fly apart and tumble to the ground
@@ -5287,7 +5506,7 @@ function breakApart(obj, t, o = {}) {
   if (o._T) tick(st => { o._T(Math.min(st, t)).decompose(g.position, g.quaternion, V); });   // carried along until it breaks (collapse: topple)
   tick(st => { const on = st >= t; node.visible = !on; for (const p of pieces) p.visible = on; });
   const cols = _dhex(_dcols(node)), at = o._at ?? [wc.x, wc.y, wc.z];
-  if (o.fx !== false) { if (glass.length) emit('debris', { at, t0: t, burst: Math.min(60, 12 * glass.length), colors: ['#DDEFF8', '#B8DCEC', '#FFFFFF'], size: 0.08, speed: pw0 * 0.8, spread: 1.3, basic: true, life: 1.8 });
+  if (o.fx !== false) { if (glass.length) emit('debris', { at, t0: t, burst: Math.min(60, 12 * glass.length), colors: ['#DDEFF8', '#B8DCEC', '#FFFFFF'], size: 0.11, speed: pw0 * 0.8, spread: 1.3, geo: 'shard', life: 1.8, spin: 9 });
     emit('debris', { at, t0: t, burst: Math.round(clamp(10 * R, 12, 60)), colors: cols, size: clamp(0.06 * R, 0.07, 0.3), speed: pw0 * 0.9, life: 2.4 });
     _dustPuff(at[0], Math.max(wbb.min.y + 0.3, at[1] - wsz.y * 0.3), at[2], t, clamp(R * 0.55, 0.6, 5));
     sfx(t, 'crack', clamp(0.5 + R * 0.12, 0.5, 1)); sfx(t, 'impact', clamp(0.4 + R * 0.12, 0.4, 1)); if (R > 3) { sfx(t, 'rumble', 0.7); SHAKES.push({ t: VT(t), amp: clamp(R * 0.045, 0.12, 0.5), dur: 0.7 }); } }
@@ -5349,16 +5568,17 @@ function wreck(v, t, o = {}) {
   if (!lat && o.hood !== false && fz > 0) box(dm, sz.x * 0.72, 0.05, sz.z * 0.2, shade(body, -0.06), 0, lb.min.y + sz.y * 0.5, lb.max.z - sz.z * 0.14, { rx: -0.5 * lvl, ...NC });   // hood sprung open
   tick(st => { const on = st >= t, k = sm01((st - t) / 0.07), e = 0.085 * lvl * k; dm.visible = on; if (on) g.scale.set(s0.x * (1 + (lat ? -e : e * 0.4)), s0.y * (1 - e * 0.6), s0.z * (1 + (lat ? e * 0.3 : -e)));
     if (v.headMat) { const f = st - t; v.headMat.emissiveIntensity = on ? (f < 0.7 && Math.sin(f * 60) > 0.2 ? (v._ei0 ??= v.headMat.emissiveIntensity) * 0.6 : 0) : (v._ei0 ??= v.headMat.emissiveIntensity); } });
-  const wh = (v.wheels ?? []).filter(w => w.parent), np = Math.min(wh.length, o.parts ?? (o._crash ? 1 + (sd > 0.55 ? 1 : 0) : 0)), at = st => v._crashAt?.(st) ?? (() => { g.updateWorldMatrix(true, false); const p = new THREE.Vector3(0, sz.y * 0.5, fz * sz.z * 0.4).applyMatrix4(g.matrixWorld); return [p.x, p.y, p.z]; })();
+  const wh = (v.wheels ?? []).filter(w => w.parent), np = Math.min(wh.length, o.parts ?? (o._crash ? 1 + (sd > 0.55 ? 1 : 0) : 0)), at = st => v._crashAt?.(st) ?? worldAt(g, [0, sz.y * 0.5, fz * sz.z * 0.4], st, v).toArray();   // v3.25: pose at st (was: this frame's matrix for every particle)
   for (let i = 0; i < np; i++) { const w = wh[Math.floor(hash(i * 4.7 + sd) * wh.length + i) % wh.length]; if (w.userData.off) continue; w.userData.off = true;   // a wheel comes off, bounces and rolls away
     const pc = dyn(grp(world)), cl = w.clone(true); cl.position.set(0, 0, 0); cl.quaternion.identity(); cl.scale.set(1, 1, 1); pc.add(cl); const V = new THREE.Vector3(), out = Math.sign(w.position.x || 1);
     late(st => { pc.visible = st >= t; w.visible = st < t; if (st > t + 1e-6) return; w.updateWorldMatrix(true, false); w.matrixWorld.decompose(pc.position, pc.quaternion, V); pc.scale.copy(V); });
     g.updateWorldMatrix(true, false); const side3 = new THREE.Vector3(out, 0, 0).transformDirection(g.matrixWorld);
     phys(pc, { t0: t, vel: [side3.x * (2.5 + 2 * sd), 3.2 + 1.5 * hash(i + sd), side3.z * (2.5 + 2 * sd)], spin: [6 * (sd - 0.5), 2, 9 * out], mass: 18, bounce: 0.45, friction: 0.5 }); }
   if (o.fx !== false) { emit('spark', { at, t0: t, t1: t + 0.35, rate: 90, speed: 6, size: 0.07 }); emit('debris', { at, t0: t, burst: 16, colors: [body, shade(body, -0.3), '#2A2D33'], size: 0.09, speed: 4.5 });
-    if (!o._crash) { emit('debris', { at, t0: t, burst: 24, speed: 3.5, size: 0.07, colors: ['#BFE8FF', '#E8F8FF', '#9FCBE0'], basic: true }); emit('smoke', { at, t0: t + 0.4, t1: t + (o.smokeFor ?? 8), rate: 5, size: 0.6, jitter: 0.3, colors: ['#D8D8D8', '#B8B8B8', '#8A8A8A'], opacity: 0.45 }); sfx(t, 'impact', 1); sfx(t + 0.03, 'clang', 0.7); sfx(t + 0.05, 'crack', 0.7); }
+    if (!o._crash) { emit('debris', { at, t0: t, burst: 24, speed: 3.5, size: 0.09, colors: ['#BFE8FF', '#E8F8FF', '#9FCBE0'], geo: 'shard', spin: 9 }); emit('smoke', { at, t0: t + 0.4, t1: t + (o.smokeFor ?? 8), rate: 5, size: 0.6, jitter: 0.3, colors: ['#D8D8D8', '#B8B8B8', '#8A8A8A'], opacity: 0.45 }); sfx(t, 'impact', 1); sfx(t + 0.03, 'clang', 0.7); sfx(t + 0.05, 'crack', 0.7); }
     else sfx(t + 0.03, 'clang', 0.7); }
-  if (o.fire != null && o.fire !== false) { const tf = t + (o.fire === true ? 1.5 : o.fire); emit('fire', { at, t0: tf, t1: tf + (o.fireFor ?? 12), rate: 55, size: 0.7, jitter: 0.4, speed: 1.4 }); emit('smoke', { at: st => { const p = at(st); return [p[0], p[1] + 0.9, p[2]]; }, t0: tf + 0.3, t1: tf + (o.fireFor ?? 12) + 3, rate: 7, size: 1.1 }); sfx(tf, 'fire', 0.7); }
+  if (o.fire != null && o.fire !== false) { const tf = t + (o.fire === true ? 1.5 : o.fire); emit('fire', { at, t0: tf, t1: tf + (o.fireFor ?? 12), rate: 55, size: 0.7, jitter: 0.4, speed: 1.4 }); emit('smoke', { at: st => { const p = at(st); return [p[0], p[1] + 0.9, p[2]]; }, t0: tf + 0.3, t1: tf + (o.fireFor ?? 12) + 3, rate: 7, size: 1.1 }); sfx(tf, 'fire', 0.7);
+    glow(0, 0, 0, { at: st => { const p = at(st); return [p[0], p[1] + 0.6, p[2]]; }, t0: tf, t1: tf + (o.fireFor ?? 12), intensity: o.fireLight ?? 28, dist: 9, color: '#FF8A3A' }); }   // v3.25: the wreck fire lights its surroundings (light pool)
   return v;
 }
 // ragdoll(rig, t, { from: [x,y,z], power, dir: [x,y,z], getUp: t2 }) — the figure is thrown and goes limp (real physics: joints, gravity, ground, obstacles); getUp: stands up again on the spot
@@ -5366,7 +5586,7 @@ function ragdoll(f, t, o = {}) { if (!f.legL) return f; dyn(f.root); f._rag = { 
 // crash(vehicle, t, { impulse: [x,y,z], spin: [x,y,z], smoke }) — the vehicle leaves its drive() path and tumbles with its momentum (+ impulse), glass bursts, smoke
 function crash(v, t, o = {}) {
   const B = phys(v, { t0: t, mass: 1200, vel: o.impulse ?? [0, 3, 0], spin: o.spin ?? [0.6, 0.4, 1.4], keepVel: true }); B.crash = v; _wreckAt(v, t);
-  emit('debris', { at: st => v._crashAt?.(st) ?? [0, -99, 0], t0: t, burst: 30, speed: 4, size: 0.08, colors: ['#BFE8FF', '#E8F8FF', '#9FCBE0'], basic: true });
+  emit('debris', { at: st => v._crashAt?.(st) ?? [0, -99, 0], t0: t, burst: 30, speed: 4, size: 0.1, colors: ['#BFE8FF', '#E8F8FF', '#9FCBE0'], geo: 'shard', spin: 9 });
   if (o.smoke !== false) emit('smoke', { at: st => v._crashAt?.(st) ?? [0, -99, 0], t0: t + 0.3, t1: t + 9, rate: 6, size: 0.9, jitter: 0.4 });
   sfx(t, 'impact', 1.2); sfx(t + 0.05, 'crack', 0.9);
   if (CFG.destruction !== false && o.wreck !== false && (v.wheels || v.kind)) wreck(v, t, { level: o.level, side: o.side, parts: o.parts, fire: o.fire, _crash: true });   // v2.36: dents, lights out, a wheel comes off
@@ -5425,6 +5645,7 @@ async function physicsBake() {
     now.forEach(([k, X, a], i) => { const b = prev[i][2]; if (k === 'b') starts.set(X, { p: a[0], q: a[1], v: a[0].clone().sub(b[0]).multiplyScalar(60) }); else { X._rag.a = a; X._rag.b = b; } }); }
   const live = [];
   const mkBody = (B, k0) => { const S = starts.get(B), o = B.o, ws = B.node.getWorldScale(new THREE.Vector3()), lb = localBox(B.node), h = lb.getSize(new THREE.Vector3()).multiply(ws).multiplyScalar(0.5), c = lb.getCenter(new THREE.Vector3()).multiply(ws);
+    B.p0 = S.p.clone(); B.q0 = S.q.clone();   // v3.25: start pose (worldAt before t0)
     const kv = o.keepVel !== false ? S.v : _pv2.set(0, 0, 0), v0 = o.vel ?? [0, 0, 0], w0 = o.spin ?? [0, 0, 0], mass = o.mass ?? clamp(8 * h.x * h.y * h.z * 250, 0.3, 3000);
     const b = W.createRigidBody(RA.RigidBodyDesc.dynamic().setTranslation(S.p.x, S.p.y, S.p.z).setRotation(Q(S.q)).setLinvel(v0[0] + kv.x, v0[1] + kv.y, v0[2] + kv.z).setAngvel({ x: w0[0], y: w0[1], z: w0[2] })
       .setLinearDamping(0.05).setAngularDamping(0.15).setCanSleep(true).setCcdEnabled(Math.min(h.x, h.y, h.z) < 0.2));
@@ -5449,7 +5670,10 @@ async function physicsBake() {
     const ts = tA + k / HZ;
     while (pend.length && pend[0][0] <= ts + 1e-6) pend.shift()[1](k);
     while (bl.length && bl[0].t <= ts + 1e-6) { const X = bl.shift();
-      for (const L of live) { if (L.kind !== 'b') continue; const b = L.b, p = b.translation(), dx = p.x - X.p[0], dy = p.y - X.p[1], dz = p.z - X.p[2], d = Math.hypot(dx, dy, dz); if (d > X.r) continue;
+      for (const L of live) { if (L.kind === 'r') { if (!(X.rag > 0)) continue; const pc = L.bodies.pelvis.b.translation(), ch = L.bodies.chest.b.translation(), cx = (pc.x + ch.x) / 2, cy = (pc.y + ch.y) / 2, cz = (pc.z + ch.z) / 2;   // v3.25: ragdolls are thrown too (was skipped)
+          const dx = cx - X.p[0], dy = cy - X.p[1], dz = cz - X.p[2], d = Math.hypot(dx, dy, dz); if (d > X.r) continue; const k2 = (1 - d / X.r) * X.power * X.rag * 0.6, nx = d > 1e-3 ? dx / d : 0, ny = d > 1e-3 ? dy / d : 1, nz = d > 1e-3 ? dz / d : 0;
+          for (const [nm] of RAGSEG) { const b = L.bodies[nm].b, m = b.mass(), w = nm === 'pelvis' || nm === 'chest' || nm === 'head' ? 1 : 0.85; b.applyImpulse({ x: nx * k2 * m * w, y: (ny + X.up) * k2 * m * w, z: nz * k2 * m * w }, true); } continue; }   // pelvis + chest lead, the limbs follow a little behind (no snapping joints)
+        if (L.kind !== 'b') continue; const b = L.b, p = b.translation(), dx = p.x - X.p[0], dy = p.y - X.p[1], dz = p.z - X.p[2], d = Math.hypot(dx, dy, dz); if (d > X.r) continue;
         const k2 = (1 - d / X.r) * X.power, m = b.mass(), nx = d > 1e-3 ? dx / d : 0, ny = d > 1e-3 ? dy / d : 1, nz = d > 1e-3 ? dz / d : 0;
         b.applyImpulse({ x: nx * k2 * m, y: (ny + X.up) * k2 * m, z: nz * k2 * m }, true); b.applyTorqueImpulse({ x: nz * k2 * m * 0.3, y: k2 * m * 0.1, z: -nx * k2 * m * 0.3 }, true); } }
     for (const K of kin) { const P = kinPose(K, ts); if (!P) continue; K.b.setNextKinematicTranslation({ x: P[0][0], y: P[0][1], z: P[0][2] }); K.b.setNextKinematicRotation(Q(P[1])); }
@@ -10570,7 +10794,7 @@ function soot(f, t0, o = {}) {
   _recolor(f, t0, o.t1 ?? 1e9, m => { m.color.lerp(new THREE.Color('#2A2522'), 0.78); m.roughness = 1; });
   if (o.afro !== false) { const a = dyn(grp(f.head, 0, 0.3, -0.02)); for (let i = 0; i < 14; i++) { const u = i / 14 * TAU, r = 0.2 + 0.06 * hash(i * 3.1); ball(a, 0.11 + 0.03 * hash(i), '#231E1B', Math.cos(u) * r, 0.06 + 0.1 * hash(i * 1.7), Math.sin(u) * r, { detail: 0, cast: false }); } ball(a, 0.17, '#231E1B', 0, 0.16, 0, { detail: 1, cast: false });
     tick(t => { const k = clamp((t - t0) / 0.15); a.scale.setScalar(t < t0 ? 0 : 0.6 + 0.4 * k + 0.08 * Math.exp(-(t - t0) * 6) * Math.sin((t - t0) * 30)); if (f.hair) f.hair.visible = t < t0; if (f.hat) f.hat.visible = t < t0; }); }
-  if (o.smoke !== false) emit('smoke', { at: t => { f.root.updateWorldMatrix(true, true); return f.head.localToWorld(v3(0, 0.45, 0)).toArray(); }, t0, t1: t0 + (o.smokeDur ?? 2.5), rate: 5, size: 0.25, opacity: 0.45 });
+  if (o.smoke !== false) emit('smoke', { at: tt => worldAt(f.head, [0, 0.45, 0], tt, f).toArray(), t0, t1: t0 + (o.smokeDur ?? 2.5), rate: 5, size: 0.25, opacity: 0.45 });   // v3.25 worldAt
   return f;
 }
 function wet(f, t0, o = {}) {
@@ -10999,7 +11223,7 @@ function rideBike(f, V, o = {}) {
   late(t => { const e = env(t); if (e <= 0) return; V.g.updateWorldMatrix(true, true); const P = V.g.localToWorld(v3(0, V.seatH - (k === 'scooter' || k === 'skateboard' ? 0 : HIP - 0.42 + 0.04), V.seatZ ?? 0)), Q = V.g.getWorldQuaternion(new THREE.Quaternion());
     if (k === 'skateboard') Q.multiply(new THREE.Quaternion().setFromAxisAngle(_AY, Math.PI / 2)); if (k === 'scooter') P.x += 0;
     if (e < 1) { const p0 = _bp(f, t < t0 ? t0 - 0.4 : t1 + 0.4); P.lerpVectors(p0, P, e); P.y += Math.sin(Math.PI * e) * 0.3; } r.position.copy(P); r.quaternion.slerp(Q, e); });
-  if (k === 'motorcycle') { sfx(t0, 'engine', 0.7); AUDIO.hits[AUDIO.hits.length - 1].dur = Math.min(t1, DUR) - t0; emit('smoke', { at: t => { V.g.updateWorldMatrix(true, false); return V.g.localToWorld(v3(...V.exhaust)).toArray(); }, t0, t1: Math.min(t1, DUR), rate: 4, size: 0.12, opacity: 0.3 }); }
+  if (k === 'motorcycle') { sfx(t0, 'engine', 0.7); AUDIO.hits[AUDIO.hits.length - 1].dur = Math.min(t1, DUR) - t0; emit('smoke', { at: tt => worldAt(V, V.exhaust, tt).toArray(), t0, t1: Math.min(t1, DUR), rate: 4, size: 0.12, opacity: 0.3 }); }   // v3.25 worldAt: the trail stays behind the bike
   return f;
 }
 // ---- rail ----
@@ -11042,7 +11266,7 @@ function train(p, o = {}) {   // v2.40: bogies, couplers and gangways between th
 }
 function run(T, o = {}) {   // drive the train straight from → to (soft start/stop), wheels turn, smoke from a steam engine, horn
   const [x0, z0] = o.from ?? [T.g.position.x, T.g.position.z], [x1, z1] = o.to, h = Math.atan2(x1 - x0, z1 - z0); drive(T, [[x0, z0], [x1, z1]], { t0: o.t0 ?? 0, speed: o.speed ?? 15, ramp: o.ramp ?? 4, dust: false, engine: false, y: 0.37 });
-  T.g.rotation.y = h; if (T.chimney) emit('smoke', { at: t => { T.g.updateWorldMatrix(true, false); return T.g.localToWorld(v3(...T.chimney)).toArray(); }, t0: o.t0 ?? 0, t1: DUR, rate: 9, size: 1.0, opacity: 0.6 });
+  T.g.rotation.y = h; if (T.chimney) emit('smoke', { at: tt => worldAt(T, T.chimney, tt).toArray(), t0: o.t0 ?? 0, t1: DUR, rate: 9, size: 1.0, opacity: 0.6 });   // v3.25 worldAt: the plume trails behind the engine
   sfx(o.t0 ?? 0, 'rumble', 0.6); AUDIO.hits[AUDIO.hits.length - 1].dur = Math.min(DUR, (o.t1 ?? DUR)) - (o.t0 ?? 0); if (o.horn !== false) sfx((o.t0 ?? 0) + (o.hornAt ?? 0.3), 'horn', 0.8); return T;
 }
 // trainStation(p, x, z, { len, ry, side }) — platform with edge line, canopy on posts, benches, pictogram signs, clock
@@ -11399,10 +11623,10 @@ function tornado(p, o = {}) {
   const inner = mesh(g, G('tornShell2' + H + R, () => new THREE.CylinderGeometry(R * 0.75, R * 0.06, H * 0.96, 16, 6, true).translate(0, H * 0.48, 0)), mat('#5A5650', { opacity: 0.5, side: THREE.DoubleSide }), 0, 0, 0, { cast: false }); dyn(inner);
   tick(t => { shell.rotation.y = t * 2.2; inner.rotation.y = -t * 3.1; shell.position.x = Math.sin(t * 1.1) * R * 0.08; });
   const deb = dyn(grp(g)); for (let i = 0; i < 26; i++) { const q = box(deb, 0.4 + hash(i) * 1.2, 0.2 + hash(i * 2) * 0.6, 0.4 + hash(i * 3) * 1.4, ['#6A4A2A', '#8A847A', '#B8302A', '#5A5E64', '#3E6A2A'][i % 5], 0, 0, 0, NC); q.userData.k = i; }
-  if (o.path) walk({ root: g }, o.path, { t0, speed: o.speed ?? 6 });
+  const WK = { root: g }; if (o.path) walk(WK, o.path, { t0, speed: o.speed ?? 6 });
   tick(t => { const a = (t - t0); rings.forEach((m, i) => { m.rotation.z = a * (3 - m.userData.u * 1.5) + i; m.position.x = Math.sin(a * 1.3 + m.userData.u * 3) * m.userData.u * R * 0.25; m.position.z = Math.cos(a * 1.1 + m.userData.u * 2) * m.userData.u * R * 0.2; });
     deb.children.forEach(q => { const k = q.userData.k, h = (hash(k) * H * 0.7 + a * (2 + hash(k * 5) * 3)) % (H * 0.8), rr = lerp(R * 0.2, R * 0.9, h / H) + 2, an = a * (2 + hash(k * 2)) + k; q.position.set(Math.cos(an) * rr, h, Math.sin(an) * rr); q.rotation.set(a * 3 + k, a * 2, k); }); g.visible = t >= t0 - 0.01 && t <= (o.t1 ?? 1e9); });
-  emit('dust', { at: t => { g.updateWorldMatrix(true, false); const P = g.getWorldPosition(v3()); return [P.x, groundH(P.x, P.z) + 0.5, P.z]; }, t0, t1: o.t1 ?? DUR, rate: 40, size: 3, spread: 1.4, speed: 4 });
+  emit('dust', { at: tt => { const P = worldAt(g, [0, 0, 0], tt, WK); return [P.x, groundH(P.x, P.z) + 0.5, P.z]; }, t0, t1: o.t1 ?? DUR, rate: 40, size: 3, spread: 1.4, speed: 4 });   // v3.25: dust where the funnel was when it rose
   sfx(t0, 'wind', 1.2); AUDIO.hits[AUDIO.hits.length - 1].dur = (o.t1 ?? DUR) - t0; sfx(t0, 'rumble', 0.8); AUDIO.hits[AUDIO.hits.length - 1].dur = (o.t1 ?? DUR) - t0;
   return { g };
 }
@@ -11928,8 +12152,9 @@ function pour(src, t0, t1, o = {}) {
 function gush(at, dir, t0, t1, o = {}) { for (let k = 0; k < (o.w ?? 3); k++) stream(toV(at).add(v3((k - ((o.w ?? 3) - 1) / 2) * 0.35, 0, 0)).toArray(), t0, t1, { dir, speed: o.speed ?? 7, n: 120, size: 0.16, life: 1.2, spread: 0.12, color: '#9AD0EA', sfx: !k, vol: 0.8 }); emit('spray', { at: toV(at).toArray(), t0, t1, rate: 30, size: 0.1 }); return t1; }
 function floodRoom(R, t0, t1, o = {}) {
   const x = R.x ?? 0, z = R.z ?? 0, w = R.w ?? 6, d = R.d ?? 6, H = o.h ?? 1.2, g = dyn(grp(world, x, groundH(x, z), z, R.ry ?? 0)), vol = box(g, w * 0.98, 1, d * 0.98, '', 0, 0, 0, { mat: mat('#5AA8D0', { opacity: 0.55, rough: 0.05 }), cast: false });
-  const top = box(g, w * 0.98, 0.02, d * 0.98, '', 0, 0, 0, { mat: mat('#BFE6FF', { opacity: 0.6, rough: 0.02 }), cast: false }); dyn(vol); dyn(top);
-  tick(t => { const k = EASE.inOut(clamp((t - t0) / (t1 - t0))), h = Math.max(0.001, H * k); vol.scale.y = h; vol.position.y = h / 2; top.position.y = h + 0.01 + 0.02 * Math.sin(t * 2.3); top.rotation.x = 0.01 * Math.sin(t * 1.7); g.visible = t > t0; });
+  const sg = new THREE.PlaneGeometry(w * 0.98, d * 0.98); sg.rotateX(-Math.PI / 2);   // v3.25: the top is real water (waterSurfaceMat: ripples, sky reflection, glint) — was a flat transparent slab that bobbed and tilted into the walls
+  const top = dyn(mesh(g, sg, waterSurfaceMat({ color: o.color ?? '#3E8FB8', opacity: o.opacity ?? 0.3, ripples: o.ripples ?? 1.4, scale: 0.9 }), 0, 0, 0, { cast: false, recv: false })); dyn(vol);
+  tick(t => { const k = EASE.inOut(clamp((t - t0) / (t1 - t0))), h = Math.max(0.001, H * k); vol.scale.y = h; vol.position.y = h / 2; top.position.y = h + 0.012; g.visible = t > t0; });
   sfx(t0, 'falls', 0.6); AUDIO.hits[AUDIO.hits.length - 1].dur = t1 - t0; return { g, level: t => H * EASE.inOut(clamp((t - t0) / (t1 - t0))) };
 }
 // ---- ropes ----
@@ -11976,13 +12201,19 @@ function jello(p, x, y, z, o = {}) {
 }
 // ---- fire ----
 // burn(obj | [x,y,z], t0, { size, dur, char }) — catches fire: flames, smoke, glow, crackle; the object chars dark over time
+// v3.25: the fire follows the object (worldAt: physics, fly, walk / drive — a burning crate that falls or a car that drives keeps its flames on it), the glow goes
+//   through the light pool and moves along; charring reuses one colour (was a new Color per mesh per frame)
+const _charC = new THREE.Color('#1E1612');
 function burn(obj, t0, o = {}) {
-  const isO = obj && (obj.isObject3D || obj.g || obj.root), n = isO ? (obj.g ?? obj.root ?? obj) : null, at = () => { if (!n) return toV(obj).toArray(); n.updateWorldMatrix(true, true); const bb = new THREE.Box3().setFromObject(n); const c = bb.getCenter(v3()); return [c.x, bb.max.y - 0.05, c.z]; };
-  if (n) { n.userData.stat = false; dyn(n); } const P0 = at(), sz = o.size ?? (n ? Math.max(0.8, new THREE.Box3().setFromObject(n).getSize(v3()).length() * 0.5) : 1), t1 = t0 + (o.dur ?? DUR);
-  emit('fire', { at: P0, t0, t1: t0 + 0.5, rate: 40 * sz, size: 0.45 * sz, jitter: 0.25 * sz, speed: 1 }); emit('fire', { at: P0, t0: t0 + 0.4, t1, rate: 80 * sz, size: 0.85 * sz, jitter: 0.5 * sz, speed: 1.2 }); emit('smoke', { at: [P0[0], P0[1] + sz, P0[2]], t0: t0 + 0.4, t1, rate: 6, size: 0.8 * sz }); glow(P0[0], P0[1] + 0.5, P0[2], { t0, t1, intensity: 10 * sz, dist: 6 * sz, color: '#FF8A3A' });
+  const isO = obj && (obj.isObject3D || obj.g || obj.root), n = isO ? (obj.g ?? obj.root ?? obj) : null, own = isO && !obj.isObject3D ? obj : undefined;
+  let LP = null; if (n) { n.userData.stat = false; dyn(n); n.updateWorldMatrix(true, true); const bb = new THREE.Box3().setFromObject(n), c = bb.getCenter(v3()); LP = n.worldToLocal(v3(c.x, bb.max.y - 0.05, c.z)); }
+  const P0 = n ? worldAt(n, LP, t0, own).toArray() : toV(obj).toArray(), sz = o.size ?? (n ? Math.max(0.8, new THREE.Box3().setFromObject(n).getSize(v3()).length() * 0.5) : 1), t1 = t0 + (o.dur ?? DUR);
+  const at = n ? (dy = 0) => tt => { const p = worldAt(n, LP, tt, own); return [p.x, p.y + dy, p.z]; } : (dy = 0) => [P0[0], P0[1] + dy, P0[2]];
+  emit('fire', { at: at(), t0, t1: t0 + 0.5, rate: 40 * sz, size: 0.45 * sz, jitter: 0.25 * sz, speed: 1 }); emit('fire', { at: at(), t0: t0 + 0.4, t1, rate: 80 * sz, size: 0.85 * sz, jitter: 0.5 * sz, speed: 1.2 }); emit('smoke', { at: at(sz), t0: t0 + 0.4, t1, rate: 6, size: 0.8 * sz });
+  glow(P0[0], P0[1] + 0.5, P0[2], { t0, t1, intensity: 10 * sz, dist: 6 * sz, color: '#FF8A3A', at: n ? at(0.5) : undefined });
   sfx(t0, 'fire', Math.min(1, 0.4 + sz * 0.2)); AUDIO.hits[AUDIO.hits.length - 1].dur = Math.min(DUR, t1) - t0;
   if (n && o.char !== false) { const L = []; n.traverse(m => { if (m.isMesh && m.material?.color && !m.material.isMeshBasicMaterial) { const m2 = m.material.clone(); L.push([m, m.material, m2, m.material.color.clone()]); } });
-    tick(t => { const k = EASE.out(clamp((t - t0) / (o.charTime ?? 4))); for (const [m, a, b2, c] of L) { if (t < t0) { m.material = a; continue; } m.material = b2; b2.color.copy(c).lerp(new THREE.Color('#1E1612'), 0.85 * k); } }); }
+    tick(t => { const k = EASE.out(clamp((t - t0) / (o.charTime ?? 4))); for (const [m, a, b2, c] of L) { if (t < t0) { m.material = a; continue; } m.material = b2; b2.color.copy(c).lerp(_charC, 0.85 * k); } }); }
   return t0;
 }
 // spreadFire(pts | objs, t0, { speed }) — fire runs from the first item to the next (grass, curtains, a row of crates)
@@ -14263,6 +14494,10 @@ const FinalShader = {
   fragmentShader: `#include <packing>
     uniform sampler2D tDiffuse, tDepth, tRays, tStreak, tHal; uniform vec2 uRes, uBlurDir, uFocus; uniform float uTime, uExp, uMode, uGrain, uVig, uAb, uSat, uCon, uBlur, uZoom, uDip, uDef, uDof, uDofOn, uFocusD, uNear, uFar, uRain, uRays, uOpen, uGSat, uGCon;
     uniform float uStreak, uHal, uCAb, uBars; uniform vec3 uSh, uHl, uLift, uSTint; varying vec2 vUv;
+    uniform vec4 uHeat[4]; uniform float uHeatN;   // v3.25 heat shimmer (heatShimmer): centre (uv), radius (frame heights), strength
+    vec2 heatOff(vec2 uv){ vec2 o = vec2(0.0); for (int i = 0; i < 4; i++) { if (float(i) >= uHeatN) break; vec4 H = uHeat[i]; vec2 q = (uv - H.xy) * vec2(uRes.x / uRes.y, 1.0) / max(H.z, 1e-4);
+        float m = (1.0 - smoothstep(0.3, 1.0, length(q * vec2(1.2, 0.75)))) * H.w; if (m > 0.0) o += m * vec2(sin(q.y * 19.0 - uTime * 7.3 + 1.7 * sin(q.x * 6.0 + uTime * 1.9)), 0.5 * cos(q.x * 15.0 + q.y * 4.0 + uTime * 6.1)); }
+      return o * 0.0016; }
     float hr(vec2 p){ return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
     vec3 drops(vec2 uv, float t, float sc){ vec2 a = vec2(uv.x * 0.5625, uv.y) * sc, id = floor(a), f = fract(a) - 0.5; float n = hr(id), n2 = hr(id + 17.3), n3 = hr(id + 41.7), life = fract(t * (0.1 + 0.12 * n) + n2);
       vec2 c = vec2(n - 0.5, n2 - 0.5) * 0.45; c.y -= step(0.72, n) * life * life * 0.7; float r = (0.1 + 0.16 * n3) * smoothstep(0.0, 0.06, life) * (1.0 - smoothstep(0.82, 1.0, life)) * step(0.3, n3);
@@ -14280,6 +14515,7 @@ const FinalShader = {
     void main(){
       vec2 uv = vUv; vec3 c; float rmk = 0.0;
       if (uRain > 0.001) { vec3 d1 = drops(uv, uTime, 6.0), d2 = drops(uv * 1.3 + 0.37, uTime * 1.2 + 3.0, 10.0); uv += (d1.xy + d2.xy) * uRain; rmk = max(d1.z, d2.z) * uRain; }
+      if (uHeatN > 0.5) uv += heatOff(uv);
       if (uMode > 2.5) { vec2 cc = uv - 0.5; uv = 0.5 + cc * (1.0 + 0.07 * dot(cc, cc)); }
       vec2 dir = uv - 0.5; float ab = uAb * 0.008 + (uMode > 2.5 ? 0.0018 : 0.0) + uCAb * 0.024 * dot(dir, dir);   // v3.23 cinema: lens colour fringes grow toward the edges (none in the centre)
       float cc = uDofOn > 0.5 ? coc(uv) : 0.0, r = uDef + (uDofOn > 0.5 ? cc : uDof * 0.012 * smoothstep(0.12, 0.45, length((uv - uFocus) * vec2(0.5625, 1.0))));   // depth of field (or the old screen-space focus look)
@@ -14352,7 +14588,7 @@ class DofDepthPass extends Pass {
   setSize(w, h) { dofRT.setSize(Math.max(1, w >> 1), Math.max(1, h >> 1)); }
   render(r) {
     this.on = CFG.dof !== false && camFx.dof > 0.01; if (!this.on) return;
-    const hid = []; scene.traverseVisible(o => { const m = o.material; if (o.isMesh && m && !o.userData.dofSolid && (m.transparent || m.blending === THREE.AdditiveBlending || m.depthWrite === false)) hid.push(o); });   // dofSolid: glassy x-ray bodies, quicksand stay in focus
+    const hid = []; scene.traverseVisible(o => { const m = o.material; if (o.isMesh && m && !o.userData.dofSolid && (o.userData.fxPart || m.transparent || m.blending === THREE.AdditiveBlending || m.depthWrite === false)) hid.push(o); });   // dofSolid: glassy x-ray bodies, quicksand stay in focus
     for (const o of hid) o.visible = false;
     const bg = scene.background, ca = r.getClearAlpha(); r.getClearColor(_cc); scene.background = null; scene.overrideMaterial = dofMat;
     r.setRenderTarget(dofRT); r.setClearColor(0xffffff, 1); r.clear(); r.render(scene, camera);
@@ -14363,7 +14599,7 @@ const dofPass = new DofDepthPass(); composer.addPass(dofPass);
 const AOI = CFG.ao ?? 0.55; let gtao = null;   // ambient occlusion: contact shadows where things meet (feet on the ground, walls, crowds)
 if (AOI > 0) {
   gtao = new GTAOPass(scene, camera, 4, 4); gtao.output = GTAOPass.OUTPUT.Default; gtao.blendIntensity = AOI;
-  gtao.overrideVisibility = function () { const c = this._visibilityCache; this.scene.traverse(o => { c.set(o, o.visible); const m = o.material; if (o.isPoints || o.isLine || (o.isMesh && m && (m.transparent || m.depthWrite === false || m.blending === THREE.AdditiveBlending))) o.visible = false; }); };   // smoke, glass, beams: no AO from their quads
+  gtao.overrideVisibility = function () { const c = this._visibilityCache; this.scene.traverse(o => { c.set(o, o.visible); const m = o.material; if (o.isPoints || o.isLine || o.userData.fxPart || (o.isMesh && m && (m.transparent || m.depthWrite === false || m.blending === THREE.AdditiveBlending))) o.visible = false; }); };   // smoke, glass, beams: no AO from their quads
   gtao.updateGtaoMaterial({ radius: 0.7, distanceExponent: 1.4, thickness: 1.4, scale: 1, samples: 8, distanceFallOff: 1, screenSpaceRadius: false });
   gtao.updatePdMaterial({ lumaPhi: 10, depthPhi: 2, normalPhi: 3, radius: 4, rings: 2, samples: 6 });
   const gs = gtao.setSize.bind(gtao), q = CFG.aoRes ?? 0.5; gtao.setSize = (w, h) => gs(Math.max(1, Math.round(w * q)), Math.max(1, Math.round(h * q)));   // AO at half resolution: ~4× cheaper, hardly visible
@@ -14572,6 +14808,7 @@ class CinePass extends Pass {
   }
 }
 if (CINE) composer.addPass(new CinePass());
+Object.assign(FinalShader.uniforms, { uHeat: { value: [0, 1, 2, 3].map(() => new THREE.Vector4()) }, uHeatN: { value: 0 } });   // v3.25 heat shimmer
 const fin = new ShaderPass(FinalShader); composer.addPass(fin);
 Object.assign(fin.uniforms.uMode, { value: { none: 0, film: 1, crt: 3 }[CFG.filter] ?? 1 });
 fin.uniforms.uGrain.value = CFG.filter === 'none' ? 0 : CFG.grain;
@@ -14993,8 +15230,8 @@ function stepScene(t) {   // everything in the 3D scene at time t (no HUD) — a
   runTickers(st);
   for (const h of hordes) h.update(st, t);
   for (const f of LATE) f(st);
-  updateEmitters(st);
   updateCamera(t);
+  updateEmitters(st);   // v3.25: after the camera — wrapped rain / snow fields sit round this frame's camera
   if (THUMB_ON) thumbCam();
   fitShadow();
   lookPass(t);
@@ -15213,7 +15450,23 @@ function qaAudit() {
   try { out.push(...qaGhost()); } catch (e) { out.push('ghost QA failed: ' + e.message); }   // v3.24: GHOST (motion blur too coarse even at CFG.mbMax)
   try { out.push(...qaProps()); } catch (e) { out.push('prop QA failed: ' + e.message); }   // v3.24: FLOAT · BURIED
   try { out.push(...qaLook()); } catch (e) { out.push('look QA failed: ' + e.message); }   // v3.5: DARK · EMPTY · CAMCLIP · HEADCUT
+  try { out.push(...qaLensFx()); } catch (e) { out.push('lens FX QA failed: ' + e.message); }   // v3.25: LENSFX
   return out;
+}
+// --- v3.25 lens FX QA (part of qaAudit, lines "QA: LENSFX – …"): an emitter whose particles would be huge on screen — the camera flies through debris, sparks, hail or rain
+//   streaks (hard particles bigger than 30 % of the frame height before the lens guard) or sits inside smoke / dust puffs (closer than ~their radius). The lens guard in the
+//   shaders shrinks / fades them, so nothing covers the frame, but the effect is lost there and pieces visibly shrink. Counts if ≥ 3 and ≥ 15 % of the emitter's live
+//   particles are affected in a sample (4 Hz over the whole video, the moment shown), in at least 2 samples (a burst flicking past once does not count). One line per emitter with the time span.
+function qaLensFx() {
+  if (!emitters.length) return [];
+  const M = new THREE.Matrix4(), P = new THREE.Vector3(), Q = new THREE.Quaternion(), S = new THREE.Vector3(), hit = new Map();
+  for (let v = 0; v <= DUR + 1e-6; v += 0.25) { stepScene(teaseV(v)); camera.updateMatrixWorld(true); const P11 = camera.projectionMatrix.elements[5], Vi = camera.matrixWorldInverse;
+    for (const e of emitters) { if (!e.im.visible || e.lensOk) continue; let live = 0, big = 0;
+      for (let j = 0; j < e.n; j++) { if (e.fade && e.fade.array[j] < 0.05) continue; e.im.getMatrixAt(j, M); M.decompose(P, Q, S); const sc = e.geo === 'streak' ? S.y : Math.max(S.x, S.y, S.z); if (sc < 1e-4) continue;
+        live++; P.applyMatrix4(Vi); const dz = -P.z; if (dz <= 0.02) continue;
+        if (e.soft ? dz < 0.15 + 0.85 * 0.85 * sc : sc * P11 / (2 * dz) > 0.3) big++; }
+      if (live && big >= Math.max(3, live * 0.15)) { const H = hit.get(e) ?? { a: v, b: v, n: 0, live: 0, c: 0 }; H.b = v; H.c++; if (big > H.n) { H.n = big; H.live = live; } hit.set(e, H); } } }
+  return [...hit].filter(([, H]) => H.c >= 2).slice(0, 8).map(([e, H]) => `LENSFX – ${e.kind} particles (emitter #${e.id}) right in front of the lens at ${H.a.toFixed(2)}${H.b > H.a ? '–' + H.b.toFixed(2) : ''} s: ${H.n} of ${H.live} ${e.soft ? 'puffs fade out round the camera' : 'pieces shrink before they reach the lens'} – move the camera out of the effect (dist, h, az) or the effect away / smaller (size, at), or set { lensOk: true } on the emitter if it is meant`);
 }
 // --- v3.24 ghost QA (part of qaAudit): every 2nd video frame that gets motion blur is planned as the export plans it (mbPlan); a frame whose copies are still
 //   more than CFG.mbGap apart with CFG.mbMax samples and the shortest shutter (or with a fixed CFG.mbSamples) shows ghost copies → one line per run of such frames.

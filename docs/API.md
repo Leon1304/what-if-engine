@@ -75,6 +75,7 @@ Kontaktschatten (`CFG.ao`, Standard 0.55), Glühen auf Feuer, Explosionen, Fenst
 ## Takt
 
 `world` ist die Wurzel der Szene. Alles Bewegte läuft über `tick(t => …)` und wird nur aus t berechnet, ohne Zustand zwischen Frames. Mit `SLOWMO` bekommt die Szene die Szenenzeit (`ST(t)`); Captions, Kamera und Sound laufen in Echtzeit, `explode` rechnet selbst um (`VT`). Helfer: `span(t,t0,dauer,ease)` → 0..1, `bump(t,t0,d)`, `EASE`, `lerp`, `clamp`, `rnd()`/`rr(a,b)`/`pick(arr)` (geseedet), `hash(n)`, `noise1(x)`, `clockText`.
+Was an der Kamera hängt (Himmelskugel, Sterne, Wetterfelder, Bildschirm-Effekte), gehört in einen `POSTCAM.push(t => …)`-Hook, nicht in `tick`: Ticks laufen vor der Kamera und sähen das vorige Bild (Sprünge nach jedem Schnitt und an jedem Render-Stück). `spaceSky` macht das seit v3.25 so.
 
 ## Gelände
 
@@ -154,6 +155,8 @@ Als letzte Zeile der Szene `biome(kind, {density, trees, keep: [[x, z, r]], area
 - `explode(x,y,z,t0,{size,crater})` bringt Feuerball, Trümmer, Rauch, Licht, Krater, Shake, Flash und Sound selbst mit.
 - `meteor({from:[x,y,z], to:[x,y,z], t0, t1, size})` fliegt mit Feuerschweif und explodiert bei t1.
 - Jede Explosion belegt für 1,2 s ein Licht. Zusammen mit `glow`/`lamp` höchstens 3–4 Lichter gleichzeitig.
+- **Explosion (v3.25):** weicher Brandfleck, der sich über den Boden legt (statt harter dunkler Scheibe; `crater: false` = keiner), eine staubige Druckwelle als Ring über den Boden, seitlich weggeschleuderter Staub, ein Funkenregen; das Licht kommt aus dem Licht-Pool (siehe Partikel und Licht). `ring: false` = ohne Ring und Staubring. Trümmer bleiben liegen, wo sie landen.
+- `lightning(t, {x, z, h, branches, width, light, lightDist})` (v3.25): verzweigter Blitz (gezackter Hauptkanal, `branches` Äste, Standard 3) und ein Lichtblitz am Einschlag über den Licht-Pool (`light`: Stärke, Standard 1400, `false` = keiner). `lightningStorm(t0, t1, {every})` wie bisher.
 
 ## Kampf (v2.9, comichaft)
 
@@ -288,6 +291,7 @@ Wenn die Handlung es hergibt, fassen die Figuren Dinge an, statt nur daneben zu 
 Für alles, was fällt, fliegt, umkippt oder zerbricht, statt Handanimation. Vor seinem Startzeitpunkt bleibt jedes Objekt in seiner normalen Animation, danach übernimmt die Simulation.
 - `phys(obj, {t0, mass, vel: [x,y,z], spin, shape: 'box'|'sphere', bounce, friction})`: fällt, kippt, rollt, prallt ab; Kistenstapel stürzen um, wenn etwas sie trifft.
 - `blast(x,y,z,t,{power, r})` stößt alles Simulierte weg; `explode()` macht das automatisch.
+- Seit v3.25 trifft `blast` auch Ragdolls (in der Simulation, bildgenau): Becken, Brust und Kopf bekommen den vollen Stoß, Arme und Beine 85 % (keine schnappenden Gelenke). `blast(…, {rag: 0})` = Ragdolls nicht stoßen, `rag: 0.5` = halb so stark.
 - `breakApart(obj, t, {n: [x,y,z], power, from})`: Mauer, Schuppen, Zaunfeld oder Kiste zerbricht in Stücke in den eigenen Farben.
 - `ragdoll(rig, t, {from: [x,y,z] | dir, power, getUp: t2})`: Die Figur wird weggeschleudert und fällt schlaff mit Gelenken (comichaft, nie brutal; bei Explosionen, Zusammenstößen, gern bei Zombies). `getUp` lässt sie an Ort und Stelle aufstehen; danach kein `walk` mehr für diese Figur.
 - `crash(vehicle, t, {impulse, spin})`: Das Fahrzeug verlässt seine `drive`-Bahn, überschlägt sich, Glas splittert, Rauch steigt auf.
@@ -321,6 +325,14 @@ Für alles, was fällt, fliegt, umkippt oder zerbricht, statt Handanimation. Vor
 
 - `emit(kind, {at:[x,y,z] | t => [x,y,z], t0, t1, rate | burst, size, jitter, …})` mit kind = fire · smoke · spark · debris · dust · goo · confetti · rain · snow. Mit einer Funktion als `at` wandert die Quelle mit (Schweif, Düse).
 - `glow(x,y,z,{t0, intensity, dist, color})` ist ein flackerndes Licht. Höchstens 3–4 Punkt- oder Spotlichter pro Szene.
+- **Licht-Pool (v3.25):** `glow()` mit Zeitfenster (`t0`/`t1`), wandernder Quelle (`at: t => [x,y,z]`) oder eigener Hüllkurve (`env: t => 0..1`) baut kein eigenes PointLight mehr: Feuer (`burn`, `spreadFire`), Explosionen, Minen, Lava-Fontänen, Blitze und brennende Wracks (`wreck(…, {fire})`, Stärke `fireLight`) sind Quellen, und `CFG.fxLights` (Standard 4) echte Lichter gehen in jedem Bild an die stärksten Quellen nahe der Kamera (Stärke × Hüllkurve, gewichtet mit dem Abstand; reine Funktion von t). Das letzte Licht blendet nach seinem Vorsprung vor der nächsten Quelle ein und aus, ein Wechsel springt nie. `spreadFire` über 10 Kisten = 4 Lichter statt 10. Dauerlampen (`glow` ohne `t0`/`t1`, `lamp`, Raumlicht) und `glow(…, {pool: false})` bleiben eigene Lichter.
+  Eine Pool-Quelle sieht für die Szene aus wie ein Licht: `position`, `color`, `distance`, `intensity` (ein späterer Szenen-Tick darf sie verschieben oder `intensity` skalieren, wie in alten Videos).
+- `worldAt(obj, [x,y,z], t, owner?)` (v3.25) → Vector3: wo ein Punkt im eigenen Rahmen von obj zur Zeit t ist, als reine Funktion von t – Pose aus Physik-Aufzeichnung (`phys`, `crash`, `breakApart`), `fly()` oder `walk()`/`drive()` von obj oder dem nächsten Elternteil, das eine hat (`owner`: das Rig oder Fahrzeug dazu, z. B. `worldAt(f.head, [0, 0.45, 0], t, f)`); was dazwischen sitzt und die kleinen Extras des aktuellen Bildes (Neigung, Federn) kommen aus dem gezeichneten Bild. Für Emitter mit wandernder Quelle: `emit('smoke', { at: t => worldAt(car, [0, 0.4, -2], t).toArray() })` – früher geborene Teilchen bleiben zurück statt mitzufahren (so seit v3.25 Motorrad-Auspuff, Dampflok-Schornstein, Tornado-Staub, Ruß-Rauch, Wrack-Feuer).
+- **Linsen-Schutz (v3.25, automatisch):** Rauch-, Staub- und Feuerwolken blenden direkt vor der Linse aus (innerhalb ihres eigenen Radius) und dort weich, wo sie den Boden treffen (keine harte Schnittkante). Harte Teilchen (Trümmer, Funken, Regenstreifen, Splitter, Hagel) schrumpfen von nahem auf höchstens 12 % der Bildhöhe und verschwinden in den letzten 0,3 m – keine großen grauen Balken mehr. Sie stehen nicht im AO- und Tiefenschärfe-Durchgang. Prüfung: `QA: LENSFX – …` meldet Emitter, deren Teilchen in einer Abtastung (4 Hz) zu ≥ 15 % (mind. 3) direkt vor der Linse wären, in mindestens 2 Abtastungen (harte > 30 % der Bildhöhe, Wolken näher als ihr Radius): Kamera aus dem Effekt nehmen oder den Effekt verschieben/verkleinern; gewollt (Kamera fliegt durch den Sturm) → `{ lensOk: true }` am Emitter oder `QA_OK`.
+- Neu in `emit` (v3.25): kind `hail` (Eiskörner, springen einmal auf und bleiben liegen; `bounce`), `sand` (treibende Sandwolken), `geo: 'shard'` (flache glänzende Glassplitter – `shatter`, Glas in `breakApart`, `crash` und `wreck` nutzen sie; `shatter(…, {geo: 'box'})` = alte Würfel), `geo: 'ice'`, `vel: [x,y,z]` (konstante Drift), `lensOk`. Trümmer mit `floor` landen und bleiben liegen und drehen sich nicht weiter (Landezeit einmal pro Teilchen bestimmt). `rain`/`snow` um den Ursprung (`at` weggelassen oder `[0, y, 0]`, Fläche ≥ 30 m) liegen als Feld um die Kamera (von etwa 0,2 × Fläche hinter bis 0,8 × vor ihr, nahtlos umgebrochen, `wrap: false` = fest), Regen mit `wind: [x,z]` treibt mit dem Wind und die Streifen neigen sich mit. Emitter außerhalb ihrer Zeit werden nicht mehr angefasst (schneller). `steam` gibt es seit v2.18 (Essen).
+- `heatShimmer(at, {t0, t1, r, h, k})` (v3.25): heiße Luft lässt das Bild über einem Feuer, Auspuff, einer Straße in der Sonne flimmern (`at`: `[x,y,z]`, Objekt, Rig oder `t => [x,y,z]`; `r` Radius der heißen Säule in m, `k` Stärke 0..1, Standard 0.6). Bildschirm-Effekt im letzten Durchgang, weich und höchstens ein paar Pixel, bis zu 4 gleichzeitig; blendet über 0,5 s ein und aus.
+- `sandstorm({t0, t1, from: [dx, dz], speed, r, h, w, color, density, light})` (v3.25): eine hohe Sandwand rollt von der Seite `from` heran (weiche Wolken, unten dunkel, oben sonnig, Staub an der Basis), erreicht die Set-Mitte nach `r / speed` s, danach ist alles in treibenden Sand gehüllt: Nebel zieht zu und färbt sich sandig, Himmel und Sonne werden dunkler, Böen ziehen an der Kamera vorbei. Klingt nach `t1` über 2 s ab. → `{ k(t) }` (0..1, wie tief das Set im Sturm steckt).
+- `tsunami({from: [x,z], to: [x,z], t0, t1, h, w, y, color, sea, foam})` (v3.25): eine Wasserwand läuft von `from` nach `to`, wächst aus dem Meer auf `h` m, die Krone rollt sich ein und bricht (von einem Ende her), Gischt fliegt von der Lippe, weißes Wasser am Fuß, Dunst dahinter; `y` Meereshöhe. → `{ g, front(t), height(t) }`. Für das Meer selbst weiter `water({level})`.
 - Partikel klein halten (fire 0.4–0.7, dust ≤ 0.4) und nicht direkt vor die Kamera setzen. Rauch, Staub und Feuer sind weiche Wolken, die ein- und ausblenden und nachts dunkler werden.
 - Wetter und Licht: `fogBank({at:[x,z], r, density, drift})` (Bodennebel: Morgen, Sumpf, Horror), `lightShafts({at:[x,z], n, top, len, opacity})` (Lichtstrahlen durch Wolken, Bäume, Fenster, Staub), `lensRain(t0, t1, stärke)` (Tropfen auf der Linse, zu `emit('rain')` in Nahaufnahmen). Jedes nur dort, wo es die Stimmung trägt.
 
@@ -490,6 +502,7 @@ Sie wirken zusätzlich zu `CAM`:
 - `pour(rig | [x,y,z], t0, t1, { to: [x,z], color, puddle })`: gießt aus der rechten Hand (Gefäß mit `holdItem`, `rot` kippt es) und bildet eine Pfütze.
 - `gush(at, dir, t0, t1, { speed, w })`: Wasser schießt durch eine Tür, ein Rohr oder ein Fenster.
 - `floodRoom({ x, z, w, d, ry }, t0, t1, { h })`: Wasser steigt in einem Raum, Wände baut die Szene; → `{ level(t) }`.
+  Seit v3.25 ist die Oberfläche echtes Wasser (`waterSurfaceMat`: Kräuseln, Himmelsspiegelung, Glanz; `color`, `opacity`, `ripples`) statt einer kippelnden durchsichtigen Platte.
 
 ## Seile und Schaukeln
 - `rope(a, b, { sag, len, segs, r, color })`: hängendes Seil zwischen Punkten, Figuren (rechte Hand), Objekten oder `t => [x,y,z]`, wird jedes Bild neu berechnet; → `{ mid(t) }`.
@@ -499,6 +512,7 @@ Sie wirken zusätzlich zu `CAM`:
 ## Wackelpudding, Feuer, Glas
 - `jello(p, x, y, z, { color, poke: [t, …], scale })`: Wackelpudding auf Teller; jeder Stups lässt ihn nachwabbeln.
 - `burn(obj | [x,y,z], t0, { size, dur, charTime, char: false })`: Flammen, Rauch, Glut und Knistern; das Objekt verkohlt.
+  Seit v3.25 bleibt das Feuer am Objekt, auch wenn es fällt (`phys`), fährt (`drive`) oder fliegt (`worldAt`); das Glühen läuft über den Licht-Pool mit.
 - `spreadFire([obj | [x,y,z], …], t0, { speed })`: Feuer springt von einem zum nächsten (Kisten, Vorhänge, Gras).
 - `crackGlass([x,y,z], t, { size, ry })`: Spinnennetz-Riss in einer Scheibe, mit Knack.
 
