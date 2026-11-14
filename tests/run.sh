@@ -9,6 +9,7 @@ sed -n '/@STORY-BEGIN/,/@STORY-END/p' template.html | sed '1d;$d' > example.stor
 sed -n '/@SCENE-BEGIN/,/@SCENE-END/p' template.html | sed '1d;$d' > example.scene.js
 cp "$R"/tests/*.story.js "$R"/tests/*.scene.js .
 names=${*:-example $(cd "$R/tests" && ls *.story.js | sed 's/\.story\.js$//')}
+names=$(echo $names)   # one line, single spaces: the " $names " checks below (gate, crowd QA, channel) also run in a full run (ls gave newlines)
 cores=$(getconf _NPROCESSORS_ONLN 2>/dev/null || echo 2); J=${SMOKE_JOBS:-$(( cores / 2 ))}; [ "$J" -lt 1 ] && J=1; [ -z "${SMOKE_JOBS:-}" ] && [ "$J" -gt 4 ] && J=4
 one() {   # one scene → its result in <name>.res (first line "ok …" or "FAIL …")
   s=$1
