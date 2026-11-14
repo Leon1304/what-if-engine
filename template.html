@@ -10437,7 +10437,8 @@ function ship(p, kind = 'fishing', x = 0, z = 0, o = {}) {   // kind: see SHIPS 
         box(b, 0.12, 1.05, len + 0.06, j % 2 ? wood : shade(wood, -0.06), s * (a[0] + c[0]) / 2, Math.min(a[1], c[1]) - 0.02, (a[2] + c[2]) / 2, { ry: ang });
         box(b, 0.14, 0.32, 0.08, '#120C08', s * ((a[0] + c[0]) / 2 + 0.01), Math.min(a[1], c[1]) + 0.5, (a[2] + c[2]) / 2, { ry: ang, ...NC });
         if (j % 3 === 0) { const sh = ball(b, 0.5, j % 2 ? '#7A2E20' : '#2E2A26', s * ((a[0] + c[0]) / 2 + 0.1), Math.min(a[1], c[1]) + 0.55, (a[2] + c[2]) / 2, { detail: 1, ...NC }); sh.scale.set(0.12, 1, 1); } }
-      for (let i = 0; i < 5; i++) for (const s of [-1, 1]) { const u = 0.33 + i * 0.07, e = H.edge(u), og = dyn(grp(b, s * (e[0] + 0.1), e[1] + 0.1, e[2])); _seg(og, [0, 0, 0], [s * 6.2, -3.2, 0], 0.06, 0.05, '#9A7A50'); box(og, 0.07, 0.05, 0.42, '#9A7A50', s * 6.2, -3.25, 0, { rz: s * 0.5, ...NC }); S.oars.push([og, s]); }
+      if (o.oars !== false) for (let i = 0; i < 5; i++) for (const s of [-1, 1]) { const u = 0.33 + i * 0.07, e = H.edge(u), og = dyn(grp(b, s * (e[0] + 0.1), e[1] + 0.1, e[2]));   // oars: false = at anchor, sweeps shipped (fewer meshes)
+        _seg(og, [0, 0, 0], [s * 6.2, -3.2, 0], 0.06, 0.05, '#9A7A50'); box(og, 0.07, 0.05, 0.42, '#9A7A50', s * 6.2, -3.25, 0, { rz: s * 0.5, ...NC }); S.oars.push([og, s]); }
       S.masts = []; S.pennants = [];
       for (const [u, Hm, rake, wk] of [[0.83, 15, -0.12, 0.62], [0.52, 23, 0, 1], [0.26, 14, 0.05, 0.6]]) {   // masts: each one a group that dismast() can fell
         const mg = dyn(grp(b, 0, dk(u) - 0.4, zz(u))); mg.rotation.x = rake; cyl(mg, 0.22 * wk + 0.12, 0.32 * wk + 0.16, Hm, '#6A4A2C', 0, 0, 0, { seg: 8 });
@@ -10523,7 +10524,7 @@ function dismast(S, t, o = {}) {   // v3.27: a mast breaks at the deck and falls
   tick(tt => { if (tt < t) return; const u = (tt - t) / dur, sh = u < 0.12 ? 0.03 * Math.sin(tt * 70) * (1 - u / 0.12) : 0, fall = u < 0.12 ? 0 : 1.42 * clamp((u - 0.12) / 0.88) ** 2.2;
     const land = Math.max(0, tt - t - dur), bounce = land > 0 ? 0.1 * Math.exp(-3 * land) * Math.sin(land * 9) : 0;
     M.g.rotation.set(r0.x, r0.y, r0.z - side * (fall + sh - bounce)); M.g.position.y = y0 - 0.6 * clamp((u - 0.5) * 2) - 0.25 * Math.min(1, land); });
-  const tipAt = tt => worldAt(S.g, [-side * M.h * 0.8 * k, 0, M.z * k], tt);
+  const tipAt = tt => worldAt(S.g, [side * M.h * 0.8 * k, 0, M.z * k], tt);   // rotation.z −side·fall tips the top towards +side·x
   for (let i = 0; i < 3; i++) { const P = tipAt(t + dur); const f = 0.35 + i * 0.3; splash(P.x + (P.x - S.g.position.x) * (f - 1) * 0.5, P.z + (P.z - S.g.position.z) * (f - 1) * 0.5, t + dur * (0.92 + i * 0.03), { size: 2.6 - i * 0.6 }); }
   sfx(t + dur * 0.95, 'splash', 1.2); return S;
 }
