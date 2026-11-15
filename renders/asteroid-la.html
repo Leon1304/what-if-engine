@@ -16521,7 +16521,7 @@ let shakeAmt = 0;
 const camFx = { blur: 0, dx: 1, zoom: 0, dip: 0, def: 0, dof: 0, fy: 0.5, mini: 0 };
 // v3.37 miniature / tilt-shift look — CFG.mini: true | { amount: 1, band: 0.12, blur: 1, angle: 0, center, sat: 1.3, con: 1.1, warm: 0.04 }: a sharp band across the frame at the subject's height (fy, or `center` 0 = top),
 // everything above and below blurs more the further it is from the band, colours pop → the scene looks like a toy model. Per camera key `mini: 0–1` (shot(…, { mini }) / shot('mini', …)) blends it in and out; CFG.mini sets the default for keys without it
-const MINIO = (() => { const c = CFG.mini, o = c && typeof c === 'object' ? c : {}; return { base: c ? clamp(o.amount ?? 1) : 0, band: o.band ?? 0.12, blur: o.blur ?? 1, ang: (o.angle ?? 0) * Math.PI / 180, center: o.center, sat: o.sat ?? 1.3, con: o.con ?? 1.1, warm: o.warm ?? 0.04 }; })();
+const MINIO = (() => { const c = CFG.mini, o = c && typeof c === 'object' ? c : {}; return { base: c ? clamp(o.amount ?? 1) : 0, band: o.band ?? 0.12, blur: o.blur ?? 1, ang: (o.angle ?? 0) * Math.PI / 180, center: o.center, sat: o.sat ?? 1.3, con: o.con ?? 1.1, warm: o.warm ?? 0.04, grain: o.grain ?? 0.35, shadow: o.shadow ?? 320 }; })();
 // transitions on cut keys: whip (fast pan + motion blur) · zoom (punch through + radial blur) · dip (to black) · blur (defocus) · cut
 const TRANS = [];
 {
@@ -17466,14 +17466,21 @@ const _sc = new THREE.Vector3(), _sf = new THREE.Vector3(), SHFAR = CFG.shadowFa
 function fitShadow() {   // the sun's shadow map follows the shot: a tight box around what the camera looks at → crisp shadows in close-ups (CFG.shadowFit: false = fixed CFG.area box)
   rimFit();   // v3.5: rim light + dust follow the camera of this frame (also for each half of a split screen)
   if (!CFG.shadows || CFG.shadowFit === false) return;
-  const A = CFG.area ?? 36, want = camera.position.distanceTo(_l) * 1.3 + 5, half = Math.round(clamp(want, 9, Math.max(A, SHFAR))), tx = 2 * half / sun.shadow.mapSize.x, C = sun.shadow.camera;
+  // v3.41 no shimmering shadows: (1) the box size moves in steps of ×1.25 instead of every metre (each size change re-rasterises every shadow edge — that crawled in
+  // every push-in), (2) the centre is snapped to whole shadow texels in the light's own frame (the old world x/z snap did not line up with the oblique sun),
+  // (3) miniature shots reach CFG.mini.shadow (320 m) so the edge of the shadow box is not a line wandering over the ground
+  const A = CFG.area ?? 36, cap = Math.max(A, SHFAR, camFx.mini > 0.001 ? MINIO.shadow : 0), want = camera.position.distanceTo(_l) * 1.3 + 5;
+  const half = Math.round(Math.min(cap, 9 * 1.25 ** Math.ceil(Math.log(clamp(want, 9, cap) / 9) / Math.log(1.25) - 1e-9))), tx = 2 * half / sun.shadow.mapSize.x, C = sun.shadow.camera;
   _sf.copy(_l); if (half > A) { camera.getWorldDirection(_rq); _rq.y = 0; if (_rq.lengthSq() > 1e-6) _sf.addScaledVector(_rq.normalize(), (half - A) * 0.35); }   // wide: the box reaches further into the view
-  _sc.set(Math.round(_sf.x / tx) * tx, 0, Math.round(_sf.z / tx) * tx);   // snapped to shadow texels: no shimmering while the camera drifts
-  const D = clamp(half * 2.2, 160, 420), far = Math.max(320, D * 2);
+  _sf.y = 0; const d = _shD.copy(skyU.orbDir.value).normalize(), r = _shR.set(0, 1, 0).cross(d); if (r.lengthSq() < 1e-8) r.set(1, 0, 0); r.normalize(); const u = _shU.copy(d).cross(r);   // light frame as lookAt() builds it
+  const a = Math.round(_sf.dot(r) / tx) * tx, b = Math.round(_sf.dot(u) / tx) * tx, c = _sf.dot(d);
+  _sc.copy(r).multiplyScalar(a).addScaledVector(u, b).addScaledVector(d, c);   // snapped to shadow texels in light space
+  const D = clamp(half * 2.2, 160, 720), far = Math.max(320, D * 2);
   if (C.right !== half || C.far !== far) { Object.assign(C, { left: -half, right: half, top: half, bottom: -half, far }); C.updateProjectionMatrix();
     sun.shadow.bias = -0.0006 * 320 / far; sun.shadow.normalBias = 0.04 * Math.max(1, tx / 0.035); }
-  sun.target.position.copy(_sc); sun.target.updateMatrixWorld(); sun.position.copy(skyU.orbDir.value).multiplyScalar(D).add(_sc);
+  sun.target.position.copy(_sc); sun.target.updateMatrixWorld(); sun.position.copy(d).multiplyScalar(D).add(_sc);
 }
+const _shD = new THREE.Vector3(), _shR = new THREE.Vector3(), _shU = new THREE.Vector3();
 // v3.5 god rays + per-sky grade: LookPass runs right before the final pass. Rays: a quarter-size mask of what is as bright as the sky round the sun (anything darker
 //   in front cuts the shafts), smeared toward the sun in three radial passes (8 taps each ≈ 512 taps, no banding), added before tone mapping. Only when the sun / moon
 //   is above the horizon and on or near the screen; strength per sky (LOOK.rays: strongest golden, dawn, dusk). CFG.godrays: number = × strength, false = off.
@@ -17556,7 +17563,7 @@ if (CINE) composer.addPass(new CinePass());
 Object.assign(FinalShader.uniforms, { uHeat: { value: [0, 1, 2, 3].map(() => new THREE.Vector4()) }, uHeatN: { value: 0 } });   // v3.26 heat shimmer
 const fin = new ShaderPass(FinalShader); composer.addPass(fin);
 Object.assign(fin.uniforms.uMode, { value: { none: 0, film: 1, crt: 3 }[CFG.filter] ?? 1 });
-fin.uniforms.uGrain.value = CFG.filter === 'none' ? 0 : Math.max(CFG.grain ?? 0, KL.grain ?? 0);   // look v2: a category look (KINDLOOK) can ask for at least this grain / vignette
+const GRAIN0 = fin.uniforms.uGrain.value = CFG.filter === 'none' ? 0 : Math.max(CFG.grain ?? 0, KL.grain ?? 0);   // look v2: a category look (KINDLOOK) can ask for at least this grain / vignette
 fin.uniforms.uVig.value = CFG.filter === 'none' ? 0 : Math.max(CFG.vignette ?? 0, KL.vig ?? 0); fin.uniforms.uSat.value = CFG.saturation; fin.uniforms.uCon.value = CFG.contrast;
 
 // --- sound: procedural score + SFX, identical offline (export) and live (preview) ---
@@ -18096,7 +18103,8 @@ function update(t) {
   if (THUMB_ON) { U.uBlur.value = U.uZoom.value = U.uDip.value = U.uDef.value = U.uAb.value = 0; }
   { const mk = SPLIT_NOW ? 0 : THUMB_ON ? clamp(TH.mini ?? MINIO.base) : camFx.mini; U.uMini.value = mk * MINIO.blur; U.uMiniBand.value = MINIO.band; U.uMiniAng.value = MINIO.ang; U.uMiniWarm.value = mk * MINIO.warm;   // v3.37 tilt-shift: replaces the depth blur while on; colours pop
     U.uMiniC.value = 1 - (MINIO.center ?? (THUMB_ON ? TH.miniY ?? 0.55 : camFx.fy)); if (mk > 0.001) { U.uDofOn.value = 0; U.uDof.value = 0; }
-    if (!THUMB_ON) { U.uSat.value *= lerp(1, MINIO.sat, mk); U.uCon.value = CFG.contrast * lerp(1, MINIO.con, mk); } }   // covers keep their own (stronger) grade
+    if (!THUMB_ON) { U.uSat.value *= lerp(1, MINIO.sat, mk); U.uCon.value = CFG.contrast * lerp(1, MINIO.con, mk); }
+    U.uGrain.value = GRAIN0 * lerp(1, MINIO.grain, mk); }   // v3.41: a tilt-shift photo is clean — less grain (on flat sky and sand the platforms' re-encode turns it into crawling blotches)   // covers keep their own (stronger) grade
   if (CINE) { const H = renderer.domElement.height || 1; U.uBars.value = THUMB_ON || SPLIT_NOW ? 0 : Math.round(cineBars(t) * H) / H; U.uCAb.value = CINE.ab; stage.classList.toggle('cine', U.uBars.value > 0); stage.style.setProperty('--bar', (U.uBars.value * 100).toFixed(3)); }   // v3.23: bars on whole pixels; none on covers and split screens
 }
 // v2.23 smooth loop: in the last LOOPX s the scene + camera at t − DUR (the moments just before frame 0) render first and are kept on #loopv,

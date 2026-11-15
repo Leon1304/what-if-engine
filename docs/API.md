@@ -1561,6 +1561,11 @@ Schalter für den Kino-Look, standardmäßig aus. Läuft als eigener Schritt (`C
 - **Rezept „filmisch“** (Skill-Schlüsselwort): `cinema: true, motionBlur: 'all', grain: 0.07, vignette: 0.6, saturation: 0.96, contrast: 1.14, dofAuto: 1`, dazu ein Himmel mit tiefer Sonne (`golden`, `dusk`) oder Nacht mit vielen Lichtern (Laternen, `headlights`, Neon) – dort wirken Streifen und Halation. Gesichter nachts mit `glow` nur mäßig aufhellen (`intensity` ≤ 15 bei 2–3 m), sonst überstrahlen sie.
 - Test: `tests/cinema` (golden → dusk-Straße mit Laternen und Scheinwerfern → Nacht-Nahaufnahme mit breiter werdenden Balken).
 
+# Neu in v3.41 (kein Flackern von Schatten und Himmel)
+- **Schattenkarte flimmert nicht mehr** (`fitShadow`): Die Größe der Schattenbox folgt der Kamera in Stufen von ×1,25 statt jeden Meter (jede Größenänderung zeichnet alle Schattenkanten neu, das krabbelte bei jedem Push-in); die Mitte rastet auf ganze Schatten-Texel im Koordinatensystem der Sonne ein (das alte Einrasten in Welt-x/z passte nicht zur schrägen Sonne und ließ Kanten bei jeder Kamerafahrt zittern); Miniatur-Einstellungen bekommen eine größere Box (`CFG.mini.shadow`, 320 m), damit ihr Rand nicht als wandernde Linie über den Boden läuft.
+- **Weniger Korn im Miniatur-Look** (`CFG.mini.grain`, 0.35): flache Flächen (Himmel, Sand, Wasser) flimmern nach dem Upload nicht mehr.
+- Test: `tests/tilt-shift`, `tests/asteroid-impact` (Kontaktbogen), Gate des Videos `asteroid-la`.
+
 # Neu in v3.37 (Miniatur-Look: Tilt-Shift)
 Die Szene sieht aus wie ein Modellbau: Ein scharfes Band liegt quer durchs Bild auf Höhe des Motivs, darüber und darunter wird es immer unschärfer, die Farben werden kräftiger und etwas warm. Das wirkt am besten von hoch oben auf Städte, Straßen, Menschenmengen, Fahrzeuge und Katastrophen. Der Effekt läuft im letzten Nachbearbeitungsschritt (FinalShader, keine zusätzlichen Durchgänge) und kostet beim Rendern auf GitHub fast nichts.
 - **Einzelne Einstellungen:** `...shot('mini', t, dauer, [x, y, z], { az, dist, h, fov, turn })` = Blick von hoch oben (Standard 62 m Abstand, 58 m Höhe, fov 32), langsamer Orbit, Tilt-Shift an. Jede andere Art mit `{ mini: 1 }`, eigene Keys mit `mini: 0–1`. Zwischen zwei Keys wird `mini` überblendet (z. B. normale Totale, die beim Hochziehen zum Modellbau wird).
@@ -1572,6 +1577,8 @@ Die Szene sieht aus wie ein Modellbau: Ein scharfes Band liegt quer durchs Bild 
   - `center`: Höhe des Bands (0 = oben, 1 = unten). Ohne Angabe folgt das Band `fy` der Kamera, liegt also immer auf dem Motiv,
   - `sat` (1.3) · `con` (1.1): × Sättigung und Kontrast, `warm` (0.04): warmes Sonnenlicht auf dem Modell,
   - `clear` (1.8): × Sichtweite im Dunst, solange `CFG.mini` gesetzt ist (klare Luft wie auf einem Tilt-Shift-Foto; `CFG.fogScale` hat Vorrang).
+  - `grain` (0.35, v3.41): × Filmkorn, solange der Look an ist (ein Tilt-Shift-Foto ist sauber; Korn auf glattem Himmel und Sand wird beim Neu-Encodieren der Plattformen zu wabernden Flecken).
+  - `shadow` (320, v3.41): halbe Breite der Sonnen-Schattenkarte in Miniatur-Einstellungen in m (sonst endet der Schatten mitten im Bild an einer Linie, die mit der Kamera wandert).
 - Solange `mini` > 0 ist, ersetzt der Tilt-Shift die Tiefenunschärfe dieses Frames. Split-Screens bleiben ohne.
 - **Cover:** `THUMB.mini: 0–1` (Standard wie `CFG.mini`), `THUMB.miniY` (0.55) = Höhe des Bands. Die Farben des Covers bleiben beim Wow-Look.
 - **Tipps:** Sonne hoch und klar (`day`), viele kleine bewegte Dinge (Autos, Menschen, Rauch). Der Blick schräg von oben (35–50°) macht den Modell-Eindruck, flach von der Seite wirkt es nur unscharf.
