@@ -42,7 +42,7 @@ case " $names " in *" crowd-qa "*) q=$(node render.mjs crowd-qa.html --probe 'qa
 # v3.25 ElevenLabs music + sounds (EL_FAKE=1: sine tones instead of requests): short sections merge, the track plays, a 'none' segment stays silent
 case " $names " in *" el-audio "*)
   cp "$R/elaudio.py" .; cp el-audio.story.js elf.story.js; cp el-audio.scene.js elf.scene.js
-  env -u ELEVENLABS_API_KEY -u XI_API_KEY EL_FAKE=1 python3 assemble.py elf --title "EL" --no-voice > elf.log 2>&1
+  env -u ELEVENLABS_API_KEY -u XI_API_KEY EL_FAKE=1 python3 assemble.py elf --title "EL" --no-voice --el > elf.log 2>&1
   pl=$(python3 elaudio.py elf --plan 2>&1 | python3 -c "import json,sys; d=json.load(sys.stdin); print(' '.join(s['section_name'] + ':' + str(s['duration_ms']) for s in d['music'][0]['sections']), len(d['sfx']))" 2>&1)
   timeout 600 node render.mjs elf.html --audio elf.wav > elf_a.log 2>&1
   lv=$(python3 -c "
@@ -53,6 +53,20 @@ def e(t0, t1):
 print('%.0f' % (e(0.5, 5) / max(1, e(9.5, 11.5))))" 2>&1)
   if [ "$pl" = "Tense 1:5500 Epic 2:3500 None 3:3000 4" ] && grep -q 'elevenlabs audio: music 12.0 s · 3 sections' elf.log && grep -q '@ELAUDIO \*/{' elf.html && ! grep -q 'PAGE ERRORS' elf_a.log && [ "${lv:-0}" -gt 10 ] 2>/dev/null; then echo "ok   elevenlabs audio  plan $pl · music on/off ${lv}×"
   else echo "FAIL elevenlabs audio: plan '$pl' · level '$lv'"; grep -E 'eleven|ELAUDIO' elf.log; tail -3 elf_a.log; fail=1; fi;;
+esac
+# v3.36 engine music styles: bluegrass style renders (banjo/fiddle/upright via Karplus-Strong), music plays and differs from the plain mood instruments
+case " $names " in *" music-styles "*)
+  sed "s/style: 'bluegrass'/style: false/" music-styles.story.js > msf.story.js; cp music-styles.scene.js msf.scene.js
+  python3 assemble.py msf --title "MS" --no-voice --no-el > msf.log 2>&1
+  timeout 600 node render.mjs music-styles.html --audio ms_a.wav > ms_a.log 2>&1; timeout 600 node render.mjs msf.html --audio ms_b.wav > ms_b.log 2>&1
+  ms=$(python3 -c "
+import subprocess, numpy as np
+r = lambda f: np.frombuffer(subprocess.run(['ffmpeg', '-v', 'error', '-i', f, '-ac', '1', '-ar', '48000', '-f', 's16le', '-'], capture_output=True).stdout, dtype='<i2').astype(float) / 32768
+a, b = r('ms_a.wav'), r('ms_b.wav'); n = min(len(a), len(b)); a, b = a[48000:n - 48000], b[48000:n - 48000]
+print('%.1f %.2f %.3f' % (20 * np.log10(np.sqrt((a ** 2).mean()) + 1e-9), np.abs(a).max(), np.sqrt(((a - b) ** 2).mean()) / (np.sqrt((a ** 2).mean()) + 1e-9)))" 2>&1)
+  set -- $ms
+  if ! grep -q 'PAGE ERRORS' ms_a.log && python3 -c "import sys; l, p, d = map(float, sys.argv[1:4]); sys.exit(0 if l > -40 and p < 1.0 and d > 0.3 else 1)" $ms 2>/dev/null; then echo "ok   music styles  bluegrass ${1} dB · peak ${2} · differs ${3}×"
+  else echo "FAIL music styles: '$ms'"; tail -3 ms_a.log; fail=1; fi;;
 esac
 # cover stage: thumbnails (THUMB, A/B variants → cover-b.jpg …) of example + every scene with an A/B THUMB array; COVERS=all = every scene that defines THUMB
 cv=""; for s in $names; do case "$s" in example) cv="$cv $s";; *) [ -f "$s.html" ] || continue; if [ "${COVERS:-}" = all ]; then grep -q '^const THUMB' "$s.story.js" && cv="$cv $s"; else grep -q '^const THUMB = \[' "$s.story.js" && cv="$cv $s"; fi;; esac; done

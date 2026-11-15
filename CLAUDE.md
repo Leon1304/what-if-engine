@@ -40,10 +40,11 @@ Lokal für Testframes und Vorschau (schnelle Qualität; `--hq` für einen Qualit
 ## Stimme, Musik, Sounds
 - Erzähler über ElevenLabs, braucht `ELEVENLABS_API_KEY` in der Umgebung (in `~/.zshrc`, nie ins Repo).
 - Stimme je Kategorie wählt `voice.py` selbst (`CFG.voice: 'auto'`): Story Denzel · Serie JM · Explain Adam · Conspiracy Declan Sage · Horror Storm Styles · True Crime Declan Sage.
-- Musik und Sounds ebenfalls über ElevenLabs, für jedes Video eigens (v3.25, `elaudio.py`, läuft in `assemble.py`): `AUDIO.musicPrompt` (Genre, Instrumente, Ort des Videos), Atmo-Prompts als 5. Element in `amb`, Schlüsselgeräusche als `hits` mit `el`. Abschnitte folgen `AUDIO.score`. Cache `.elaudio/` in `work/`. Ohne Key Synth-Musik + Bibliotheks-SFX. Smoke-Tests laufen mit `--no-el` (keine Kosten).
+- Musik und Sounds kommen aus der Engine, **nicht von ElevenLabs** (v3.36, Leons Vorgabe: zu viele Credits): pro Video eigener Musik-Stil `AUDIO.style` (bluegrass, western, military, orchestral, synthwave, middleeast, asian … in `STYLES`, `template.html`) über `AUDIO.score`; fehlt ein Stil oder Soundeffekt, wird er in `template.html` gebaut (`STYLES`, `SFX`, `AMB`, oder CC0-Datei in `sfx/`). ElevenLabs-Musik/-SFX (`elaudio.py`) nur auf ausdrücklichen Wunsch mit `--el` bzw. `AUDIO.el: true`.
 - Kokoro nur für die Figurenstimmen in Serien (Dr. Steve, „you“) und als Ersatz ohne Key. `python3 voice.py <slug> --which` zeigt Kategorie und Stimme.
 
 ## Lieferung pro Video
+Länge: jedes Short höchstens 45 s (Story 38–45 s, Erklär/Conspiracy 35–43 s; Leons Vorgabe ab 15.11.2026, `assemble.py` warnt).
 `<slug>.mp4` (2K, 1440 × 2560), Cover A/B, YouTube-Shorts-Text (Titel, Beschreibung, Tags), Instagram-Caption, TikTok-Text.
 Die Posting-Texte liegen zusätzlich als Textdatei `<slug>-captions.txt` im Release neben MP4 und Cover (Leons Vorgabe ab 15.11.2026): kommt automatisch, sobald `gallery/captions/<slug>.json` gepusht ist (Workflow `captions`, Skript `tools/captions_txt.py`); im Chat den Direktlink mit ausgeben.
 Immer den GitHub-Download-Link mit ausgeben: Release-Seite `https://github.com/Leon1304/what-if-engine/releases/tag/render-<slug>` und direkt `https://github.com/Leon1304/what-if-engine/releases/download/render-<slug>/<slug>.mp4`. Danach `docs/projekt/running-gags.md` und ggf. Themenliste/Trend-Log aktualisieren und committen.

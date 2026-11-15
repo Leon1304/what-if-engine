@@ -50,13 +50,13 @@ if _long:
     if _d and not 120 <= float(_d.group(1)) <= 720: print(f'NOTE: long video is {float(_d.group(1)):.0f} s — the long-video format is 3–10 min')
     if not re.search(r"\bconst STEPS\b", story): print('WARNING: long video without STEPS — chapters drive the chapter cards, the HUD and the YouTube chapter list')
     if re.search(r"\bcapWords:", story): print('NOTE: CFG.capWords is ignored in long videos — subtitles use CFG.subWords (16 words, two lines)')
-if not _long and re.search(r"kind:\s*'(explain|conspiracy|debunk)'", story) and _d and float(_d.group(1)) > 52:
-    print(f'WARNING: explainer / conspiracy video is {float(_d.group(1)):.0f} s — target 40–50 s (max 52): 1–2 sentences per beat, exactly 3 steps of 5–6 s, GUESS or MYTH (not both), one FACTS card, end card + loop ≤ 6 s')
-# v2.20 retention + sound checks (story videos: 50–56 s, short outro, loop, flash-forward; every mood / ambience must exist in the engine)
+if not _long and re.search(r"kind:\s*'(explain|conspiracy|debunk)'", story) and _d and float(_d.group(1)) > 45:
+    print(f'WARNING: explainer / conspiracy video is {float(_d.group(1)):.0f} s — target 35–43 s (max 45, Leon): 1–2 sentences per beat, exactly 3 steps of 5–6 s, GUESS or MYTH (not both), one FACTS card, end card + loop ≤ 6 s')
+# v2.20 retention + sound checks (v3.36 story videos: 38–45 s, max 45, short outro, loop, flash-forward; every mood / ambience must exist in the engine)
 _story = not _long and not re.search(r"kind:\s*'(explain|conspiracy|debunk)'", story)
 _e = re.search(r"const END\s*=\s*\{\s*t:\s*([\d.]+)", story)
-if _story and _d and float(_d.group(1)) > 58:
-    print(f'WARNING: story video is {float(_d.group(1)):.0f} s — target 50–56 s (max 58): cut card and intro seconds (one intro beat, end card + loop ≤ 6 s), not narration')
+if _story and _d and float(_d.group(1)) > 45:
+    print(f'WARNING: story video is {float(_d.group(1)):.0f} s — target 38–45 s (max 45, Leon): cut card and intro seconds (one intro beat, end card + loop ≤ 6 s), not narration')
 if not _long and _d and _e and float(_d.group(1)) - float(_e.group(1)) > 6.5:
     print(f'WARNING: end card + loop take {float(_d.group(1)) - float(_e.group(1)):.1f} s — keep them ≤ 6 s and let the scene keep moving underneath (viewers swipe on static cards)')
 if re.search(r"\breview:\s*\{", story):
@@ -74,6 +74,9 @@ _moods = set(re.findall(r"^\s{4}(\w+):\s+\{ bpm:", _tpl, re.M)); _ambs = set(re.
 _au = re.search(r"const AUDIO\s*=\s*\{(.*?)\n\};", story, re.S); _au = _au.group(1) if _au else ''
 for m_ in sorted(set(re.findall(r"mood:\s*'(\w+)'", _au)) | set(re.findall(r"\[\s*[^\[\],]+,\s*'(\w+)'\s*\]", (re.search(r"score:\s*(\[\[.*?\]\])", _au, re.S) or re.search('()', '')).group(1)))):
     if _moods and m_ not in _moods: print(f"WARNING: unknown music mood '{m_}' — use one of {', '.join(sorted(_moods))} or 'none' (no music, only sounds)")
+_sty = set(re.findall(r"^\s{4}(\w+):\s+\{ lead:", _tpl, re.M)); _sm = re.search(r"\bstyle:\s*(?:'(\w+)'|\{[^}]*base:\s*'(\w+)')", _au)
+if _sm and _sty and (_sm.group(1) or _sm.group(2)) not in _sty | {'none'}: print(f"WARNING: unknown music style '{_sm.group(1) or _sm.group(2)}' — use one of {', '.join(sorted(_sty))} or build it in STYLES (template.html, sound section)")
+if _au and not _sm and 'musicPrompt' not in _au and not re.search(r"score:\s*false|mood:\s*'none'", _au): print("NOTE: no AUDIO.style — give the video its own music (e.g. style: 'western'); without it the plain mood instruments play")
 _am = re.search(r"amb:\s*(\[\[.*?\]\])", _au, re.S)
 for k_ in sorted(set(re.findall(r"\[\s*[^\[\],]+,\s*[^\[\],]+,\s*'(\w+)'", _am.group(1)) if _am else [])):
     if _ambs and k_ not in _ambs: print(f"WARNING: ambience '{k_}' does not exist yet — build it in AMB (template.html, sound section) and commit it to the engine, so later videos can reuse it")
@@ -180,7 +183,9 @@ if sfx: t = t.replace('/* @SFX */{}', '/* @SFX */' + json.dumps(sfx, separators=
 # voice-over: voice.py (cached) → embed mp3 + word timings; CFG.voice: false = no voice
 _KEY = os.environ.get('ELEVENLABS_API_KEY') or os.environ.get('XI_API_KEY')
 _want_voice = (os.path.exists(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'tts', 'voices-v1.0.bin')) or _KEY) and '--no-voice' not in args
-_want_el = bool(_KEY or os.environ.get('EL_FAKE') == '1') and '--no-el' not in args and not re.search(r"\bel:\s*false", story + scene)   # v3.25 ElevenLabs music + sounds for this video
+# v3.36: music + sounds come from the engine again (synth score with AUDIO.style, library + built SFX) — ElevenLabs music/sounds cost too many credits.
+# Only on request: --el or AUDIO.el: true (the narrator voice stays ElevenLabs, voice.py)
+_want_el = bool(_KEY or os.environ.get('EL_FAKE') == '1') and '--no-el' not in args and ('--el' in args or bool(re.search(r"\bel:\s*true", story + scene)))
 if _want_voice or _want_el:
     # v2.38: the narrator reacts to the scene — ask the built page what happens when (loud hits, shakes, music mood, counters that jump);
     # cached per story + scene; if the page cannot be probed, voice.py falls back to what the story file itself lists. v3.25: the same probe
@@ -204,7 +209,7 @@ if _want_voice or _want_el:
 if _want_el:
     v = subprocess.run([sys.executable, os.path.join(os.path.dirname(os.path.abspath(__file__)), 'elaudio.py'), slug] + (['--lang', LANG] if LANG != 'en' else []), capture_output=True, text=True)
     print((v.stdout or '').rstrip() or ('elevenlabs audio failed: ' + v.stderr[-600:]))
-elif os.path.exists(f'{OUT}.elaudio.json'): os.remove(f'{OUT}.elaudio.json')   # --no-el / AUDIO.el: false / no key: synth music + library sounds
+elif os.path.exists(f'{OUT}.elaudio.json'): os.remove(f'{OUT}.elaudio.json')   # default (v3.36), --no-el, no key: engine music (AUDIO.style) + library/engine sounds
 if os.path.exists(f'{OUT}.elaudio.json'):
     t = t.replace('/* @ELAUDIO */null', '/* @ELAUDIO */' + open(f'{OUT}.elaudio.json').read(), 1)
 if os.path.exists(f'{OUT}.voice.json') and os.path.exists(f'{OUT}.voice.mp3'):

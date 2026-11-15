@@ -36,9 +36,11 @@ Lokal für Testframes und Vorschau. Das finale 2K-Video rendert GitHub Actions: 
 
 ## Stimme
 - Erzähler über ElevenLabs, braucht `ELEVENLABS_API_KEY` in der Umgebung (in `~/.zshrc`, nie ins Repo).
+- Musik und Sounds kommen aus der Engine, **nicht von ElevenLabs** (v3.36, Leons Vorgabe: zu viele Credits): pro Video eigener Musik-Stil `AUDIO.style` (bluegrass, western, military, orchestral, synthwave, middleeast, asian … in `STYLES`, `template.html`) über `AUDIO.score`; fehlt ein Stil oder Soundeffekt, wird er in `template.html` gebaut (`STYLES`, `SFX`, `AMB`, oder CC0-Datei in `sfx/`). ElevenLabs-Musik/-SFX (`elaudio.py`) nur auf ausdrücklichen Wunsch mit `--el` bzw. `AUDIO.el: true`.
 - Stimme je Kategorie wählt `voice.py` selbst (`CFG.voice: 'auto'`): Story Denzel · Serie JM · Explain Adam · Conspiracy Declan Sage · Horror Storm Styles · True Crime Declan Sage.
 - Kokoro nur für die Figurenstimmen in Serien (Dr. Steve, „you“) und als Ersatz ohne Key. `python3 voice.py <slug> --which` zeigt Kategorie und Stimme.
 
 ## Lieferung pro Video
+Länge: jedes Short höchstens 45 s (Story 38–45 s, Erklär/Conspiracy 35–43 s; Leons Vorgabe ab 15.11.2026, `assemble.py` warnt).
 `<slug>.mp4` (2K, 1440 × 2560), Cover A/B, YouTube-Shorts-Text (Titel, Beschreibung, Tags), Instagram-Caption, TikTok-Text.
 Immer den GitHub-Download-Link mit ausgeben: Release-Seite `https://github.com/Leon1304/what-if-engine/releases/tag/render-<slug>` und direkt `https://github.com/Leon1304/what-if-engine/releases/download/render-<slug>/<slug>.mp4`. Danach `docs/projekt/running-gags.md` und ggf. Themenliste/Trend-Log aktualisieren und committen.

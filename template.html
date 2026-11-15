@@ -399,11 +399,12 @@ const STATS = [
 const END = { t: 18.3, q: 'Silo, cellar or tractor – where do *you* hide?', opts: ['Silo', 'Cellar', 'Tractor'], cta: 'Comment A, B or C', loop: 'Because sooner or later, someone asks —' };
 // Sound: mood horror | epic | action | funny | science | chill | tense | party | triumph | sad — or score: [[t, mood], …] (music follows the scene).
 // mood 'none' (or score: false) = no music, only ambience + SFX — use it when no mood fits the topic; score segments may be 'none' too ([[0, 'none'], [21, 'tense']]).
-// v3.25 ElevenLabs (ELEVENLABS_API_KEY): musicPrompt: 'genre, instruments, place' → a track made for this video, sections = score; amb[4] = own prompt of a bed; hits[].el = own sound (k = fallback). docs/API.md
+// v3.36 style: the video's own music from the engine — bluegrass western military orchestral synthwave electronic lofi jazz middleeast asian celtic latin tribal ambient industrial circus
+//   (score = mood curve, style = instruments). ElevenLabs music/sounds (musicPrompt, amb[4], hits[].el) only with assemble.py --el or AUDIO.el: true. docs/API.md
 // sections [t, level 0..3]. amb: [[t0, t1, kind, vol]] ambience beds: night farm wind blizzard rain storm fire indoor crowd (zombies) city ocean space engine
 //   + v2.20: cabin (airliner) hum (fluorescent / electric buzz) people (human chatter) stadium (cheering crowd) underwater forest cave. sfx kinds: see SND below.
 const AUDIO = {
-  mood: 'horror', music: 0.55, sfx: 0.95,
+  mood: 'horror', style: 'bluegrass', music: 0.55, sfx: 0.95,
   sections: [[0, 1], [2.6, 1], [6.05, 2], [10.2, 3], [14.2, 2], [18.3, 1]],
   hits: [
     { t: 0, k: 'boom' }, { t: 0.15, k: 'horde', dur: 2.3, v: 0.55 }, { t: 2.42, k: 'whoosh' },
@@ -15976,6 +15977,37 @@ const SND = (() => {
     sad:     { bpm: 68,  root: 45, scale: [0, 2, 3, 5, 7, 8, 10], prog: [0, 5, 3, 4], lead: 'keys',    drums: 'none', sevenths: true },  // didn't make it
     none:    { bpm: 100, root: 43, scale: [0, 2, 4, 5, 7, 9, 11], prog: [0], lead: 'keys', drums: 'none', none: true }   // v2.20: no music — ambience and SFX carry the scene (no mood fits the topic)
   };
+  // v3.36 music styles: AUDIO.style gives every video its own sound (genre, instruments, place) on top of the mood score. The mood keeps tempo feel,
+  // minor/major and density (AUDIO.sections); the style swaps lead, second voice (melody), drums, bass and scale. AUDIO.style: 'bluegrass' | { base, lead, lead2, drums, bass, bpmX, root, pad };
+  // without style, words in AUDIO.musicPrompt pick one (banjo → bluegrass, synthwave → synthwave …). Unknown/none = the old mood instruments.
+  const STYLES = {
+    bluegrass:  { lead: 'banjo',   lead2: 'fiddle',  drums: 'brush',  bass: 'upright', bpmX: 1.12, maj: [0, 2, 4, 5, 7, 9, 10], min: [0, 2, 3, 5, 7, 9, 10], pad: 0.35 },
+    western:    { lead: 'guitar',  lead2: 'whistle', drums: 'gallop', bass: 'upright', bpmX: 0.95, min: [0, 2, 3, 5, 7, 8, 10], pad: 0.45, drone: true },
+    military:   { lead: 'brass',   lead2: 'horn',    drums: 'march',  bass: 'synth',   bpmX: 1.0, pad: 0.8 },
+    orchestral: { lead: 'strings', lead2: 'horn',    drums: 'timpani', bass: 'synth',  bpmX: 1.0, pad: 1.1 },
+    synthwave:  { lead: 'saw',     lead2: 'saw',     drums: 'gated',  bass: 'octave',  bpmX: 1.08, pad: 1.0 },
+    electronic: { lead: 'saw',     drums: 'four',    bass: 'octave',  bpmX: 1.18, pad: 0.7 },
+    lofi:       { lead: 'keys',    drums: 'lofi',    bass: 'synth',   bpmX: 0.85, sevenths: true, pad: 0.7, crackle: true },
+    jazz:       { lead: 'keys',    lead2: 'horn',    drums: 'brush',  bass: 'walking', bpmX: 1.0, sevenths: true, pad: 0.5 },
+    middleeast: { lead: 'oud',     lead2: 'flute',   drums: 'hand',   bass: 'upright', bpmX: 1.0, min: [0, 1, 4, 5, 7, 8, 10], maj: [0, 1, 4, 5, 7, 8, 11], pad: 0.4, drone: true },
+    asian:      { lead: 'koto',    lead2: 'flute',   drums: 'hand',   bass: 'upright', bpmX: 0.92, min: [0, 2, 3, 7, 8], maj: [0, 2, 4, 7, 9], pad: 0.45 },
+    celtic:     { lead: 'guitar',  lead2: 'fiddle',  drums: 'hand',   bass: 'upright', bpmX: 1.1, min: [0, 2, 3, 5, 7, 9, 10], maj: [0, 2, 4, 5, 7, 9, 10], pad: 0.4, drone: true },
+    latin:      { lead: 'guitar',  lead2: 'horn',    drums: 'conga',  bass: 'upright', bpmX: 1.05, pad: 0.4 },
+    tribal:     { lead: 'flute',   drums: 'hand',    bass: 'synth',   bpmX: 1.0, min: [0, 3, 5, 7, 10], maj: [0, 2, 4, 7, 9], pad: 0.5, drone: true },
+    ambient:    { lead: 'bell',    drums: 'none',    bass: 'synth',   bpmX: 0.8, pad: 1.3, drone: true },
+    industrial: { lead: 'saw',     drums: 'gated',   bass: 'octave',  bpmX: 1.0, min: [0, 1, 3, 5, 6, 8, 10], pad: 0.9, drone: true },
+    circus:     { lead: 'marimba', lead2: 'whistle', drums: 'bounce', bass: 'upright', bpmX: 1.12, pad: 0.4 }
+  };
+  const STYLE_WORDS = [[/bluegrass|banjo|country|hillbilly|appalach/i, 'bluegrass'], [/western|cowboy|spaghetti|frontier|desert town|saloon/i, 'western'],
+    [/military|war film|march|snare|army|battlefield|wartime/i, 'military'], [/synthwave|retro ?wave|80s|neon|outrun/i, 'synthwave'],
+    [/techno|edm|electro|club|house music|dubstep|trap/i, 'electronic'], [/lo-?fi|chillhop/i, 'lofi'], [/jazz|swing|noir|saxophone|big band/i, 'jazz'],
+    [/arab|middle east|oud|egypt|persian|desert|bazaar/i, 'middleeast'], [/japan|chinese|asia|koto|shamisen|erhu|guzheng|samurai|kung fu/i, 'asian'],
+    [/celtic|irish|scottish|pirate|sea shanty|viking|medieval|folk/i, 'celtic'], [/latin|mexic|salsa|cuba|brazil|samba|mariachi|flamenco|spanish guitar/i, 'latin'],
+    [/tribal|jungle|african|aborigin|caveman|stone age/i, 'tribal'], [/industrial|cyberpunk|factory|metal clang/i, 'industrial'], [/circus|carnival|clown/i, 'circus'],
+    [/ambient|space|cosmic|drone|ethereal/i, 'ambient'], [/orchestra|cinematic|film score|epic|strings|symphon/i, 'orchestral']];
+  const styleOf = () => { const A = AUDIO, s = A.style; if (s === false || s === 'none') return null;
+    const o = typeof s === 'object' && s ? s : {}, name = typeof s === 'string' ? s : o.base ?? (STYLE_WORDS.find(([re]) => re.test(A.musicPrompt ?? '')) ?? [])[1];
+    const B = STYLES[name] ?? (typeof s === 'object' && s ? {} : null); return B ? { name: name ?? 'custom', ...B, ...o } : null; };
   function build(ctx, vbuf, SB = {}, BO = {}) {   // BO.voice: false = the voice is mixed in afterwards (renderAudio: mixVoice keeps the background under it)
     let s = 987654321; const ar = () => (s = (s * 16807) % 2147483647) / 2147483647;
     const sr = ctx.sampleRate, A = AUDIO;
@@ -16028,31 +16060,82 @@ const SND = (() => {
     const keys = (t, f, v = 1) => { tone('triangle', f, t, 0.01, 0.1, 0.9, 0.09 * v, music); tone('sine', f * 2, t, 0.01, 0, 0.5, 0.03 * v, music); };
     const bell = (t, f, v = 1) => { tone('sine', f, t, 0.002, 0, 2.6, 0.08 * v, music); tone('sine', f * 2.76, t, 0.002, 0, 1.2, 0.035 * v, music); tone('sine', f * 5.4, t, 0.002, 0, 0.5, 0.02 * v, music); };
     const brass = (t, fs_, d, v = 1) => fs_.forEach(f => tone('sawtooth', f, t, 0.05, d * 0.6, 0.3, 0.05 * v, music, { lp: 700, lpTo: 2200, q: 1.2 }));
+    // v3.36 style instruments (AUDIO.style): plucked strings by Karplus-Strong (one cached buffer per pitch + kind), bowed / blown voices with delayed vibrato, more drums
+    const KSB = new Map(), KSK = { banjo: [0.993, 0.92, 0.9, 1.4], guitar: [0.997, 0.62, 1.6, 1.3], oud: [0.996, 0.45, 1.4, 1.2], koto: [0.997, 0.7, 2.0, 1.1], upright: [0.994, 0.3, 1.0, 1.8] };
+    const ks = (t, f, v = 1, kind = 'guitar') => { const [damp, br, len, g] = KSK[kind] ?? KSK.guitar, key = kind + '|' + f.toFixed(1); let b = KSB.get(key);
+      if (!b) { const n = Math.floor(sr * len), P = Math.max(2, Math.round(sr / f)); b = ctx.createBuffer(1, n, sr); const d = b.getChannelData(0); let rs = 7919 + P * 31;
+        const rr = () => (rs = (rs * 16807) % 2147483647) / 2147483647; for (let i = 0; i < P && i < n; i++) d[i] = rr() * 2 - 1;
+        for (let i = P; i < n; i++) { const a0 = d[i - P], a1 = i - P - 1 >= 0 ? d[i - P - 1] : a0; d[i] = damp * (br * a0 + (1 - br) * 0.5 * (a0 + a1)); }
+        let m = 0; for (let i = 0; i < n; i++) m = Math.max(m, Math.abs(d[i])); if (m > 0) for (let i = 0; i < n; i++) d[i] /= m; KSB.set(key, b); }
+      const s_ = ctx.createBufferSource(), gg = ctx.createGain(); s_.buffer = b; gg.gain.value = 0.21 * g * v; s_.connect(gg); gg.connect(music); s_.start(t); };
+    const vib = (os, t, rate, depth, delay = 0.15) => { const l = ctx.createOscillator(), lg = ctx.createGain(); l.frequency.value = rate; lg.gain.setValueAtTime(0, t); lg.gain.linearRampToValueAtTime(depth, t + delay + 0.2); l.connect(lg); lg.connect(os.detune); l.start(t); return l; };
+    const voice2 = (t, f, d, v, kind) => {   // the melody voice of a style
+      const R = Math.max(0.08, d * 0.25), H = Math.max(0, d - R), cfg = { fiddle: ['sawtooth', 0.045, 0.06, 2600, 5.6, 22], whistle: ['sine', 0.07, 0.04, 0, 5.2, 18], flute: ['triangle', 0.075, 0.07, 0, 4.8, 14],
+        horn: ['sawtooth', 0.04, 0.09, 1100, 4.5, 8], strings: ['sawtooth', 0.03, 0.16, 1800, 5, 12], saw: ['sawtooth', 0.04, 0.01, 2800, 0, 0] }[kind] ?? ['triangle', 0.06, 0.05, 0, 5, 10];
+      const [type, pk, at, lp, vr, vd] = cfg;
+      for (const dt of kind === 'strings' || kind === 'saw' ? [-8, 8] : [0]) { const os = tone(type, f, t, at, H, R, pk * v, music, { detune: dt, ...(lp ? { lp, q: 0.9 } : {}) }); if (vr) vib(os, t, vr, vd).stop(t + d + R + 0.1); }
+      if (kind === 'flute' || kind === 'whistle') nz(t, 0.03, H * 0.6, R, 0.025 * v, music, 'bandpass', f * 2, 0, 2);
+      if (kind === 'fiddle') nz(t, 0.02, H, R, 0.012 * v, music, 'bandpass', 3200, 0, 1.5); };
+    const timp = (t, f, v = 1) => { tone('sine', f, t, 0.004, 0.05, 1.2, 0.6 * v, music, { to: f * 0.93, glide: 0.6 }); nz(t, 0.002, 0.01, 0.25, 0.12 * v, music, 'lowpass', 500); };
+    const brush = (t, v = 1, d = 0.12) => nz(t, 0.02, d * 0.4, d, 0.09 * v, music, 'bandpass', 4200, 2600, 0.6);
+    const shaker = (t, v = 1) => nz(t, 0.004, 0, 0.05, 0.07 * v, music, 'highpass', 6500);
+    const clap = (t, v = 1) => { for (const dt of [0, 0.011, 0.022]) nz(t + dt, 0.001, 0, 0.05, 0.25 * v, music, 'bandpass', 1500, 0, 1.2); nz(t + 0.03, 0.001, 0, 0.18, 0.12 * v, music, 'bandpass', 1300, 0, 0.8); };
+    const doum = (t, v = 1) => tone('sine', 92, t, 0.002, 0.01, 0.3, 0.6 * v, music, { to: 70, glide: 0.2 }), tek = (t, v = 1) => { nz(t, 0.001, 0, 0.05, 0.3 * v, music, 'bandpass', 2600, 0, 3); tone('sine', 520, t, 0.001, 0, 0.05, 0.12 * v, music); };
+    const conga = (t, f, v = 1) => { tone('sine', f, t, 0.002, 0.01, 0.22, 0.45 * v, music, { to: f * 0.88, glide: 0.1 }); nz(t, 0.001, 0, 0.02, 0.12 * v, music, 'bandpass', 1800, 0, 1); };
+    const gsnare = (t, v = 1) => { nz(t, 0.001, 0.12, 0.05, 0.42 * v, music, 'bandpass', 1500, 0, 0.6); tone('triangle', 180, t, 0.001, 0.02, 0.1, 0.25 * v, music); };   // gated 80s snare
+    const crackle = () => { const ts = []; let x = 0; let rs = 4242; const rr = () => (rs = (rs * 16807) % 2147483647) / 2147483647; while (x < DUR) { x += 0.02 + rr() * 0.13; ts.push(x); } pulses(ts, 0.004, i => 0.02 + (i * 7919 % 13) / 13 * 0.05, music, 'highpass', 3000); };
     // score
     const levelAt = t => { let l = 0; for (const [ts, lv] of A.sections ?? [[0, 2]]) if (ts <= t) l = lv; return l; };
-    const degM = (M, d, oct = 0) => M.root + 12 * oct + M.scale[((d % 7) + 7) % 7] + 12 * Math.floor(d / 7);
+    const degM = (M, d, oct = 0) => { const n = M.scale.length; return M.root + 12 * oct + M.scale[((d % n) + n) % n] + 12 * Math.floor(d / n); };   // v3.36: 5-note scales too
     const chordM = (M, d, oct) => [degM(M, d, oct), degM(M, d + 2, oct), degM(M, d + 4, oct), ...(M.sevenths ? [degM(M, d + 6, oct)] : [])].map(mtof);
     const end = END ? END.t : DUR;
     if (ELM) {   // v3.25: one ElevenLabs track whose sections follow SCORE (elaudio.py); 'none' segments stay silent, ducking and loop fade as before
       const src = ctx.createBufferSource(), gate = ctx.createGain(), gm = A.elMusic ?? 1; src.buffer = ELM; src.connect(gate); gate.connect(music);
       gate.gain.setValueAtTime(SCORE[0][1] === 'none' ? 0 : gm, 0); SCORE.slice(1).forEach(([ts, mm]) => gate.gain.setTargetAtTime(mm === 'none' ? 0 : gm, Math.max(0, ts - 0.05), 0.25)); src.start(0);
     } else {
+    // v3.36 AUDIO.style: the mood's character (tempo, minor/major, prog, density) with the style's instruments, drums, bass and scale
+    const ST = styleOf(), MR = n => { let rs = 1013904223 + n * 7919; return () => (rs = (rs * 16807) % 2147483647) / 2147483647; };
+    const styled = M => { if (!ST || M.none) return M; const minor = M.scale[2] === 3 || M.scale[1] === 1, sc = (minor ? ST.min : ST.maj) ?? (minor ? ST.min ?? ST.maj : ST.maj ?? ST.min) ?? M.scale;
+      return { ...M, scale: sc, bpm: Math.round(M.bpm * (ST.bpmX ?? 1)), root: ST.root ?? M.root, lead: ST.lead ?? M.lead, lead2: ST.lead2, bass: ST.bass, pad: ST.pad ?? 1,
+        drums: M.drums === 'none' ? 'none' : (M.drums === 'sparse' && !['hand', 'timpani', 'march', 'brush'].includes(ST.drums) ? 'sparse' : ST.drums ?? M.drums),
+        drone: ST.drone || M.drone, sevenths: ST.sevenths ?? M.sevenths, styled: true }; };
+    if (ST?.crackle && !NOMUSIC) crackle();
     SCORE.forEach(([ts, mm], i) => {   // drones per mood segment
-      const M = MOODS[mm] ?? MOODS.horror, te = i + 1 < SCORE.length ? SCORE[i + 1][0] : DUR, d0 = te - ts; if (M.none || !M.drone || d0 < 1.2) return;
+      const M = styled(MOODS[mm] ?? MOODS.horror), te = i + 1 < SCORE.length ? SCORE[i + 1][0] : DUR, d0 = te - ts; if (M.none || !M.drone || d0 < 1.2) return;
       tone('sawtooth', mtof(M.root - 12), ts, 0.8, Math.max(0, d0 - 1.6), 0.8, 0.07, music, { lp: 220, q: 3 }); tone('sine', mtof(M.root - 12) * 1.5, ts, 1, Math.max(0, d0 - 2), 1, 0.04, music);
     });
     for (let b0 = 0, n = 0; b0 < DUR - 0.05; n++) {
-      const Md = moodAt(b0 + 0.01), beat = 60 / (A.bpm ?? Md.bpm), barF = beat * 4;
+      const Md = styled(moodAt(b0 + 0.01)), beat = 60 / (A.bpm ?? Md.bpm), barF = beat * 4, mr = MR(n);
       const nxt = SCORE.map(x => x[0]).find(ts => ts > b0 + 0.05 && ts < b0 + barF), bar = nxt ? nxt - b0 : barF;   // a mood change starts a new bar
       if (Md.none) { b0 += bar; continue; }   // mood 'none': silence in the music bus
       const deg = (d, oct = 0) => degM(Md, d, oct), chord = (d, oct) => chordM(Md, d, oct);
       const lv = levelAt(b0 + 0.01), d = Md.prog[n % Md.prog.length], ch = chord(d, 1), cut = 500 + lv * 550;
-      if (lv >= 0 && Md.lead !== 'marimba') pad(b0, ch, bar, Md.bright ? 0.6 : 1, cut);
+      if (lv >= 0 && Md.lead !== 'marimba') pad(b0, ch, bar, (Md.bright ? 0.6 : 1) * (Md.pad ?? 1), cut);
+      // v3.36 melody of the second style voice: a phrase per bar from chord tones and steps (own seeded random per bar, pure in t)
+      if (Md.lead2 && levelAt(b0 + 0.01) >= 1) { const rh = [[0, 1], [1, 0.5], [1.5, 0.5], [2, 1.5], [3.5, 0.5]].filter((_, k) => k === 0 || mr() < 0.4 + 0.15 * lv), base = [0, 2, 4][Math.floor(mr() * 3)];
+        let dg = d + base; for (const [q0, ql] of rh) { const tt = b0 + q0 * beat; if (tt >= b0 + bar - 0.02 || tt >= DUR - 0.1) break; dg += [-1, 0, 1, 2, -2][Math.floor(mr() * 5)];
+          voice2(tt, mtof(deg(dg, 2)), Math.min(ql * beat * 0.95, b0 + bar - tt), Md.lead2 === 'horn' ? 0.9 : 1, Md.lead2); } }
       for (let q = 0; q < 4; q++) {
         const t = b0 + q * beat; if (t >= DUR - 0.05 || t >= b0 + bar - 0.01) break;
         const lq = levelAt(t), root = mtof(deg(d, -1));
-        if (lq >= 1) { if (Md.drums === 'drive') { bass(t, root, beat / 2); bass(t + beat / 2, root, beat / 2, 0.8); } else if (Md.lead === 'marimba') bass(t, q % 2 ? mtof(deg(d + 4, -1)) : root, beat * 0.5, 0.9); else if (q % 2 === 0) bass(t, root, beat * 1.6); }
-        if (lq >= 2 && Md.drums !== 'none') {
+        if (lq >= 1 && Md.bass && Md.bass !== 'synth') { const r5 = mtof(deg(d + 4, -1)), r0 = Md.bass === 'octave' ? root / 2 : root;
+          if (Md.bass === 'upright') ks(t, q % 2 ? r5 : r0, 1, 'upright');
+          else if (Md.bass === 'walking') ks(t, mtof(deg(d + [0, 2, 4, 5][q], -1)), 1, 'upright');
+          else if (Md.bass === 'octave') { bass(t, r0, beat / 2, 0.9); bass(t + beat / 2, r0 * 2, beat / 2, 0.7); } }
+        else if (lq >= 1) { if (Md.drums === 'drive') { bass(t, root, beat / 2); bass(t + beat / 2, root, beat / 2, 0.8); } else if (Md.lead === 'marimba') bass(t, q % 2 ? mtof(deg(d + 4, -1)) : root, beat * 0.5, 0.9); else if (q % 2 === 0) bass(t, root, beat * 1.6); }
+        const DK = Md.drums;
+        if (lq >= 2 && ['brush', 'gallop', 'march', 'timpani', 'gated', 'four', 'hand', 'conga'].includes(DK)) {   // v3.36 style drums
+          const r1 = mtof(deg(d, -2));
+          if (DK === 'brush') { if (q % 2 === 0) kick(t, 0.45); else snare(t, 0.35); brush(t, 1, beat * 0.6); brush(t + beat * 0.66, 0.6); }
+          else if (DK === 'gallop') { if (q % 2 === 0) kick(t, 0.6); tom(t + beat * 0.5, 160, 0.35); tom(t + beat * 0.75, 130, 0.35); shaker(t, 0.8); shaker(t + beat / 2, 0.5); }
+          else if (DK === 'march') { if (q % 2 === 0) kick(t, 0.8); snare(t, q % 2 ? 0.75 : 0.5); if (q === 3) { snare(t + beat / 4, 0.35); snare(t + beat / 2, 0.45); snare(t + 3 * beat / 4, 0.55); } }
+          else if (DK === 'timpani') { if (q === 0) timp(t, r1, 1); if (q === 2 && lq >= 3) timp(t, r1 * 1.5, 0.8); if (q === 3 && n % 2) for (let e = 0; e < 4; e++) timp(t + e * beat / 4, r1, 0.3 + e * 0.12); }
+          else if (DK === 'gated') { if (q % 2 === 0) kick(t); else gsnare(t); hat(t, 0.6); hat(t + beat / 2, 0.45); }
+          else if (DK === 'four') { kick(t); hat(t + beat / 2, 0.8, true); if (q % 2) clap(t, 0.8); }
+          else if (DK === 'hand') { if (q === 0 || q === 2 && n % 2) doum(t); if (q !== 0) tek(t, 0.7); tek(t + beat / 2, 0.45); if (lq >= 3) tek(t + 3 * beat / 4, 0.35); }
+          else if (DK === 'conga') { conga(t, q % 2 ? 330 : 220, 0.8); conga(t + beat / 2, 260, 0.55); shaker(t, 0.7); shaker(t + beat / 2, 0.5); if (q === 1 || q === 3) tek(t + beat * 0.75, 0.4); }
+          if (lq >= 3 && DK !== 'march' && DK !== 'timpani') { shaker(t + beat / 4, 0.4); shaker(t + 3 * beat / 4, 0.4); }
+        } else if (lq >= 2 && Md.drums !== 'none') {
           if (Md.drums === 'sparse') { if (q === 0) kick(t); if (q === 2) kick(t, 0.6); if (q === 3) hat(t + beat / 2, 0.8, true); }
           else { if (q % 2 === 0 || Md.drums === 'drive') kick(t, q % 2 ? 0.7 : 1); if (q % 2 === 1) snare(t, Md.drums === 'lofi' ? 0.6 : 1); hat(t, 0.8); hat(t + beat / 2, 0.55); }
           if (Md.drums === 'toms' && q === 3 && n % 2 === 1) { tom(t, 140); tom(t + beat / 3, 110); tom(t + 2 * beat / 3, 85); }
@@ -16064,6 +16147,12 @@ const SND = (() => {
         if (L === 'marimba' && lq >= 1) for (let e = 0; e < 2; e++) marimba(t + e * beat / 2, ch[Math.floor(ar() * ch.length)] * 2, 0.8);
         if (L === 'keys' && lq >= 1 && q % 2 === 0) keys(t, ch[q % ch.length] * 2);
         if (L === 'brass' && lq >= 2 && q === 0) brass(t, ch, beat * 1.5, 1);
+        if (L === 'banjo' && lq >= 1) { const pat = [0, 2, 1, 2]; for (let e = 0; e < (lq >= 2 ? 4 : 2); e++) ks(t + e * beat / (lq >= 2 ? 4 : 2), ch[pat[(q + e) % 4] % ch.length] * 2, e ? 0.75 : 1, 'banjo'); }   // forward rolls
+        if (L === 'guitar' && lq >= 1) { if (q % 2 === 0) ch.forEach((f, k) => ks(t + k * 0.014, f, 0.7, 'guitar')); else if (lq >= 2) { ks(t, ch[0] * 2, 0.6, 'guitar'); ks(t + beat / 2, ch[2 % ch.length] * 2, 0.5, 'guitar'); } }   // strum + picking
+        if ((L === 'oud' || L === 'koto') && lq >= 1) for (let e = 0; e < (lq >= 2 ? 2 : 1); e++) { const dg = d + [0, 2, 4, 3, 1, 5, 4, 2][(n * 4 + q * 2 + e) % 8]; ks(t + e * beat / 2, mtof(deg(dg, 1)), e ? 0.7 : 1, L); }
+        if (L === 'strings' && lq >= 1) { if (lq >= 2) for (let e = 0; e < 2; e++) voice2(t + e * beat / 2, ch[(q + e) % 2 ? 2 % ch.length : 0], beat * 0.4, 0.7, 'strings'); else if (q === 0) ch.forEach(f => voice2(t, f, bar * 0.95, 0.6, 'strings')); }
+        if (L === 'saw' && lq >= 2) for (let e = 0; e < 4; e++) voice2(t + e * beat / 4, ch[(q * 4 + e) % ch.length] * 2, beat / 4 * 0.8, 0.5, 'saw');
+        if (L === 'flute' && lq >= 1 && !Md.lead2 && q % 2 === 0) voice2(t, mtof(deg(d + [0, 4, 2, 5][(n + q) % 4], 2)), beat * 1.8, 1, 'flute');
       }
       b0 += bar;
     }

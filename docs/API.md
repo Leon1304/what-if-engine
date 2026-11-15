@@ -437,8 +437,16 @@ Für alles, was fällt, fliegt, umkippt oder zerbricht, statt Handanimation. Vor
 - Weitere Sounds setzt die Engine bei den Funktionen selbst: Kampf (shot · rifle · shotgun · minigun · cannon · missile · jet · twang · clang · slash · punch · daze …), Fallen (snap · boing · saw · buzz · beep · rumble · hiss), Tiere (roar · growl · howl · trumpet · neigh · moo · bleat · oink · bark · meow · squawk · caw · screech · tweet · hoot · quack · honk · flap · chomp · click · song · blow · hooves). Von Hand als `hits` nur, wenn kein Aufruf sie auslöst (z. B. ein Vogelruf im Hintergrund).
 - Whooshes für Übergänge und `drop` für Zeitlupen setzt die Engine selbst, nicht doppelt eintragen. Ein riser startet bei Schnitt minus dur. `stinger` gehört auf die Endcard. Laute Hits ducken die Musik automatisch, die Stimme auch (`AUDIO.duck`, Standard 0.38 = Musik auf 38 %).
 
-### ElevenLabs-Musik und -Sounds (v3.25)
-Mit `ELEVENLABS_API_KEY` erzeugt `assemble.py` (über `elaudio.py`) für jedes Video eigene Musik und eigene Geräusche bei ElevenLabs und bettet sie ins HTML ein (`/* @ELAUDIO */`). CI braucht keinen Key: Das gepushte `renders/<slug>.html` enthält alles. Ohne Key, mit `--no-el` oder bei einem Fehler bleibt der bisherige Ton (Synth-Score, prozedurale Atmo, CC0-Sounds); `assemble.py` meldet `ELAUDIO: …`.
+### Musik-Stile der Engine (v3.36, Standard)
+Musik und Sounds kommen aus der Engine (Synth-Score, CC0-Aufnahmen, gebaute SFX), nicht mehr von ElevenLabs (zu teuer). Damit jedes Video eigene, passende Musik hat:
+- `AUDIO.style: 'bluegrass'` legt das Genre fest, `AUDIO.score` bleibt die Stimmungs-Kurve: Die Stimmung bestimmt Tempo-Gefühl, Moll/Dur, Akkordfolge und (mit `sections`) die Dichte; der Stil tauscht Leitinstrument (`lead`), Melodiestimme (`lead2`, eine Phrase pro Takt aus Akkordtönen, eigener Zufall pro Takt → rein in t), Schlagzeug (`drums`), Bass (`bass`), Skala (`maj`/`min`, auch 5-tönig), Tempo-Faktor (`bpmX`), Grundton (`root`, MIDI), Pad-Pegel (`pad`), `drone`, `sevenths`, `crackle` (Vinyl).
+- Stile: bluegrass · western · military · orchestral · synthwave · electronic · lofi · jazz · middleeast · asian · celtic · latin · tribal · ambient · industrial · circus (Instrumente siehe SKILL.md bzw. `STYLES` in `template.html`).
+- Objekt-Form: `style: { base: 'western', lead2: 'flute', bpmX: 0.9 }`; ohne `base` ein eigener Stil aus den Bausteinen. `style: false` = alte Mood-Instrumente. Ohne `style` wird er aus Wörtern in `AUDIO.musicPrompt` geraten (banjo → bluegrass, neon → synthwave …).
+- Bausteine im Sound-Abschnitt: `ks(t, f, v, kind)` gezupfte Saite (Karplus-Strong, Buffer je Tonhöhe gecacht; banjo · guitar · oud · koto · upright), `voice2(t, f, d, v, kind)` (fiddle · whistle · flute · horn · strings · saw), Trommeln `timp brush shaker clap doum tek conga gsnare`; Drum-Arten brush · gallop · march · timpani · gated · four · hand · conga; Bass upright · walking · octave · synth. Leads banjo · guitar · oud · koto · strings · saw · flute zusätzlich zu den alten (bell · marimba · keys · pluck · arp · brass).
+- Neuer Stil = neuer Eintrag in `STYLES` (Schlüssel `lead` zuerst, `assemble.py` liest die Namen daraus und warnt bei unbekannten). Test: `tests/music-styles`.
+
+### ElevenLabs-Musik und -Sounds (v3.25, nur auf Wunsch)
+Seit v3.36 aus: nur mit `assemble.py … --el` oder `AUDIO.el: true`. Dann erzeugt `assemble.py` (über `elaudio.py`) für jedes Video eigene Musik und eigene Geräusche bei ElevenLabs und bettet sie ins HTML ein (`/* @ELAUDIO */`). CI braucht keinen Key: Das gepushte `renders/<slug>.html` enthält alles. Ohne Key, mit `--no-el` oder bei einem Fehler bleibt der bisherige Ton (Synth-Score, prozedurale Atmo, CC0-Sounds); `assemble.py` meldet `ELAUDIO: …`.
 - **Musik:** ein Track pro Video, Abschnitte = `AUDIO.score` (inkl. automatischem Ende sad/triumph). Je Stimmung feste Stil-Wörter (`MOOD` in `elaudio.py`), `AUDIO.sections` setzt die Dichte (0 sparsam … 3 Höhepunkt). Abschnitte unter 3 s gehen im vorherigen auf, über 120 s werden geteilt, Filme über ~280 s in mehreren Anfragen erzeugt und aneinandergehängt. Immer instrumental. `'none'`-Abschnitte bleiben stumm (Gate auf dem Musik-Bus), Ducken unter der Stimme, Hits und Loop-Blende wie bisher.
 - `AUDIO.musicPrompt: 'dark bluegrass, banjo and fiddle, rural farm at night'` (Pflicht, Englisch, durch Kommas getrennt): Genre, Instrumente, Ort/Epoche des Videos; daraus werden die globalen Stile. Fehlt er, kommt eine NOTE.
 - **Atmo:** `amb: [[t0, t1, kind, vol, 'prompt']]`. Das 5. Element ist ein eigener ElevenLabs-Prompt für diesen Ort (z. B. `'Abandoned shopping mall at night, distant alarm, flickering neon buzz'`); ohne ihn nimmt die Engine den Standard-Prompt der Art (`AMB_EL` im Template). Jedes Bett ist ein 20-s-Loop, über die Spanne geloopt, 0,35 s Blende. `kind` bleibt der Rückfall.
@@ -651,7 +659,7 @@ Sie wirken zusätzlich zu `CAM`:
 - Fehlt ein Geräusch: im Objekt `AMB` im Sound-Abschnitt von `template.html` als neue Art bauen (Bausteine `bed`, `every`, `tone`, `nz`) und mitcommitten. `assemble.py` warnt bei unbekannten Stimmungen und Geräuscharten.
 
 ## assemble.py-Hinweise (v2.20)
-Story-Video über 58 s · Endcard + Loop über 6,5 s · `loop: false` · kein `TEASE` ab 40 s · Rückblick als Vollbild-Karte · unbekannte Musikstimmung oder Geräuschart.
+Story-Video über 45 s (v3.36; Erklärvideo über 45 s) · Endcard + Loop über 6,5 s · `loop: false` · kein `TEASE` ab 40 s · Rückblick als Vollbild-Karte · unbekannte Musikstimmung oder Geräuschart.
 
 # Neu in v2.21 (Minen und Warnschilder)
 
