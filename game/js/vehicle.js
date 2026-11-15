@@ -5,6 +5,7 @@
 import * as THREE from 'three';
 import { roadX } from './life.js';
 import { B } from './world.js';
+import { regionOf, bergRoadDist, REGIONS } from './regions.js';
 
 const up = new THREE.Vector3(0, 1, 0), tmp = new THREE.Vector3(), q = new THREE.Quaternion(), e = new THREE.Euler(0, 0, 0, 'YXZ');
 const ray = new THREE.Ray();
@@ -73,6 +74,10 @@ export class Vehicle {
   blocked(from, dir, dist) {
     const W = this.g.W; ray.set(from, dir);
     const h = W.collider.geometry.boundsTree.raycastFirst(ray, THREE.DoubleSide); if (h && h.distance < dist && Math.abs(h.face.normal.y) < .6) return true;
+    for (const it of W.movers) {                     // closed doors, gates – and the pass barrier
+      if (!it.bvhGeo || it.node.visible === false || it.pivot.position.distanceTo(from) > 12) continue;
+      const r2 = ray.clone().applyMatrix4(it.pivot.matrixWorld.clone().invert()), hh = it.bvhGeo.boundsTree.raycastFirst(r2, THREE.DoubleSide); if (hh && hh.distance < dist) return true;
+    }
     for (const c of W.dyn) { if (c === this.col || c.pos.distanceTo(from) > c.r + 6) continue;
       const inv = c.obj.matrixWorld.clone().invert(), r2 = ray.clone().applyMatrix4(inv), hh = c.geo.boundsTree.raycastFirst(r2, THREE.DoubleSide); if (hh && hh.distance < dist) return true; }
     for (const t of W.treesNear(from.x + dir.x * dist, from.z + dir.z * dist)) if (Math.hypot(t.x - from.x - dir.x * dist, t.z - from.z - dir.z * dist) < t.r + .5) return true;
@@ -82,7 +87,8 @@ export class Vehicle {
     if (!this.ok) return; const g = this.g, S = this.S;
     if (!this.driving) { this.light.intensity = 0; return; }
     const fw = (keys.KeyW ? 1 : 0) - (keys.KeyS ? 1 : 0), st = (keys.KeyA ? 1 : 0) - (keys.KeyD ? 1 : 0);
-    const by = -this.pos.z, onRoad = Math.abs(this.pos.x - roadX(by)) < 4.5 || (this.pos.x > -3 && this.pos.x < 38 && by > -24 && by < 26) || (this.pos.x > -70 && this.pos.x < -57 && by > 148 && by < 230);
+    const by = -this.pos.z, berg = regionOf(by) === 'berg';
+    const onRoad = berg ? bergRoadDist(this.pos.x, by) < 3.4 : Math.abs(this.pos.x - roadX(by)) < 4.5 || (this.pos.x > -3 && this.pos.x < 38 && by > -24 && by < 26) || (this.pos.x > -70 && this.pos.x < -57 && by > 148 && by < 230);
     const vmax = onRoad ? 24 : 9, fuelOk = S.fuel > 0;
     if (fw > 0 && fuelOk) this.v += (this.v < 0 ? 14 : 7) * dt; else if (fw < 0) this.v -= (this.v > 0 ? 16 : 4) * dt;
     else this.v *= Math.max(0, 1 - dt * (onRoad ? .4 : 1.4));
@@ -95,7 +101,9 @@ export class Vehicle {
     if (Math.abs(this.v) > .05 && this.blocked(front, dir.clone().multiplyScalar(Math.sign(this.v)), Math.abs(step) + .25)) {
       if (Math.abs(this.v) > 6) { g.audio.sfx('thud'); g.hurt((Math.abs(this.v) - 6) * 3, 'Unfall'); }
       this.v = -this.v * .2;
-    } else this.pos.addScaledVector(dir, step);
+    } else { this.pos.addScaledVector(dir, step); g.progress.stat('drive', Math.abs(step)); }
+    const R = REGIONS[berg ? 'berg' : 'tal'], px = Math.max(R.x0 + 3, Math.min(R.x1 - 3, this.pos.x)), pz = Math.max(-(R.y1 - 2), Math.min(-(R.y0 - 6), this.pos.z));
+    if (px !== this.pos.x || pz !== this.pos.z) { this.pos.x = px; this.pos.z = pz; this.v = 0; }
     S.fuel = Math.max(0, S.fuel - Math.abs(step) / 150);
     if (S.fuel <= 0 && !this._empty) { this._empty = 1; g.ui.toast('⛽ Der Tank ist leer!', 'warn'); }
     if (S.fuel > 0) this._empty = 0;

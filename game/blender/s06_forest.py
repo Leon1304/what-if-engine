@@ -16,7 +16,7 @@ def tree_ok(x, y, r):
     if abs(x - VILLAGE[0]) < 40 + r and abs(y - VILLAGE[1]) < 36 + r: return False
     for sx, sy, _ in SACKS:
         if math.hypot(x - sx, y - sy) < 1.6 + r: return False
-    for c_, rr in ((TOWER, 9), (RUIN, 15), (QUARRY, 19), (MILL, 10), (LAKE, 21)):
+    for c_, rr in ((TOWER, 9), (RUIN, 15), (QUARRY, 19), (MILL, 10), (LAKE, LAKE_R + 9), (FORSTHAUS, 13), (FUNKTURM, 10), (ANGLER, 6), ((LAKE[0] + 21.5, LAKE[1] - 7), 3)):
         if math.hypot(x - c_[0], y - c_[1]) < rr + r: return False
     return MAP_X0 + 2 < x < MAP_X1 - 2 and MAP_Y0 + 2 < y < MAP_Y1 - 2
 
@@ -193,3 +193,25 @@ def build(c):
         b = cyl(.22, 1.8, seg=7, axis='X'); move(b, (-.9, 0, .2)); rotz(b, a + math.pi / 2); move(b, (x, y, terrain_h(x, y)))
         obj(f'Sitzstamm_{i}', b, bark, c)
     spot('ziel_feuerstelle', (fx, fy, fz), quest='feuerstelle')
+
+    # ---------------- west strip beyond the old map edge (hills behind the lake): spruces and pines only (own random stream)
+    R = random.Random(2525); conif = [v for v in V if v[0] in ('Fichte', 'Kiefer')]
+    for gx in range(int(MAP_X0) - 22, int(MAP_X0) + 2, 5):
+        for gy in range(int(MAP_Y0) + 2, int(MAP_Y1) - 2, 5):
+            x, y = gx + R.uniform(0, 5), gy + R.uniform(0, 5)
+            if math.hypot(x - LAKE[0], y - LAKE[1]) < LAKE_R + 8 or R.random() < .3: continue
+            kind, src, _ = R.choice(conif)
+            inst(src, f'{kind}_W{n}', (x, y, terrain_h(x, y) - .1), R.uniform(0, 6.28), R.uniform(.9, 1.3), c=trees, tree=kind); n += 1
+    # ---------------- chamomile (herbs for tea against a cold): pickups on meadows and along paths
+    herb = lp('Kraut_gruen', '#6f9a3a', .9, var=.1); petal = lp('Bluete_weiss', '#f1efe6', .8); eye = lp('Bluete_gelb', '#e9c43a', .7)
+    R = random.Random(8); k = 0
+    while k < 26:
+        x, y = R.uniform(-100, 100), R.uniform(-100, 220)
+        if not tree_ok(x, y, 0) or abs(x - road_x(y)) < 10 or abs(x - creek_x(y)) < 4: continue
+        z = terrain_h(x, y); P = []
+        for i in range(5):
+            a = 6.283 * i / 5; px, py = x + .07 * math.cos(a), y + .07 * math.sin(a)
+            P += [(cyl(.008, .2, at=(px, py, z - .02), seg=3), herb), (cyl(.03, .01, at=(px, py, z + .18), seg=6), petal), (cyl(.012, .015, at=(px, py, z + .185), seg=5), eye)]
+        P.append((ico(.07, at=(x, y, z + .02), sub=1, jit=.3, seed=k, sz=.5), herb))
+        multi(f'Kraeuter_{k}', P, ug, collide=0, interact='pickup', item='kraeuter', label='Kamille'); k += 1
+

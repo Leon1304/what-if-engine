@@ -9,11 +9,14 @@ import { Combat } from './combat.js';
 import { Progress } from './progress.js';
 import { Vehicle } from './vehicle.js';
 import { Seasons } from './seasons.js';
+import { Health } from './health.js';
+import { Boat } from './boat.js';
+import { REGIONS, regionOf, PASS, BERG_IN, LAKES, bergRoadDist } from './regions.js';
 
 // Save games: slots auto / 1 / 2 / 3 in localStorage (+ export / import as a file). Everything is stored by name or id, so a newer
 // version of the map or the game can load an older save: unknown objects / items are skipped, new ones start in their default state.
 export const SLOTS = ['auto', '1', '2', '3'];
-const SAVE_PREFIX = 'waldtank_save_', OLD_SAVE = 'waldtank_save_v1', SAVE_VERSION = 3;
+const SAVE_PREFIX = 'waldtank_save_', OLD_SAVE = 'waldtank_save_v1', SAVE_VERSION = 4;
 const POOL = 8;
 const clamp = (v, a = 0, b = 100) => Math.max(a, Math.min(b, v));
 const MOVING = new Set(['door', 'slide', 'lid', 'drawer']);
@@ -38,12 +41,15 @@ export class Game {
     this.chop = 0; this.saveT = 0; this.tipT = 0; this.birdT = 3; this.heartT = 0; this.candleT = 0;
     this.progress = new Progress(this); this.build = new Build(this); this.combat = new Combat(this);
     this.vehicle = new Vehicle(this); this.seasons = new Seasons(this); this.drops = []; this.secT = 0;
+    this.health = new Health(this); this.boat = new Boat(this); this.waterT = 0; this.edgeT = 0; this.traveling = false;
+    for (const it of W.interactives) if (it.u.hidden) it.node.visible = false;          // e.g. the treasure chest: shows up when dug out
+    this.funkMats = []; scene.traverse(o => { if (o.isMesh) for (const m of [].concat(o.material)) if (m.name === 'Display_Funk' && !this.funkMats.includes(m)) { m.emissive = new THREE.Color('#000000'); this.funkMats.push(m); } });
     try { this.S.diff = localStorage.getItem('waldtank_diff') || 'mittel'; } catch { }
   }
   fresh() {
     return { time: 17.0, day: 1, abs: 17, stats: { health: 100, hunger: 78, thirst: 72, warmth: 85, stamina: 100 }, inv: [], sel: 0,
       battery: 65, genFuel: 0, quest: 0, flags: {}, found: {}, known: {}, marks: [], felled: {}, ammo: {}, mag: {}, diff: 'mittel',
-      xp: 0, side: {}, stat: {}, notes: {}, money: 0, car: { fixed: 0, fuel: 0 }, dog: { tame: 0, sit: 0 }, drops: [], weather: 'klar',
+      xp: 0, side: {}, stat: {}, notes: {}, money: 0, car: { fixed: 0, fuel: 0 }, dog: { tame: 0, sit: 0 }, drops: [], weather: 'klar', ill: { erk: 0, mag: 0 }, badges: {}, boat: null,
       rain: 0, rainUntil: 0, nextRain: 19 + Math.random() * 6, rescueAt: 0 };
   }
 
@@ -68,7 +74,7 @@ export class Game {
   count(id) { return this.S.inv.filter(s => s.id === id).reduce((a, s) => a + s.n, 0); }
   has(id) { return this.count(id) > 0; }
   brenn() { return this.count('ast') + this.count('holz'); }
-  add(id, n = 1, quiet = false) {
+  add(id, n = 1, quiet = false, f) {
     const it = ITEMS[id];
     if (it?.equip === 'bag') { this.S.flags.bag = true; if (!quiet) this.ui.toast('🎒 Rucksack aufgesetzt – jetzt 16 Plätze. Tab öffnet ihn.'); return true; }
     if (it?.equip === 'jacket') { this.S.flags.jacket = true; if (!quiet) this.ui.toast('🧥 Jacke angezogen – du frierst nur noch halb so schnell.'); return true; }
@@ -81,7 +87,9 @@ export class Game {
     const room = inv.filter(s => s.id === id).reduce((a, s) => a + max - s.n, 0) + (this.capacity() - inv.length) * max;
     if (room < n) { this.ui.toast(this.S.flags.bag ? 'Dein Rucksack ist voll.' : 'Kein Platz mehr – du brauchst einen Rucksack.', 'warn'); this.audio.sfx('error'); return false; }
     let left = n;
-    while (left > 0) { let s = inv.find(s => s.id === id && s.n < max); if (!s) { s = { id, n: 0 }; inv.push(s); } const k = Math.min(left, max - s.n); s.n += k; left -= k; }
+    const fresh = it?.spoil ? (f ?? it.spoil) : undefined;                 // food: the stack keeps the oldest freshness
+    while (left > 0) { let s = inv.find(s => s.id === id && s.n < max); if (!s) { s = { id, n: 0 }; if (fresh !== undefined) s.f = fresh; inv.push(s); } else if (fresh !== undefined) s.f = Math.min(s.f ?? it.spoil, fresh);
+      const k = Math.min(left, max - s.n); s.n += k; left -= k; }
     if (!quiet) this.ui.toast(`+ ${n > 1 ? n + '× ' : ''}${it?.icon || ''} ${it?.name || id}`); this.ui.renderHotbar(inv, this.S.sel); return true;
   }
   take(id, n = 1) {
@@ -101,7 +109,7 @@ export class Game {
     const st = this.S.stats;
     const table = this.build.near('tisch', this.P.pos, 2.2) ? 1.2 : 1;
     for (const [k, v] of Object.entries(it.use)) st[k] = clamp(st[k] + (k === 'hunger' && v > 0 ? v * table : v));
-    if (it.use.hunger > 0) this.S.flags.ate = 1; if (it.use.thirst > 0) this.S.flags.drank = 1;
+    if (it.use.hunger > 0) this.S.flags.ate = 1; if (it.use.thirst > 0) this.S.flags.drank = 1; this.progress.stat('eaten'); this.health.eat(s.id);
     if (it.boost) this.boostT = it.boost;
     this.audio.sfx(it.use.thirst > it.use.hunger || it.use.thirst > 0 && !it.use.hunger ? 'drink' : 'eat');
     this.take(s.id); if (it.after) this.add(it.after, 1, true);
@@ -112,7 +120,7 @@ export class Game {
     const s = this.S.inv[i]; if (!s) return; this.S.inv.splice(i, 1);
     const f = this.P.forward(new THREE.Vector3()); f.y = 0; f.normalize(); const p = this.P.pos.clone().addScaledVector(f, .9);
     const fl = this.build.room(p)?.floor; p.y = fl ?? this.W.groundY(p.x, p.z, this.P.pos.y + 1.2);
-    this.addDrop({ id: s.id, n: s.n, p: p.toArray().map(v => +v.toFixed(2)) });
+    this.addDrop({ id: s.id, n: s.n, p: p.toArray().map(v => +v.toFixed(2)), f: s.f });
     this.ui.toast(`${ITEMS[s.id].icon} ${ITEMS[s.id].name} abgelegt – mit E wieder aufheben.`); this.ui.renderHotbar(this.S.inv, this.S.sel);
   }
   addDrop(d) {
@@ -120,14 +128,14 @@ export class Game {
     const bag = new THREE.Mesh(new THREE.DodecahedronGeometry(.13, 0), new THREE.MeshStandardMaterial({ color: '#b08d57', flatShading: true, roughness: .95 })); bag.scale.set(1.2, .7, 1); bag.position.y = .08; bag.castShadow = true; g.add(bag);
     const c = document.createElement('canvas'); c.width = c.height = 64; const x = c.getContext('2d'); x.font = '48px system-ui'; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText(it.icon, 32, 36);
     const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(c), depthWrite: false })); sp.scale.setScalar(.32); sp.position.y = .42; g.add(sp);
-    this.scene.add(g); const rec = { ...d, g }; this.drops.push(rec); this.S.drops = this.drops.map(({ id, n, p }) => ({ id, n, p }));
+    this.scene.add(g); const rec = { ...d, g }; this.drops.push(rec); this.S.drops = this.drops.map(({ id, n, p, f }) => ({ id, n, p, f }));
   }
-  takeDrop(r) { if (!this.add(r.id, r.n)) return; this.scene.remove(r.g); this.drops.splice(this.drops.indexOf(r), 1); this.S.drops = this.drops.map(({ id, n, p }) => ({ id, n, p })); this.audio.sfx('pickup'); }
+  takeDrop(r) { if (!this.add(r.id, r.n, false, r.f)) return; this.scene.remove(r.g); this.drops.splice(this.drops.indexOf(r), 1); this.S.drops = this.drops.map(({ id, n, p, f }) => ({ id, n, p, f })); this.audio.sfx('pickup'); }
   dropTarget(o, f) { let best = null, ba = .2; for (const r of this.drops) { const d = r.g.position.clone().add(new THREE.Vector3(0, .15, 0)).sub(o), L = d.length(); if (L > 2.6) continue; const a = d.normalize().angleTo(f); if (a < ba) { ba = a; best = r; } } return best; }
   // trader Kurt
   buy(id) { const pr = TRADE.buy[id]; if (!pr || this.S.money < pr) return; if (!this.add(id, 1)) return; this.S.money = +(this.S.money - pr).toFixed(2); this.audio.sfx('coins'); this.progress.add(2, ''); }
   sell(id, all) { const pr = TRADE.sell[id], n = all ? this.count(id) : Math.min(1, this.count(id)); if (!pr || !n) return; this.take(id, n); this.S.money = +(this.S.money + pr * n).toFixed(2);
-    this.progress.stat('sold_' + id, n); this.audio.sfx('coins'); this.ui.toast(`💶 ${n}× ${ITEMS[id].name} verkauft: +${(pr * n).toFixed(2).replace('.', ',')} €`); }
+    this.progress.stat('sold_' + id, n); this.progress.stat('earned', pr * n); this.audio.sfx('coins'); this.ui.toast(`💶 ${n}× ${ITEMS[id].name} verkauft: +${(pr * n).toFixed(2).replace('.', ',')} €`); }
   talk(what) { if (what === 'story' && Object.keys(this.S.notes).length >= 5) { this.S.flags.kurtStory = 1; this.add('patronen_gewehr', 1, true); this.ui.toast('Kurt: „Brandt! Hab ich’s doch gewusst. Hier, nimm die Patronen – für alle Fälle.“', 'good'); } }
   // sleep in a bed until 7:00 (from 18:00): time passes, you heal, fields grow, the night's animals are gone
   sleep(bed) {
@@ -144,7 +152,7 @@ export class Game {
       st.health = clamp(st.health + (bed?.type === 'bett' ? 45 : 30)); st.stamina = 100;
       if (S.genFuel > 0) S.genFuel = Math.max(0, S.genFuel - hours);
       for (const f of this.life.fires) { f.fuel -= hours; if (f.fuel <= 0) { f.fuel = 0; f.on = false; } }
-      this.build.update(0, hours); this.life.clear(); this.S.flags.slept = 1;
+      this.build.update(0, hours); this.health.update(0, hours, true); this.life.clear(); this.S.flags.slept = 1; this.progress.stat('slept');
       ui.toast(`☀️ Gut geschlafen. Tag ${S.day}, 7:00 Uhr.${st.hunger < 30 || st.thirst < 30 ? ' Du hast Hunger und Durst.' : ''}`, 'good'); this.save();
     }, 1200);
   }
@@ -167,7 +175,7 @@ export class Game {
     } else {
       if (r.ammoN) { const w = ITEMS[Object.keys(r.gives)[0]].ammo[0]; this.S.ammo[w] = (this.S.ammo[w] || 0) + r.ammoN; }
       else for (const [k, v] of Object.entries(r.gives)) this.add(k, r.id === 'bretter' && this.has('saege') ? 4 : v, true);
-      this.audio.sfx('craft'); this.ui.toast(`🛠️ ${r.name} hergestellt.`); this.progress.add(r.bench ? 8 : 4, r.name);
+      this.audio.sfx('craft'); this.ui.toast(`🛠️ ${r.name} hergestellt.`); this.progress.add(r.bench ? 8 : 4, r.name); this.progress.stat('crafted');
     }
     this.ui.renderInventory(this);
   }
@@ -177,8 +185,11 @@ export class Game {
 
   // ---------------------------------------------------------------- world helpers
   insideShop(p) { return p.x > 21.1 && p.x < 36.9 && p.z > -9.9 && p.z < 9.9 && p.y < 4; }
+  region(p = this.P.pos) { return regionOf(-p.z); }
   surface(p) {
     const bx = p.x, by = -p.z;
+    if (this.boat?.on) return 'water';
+    if (this.region(p) === 'berg') { const d = bergRoadDist(bx, by); return this.indoor(p) ? 'wood' : d < 3 ? 'asphalt' : d < 4.2 ? 'gravel' : p.y > 40 ? 'gravel' : 'grass'; }
     if (this.insideShop(p)) return 'tile';
     if (this.onHochsitz || (bx > 42.4 && bx < 45.6 && by > -13.4 && by < -10.6)) return 'wood';
     if (Math.abs(bx - creekX(by)) < 2.2) return 'water';
@@ -201,6 +212,7 @@ export class Game {
     if (this.P.climb) return null;
     for (const fi of this.life.fires) if (fi.owned) { const d = fi.pos.clone().sub(o); if (d.length() < 2.4 && d.normalize().angleTo(f) < .35) return { fire: fi }; }   // fireplace inside a structure
     if (this.vehicle.driving) return { exit: true };
+    if (this.boat.on) return { boatExit: true };
     const dog = this.life.dogTarget(o, f); if (dog) return { dog };
     const dr = this.dropTarget(o, f); if (dr) return { drop: dr };
     const bt = this.build.target(o, f);
@@ -235,6 +247,7 @@ export class Game {
     if (t.tree) return t.tree.fixed || t.tree.kind === 'Linde' ? 'Ein mächtiger Baum' : `[E] Baum fällen (Axt) ${t.tree.hits || 0}/${this.build.chopsNeeded()}`;
     if (t.build || t.log) return this.build.verb(t);
     if (t.exit) return this.vehicle.verb();
+    if (t.boatExit) return this.boat.verb();
     if (t.dog) return this.life.dogVerb();
     if (t.drop) return `[E] ${ITEMS[t.drop.id].icon} ${ITEMS[t.drop.id].name}${t.drop.n > 1 ? ' ×' + t.drop.n : ''} aufheben`;
     if (t.carcass) return this.has('messer') ? '[E] Zerlegen (Messer)' : 'Erlegtes Tier – ein Messer zum Zerlegen fehlt';
@@ -245,6 +258,7 @@ export class Game {
     switch (u.interact) {
       case 'door': case 'lid': case 'slide': case 'drawer':
         if (u.interact === 'slide' && u.auto && this.strom()) return L + ' (öffnet automatisch)';
+        if (u.code && u.locked && !it.state.unlocked) return `[E] ${L}: Code eingeben`;
         return `[E] ${L} ${it.target ? 'schließen' : 'öffnen'}`;
       case 'switch': return `[E] ${L} (${this.S.flags.lightsOff ? 'an' : 'aus'})`;
       case 'pickup': return `[E] ${L} aufheben`;
@@ -253,7 +267,14 @@ export class Game {
       case 'pump': return `[E] ${L} benutzen`;
       case 'read': return `[E] ${L} lesen`;
       case 'trade': return `[E] Mit ${L.split(' ')[0]} reden / handeln`;
-      case 'use': if (u.use === 'auto') return this.vehicle.verb(); if (u.use === 'bett') return `[E] ${L}: schlafen`; break;
+      case 'talk': return `[E] Mit ${L.split(' ')[0]} reden`;
+      case 'use':
+        if (u.use === 'auto') return this.vehicle.verb(); if (u.use === 'bett') return `[E] ${L}: schlafen`; if (u.use === 'boot') return this.boat.verb();
+        if (u.use === 'graben') return it.state.dug ? 'Hier ist schon alles ausgegraben' : this.has('spaten') ? '[E] Unter dem Steinkreuz graben (Spaten)' : 'Ein Kreuz aus Steinen – der Boden darunter ist locker';
+        if (u.use === 'sprengen') return '[E] Geröll sprengen (2 Sprengpulver, Zündschnur, Feuerzeug)';
+        if (u.use === 'funkaggregat') return this.S.flags.funkPower ? 'Notstrom-Aggregat läuft' : '[E] Aggregat betanken (voller Kanister)';
+        if (u.use === 'sender') return this.S.flags.funkPower ? `[E] Funksender: ${this.S.flags.funkCalled ? 'Wetterbericht abfragen' : 'Bergwacht rufen'}` : 'Funksender – kein Strom';
+        break;
     }
     if (u.ladder) return this.onHochsitz ? '[E] Runterklettern' : '[E] Leiter hochklettern';
     return `[E] ${L}`;
@@ -265,6 +286,7 @@ export class Game {
     if (t.tree) return this.build.chopTree(t.tree);
     if (t.build || t.log) return this.build.interact(t);
     if (t.exit) return this.vehicle.exit();
+    if (t.boatExit) return this.boat.exit();
     if (t.dog) return this.life.dogUse();
     if (t.drop) return this.takeDrop(t.drop);
     if (t.carcass) return this.life.butcher(t.carcass);
@@ -277,6 +299,7 @@ export class Game {
     switch (u.interact) {
       case 'door': case 'lid': case 'slide': case 'drawer': {
         if (u.needs === 'strom' && !this.strom()) { if (it.name.startsWith('Schiebetuer')) S.flags.frontTried = 1; A.sfx('locked'); return ui.toast(u.locked_msg || 'Ohne Strom geht das nicht.'); }
+        if (u.locked && !it.state.unlocked && u.code) { this.codeFor = it; A.sfx('key'); return this.openPanel?.('code'); }
         if (u.locked && !it.state.unlocked) {
           if (it.name === 'Hintertuer') S.flags.backTried = 1;
           if (u.key && this.has(u.key)) { it.state.unlocked = 1; A.sfx('switch'); ui.toast('🔑 Aufgeschlossen.'); }
@@ -296,6 +319,7 @@ export class Game {
           A.sfx('pickup');
           if (!u.infinite) { it.node.visible = false; it.state.taken = 1; }
           if (u.item === 'notiz_hochsitz') this.read('notiz_hochsitz');
+          if (u.item === 'bergkristall') { this.progress.stat('kristall'); this.progress.add(20, 'Bergkristall'); }
         }
         return;
       case 'search': {
@@ -306,18 +330,21 @@ export class Game {
           for (const [id, n] of left) if (!this.add(id, n, true)) keep.push([id, n]);
           const got = left.filter(x => !keep.includes(x));
           if (got.length) ui.toast(u.found && !keep.length && !it.state.left ? u.found : 'Gefunden: ' + got.map(([id, n]) => `${n > 1 ? n + '× ' : ''}${ITEMS[id].icon} ${ITEMS[id].name}`).join(', '), 'good');
-          if (keep.length) { it.state.left = keep; ui.toast('Dein Rucksack ist voll – der Rest bleibt hier.', 'warn'); } else { it.state.searched = 1; delete it.state.left; this.emptySack(it); }
+          if (keep.length) { it.state.left = keep; ui.toast('Dein Rucksack ist voll – der Rest bleibt hier.', 'warn'); } else { it.state.searched = 1; delete it.state.left; this.emptySack(it); if (it.name.startsWith('Sack')) this.progress.stat('sacks'); }
+          if (it.name === 'Schatzkiste' && got.length) { S.flags.treasure = 1; this.audio.sfx('win'); }
           if (got.length) A.sfx('pickup'); return;
         }
         if (this.add(u.item, u.item === 'dosenbohnen' ? 2 : 1, true)) { it.state.searched = 1; if (u.bonus) this.add(u.bonus, 1, true); ui.toast(u.found || `Gefunden: ${ITEMS[u.item].name}`); A.sfx('pickup'); }
         return;
       }
       case 'trade': this.S.flags.metKurt = 1; return this.openPanel?.('trade');
+      case 'talk': return this.talkNpc(it);
       case 'read':
         if (u.note && !this.S.notes[u.note]) { this.S.notes[u.note] = 1; this.progress.add(15, 'Notiz'); setTimeout(() => ui.toast(`📜 Notiz ${Object.keys(this.S.notes).length}/5 gefunden (Nebenaufgabe „Das stille Dorf“).`, 'good'), 400); }
-        if (u.reveal) { const ids = u.reveal === 'all' ? this.places.map(p => p.id) : u.reveal.split(','); let n = 0;
+        if (it.name === 'Tagebuch_Henning') S.flags.diary = 1;
+        if (u.reveal) { const ids = u.reveal === 'all' ? this.places.filter(p => p.region === 'tal').map(p => p.id) : u.reveal === 'berg_all' ? this.places.filter(p => p.region === 'berg').map(p => p.id) : u.reveal.split(','); let n = 0;
           for (const id of ids) if (!this.S.known[id] && !this.S.found[id]) { this.S.known[id] = 1; n++; }
-          if (n) setTimeout(() => ui.toast(`🗺️ ${n} Orte auf deiner Karte eingetragen.`, 'good'), 300); }
+          if (n) setTimeout(() => ui.toast(`🗺️ ${n} ${n > 1 ? 'Orte' : 'Ort'} auf deiner Karte eingetragen.`, 'good'), 300); }
         return ui.read(it.label, u.text || '');
       case 'pump':
         if (!this.strom()) { A.sfx('error'); return ui.toast('Das Display bleibt dunkel. Ohne Strom pumpt hier nichts.'); }
@@ -367,11 +394,19 @@ export class Game {
         A.sfx('drink'); this.S.stats.thirst = clamp(this.S.stats.thirst + 35); this.S.flags.drank = 1; return ui.toast('Klares, kaltes Brunnenwasser.');
       case 'wasserhahn': A.sfx('water'); this.S.stats.thirst = clamp(this.S.stats.thirst + 30); this.S.flags.drank = 1; return ui.toast('Du trinkst Leitungswasser.');
       case 'auto': return this.vehicle.use();
+      case 'boot': return this.boat.enter();
+      case 'graben': return this.dig(it);
+      case 'sprengen': return this.blast(it);
+      case 'funkaggregat':
+        if (S.flags.funkPower) return ui.toast('Das Aggregat tuckert. Der Sender hat Strom.');
+        if (!this.has('kanister_voll')) { A.sfx('error'); return ui.toast('Der Tank ist leer. Ein voller Kanister Diesel würde reichen (Dieselfass im Schuppen der Tankstelle).'); }
+        this.swap('kanister_voll', 'kanister'); S.flags.funkPower = 1; A.sfx('genstart'); this.progress.add(30, 'Notstrom'); return ui.toast('⚡ Das Aggregat springt an – in der Funkhütte leuchten die Anzeigen.', 'good');
+      case 'sender': return this.radio();
       case 'bett': return this.sleep(it);
       case 'bachwasser':
         if (this.has('topf')) { this.swap('topf', 'topf_wasser'); A.sfx('water'); return ui.toast('Topf mit Bachwasser gefüllt. Am Feuer abkochen!'); }
         A.sfx('drink'); this.S.stats.thirst = clamp(this.S.stats.thirst + 25); this.S.flags.drank = 1;
-        if (Math.random() < .4) { this.hurt(10, 'Bachwasser'); return ui.toast('Das Wasser schmeckt modrig … dein Bauch grummelt.', 'warn'); }
+        if (Math.random() < .4) { this.hurt(10, 'Bachwasser'); this.health.upset(40); return ui.toast('Das Wasser schmeckt modrig … dein Bauch grummelt.', 'warn'); }
         return ui.toast('Kaltes Bachwasser. Riskant, aber es löscht den Durst.');
       case 'lagerfeuer': {
         const p = it.center.clone(); p.y = this.W.groundY(p.x, p.z, p.y + 1);
@@ -383,12 +418,101 @@ export class Game {
     }
     ui.toast(it.label);
   }
+  // ---------------------------------------------------------------- puzzles: code locks, digging, blasting, the radio station, Henning
+  tryCode(code) {
+    const it = this.codeFor; if (!it) return false; const u = it.u;
+    if (String(code) !== String(u.code)) { this.audio.sfx('error'); this.ui.toast('❌ Falscher Code.', 'warn'); return false; }
+    it.state.unlocked = 1; it.target = 1; this.codeFor = null; this.audio.sfx('switch'); this.progress.add(40, 'Code geknackt');
+    this.ui.toast('🔓 Klick – das Schloss springt auf!', 'good'); return true;
+  }
+  dig(it) {
+    const ui = this.ui;
+    if (it.state.dug) return ui.toast('Hier ist schon alles ausgegraben.');
+    if (!this.has('spaten')) { this.audio.sfx('error'); return ui.toast('Der Boden unter dem Steinkreuz ist locker. Mit einem Spaten könntest du hier graben.'); }
+    it.state.dug = 1; this.S.flags.dug = 1; this.audio.sfx('dig'); setTimeout(() => this.audio.sfx('dig'), 450); this.progress.add(30, 'gegraben');
+    const box = this.byName.Schatzkiste; if (box) { box.state.shown = 1; box.node.visible = true; }
+    ui.toast('⛏️ Du gräbst … und stößt auf eine alte Holzkiste!', 'good');
+  }
+  blast(it) {
+    const ui = this.ui, need = [['schwarzpulver', 2], ['seil', 1], ['feuerzeug', 1]], miss = need.filter(([k, n]) => this.count(k) < n);
+    if (it.state.gone) return;
+    if (miss.length) { this.audio.sfx('error'); return ui.toast(`Zum Sprengen fehlt: ${miss.map(([k, n]) => `${n}× ${ITEMS[k].name}`).join(', ')}. (Zündschnur = Seil)`, 'warn'); }
+    if (it.state.fuse) return;
+    this.take('schwarzpulver', 2); this.take('seil', 1); it.state.fuse = 1; this.audio.sfx('fuse');
+    ui.toast('🧨 Die Zündschnur brennt – schnell weg vom Geröll!', 'warn');
+    setTimeout(() => {
+      this.audio.sfx('boom'); it.node.visible = false; it.state.gone = 1; delete it.state.fuse; this.S.flags.blasted = 1;
+      const d = it.center.distanceTo(this.P.pos); if (d < 7) { this.hurt((7 - d) * 9, 'Sprengung'); ui.damage(); }
+      this.combat.puff(it.center, '#9a948a', 30); this.progress.add(60, 'Sprengung');
+      ui.toast('💥 BUMM! Der Weg ist frei – dahinter funkelt es violett.', 'good'); this.save();
+    }, 3200);
+  }
+  radio() {
+    const S = this.S, ui = this.ui;
+    if (!S.flags.funkPower) { this.audio.sfx('error'); return ui.toast('Der Sender ist tot. Draußen hinter der Hütte steht ein Notstrom-Aggregat.'); }
+    this.audio.sfx('radio');
+    if (!S.flags.funkCalled) {
+      S.flags.funkCalled = 1; for (const id of ['pass', 'berghuette']) if (!S.found[id]) S.known[id] = 1;
+      return ui.read('Funksender – Kanal 3', '„… Funkstation Nordwald? Hier Bergwacht! Wir dachten, die Station ist verlassen. Sie suchen Förster Albers? Der hat sich vor einer Woche von der <b>Steinberghütte</b> gemeldet – seitdem nichts mehr. Die Passstraße ist seit dem Steinschlag gesperrt; den Schlüssel für die Schranke finden Sie dort am Haken neben der Tür. Mit einem Auto kommen Sie hoch. Und: Kanal 3 gibt Ihnen jederzeit den Wetterbericht. Ende.“<br><i>Pass-Schranke und Steinberghütte sind auf deiner Karte eingetragen.</i>');
+    }
+    return ui.toast(`📻 Wetterbericht: ${this.seasons.forecast()}`);
+  }
+  talkNpc(it) {
+    const S = this.S, ui = this.ui;
+    if (it.u.npc !== 'henning') return ui.toast(it.label);
+    if (!S.flags.henning) {
+      S.flags.henning = 1; this.addAll({ patronen_gewehr: 1, medizin: 1 }); this.audio.sfx('quest');
+      return ui.read('Henning, der Förster', '„Mensch, ein Mensch! Ich sitz hier oben fest, seit mir der Steinschlag die Straße zugemacht hat – das Bein ist verstaucht, und das Funkgerät der Hütte ist hin. Du bist mit dem Auto über den Pass? Respekt.<br>Hier, nimm die Patronen und die Tabletten – ich hab genug. Und hör zu: Im alten <b>Stollen „Glück auf“</b> drüben am Osthang liegen hinter dem Geröll noch Bergkristalle. Mit Sprengpulver und einer Zündschnur kriegst du das frei. Die Kiste mit dem Pulver steht vorm Eingang.<br>Grüß mir Kurt – und Bello, falls du ihn findest!“');
+    }
+    const tips = ['„Auf den Gipfel geht’s hinter der Hütte rauf. Das Gipfelbuch trägt dir alle Wege ein.“', '„Im Bergsee beißen Saiblinge. Angel hast du?“', '„Hier oben wird’s nachts bitterkalt. Bleib nicht draußen, sonst holst du dir was weg.“',
+      '„Gämsen sind schnell – mit dem Gewehr musst du gut zielen.“', '„Die Bären kommen im Herbst bis an die Hütte. Feuer hilft.“'];
+    this.npcTip = ((this.npcTip ?? -1) + 1) % tips.length; return ui.toast(`🧔 Henning: ${tips[this.npcTip]}`);
+  }
+  // ---------------------------------------------------------------- two maps: travel over the pass, region borders, deep water
+  travel(to) {
+    if (this.traveling) return; const V = this.vehicle, S = this.S; this.traveling = true; this.ui.fade?.(); this.audio.sfx('car');
+    setTimeout(() => {
+      const sp = this.W.spots[to === 'berg' ? 'berg_start' : 'pass_tal'];
+      if (sp) { V.pos.copy(sp.pos); V.pos.y = this.W.groundY(V.pos.x, V.pos.z, V.pos.y + 3) + .02; }
+      const dy = V.yaw; V.yaw = to === 'berg' ? 0 : Math.PI; V.v = 5; V.pitch = V.roll = 0; V.camPos = null; this.P.yaw += V.yaw - dy; V.enterYaw += V.yaw - dy; V.pose();
+      S.time += .5; if (S.time >= 24) { S.time -= 24; S.day++; } S.abs = (S.day - 1) * 24 + S.time; S.car.fuel = Math.max(1, S.car.fuel - 8);
+      this.life.clear(); if (this.life.car) { this.scene.remove(this.life.car.mesh); this.life.car = null; }
+      if (to === 'berg' && !S.flags.berg) { S.flags.berg = 1; this.progress.add(80, 'Über den Pass'); }
+      this.ui.toast(to === 'berg' ? '⛰️ Eine halbe Stunde Serpentinen später: das Hochtal am Steinberg. Hier oben ist es kälter.' : '🌲 Zurück im Nordwald – vor dir liegt das Dorf Tannbach.', 'good');
+      this.traveling = false; this.save();
+    }, 1200);
+  }
+  borders() {
+    const P = this.P, V = this.vehicle, reg = this.region();
+    if (V.driving) {                                 // over the pass and back
+      const vb = -V.pos.z;
+      if (reg === 'tal' && vb > PASS.y + 3 && Math.abs(V.pos.x - PASS.x) < 9) return this.travel('berg');
+      if (reg === 'berg' && vb < BERG_IN) return this.travel('tal');
+      return;
+    }
+    if (this.boat.on) return;
+    const R = REGIONS[reg], bx = P.pos.x, by = -P.pos.z; let nx = Math.max(R.x0 + 1.5, Math.min(R.x1 - 1.5, bx)), ny = Math.max(R.y0 + 1.5, Math.min(R.y1 - 1.5, by)), why = '';
+    if (reg === 'tal' && ny > PASS.y + 3 && Math.abs(bx - PASS.x) < 12) { ny = PASS.y + 3; why = 'Zu Fuß ist der Pass zu weit – 12 km bergauf. Nimm das Auto.'; }
+    if (reg === 'berg' && ny < BERG_IN + 1) { ny = BERG_IN + 1; why = 'Zu Fuß ist es zu weit ins Tal – fahr mit dem Auto zurück.'; }
+    if (nx !== bx || ny !== by) { P.pos.x = nx; P.pos.z = -ny; P.vel.x = P.vel.z = 0; P.sync(); if (why && this.edgeT <= 0) { this.edgeT = 5; this.ui.toast(why, 'warn'); } }
+  }
+  waterGuard() {
+    const P = this.P; if (this.boat.on || this.vehicle.driving) { this.safePos = null; return; }
+    const bx = P.pos.x, by = -P.pos.z;
+    for (const L of LAKES) if (Math.hypot(bx - L.x, by - L.y) < L.r && P.pos.y < L.z - 1.1) {
+      if (this.safePos) { P.pos.copy(this.safePos); P.vel.set(0, 0, 0); P.sync(); }
+      if (this.waterT <= 0) { this.waterT = 5; this.ui.toast(L.name === 'See' ? 'Zu tief zum Waten. Am Steg liegt ein Ruderboot.' : 'Zu tief – hier geht es nicht weiter.', 'warn'); }
+      return;
+    }
+    if (P.onGround) (this.safePos ||= new THREE.Vector3()).copy(P.pos);
+  }
   takeBrenn(n) { const a = Math.min(n, this.count('ast')); this.take('ast', a); this.take('holz', n - a); }
   fireAction(f) {
     const ui = this.ui;
     if (!f.on) { if (this.brenn() && this.has('feuerzeug')) { this.takeBrenn(1); f.on = true; f.fuel = 3; this.audio.sfx('fire'); return ui.toast('🔥 Wieder angezündet.'); } return; }
     const c = this.cookable();
-    if (c) { const [from, to, , msg] = c; for (const [k, n] of Object.entries(from)) this.take(k, n); this.add(to, 1, true); this.audio.sfx('fire'); return ui.toast(msg); }
+    if (c) { const [from, to, , msg] = c; for (const [k, n] of Object.entries(from)) { this.take(k, n); const back = ITEMS[k].after; if (back && k !== Object.keys(from)[0] && to !== 'topf_abgekocht') this.add(back, 1, true); }
+      this.add(to, 1, true); this.audio.sfx('fire'); this.progress.stat('cooked'); return ui.toast(msg); }
     if (this.brenn()) { this.takeBrenn(1); f.fuel += this.has('holz') ? 3 : 2; this.audio.sfx('fire'); return ui.toast('Holz nachgelegt.'); }
   }
   // what can be cooked at a fire right now: [needs, gives, verb, message]
@@ -396,6 +520,8 @@ export class Game {
     const water = ['topf_klar', 'topf_abgekocht', 'wasser'].find(k => this.has(k));
     const L = [[{ dosensuppe: 1 }, 'suppe_warm', 'Suppe am Feuer erwärmen', '🍲 Heiße Suppe!'], [{ topf_wasser: 1 }, 'topf_abgekocht', 'Wasser abkochen', 'Wasser abgekocht – jetzt sicher trinkbar.'],
       [{ fleisch: 1 }, 'fleisch_gebraten', 'Fleisch braten', '🍖 Fleisch gebraten.'], [{ steinpilz: 1 }, 'pilz_gebraten', 'Pilze braten', '🍳 Pilze gebraten.'],
+      [{ fisch: 1 }, 'fisch_gebraten', 'Fisch braten', '🍣 Fisch gebraten.'], [{ kaninchen: 1 }, 'kaninchen_gebraten', 'Kaninchen braten', '🍗 Kaninchenbraten!'],
+      water && [{ kraeuter: 1, [water]: 1 }, 'tee', 'Kräutertee kochen', '🍵 Kräutertee – hilft gegen Erkältung.'],
       [{ kartoffel: 1 }, 'ofenkartoffel', 'Kartoffel in die Glut legen', '🥔 Ofenkartoffel!'], [{ kuerbis: 1, topf: 1 }, 'kuerbissuppe', 'Kürbissuppe kochen', '🍲 Kürbissuppe!'],
       water && [{ mehl: 1, [water]: 1 }, 'fladenbrot', 'Fladenbrot backen', '🫓 Fladenbrot gebacken.']].filter(Boolean);
     return L.find(([need]) => Object.entries(need).every(([k, n]) => this.count(k) >= n));
@@ -464,8 +590,14 @@ export class Game {
       { id: 'hof', name: 'Bauernhof mit Scheune', pos: B(-38, 158, 0), r: 12, icon: '🌾' }, { id: 'turm', name: 'Aussichtsturm Hirschkopf', pos: sp.ziel_turm?.pos, r: 12, icon: '🗼', flat: 1 },
       { id: 'ruine', name: 'Burgruine Falkenstein', pos: sp.ziel_ruine?.pos, r: 14, icon: '🏰' }, { id: 'steinbruch', name: 'Alter Steinbruch', pos: sp.ziel_steinbruch?.pos, r: 18, icon: '⛏️' },
       { id: 'muehle', name: 'Alte Mühle', pos: sp.ziel_muehle?.pos, r: 10, icon: '⚙️' },
-      { id: 'see', name: 'Waldsee', pos: sp.ziel_see?.pos, r: 18, icon: '🎣', flat: 1 }, { id: 'werkstatt', name: 'Werkstatt „KFZ Brandt“', pos: B(-52.8, 167.5, 0), r: 7, icon: '🔧' },
-    ].map(p => { if (p.flat && p.pos) p.test = q => Math.hypot(q.x - p.pos.x, q.z - p.pos.z) < p.r; return p; });
+      { id: 'see', name: 'Waldsee', pos: sp.ziel_see?.pos, r: 20, icon: '🎣', flat: 1 }, { id: 'werkstatt', name: 'Werkstatt „KFZ Brandt“', pos: B(-52.8, 167.5, 0), r: 7, icon: '🔧' },
+      { id: 'insel', name: 'Insel im Waldsee', pos: sp.ziel_insel?.pos, r: 4.5, icon: '🏝️', flat: 1 }, { id: 'forsthaus', name: 'Forsthaus Eichengrund', pos: sp.ziel_forsthaus?.pos, r: 11, icon: '🏠', flat: 1 },
+      { id: 'funkturm', name: 'Funkstation Nordwald', pos: sp.ziel_funkturm?.pos, r: 12, icon: '📡', flat: 1 }, { id: 'pass', name: 'Pass-Schranke', pos: B(PASS.x, PASS.y, 0), r: 9, icon: '🚧', flat: 1 },
+      // the mountains (second map)
+      { id: 'steinberg', name: 'Hochtal Steinberg', pos: sp.berg_start?.pos, r: 22, icon: '⛰️', flat: 1 }, { id: 'berghuette', name: 'Steinberghütte', pos: sp.ziel_berghuette?.pos, r: 14, icon: '🛖', flat: 1 },
+      { id: 'bergwerk', name: 'Stollen „Glück auf“', pos: sp.ziel_bergwerk?.pos, r: 12, icon: '⛏️', flat: 1 }, { id: 'gipfel', name: 'Gipfel des Steinbergs', pos: sp.ziel_gipfel?.pos, r: 7, icon: '⛳', flat: 1 },
+      { id: 'bergsee', name: 'Bergsee', pos: sp.ziel_bergsee?.pos, r: 15, icon: '💧', flat: 1 }, { id: 'heustadel', name: 'Heustadel auf der Alm', pos: sp.ziel_heustadel?.pos, r: 9, icon: '🌾', flat: 1 },
+    ].map(p => { if (p.flat && p.pos) p.test = q => Math.hypot(q.x - p.pos.x, q.z - p.pos.z) < p.r; p.region = p.pos ? regionOf(-p.pos.z) : 'tal'; return p; });
   }
   win() {
     this.S.flags.won = 1; this.audio.sfx('win'); this.life.clear();
@@ -482,6 +614,9 @@ export class Game {
   update(dt, keys) {
     const S = this.S, st = S.stats, P = this.P;
     if (S.flags.dead || S.flags.won) return;
+    this.waterT -= dt; this.edgeT -= dt; this.waterGuard(); this.borders();
+    if (!this.vehicle.driving && !this.boat.on && P.onGround) { const m = this._lastP ? Math.hypot(P.pos.x - this._lastP.x, P.pos.z - this._lastP.z) : 0; if (m < 2) this.walkAcc = (this.walkAcc || 0) + m; }
+    (this._lastP ||= new THREE.Vector3()).copy(P.pos);
     // time (1 real second = 1 game minute; Z = wait faster where it is safe and warm)
     const wolfNear = this.life.animals.some(a => ['wolf', 'boar', 'bear'].includes(a.kind) && a.state !== 'dead' && a.pos.distanceTo(P.pos) < 45);
     const roof = this.build.shelter(P.pos), bed = this.build.near('bett', P.pos, 2.5), indoor = this.indoor(P.pos);
@@ -502,9 +637,12 @@ export class Game {
     if (S.genFuel > 0) { S.genFuel -= dt * scale / 60; if (S.genFuel <= 0) { S.genFuel = 0; this.ui.toast('⚠️ Das Aggregat stottert und geht aus. Tank leer!', 'warn'); } }
     // survival
     const drain = waiting ? scale * .35 : 1, inside = !!indoor, shop = indoor === 'shop';
-    st.hunger = clamp(st.hunger - dt * drain * .075 * (P.sprint ? 1.8 : 1));
-    st.thirst = clamp(st.thirst - dt * drain * .1 * (P.sprint ? 2 : 1));
-    let env = shop ? (this.strom() ? .35 : -.02 - .04 * dark) : inside ? -.02 - .03 * dark : -.03 - .2 * dark - .15 * rain + this.seasons.warmth(dark);
+    this.health.update(dt, dt * scale / 60);
+    st.hunger = clamp(st.hunger - dt * drain * .075 * (P.sprint ? 1.8 : 1) * this.health.foodK);
+    st.thirst = clamp(st.thirst - dt * drain * .1 * (P.sprint ? 2 : 1) * this.health.foodK);
+    const berg = this.region() === 'berg' ? -.04 - Math.max(0, P.pos.y - 20) * .002 : 0;
+    let env = shop ? (this.strom() ? .35 : -.02 - .04 * dark) : inside ? -.02 - .03 * dark : -.03 - .2 * dark - .15 * rain + this.seasons.warmth(dark) + berg;
+    if (env < 0) env *= this.health.coldLossK;
     if (inside && this.build.near('teppich', P.pos, 4)) env += .015;
     if (this.onHochsitz) env *= .6;
     for (const f of this.life.fires) if (f.on) { const d = f.pos.distanceTo(P.pos); if (d < 4.5) env = Math.max(env, 1.2 * (1 - d / 4.5) + .2); }
@@ -514,11 +652,11 @@ export class Game {
     if (env < 0 && waiting && this.has('schlafsack')) env *= .3;
     st.warmth = clamp(st.warmth + env * dt * (waiting ? scale * .35 : 1));
     if (this.boostT > 0) this.boostT -= dt;
-    st.stamina = clamp(st.stamina + (P.sprint ? -15 * (this.boostT > 0 ? .4 : 1) : 11) * dt);
-    let hp = 0; if (st.hunger <= 0) hp -= .3; if (st.thirst <= 0) hp -= .4; if (st.warmth <= 0) hp -= .5;
+    st.stamina = clamp(st.stamina + (P.sprint ? -15 * (this.boostT > 0 ? .4 : 1) * (2 - this.health.staminaK) : 11 * this.health.staminaK) * dt);
+    let hp = -this.health.hpDrain(); if (st.hunger <= 0) hp -= .3; if (st.thirst <= 0) hp -= .4; if (st.warmth <= 0) hp -= .5;
     if (st.hunger > 40 && st.thirst > 40 && st.warmth > 35) hp += .12 * (waiting && this.bed ? 6 : 1);
     st.health = clamp(st.health + hp * dt * drain);
-    if (hp < 0 && st.health < 100) this.lastCause = st.warmth <= 0 ? 'Kälte' : st.thirst <= 0 ? 'Durst' : 'Hunger';
+    if (hp < 0 && st.health < 100) this.lastCause = st.warmth <= 0 ? 'Kälte' : st.thirst <= 0 ? 'Durst' : st.hunger <= 0 ? 'Hunger' : this.health.ill.erk > 60 ? 'Fieber' : 'Magen';
     this.slow = (st.warmth < 15 ? .85 : 1) * (st.health < 25 ? .85 : 1);
     if (st.health <= 0) return this.die();
     // flashlight / torch
@@ -548,7 +686,7 @@ export class Game {
     if (q && q.done()) { S.quest++; this.audio.sfx('quest'); this.progress.add(50, q.t); q.onDone?.(); this.save(); }
     for (const pl of this.places) if (!S.found[pl.id] && (pl.test ? pl.test(P.pos) : pl.pos && pl.pos.distanceTo(P.pos) < pl.r)) {
       S.found[pl.id] = 1; this.progress.add(40, pl.name); this.ui.toast(`📍 Entdeckt: ${pl.name} (${Object.keys(S.found).length}/${this.places.length})`, 'good'); }
-    this.secT -= dt; if (this.secT < 0) { this.secT = 1; this.progress.update(); }
+    this.secT -= dt; if (this.secT < 0) { this.secT = 1; if (this.walkAcc) { this.progress.stat('walk', this.walkAcc); this.walkAcc = 0; } this.progress.update(); }
     for (const r of this.drops) r.g.children[1].position.y = .42 + .04 * Math.sin(performance.now() / 400 + r.p[0]);
     // tips
     this.tipT -= dt;
@@ -562,7 +700,8 @@ export class Game {
   }
   updateLights(dt, dark) {
     const S = this.S, on = this.strom(), blink = Math.floor(performance.now() / 500) % 2 === 0;
-    const grp = { innen: on && !S.flags.lightsOff, aussen: on && dark > .3, dach: on && dark > .3, strom: on, display: on, blinker: blink && S.day < 2 };
+    const grp = { innen: on && !S.flags.lightsOff, aussen: on && dark > .3, dach: on && dark > .3, strom: on, display: on, blinker: blink && S.day < 2, funk: dark > .3 && blink, kristall: true };
+    for (const m of this.funkMats) { m.emissive.set(S.flags.funkPower ? '#4aff9a' : '#000000'); m.emissiveIntensity = S.flags.funkPower ? .9 : 0; }
     for (const [g, mats] of Object.entries(this.W.glow)) for (const m of mats) {
       const lit = grp[g] ?? true;
       if (g === 'display') { m.emissive.set(lit ? '#7dffb0' : '#000000'); m.emissiveIntensity = lit ? 1.2 : 0; }
@@ -596,7 +735,7 @@ export class Game {
   }
   die() {
     this.S.flags.dead = 1; this.audio.sfx('hurt'); document.exitPointerLock?.();
-    const cause = { Bär: 'Der Bär war stärker.', Wildschwein: 'Das Wildschwein hat dich erwischt.', Wolf: 'Die Wölfe waren schneller.', Kälte: 'Du bist erfroren.', Durst: 'Du bist verdurstet.', Hunger: 'Du bist verhungert.', Sturz: 'Ein böser Sturz.', Bachwasser: 'Das Bachwasser war keine gute Idee.', Unfall: 'Ein schwerer Unfall.' }[this.lastCause] || 'Die Nacht war zu lang.';
+    const cause = { Bär: 'Der Bär war stärker.', Wildschwein: 'Das Wildschwein hat dich erwischt.', Wolf: 'Die Wölfe waren schneller.', Kälte: 'Du bist erfroren.', Durst: 'Du bist verdurstet.', Hunger: 'Du bist verhungert.', Sturz: 'Ein böser Sturz.', Bachwasser: 'Das Bachwasser war keine gute Idee.', Unfall: 'Ein schwerer Unfall.', Fieber: 'Das Fieber war zu stark.', Magen: 'Dein Magen hat nicht mitgemacht.', Sprengung: 'Zu nah an der Sprengung.' }[this.lastCause] || 'Die Nacht war zu lang.';
     document.getElementById('deadcause').textContent = cause; this.ui.show('dead', true);
   }
 
@@ -605,6 +744,7 @@ export class Game {
     const its = {};
     for (const it of this.W.interactives) if (!it.built && (it.target || Object.keys(it.state).length)) its[it.name] = { t: it.target, s: it.state };
     this.S.questId = this.quests[this.S.quest]?.t || '';
+    if (this.boat.ok) this.S.boat = this.boat.save();
     return { v: SAVE_VERSION, at: Date.now(), S: this.S, its, build: this.build.save(), car: this.vehicle.ok ? this.vehicle.save() : null,
       fires: this.life.fires.filter(f => f.on && !f.owned).map(f => ({ p: f.pos.toArray(), fuel: f.fuel })), pos: this.P.pos.toArray(), yaw: this.P.yaw, torch: this.torchOn ? this.torchT : 0 };
   }
@@ -626,17 +766,18 @@ export class Game {
     if (!d || !d.S) return false;
     // state: defaults first, then the saved values (keys a newer version added keep their defaults)
     const F = this.fresh();
-    this.S = Object.assign(F, d.S); for (const k of ['stats', 'flags', 'found', 'known', 'ammo', 'mag', 'felled', 'side', 'stat', 'notes', 'car', 'dog']) this.S[k] = Object.assign(this.fresh()[k], d.S[k] || {});
+    this.S = Object.assign(F, d.S); for (const k of ['stats', 'flags', 'found', 'known', 'ammo', 'mag', 'felled', 'side', 'stat', 'notes', 'car', 'dog', 'ill', 'badges']) this.S[k] = Object.assign(this.fresh()[k], d.S[k] || {});
     this.S.marks = Array.isArray(d.S.marks) ? d.S.marks : []; this.S.flags.dead = 0;
     this.S.inv = (d.S.inv || []).filter(x => ITEMS[x.id] && x.n > 0);           // items removed in a newer version
     if (!DIFF[this.S.diff]) this.S.diff = 'mittel';
     for (const it of this.W.interactives) {
       if (it.built) continue; const s = d.its?.[it.name]; if (!s) continue; it.state = s.s || {}; it.target = s.t || 0; it.open = it.target ? .999 : 0;
-      if (it.state.taken) it.node.visible = false; if (it.state.searched) this.emptySack(it);
+      if (it.state.taken || it.state.gone) it.node.visible = false; if (it.state.shown) it.node.visible = true; if (it.state.searched) this.emptySack(it); delete it.state.fuse;
     }
     for (const f of d.fires || []) this.life.addFire(new THREE.Vector3().fromArray(f.p), f.fuel);
     this.build.load(d.build);
     if (d.car) this.vehicle.load(d.car);
+    if (this.S.boat) this.boat.load(this.S.boat);
     for (const r of [...this.drops]) this.scene.remove(r.g); this.drops = []; for (const x of d.S.drops || []) this.addDrop(x);
     // quest by name (robust against inserted quest steps)
     this.quests = this.makeQuests(); const qi = this.quests.findIndex(q => q.t === d.S.questId); if (qi >= 0) this.S.quest = qi;

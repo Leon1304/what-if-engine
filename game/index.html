@@ -120,6 +120,10 @@
   .trow { display: grid; grid-template-columns: 28px 1fr auto auto auto; align-items: center; gap: 6px; padding: 3px 0; font-size: 13px; border-bottom: 1px solid rgba(255,255,255,.06); }
   .trow i { font-style: normal; font-size: 18px; } .trow em { font-style: normal; color: var(--acc); font-weight: 700; } .trow button { padding: 3px 9px; font-size: 12px; margin: 0; }
   @media (max-width: 700px) { .tradecols { grid-template-columns: 1fr; } #compass { top: 54px; } }
+  #codepanel { width: min(330px, 92vw); text-align: center; } .codedisp { font: 700 34px ui-monospace, Menlo, monospace; letter-spacing: .1em; background: #10180f; color: #6dff9a; border-radius: 8px; padding: 10px; margin: 6px 0 12px; }
+  .keypad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; } .keypad button { margin: 0; padding: 14px 0; font-size: 20px; }
+  .book .badges { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 6px; } .book .badge { background: #fffaf0; border-radius: 6px; padding: 6px 8px; font-size: 13px; opacity: .45; }
+  .book .badge.on { opacity: 1; box-shadow: inset 0 0 0 2px #b08a4a; } .book .badge b { display: block; font-size: 14px; } .book .badge i { font-style: normal; font-size: 22px; float: left; margin-right: 6px; }
   #found { list-style: none; padding: 0; columns: 2; color: var(--mut); } #found li.on { color: var(--fg); }
   @media (max-width: 700px) { #bars { width: 160px; } #quest { max-width: 60vw; font-size: 13px; } .slot { width: 44px; height: 44px; } }
 </style>
@@ -161,14 +165,14 @@
     <b>E</b><span>benutzen, öffnen, aufheben</span><b>F</b><span>Taschenlampe</span><b>Tab / C</b><span>Rucksack &amp; Herstellen</span>
     <b>1–5 · Mausrad · Q</b><span>Schnellleiste wählen · essen/trinken/benutzen</span><b>M</b><span>Karte (wenn du eine hast)</span>
     <b>Z (halten)</b><span>Zeit vergehen lassen – drinnen mit Strom, am Feuer, im Unterstand, am Bett oder mit Schlafsack</span>
-    <b>Linksklick · R · rechte Maustaste</b><span>Waffe: schießen · nachladen · zielen — ohne Waffe: Taschenlampe an · aus (Fernglas)</span><b>G · X</b><span>Baumenü · Gebautes abbauen</span><b>N</b><span>Wegmarker setzen</span>
+    <b>Linksklick · R · rechte Maustaste</b><span>Waffe: schießen · nachladen · zielen — ohne Waffe: Taschenlampe an · aus (Fernglas)</span><b>G · X</b><span>Baumenü · Gebautes abbauen</span><b>N · H</b><span>Wegmarker setzen · Bello: „Such!“</span>
     <b>B</b><span>Handbuch: alle Tasten, Rezepte, Tipps</span><b>Esc</b><span>Pause, Speichern, Schwierigkeit</span>
   </div>
 </div></div>
 
 <div class="ov" id="pause"><div class="card">
   <h2>Pause</h2>
-  <button id="btn-resume">Weiter</button><button id="btn-book" class="sec">📖 Handbuch (B)</button><button id="btn-restart" class="sec">Neu beginnen</button>
+  <button id="btn-resume">Weiter</button><button id="btn-book" class="sec">📖 Handbuch (B)</button><button id="btn-badges" class="sec">🏅 Erfolge &amp; Statistik</button><button id="btn-restart" class="sec">Neu beginnen</button>
   <h2>Spielstand</h2><div id="slots"></div>
   <button class="sec" id="btn-export">⬇️ Spielstand als Datei sichern</button><button class="sec" id="btn-import">⬆️ Datei laden</button><input type="file" id="importfile" accept=".json,application/json" hidden>
   <h2>Schwierigkeit</h2><div class="diff"><button class="sec" data-diff="aus">Keine Feinde</button><button class="sec" data-diff="leicht">Leicht</button><button class="sec" data-diff="mittel">Mittel</button><button class="sec" data-diff="schwer">Schwer</button></div>
@@ -190,6 +194,7 @@
 <div class="panel" id="mappanel"><canvas id="mapcanvas" width="440" height="680"></canvas><p class="hint">Klick = Wegmarker setzen / löschen · M / Esc schließen</p></div>
 <div class="panel" id="buildpanel"></div>
 <div class="panel" id="tradepanel"></div>
+<div class="panel" id="codepanel"></div>
 
 <script type="module" src="js/main.js"></script>
 </body>

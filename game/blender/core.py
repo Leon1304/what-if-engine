@@ -183,14 +183,40 @@ QUARRY = (28.0, 178.0)           # old quarry (pit) – stones for building
 MILL = (64.0, 140.0)             # water mill on the west bank of the creek
 LAKE = (-86.0, 18.0)             # forest lake west of the road (fishing, jetty, angler's hut)
 LAKE_Z = -.55                    # its water level
+LAKE_R = 16.0                    # flat bottom radius of the lake bowl (shore ~19.6 m from the centre, deeper than 1.1 m inside ~17.3 m)
+ANGLER = (LAKE[0] + 24.0, LAKE[1] + 5.0)    # angler's hut on the east bank
+ISLAND = (LAKE[0] - 4.0, LAKE[1] - 1.0)   # small island in the lake (buried treasure) – only reachable with the rowing boat
+FORSTHAUS = (-88.0, 128.0)       # forester's house „Eichengrund“ (locked, key at the deer feeder; gun cabinet with a code)
+FUNKTURM = (-78.0, -78.0)        # radio mast on a hill in the south-west (hut with a keypad, generator, transmitter)
+PASS_Y = 222.0                   # barrier across the road at the north end – the pass road to the mountains (second map)
+# ---------------- second map: the mountains „Steinberg“ – its own region far north (y 900 … 1160), the car takes you there over the pass
+BERG_X0, BERG_X1, BERG_Y0, BERG_Y1 = -120.0, 120.0, 900.0, 1160.0
+BERG_ROAD = [(0.0, 896.0), (0.0, 935.0), (-22.0, 958.0), (-46.0, 974.0), (-40.0, 991.0), (-4.0, 1006.0), (32.0, 1023.0), (40.0, 1041.0),
+             (16.0, 1059.0), (-10.0, 1074.0), (-24.0, 1089.0)]
+def _chaikin(pts, it=3):
+    for _ in range(it):
+        q = [pts[0]]
+        for (ax, ay), (bx, by) in zip(pts, pts[1:]): q += [(.75 * ax + .25 * bx, .75 * ay + .25 * by), (.25 * ax + .75 * bx, .25 * ay + .75 * by)]
+        q.append(pts[-1]); pts = q
+    return pts
+BERG_ROAD_S = _chaikin(BERG_ROAD)     # smoothed centre line (game/js/regions.js does the same)
+BERGHUETTE = (-24.0, 1101.0)     # mountain hut „Steinberghütte“ (forester Henning waits there)
+BERGWERK = (74.0, 1010.0)        # portal of the old mine „Glück auf“ (tunnel runs east into the slope, rubble to blast)
+STOLLEN = (74.5, 93.0, 1010.0, 2.3)   # tunnel: x from … to, centre y, half width
+GIPFEL = (52.0, 1138.0)          # summit with the cross
+BERGSEE = (-70.0, 1030.0)        # small mountain lake (fishing)
+HEUSTADEL = (34.0, 962.0)        # hay barn on the alpine meadow
+SACKS_BERG = [(32.6, 961.0, [['kraeuter', 2], ['dosenbohnen', 1], ['patronen_schrot', 1]]), (-48.0, 1062.0, [['medizin', 1], ['energy', 1]]),
+              (52.0, 1052.0, [['schwarzpulver', 1], ['metall', 2]]), (-38.0, 946.0, [['patronen_gewehr', 1], ['wasser', 1]]),
+              (-6.0, 1118.0, [['verband', 1], ['schokolade', 1]]), (20.0, 990.0, [['seil', 1], ['dosensuppe', 1], ['kraeuter', 1]])]
 # jute sacks with loot, spread over the map (x, y, loot); s06 keeps trees away from them, s10 builds them
 SACKS = [
-    (24.0, -62.0, [['stein', 2], ['wasser', 1], ['patronen_pistole', 1]]), (-30.0, -72.0, [['saat_kartoffel', 1], ['kekse', 1]]), (-38.0, -26.0, [['batterien', 1], ['ast', 2]]),
+    (24.0, -62.0, [['stein', 2], ['wasser', 1], ['patronen_pistole', 1]]), (-30.0, -72.0, [['saat_kartoffel', 1], ['kekse', 1]]), (-38.0, -26.0, [['batterien', 1], ['ast', 2], ['medizin', 1]]),
     (58.5, -33.0, [['holz', 2], ['dosensuppe', 1], ['patronen_schrot', 1]]), (82.0, 18.0, [['topf', 1], ['stein', 2]]), (57.0, 60.0, [['schokolade', 1], ['saat_karotte', 1], ['patronen_gewehr', 1]]),
-    (-26.0, 42.0, [['verband', 1], ['wasser', 1]]), (12.0, 86.0, [['stein', 3], ['brett', 2], ['metall', 2]]), (-74.0, 78.0, [['goldmuenze', 1], ['cola', 1], ['patronen_pistole', 1]]),
+    (-26.0, 42.0, [['verband', 1], ['wasser', 1], ['kraeuter', 2]]), (12.0, 86.0, [['stein', 3], ['brett', 2], ['metall', 2]]), (-74.0, 78.0, [['goldmuenze', 1], ['cola', 1], ['patronen_pistole', 1]]),
     (20.5, 175.0, [['stein', 3], ['hammer', 1], ['schwarzpulver', 1]]), (-12.0, 205.0, [['saat_kuerbis', 1], ['sandwich', 1], ['solarlampe', 1]]), (-96.0, 150.0, [['brett', 3], ['lappen', 1], ['patronen_schrot', 1]]),
-    (92.0, 188.0, [['dosenbohnen', 1], ['energy', 1], ['patronen_gewehr', 1]]), (88.0, -92.0, [['batterie_9v_leer', 1], ['chips', 1], ['metall', 1]]), (-92.0, -92.0, [['kerze', 2], ['fladenbrot', 1]]),
-    (-52.0, 112.0, [['wasser', 1], ['saat_kartoffel', 1], ['patronen_pistole', 1]]), (95.0, 100.0, [['stamm', 1], ['seil', 1], ['schwarzpulver', 1]]), (-100.0, 20.0, [['seil', 1], ['mehl', 1]]),
+    (92.0, 188.0, [['dosenbohnen', 1], ['energy', 1], ['patronen_gewehr', 1]]), (88.0, -92.0, [['batterie_9v_leer', 1], ['chips', 1], ['metall', 1]]), (-92.0, -92.0, [['kerze', 2], ['fladenbrot', 1], ['medizin', 1]]),
+    (-52.0, 112.0, [['wasser', 1], ['saat_kartoffel', 1], ['patronen_pistole', 1]]), (95.0, 100.0, [['stamm', 1], ['seil', 1], ['schwarzpulver', 1]]), (-100.0, 44.0, [['seil', 1], ['mehl', 1], ['kraeuter', 1]]),
     (-62.0, 30.0, [['angel', 1], ['wasser', 1]]), (40.0, 100.0, [['patronen_schrot', 1], ['goldmuenze', 1]]), (-100.0, 200.0, [['bewegungsmelder', 1], ['verband', 1]]),
     (70.0, 210.0, [['patronen_gewehr', 1], ['metall', 2]]), (-20.0, -100.0, [['solarlampe', 1], ['seil', 1]]), (100.0, 40.0, [['schwarzpulver', 1], ['patronen_pistole', 1]]),
 ]
@@ -223,11 +249,17 @@ def terrain_h(x, y):
     # village: flat ground (houses, square, farm); hills under tower and ruin; quarry pit; flat bank at the mill
     vx = max(0.0, abs(x - VILLAGE[0]) - 34); vy = max(0.0, abs(y - VILLAGE[1]) - 30); wv = max(0.0, min(1.0, 1 - math.hypot(vx, vy) / 14))
     if wv > 0: h *= 1 - wv                                                       # flat like the station plot (road surface .1 above)
-    for c_, r_, R_, H_ in ((TOWER, 6.0, 30.0, 7.0), (RUIN, 12.0, 34.0, 8.5)):       # hills with a flat top
+    for c_, r_, R_, H_ in ((TOWER, 6.0, 30.0, 7.0), (RUIN, 12.0, 34.0, 8.5), (FUNKTURM, 6.0, 24.0, 6.0)):       # hills with a flat top
         dd = math.hypot(x - c_[0], y - c_[1])
         if dd < R_: t_ = 1 - max(0.0, dd - r_) / (R_ - r_); h += H_ * t_ * t_ * (3 - 2 * t_); h -= n * k * (1 if dd < r_ else 0) * .9
-    wl = _pad(x, y, LAKE, 12, 7)                                                               # forest lake: bowl down to −2.3
+    if math.hypot(x - LAKE[0], y - LAKE[1]) < LAKE_R + 8: h = max(h, LAKE_Z + .35)             # forest lake: shore never below the water …
+    wl = _pad(x, y, LAKE, LAKE_R, 6)                                                           # … bowl down to −2.3
     if wl > 0: h = h * (1 - wl) + (-2.3) * wl
+    wi = _pad(x, y, ISLAND, 2.5, 4.5)                                                          # island: flat top .45 m above the water
+    if wi > 0: h = h * (1 - wi) + (LAKE_Z + 1.0) * wi
+    wf = _pad(x, y, FORSTHAUS, 10, 7)                                                          # forester's plot: flat
+    if wf > 0: h = h * (1 - wf) + .55 * wf
+    if x < -103: h += min(14.0, ((-103 - x) / 7) ** 2 * 1.6)                                             # hills beyond the west edge (behind the lake)
     west = abs(abs(math.atan2(y - QUARRY[1], x - QUARRY[0])) - math.pi) < .3                       # ramp into the pit from the west
     wq = _pad(x, y, QUARRY, 13, 16 if west else 5); h -= 4.5 * wq
     wm = _pad(x, y, MILL, 7, 8); h = h * (1 - wm) + .9 * wm
@@ -257,8 +289,10 @@ def trail_pts():
     pts5 = [(TOWER[0] + 4.0, TOWER[1] + 2.0), (45.0, 130.0), (MILL[0] - 6.0, MILL[1] - 1.0)]                                  # tower → mill
     pts6 = [(road_x(176) + 6.0, 176.0), (-35.0, 178.0), (0.0, 177.0), (QUARRY[0] - 13.0, QUARRY[1])]                         # village → quarry
     pts7 = [(road_x(80) - 5.0, 80.0), (-40.0, 79.0), (-62.0, 76.0), (RUIN[0] + 8.0, RUIN[1] + 1.0)]                          # road → ruin
-    pts8 = [(road_x(16) - 5.0, 16.0), (-30.0, 18.0), (-50.0, 21.0), (LAKE[0] + 22.0, LAKE[1] + 3.0)]                       # road → lake
-    return [pts, pts2, pts3, pts4, pts5, pts6, pts7, pts8]
+    pts8 = [(road_x(16) - 5.0, 16.0), (-30.0, 18.0), (-50.0, 20.0), (LAKE[0] + 21.5, LAKE[1])]                              # road → lake (jetty)
+    pts9 = [(road_x(126) - 5.0, 126.0), (-66.0, 127.0), (FORSTHAUS[0] + 7.5, FORSTHAUS[1] - .5)]                             # road → forester's house
+    pts10 = [(CAMP[0] - 4.0, CAMP[1] - 6.0), (-56.0, -56.0), (-66.0, -68.0), (FUNKTURM[0] + 5.0, FUNKTURM[1] + 5.0)]          # caravan → radio mast
+    return [pts, pts2, pts3, pts4, pts5, pts6, pts7, pts8, pts9, pts10]
 
 def trail_dist(x, y):
     best = 1e9
@@ -268,6 +302,76 @@ def trail_dist(x, y):
             t = max(0.0, min(1.0, ((x - ax) * vx + (y - ay) * vy) / L2)) if L2 else 0
             best = min(best, math.hypot(x - ax - t * vx, y - ay - t * vy))
     return best
+
+# ---------------------------------------------------------------- mountains (second map): heights, pass road, footpath to the summit
+def _sstep(a, b, v):
+    t = max(0.0, min(1.0, (v - a) / (b - a))); return t * t * (3 - 2 * t)
+
+def berg_base(y):
+    """Valley floor: flat at the pass entrance, steep in the middle (serpentines), alpine plateau around the hut."""
+    return 34.0 * _sstep(BERG_Y0 + 30, BERG_Y0 + 205, y)
+
+def _near_poly(x, y, pts):
+    """(distance, x, y of the nearest point) on a polyline."""
+    best = (1e9, 0.0, 0.0)
+    for (ax, ay), (bx, by) in zip(pts, pts[1:]):
+        vx, vy = bx - ax, by - ay; L2 = vx * vx + vy * vy
+        t = max(0.0, min(1.0, ((x - ax) * vx + (y - ay) * vy) / L2)) if L2 else 0
+        px, py = ax + t * vx, ay + t * vy; d = math.hypot(x - px, y - py)
+        if d < best[0]: best = (d, px, py)
+    return best
+
+def berg_trail():
+    """Footpath: hut → switchbacks up to the summit cross; branch to the mine and to the mountain lake."""
+    hx, hy = BERGHUETTE
+    return [[(hx + 6.0, hy + 4.0), (hx + 22.0, hy + 10.0), (hx + 30.0, hy + 20.0), (hx + 46.0, hy + 22.0), (hx + 56.0, hy + 30.0), (GIPFEL[0] - 3.0, GIPFEL[1] - 3.0)],
+            [(BERG_ROAD[6][0] + 5.0, BERG_ROAD[6][1] - 2.0), (55.0, 1016.0), (BERGWERK[0] - 4.0, BERGWERK[1])],
+            [(BERG_ROAD[4][0] - 5.0, BERG_ROAD[4][1] + 2.0), (-55.0, 1004.0), (-62.0, 1018.0), (BERGSEE[0] + 9.0, BERGSEE[1] - 4.0)]]
+
+def berg_h(x, y, carve=True):
+    """Ground height in the mountain region: valley floor + noise, walls rising steeply to the east / west and a ridge in the north (natural
+    border), a gorge at the pass entrance, the road cut into the slope, a flat plateau at the hut, the lake bowl, the summit, the mine tunnel."""
+    b = berg_base(y)
+    n = noise.noise(Vector((x * .03, y * .03, 4.1))) * 3.0 + noise.noise(Vector((x * .11, y * .11, 2.3))) * .7
+    wx = max(0.0, abs(x) - 60); wall = (wx / 40) ** 1.5 * 55 * (1 + .25 * noise.noise(Vector((x * .05, y * .05, 7.7))))
+    ridge = (max(0.0, y - 1134) / 26) ** 1.4 * 40
+    gorge = max(0.0, (BERG_Y0 + 34 - y) / 34) * max(0.0, abs(x) - 11) * 1.1
+    h = b + n + wall + ridge + gorge
+    gx, gy = GIPFEL; dg = math.hypot(x - gx, y - gy); h += 26 * max(0.0, 1 - dg / 46) ** 1.5
+    dr, rx_, ry_ = _near_poly(x, y, BERG_ROAD_S)                                                # pass road: flat band, embankment
+    k = _sstep(4.0, 13.0, dr); hr = berg_base(ry_) + .05
+    h = hr * (1 - k) + h * k
+    wp = _pad(x, y, BERGHUETTE, 13, 9); h = h * (1 - wp) + (berg_base(BERGHUETTE[1]) + .1) * wp
+    if math.hypot(x - BERGSEE[0], y - BERGSEE[1]) < 14: h = max(h, BERGSEE_Z + .35)
+    wl = _pad(x, y, BERGSEE, 6, 5); h = h * (1 - wl) + (BERGSEE_Z - 1.9) * wl
+    for pts in berg_trail():                                                                     # footpaths: a little smoother
+        dt_, _, _ = _near_poly(x, y, pts)
+        if dt_ < 2.5: h -= n * .5 * (1 - dt_ / 2.5)
+    x0, x1, yc, hw = STOLLEN; wm = _pad(x, y, (x0 - 10, yc), 3, 4); h = h * (1 - wm) + STOLLEN_Z * wm     # flat apron before the portal
+    if carve and x0 - 8 < x < x1 + 1.5 and abs(y - yc) < hw + 1.2: h = min(h, STOLLEN_Z - .02)         # cutting + tunnel floor (s14 closes the tunnel above)
+    return h
+
+BERGSEE_Z = berg_base(BERGSEE[1]) - .3          # water level of the mountain lake
+STOLLEN_Z = 23.0                                  # floor of the mine tunnel (and its apron)
+
+def berg_trail_dist(x, y):
+    return min(_near_poly(x, y, pts)[0] for pts in berg_trail())
+
+def person(cx, cy, cz, rz, shirt, apron=None, beard='#d8d4cc', hat='#2f4a3a', trousers='#3a4a5c'):
+    """Low-poly standing person (facing −x before rz), feet at cz: legs, boots, arms, body, head, beard, cap. Returns [(bmesh, material)]."""
+    P = []; skin = lp('Haut', '#e0b08a', .7)
+    for s_ in (-1, 1):
+        P += [(box(.15, .17, .82, at=(0, s_ * .11, .08), bevel_w=.03), lp('Hose_' + trousers[1:], trousers, .9)), (box(.28, .15, .1, at=(-.05, s_ * .11, 0), bevel_w=.03), lp('Stiefel', '#3a2a1c', .7))]
+        arm = box(.13, .13, .62, at=(0, 0, 0), bevel_w=.04); bmesh.ops.rotate(arm, cent=(0, 0, .62), matrix=Matrix.Rotation(-.9, 3, 'Y'), verts=arm.verts)
+        P += [(move(arm, (-.02, s_ * .29, .82)), shirt), (ico(.065, at=(-.44, s_ * .25, 1.05), sub=1), skin)]
+    P += [(box(.3, .48, .62, at=(0, 0, .86), bevel_w=.06, seg=2), shirt), (box(.12, .16, .1, at=(0, 0, 1.46)), skin),
+          (ico(.14, at=(0, 0, 1.64), sub=2, sz=1.15), skin), (ico(.13, at=(-.06, 0, 1.55), sub=1, sz=.8, jit=.15, seed=4), lp('Bart_' + beard[1:], beard, .9)),
+          (cyl(.15, .08, at=(0, 0, 1.74), seg=10), lp('Muetze_' + hat[1:], hat, .8)), (box(.14, .3, .03, at=(-.12, 0, 1.77)), lp('Muetze_' + hat[1:], hat, .8)),
+          (box(.02, .2, .04, at=(-.135, 0, 1.66)), lp('Kunststoff_schwarz', '#232426', .6))]
+    if apron: P.append((box(.04, .4, .7, at=(-.16, 0, .55)), apron))
+    out = []
+    for b_, m in P: rotz(b_, rz); move(b_, (cx, cy, cz)); out.append((b_, m))
+    return out
 
 def section(name, rebuild=True):
     """Build one section script (game/blender/<name>.py → build(c)) into its own collection; rebuild = remove the old one first."""

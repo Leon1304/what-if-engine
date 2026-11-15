@@ -1,4 +1,4 @@
-# Section 1 – ground (low poly): 220 × 340 m (y −110 … 230, village in the north) of faceted triangles (2 m grid, corners jittered so the facets look hand-made).
+# Section 1 – ground (low poly): 244 × 340 m (x −134 … 110: hills behind the lake in the west) (y −110 … 230, village in the north) of faceted triangles (2 m grid, corners jittered so the facets look hand-made).
 # Facet colour by area: grass verge along road and station, forest floor (brown, mossy patches) elsewhere, a ragged edge between.
 # Ditches beside the road, rolling hills further out. Heights come from terrain_h() in core.py (shared with every section).
 COLL = '01 Gelände'
@@ -12,19 +12,20 @@ def forest_w(x, y):
     vx = max(0.0, abs(x - VILLAGE[0]) - 36); vy = max(0.0, abs(y - VILLAGE[1]) - 32)       # village: meadows
     w = min(w, (math.hypot(vx, vy) - 2 + n) / 5)
     w = min(w, (math.hypot(x - MILL[0], y - MILL[1]) - 9 + n) / 4, (math.hypot(x - TOWER[0], y - TOWER[1]) - 8 + n) / 4)
-    w = min(w, (math.hypot(x - LAKE[0], y - LAKE[1]) - 17 + n) / 4)
+    w = min(w, (math.hypot(x - LAKE[0], y - LAKE[1]) - LAKE_R - 5 + n) / 4)
+    w = min(w, (math.hypot(x - FORSTHAUS[0], y - FORSTHAUS[1]) - 11 + n) / 4, (math.hypot(x - FUNKTURM[0], y - FUNKTURM[1]) - 9 + n) / 4)
     return min(1.0, max(0.0, w))
 
 def build(c):
     cols = [lp('Gras', '#6f9a3a', var=.07), lp('Gras_hell', '#8fb04a', var=.06), lp('Waldboden', '#6b5236', var=.08),
             lp('Moos', '#55702f', var=.07), lp('Laub', '#8a5a2c', var=.08), lp('Trampelpfad', '#8b6a45', var=.07), lp('Bachufer', '#6e6250', var=.08), lp('Steinbruch', '#9a948a', var=.1)]
-    step = 2.0; NX, NY = int((MAP_X1 - MAP_X0) / step), int((MAP_Y1 - MAP_Y0) / step)
+    step = 2.0; X0 = MAP_X0 - 24; NX, NY = int((MAP_X1 - X0) / step), int((MAP_Y1 - MAP_Y0) / step)     # 24 m more in the west: hills behind the lake
     r = random.Random(7)
     bm = bmesh.new(); vs = []
     for j in range(NY + 1):
         row = []
         for i in range(NX + 1):
-            x, y = MAP_X0 + i * step, MAP_Y0 + j * step
+            x, y = X0 + i * step, MAP_Y0 + j * step
             if 0 < i < NX and 0 < j < NY: x += r.uniform(-.45, .45) * step; y += r.uniform(-.45, .45) * step
             row.append(bm.verts.new((x, y, terrain_h(x, y))))
         vs.append(row)
@@ -36,7 +37,8 @@ def build(c):
                 w = forest_w(p.x, p.y) + r.uniform(-.25, .25)
                 if math.hypot(p.x - QUARRY[0], p.y - QUARRY[1]) < 17.5 + r.uniform(-1, 1): f.material_index = 7
                 elif abs(p.x - creek_x(p.y)) < 2.6 + r.uniform(-.4, .4): f.material_index = 6
-                elif math.hypot(p.x - LAKE[0], p.y - LAKE[1]) < 15.5 + r.uniform(-.8, .8): f.material_index = 6
+                elif math.hypot(p.x - ISLAND[0], p.y - ISLAND[1]) < 3.6 + r.uniform(-.5, .5): f.material_index = 3 if r.random() < .4 else 0
+                elif math.hypot(p.x - LAKE[0], p.y - LAKE[1]) < LAKE_R + 3.4 + r.uniform(-.8, .8): f.material_index = 6
                 elif trail_dist(p.x, p.y) < .9 + r.uniform(-.25, .25): f.material_index = 5
                 elif w < .5: f.material_index = 1 if noise.noise(Vector((p.x * .2, p.y * .2, 2.0))) > .25 else 0
                 else:

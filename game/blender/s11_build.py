@@ -176,6 +176,10 @@ def build(c):
        light=[0, 0, .52], label='Solarlampe')
     bp('baustrahler', [(beam((sx * .35, sy * .3, 0), (0, 0, 1.4), .025), lp('Strahler_gelb', '#e0b020', .5, .2)) for sx, sy in ((-1, -1), (1, -1), (0, 1))] +
        [(box(.36, .14, .28, at=(0, -.05, 1.38)), lp('Strahler_gelb', '#e0b020', .5, .2)), (box(.32, .02, .24, at=(0, -.13, 1.4)), lp('Lampenglas', '#e6e2c8', .3))], light=[0, -.4, 1.5], label='Baustrahler')
+    cbx = lp('Kuehlbox_blau', '#2f6fb0', .5, var=.03); cwh = lp('Kuehlbox_weiss', '#eef0ee', .4, var=.02)
+    bp('kuehlbox', [(box(.8, .5, .48, at=(0, 0, 0), bevel_w=.04), cbx), (box(.82, .52, .09, at=(0, 0, .48), bevel_w=.03), cwh), (box(.5, .06, .05, at=(0, 0, .6)), cwh),
+                    (box(.06, .1, .2, at=(-.43, 0, .3)), cwh), (box(.06, .1, .2, at=(.43, 0, .3)), cwh), (box(.22, .02, .1, at=(.2, -.26, .3)), lp('Display_Funk', '#1a2a22', .3)),
+                    (box(.04, .02, .04, at=(.05, -.26, .3)), lp('LED_gruen', '#3ad06a', .3, emit='#3ad06a', ei=2.0))], label='Kühlbox')
     bp('bewegungsmelder', [(cyl(.03, 1.2, at=(0, 0, 0), seg=6), plank_d), (box(.1, .1, .12, at=(0, -.05, 1.1), bevel_w=.02), lp('Weiss_glanz', '#f4f4f1', .3)),
                            (ico(.035, at=(0, -.11, 1.17), sub=1), lp('Sensor', '#3a3c40', .3)), (box(.02, .02, .02, at=(.03, -.11, 1.2)), lp('LED_rot', '#ff3a2a', .3, emit='#ff3a2a', ei=2))], label='Bewegungsmelder')
     bp('solarlader', [(beam((sx * .25, .2, 0), (sx * .25, 0, .7), .02), steel) for sx in (-1, 1)] + [(solid([(-.35, -.05, .55), (.35, -.05, .55), (.35, .25, .85), (-.35, .25, .85)], (0, 0, .03)), lp('Solarzelle', '#203a6a', .2, .4)),

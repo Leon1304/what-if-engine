@@ -34,12 +34,18 @@ export const ROUTES = [
   ['Aussichtsturm: Treppe bis oben', [[26.0, 118.5], [28.45, 118.5], [28.45, 120.45], [31.55, 120.45], [31.55, 123.55], [28.45, 123.55], [28.45, 120.45], [31.55, 120.45], [31.55, 123.55], [30.0, 123.6]], { rise: 7.8 }],
   ['Werkstatt „KFZ Brandt“: Tor → Hebebühne → Werkbank', [[-61.0, 167.25], [-56.0, 167.25], [-53.0, 167.25], [-51.0, 167.25], [-50.5, 169.6]]],
   ['Waldsee: Ufer → Steg → Ende', [[-64.0, 18.0], [-70.0, 18.0], [-74.0, 18.0], [-77.6, 18.0]]],
-  ['Anglerhütte: Tür → Pritsche', [[-70.0, 23.05], [-66.0, 23.05], [-65.0, 22.6], [-64.4, 23.2]]],
+  ['Anglerhütte: Tür → Pritsche', [[-67.0, 23.05], [-63.0, 23.05], [-62.0, 22.6], [-61.4, 23.2]]],
+  ['Forsthaus: Tür → Stube → Schreibtisch', [[-80.5, 128.25], [-82.5, 128.25], [-84.5, 128.25], [-86.5, 128.3], [-88.5, 128.6], [-90.2, 128.4]]],
+  ['Funkstation: Tür → Sender', [[-74.4, -74.5], [-74.4, -76.6], [-74.4, -78.3], [-73.6, -78.5]]],
+  ['Gebirge: Steinberghütte: Terrasse → Tür → Stube', [[-24.0, 1090.5], [-24.0, 1094.0], [-24.0, 1096.5], [-24.0, 1098.5], [-25.5, 1100.5]]],
+  ['Gebirge: Stollen → Kristallkammer (Geröll gesprengt)', [[64.0, 1010.9], [70.0, 1010.9], [76.0, 1010.9], [82.0, 1010.9], [88.0, 1010.9], [91.5, 1010.9]]],
+  ['Gebirge: Hütte → Pfad → Gipfelkreuz', [[-18.0, 1105.0], [-2.0, 1111.0], [6.0, 1121.0], [22.0, 1123.0], [32.0, 1131.0], [49.0, 1135.0]], { rise: 18 }],
   ['Wohnwagen: Stufen → Tür → vor das Bett', [[-48.6, -41.89], [-47.63, -41.63], [-46.81, -41.41], [-45.99, -41.19], [-46.05, -39.81], [-46.23, -39.13]]],
 ];
 const res = await page.evaluate(async routes => {
   const { game, player, W, B, THREE } = window.__game;
   for (const it of W.interactives) if (['door', 'slide'].includes(it.u.interact)) { it.target = 1; }
+  for (const it of W.interactives) if (it.u.blocker) it.node.visible = false;           // blasted rubble
   for (let i = 0; i < 60; i++) game.update(.1, {});
   const pt = w => {
     const v = B(w[0], w[1], 0); return { x: v.x, z: v.z, fz: w[2] };

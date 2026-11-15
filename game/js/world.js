@@ -61,7 +61,7 @@ export async function loadWorld(scene, onProgress) {
     if (u.spin) { const pivot = new THREE.Group(); pivot.position.copy(Bv(u.pivot_w || [0, 0, 0])); root.add(pivot); pivot.updateMatrixWorld(true); pivot.attach(n);
       const a = u.spin_axis || [1, 0, 0]; W.spinners.push({ pivot, axis: new THREE.Vector3(a[0], a[2], -a[1]).normalize(), speed: u.spin_speed || 1 }); continue; }
     if (n.name.startsWith('light_')) { W.lights.push({ pos: n.getWorldPosition(new THREE.Vector3()), color: new THREE.Color(u.color || '#ffffff'), power: u.power || 30, group: u.group || '', kind: u.kind || 'point', name: n.name }); continue; }
-    if (n.name === 'spawn' || n.name.startsWith('ziel_')) { W.spots[n.name] = { pos: n.getWorldPosition(new THREE.Vector3()), quat: n.getWorldQuaternion(new THREE.Quaternion()), ...u }; continue; }
+    if (n.name === 'spawn' || n.name.startsWith('ziel_') || (u.quest && n.type === 'Object3D')) { W.spots[n.name] = { pos: n.getWorldPosition(new THREE.Vector3()), quat: n.getWorldQuaternion(new THREE.Quaternion()), ...u }; continue; }
     if (u.collide_r && u.pos_w) { const p = Bv(u.pos_w); const t = { x: p.x, z: p.z, y: p.y, r: u.collide_r, kind: u.tree || '', name: n.name, parts: [] }; W.trees.push(t); u._tree = t; }
     if (u.indoor) { const r = u.indoor; W.indoor.push({ x0: r[0], y0: r[1], x1: r[2], y1: r[3], z0: r[4], z1: r[5], name: n.name }); }
     if (u.vehicle) n.traverse(m => { m.userData._veh = 1; });
@@ -76,7 +76,7 @@ export async function loadWorld(scene, onProgress) {
       const it = { node: n, pivot, u, name: n.name, open: 0, target: 0, state: {}, label: u.label || n.name };
       n.traverse(m => { if (m.isMesh) m.userData._it = it; });
       W.interactives.push(it); if (u.vehicle) W.vehicle.push({ pivot, node: n, name: n.name, it });
-      if (MOVING.has(u.interact)) W.movers.push(it);
+      if (MOVING.has(u.interact) || u.blocker) W.movers.push(it);          // blockers (rubble): own collider, vanish when blasted
       if (u.ladder) W.ladders.push(it);
     }
   }
@@ -115,9 +115,8 @@ export async function loadWorld(scene, onProgress) {
   const colGeos = [];
   root.updateMatrixWorld(true);
   root.traverse(o => {
-    if (!o.isMesh) return; const u = ud(o);
-    const it = o.userData._it;
-    if (u.collide === 0 || u.collide_r || u.vehicle || o.material.name === 'Wasser' || (it && (MOVING.has(it.u.interact) || it.u.ladder))) return;
+    if (!o.isMesh) return; const it = o.userData._it, u = it ? it.u : ud(o);      // (multi-material interactives: their props live on the node)
+    if (u.collide === 0 || u.collide_r || u.vehicle || o.material.name === 'Wasser' || (it && (MOVING.has(it.u.interact) || it.u.ladder || it.u.blocker))) return;
     if (u.ground) { W.ground = o; }
     colGeos.push(floatGeo(o.geometry, o.matrixWorld, ['position']));
   });
@@ -138,8 +137,10 @@ export async function loadWorld(scene, onProgress) {
   // ---------------- instancing (repeated models) + static batching per material (everything else that never moves)
   const staticMeshes = [];
   root.traverse(o => { if (o.isMesh && !o.userData._it && !o.userData._veh && !ud(o).glow_group && !W.spinners.some(s => s.pivot === o.parent?.parent || s.pivot === o.parent)) staticMeshes.push(o); });
+  // the two maps (valley / mountains, see regions.js) are batched and instanced separately – the far one is culled as a whole
+  const regionKey = m => { if (!m.geometry.boundingBox) m.geometry.computeBoundingBox(); const c = m.geometry.boundingBox.getCenter(new THREE.Vector3()).applyMatrix4(m.matrixWorld); return -c.z > 600 ? 'berg' : 'tal'; };
   const byGeo = new Map();
-  for (const m of staticMeshes) { const k = m.geometry.uuid + '|' + m.material.uuid; (byGeo.get(k) || byGeo.set(k, []).get(k)).push(m); }
+  for (const m of staticMeshes) { const k = m.geometry.uuid + '|' + m.material.uuid + '|' + regionKey(m); (byGeo.get(k) || byGeo.set(k, []).get(k)).push(m); }
   const batch = new Map();
   for (const list of byGeo.values()) {
     if (list.length >= 4) {
@@ -147,11 +148,11 @@ export async function loadWorld(scene, onProgress) {
       list.forEach((m, i) => { im.setMatrixAt(i, m.matrixWorld); const t = ud(m)._tree; if (t) t.parts.push({ im, i, m: m.matrixWorld.clone() }); });
       im.instanceMatrix.needsUpdate = true; im.castShadow = true; im.receiveShadow = true; im.computeBoundingSphere();
       im.userData.instanced = true; scene.add(im);
-    } else for (const m of list) { const t = ud(m)._tree; if (t) t.fixed = 1; (batch.get(m.material) || batch.set(m.material, []).get(m.material)).push(m); }
+    } else for (const m of list) { const t = ud(m)._tree; if (t) t.fixed = 1; const k = m.material.uuid + '|' + regionKey(m); (batch.get(k) || batch.set(k, []).get(k)).push(m); }
     for (const m of list) m.removeFromParent();
   }
-  for (const [mat, list] of batch) {
-    const gs = list.map(m => floatGeo(m.geometry, m.matrixWorld));
+  for (const list of batch.values()) {
+    const mat = list[0].material, gs = list.map(m => floatGeo(m.geometry, m.matrixWorld));
     let g; try { g = mergeGeometries(gs, false); } catch { g = null; }
     if (!g) { for (const m of list) scene.add(m); continue; }
     gs.forEach(x => x.dispose());

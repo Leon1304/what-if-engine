@@ -62,6 +62,7 @@ export class Seasons {
     }
   }
   pick() {
+    if (this.S.forecast) { const f = this.S.forecast; delete this.S.forecast; return f; }      // the radio's forecast comes true
     const tbl = WEATHER[this.season] || WEATHER.Herbst; let r = Math.random(), w = 'klar';
     for (const [k, p] of Object.entries(tbl)) { r -= p; if (r <= 0) { w = k; break; } }
     return w;
@@ -86,12 +87,20 @@ export class Seasons {
     const wet = { regen: 1, gewitter: 1, schnee: .8 }[S.weather] || 0, fog = { nebel: 1, gewitter: .3, schnee: .4 }[S.weather] || 0;
     sky.rainAmount += (wet - sky.rainAmount) * Math.min(1, dt * .2);
     sky.fogBoost += (fog - sky.fogBoost) * Math.min(1, dt * .15);
-    sky.setSnow(S.weather === 'schnee' || (season === 'Winter' && sky.rainAmount > .05));
+    sky.setSnow(S.weather === 'schnee' || ((season === 'Winter' || g.region?.() === 'berg') && sky.rainAmount > .05));      // up in the mountains it snows
     S.rainUntil = wet ? S.weatherUntil : 0;        // older code paths / saves
     // lightning
     if (S.weather === 'gewitter') {
       this.boltT -= dt; if (this.boltT < 0) { this.boltT = 6 + Math.random() * 14; sky.flash = 1; const d = .4 + Math.random() * 2.5; setTimeout(() => g.audio.sfx('thunder'), d * 1000); }
     }
+  }
+  // radio weather report (Funkstation): fixes the next weather so the report is right
+  forecast() {
+    const S = this.S, N = { klar: 'klar und trocken', regen: 'Regen', nebel: 'Nebel', gewitter: 'Gewitter', schnee: 'Schnee' };
+    if (S.weather !== 'klar') { const h = Math.max(0, (S.weatherUntil || S.abs) - S.abs); return `Zurzeit ${N[S.weather]}, noch etwa ${Math.max(1, Math.round(h))} Stunde${Math.round(h) > 1 ? 'n' : ''}. Danach klart es auf.`; }
+    if (!S.forecast) { let w = 'klar'; for (let i = 0; i < 4 && w === 'klar'; i++) w = this.pick(); S.forecast = w; }
+    const h = Math.max(1, Math.round((S.nextWeather ?? S.nextRain ?? S.abs + 3) - S.abs)); S.nextWeather = S.abs + h;
+    return `Die nächsten ${h} Stunde${h > 1 ? 'n' : ''} bleibt es trocken, danach ${N[S.forecast]}.${this.season === 'Winter' ? ' Strenger Frost!' : ''}`;
   }
   label() { return `${this.icon} ${this.season || ''}${this.S.weather && this.S.weather !== 'klar' ? ' · ' + { regen: '🌧️', nebel: '🌫️', gewitter: '⛈️', schnee: '🌨️' }[this.S.weather] : ''}`; }
 }

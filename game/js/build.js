@@ -12,17 +12,18 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { MeshBVH } from 'three-mesh-bvh';
 import { BLUEPRINTS, BP_CATS, CROPS, ITEMS } from './items.js';
 import { roadX } from './life.js';
+import { regionOf, bergRoadDist } from './regions.js';
 
 const up = new THREE.Vector3(0, 1, 0), v1 = new THREE.Vector3();
 const box = new THREE.Box3(), mat4 = new THREE.Matrix4(), mat5 = new THREE.Matrix4();
 const ghostOk = new THREE.MeshBasicMaterial({ color: '#6fe07a', transparent: true, opacity: .45, depthWrite: false });
 const ghostBad = new THREE.MeshBasicMaterial({ color: '#ff5a4a', transparent: true, opacity: .45, depthWrite: false });
-const STORE = { kiste: 20, regal: 12 }, WATER_MAX = 8, FH = .45;
+const STORE = { kiste: 20, regal: 12, kuehlbox: 12 }, WATER_MAX = 8, FH = .45;
 // cabin rooms (local x0, z0, x1, z1 in three axes: z = −Blender y) per extension level: main room, side room, veranda roof, workshop roof
 const ROOMS = [[-2.05, -1.75, 2.05, 1.75, 'in'], [2.3, -1.75, 5.85, 1.75, 'in'], [-2.3, 2.0, 6.1, 4.2, 'roof'], [-5.6, -2.0, -2.3, 2.0, 'roof']];
 // light structures: colour, power, when it shines, light group (game.updateLights)
 const LIGHTS = { fackelhalter: ['#ff9a40', 55, 'fuel', 'fire'], laterne: ['#ffd9a0', 22, 'night', 'lamp'], solarlampe: ['#f2f6ff', 9, 'night', 'lamp'], baustrahler: ['#ffffff', 90, 'battery', 'lamp'] };
-const GADGETS = ['solarlampe', 'baustrahler', 'bewegungsmelder', 'solarlader'];
+const GADGETS = ['solarlampe', 'baustrahler', 'bewegungsmelder', 'solarlader', 'kuehlbox'];
 
 function clone(tpl) {          // template → own object (geometry/material shared); the template keeps its (dequantisation) transform inside a group
   const g = new THREE.Group(), o = tpl.clone(true); g.add(o);
@@ -95,7 +96,7 @@ export class Build {
     let lo = 1e9, hi = -1e9;
     if (inRoom) { lo = hi = inRoom.floor; if (['feld', 'falle', 'zaun', 'palisade', 'steinmauer', 'gartentor', 'unterstand', 'feuerstelle'].includes(bp.id)) return 'Das gehört nach draußen.'; }
     else for (const q of cs) {
-      const by = -q.z; if (Math.abs(q.x - roadX(by)) < 4.4) return 'Nicht auf der Straße.';
+      const by = -q.z; if (regionOf(by) === 'berg' ? bergRoadDist(q.x, by) < 3.6 : Math.abs(q.x - roadX(by)) < 4.4) return 'Nicht auf der Straße.';
       const y = W.groundY(q.x, q.z, g.P.pos.y + 4); lo = Math.min(lo, y); hi = Math.max(hi, y);
     }
     if (hi - lo > (bp.id === 'huette' || bp.ext ? 1.1 : bp.id === 'feld' ? .45 : .6)) return 'Der Boden ist hier zu uneben.';
@@ -141,7 +142,7 @@ export class Build {
     const cost = this.costOf(bp); if (!this.hasCost(cost)) { g.audio.sfx('error'); return g.ui.toast(`Es fehlt Material: ${this.costText(cost)}`, 'warn'); }
     this.pay(cost);
     const s = this.make({ type: bp.id, x: this.ghostPos.x, y: this.ghostPos.y, z: this.ghostPos.z, rot: this.rot, stage: 1 });
-    g.audio.sfx('build'); g.progress.add(bp.stages ? 30 : 15, bp.name);
+    g.audio.sfx('build'); g.progress.add(bp.stages ? 30 : 15, bp.name); g.progress.stat('built');
     g.ui.toast(bp.stages ? `🔨 ${bp.stages[0].name} steht. Nächster Abschnitt: ${bp.stages[1].name} (E an der Baustelle).` : `🔨 ${bp.name} gebaut.`, 'good');
     g.S.flags.built = 1; this.cancel(); g.save(); return s;
   }
@@ -347,9 +348,10 @@ export class Build {
   chestMove(dir, i) {       // dir 1: backpack → storage, −1: storage → backpack
     const g = this.g, s = this.chest; if (!s) return; const cap = STORE[s.type];
     if (dir > 0) { const it = g.S.inv[i]; if (!it) return; let slot = s.inv.find(x => x.id === it.id && x.n < 30);
-      if (!slot) { if (s.inv.length >= cap) return g.ui.toast('Hier ist kein Platz mehr.', 'warn'); slot = { id: it.id, n: 0 }; s.inv.push(slot); }
+      if (!slot) { if (s.inv.length >= cap) return g.ui.toast('Hier ist kein Platz mehr.', 'warn'); slot = { id: it.id, n: 0 }; if (it.f !== undefined) slot.f = it.f; s.inv.push(slot); }
+      else if (it.f !== undefined) slot.f = Math.min(slot.f ?? it.f, it.f);
       const k = Math.min(it.n, 30 - slot.n); slot.n += k; g.take(it.id, k); }
-    else { const it = s.inv[i]; if (!it) return; if (g.add(it.id, it.n, true)) s.inv.splice(i, 1); }
+    else { const it = s.inv[i]; if (!it) return; if (g.add(it.id, it.n, true, it.f)) s.inv.splice(i, 1); }
   }
   storeCap(s) { return STORE[s.type] || 0; }
 
@@ -362,7 +364,7 @@ export class Build {
     const need = this.chopsNeeded();
     if (t.hits < need) return g.ui.toast(`🪓 ${t.hits}/${need}`);
     const P = g.P, dir = new THREE.Vector3(t.x - P.pos.x, 0, t.z - P.pos.z).normalize();
-    g.progress.add(15, 'Baum gefällt'); this.fell(t, dir, true);
+    g.progress.add(15, 'Baum gefällt'); g.progress.stat('trees'); this.fell(t, dir, true);
   }
   chopsNeeded() { return this.g.has('saege') || this.g.has('profiaxt') ? 3 : 6; }
   fell(t, dir, animate) {

@@ -1,6 +1,6 @@
 // Waldtank – survival exploration game. Entry point: renderer, loop, input, menus, map.
 // URL parameters (for testing): ?autostart=1 (no pointer lock needed), ?t=21.5 (hour), ?at=x,y,z,yaw (Blender coordinates), ?q=n (quest step), ?power=1,
-// ?give=id,id (items), ?diff=aus|leicht|mittel|schwer
+// ?give=id,id (items), ?diff=aus|leicht|mittel|schwer, ?book=n (handbook chapter)
 import * as THREE from 'three';
 import { loadWorld, B } from './world.js';
 import { Sky } from './sky.js';
@@ -13,6 +13,7 @@ import { LEVELS, SIDE } from './progress.js';
 import { Handbook } from './handbook.js';
 import { roadX, creekX } from './life.js';
 import { ITEMS, WEAPONS } from './items.js';
+import { REGIONS, BERG_ROAD_S, BERG_TRAILS, LAKES } from './regions.js';
 
 const $ = id => document.getElementById(id);
 const Q = new URLSearchParams(location.search);
@@ -61,7 +62,7 @@ if (Q.has('power')) game.S.genFuel = 10;
 if (Q.has('pitch')) player.pitch = parseFloat(Q.get('pitch')) * Math.PI / 180;
 if (Q.has('give')) for (const id of Q.get('give').split(',')) { const [k, n] = id.split(':'); game.add(k, +(n || 1), true); }
 if (Q.has('diff')) game.S.diff = Q.get('diff');
-game.openPanel = n => openPanel(n);
+game.openPanel = n => openPanel(n); game.closePanel = () => closePanel(true);
 
 // ---------------------------------------------------------------- menus
 let playing = false, panel = null;
@@ -103,6 +104,7 @@ function begin(load) {
 }
 const book = new Handbook(game);
 $('btn-book').onclick = () => { ui.show('pause', false); openPanel('book'); };
+$('btn-badges').onclick = () => { ui.show('pause', false); openPanel('book'); book.show(true, book.index('erfolge')); };
 $('btn-book-start').onclick = () => book.show(true, 0);
 book.el.addEventListener('click', e => { if (e.target.closest('[data-close]')) { if (panel === 'book') closePanel(); else book.show(false); } });
 if (Q.has('book')) { panel = 'book'; book.show(true, +Q.get('book') || 0); }      // test aid: open the handbook at chapter n
@@ -136,10 +138,12 @@ function openPanel(name) {
   if (name === 'map') { drawMap(); ui.show('mappanel', true); }
   if (name === 'build') { $('buildpanel').innerHTML = game.build.menuHtml(); ui.show('buildpanel', true); }
   if (name === 'trade') { ui.renderTrade(game); ui.show('tradepanel', true); }
+  if (name === 'code') { codeTyped = ''; renderCode(); ui.show('codepanel', true); }
   if (name === 'book') book.show(true);
 }
 function closePanel(silent) {
-  if (!panel) return; book.show(false); ui.show('invpanel', false); ui.show('mappanel', false); ui.show('reader', false); ui.show('buildpanel', false); ui.show('tradepanel', false); game.build.chest = null; panel = null; if (!silent) lock();
+  if (!panel) return; book.show(false); ui.show('invpanel', false); ui.show('mappanel', false); ui.show('reader', false); ui.show('buildpanel', false); ui.show('tradepanel', false); ui.show('codepanel', false);
+  if (panel === 'code') game.codeFor = null; game.build.chest = null; panel = null; if (!silent) lock();
 }
 $('invpanel').addEventListener('click', e => {
   const b = e.target.closest('button'); if (!b) return;
@@ -157,6 +161,18 @@ $('buildpanel').addEventListener('click', e => {
 $('tradepanel').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return;
   if (b.dataset.buy) game.buy(b.dataset.buy); if (b.dataset.sell) game.sell(b.dataset.sell); if (b.dataset.sellall) game.sell(b.dataset.sellall, true); if (b.dataset.talk) game.talk(b.dataset.talk);
   ui.renderTrade(game); });
+// keypad for code locks (gun cabinet, radio hut)
+let codeTyped = '';
+const codeLen = () => String(game.codeFor?.u.code || '').length || 4;
+function renderCode() { if (game.codeFor) ui.renderCode(game.codeFor.label, codeTyped, codeLen()); }
+function codeKey(k) {
+  if (!game.codeFor) return closePanel();
+  if (k === 'C') codeTyped = codeTyped.slice(0, -1);
+  else if (k === 'OK') { if (game.tryCode(codeTyped)) return closePanel(); codeTyped = ''; }
+  else if (codeTyped.length < codeLen()) { codeTyped += k; audio.sfx('key'); if (codeTyped.length === codeLen()) { if (game.tryCode(codeTyped)) return setTimeout(closePanel, 250); codeTyped = ''; } }
+  renderCode();
+}
+$('codepanel').addEventListener('click', e => { const b = e.target.closest('[data-key]'); if (b) codeKey(b.dataset.key); });
 // reader opened by the game (notes, radio)
 new MutationObserver(() => { if ($('reader').classList.contains('show') && panel !== 'reader') { panel = 'reader'; document.exitPointerLock?.(); } }).observe($('reader'), { attributes: true });
 
@@ -171,6 +187,11 @@ addEventListener('keydown', e => {
     return;
   }
   if (!playing || game.S.flags.dead || game.S.flags.won) return;
+  if (panel === 'code') {
+    const m = e.code.match(/^(?:Digit|Numpad)(\d)$/); if (m) codeKey(m[1]); else if (e.code === 'Backspace') codeKey('C'); else if (['Enter', 'NumpadEnter'].includes(e.code)) codeKey('OK');
+    else if (['Escape', 'KeyE', 'Tab'].includes(e.code)) closePanel();
+    return;
+  }
   if (panel) {
     if (['Tab', 'Escape', 'KeyC', 'KeyM', 'KeyE', 'KeyG'].includes(e.code)) { if (e.code === 'KeyC' && panel === 'inv') return; closePanel(); }
     return;
@@ -184,6 +205,7 @@ addEventListener('keydown', e => {
     case 'KeyR': if (game.build.ghost) game.build.turn(Math.PI / 2); else game.combat.reload(); break;
     case 'KeyX': { const t = game.findTarget(); if (t?.build) game.build.dismantle(t.build); break; }
     case 'KeyN': addMark(player.pos.x, -player.pos.z); break;
+    case 'KeyH': game.life.dogSeek(); break;
     case 'KeyF': if (game.has('taschenlampe')) { if (game.S.battery <= 0) ui.toast('Batterie leer.'); else { game.S.flags.flashOn = !game.S.flags.flashOn; audio.sfx('switch'); } } else ui.toast('Du hast keine Taschenlampe.'); break;
     case 'Tab': case 'KeyC': if (game.vehicle.driving && e.code === 'KeyC') { game.vehicle.inside = !game.vehicle.inside; break; } openPanel('inv'); break;
     case 'KeyM': if (game.has('karte')) openPanel('map'); else ui.toast('Du hast keine Karte. Vielleicht gibt es im Laden eine?'); break;
@@ -198,7 +220,7 @@ addEventListener('mousemove', e => { if (document.pointerLockElement === rendere
 let rmb = false, lmb = false;
 addEventListener('mousedown', e => {
   if (!document.pointerLockElement || panel) return;
-  if (game.vehicle.driving) return;
+  if (game.vehicle.driving || game.boat.on) return;
   if (e.button === 2) { rmb = true; if (!game.combat.secondary() && game.has('fernglas') && !game.combat.weapon()) player.zoom = true; }
   if (e.button === 0) { lmb = true; if (game.build.ghost) game.build.place(); else game.combat.primary(); }
 });
@@ -206,16 +228,19 @@ addEventListener('mouseup', e => { if (e.button === 2) { rmb = false; player.zoo
 addEventListener('contextmenu', e => e.preventDefault());
 addEventListener('wheel', e => { if (!document.pointerLockElement) return; if (game.build.ghost) { game.build.turn((e.deltaY > 0 ? 1 : -1) * Math.PI / 12); return; } game.S.sel = (game.S.sel + (e.deltaY > 0 ? 1 : 4)) % 5; ui.renderHotbar(game.S.inv, game.S.sel); });
 
-// ---------------------------------------------------------------- map (M): roads, creek and paths always; places only once found
-// (or read on a sign board); waypoints: N sets one where you stand, click on the map sets / removes one
-const MX0 = -110, MX1 = 110, MY0 = -110, MY1 = 230, MK = 2;          // Blender metres → canvas pixels (440 × 680)
-const mapX = bx => (bx - MX0) * MK, mapY = by => (MY1 - by) * MK;
+// ---------------------------------------------------------------- map (M): the map of the region you are in (valley or mountains).
+// Valley: roads, creek and paths always; places only once found (or read on a sign board). Mountains: shaded relief, pass road, paths.
+// Waypoints: N sets one where you stand, click on the map sets / removes one
+const MAPS = { tal: { ...REGIONS.tal, K: 2 }, berg: { ...REGIONS.berg, K: 440 / 240 } };
+let MG = MAPS.tal;
+const mapX = bx => (bx - MG.x0) * MG.K, mapY = by => (MG.y1 - by) * MG.K;
 const MARK_COLS = ['#ff4a3a', '#3aa0ff', '#ffd23a', '#7fdc6a', '#d070ff', '#ff9a3a', '#3ae0d0', '#ffffff'];
 function trails() {
   const a = [[46, 5], [51, 7], [56, 9.5], [60.5, 12]]; for (let y = 14; y < 46; y += 4) a.push([creekX(y) - 4.5 - 1.2 * Math.sin(y / 7), y]); a.push([64.5, 49]);
   return [a, [[48, -4], [51, -14], [53, -25], [54, -32]], [[roadX(-38) - 5, -38], [-18, -37], [-27, -41], [-36, -39], [-41, -39.5]],
     [[roadX(120) + 5, 120], [-30, 121], [-5, 118], [26, 121]], [[34, 124], [45, 130], [58, 139]], [[roadX(176) + 6, 176], [-35, 178], [0, 177], [15, 178]],
-    [[roadX(80) - 5, 80], [-40, 79], [-62, 76], [-78, 75]]];
+    [[roadX(80) - 5, 80], [-40, 79], [-62, 76], [-78, 75]], [[roadX(16) - 5, 16], [-30, 18], [-50, 20], [-64.5, 18]], [[roadX(126) - 5, 126], [-66, 127], [-80.5, 127.5]],
+    [[-50, -46], [-56, -56], [-66, -68], [-73, -73]]];
 }
 function addMark(bx, by) {
   const M = game.S.marks;
@@ -227,41 +252,65 @@ function addMark(bx, by) {
 }
 $('mapcanvas').addEventListener('click', e => {
   const c = $('mapcanvas'), r = c.getBoundingClientRect(), px = (e.clientX - r.left) * c.width / r.width, py = (e.clientY - r.top) * c.height / r.height;
-  const bx = px / MK + MX0, by = MY1 - py / MK, M = game.S.marks;
+  const bx = px / MG.K + MG.x0, by = MG.y1 - py / MG.K, M = game.S.marks;
   const hit = M.findIndex(m => Math.hypot(m.x - bx, m.y - by) < 6);
   if (hit >= 0) { const [m] = M.splice(hit, 1); ui.toast(`Wegmarker entfernt: ${m.label}`); } else addMark(bx, by);
   drawMap();
 });
+let relief = null;
+function bergRelief() {           // shaded relief of the mountains, sampled once from the collision mesh
+  if (relief) return relief; const G = MAPS.berg, c = document.createElement('canvas'), S = 3; c.width = 440; c.height = Math.round((G.y1 - G.y0) * G.K); const x = c.getContext('2d');
+  const nx = Math.ceil((G.x1 - G.x0) / S) + 1, ny = Math.ceil((G.y1 - G.y0) / S) + 1, H = [];
+  for (let j = 0; j < ny; j++) { H.push([]); for (let i = 0; i < nx; i++) H[j].push(W.groundY(G.x0 + i * S, -(G.y0 + j * S), 160)); }
+  const col = h => h < 8 ? [111, 143, 66] : h < 20 ? [98, 128, 58] : h < 32 ? [86, 112, 52] : h < 42 ? [128, 128, 112] : h < 54 ? [160, 158, 150] : [232, 236, 239];
+  const sm = document.createElement('canvas'); sm.width = nx - 1; sm.height = ny - 1; const sx = sm.getContext('2d'), img = sx.createImageData(nx - 1, ny - 1);
+  for (let j = 0; j < ny - 1; j++) for (let i = 0; i < nx - 1; i++) {
+    const h = H[j][i], sh = Math.max(-40, Math.min(40, (H[j][i + 1] - h) * -6 + (H[j + 1][i] - h) * 6)), [r, g, b] = col(h), o = ((ny - 2 - j) * (nx - 1) + i) * 4;
+    img.data[o] = r + sh; img.data[o + 1] = g + sh; img.data[o + 2] = b + sh; img.data[o + 3] = 255;
+  }
+  sx.putImageData(img, 0, 0); x.imageSmoothingEnabled = true; x.imageSmoothingQuality = 'high'; x.drawImage(sm, 0, 0, c.width, (ny - 1) * S * G.K);
+  return relief = c;
+}
 function drawMap() {
-  const c = $('mapcanvas'), x = c.getContext('2d'), Wd = c.width, Ht = c.height, k = MK, X = mapX, Y = mapY;
-  x.fillStyle = '#2f4a2a'; x.fillRect(0, 0, Wd, Ht);
-  for (let i = 0; i < 1500; i++) { x.fillStyle = i % 3 ? '#35532f' : '#284024'; x.beginPath(); x.arc((i * 97.3) % Wd, (i * 57.7 * 1.3) % Ht, 3 + i % 4, 0, 7); x.fill(); }
+  const reg = game.region(); MG = MAPS[reg];
+  const c = $('mapcanvas'), Ht = Math.round((MG.y1 - MG.y0) * MG.K); if (c.height !== Ht) c.height = Ht;
+  const x = c.getContext('2d'), Wd = c.width, k = MG.K, X = mapX, Y = mapY, S = game.S, seen = id => S.found[id] || S.known[id];
   const line = (pts, w, col, dash) => { x.strokeStyle = col; x.lineWidth = w * k; x.setLineDash(dash || []); x.beginPath(); pts.forEach(([a, b], i) => i ? x.lineTo(X(a), Y(b)) : x.moveTo(X(a), Y(b))); x.stroke(); x.setLineDash([]); };
-  const road = []; for (let y = MY0; y <= MY1; y += 2) road.push([roadX(y), y]);
-  line(road, 22, '#5e7f3c'); line(road, 8, '#8a8377'); line(road, 7, '#3e4044');
-  const creek = []; for (let y = MY0; y <= MY1; y += 2) creek.push([creekX(y), y]); line(creek, 4, '#4f8fae');
-  for (const t of trails()) line(t, 1.4, '#c9a273', [6, 4]);
-  const S = game.S, seen = id => S.found[id] || S.known[id];
-  { x.fillStyle = '#55575b'; x.fillRect(X(-2.5), Y(26), 40.5 * k, 50 * k); x.fillStyle = '#e7e2d6'; x.fillRect(X(21), Y(10), 16 * k, 20 * k); }
-  if (seen('dorf')) { x.fillStyle = '#c9b48a'; for (const [x0, y0, x1, y1] of [[-78.5, 156, -70.5, 164], [-79.5, 168, -70.5, 180], [-78.5, 184, -70.5, 192], [-78.5, 196, -70.5, 206], [-56.8, 151, -48.8, 159], [-56.8, 206, -48.8, 214], [-54, 194, -42, 201], [-46, 152, -36, 164]])
-    x.fillRect(X(x0), Y(y1), (x1 - x0) * k, (y1 - y0) * k); }
-  for (const s of game.build.list) { x.fillStyle = s.type === 'feld' ? '#6a4a2a' : '#a07850'; x.fillRect(X(s.x) - 3, Y(-s.z) - 3, 6, 6); }
+  if (reg === 'berg') {
+    x.drawImage(bergRelief(), 0, 0);
+    const L = LAKES[1]; x.fillStyle = '#4f8fae'; x.beginPath(); x.arc(X(L.x), Y(L.y), 9.5 * k, 0, 7); x.fill();
+    line(BERG_ROAD_S, 7, '#3e4044'); line(BERG_ROAD_S, 5.4, '#6a6c70');
+    for (const t of BERG_TRAILS) line(t, 1.4, '#c9a273', [6, 4]);
+  } else {
+    x.fillStyle = '#2f4a2a'; x.fillRect(0, 0, Wd, Ht);
+    for (let i = 0; i < 1500; i++) { x.fillStyle = i % 3 ? '#35532f' : '#284024'; x.beginPath(); x.arc((i * 97.3) % Wd, (i * 57.7 * 1.3) % Ht, 3 + i % 4, 0, 7); x.fill(); }
+    const road = []; for (let y = MG.y0; y <= MG.y1; y += 2) road.push([roadX(y), y]);
+    line(road, 22, '#5e7f3c'); line(road, 8, '#8a8377'); line(road, 7, '#3e4044');
+    const creek = []; for (let y = MG.y0; y <= MG.y1; y += 2) creek.push([creekX(y), y]); line(creek, 4, '#4f8fae');
+    const L = LAKES[0]; x.fillStyle = '#4f8fae'; x.beginPath(); x.arc(X(L.x), Y(L.y), 19 * k, 0, 7); x.fill(); x.fillStyle = '#5a7a3a'; x.beginPath(); x.arc(X(-90), Y(17), 4 * k, 0, 7); x.fill();
+    for (const t of trails()) line(t, 1.4, '#c9a273', [6, 4]);
+    { x.fillStyle = '#55575b'; x.fillRect(X(-2.5), Y(26), 40.5 * k, 50 * k); x.fillStyle = '#e7e2d6'; x.fillRect(X(21), Y(10), 16 * k, 20 * k); }
+    if (seen('dorf')) { x.fillStyle = '#c9b48a'; for (const [x0, y0, x1, y1] of [[-78.5, 156, -70.5, 164], [-79.5, 168, -70.5, 180], [-78.5, 184, -70.5, 192], [-78.5, 196, -70.5, 206], [-56.8, 151, -48.8, 159], [-56.8, 206, -48.8, 214], [-54, 194, -42, 201], [-46, 152, -36, 164]])
+      x.fillRect(X(x0), Y(y1), (x1 - x0) * k, (y1 - y0) * k); }
+    x.fillStyle = '#e04a3a'; x.fillRect(X(-68), Y(222.4), 8.6 * k, .8 * k);              // pass barrier
+  }
+  for (const s of game.build.list) { if (game.region(s.grp.position) !== reg) continue; x.fillStyle = s.type === 'feld' ? '#6a4a2a' : '#a07850'; x.fillRect(X(s.x) - 3, Y(-s.z) - 3, 6, 6); }
   const POS = { tanke: [29, 0, '⛽'], hochsitz: [63, 52, '🪜'], feuer: [55, -36, '🔥'], panne: [roadX(-82) + 3, -82, '🚗'], bus: [roadX(40) - 5.2, 40, '🚏'], schuppen: [44, -12, '🛖'], camp: [-46, -40, '🚐'] };
   x.textAlign = 'center';
   for (const p of game.places) {
-    if (!seen(p.id) || p.id === 'bach') continue;
+    if (!seen(p.id) || p.id === 'bach' || p.region !== reg) continue;
     const [bx, by, ic] = POS[p.id] || (p.pos ? [p.pos.x, -p.pos.z, p.icon || '📍'] : []); if (bx === undefined) continue;
     x.globalAlpha = S.found[p.id] ? 1 : .6;
     x.font = '18px system-ui'; x.fillStyle = '#fff'; x.fillText(ic, X(bx), Y(by) + 6); x.font = 'bold 11px system-ui'; x.fillText(p.name.replace(/ „.*“/, ''), X(bx), Y(by) + 22); x.globalAlpha = 1;
   }
-  for (const m of S.marks) { x.fillStyle = m.c; x.strokeStyle = '#000'; x.lineWidth = 1.5; x.beginPath(); x.arc(X(m.x), Y(m.y) - 9, 6, 0, 7); x.moveTo(X(m.x) - 5, Y(m.y) - 6); x.lineTo(X(m.x), Y(m.y)); x.lineTo(X(m.x) + 5, Y(m.y) - 6); x.fill(); x.stroke();
+  for (const m of S.marks) { if ((m.y > 600 ? 'berg' : 'tal') !== reg) continue; x.fillStyle = m.c; x.strokeStyle = '#000'; x.lineWidth = 1.5; x.beginPath(); x.arc(X(m.x), Y(m.y) - 9, 6, 0, 7); x.moveTo(X(m.x) - 5, Y(m.y) - 6); x.lineTo(X(m.x), Y(m.y)); x.lineTo(X(m.x) + 5, Y(m.y) - 6); x.fill(); x.stroke();
     x.font = 'bold 10px system-ui'; x.fillStyle = '#fff'; x.fillText(m.label, X(m.x), Y(m.y) - 18); }
   const p = player.pos, px = X(p.x), py = Y(-p.z);
   x.save(); x.translate(px, py); x.rotate(-player.yaw); x.fillStyle = '#ff4a3a'; x.strokeStyle = '#fff'; x.lineWidth = 1.5; x.beginPath(); x.moveTo(0, -10); x.lineTo(7, 8); x.lineTo(0, 4); x.lineTo(-7, 8); x.closePath(); x.fill(); x.stroke(); x.restore();
-  const q = game.quests[game.S.quest], t = q?.target?.(); if (t) { x.font = '20px system-ui'; x.fillStyle = '#ffd23a'; x.fillText('★', X(t.x), Y(-t.z) + 7); }
+  const q = game.quests[game.S.quest], t = q?.target?.(); if (t && game.region(t) === reg) { x.font = '20px system-ui'; x.fillStyle = '#ffd23a'; x.fillText('★', X(t.x), Y(-t.z) + 7); }
   x.strokeStyle = '#d9c38a'; x.lineWidth = 6; x.strokeRect(3, 3, Wd - 6, Ht - 6);
-  x.fillStyle = '#d9c38a'; x.font = 'bold 15px system-ui'; x.textAlign = 'left'; x.fillText('N ↑   Wanderkarte Nordwald', 14, 24);
-  const nf = game.places.filter(p => S.found[p.id]).length; x.font = '12px system-ui'; x.fillText(`Entdeckt: ${nf}/${game.places.length} · Klick = Wegmarker setzen/löschen · N = Marker hier`, 14, Ht - 14);
+  x.fillStyle = reg === 'berg' ? '#3a2a1c' : '#d9c38a'; x.font = 'bold 15px system-ui'; x.textAlign = 'left'; x.fillText(reg === 'berg' ? 'N ↑   Wanderkarte Steinberg' : 'N ↑   Wanderkarte Nordwald', 14, 24);
+  const here = game.places.filter(p => p.region === reg), nf = here.filter(p => S.found[p.id]).length; x.font = '12px system-ui'; x.fillText(`Entdeckt: ${nf}/${here.length} · Klick = Wegmarker setzen/löschen · N = Marker hier`, 14, Ht - 14);
 }
 
 // ---------------------------------------------------------------- compass (top centre): directions, quest star, waypoints
@@ -293,7 +342,7 @@ function frame(now = 0) {
 function step() {
   const dt = Math.min(.05, clock.getDelta());
   const active = playing && (document.pointerLockElement === renderer.domElement || AUTO) && !panel;
-  if (active && !game.S.flags.dead && !game.S.flags.won) { if (game.vehicle.driving) game.vehicle.update(dt, player.keys); else player.update(dt, game); game.update(dt, player.keys); }
+  if (active && !game.S.flags.dead && !game.S.flags.won) { if (game.vehicle.driving) game.vehicle.update(dt, player.keys); else if (!game.boat.on) player.update(dt, game); game.boat.update(dt, game.boat.on ? player.keys : {}); game.update(dt, player.keys); }
   else if (AUTO && !playing) { game.update(dt, {}); player.sync(); }
   if (active) game.combat.update(dt, 1 - sky.darkness(game.S.time), rmb); else game.combat.update(0, 1 - sky.darkness(game.S.time), false);
   const wantFov = player.zoom ? 20 : game.combat.scope ? 18 : game.combat.aim > .5 ? 58 : 72;
@@ -304,8 +353,9 @@ function step() {
   if (hudT < 0) {
     hudT = .1;
     ui.stats(game.S.stats);
-    const extra = ` · ${game.seasons.label()}` + (game.S.money ? ` · ${game.S.money.toFixed(2).replace('.', ',')} €` : '') + (game.strom() ? ' · ⚡' : '') + (game.S.flags.flashOn ? ` · 🔦${Math.round(game.S.battery)}%` : '') + (game.torchOn ? ' · 🔥' : '') + (game.waiting ? ' · ⏩' : '') + (game.roof ? ' · 🏠' : '');
-    $('weaponhud').textContent = game.vehicle.hud() || game.combat.hud();
+    const ill = game.health.label();
+    const extra = ` · ${game.seasons.label()}` + (ill ? ` · ${ill}` : '') + (game.S.money ? ` · ${game.S.money.toFixed(2).replace('.', ',')} €` : '') + (game.strom() ? ' · ⚡' : '') + (game.S.flags.flashOn ? ` · 🔦${Math.round(game.S.battery)}%` : '') + (game.torchOn ? ' · 🔥' : '') + (game.waiting ? ' · ⏩' : '') + (game.roof ? ' · 🏠' : '');
+    $('weaponhud').textContent = game.vehicle.hud() || (game.boat.on ? '🚣 W/S rudern · A/D drehen · E aussteigen' : '') || game.combat.hud();
     const L = game.progress.level, lo = LEVELS[L - 1] || 0, hi = LEVELS[L]; ui.level(L, hi ? (game.S.xp - lo) / (hi - lo) * 100 : 100, game.S.xp);
     const sq = game.S.quest >= 12 ? game.progress.active()[0] : null;
     $('sidequest').innerHTML = sq ? `<b>Nebenaufgabe:</b> ${sq.t}${game.progress.progressText(sq)}` : '';
@@ -331,6 +381,9 @@ function step() {
     v.project(camera); if (v.z > 1 || Math.abs(v.x) > 1 || Math.abs(v.y) > 1) continue;
     ph += `<div class="pin" style="left:${(v.x + 1) / 2 * innerWidth}px;top:${(1 - v.y) / 2 * innerHeight}px;--c:${m.c}"><i></i><span>${m.label} · ${Math.round(d)} m</span></div>`;
   }
+  const sk = game.life.dog?.seek;
+  if (playing && sk) { v.copy(game.life.dog.pos); v.y += 1.2; const d = game.life.dog.pos.distanceTo(player.pos); v.project(camera);
+    if (v.z < 1 && Math.abs(v.x) < 1 && Math.abs(v.y) < 1) ph += `<div class="pin" style="left:${(v.x + 1) / 2 * innerWidth}px;top:${(1 - v.y) / 2 * innerHeight}px;--c:#c9a273"><i></i><span>🐾 Bello · ${Math.round(d)} m</span></div>`; }
   if (pins.innerHTML !== ph) pins.innerHTML = ph;
   drawCompass();
   for (const w of W.waterMeshes) { /* gentle shimmer */ w.material.opacity = .74 + .04 * Math.sin(performance.now() / 700); }

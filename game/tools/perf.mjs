@@ -11,7 +11,7 @@ page.on('pageerror', e => console.log('PAGE ERROR', e.message));
 await page.addInitScript(q => { try { localStorage.setItem('waldtank_quality', q); } catch { } }, process.argv[2] || 'mittel');
 await page.goto(`http://localhost:${srv.address().port}/index.html?autostart=1`);
 await page.waitForFunction(() => window.__game, null, { timeout: 120000 });
-const spots = [['Auto (Start)', 'spawn', 0], ['Vorplatz', [8, -16], 40], ['Laden innen', [26, -6, .25], 90], ['Wald / Bach', [48, 20], 200], ['Hochsitz', [58, 48], 30], ['Wohnwagen', [-40, -36], 250]];
+const spots = [['Auto (Start)', 'spawn', 0], ['Vorplatz', [8, -16], 40], ['Laden innen', [26, -6, .25], 90], ['Wald / Bach', [48, 20], 200], ['Hochsitz', [58, 48], 30], ['Wohnwagen', [-40, -36], 250], ['Dorf', [-60, 175], 0], ['Waldsee', [-64, 18], 90], ['Gebirge: Pass', [1.75, 910], 0], ['Gebirge: Hütte', [-10, 1086], 40]];
 const out = await page.evaluate(async spots => {
   const { game, player, W, renderer, scene, camera, B } = window.__game; const res = [];
   const gl = renderer.getContext();
@@ -19,7 +19,7 @@ const out = await page.evaluate(async spots => {
     game.S.time = night ? 22 : 15; if (night) { game.S.flags.flashOn = true; game.S.battery = 100; }
     for (const [name, at, yawDeg] of spots) {
       let p; if (at === 'spawn') p = W.spots.spawn.pos.clone().setY(W.spots.spawn.pos.y - 1.6);
-      else { p = B(at[0], at[1], 0); p.y = at[2] !== undefined ? B(0, 0, at[2]).y : W.groundY(p.x, p.z, 3) + .02; }
+      else { p = B(at[0], at[1], 0); p.y = at[2] !== undefined ? B(0, 0, at[2]).y : W.groundY(p.x, p.z, 120) + .02; }
       player.setPose(p, yawDeg * Math.PI / 180);
       W.cull?.(camera.position); let n = 0; const draw = () => { renderer.shadowMap.needsUpdate = (n++ & 1) === 0; renderer.render(scene, camera); };
       for (let i = 0; i < 20; i++) { game.update(1 / 60, {}); draw(); }

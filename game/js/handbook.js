@@ -2,7 +2,8 @@
 // places and the current task. Food, recipes and tools are generated from ITEMS / RECIPES so the book never goes stale.
 import { ITEMS, RECIPES, BLUEPRINTS, WEAPONS, CROPS } from './items.js';
 import { DIFF } from './life.js';
-import { LEVELS, SIDE } from './progress.js';
+import { LEVELS, SIDE, BADGES, STATS } from './progress.js';
+import { ILL } from './health.js';
 import { SEASONS, SEASON_DAYS } from './seasons.js';
 
 const STAT = { hunger: 'Hunger', thirst: 'Durst', warmth: 'Wärme', health: 'Gesundheit', stamina: 'Ausdauer' };
@@ -25,7 +26,7 @@ export function chapters(g) {
         ${keyRow('M', 'Wanderkarte (wenn du sie hast)')}${keyRow('Z (halten)', 'Zeit vorspulen – nur an sicheren Orten')}
         ${keyRow('Linksklick', 'Waffe: schießen / zustechen · beim Bauen: setzen')}${keyRow('E (am Auto)', 'reparieren · tanken · einsteigen / aussteigen; fahren: W S A D')}${keyRow('R', 'nachladen · beim Bauen: drehen')}
         ${keyRow('Rechte Maustaste', 'zielen (Gewehr: Zielfernrohr) · ohne Waffe: Fernglas')}${keyRow('G', 'Baumenü')}${keyRow('X', 'Gebautes abbauen · Bauen abbrechen')}
-        ${keyRow('N', 'Wegmarker an deiner Stelle setzen')}${keyRow('B', 'dieses Handbuch')}${keyRow('Esc', 'Pause: Speichern, Laden, Schwierigkeit, Grafik')}
+        ${keyRow('N', 'Wegmarker an deiner Stelle setzen')}${keyRow('H', 'Bello: „Such!“ – er führt dich zu Säcken, Kräutern, Kristallen, Schätzen')}${keyRow('E (am Ruderboot)', 'einsteigen · W S rudern, A D drehen · E aussteigen')}${keyRow('B', 'dieses Handbuch')}${keyRow('Esc', 'Pause: Speichern, Laden, Schwierigkeit, Grafik')}
       </table>
       <p class="tip">Im Buch: <kbd>←</kbd> <kbd>→</kbd> blättern, <kbd>B</kbd> oder <kbd>Esc</kbd> schließen.</p>` },
     { id: 'werte', icon: '❤️', t: 'Überleben', h: `
@@ -80,6 +81,27 @@ export function chapters(g) {
       <dt>🐇 Fallen</dt><dd>Kaninchenfalle weit weg von deiner Hütte aufstellen – mit der Zeit sitzt ein Kaninchen drin. Kaninchen am Feuer braten.</dd>
       <dt>🍂 Jahreszeiten</dt><dd>Alle ${SEASON_DAYS} Tage: ${SEASONS.join(' → ')}. Im Winter Schnee, große Kälte und kein Wachstum auf den Feldern; im Frühling und Sommer wächst alles schneller. Jetzt: <b>${g.seasons.season || ''}</b>.</dd>
       <dt>⛈️ Wetter</dt><dd>Regen, Nebel (kurze Sicht), Gewitter (Blitz und Donner), im Winter Schnee.</dd></dl>` },
+    { id: 'gesund', icon: '🤧', t: 'Gesundheit & Vorräte', h: `
+      <p>Jetzt: ${g.health.label() || '<b>gesund</b> 😊'}</p>
+      <dl><dt>${ILL.erk.icon} ${ILL.erk.name}</dt><dd>Holst du dir, wenn dir kalt ist (Wärme unter 30) oder du im Regen draußen nass wirst – im Gebirge besonders schnell. Du hustest, wirst schneller müde und frierst leichter; ab 60 % kommt Fieber dazu (kostet Gesundheit). Warm und satt heilt sie von selbst, im Bett am schnellsten.</dd>
+      <dt>${ILL.mag.icon} ${ILL.mag.name}</dt><dd>Von verdorbenem Essen, rohem Fleisch oder Fisch und Bachwasser. Hunger und Durst steigen schneller, ab 50 % sinkt die Gesundheit. Geht nach ein paar Stunden vorbei.</dd>
+      <dt>🍵 Kräutertee</dt><dd>Kamille (wächst auf Wiesen und an Wegen, Säcke, Kurt) + Wasser am Feuer oder Gaskocher. Hilft gegen beides und wärmt.</dd>
+      <dt>💊 Medizin</dt><dd>Heilt sofort alles. In Säcken, im Forsthaus, in der Steinberghütte und bei Kurt (9 €).</dd></dl>
+      <h4>Essen verdirbt</h4><p>Frisches Essen hält nur eine Weile (Stunden = Spielstunden; 1 Spieltag = 24 Minuten). Danach wird es zu 🤢 verdorbenem Essen. Kälte hält es länger frisch: im Winter doppelt so lange, im Gebirge etwas länger – und in der <b>🧊 Kühlbox</b> fünfmal so lange (Anglerhütte, Kurt; mit G aufstellen). 🥓 Trockenfleisch verdirbt nie.</p>
+      <table class="list">${Object.values(ITEMS).filter(it => it.spoil).map(it => `<tr><td>${it.icon} ${it.name}</td><td>${it.spoil} h</td></tr>`).join('')}</table>` },
+    { id: 'raetsel', icon: '🧩', t: 'Rätsel & Gebirge', h: `
+      <dl><dt>🏝️ Opa Willis Schatz</dt><dd>Im Logbuch der Anglerhütte am Waldsee steht, wo der Schatz liegt. Zur Insel kommst du nur mit dem <b>Ruderboot</b> am Steg (das Wasser ist zu tief). Zum Graben brauchst du einen Spaten.</dd>
+      <dt>🏠 Forsthaus Eichengrund</dt><dd>Südlich des Dorfes, westlich der Straße. Verschlossen – lies den Zettel an der Tür. Drinnen: Hennings Tagebuch, ein Wandkalender und ein Waffenschrank mit Zahlenschloss.</dd>
+      <dt>📡 Funkstation Nordwald</dt><dd>Auf dem Kahlberg südwestlich der Tankstelle (Pfad vom Wohnwagen). Die Stahltür hat ein Tastenfeld – der Code steht irgendwo im Wald. Drinnen hängt der Schlüssel der Pass-Schranke; mit Diesel im Notstrom-Aggregat funkt der Sender: Bergwacht und Wetterbericht.</dd>
+      <dt>⛰️ Das Gebirge (zweite Karte)</dt><dd>Schranke am Nordende der Straße aufschließen und mit dem Auto weiterfahren – nach einer halben Stunde Serpentinen bist du im Hochtal am Steinberg. Zurück: einfach die Passstraße bergab fahren. Oben ist es kälter, es schneit statt zu regnen, und statt Rehen leben dort Gämsen.</dd>
+      <dt>🛖 Steinberghütte</dt><dd>Förster Henning wartet dort. Betten, Ofen, Vorräte. Von hier führen Pfade zum Gipfelkreuz, zum Bergsee und zum Stollen.</dd>
+      <dt>⛏️ Stollen „Glück auf“</dt><dd>Dunkel – Taschenlampe mitnehmen! Hinten ist er verschüttet. Mit 2 Sprengpulver, einer Zündschnur (Seil) und einem Feuerzeug sprengst du das Geröll. Dann schnell weg! Dahinter: Bergkristalle (Kurt zahlt 40 € pro Stück).</dd>
+      <dt>🐕 Bello, such!</dt><dd>Ist Bello gezähmt, schickt ihn <kbd>H</kbd> auf die Suche: Er läuft zum nächsten ungeöffneten Sack, zu Kräutern, Pilzen, Kristallen oder Schätzen in bis zu 140 m und bellt dort, bis du kommst (🐾 zeigt, wo er ist).</dd></dl>` },
+    { id: 'erfolge', icon: '🏅', t: `Erfolge (${BADGES.filter(b => (g.S.badges || {})[b.id]).length}/${BADGES.length})`, h: `
+      <div class="badges">${BADGES.map(b => { const d = (g.S.badges || {})[b.id]; return `<div class="badge ${d ? 'on' : ''}"><i>${d ? b.icon : '🔒'}</i><b>${b.t}</b>${b.x}${d ? `<br><small>Tag ${d}</small>` : ''}</div>`; }).join('')}</div>
+      <h4>Statistik</h4><table class="list">${STATS.map(([k, label, unit]) => { const v = g.S.stat[k] || 0; const txt = unit === 'km' ? (v / 1000).toFixed(1).replace('.', ',') + ' km' : unit === 'm' ? Math.round(v) + ' m' : unit === '€' ? v.toFixed(2).replace('.', ',') + ' €' : Math.round(v);
+        return `<tr><td>${label}</td><td>${txt}</td></tr>`; }).join('')}<tr><td>📅 Tage überlebt</td><td>${g.S.day - 1}</td></tr><tr><td>📍 Orte entdeckt</td><td>${Object.keys(g.S.found).length} / ${g.places.length}</td></tr>
+      <tr><td>✅ Nebenaufgaben</td><td>${Object.keys(g.S.side).length} / ${SIDE.length}</td></tr><tr><td>⭐ Erfahrung</td><td>${g.S.xp} EP (Level ${g.progress.level})</td></tr></table>` },
     { id: 'tun', icon: '✋', t: 'Was du tun kannst', h: `
       <p>Schau ein Ding an – erscheint unten ein Hinweis mit <kbd>E</kbd>, kannst du etwas damit machen.</p>
       <ul>
@@ -111,7 +133,7 @@ export function chapters(g) {
         <dt>🔦 Batterie</dt><dd>Die Taschenlampe verbraucht Batterie. Batterien gibt es im Laden.</dd>
       </dl>` },
     { id: 'orte', icon: '🗺️', t: `Orte (${found}/${g.places.length})`, h: `
-      <ul class="places">${g.places.map(p => `<li class="${S.found[p.id] ? 'on' : ''}">${S.found[p.id] ? '📍 ' + p.name : S.known[p.id] ? '🗺️ ' + p.name + ' (noch nicht besucht)' : '❔ noch nicht entdeckt'}</li>`).join('')}</ul>
+      ${['tal', 'berg'].map(r => `<h4>${r === 'tal' ? '🌲 Nordwald' : '⛰️ Gebirge Steinberg'}</h4><ul class="places">${g.places.filter(p => p.region === r).map(p => `<li class="${S.found[p.id] ? 'on' : ''}">${S.found[p.id] ? '📍 ' + p.name : S.known[p.id] ? '🗺️ ' + p.name + ' (noch nicht besucht)' : '❔ noch nicht entdeckt'}</li>`).join('')}</ul>`).join('')}
       <p class="tip">Mit der 🗺️ Wanderkarte (Laden, Zeitungsständer) zeigt <kbd>M</kbd> alle Orte, die du gefunden hast. Klick auf die Karte setzt einen Wegmarker, <kbd>N</kbd> setzt einen an deiner Stelle – Marker siehst du im Spiel mit Entfernung. Infotafeln (Dorfplatz, Aussichtsturm) tragen weitere Orte ein.</p>` },
     { id: 'aufgabe', icon: '⭐', t: 'Aufgaben', h: `
       <ol class="quests">${g.quests.map((q, i) => i < S.quest ? `<li class="done">✔ ${q.t}</li>` : i === S.quest ? `<li class="now"><b>${q.t}</b><br>${q.x()}</li>` : '').join('')}</ol>
@@ -133,6 +155,7 @@ export class Handbook {
       <article><h3>${c.icon} ${c.t}</h3><div class="pg">${c.h}</div>
         <footer><button data-flip="-1">← zurück</button><span>Seite ${this.i + 1} / ${ch.length} · <kbd>←</kbd> <kbd>→</kbd> blättern · <kbd>B</kbd> schließen</span><button data-flip="1">weiter →</button><button data-close>✕</button></footer></article></div>`;
   }
+  index(id) { return Math.max(0, chapters(this.g).findIndex(c => c.id === id)); }
   show(on, chapter) { if (chapter !== undefined) this.i = chapter; if (on) this.render(); this.el.classList.toggle('show', on); }
   flip(d) { this.i += d; this.render(); }
 }

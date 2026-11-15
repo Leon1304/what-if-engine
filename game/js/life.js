@@ -4,12 +4,17 @@
 // All built from low-poly primitives with flat shading (same look as the Blender map).
 import * as THREE from 'three';
 import { B } from './world.js';
+import { REGIONS, regionOf, bergRoadDist } from './regions.js';
 
 const M = (c, o = {}) => new THREE.MeshStandardMaterial({ color: c, flatShading: true, roughness: .9, ...o });
 function bx(w, h, d, m, x = 0, y = 0, z = 0) { const g = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m); g.position.set(x, y, z); g.castShadow = true; return g; }
 
 // road centre (Blender x as a function of Blender y) – same as core.py road_x
-export function roadX(y) { if (y > 30) return -6 - 0.006 * (y - 30) ** 2; if (y < -30) return -6 + 0.0045 * (y + 30) ** 2; return -6; }
+export function roadX(y) {
+  if (y > 150) return -63.6;
+  if (y > 110) { const d = y - 110; return -44.4 - .96 * d + .012 * d * d; }
+  if (y > 30) return -6 - 0.006 * (y - 30) ** 2; if (y < -30) return -6 + 0.0045 * (y + 30) ** 2; return -6;
+}
 export function creekX(y) { return 70 + 6 * Math.sin(y / 22); }
 export const MAP = { x0: -108, x1: 108, y0: -108, y1: 228 };         // walkable map in Blender x / y (ground: −110 … 110, −110 … 230)
 
@@ -26,6 +31,7 @@ const KIND = {          // hit points, bite damage, run speed, body length / hei
   bear: { hp: 260, dmg: 24, run: 5.0, len: 1.6, hy: 1.0, r: .8, loot: { fleisch: 6, fell: 2 } },
   deer: { hp: 50, dmg: 0, run: 7.5, len: 1.0, hy: 1.0, r: .45, loot: { fleisch: 3, fell: 1 } },
   rabbit: { hp: 12, dmg: 0, run: 7, len: .3, hy: .2, r: .22, loot: { kaninchen: 1 } },
+  gams: { hp: 45, dmg: 0, run: 8.5, len: .9, hy: .85, r: .4, loot: { fleisch: 2, fell: 1 } },     // chamois (mountains only)
 };
 export { KIND };
 
@@ -51,6 +57,12 @@ function buildAnimal(kind) {
     g.add(bx(.9, .9, 1.6, fur, 0, 1.05, 0), bx(.95, 1.0, .7, fur, 0, 1.15, -.5), bx(.6, .55, .6, fur, 0, 1.25, -1.05), bx(.3, .26, .3, snout, 0, 1.15, -1.4), bx(.12, .1, .08, dark, 0, 1.2, -1.56));
     for (const s of [-1, 1]) { const ear = bx(.16, .16, .1, dark, s * .22, 1.6, -1.0); g.add(ear); }
     for (const [x, z] of [[-.3, -.5], [.3, -.5], [-.3, .55], [.3, .55]]) { const p = new THREE.Group(); p.position.set(x, .7, z); p.add(bx(.26, .7, .3, dark, 0, -.35, 0)); g.add(p); legs.push(p); }
+  } else if (kind === 'gams') {                           // chamois: dark brown, light face with dark stripes, short hooked horns
+    const fur = M('#5a4434'), light = M('#e8dcc4'), dark = M('#241c16');
+    g.add(bx(.34, .42, .95, fur, 0, .82, 0), bx(.22, .45, .24, fur, 0, 1.1, -.48), bx(.18, .2, .32, light, 0, 1.32, -.66), bx(.19, .06, .3, dark, 0, 1.34, -.66), bx(.08, .1, .08, dark, 0, .92, .5));
+    for (const s of [-1, 1]) { const h = bx(.035, .22, .035, dark, s * .06, 1.52, -.6); h.rotation.x = .35; g.add(h); const tip = bx(.035, .035, .1, dark, s * .06, 1.62, -.53); g.add(tip);
+      const ear = new THREE.Mesh(new THREE.ConeGeometry(.04, .12, 4), fur); ear.position.set(s * .1, 1.45, -.58); ear.rotation.z = -s * .6; g.add(ear); }
+    for (const [x, z] of [[-.11, -.36], [.11, -.36], [-.11, .36], [.11, .36]]) { const p = new THREE.Group(); p.position.set(x, .62, z); p.add(bx(.07, .62, .07, dark, 0, -.31, 0)); g.add(p); legs.push(p); }
   } else if (kind === 'rabbit') {
     const fur = M('#8a7a68'), light = M('#efe8dc');
     g.add(bx(.18, .18, .3, fur, 0, .17, 0), bx(.13, .13, .14, fur, 0, .27, -.17), bx(.03, .14, .03, fur, -.035, .4, -.15), bx(.03, .14, .03, fur, .035, .4, -.15), bx(.07, .07, .06, light, 0, .2, .17));
@@ -76,17 +88,23 @@ export class Life {
     // one headlight spot that always exists (adding lights later would recompile every shader)
     this.carLight = new THREE.SpotLight('#fff3d8', 0, 45, .5, .5, 1.2); scene.add(this.carLight, this.carLight.target); }
   forestSpot(near, rmin, rmax) {
+    const reg = regionOf(-near.z), R = REGIONS[reg];
     for (let i = 0; i < 30; i++) {
       const a = Math.random() * 6.283, d = rmin + Math.random() * (rmax - rmin);
       const x = near.x + Math.cos(a) * d, z = near.z + Math.sin(a) * d, by = -z;
-      if (x < MAP.x0 + 3 || x > MAP.x1 - 3 || by < MAP.y0 + 3 || by > MAP.y1 - 3) continue;
+      if (x < R.x0 + 3 || x > R.x1 - 3 || by < R.y0 + 3 || by > R.y1 - 3) continue;
+      if (reg === 'berg') {                          // mountains: on the valley floor and the lower slopes, not on the road or at the hut
+        if (Math.abs(x) > 64 || by > 1125 || by < 915 || bergRoadDist(x, by) < 7 || Math.hypot(x + 24, by - 1101) < 16) continue;
+        const y = this.W.groundY(x, z); if (y > 46) continue; return new THREE.Vector3(x, y, z);
+      }
       if (Math.abs(x - roadX(by)) < 9 || (x > -6 && x < 50 && by > -30 && by < 32) || (x > -100 && x < -28 && by > 146 && by < 218)) continue;
       return new THREE.Vector3(x, this.W.groundY(x, z), z);
     }
     return null;
   }
   spawn(kind, near, at) {
-    const p = at || this.forestSpot(near, kind === 'deer' ? 25 : 45, kind === 'deer' ? 70 : 70); if (!p) return;
+    if (kind === 'deer' && near && regionOf(-near.z) === 'berg') kind = 'gams';
+    const p = at || this.forestSpot(near, kind === 'deer' || kind === 'gams' ? 25 : 45, 70); if (!p) return;
     const mesh = buildAnimal(kind); mesh.position.copy(p); this.scene.add(mesh);
     const a = { kind, mesh, pos: p, heading: Math.random() * 6.28, speed: 0, state: 'roam', t: 0, cool: 0, wander: Math.random() * 6.28, phase: 0, hp: KIND[kind].hp, angry: 0 };
     this.animals.push(a); return a;
@@ -97,14 +115,14 @@ export class Life {
     if (a.state === 'dead') return;
     a.hp -= dmg; a.angry = 20; this.g.audio.sfx(a.kind === 'bear' ? 'roar' : a.kind === 'deer' ? 'none' : 'growl');
     if (a.hp <= 0) { a.state = 'dead'; a.dead = 0; a.speed = 0; a.rotTo = (Math.random() < .5 ? 1 : -1) * Math.PI / 2; this.g.S.flags.hunted = 1; return true; }
-    if (a.kind === 'deer') { a.state = 'flee'; a.t = 6; }
+    if (a.kind === 'deer' || a.kind === 'gams') { a.state = 'flee'; a.t = 6; }
     else if (a.kind === 'wolf' && Math.random() < .5) { a.state = 'flee'; a.t = 3; }
     return false;
   }
   noise(pos, r) {          // a gunshot: deer and wolves run, boars and bears come for you (not on easy)
     const D = this.diff();
     for (const a of this.animals) { if (a.state === 'dead') continue; const d = a.pos.distanceTo(pos); if (d > r) continue;
-      if (a.kind === 'deer' || (a.kind === 'wolf' && this.g.S.diff !== 'schwer')) { a.state = 'flee'; a.t = 4 + Math.random() * 3; }
+      if (a.kind === 'deer' || a.kind === 'gams' || (a.kind === 'wolf' && this.g.S.diff !== 'schwer')) { a.state = 'flee'; a.t = 4 + Math.random() * 3; }
       else if (D.boarAggro && (a.kind === 'boar' || a.kind === 'bear') && d < r * .6) a.angry = 12; }
   }
   carcass(o, f) {          // dead animal in front of the player (for E)
@@ -119,7 +137,7 @@ export class Life {
     if (Object.keys(left).length) { a.left = left; g.ui.toast('Dein Rucksack ist voll – der Rest bleibt liegen.', 'warn'); } else this.remove(a);
   }
   sheltered(P) {           // where enemies do not attack: in buildings (shop, houses, cabin …), high up, in the car
-    const g = this.g; return g.insideShop(P.pos) || g.onHochsitz || !!g.indoor?.(P.pos) || !!g.vehicle?.driving;
+    const g = this.g; return g.insideShop(P.pos) || g.onHochsitz || !!g.indoor?.(P.pos) || !!g.vehicle?.driving || !!g.boat?.on;
   }
   scared(a, P) {      // is the player defending himself?
     const g = this.g, toA = a.pos.clone().sub(P.pos), d = toA.length();
@@ -138,9 +156,10 @@ export class Life {
     const night = dark > (D.dusk ? .45 : .75);
     const maxW = night && !grace ? Math.min(D.wolves + (D.wolves ? Math.min(2, g.S.day - 1) : 0), D.wolves + 2) : 0;
     if (live('wolf') < maxW && Math.random() < dt * .05) { this.spawn('wolf', P.pos); if (!g.S.flags.wolfIntro) { g.S.flags.wolfIntro = 1; g.audio.sfx('howl'); g.ui.toast('Ein Heulen im Wald … Wölfe! Bleib im Licht, leuchte sie mit der Lampe an oder geh nach drinnen.', 'warn'); } }
-    if (!grace && live('boar') < D.boars && dark < .8 && Math.random() < dt * .02) this.spawn('boar', P.pos);
+    const berg = regionOf(-P.pos.z) === 'berg';
+    if (!grace && !berg && live('boar') < D.boars && dark < .8 && Math.random() < dt * .02) this.spawn('boar', P.pos);
     if (!grace && live('bear') < D.bears && (-P.pos.z > 60 || g.S.diff === 'schwer') && Math.random() < dt * .006) { this.spawn('bear', P.pos); g.ui.toast('Irgendwo im Wald bricht Unterholz. Etwas Großes ist unterwegs …', 'warn'); }
-    if (dark < .35 && live('deer') < (g.seasons?.season === 'Winter' ? 1 : 3) && Math.random() < dt * .1) this.spawn('deer', P.pos);
+    if (dark < .35 && live(berg ? 'gams' : 'deer') < (g.seasons?.season === 'Winter' ? 1 : 3) && Math.random() < dt * .1) this.spawn('deer', P.pos);
     if (dark < .6 && live('rabbit') < 3 && Math.random() < dt * .06) { const p = this.forestSpot(P.pos, 15, 40); if (p) this.spawn('rabbit', null, p); }
     this.updateDog(dt, P);
     this.howlT -= dt; if (live('wolf') && this.howlT < 0) { this.howlT = 25 + Math.random() * 40; g.audio.sfx('howl'); }
@@ -177,8 +196,8 @@ export class Life {
         if (d > 90) { this.remove(a); continue; }
       } else {
         if (dark > .6) { dirA = Math.atan2(-to.x, -to.z); want = 3; if (d > 90) { this.remove(a); continue; } }
-        else if (d < 16) { a.state = 'flee'; a.t = 5; }
-        if (a.state === 'flee' && a.t > 0) { dirA = Math.atan2(-to.x, -to.z); want = 7.5; }
+        else if (d < (a.kind === 'gams' ? 22 : 16)) { a.state = 'flee'; a.t = 5; }
+        if (a.state === 'flee' && a.t > 0) { dirA = Math.atan2(-to.x, -to.z); want = K.run; }
         else { a.state = 'graze'; if (Math.random() < dt * .2) a.wander += (Math.random() - .5) * 2; dirA = a.wander; want = Math.sin(performance.now() / 3000 + a.mesh.id) > .3 ? .8 : 0; }
         if (d > 120) { this.remove(a); continue; }
       }
@@ -194,7 +213,7 @@ export class Life {
       this.fencePush(a.pos, .45);
       for (const s of g.build?.list || []) { if (!['huette', 'unterstand', 'kiste', 'regal', 'bett', 'werkbank', 'herd', 'regentonne'].includes(s.type)) continue; const dx = a.pos.x - s.x, dz = a.pos.z - s.z, dd = Math.hypot(dx, dz), m = s.type === 'huette' ? 3.0 : 1.2;
         if (dd < m && dd > 1e-4) { a.pos.x = s.x + dx / dd * m; a.pos.z = s.z + dz / dd * m; } }
-      a.pos.x = Math.max(MAP.x0, Math.min(MAP.x1, a.pos.x)); a.pos.z = Math.max(-MAP.y1, Math.min(-MAP.y0, a.pos.z));
+      const RA = REGIONS[regionOf(-a.pos.z)]; a.pos.x = Math.max(RA.x0 + 2, Math.min(RA.x1 - 2, a.pos.x)); a.pos.z = Math.max(-RA.y1 + 2, Math.min(-RA.y0 - 2, a.pos.z));
       a.pos.y += (this.W.groundY(a.pos.x, a.pos.z, a.pos.y + 1.5) - a.pos.y) * Math.min(1, dt * 10);
       a.mesh.position.copy(a.pos); a.mesh.rotation.y = a.heading + Math.PI;
       if (a.kind === 'rabbit') a.mesh.position.y += Math.abs(Math.sin(a.phase * 1.5)) * Math.min(.25, a.speed * .05);
@@ -225,11 +244,21 @@ export class Life {
     D.barkT -= dt; D.biteT -= dt;
     if (!S.dog.tame) { const h = D.home.clone().sub(D.pos); h.y = 0; if (h.length() > 5) { dirA = Math.atan2(h.x, h.z); want = 1.2; } else if (d < 8) { dirA = Math.atan2(to.x, to.z); want = 0; } }
     else {
-      if (d > 45 && !S.dog.sit) { D.pos.copy(P.pos).add(new THREE.Vector3(1.5, 0, 1.5)); }
+      if (d > 45 && !S.dog.sit && !D.seek) { D.pos.copy(P.pos).add(new THREE.Vector3(1.5, 0, 1.5)); }
       const foe = this.animals.find(a => ['wolf', 'boar', 'bear'].includes(a.kind) && a.state !== 'dead' && a.pos.distanceTo(D.pos) < 35);
       if (foe && D.barkT < 0) { D.barkT = 25; g.audio.sfx('bark'); g.ui.toast(`🐕 Bello knurrt – ${foe.kind === 'wolf' ? 'Wölfe' : foe.kind === 'bear' ? 'ein Bär' : 'ein Wildschwein'} in der Nähe!`, 'warn'); }
       const near = foe && foe.kind === 'wolf' && foe.pos.distanceTo(D.pos) < 12 ? foe : null;
       if (near) { const t = near.pos.clone().sub(D.pos); t.y = 0; dirA = Math.atan2(t.x, t.z); want = 6.5; if (t.length() < 1.4 && D.biteT < 0) { D.biteT = 1.2; this.hit(near, 14); g.audio.sfx('bite'); } }
+      else if (D.seek) {                             // „Such!“: run to the find, sit there and bark until you come
+        const sk = D.seek, it = sk.it; sk.t += dt; D.seekBark = (D.seekBark ?? 0) - dt;
+        if (!it.node.visible || it.state.taken || it.state.searched || it.state.dug || sk.t > 150) D.seek = null;
+        else {
+          const t = sk.pos.clone().sub(D.pos); t.y = 0; const td = t.length();
+          if (td > 1.3) { dirA = Math.atan2(t.x, t.z); want = Math.min(6.5, td * 1.5 + .5); }
+          else { dirA = Math.atan2(to.x, to.z); if (D.seekBark < 0) { D.seekBark = 3.5; g.audio.sfx('bark'); } }
+          if (P.pos.distanceTo(sk.pos) < 3.5 && td < 3) { D.seek = null; g.progress.stat('dogfind'); g.progress.add(5, 'Bello'); g.audio.sfx('bark'); g.ui.toast(`🐕 Bello wedelt stolz: ${it.label}!`, 'good'); }
+        }
+      }
       else if (!S.dog.sit && d > 3) { dirA = Math.atan2(to.x, to.z); want = Math.min(6.5, (d - 2.5) * 1.6); }
     }
     let dh = ((dirA - D.heading + Math.PI) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2) - Math.PI;
@@ -245,12 +274,29 @@ export class Life {
     S.dog.pos = D.pos.toArray().map(v => +v.toFixed(2));
   }
   dogTarget(o, f) { const D = this.dog; if (!D) return null; const c = D.pos.clone(); c.y += .5; const d = c.sub(o); return d.length() < 2.8 && d.normalize().angleTo(f) < .5 ? D : null; }
-  dogVerb() { const S = this.g.S.dog; if (!S.tame) return ['fleisch', 'fleisch_gebraten', 'kaninchen', 'trockenfleisch'].some(k => this.g.has(k)) ? '[E] Bello etwas zu fressen geben' : 'Ein Hund mit rotem Halsband – er sieht hungrig aus'; return S.sit ? '[E] Bello: „Komm!“' : '[E] Bello: „Bleib!“'; }
+  // H = „Such, Bello!“: the nearest unsearched sack, herb, crystal or dig spot within 140 m
+  dogSeek() {
+    const g = this.g, S = g.S.dog, D = this.dog;
+    if (!S?.tame || !D) return g.ui.toast('Du hast keinen Hund. Kurts Hund Bello streunt bei der Burgruine herum …');
+    S.sit = 0; let best = null, bd = 140;
+    for (const it of g.W.interactives) {
+      if (!it.node.visible || it.state.taken || !it.center) continue; const u = it.u;
+      const ok = (u.interact === 'search' && it.name.startsWith('Sack') && !it.state.searched) || (u.interact === 'pickup' && ['kraeuter', 'steinpilz', 'bergkristall', 'medizin'].includes(u.item))
+        || (u.use === 'graben' && !it.state.dug) || (it.name === 'Schatzkiste' && !it.state.searched);
+      if (!ok) continue; const dd = it.center.distanceTo(D.pos); if (dd < bd) { bd = dd; best = it; }
+    }
+    g.audio.sfx('sniff');
+    if (!best) return g.ui.toast('🐕 Bello schnüffelt … hier in der Nähe findet er nichts mehr.');
+    D.seek = { it: best, pos: best.center.clone(), t: 0 }; D.seekBark = 0;
+    setTimeout(() => g.audio.sfx('bark'), 500); g.ui.toast(`🐕 „Such, Bello!“ – er nimmt eine Spur auf (${Math.round(bd)} m). Folge ihm (🐾).`);
+  }
+  dogVerb() { const S = this.g.S.dog; if (this.dog?.seek) return '[E] Bello: „Komm!“ (Suche abbrechen)'; if (!S.tame) return ['fleisch', 'fleisch_gebraten', 'kaninchen', 'trockenfleisch'].some(k => this.g.has(k)) ? '[E] Bello etwas zu fressen geben' : 'Ein Hund mit rotem Halsband – er sieht hungrig aus'; return S.sit ? '[E] Bello: „Komm!“' : '[E] Bello: „Bleib!“'; }
   dogUse() {
     const g = this.g, S = g.S.dog;
     if (!S.tame) { const food = ['trockenfleisch', 'fleisch_gebraten', 'fleisch', 'kaninchen'].find(k => g.has(k)); if (!food) return g.ui.toast('Bello knurrt leise. Er hat Hunger – bring ihm Fleisch.');
       g.take(food); S.tame = 1; g.audio.sfx('bark'); return g.ui.toast('🐕 Bello frisst gierig – und wedelt. Er folgt dir jetzt und warnt dich vor Raubtieren!', 'good'); }
-    S.sit = S.sit ? 0 : 1; g.audio.sfx('bark'); g.ui.toast(S.sit ? 'Bello bleibt hier.' : 'Bello kommt mit.');
+    if (this.dog?.seek) { this.dog.seek = null; g.audio.sfx('bark'); return g.ui.toast('Bello kommt zurück.'); }
+    S.sit = S.sit ? 0 : 1; g.audio.sfx('bark'); g.ui.toast(S.sit ? 'Bello bleibt hier. (H = „Such!“)' : 'Bello kommt mit. (H = „Such!“)');
   }
   clear() { for (const a of [...this.animals]) this.remove(a); }
 
@@ -265,7 +311,7 @@ export class Life {
   }
   updateCar(dt, P, dark) {
     const g = this.g;
-    if (!this.car && dark > .7 && g.S.abs > this.nextCarAbs) {
+    if (!this.car && dark > .7 && g.S.abs > this.nextCarAbs && regionOf(-P.pos.z) === 'tal') {
       const north = Math.random() < .5, mesh = this.buildCar(); this.scene.add(mesh);
       this.car = { mesh, y: north ? MAP.y1 : MAP.y0, dir: north ? -1 : 1, v: 16, honk: 0 };
       this.nextCarAbs = g.S.abs + 1.5 + Math.random() * 2.5; g.audio.sfx('car');

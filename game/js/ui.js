@@ -75,16 +75,17 @@ export class UI {
     const inv = g.S.inv, cap = g.capacity(), chest = g.build?.chest;
     let h = '';
     if (chest) {
-      h += `<h2>📦 Vorratskiste <small>${chest.inv.length}/20 Plätze · ← nimmt, → legt hinein</small></h2><div class="grid">`;
-      for (let i = 0; i < 20; i++) { const s = chest.inv[i], it = s && ITEMS[s.id];
-        h += it ? `<div class="cell"><i>${it.icon}</i><div>${it.name}${s.n > 1 ? ' ×' + s.n : ''}</div><button data-get="${i}">← Nehmen</button></div>` : `<div class="cell empty"></div>`; }
+      const cap = g.build.storeCap(chest), title = { kiste: '📦 Vorratskiste', regal: '🗄️ Regal', kuehlbox: '🧊 Kühlbox – hier verdirbt nichts so schnell' }[chest.type] || 'Lager';
+      h += `<h2>${title} <small>${chest.inv.length}/${cap} Plätze · ← nimmt, → legt hinein</small></h2><div class="grid">`;
+      for (let i = 0; i < cap; i++) { const s = chest.inv[i], it = s && ITEMS[s.id];
+        h += it ? `<div class="cell"><i>${it.icon}</i><div>${it.name}${s.n > 1 ? ' ×' + s.n : ''}</div><small>${g.health.freshText(s)}</small><button data-get="${i}">← Nehmen</button></div>` : `<div class="cell empty"></div>`; }
       h += `</div>`;
     }
     h += `<h2>Rucksack <small>${inv.length}/${cap} Plätze${g.S.flags.fur ? ' · 🧥 Fellmantel an' : g.S.flags.jacket ? ' · 🧥 Jacke an' : ''}</small></h2><div class="grid">`;
     for (let i = 0; i < cap; i++) {
       const s = inv[i], it = s && ITEMS[s.id];
       h += it ? `<div class="cell" data-i="${i}" title="${it.desc || ''}"><i>${it.icon}</i><div>${it.name}${s.n > 1 ? ' ×' + s.n : ''}</div>
-        <small>${it.desc || (it.use ? Object.entries(it.use).map(([k, v]) => ({ hunger: 'Hunger', thirst: 'Durst', warmth: 'Wärme', health: 'Gesundheit', stamina: 'Ausdauer' }[k] + (v > 0 ? ' +' : ' ') + v)).join(', ') : '')}</small>
+        <small>${it.desc || (it.use ? Object.entries(it.use).map(([k, v]) => ({ hunger: 'Hunger', thirst: 'Durst', warmth: 'Wärme', health: 'Gesundheit', stamina: 'Ausdauer' }[k] + (v > 0 ? ' +' : ' ') + v)).join(', ') : '')}${g.health.freshText(s) ? '<br>' + g.health.freshText(s) : ''}</small>
         ${chest ? `<button data-put="${i}">→ In die Kiste</button>` : it.use ? `<button data-use="${i}">Benutzen</button>` : it.read ? `<button data-read="${i}">Lesen</button>` : ''}<button data-drop="${i}" class="drop">Wegwerfen</button></div>`
         : `<div class="cell empty"></div>`;
     }
@@ -98,6 +99,12 @@ export class UI {
     }
     h += `</div><p class="hint">${bench ? '🛠️ Werkbank in der Nähe: Munition, Angel, Profi-Axt, großer Rucksack, Kerzen.' : 'Mehr Rezepte (Munition, Angel, Profi-Axt …) an einer Werkbank (G → Nützliches).'} · Tab / Esc schließen</p>`;
     $('invpanel').innerHTML = h;
+  }
+  // keypad (code locks): digits typed so far
+  renderCode(label, typed, n) {
+    $('codepanel').innerHTML = `<h2>🔢 ${label}</h2><div class="codedisp">${(typed + '_'.repeat(Math.max(0, n - typed.length))).split('').join(' ')}</div>
+      <div class="keypad">${[1, 2, 3, 4, 5, 6, 7, 8, 9, 'C', 0, 'OK'].map(k => `<button data-key="${k}" class="${typeof k === 'string' ? 'sec' : ''}">${k}</button>`).join('')}</div>
+      <p class="hint">Ziffern auch mit der Tastatur · Enter = OK · Esc schließen</p>`;
   }
   show(id, on) { $(id).classList.toggle('show', on); }
   read(title, text) { $('reader').innerHTML = `<h2>${title}</h2><p>${text}</p><small>E / Esc schließen</small>`; this.show('reader', true); }

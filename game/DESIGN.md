@@ -71,8 +71,23 @@ Lichter (Fackelhalter, Laterne, Solarlampe, Baustrahler), Zäune mit Tor gegen T
 Waldsee mit Steg + Anglerhütte, Angeln, Kaninchen + Fallen, Hund Bello, Jahreszeiten + Wetter (Schnee, Nebel, Gewitter), Kompass, abgelegte Gegenstände bleiben liegen,
 Taschenlampe per Links-/Rechtsklick, mehr Munition (Säcke, Händler, Werkbank).
 
+## Ausbau 3 (15.11.2026)
+- **Krankheiten:** Erkältung (Kälte, Nässe, Gebirge; Husten, weniger Ausdauer, Fieber ab 60 %) und Magenverstimmung (Verdorbenes, Rohes, Bachwasser);
+  Heilung durch Wärme/Schlaf, Kräutertee (Kamille + Wasser am Feuer/Gaskocher) und Medizin (`js/health.js`).
+- **Vorräte verderben:** Essen trägt seine Frische im Stapel (`f`, Spielstunden), auch in Kisten und abgelegten Bündeln; Kühlbox ×0,2, Winter ×0,5, Gebirge ×0,7;
+  danach „Verdorbenes Essen“. Trockenfleisch verdirbt nie.
+- **Ruderboot + Insel:** der Waldsee ist größer und tief (nicht watbar); Boot am Steg (W/S/A/D, Aussteigen am Ufer/Steg/Insel, `js/boat.js`);
+  Opa Willis Schatz unter dem Steinkreuz (Spaten), Hinweis im Logbuch der Anglerhütte.
+- **Forsthaus + Funkturm:** Rätselkette – Schlüssel bei der Futterkrippe → Tagebuch (Code der Funkhütte = Höhe Hirschkopf 612) + Kalender (Waffenschrank 1403);
+  Funkstation mit Tastenfeld, Notstrom-Aggregat, Sender (Bergwacht, Wetterbericht), Schlüssel der Pass-Schranke.
+- **Zweite Karte „Steinberg“:** eigene Region im selben GLB (y 900 … 1160, `s14_gebirge.py`, `js/regions.js`), per Auto über den Pass erreichbar:
+  Serpentinen, Steinberghütte mit Förster Henning, Stollen mit Geröll zum Sprengen und Kristallkammer, Gipfelkreuz, Bergsee, Heustadel, Gämsen,
+  Schnee statt Regen, kälter. Batches und Instanzen pro Region – die jeweils andere Karte wird nicht gezeichnet.
+- **Bello „Such!“** (H): führt zu Säcken, Kräutern, Kristallen, Schätzen. **26 Abzeichen + Statistikseite** (Handbuch, Pause-Menü).
+- 7 neue Nebenaufgaben, neue Gebirgskarte (Relief), Fisch/Kaninchen am Feuer braten, Töpfe kommen beim Kochen zurück.
+
 ## Später (weitere Maps / Ausbau)
-Forsthaus, Funkturm, Boot fahren auf dem See, Krankheiten/Erkältung, Vorräte verderben, zweite Karte (Gebirge), Controller-Steuerung, Mehrspieler.
+Controller-Steuerung, Mehrspieler, Jagdhütte im Gebirge, Winter-Events (zugefrorener See), weitere Regionen.
 
 ## Technik
 - Blender: jedes benutzbare Ding ist ein eigenes Objekt mit Eigenschaften (`interact`, `label`, `item`, `angle`, `slide`, `group` …),

@@ -109,6 +109,15 @@ export class Audio {
       case 'splash': this.noise(.3, 'lowpass', 1400, .35, 1, 0, .5); this.noise(.2, 'bandpass', 2400, .2, 1, .12); break;
       case 'bark': for (let i = 0; i < 2; i++) { this.tone(420, .09, .2, 'sawtooth', i * .22, .6); this.noise(.08, 'bandpass', 900, .25, 1, i * .22); } break;
       case 'thunder': this.noise(2.5, 'lowpass', 160, 1.0, 1, 0, .4); this.noise(.4, 'lowpass', 900, .5, 1, 0, .3); this.tone(38, 2, .25, 'sine', 0, .6); break;
+      case 'cough': for (let i = 0; i < 2; i++) { this.noise(.18, 'bandpass', 700, .35, 1.5, i * .32, .6); this.tone(160, .12, .12, 'sawtooth', i * .32, .7); } break;
+      case 'retch': this.tone(120, .6, .15, 'sawtooth', 0, .6); this.noise(.5, 'lowpass', 600, .2, 1, .1, .5); break;
+      case 'fuse': this.noise(2.6, 'highpass', 3500, .12, 1, 0, 1.1); break;
+      case 'boom': this.noise(2.8, 'lowpass', 220, 1.0, 1, 0, .35); this.noise(.5, 'lowpass', 1800, .8, 1, 0, .3); this.tone(32, 2.2, .45, 'sine', 0, .5);
+        for (let i = 0; i < 6; i++) this.noise(.15, 'lowpass', 900, .25, 1, .6 + i * .25); break;
+      case 'row': this.noise(.35, 'bandpass', 1100, .14, 1.2, 0, .6); this.noise(.25, 'lowpass', 500, .1, 1, .15); break;
+      case 'key': this.tone(1200 + Math.random() * 400, .06, .08, 'square'); break;
+      case 'badge': [659, 784, 988, 1318].forEach((f, i) => this.tone(f, .3, .1, 'triangle', i * .11)); this.tone(1976, .5, .05, 'sine', .45); break;
+      case 'sniff': for (let i = 0; i < 4; i++) this.noise(.06, 'bandpass', 1800, .18, 2, i * .1); break;
       case 'coins': for (let i = 0; i < 3; i++) this.tone(1500 + i * 300, .08, .08, 'triangle', i * .07); break;
     }
   }

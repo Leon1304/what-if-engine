@@ -34,7 +34,7 @@ await step('Sack durchsuchen', () => { const { game } = window.__game; T.give('r
   return { v, stein: T.n('stein'), wasser: T.n('wasser'), searched: !!s.state.searched, flat: s.node.scale.y < .5 }; }, r => r.stein >= 2 && r.searched && r.flat);
 
 await step('Baum fällen + Stamm zerlegen', () => { const { game, W, THREE } = window.__game; T.give('axt');
-  const t = W.trees.find(t => !t.fixed && t.kind === 'Fichte' && t.x > -80 && t.x < -40 && -t.z > 40 && -t.z < 100);
+  const t = W.trees.find(t => !t.fixed && t.kind === 'Fichte' && t.x > -100 && t.x < -20 && -t.z > 30 && -t.z < 140 && !W.treesNear(t.x, t.z).some(o => o !== t && Math.hypot(o.x - t.x, o.z - t.z) < 6.5));
   const p = new THREE.Vector3(t.x + 1.5, 0, t.z); T.at(p.x, -p.z); T.lookP(new THREE.Vector3(t.x, window.__game.player.pos.y + 1.2, t.z));
   let v = ''; for (let i = 0; i < 6; i++) v = T.e(); const fell = game.build.falling.length; T.tick(4);
   const L = game.build.logs[0]; if (!L) return { fell, logs: 0 };
@@ -149,14 +149,87 @@ await step('Jahreszeit Winter: Schnee, kein Wachstum', () => { const { game } = 
   const f = game.build.list.find(s => s.type === 'feld'); f.field.crop = 'karotte'; f.field.p = 0; game.build.update(0, 5); const grow = f.field.p;
   game.S.day = 9; game.seasons.update(.1); game.build.update(0, 1); const spring = game.seasons.season, grow2 = f.field.p; game.S.day = 4; game.seasons.update(.1);
   return { w, c0: +c0.toFixed(1), c1: +c1.toFixed(1), kinds: game.seasons.targets.map(t => t.kind + t.geo.attributes.color.count).slice(0, 6).join(), changed: c1 > c0 * 1.05, grow, spring, grow2: +grow2.toFixed(2), back: game.seasons.season }; }, r => r.w === 'Winter' && r.changed && r.grow === 0 && r.spring === 'Frühling' && r.grow2 > 0 && r.back === 'Herbst');
+// ---------------- round 3: health, spoiling, boat + island, forester, radio station, pass, mountains, Bello's search, badges
+await step('Essen verdirbt, Kühlbox hält frisch', () => { const { game, THREE } = window.__game; const H = game.health; game.seasons.update(.01); T.at(-20, 196);
+  T.clear(['rucksack']); T.give('fleisch', 2); const f0 = game.S.inv.find(x => x.id === 'fleisch')?.f; H.update(0, 31); const bad = T.n('verdorben'), meat = T.n('fleisch');
+  const p = window.__game.B(-22, 196, 0); p.y = window.__game.W.groundY(p.x, p.z, 60); const k = game.build.make({ type: 'kuehlbox', x: p.x, y: p.y, z: p.z, rot: 0 });
+  T.give('fleisch', 1); game.build.chest = k; game.build.chestMove(1, game.S.inv.findIndex(x => x.id === 'fleisch')); H.update(0, 31); const kept = k.inv[0]?.id, left = Math.round(k.inv[0]?.f);
+  game.build.chestMove(-1, 0); game.build.chest = null; const back = game.S.inv.find(x => x.id === 'fleisch')?.f;
+  return { f0, bad, meat, kept, left, back: Math.round(back) }; }, r => r.f0 === 30 && r.bad === 2 && r.meat === 0 && r.kept === 'fleisch' && r.left > 20 && r.back === r.left);
+await step('Erkältung: kalt → krank, Tee kochen, Medizin heilt', () => { const { game, THREE } = window.__game; const H = game.health, S = game.S; S.day = Math.max(S.day, 3); S.ill = { erk: 0, mag: 0 };
+  T.clear(['rucksack']); S.stats.warmth = 5; let h = 0; for (; h < 60 && !H.ill.erk; h++) H.update(0, 1); const sick = H.ill.erk;
+  const stam = H.staminaK; T.give('kraeuter', 1); T.give('topf_klar', 1); const f = game.life.addFire(window.__game.player.pos.clone().add(new THREE.Vector3(1, 0, 0)), 3, true);
+  const v = game.cookable()?.[2]; game.fireAction(f); const tee = T.n('tee'), topf = T.n('topf'); S.stats.warmth = 80;
+  game.useSlot(game.S.inv.findIndex(x => x.id === 'tee')); const afterTea = Math.round(H.ill.erk); T.give('medizin'); game.useSlot(game.S.inv.findIndex(x => x.id === 'medizin'));
+  T.give('verdorben'); game.useSlot(game.S.inv.findIndex(x => x.id === 'verdorben')); const mag = H.ill.mag; H.update(0, 10); 
+  return { hours: h, sick, stam, v, tee, topf, afterTea, erk: H.ill.erk, mag, magAfter: H.ill.mag, cured: S.stat.cured, label: H.label() }; },
+  r => r.sick > 0 && r.stam < 1 && r.tee === 1 && r.topf === 1 && r.afterTea < r.sick && r.erk === 0 && r.mag >= 60 && r.magAfter < r.mag && r.cured >= 1);
+await step('Waldsee: zu tief zum Waten, Ruderboot zur Insel, graben, Schatz', () => { const { game, player, THREE, B } = window.__game; const Bt = game.boat; game.life.clear();
+  T.at(-64.5, 14.0); player.yaw = Math.PI / 2; for (let i = 0; i < 30 * 6; i++) { player.keys = { KeyW: true }; player.update(1 / 30, game); game.update(1 / 30, {}); } player.keys = {};
+  const wade = { x: +player.pos.x.toFixed(1), y: +player.pos.y.toFixed(2) };
+  T.at(-75.6, 17.6, -.1); T.lookP(Bt.it.center); const v = game.verb(game.findTarget()); T.e(); const on = Bt.on;
+  const isl = B(-90, 17, 0); let n = 0;
+  for (; n < 30 * 40 && Math.hypot(isl.x - Bt.pos.x, isl.z - Bt.pos.z) > 7.2; n++) { Bt.yaw = Math.atan2(-(isl.x - Bt.pos.x), -(isl.z - Bt.pos.z)); Bt.update(1 / 30, { KeyW: true }); game.update(1 / 30, {}); }
+  for (let i = 0; i < 30 * 4; i++) { Bt.yaw = Math.atan2(-(isl.x - Bt.pos.x), -(isl.z - Bt.pos.z)); Bt.update(1 / 30, { KeyW: true }); game.update(1 / 30, {}); }
+  player.yaw = Bt.yaw; player.pitch = 0; player.sync(); const d = +Math.hypot(isl.x - Bt.pos.x, isl.z - Bt.pos.z).toFixed(1); const ve = game.verb(game.findTarget()); game.boat.exit();
+  const landed = !Bt.on, onIsland = Math.hypot(isl.x - player.pos.x, isl.z - player.pos.z) < 4.5; T.tick(.5);
+  T.give('spaten'); const kreuz = game.byName.Steinkreuz, kiste = game.byName.Schatzkiste; const hidden = !kiste.node.visible; game.interact({ it: kreuz }); const shown = kiste.node.visible;
+  game.interact({ it: kiste }); game.progress.update();
+  return { wade, v, on, d, ve, landed, onIsland, found: game.S.found.insel, hidden, shown, gold: T.n('goldmuenze'), treasure: game.S.flags.treasure, side: !!game.S.side.schatz, rowed: Math.round(game.S.stat.row) }; },
+  r => r.wade.y > -1.7 && r.on && r.landed && r.onIsland && r.hidden && r.shown && r.gold >= 4 && r.treasure && r.side && r.rowed > 5);
+await step('Forsthaus: Schlüssel im Heu, Tür, Tagebuch, Waffenschrank-Code', () => { const { game } = window.__game; const g = game, b = g.byName;
+  T.at(-82, 128.25); g.interact({ it: b.Forsthaus_Tuer }); const locked = !b.Forsthaus_Tuer.target; g.interact({ it: b.Futterkrippe_Heu }); const key = T.n('schluessel_forst');
+  g.interact({ it: b.Forsthaus_Tuer }); const open = b.Forsthaus_Tuer.target; g.interact({ it: b.Tagebuch_Henning }); g.ui.show('reader', false);
+  g.interact({ it: b.Waffenschrank_Tuer }); const pad = g.codeFor?.name; const wrong = g.tryCode('1111'), right = g.tryCode('1403'); g.closePanel?.();
+  g.interact({ it: b.Waffenschrank_Inhalt }); g.progress.update();
+  return { locked, key, open, diary: g.S.flags.diary, known: !!g.S.known.funkturm, pad, wrong, right, cab: b.Waffenschrank_Tuer.target, med: T.n('medizin'), side: !!g.S.side.forst }; },
+  r => r.locked && r.key === 1 && r.open === 1 && r.diary && r.known && r.pad === 'Waffenschrank_Tuer' && !r.wrong && r.right && r.cab === 1 && r.side);
+await step('Funkstation: Code 612, Aggregat, Sender, Schranken-Schlüssel', () => { const { game } = window.__game; const g = game, b = g.byName; T.at(-74.4, -74.5);
+  g.interact({ it: b.Funkhuette_Tuer }); const pad = g.codeFor?.name; const ok = g.tryCode('612'); const v0 = g.verb({ it: b.Funksender }); g.interact({ it: b.Funksender }); const noPower = !g.S.flags.funkCalled;
+  T.give('kanister_voll'); g.interact({ it: b.Funkaggregat }); g.interact({ it: b.Funksender }); g.ui.show('reader', false); const fc = g.seasons.forecast();
+  g.interact({ it: b.Schluessel_Schranke }); g.progress.update(); g.closePanel?.();
+  return { pad, ok, v0, noPower, power: g.S.flags.funkPower, called: g.S.flags.funkCalled, fc, key: T.n('schluessel_schranke'), side: !!g.S.side.funk, known: !!g.S.known.berghuette }; },
+  r => r.pad === 'Funkhuette_Tuer' && r.ok && r.noPower && r.power && r.called && r.key === 1 && r.side && r.known && r.fc.length > 10);
+await step('Schranke auf, mit dem Auto über den Pass ins Gebirge', async () => { const { game, B, W } = window.__game; const g = game, V = g.vehicle, sch = g.byName.Schranke; g.S.time = 11;
+  const p = B(-61.85, 205, 0); p.y = W.groundY(p.x, p.z, 60); T.at(-61, 219.5); g.interact({ it: sch }); const open = sch.target; for (let i = 0; i < 60; i++) g.update(1 / 30, {});
+  V.pos.copy(p); V.yaw = 0; V.pose(); g.S.car.fixed = 1; g.S.car.fuel = 80; V.enter(); let i = 0;
+  for (; i < 30 * 12 && !g.traveling && g.region(V.pos) === 'tal'; i++) { V.update(1 / 30, { KeyW: true }); g.update(1 / 30, {}); }
+  const trig = g.traveling; await new Promise(r => setTimeout(r, 1500)); for (let k = 0; k < 10; k++) { V.update(1 / 30, {}); g.update(1 / 30, {}); }
+  const reg = g.region(V.pos), at = [Math.round(V.pos.x), Math.round(-V.pos.z)]; for (let k = 0; k < 30 * 4; k++) { V.update(1 / 30, { KeyW: true }); g.update(1 / 30, {}); }
+  const climbed = Math.round(-V.pos.z); V.exit(); g.update(.1, {}); g.progress.update();
+  return { open, trig, reg, at, climbed, berg: g.S.flags.berg, side: !!g.S.side.pass, found: !!g.S.found.steinberg, fuel: Math.round(g.S.car.fuel) }; },
+  r => r.open === 1 && r.trig && r.reg === 'berg' && r.climbed > r.at[1] && r.berg && r.side && r.found);
+if (SHOTS) { await page.evaluate(() => { const { game, player } = window.__game; game.S.time = 11; T.at(-8, 1086, 34.4); player.yaw = .5; player.pitch = .05; player.sync(); }); await page.waitForTimeout(600); await shot('berg_huette'); }
+await step('Gebirge: Henning, Gämse, Stollen sprengen, Kristalle, Gipfelbuch, Karte', async () => { const { game, THREE } = window.__game; const g = game, b = g.byName;
+  T.at(-24, 1096.5); g.interact({ it: b.Henning }); g.ui.show('reader', false); const tip = g.verb({ it: b.Henning }); g.interact({ it: b.Henning });
+  g.life.clear(); g.S.time = 12; T.tick(30); const kinds = [...new Set(g.life.animals.map(a => a.kind))];
+  const gams = g.life.spawn('deer', g.P.pos); const gk = gams?.kind;
+  T.at(80, 1010.9, 23.0); const geroell = b.Geroell; const v0 = g.verb({ it: geroell }); g.interact({ it: geroell }); const miss = !geroell.state.fuse;
+  T.give('schwarzpulver', 2); T.give('seil', 1); T.give('feuerzeug', 1); g.interact({ it: geroell }); T.at(70, 1010.9, 23.0); await new Promise(r => setTimeout(r, 3500));
+  const gone = !geroell.node.visible; T.at(89, 1010.9, 23.0); const free = window.__game.player.free();
+  for (const n of ['Bergkristall_0', 'Bergkristall_1', 'Bergkristall_2']) g.interact({ it: b[n] });
+  g.interact({ it: b.Gipfelbuch }); g.ui.show('reader', false); g.progress.update(); g.add('karte', 1, true); g.openPanel('map'); const ch = document.getElementById('mapcanvas').height; g.openPanel('map');
+  return { henning: g.S.flags.henning, tip, kinds, gk, v0, miss, gone, free, kristall: g.S.stat.kristall, sideH: !!g.S.side.henning, sideS: !!g.S.side.stollen, known: !!g.S.known.gipfel, ch, blast: g.S.flags.blasted }; },
+  r => r.henning && r.gk === 'gams' && r.miss && r.gone && r.free && r.kristall === 3 && r.sideH && r.sideS && r.known && r.ch < 600 && r.blast);
+if (SHOTS) { await page.evaluate(() => { const { game, player } = window.__game; game.S.time = 12; T.at(68, 1012, 23.0); player.yaw = -1.5; player.pitch = .1; player.sync(); }); await page.waitForTimeout(500); await shot('berg_stollen');
+  await page.evaluate(() => { const { game, player } = window.__game; game.S.flags.flashOn = true; game.S.battery = 90; T.at(88, 1010.9, 23.0); player.yaw = -1.57; player.pitch = -.1; player.sync(); }); await page.waitForTimeout(500); await shot('berg_kristalle');
+  await page.evaluate(() => { const { game } = window.__game; game.S.flags.flashOn = false; game.openPanel('map'); }); await page.waitForTimeout(300); await shot('berg_karte'); await page.evaluate(() => window.__game.game.openPanel('map')); }
+await step('Zurück ins Tal (Passstraße bergab)', async () => { const { game } = window.__game; const g = game; g.travel('tal'); await new Promise(r => setTimeout(r, 1500)); const V = g.vehicle;
+  return { reg: g.region(V.pos), at: [Math.round(V.pos.x), Math.round(-V.pos.z)] }; }, r => r.reg === 'tal' && Math.abs(r.at[1] - 214) < 3);
+await step('Bello: „Such!“ findet einen Sack', () => { const { game } = window.__game; const g = game, L = g.life; T.at(-60, 60); g.S.dog.sit = 0; T.tick(3); const d0 = g.S.stat.dogfind || 0;
+  L.dogSeek(); const sk = L.dog.seek; if (!sk) return { none: true }; const name = sk.it.name; T.tick(30); const dd = +L.dog.pos.distanceTo(sk.pos).toFixed(1);
+  T.at(sk.pos.x + 1.5, -sk.pos.z); T.tick(1); return { name, dd, finds: (g.S.stat.dogfind || 0) - d0, seek: !!L.dog.seek }; }, r => r.dd < 3 && r.finds === 1 && !r.seek);
+await step('Erfolge + Statistik (Handbuch)', () => { const { game } = window.__game; game.progress.update(); const b = Object.keys(game.S.badges); game.openPanel('book'); const book = document.getElementById('book');
+  const i = [...book.querySelectorAll('nav button')].findIndex(x => x.textContent.includes('Erfolge')); book.querySelectorAll('nav button')[i].click(); const html = book.innerHTML; game.openPanel('book');
+  return { n: b.length, some: b.slice(0, 6).join(','), stats: html.includes('Statistik'), rowed: html.includes('gerudert') }; }, r => r.n >= 5 && r.stats && r.rowed);
 await step('Speichern Platz 1', () => { const { game } = window.__game; game.S.time = 12; return { ok: game.save('1'), info: game.slotInfo('1') }; }, r => r.ok);
-const before = await page.evaluate(() => { const { game } = window.__game; return { n: game.build.list.length, felled: Object.keys(game.S.felled).length, inv: game.S.inv.length, stage: game.build.list[0]?.stage, crop: game.build.list.find(s => s.type === 'feld')?.field, marks: game.S.marks.length, drops: game.drops.length, xp: game.S.xp, car: game.vehicle.pos.toArray().map(v => Math.round(v)).join(), dog: game.S.dog.tame, ext: Math.max(...game.build.list.map(s => s.ext || 0)) }; });
+const before = await page.evaluate(() => { const { game } = window.__game; return { n: game.build.list.length, felled: Object.keys(game.S.felled).length, inv: game.S.inv.length, stage: game.build.list[0]?.stage, crop: game.build.list.find(s => s.type === 'feld')?.field, marks: game.S.marks.length, drops: game.drops.length, xp: game.S.xp, car: game.vehicle.pos.toArray().map(v => Math.round(v)).join(), dog: game.S.dog.tame, ext: Math.max(...game.build.list.map(s => s.ext || 0)), chest: game.byName.Schatzkiste.node.visible, rubble: game.byName.Geroell.node.visible, badges: Object.keys(game.S.badges).length, boat: Math.round(game.boat.pos.x), funk: game.S.flags.funkPower, cab: game.byName.Waffenschrank_Tuer.state.unlocked }; });
 if (SHOTS) { await page.evaluate(() => { const { game, player } = window.__game; const s = game.build.list[0]; T.at(s.x + 7, -s.z - 6); T.lookP(new (window.__game.THREE.Vector3)(s.x, s.y + 1.5, s.z)); }); await page.waitForTimeout(400); await shot('huette'); }
 await page.evaluate(() => sessionStorage.setItem('waldtank_load', '1'));
 await page.goto(URL_); await page.waitForFunction(() => window.__game, null, { timeout: 120000 }); await page.waitForTimeout(800);
 await page.evaluate(helpers);
-await step('Laden Platz 1 (nach Neustart)', () => { const { game } = window.__game; return { n: game.build.list.length, felled: Object.keys(game.S.felled).length, inv: game.S.inv.length, stage: game.build.list[0]?.stage, crop: game.build.list.find(s => s.type === 'feld')?.field, marks: game.S.marks.length, door: !!game.build.list[0]?.door, drops: game.drops.length, xp: game.S.xp, car: game.vehicle.pos.toArray().map(v => Math.round(v)).join(), dog: game.S.dog.tame, ext: Math.max(...game.build.list.map(s => s.ext || 0)) }; },
-  r => r.n === before.n && r.felled === before.felled && r.inv === before.inv && r.stage === 4 && r.marks === before.marks && r.door && r.drops === before.drops && r.xp === before.xp && r.car === before.car && r.dog === before.dog && r.ext === before.ext);
+await step('Laden Platz 1 (nach Neustart)', () => { const { game } = window.__game; return { n: game.build.list.length, felled: Object.keys(game.S.felled).length, inv: game.S.inv.length, stage: game.build.list[0]?.stage, crop: game.build.list.find(s => s.type === 'feld')?.field, marks: game.S.marks.length, door: !!game.build.list[0]?.door, drops: game.drops.length, xp: game.S.xp, car: game.vehicle.pos.toArray().map(v => Math.round(v)).join(), dog: game.S.dog.tame, ext: Math.max(...game.build.list.map(s => s.ext || 0)), chest: game.byName.Schatzkiste.node.visible, rubble: game.byName.Geroell.node.visible, badges: Object.keys(game.S.badges).length, boat: Math.round(game.boat.pos.x), funk: game.S.flags.funkPower, cab: game.byName.Waffenschrank_Tuer.state.unlocked }; },
+  r => r.chest === before.chest && r.rubble === before.rubble && r.badges === before.badges && r.boat === before.boat && r.funk === before.funk && r.cab === before.cab && r.n === before.n && r.felled === before.felled && r.inv === before.inv && r.stage === 4 && r.marks === before.marks && r.door && r.drops === before.drops && r.xp === before.xp && r.car === before.car && r.dog === before.dog && r.ext === before.ext);
 await step('Alter Spielstand (v1) lädt', () => { const { game } = window.__game;
   const old = { S: { time: 20, day: 2, stats: { health: 80, hunger: 50, thirst: 50, warmth: 50 }, inv: [{ id: 'chips', n: 2 }, { id: 'gibtsnichtmehr', n: 1 }], sel: 0, battery: 50, genFuel: 3, quest: 6, flags: { bag: true }, found: { tanke: 1 } },
     its: { Kanister: { t: 0, s: { taken: 1 } }, AltesObjekt: { t: 1, s: {} } }, fires: [], pos: [25, 1.0, 0], yaw: 0 };
