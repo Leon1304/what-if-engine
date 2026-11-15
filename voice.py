@@ -184,7 +184,9 @@ def outro():
     opts = (END or {}).get('opts') or []; q = clean((END or {}).get('q') or '')
     ab = ', '.join('ABCD'[:len(opts) - 1]) + ' or ' + 'ABCD'[len(opts) - 1] if len(opts) > 1 else ''
     return f"{q} {ab} — drop your pick in the comments." if ab else f"{q} Tell me in the comments."
-if END and END.get('say') is not False and (isinstance(END.get('say'), str) or END.get('q')):
+# v3.44 quick end card (CFG.endCard 'quick', default in shorts): the card stands ≤ 1.5 s, the question is only on screen — no closing line, END.loop alone carries the voice
+QUICK_END = bool(END) and CFG.get('endCard', 'full' if CFG.get('aspect') in ('16:9', 'landscape') else 'quick') == 'quick'
+if END and not QUICK_END and END.get('say') is not False and (isinstance(END.get('say'), str) or END.get('q')):
     say = clean(END['say']) if isinstance(END.get('say'), str) else (outro() if EXPL and END.get('q') else clean(END['q']))
     if EXPL and WWYD.search(say): say = WWYD.sub(' ', say).strip() or outro()
     lines.append(('end', END['t'] + 0.35, DUR - LOOP_EST - LOOP_TAIL - 0.25 - END['t'] - 0.35, say, [], 0, None, END.get('pace', 1), None, END.get('tone') or 'calm'))

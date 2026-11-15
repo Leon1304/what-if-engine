@@ -96,7 +96,16 @@ async function freshPrints() {
   const { browser, page } = await openPage(135);
   try { return await page.evaluate(() => window.whatif.audit({ fresh: true })); } catch (e) { return null; } finally { await browser.close(); }
 }
-const AF = 'loudnorm=I=-14:TP=-1.5:LRA=11,aresample=48000', igPath = v => v.replace(/\.mp4$/, '') + '-ig.mp4';
+const AF0 = 'loudnorm=I=-14:TP=-1.5:LRA=11,aresample=48000', igPath = v => v.replace(/\.mp4$/, '') + '-ig.mp4';
+// v3.44 two-pass loudness: measure the mix (EBU R128), one fixed gain to −14 LUFS — the engine's dynamics (pre-impact drop, hits) stay, single-pass loudnorm pulled
+// every 3 s towards the target — then a true-peak limiter (4× oversampled, −2 dBFS: ≤ −1 dBTP after AAC). WHATIF_LOUDNORM=1 = the old single-pass filter.
+const AFfor = wav => {
+  if (process.env.WHATIF_LOUDNORM === '1') return AF0;
+  const r = spawnSync('ffmpeg', ['-hide_banner', '-nostats', '-i', wav, '-af', 'ebur128', '-f', 'null', '-'], { encoding: 'utf8', maxBuffer: 1 << 28 });
+  const m = /Integrated loudness:\s*I:\s*(-?[\d.]+) LUFS/.exec(r.stderr ?? ''); if (!m || !isFinite(+m[1]) || +m[1] < -60) return AF0;
+  const g = Math.max(-24, Math.min(24, -14 - +m[1]));
+  return `volume=${g.toFixed(2)}dB,aresample=192000,alimiter=limit=0.79:attack=1:release=60:level=0,aresample=48000`;
+};
 const ff = args => { const r = spawnSync('ffmpeg', ['-y', '-loglevel', 'error', ...args], { stdio: 'inherit' }); if (r.status !== 0) { console.log('ffmpeg failed'); process.exit(1); } };
 
 if (opt('srt')) {   // v2.30: subtitles for YouTube (same pages + timing as the burned-in captions)
@@ -191,7 +200,7 @@ if (opt('remux')) {   // --remux out.mp4 : render audio again and swap it into t
   await renderAudio(wav);
   for (const v of [video, igPath(video)].filter(existsSync)) {
     const tmp = v.replace(/\.mp4$/, '') + '.part.mp4';
-    ff(['-i', v, '-i', wav, '-map', '0:v', '-map', '1:a', '-c:v', 'copy', '-af', AF, '-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart', '-shortest', tmp]);
+    ff(['-i', v, '-i', wav, '-map', '0:v', '-map', '1:a', '-c:v', 'copy', '-af', AFfor(wav), '-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart', '-shortest', tmp]);
     renameSync(tmp, v); console.log('new audio in', v);
   }
 }
@@ -285,7 +294,7 @@ if (opt('video')) {
   ff(['-framerate', String(fps), '-i', path.join(dir, 'f%05d.jpg'), '-i', wav, '-map', '0:v', '-map', '1:a',
     '-c:v', 'libx264', '-preset', draft ? 'veryfast' : 'medium', '-profile:v', 'high', '-crf', draft ? '23' : '18',
     '-maxrate', cap + 'M', '-bufsize', 2 * cap + 'M', '-pix_fmt', 'yuv420p', '-r', String(fps),
-    '-af', AF, '-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart', '-shortest', tmpMp4]);
+    '-af', AFfor(wav), '-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart', '-shortest', tmpMp4]);
   renameSync(tmpMp4, video);
   // Instagram copy: 1080x1920 from the same frames (one encode only), ~12 Mbps VBR
   if (W > 1080 && !draft && flag('ig')) {   // Instagram copy only on request (--ig); default output is the YouTube master only
@@ -293,7 +302,7 @@ if (opt('video')) {
     ff(['-framerate', String(fps), '-i', path.join(dir, 'f%05d.jpg'), '-i', wav, '-map', '0:v', '-map', '1:a',
       '-vf', 'scale=1080:1920:flags=lanczos', '-c:v', 'libx264', '-preset', 'medium', '-profile:v', 'high',
       '-b:v', '12M', '-maxrate', '15M', '-bufsize', '24M', '-pix_fmt', 'yuv420p', '-r', String(fps),
-      '-af', AF, '-c:a', 'aac', '-b:a', '192k', '-ar', '48000', '-movflags', '+faststart', '-shortest', tmpIg]);
+      '-af', AFfor(wav), '-c:a', 'aac', '-b:a', '192k', '-ar', '48000', '-movflags', '+faststart', '-shortest', tmpIg]);
     renameSync(tmpIg, ig); console.log('wrote', ig, `${(statSync(ig).size / 1e6).toFixed(1)} MB (Instagram 1080x1920)`);
   }
   if (flag('clean')) { rmSync(dir, { recursive: true, force: true }); rmSync(wav, { force: true }); }

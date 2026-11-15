@@ -39,6 +39,21 @@ esac
 # v3.24 crowd QA by what the viewer sees (tests/crowd-qa): members inside each other close to the lens are reported, the same cram behind the camera is not
 case " $names " in *" crowd-qa "*) q=$(node render.mjs crowd-qa.html --probe 'qaCrowds()' 2>&1)
   if echo "$q" | grep -q 'crowd #0: .*close to the camera' && ! echo "$q" | grep -q 'crowd #1'; then echo "ok   crowd QA  near lens reported, off screen not"; else echo "FAIL crowd QA: $(echo "$q" | tail -5)"; fail=1; fi;; esac
+# v3.44 post-FX QA (tests/post-qa): the finished picture — LINES + BLOCKY (old 16-tap blur, CFG.blurLegacy), FRINGE (CFG.fringeMax: 8 + shake) and WASHOUT (white veil after a
+# flash) are reported; the same scene without those switches reports none of them; the tilt-shift scene stays free of BLOCKY / LINES / FRINGE / WASHOUT
+case " $names " in *" post-qa "*)
+  sed 's/^  blurLegacy: true, fringeMax: 8, washVeil: true };$/};/' post-qa.story.js > pq_off.story.js; cp post-qa.scene.js pq_off.scene.js
+  python3 assemble.py pq_off --title "PQ" --no-voice --no-el > pq_off.log 2>&1
+  { timeout 900 node render.mjs post-qa.html --audit --no-fresh > pq_on.out 2>&1; } & { timeout 900 node render.mjs pq_off.html --audit --no-fresh > pq_off.out 2>&1; } & wait
+  tsq=0; [ -f tilt-shift.log ] && tsq=$(grep -c '^QA: \(BLOCKY\|LINES\|FRINGE\|WASHOUT\)' tilt-shift.log)
+  if grep -q '^QA: LINES' pq_on.out && grep -q '^QA: BLOCKY' pq_on.out && grep -q '^QA: FRINGE' pq_on.out && grep -q '^QA: WASHOUT' pq_on.out && ! grep -q '^QA: \(LINES\|BLOCKY\|FRINGE\|WASHOUT\)' pq_off.out && [ "$tsq" = 0 ]; then echo "ok   post-FX QA  LINES · BLOCKY · FRINGE · WASHOUT reported, gone with the engine defaults; tilt-shift clean"
+  else echo "FAIL post-FX QA: tilt-shift lines $tsq"; grep -E '^QA: (LINES|BLOCKY|FRINGE|WASHOUT)|failed' pq_on.out pq_off.out | cut -c1-200; fail=1; fi;;
+esac
+# clip QA (tests/clip-qa): two houses in each other → OVERLAP, a figure in the side of a van → INSIDE, one under a beam that may not duck → HEADCLIP; the room, doorway, car, hug,
+# high awning, the figures that duck (beam, crawl tunnel, motorbike tunnel), drivers in every vehicle kind and the city figure (its tower is left out) stay quiet
+case " $names " in *" clip-qa "*) q=$(WHATIF_START_TIMEOUT=600 node render.mjs clip-qa.html --probe '[...qaOverlap(), ...qaClip()]' 2>&1)
+  if [ "$(echo "$q" | grep -c 'OVERLAP – ')" = 1 ] && echo "$q" | grep -q "OVERLAP – 'house' at (-10.0, -8.0)" && echo "$q" | grep -q "INSIDE – 'Inside'" && echo "$q" | grep -q "HEADCLIP – 'Beam'" \
+    && ! echo "$q" | grep -q "'Duck'\|'Room'\|'Door'\|'Driver'\|'HugA'\|'HugB'\|'Shade'\|'City'\|'Crawl'\|'Rider'\|'Seat\|failed"; then echo "ok   clip QA  OVERLAP · INSIDE · HEADCLIP reported, the rest quiet"; else echo "FAIL clip QA: $(echo "$q" | tail -8)"; fail=1; fi;; esac
 # v3.25 ElevenLabs music + sounds (EL_FAKE=1: sine tones instead of requests): short sections merge, the track plays, a 'none' segment stays silent
 case " $names " in *" el-audio "*)
   cp "$R/elaudio.py" .; cp el-audio.story.js elf.story.js; cp el-audio.scene.js elf.scene.js
@@ -68,12 +83,69 @@ print('%.1f %.2f %.3f' % (20 * np.log10(np.sqrt((a ** 2).mean()) + 1e-9), np.abs
   if ! grep -q 'PAGE ERRORS' ms_a.log && python3 -c "import sys; l, p, d = map(float, sys.argv[1:4]); sys.exit(0 if l > -40 and p < 1.0 and d > 0.3 else 1)" $ms 2>/dev/null; then echo "ok   music styles  bluegrass ${1} dB · peak ${2} · differs ${3}×"
   else echo "FAIL music styles: '$ms'"; tail -3 ms_a.log; fail=1; fi;;
 esac
+# v3.44 camera (tests/camera-react): the blast front hits the camera only after it got there (camReact), the speed ramp slows the scene and snaps back with a whoosh,
+#   punch-in whoosh, every frame the same when jumped to from elsewhere, tilt-shift policy (close shot 0, far hand key on)
+case " $names " in *" camera-react "*)
+  cr=$(node render.mjs camera-react.html --probe '(() => { stepScene(6.0); const k0 = CAMHIT.k; stepScene(6.8); const k1 = CAMHIT.k; const slow = ST(6.4) - ST(6.3); stepScene(9); const m1 = camFx.mini; stepScene(11); const m2 = camFx.mini;
+    stepScene(6.75); const A = camera.position.toArray().join() + camera.quaternion.toArray().join(); stepScene(2); stepScene(6.75); const B = camera.position.toArray().join() + camera.quaternion.toArray().join();
+    const H = AUDIO.hits, w1 = H.some(h => h.k === "whoosh" && Math.abs(h.t - 6.48) < 0.05), w2 = H.some(h => h.k === "whoosh" && Math.abs(h.t - 5.42) < 0.05);
+    return ["k0=" + k0.toFixed(2), "k1=" + k1.toFixed(2), "slow=" + slow.toFixed(3), "mini=" + m1.toFixed(2) + "/" + m2.toFixed(2), "pure=" + (A === B), "snap=" + w1, "punch=" + w2].join(" "); })()' 2>&1 | tail -1 | tr -d '"')
+  if echo "$cr" | grep -q 'k0=0.00 ' && echo "$cr" | grep -q 'pure=true snap=true punch=true' && echo "$cr" | grep -q 'mini=0.00/1.00' && python3 -c "import sys; d = dict(x.split('=') for x in sys.argv[1:]); sys.exit(0 if float(d['k1']) > 0.3 and float(d['slow']) < 0.04 else 1)" $cr 2>/dev/null
+  then echo "ok   camera react  $cr"; else echo "FAIL camera react: '$cr'"; fail=1; fi;;
+esac
+# v3.44 idle life (tests/life): a figure posed with a fixed time still moves (head / arms), has clothing detail, a bystander turns to the explosion
+case " $names " in *" life "*) q=$(node render.mjs life.html --probe "(() => { const g = RIGS.find(r => r.tag === 'still'), a = RIGS.find(r => r.tag === 'bysA'); stepScene(0.3); const n0 = g.neck.quaternion.clone(), e0 = g.foreL.quaternion.clone(); stepScene(1.3); const mv = g.neck.quaternion.angleTo(n0) + g.foreL.quaternion.angleTo(e0); stepScene(6.9); const y0 = a.neck.rotation.y; stepScene(8.2); const y1 = a.neck.rotation.y; return [mv > 0.01 ? 'moves' : 'frozen', (g._tlr?.length ?? 0) > 3 ? 'tailor' : 'plain', Math.abs(y1 - y0) > 0.15 ? 'attends' : 'ignores'].join(' '); })()" 2>&1 | tail -1)
+  case "$q" in *"moves tailor attends"*) echo "ok   idle life  $q";; *) echo "FAIL idle life: '$q'"; fail=1;; esac;; esac
+# v3.44 focus HUD + caption chunks + highlight rule (tests/overlay-hud): no badge / clock, one counter only while it counts, 2–4-word chunks, THE white in *The air*, one CAPHL, safe zone, dodge off the close-up's torso
+case " $names " in *" overlay-hud "*)
+  oh=$(node render.mjs overlay-hud.html --probe "(() => { const vis = t => { whatif.seek(t); return [...document.querySelectorAll('.stat')].filter(e => e.style.display !== 'none' && +e.style.opacity > 0.02).map(e => e.querySelector('.l').textContent).join('+') || '-'; };
+    const hud = [1, 3.5, 5.5, 7].map(vis).join(','); whatif.seek(1); const pos1 = document.getElementById('cap').className, ph = document.getElementById('phase').textContent || '-', bd = document.getElementById('badge').style.display || 'shown';
+    whatif.seek(5.2); const pos2 = document.getElementById('cap').className;
+    const ch = BEATS.map(b => { const d = document.createElement('div'); d.innerHTML = markup(b.text); const ws = [...d.querySelectorAll('.w')]; return capChunks(ws).map(p => p.map(i => ws[i].textContent).join(' ')); }).flat();
+    const bad = ch.filter(c => { const w = c.split(' '); return w.length > 4 || (w.length > 1 && !/[.,!?]$/.test(c) && isFWord(w[w.length - 1])) || /\\d$/.test(c); });
+    const d = document.createElement('div'); d.innerHTML = markup('*The air* burns'); const hl = [...d.querySelectorAll('.w')].map(w => w.classList.contains('hl') ? 1 : 0).join('');
+    return [hud, bd, ph, pos1, pos2, hl, qaCapHL().length, bad.length, ch.join(' / ')].join('|'); })()" 2>&1 | tail -1 | tr -d '"')
+  IFS='|' read -r h1 h2 h3 h4 h5 h6 h7 h8 h9 <<< "$oh"
+  if [ "$h1" = "Impact in,Fuel,-,Impact in" ] && [ "$h2" = none ] && [ "$h3" = - ] && [ "$h4" = safe ] && [ "$h5" != safe ] && [ "$h6" = 010 ] && [ "$h7" = 1 ] && [ "$h8" = 0 ]; then echo "ok   focus HUD + captions  counters $h1 · close-up caption → $h5 · chunks: $h9"
+  else echo "FAIL focus HUD + captions: '$oh'"; fail=1; fi;;
+esac
+# v3.44 sound dynamics (tests/sound-dynamics): impact at 6 s, cut sounds at 2 and 3.2 (dense → quieter), none in the hush before the hit; the 0.25 s before the hit ≥ 10 dB quieter than the bed, sub-drop on the hit
+case " $names " in *" sound-dynamics "*)
+  sp=$(node render.mjs sound-dynamics.html --probe "JSON.stringify([impactTimes(), AUDIO.hits.filter(h => h.k === 'cuthit').map(h => +h.t.toFixed(2)), AUDIO.hits.some(h => h.k === 'whoosh' && Math.abs(h.t - 8.68) < 0.05)])" 2>&1 | tail -1)
+  timeout 600 node render.mjs sound-dynamics.html --audio sd.wav > sd.log 2>&1
+  sl=$(python3 -c "
+import subprocess, numpy as np
+a = np.frombuffer(subprocess.run(['ffmpeg', '-v', 'error', '-i', 'sd.wav', '-ac', '1', '-ar', '48000', '-f', 's16le', '-'], capture_output=True).stdout, dtype='<i2').astype(float) / 32768
+r = lambda t0, t1: np.sqrt((a[int(t0 * 48000):int(t1 * 48000)] ** 2).mean()) + 1e-9
+def lo(t0, t1):
+    s = a[int(t0 * 48000):int(t1 * 48000)]; f = np.fft.rfftfreq(len(s), 1 / 48000); return np.abs(np.fft.rfft(s))[(f > 18) & (f < 90)].sum() / len(s)
+print('%.1f %.1f' % (20 * np.log10(r(3.6, 4.4) / r(5.73, 5.98)), lo(6.0, 7.0) / max(1e-12, lo(3.6, 4.4))))" 2>&1)
+  set -- $sl
+  if [ "$sp" = '"[[6],[2,3.2],true]"' ] && ! grep -q 'PAGE ERRORS' sd.log && python3 -c "import sys; sys.exit(0 if float(sys.argv[1]) >= 10 and float(sys.argv[2]) >= 3 else 1)" $sl 2>/dev/null; then echo "ok   sound dynamics  impact $sp · hush ${1} dB under the bed · sub ×${2}"
+  else echo "FAIL sound dynamics: probe $sp · levels '$sl'"; tail -3 sd.log; fail=1; fi;;
+esac
+# v3.44 directing (tests/direction): CFG.autoCut splits the long shot and cuts to 'you' on "you notice", reactCut() lets 'you' react, the directing QA reports exactly
+#   HOOK · PACING (the cuts: false shot 5.4–9.4 s) · YOU · MISMATCH · ENDCARD
+case " $names " in *" direction "*)
+  dq=$(node render.mjs direction.html --probe 'JSON.stringify({ ac: AUTOCUTS, rx: (TRACK.you.rig._rx ?? []).length, n: CUTS.length, qa: qaDirect() })' 2>&1 | tail -1)
+  dr=$(printf '%s' "$dq" | python3 -c "
+import json, re, sys
+try: d = json.loads(json.loads(sys.stdin.read()))
+except Exception as e: print('bad probe output'); sys.exit()
+qa = sorted(l.split(' ')[0] + ((' ' + re.search(r'\(([\d.]+–[\d.]+) s\)', l).group(1)) if l.startswith('PACING') else '') for l in d['qa'])
+you = any(a['kind'] == 'react' and a.get('who') == 'you' for a in d['ac'])
+print('ok' if qa == ['ENDCARD', 'HOOK', 'MISMATCH', 'PACING 5.40–9.40', 'YOU'] and you and d['rx'] >= 1 and d['n'] >= 11 else 'got ' + ' · '.join(qa) + ' | you cut %s | react %s | cuts %s' % (you, d['rx'], d['n']))" 2>&1)
+  if [ "$dr" = ok ]; then echo "ok   directing  autoCut → 'you' · reactCut · HOOK PACING YOU MISMATCH ENDCARD"; else echo "FAIL directing: $dr"; fail=1; fi;;
+esac
 # cover stage: thumbnails (THUMB, A/B variants → cover-b.jpg …) of example + every scene with an A/B THUMB array; COVERS=all = every scene that defines THUMB
 cv=""; for s in $names; do case "$s" in example) cv="$cv $s";; *) [ -f "$s.html" ] || continue; if [ "${COVERS:-}" = all ]; then grep -q '^const THUMB' "$s.story.js" && cv="$cv $s"; else grep -q '^const THUMB = \[' "$s.story.js" && cv="$cv $s"; fi;; esac; done
 cover() { s=$1; rm -f "cover_$s.jpg" "cover_$s"-[a-h].jpg; timeout 300 node render.mjs "$s.html" --cover "cover_$s.jpg" > "cover_$s.log" 2>&1; n=$(grep -c '^const THUMB = \[' "$s.story.js" 2>/dev/null); want=$(( n > 0 ? 2 : 1 ))
   if grep -q "PAGE ERRORS\|PAGE DID NOT START" "cover_$s.log" || [ "$(ls "cover_$s.jpg" "cover_$s"-[a-h].jpg 2>/dev/null | wc -l)" -lt "$want" ]; then echo "FAIL cover $s"; grep -A6 "PAGE" "cover_$s.log" | head -8; else echo "ok   cover $s  $(ls "cover_$s.jpg" "cover_$s"-[a-h].jpg 2>/dev/null | wc -l | tr -d ' ') image(s)"; fi; }
 export -f cover
 if [ -n "$cv" ]; then out=$(printf '%s\n' $cv | xargs -P "$J" -I{} bash -c 'cover "$1"' _ {}); echo "$out"; echo "$out" | grep -q '^FAIL' && fail=1; fi
+# v3.44 cover styles (tests/cover-styles): four variants → four images, styles split · number · frame · an automatic pick
+case " $names " in *" cover-styles "*) cs=$(node render.mjs cover-styles.html --probe "THV.map(coverStyle).join(',')" 2>&1 | tail -1 | tr -d '"'); nc=$(ls cover_cover-styles.jpg cover_cover-styles-[a-h].jpg 2>/dev/null | wc -l | tr -d ' ')
+  case "$cs" in split,number,frame,split|split,number,frame,number|split,number,frame,frame|split,number,frame,pop|split,number,frame,rays) [ "$nc" = 4 ] && echo "ok   cover styles  $cs · $nc images" || { echo "FAIL cover styles: $nc images"; fail=1; };; *) echo "FAIL cover styles: '$cs'"; fail=1;; esac;; esac
 # channel handle: default '@whatifthishappenedscenarios' in every video, CFG.channel overrides it (tests/signs-beams)
 chan() { node render.mjs "$1.html" --probe "document.getElementById('chan').textContent" 2>&1 | tail -1; }
 case " $names " in *" example "*) c=$(chan example); case "$c" in *@whatifthishappenedscenarios*) echo "ok   channel default";; *) echo "FAIL channel default: '$c'"; fail=1;; esac;; esac

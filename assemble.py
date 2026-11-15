@@ -57,7 +57,10 @@ _story = not _long and not re.search(r"kind:\s*'(explain|conspiracy|debunk)'", s
 _e = re.search(r"const END\s*=\s*\{\s*t:\s*([\d.]+)", story)
 if _story and _d and float(_d.group(1)) > 45:
     print(f'WARNING: story video is {float(_d.group(1)):.0f} s — target 38–45 s (max 45, Leon): cut card and intro seconds (one intro beat, end card + loop ≤ 6 s), not narration')
-if not _long and _d and _e and float(_d.group(1)) - float(_e.group(1)) > 6.5:
+_quick = not _long and not re.search(r"endCard:\s*'full'", story)   # v3.44 quick end card (default): ≤ CFG.endMax (1.5 s), no closing line
+if _quick and _d and _e and float(_d.group(1)) - float(_e.group(1)) > 2.0:
+    print(f'WARNING: end card planned at {float(_e.group(1)):.1f} s = {float(_d.group(1)) - float(_e.group(1)):.1f} s before the end — the quick end card (v3.44) stands only the last 1.5 s and END.say is not spoken: end the last beat at dur − 1.5 and set END.t there (or CFG.endCard: \'full\')')
+if not _quick and not _long and _d and _e and float(_d.group(1)) - float(_e.group(1)) > 6.5:
     print(f'WARNING: end card + loop take {float(_d.group(1)) - float(_e.group(1)):.1f} s — keep them ≤ 6 s and let the scene keep moving underneath (viewers swipe on static cards)')
 if re.search(r"\breview:\s*\{", story):
     print('WARNING: END.review is gone since v2.23 (no review card) — delete it; the closing line goes in END.say, the loop line in END.loop')
