@@ -1,4 +1,4 @@
-  // v3.37 dress() + prop library: four sets far apart, each dressed by its own dress() call with an area
+  // v3.38 dress() + prop library: four sets far apart, each dressed by its own dress() call with an area
   ground({ color: '#7FA052', flat: 900, hills: 0, dress: false });
   // city street (x 0): towers on both sides, kerbs, a walker on the pavement, traffic in one lane
   road(world, [[-60, 0], [60, 0]], { w: 10, curb: true });
