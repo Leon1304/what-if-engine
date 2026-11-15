@@ -68,3 +68,51 @@ Einzelvideos zum Launch, ohne Gerald/Steve, ohne Logos oder Figuren aus dem Spie
 - L1 What if the whole world called in sick for GTA 6? – Story, Krankmeldungen, Schlange, leere Stadt, Stromausfall, Pizzabote mit Aggregat ✅ auf GitHub (sick-day-launch, 14.11.)
 - L2 What if GTA 6 got delayed again, live on launch day? – Story, Countdown springt auf „Delayed to 2027“, Zelt Kevin, ein Jahr später 2028 ✅ auf GitHub (delayed-launch-day, 14.11.)
 - L3 What if Vice City was real for 24 hours? – Erklärvideo über das echte Miami: Kreuzfahrthafen, Alligatoren, fallende Leguane ✅ auf GitHub (vice-city-real, 14.11.)
+
+## Neue Nischen-Blöcke (Recherche 15.11.2026, von Leon gewünscht)
+Vier Nischen für TikTok, die mit der Engine machbar sind, plus True Crime als eigene Nische weiterführen. ★ = zuerst. Zahlen vor dem Skript noch einmal prüfen.
+
+### Größenvergleiche GV1–GV8 (Kategorie Erklärung, 30–45 s)
+Du stehst als Maßstab im Bild, die Kamera fährt hoch/runter, ein Zähler (METERS / KM) läuft mit, jede Stufe bekommt ein Callout am Objekt, die Pointe kommt am Ende. Braucht Vergleichsobjekte als wiederverwendbare Funktionen (Leiter aus Objekten, `kind`).
+- ★ GV1 How high can you go before you die? – Höhenleiter: Everest 8.849 m (Todeszone ab 8.000 m) → Linienflug ~11 km → Armstrong-Grenze ~19 km (Blut kocht) → Sprungrekord ~41 km → ISS 408 km. Zähler ALTITUDE.
+- ★ GV2 How deep can you dive before your body gives up? – Taucher ohne Gerät (Freitauchrekord ~214 m) → Gerätetauchrekord 332 m → Pottwal ~2.000 m → Titanic 3.800 m → Challenger Deep 10.935 m. Zähler DEPTH, Druck-Zähler daneben.
+- GV3 How deep is the deepest hole ever dug? – Kola-Bohrung 12.262 m, Durchmesser nur 23 cm, Gestein 180 °C; Vergleich mit Burj Khalifa, Everest, Mariana-Graben; Mythos „Höllengeräusche“ → FALSE.
+- GV4 How big was the biggest animal ever, next to you? – Blauwal ~30 m, Herz so groß wie ein Kleinwagen (Callout), Argentinosaurus, Megalodon; Pointe: du passt durch seine Hauptschlagader nicht, aber fast (Mythos → FALSE).
+- GV5 How tall was the tallest man ever? – Robert Wadlow 2,72 m neben dir, Türrahmen, Bett, Schuhgröße; ernst und respektvoll, keine Gags über ihn.
+- GV6 How big can a hailstone get? – Erbse → Golfball → Grapefruit → Rekord Vivian 2010, ~20 cm, ~0,9 kg; Fallgeschwindigkeit als Zähler; Autodach als Maßstab.
+- GV7 How big was the biggest wave ever surfed? – Nazaré, ~26 m (Rekord 2020), neben einem 8-stöckigen Haus; danach Tsunami-Vergleich.
+- GV8 How small is the smallest thing you can see? – Haar ~70 µm → Staubmilbe → Blutzelle → Virus; Zoom-Fahrt, Zähler SIZE (µm).
+
+### Worst Jobs in History WJ1–WJ8 (Kategorie History, Du-Perspektive, 45–55 s)
+„What if you had this job for one day?“ Schicht-Uhr als Zähler (SHIFT ENDS IN), Faktenkarte mit Quelle, Mythos-Karte nur bei echtem Mythos. Leicht humorvoll, wo es passt (Erzähler genervt), ernst bei Kindern und Tod. Braucht Mittelalter-/Viktorianik-Bausteine (Kleidung, Gassen, Kanäle).
+- ★ WJ1 What if you were a gong farmer for one night? – Tudor-England, Latrinen nachts leeren, gut bezahlt, durfte nur nachts arbeiten; Gestank-Zähler.
+- ★ WJ2 What if you were the King's Groom of the Stool? – Henry VIII., hilft dem König auf dem Klo, aber einer der mächtigsten Posten am Hof; Twist: alle beneiden dich.
+- WJ3 What if you were a plague doctor in 1656? – Rom/Neapel, Schnabelmaske mit Kräutern, Mythos „Maske schützte“ → FALSE (Wachsmantel half eher); Maske erst im 17. Jh.
+- WJ4 What if you were a Victorian sewer hunter? – Londoner „Toshers“, suchen Münzen im Kanal, Ratten, Gasblasen; Mythos Riesen-Kanalschweine → FALSE.
+- WJ5 What if you were a leech collector? – Watet in Sümpfen, Blutegel beißen ins Bein; 1800er, Ärzte brauchten Millionen.
+- WJ6 What if you were a powder monkey at Trafalgar? – 1805, Junge trägt Schießpulver zu den Kanonen; ernst, ohne Blut.
+- WJ7 What if you were a lighthouse keeper on the Flannan Isles? – Dezember 1900, drei Wärter verschwinden; ungelöstes Rätsel, Grenze zu Horror; Jahrestag 15.12.
+- WJ8 What if you built the pyramids? – Mythos „Sklaven“ → FALSE (bezahlte Arbeiter, Brot und Bier, Arbeitersiedlung Gizeh); Steinblock-Zähler. Nicht mit pyramids-aliens verwechseln.
+- Reserve: Knocker-upper (weckt Menschen mit Blasrohr und Erbsen), Vomitorium-Mythos (Ausgänge im Amphitheater, kein Brechraum).
+
+### Katastrophen-Simulation am echten Ort KS1–KS8 (Kategorie Story/Erklärung, 40–55 s)
+**Look: Miniatur/Tilt-Shift** (Stadt als Spielzeugmodell, unscharfe Ränder, kräftige Farben); wird gerade in einer anderen Sitzung getestet (Worktree `tilt-shift`). Erst bauen, wenn der Look steht. Du-Perspektive über eine Figur in der Miniaturstadt, Zähler (MINUTES UNTIL IMPACT, WAVE HEIGHT), Faktenkarte mit Quelle, keine Opferzahlen-Spektakel, GORE-QA leer. `tsunami`, `flood`, `asteroid` gibt es schon in der Engine.
+- ★ KS1 What if a tsunami hit New York? – Wellenhöhe-Zähler, Wasser läuft durch die Straßenschluchten; Fakt: Long Island hat realistisch kaum Tsunami-Risiko → Rate-Frage am Ende.
+- ★ KS2 What if an asteroid hit your city? – 50 m (Tunguska 1908, Wald von 2.000 km²) vs 1 km vs 10 km; drei Größen nacheinander auf derselben Miniaturstadt.
+- KS3 What if Vesuvius erupted today? – Neapel, ~600.000 in der roten Zone, Evakuierungsplan 72 h; Bezug Pompeji 79 n. Chr.
+- KS4 What if the Hoover Dam broke? – Lake Mead läuft aus, Welle durch die Schlucht; Fakt: Damm hält gegen fast alles (Beton kühlt noch heute aus → Mythos-Karte).
+- KS5 What if the Dutch dikes broke? – 26 % der Niederlande unter dem Meeresspiegel; Sturmflut 1953 als Faktenkarte; Deltawerke.
+- KS6 What if the San Andreas fault ripped open? – Mythos „Kalifornien fällt ins Meer“ → FALSE (Platten gleiten seitlich, ~5 cm/Jahr); Los Angeles rückt Richtung San Francisco.
+- KS7 What if a Category 5 hurricane hit Miami? – Sturmflut-Zähler, Auge zieht über die Miniaturstadt (Anschluss an Vice-City-Thema).
+- KS8 What if Yellowstone erupted? – Aschewolke über der US-Miniaturkarte; T10 (Wahrscheinlichkeit) gibt es schon als Erklär-Thema → hier als Simulation, T10 als Folgevideo.
+
+### 1 vs 100 VS1–VS8 (Serie „1 vs 100“, Gerald + Dr. Steve, 50–56 s)
+Wer gewinnt? Zähler REMAINING auf beiden Seiten, Endcard-Abstimmung „Who wins next?“ wählt die nächste Folge. Ohne Blut (plattformkonform, Gegner fliegen weg/geben auf). Ideen aus dem Content-Plan plus neue.
+- ★ VS1 What if 100 men fought 1 gorilla? – die Internet-Debatte von 2025, Evergreen; Fakten: Gorilla ~10× stärker, Beißkraft; Ausgang offen bis zum Twist.
+- ★ VS2 What if 1,000 chickens attacked a lion? – Gerald ist eins der Hühner (oder schaut zu und überlebt).
+- VS3 What if 100 grandmas fought a T-Rex? – Stricknadeln, Rollatoren, Handtaschen; T-Rex flieht vor den Keksen.
+- VS4 What if 1 million ants attacked you? – Ameisen tragen ~50× ihr Gewicht, Zähler BITES.
+- VS5 What if 10,000 geese invaded your city? – Gänse gegen Polizei, Gerald führt sie nicht an.
+- VS6 What if 100 Roman soldiers fought 1 tank? – Schildkröten-Formation, Mythos-Karte zu Römer-Taktik.
+- VS7 What if you had to fight 100 chimpanzees? – Schimpanse ~1,5× stärker als ein Mensch (nicht 5×: Mythos → FALSE).
+- VS8 What if 1 bear fought 100 Vikings? – Bezug zu Raised-by-Reihe.
