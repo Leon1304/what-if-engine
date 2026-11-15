@@ -532,13 +532,15 @@ export class Game {
   // what can be cooked at a fire right now: [needs, gives, verb, message]
   cookable() {
     const water = ['topf_klar', 'topf_abgekocht', 'wasser'].find(k => this.has(k));
-    const L = [[{ dosensuppe: 1 }, 'suppe_warm', 'Suppe am Feuer erwärmen', '🍲 Heiße Suppe!'], [{ topf_wasser: 1 }, 'topf_abgekocht', 'Wasser abkochen', 'Wasser abgekocht – jetzt sicher trinkbar.'],
+    return this.cookList(water).find(([need]) => Object.entries(need).every(([k, n]) => this.count(k) >= n));
+  }
+  cookList(water) {
+    return [[{ dosensuppe: 1 }, 'suppe_warm', 'Suppe am Feuer erwärmen', '🍲 Heiße Suppe!'], [{ topf_wasser: 1 }, 'topf_abgekocht', 'Wasser abkochen', 'Wasser abgekocht – jetzt sicher trinkbar.'],
       [{ fleisch: 1 }, 'fleisch_gebraten', 'Fleisch braten', '🍖 Fleisch gebraten.'], [{ steinpilz: 1 }, 'pilz_gebraten', 'Pilze braten', '🍳 Pilze gebraten.'],
       [{ fisch: 1 }, 'fisch_gebraten', 'Fisch braten', '🍣 Fisch gebraten.'], [{ kaninchen: 1 }, 'kaninchen_gebraten', 'Kaninchen braten', '🍗 Kaninchenbraten!'],
       water && [{ kraeuter: 1, [water]: 1 }, 'tee', 'Kräutertee kochen', '🍵 Kräutertee – hilft gegen Erkältung.'],
       [{ kartoffel: 1 }, 'ofenkartoffel', 'Kartoffel in die Glut legen', '🥔 Ofenkartoffel!'], [{ kuerbis: 1, topf: 1 }, 'kuerbissuppe', 'Kürbissuppe kochen', '🍲 Kürbissuppe!'],
       water && [{ mehl: 1, [water]: 1 }, 'fladenbrot', 'Fladenbrot backen', '🫓 Fladenbrot gebacken.']].filter(Boolean);
-    return L.find(([need]) => Object.entries(need).every(([k, n]) => this.count(k) >= n));
   }
   // pickups glow softly when you are close, the target under the crosshair glows brighter (Pause → "Gegenstände hervorheben")
   highlight(t, pos) {

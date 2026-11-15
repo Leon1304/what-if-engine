@@ -227,6 +227,9 @@ await step('Rucksack-Stufen: 10 / 20 / 28 / 36 / 48 Plätze, kein Rückschritt',
   for (const k of ['bag', 'bigbag', 'trekbag', 'expbag']) delete f[k]; cap.push(game.capacity()); for (const id of ['rucksack', 'rucksack_gross', 'rucksack_trekking', 'rucksack_expedition']) { game.add(id, 1, true); cap.push(game.capacity()); }
   game.add('rucksack', 1, true); cap.push(game.capacity()); const m0 = game.S.money = 200; game.buy('rucksack_trekking'); const rebuy = game.S.money === m0;
   const r = game.recipes().find(r => r.id === 'rucksack_expedition'); Object.assign(f, keep); return { cap: cap.join(), rebuy, recipe: !!r && r.lvl === 7 }; }, r => r.cap === '10,20,28,36,48,48' && r.rebuy && r.recipe);
+await step('Handbuch: Fundorte für jeden Gegenstand', async () => { const { game } = window.__game; const { ITEMS } = await import('./js/items.js'); const { itemSources } = await import('./js/handbook.js');
+  game._src = null; const src = itemSources(game), miss = Object.keys(ITEMS).filter(k => !src[k]?.length); game.openPanel('book'); const i = window.__game.book?.index?.('fund');
+  const html = document.getElementById('book').innerHTML; game.closePanel(); return { miss, n: Object.keys(src).length, axt: src.axt, book: html.length > 0 }; }, r => !r.miss.length && r.axt?.length);
 await step('Erfolge + Statistik (Handbuch)', () => { const { game } = window.__game; game.progress.update(); const b = Object.keys(game.S.badges); game.openPanel('book'); const book = document.getElementById('book');
   const i = [...book.querySelectorAll('nav button')].findIndex(x => x.textContent.includes('Erfolge')); book.querySelectorAll('nav button')[i].click(); const html = book.innerHTML; game.openPanel('book');
   return { n: b.length, some: b.slice(0, 6).join(','), stats: html.includes('Statistik'), rowed: html.includes('gerudert') }; }, r => r.n >= 5 && r.stats && r.rowed);

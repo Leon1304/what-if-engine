@@ -60,6 +60,7 @@ neuere – Unbekanntes wird übersprungen, Neues startet im Grundzustand, steht 
   Sender: Bergwacht + Wetterbericht, Schlüssel der Pass-Schranke).
 - **Zweite Karte – Gebirge „Steinberg“:** Schranke am Nordende aufschließen, mit dem Auto über den Pass. Serpentinen, Steinberghütte mit Förster Henning,
   Stollen „Glück auf“ (Geröll sprengen: 2 Sprengpulver + Seil + Feuerzeug → Bergkristalle), Gipfelkreuz, Bergsee, Heustadel, Gämsen, Schnee, Kälte.
+- **Handbuch „Fundorte“:** für jeden Gegenstand, wo er liegt, wer ihn verkauft, wie man ihn herstellt oder kocht (automatisch aus Welt, Rezepten und Laden erzeugt; Test prüft, dass keiner fehlt).
 - **Inventar:** 10 Plätze in den Taschen, Rucksack 20, Großer Rucksack 28 (Werkbank), Trekkingrucksack 36 (Kurt 90 €, Steinberghütte), Expeditionsrucksack 48 (Werkbank, Stufe 7).
 - **Bello „Such!“**, **27 Abzeichen + Statistik** (Handbuch → Erfolge, Pause-Menü), 18 Nebenaufgaben.
 - **Ereignisse:** nachts fährt ab und zu ein Auto vorbei (hält und hupt, wenn du auf der Straße stehst).

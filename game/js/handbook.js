@@ -1,6 +1,6 @@
 // Survival handbook (key B): a book with chapters – controls, survival values, food, crafting, tools, actions, dangers,
 // places and the current task. Food, recipes and tools are generated from ITEMS / RECIPES so the book never goes stale.
-import { ITEMS, RECIPES, BLUEPRINTS, WEAPONS, CROPS } from './items.js';
+import { ITEMS, RECIPES, BLUEPRINTS, WEAPONS, CROPS, TRADE } from './items.js';
 import { DIFF } from './life.js';
 import { LEVELS, SIDE, BADGES, STATS } from './progress.js';
 import { ILL } from './health.js';
@@ -10,6 +10,53 @@ const STAT = { hunger: 'Hunger', thirst: 'Durst', warmth: 'Wärme', health: 'Ges
 const fx = use => Object.entries(use).map(([k, v]) => `<span class="${v > 0 ? 'pos' : 'neg'}">${STAT[k]} ${v > 0 ? '+' : '−'}${Math.abs(v)}</span>`).join(' ');
 const nm = id => id === 'brenn' ? '🪵 Ast oder Brennholz' : `${ITEMS[id]?.icon || ''} ${ITEMS[id]?.name || id}`;
 const keyRow = (k, t) => `<tr><td><kbd>${k.split(' / ').join('</kbd> / <kbd>')}</kbd></td><td>${t}</td></tr>`;
+
+
+// ---------------------------------------------------------------- where to get every item (chapter „Fundorte“)
+// Built from the world itself (pickups, cupboards, crates with loot, sacks), the recipes, Kurt's shop and the cooking list,
+// plus the few sources that are game logic (animals, fishing, fields, filling a can). A test checks that every item has one.
+const EXTRA = {
+  fleisch: ['🦌 Reh, Wildschwein, Wolf, Bär oder Gämse erlegen und mit dem 🔪 Messer zerlegen (E am Tier)'],
+  fell: ['🦌 Tiere erlegen und mit dem 🔪 Messer zerlegen (Reh, Wolf, Gämse 1, Bär 2)'],
+  fisch: ['🎣 Angeln am Waldsee, am Bach oder am Bergsee (Angel in der Hand, Linksklick auswerfen, beim Biss einholen)'],
+  kaninchen: ['🪤 Kaninchenfalle bauen (G → Nützliches) und am Morgen nachsehen'],
+  kartoffel: ['🌱 Feld anlegen (G), Saatkartoffeln setzen, gießen, warten'], karotte: ['🌱 Feld anlegen (G), Karottensamen säen'], kuerbis: ['🌱 Feld anlegen (G), Kürbissamen säen'],
+  kanister_voll: ['⛽ Leeren Kanister am Dieselfass im Schuppen oder an der Zapfsäule füllen (E)'],
+  topf_wasser: ['💧 Mit dem 🫕 Topf am Bach schöpfen (E) – erst abkochen!'], topf_klar: ['💧 Mit dem 🫕 Topf am Brunnen im Dorf oder an der Regentonne füllen'],
+  kaffee: ['☕ Kaffeemaschine in der Tankstelle (braucht Strom)'],
+  trockenfleisch: ['🪵 Trockengestell bauen (G), rohes Fleisch aufhängen, 6 Stunden warten'],
+  verdorben: ['🤢 Entsteht von selbst, wenn frisches Essen zu lange liegt'],
+  stamm: ['🪓 Bäume mit der Axt fällen'], ast: ['🌲 Liegt überall im Wald; beim Fällen fallen Äste ab'], holz: ['🪓 Holzstapel, gefällte Bäume'],
+  fliegenpilz: ['🍄 Wächst im Wald (giftig!)'], steinpilz: ['🍄 Wächst im Wald'], kraeuter: ['🌼 Kamille wächst auf Wiesen und an Wegen'],
+  bergkristall: ['💎 Erst das Geröll im Stollen sprengen: 2× Sprengpulver + Seil + Feuerzeug'],
+};
+const near = (g, p) => { let best = null, bd = 1e9; for (const pl of g.places) { if (!pl.pos) continue; const d = Math.hypot(pl.pos.x - p.x, pl.pos.z - p.z) - (pl.r || 10); if (d < bd) { bd = d; best = pl; } }   // big places (village) win over small ones nearby
+  return best && bd < 35 ? best.name : 'im Wald'; };
+export function itemSources(g) {
+  if (g._src) return g._src; const src = {}, add = (id, t) => { if (!ITEMS[id]) return; const a = src[id] ||= []; if (!a.includes(t)) a.push(t); };
+  let sacks = new Set();
+  for (const it of g.W.interactives) {
+    const u = it.u || {}, ids = [...(u.item ? [u.item] : []), ...(u.bonus ? [u.bonus] : []), ...(u.loot || []).map(l => l[0])]; if (!ids.length) continue;
+    const label = u.label || it.name, sack = /^Sack/.test(it.name);
+    for (const id of ids) { if (sack) { sacks.add(id); continue; } add(id, `📍 ${label}${u.interact === 'search' || u.interact === 'drawer' ? ' durchsuchen' : ''} – ${near(g, it.center || it.pivot?.position || it.node.position)}${u.hidden ? ' (vergraben: mit dem Spaten graben)' : ''}`); }
+  }
+  for (const id of sacks) add(id, '🧺 manchmal in Jutesäcken (überall verteilt, Bello findet sie mit H)');
+  for (const r of RECIPES) for (const id in r.gives || {}) add(id, `🔨 Herstellen: ${Object.entries(r.needs).map(([k, n]) => `${n}× ${ITEMS[k]?.name || k}`).join(' + ')}${r.tools ? ' · mit ' + r.tools.map(t => ITEMS[t]?.name).join(', ') : ''}${r.bench ? ' · an der Werkbank' : ''}${r.lvl ? ' · ab Level ' + r.lvl : ''}`);
+  for (const [need, id] of g.cookList('wasser')) add(id, `🔥 Am Feuer / Ofen: ${Object.keys(need).map(k => k === 'wasser' ? 'Wasser (Flasche oder Topf)' : ITEMS[k]?.name || k).join(' + ')}`);
+  for (const [id, pr] of Object.entries(TRADE.buy)) add(id, `🛒 Bei Kurt im Dorfladen: ${pr} €`);
+  for (const [id, a] of Object.entries(EXTRA)) if (!src[id] || ['bergkristall', 'ast', 'kraeuter'].includes(id)) for (const t of a) add(id, t);
+  return g._src = src;
+}
+const CATS = [['🍲 Essen & Trinken', it => it.use], ['🔫 Waffen & Munition', it => it.weapon || it.ammo], ['🪵 Baumaterial', it => it.mat],
+  ['🎒 Werkzeug & Ausrüstung', it => it.tool || it.equip || it.battery], ['🗝️ Schlüssel, Hinweise & Sonstiges', () => true]];
+function fundorte(g) {
+  const src = itemSources(g), done = new Set(); let h = '<p class="tip">Hier steht, wo du jeden Gegenstand findest, kaufst oder herstellst. Orte, die du noch nicht kennst, findest du über die Karte (M) und Infotafeln.</p>';
+  for (const [t, f] of CATS) {
+    const ids = Object.keys(ITEMS).filter(id => !done.has(id) && f(ITEMS[id])).sort((a, b) => ITEMS[a].name.localeCompare(ITEMS[b].name, 'de')); ids.forEach(id => done.add(id));
+    h += `<h4>${t}</h4><table class="list fund">${ids.map(id => `<tr><td>${nm(id)}</td><td>${(src[id] || ['❔ unbekannt']).slice(0, 6).map(x => `<div>${x}</div>`).join('')}${(src[id] || []).length > 6 ? `<div>… und ${src[id].length - 6} weitere Fundstellen</div>` : ''}</td></tr>`).join('')}</table>`;
+  }
+  return h;
+}
 
 export function chapters(g) {
   const S = g.S, found = g.places.filter(p => S.found[p.id]).length;
@@ -133,6 +180,7 @@ export function chapters(g) {
         <dt>🪜 Stürze</dt><dd>Wer von hoch oben springt, verletzt sich.</dd>
         <dt>🔦 Batterie</dt><dd>Die Taschenlampe verbraucht Batterie. Batterien gibt es im Laden.</dd>
       </dl>` },
+    { id: 'fund', icon: '🔎', t: 'Fundorte aller Gegenstände', h: fundorte(g) },
     { id: 'orte', icon: '🗺️', t: `Orte (${found}/${g.places.length})`, h: `
       ${['tal', 'berg'].map(r => `<h4>${r === 'tal' ? '🌲 Nordwald' : '⛰️ Gebirge Steinberg'}</h4><ul class="places">${g.places.filter(p => p.region === r).map(p => `<li class="${S.found[p.id] ? 'on' : ''}">${S.found[p.id] ? '📍 ' + p.name : S.known[p.id] ? '🗺️ ' + p.name + ' (noch nicht besucht)' : '❔ noch nicht entdeckt'}</li>`).join('')}</ul>`).join('')}
       <p class="tip">Mit der 🗺️ Wanderkarte (Laden, Zeitungsständer) zeigt <kbd>M</kbd> alle Orte, die du gefunden hast. Klick auf die Karte setzt einen Wegmarker, <kbd>N</kbd> setzt einen an deiner Stelle – Marker siehst du im Spiel mit Entfernung. Infotafeln (Dorfplatz, Aussichtsturm) tragen weitere Orte ein.</p>` },
