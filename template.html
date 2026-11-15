@@ -3043,17 +3043,20 @@ function mcAmp(g, v) { const D = mcClip(g, true), G = MC_GAIT[g]; if (!D || !G |
 // v3.36 gait of a locomotion clip, measured from its foot contacts on the figure's own legs (was: a fixed stride per clip — Sprint_Loop's feet covered 2.9 m per cycle
 // where 4.8 m were assumed, so the planted foot slid 2 m/s at a sprint): win = the frames each foot is down (the longest run within 2.5 cm of its lowest point; a
 // swing-scaled copy keeps the windows of its clip), stride = the backward sweep over the window → m per cycle (the walk's clip time follows it), yC = ankle height
-// in contact (the hips go down / up by ANK − yC: the sprint no longer floats 3 cm), ph = the clip phase with the left foot under the body (walks start and stop there).
+// in contact (the hips go down by yC − ANK where it floats; feet that dip in are lifted by footFloor as before: the sprint no longer floats 3 cm), ph = the clip phase with the left foot under the body (walks start and stop there).
 // The clips' feet do not move back evenly (a sprint foot lands, waits, then whips back): _mcLock() spreads that sweep evenly over the window with leg IK.
 function mcGait(D) {
   if (!D) return null; if (D.gait) return D.gait; const T = { p: new THREE.Vector3(), q: {} }, a = new THREE.Vector3(), b = new THREE.Vector3(), n = D.n, F = [[], []], dt = 1 / MOCAP.fps;
   for (let i = 0; i < n; i++) { mcSample(D, i / MOCAP.fps, false, T); [['legL', 'shinL', -1], ['legR', 'shinR', 1]].forEach(([L, S, sx], k) => {
     a.set(0, -LEG2, 0).applyQuaternion(T.q[S]).add(b.set(0, -LEG1, 0)).applyQuaternion(T.q[L]).add(b.set(sx * 0.12, 0, 0)).applyQuaternion(T.q.hips).add(b.set(T.p.x, HIP + T.p.y, T.p.z)); F[k].push([a.y, a.z]); }); }
   const B = D.base ? mcGait(D.base) : null, Y = F.map(R => Math.min(...R.map(r => r[0])));
-  const win = B ? B.win : F.map((R, k) => { const on = R.map(r => r[0] < Y[k] + 0.025); let best = [0, 0]; for (let i = 0; i < n; i++) { if (!on[i] || on[(i - 1 + n) % n]) continue; let l = 0; while (l < n - 1 && on[(i + l + 1) % n]) l++; if (l > best[1]) best = [i, l]; } return best; });
+  const win = B ? B.win : F.map((R, k) => { const on = R.map(r => r[0] < Y[k] + 0.025); let best = [0, 0]; for (let i = 0; i < n; i++) { if (!on[i] || on[(i - 1 + n) % n]) continue; let l = 0; while (l < n - 1 && on[(i + l + 1) % n]) l++; if (l > best[1]) best = [i, l]; } if (best[1] < n * 0.25) while (best[1] < n * 0.4 && R[(best[0] + best[1] + 1) % n][0] < Y[k] + 0.065) best[1]++; return best; });   // v3.36 runs (short contact): the window runs on through the push-off (until the foot is 6.5 cm up), so the foot stays put there too
   const V = win.map(([w0, l], k) => l >= 1 ? (F[k][w0][1] - F[k][(w0 + l) % n][1]) / (l * dt) : 0).filter(x => x > 0.2), v = V.length ? V.reduce((x, y) => x + y) / V.length : 0;
   let ph = 0, bz = 1e9; { const [w0, l] = win[0]; for (let o = 0; o <= l; o++) { const i = (w0 + o) % n; if (Math.abs(F[0][i][1]) < bz) { bz = Math.abs(F[0][i][1]); ph = i / n; } } }
-  return (D.gait = { stride: v > 0.2 ? v * D.d : null, yC: (Y[0] + Y[1]) / 2, ph, win, F }); }
+  const phz = (k, z) => { const [w0, l] = win[k]; let best = w0, bd = 1e9; for (let o = Math.round(0.25 * l); o <= Math.round(0.75 * l); o++) { const i = (w0 + o) % n, dd = Math.abs(F[k][i][1] - z); if (dd < bd) { bd = dd; best = i; } } return best / n; };   // phase in the middle half of foot k's window where it is closest to z ahead of the hips (never at touch-down / lift-off)
+  return (D.gait = { stride: v > 0.2 ? v * D.d : null, yC: (Y[0] + Y[1]) / 2, ph, win, F, phz }); }
+// v3.36 where the idle clip keeps the feet (mean ankle z ahead of the hips, left / right): walks start and stop with the planted foot on that spot (no slide when the legs blend)
+const mcIdleZ = () => { if (_mcD.has('@idz')) return _mcD.get('@idz'); const D = mcClip('Idle_Loop', true), G = D && mcGait(D), Z = G ? G.F.map(R => R.reduce((a, r) => a + r[1], 0) / R.length) : null; _mcD.set('@idz', Z); return Z; };
 // v3.36 planted feet in walk / run clips: inside a foot's contact window the ankle moves back evenly (the window's sweep spread over its frames; the ends stay where the clip
 // has them, so nothing pops) and sits at ANK — two-bone IK on the thigh and the knee, weighted by the clip's share of the legs
 const _lkA = new THREE.Vector3(), _lkB = new THREE.Vector3(), _lkC = new THREE.Vector3(), _lkQ = new THREE.Quaternion(), _lkR = new THREE.Quaternion(), _lkX = new THREE.Vector3(1, 0, 0);
@@ -3066,6 +3069,13 @@ function _mcLock(f, e, w) {
     const zt = lerp(R[w0][1], R[(w0 + l) % n][1], o / l), ed = Math.min(o, l - o) / Math.max(1e-3, l), wy = sm01(ed / 0.25);   // the height eases in / out at the window ends
     const dz = (zt - zc) * w, dh = clamp(ANK - (yc + dy), -0.04, 0.04) * w * wy; if (Math.abs(dz) + Math.abs(dh) < 1e-3) return;
     _legTo(f, th, sh, ft, dz, dh); });
+}
+function _mcPlant(f, P, w) {   // v3.36 first / last stance of a walk: the foot stays where it stood (body-frame z = idle spot − distance walked since)
+  const LG = [[f.legL, f.shinL, f.footL], [f.legR, f.shinR, f.footR]], one = (k, zt, ww) => { if (ww < 0.01) return; const [th, sh, ft] = LG[k];
+    _lkA.copy(ft.position).applyQuaternion(sh.quaternion).add(sh.position).applyQuaternion(th.quaternion).add(th.position).applyQuaternion(f.hips.quaternion).add(f.hips.position);   // ankle in the body frame
+    _legTo(f, th, sh, ft, (zt - _lkA.z) * ww, 0); };
+  const d = P.dist; if (d < P.sLo) one(1, P.IZ[1] - d, w * (1 - sm01((d - P.sLo + 0.06) / 0.06)));
+  if (d > P.sTd && d <= P.distE + 1e-6) one(P.kE, P.IZ[P.kE] + (P.distE - d), w * sm01((d - P.sTd) / 0.06));
 }
 function _legTo(f, th, sh, ft, dz, dh) {   // v3.36 two-bone leg IK: move the ankle by (0, dh, dz) of the body frame (thigh and knee turn, the foot keeps its angle to the shin)
   _lkA.copy(ft.position).applyQuaternion(sh.quaternion).add(sh.position).applyQuaternion(th.quaternion);   // ankle relative to the hip joint, in the hips frame
@@ -3116,12 +3126,19 @@ function _mcLayer(f, mode, ph, t, v, dist, distE) {   // the clips a figure show
     // walk(): by distance (feet stay planted) — v is the walk's cruise speed (one value per walk(): the stride never changes under way)
     // v3.36: stride measured from the clip (mcGait); the walk starts with the left foot under the body and the stride is fitted (± 15 %) so it ends with a foot under it (distE)
     const vs = (v ?? vv) / (f.root?.scale.x || 1), a = mcAmp(g, vs), wj = !zb && (mode === 'walk' || g === 'Jog_Fwd_Loop') && mcClip('Walk_Loop', true) && mcClip('Jog_Fwd_Loop', true) ? (mode === 'run' && vs < 2.4 ? 1 : sm01((vs - 1.8) / 1.2)) : g === 'Jog_Fwd_Loop' ? 1 : 0;
-    const fit = st => { if (!(distE > 0)) return 1; const n = distE / st, nh = Math.max(0.5, Math.round(2 * n) / 2); return Math.abs(nh / n - 1) < 0.15 ? nh / n : 1; }, GA = (D0, am) => mcGait(Math.abs(am - 1) > 1e-3 ? mcClipAmp(D0, am) : D0);
-    if (wj <= 1e-3 || wj >= 0.999 || !(mode === 'walk' || g === 'Jog_Fwd_Loop')) { const G2 = wj >= 0.999 ? 'Jog_Fwd_Loop' : g, D2 = mcClip(G2, true), a2 = mcAmp(G2, vs), st = mcStride(G2, a2), I = GA(D2, a2), u = dist / st * fit(st) + (I?.ph ?? 0);
-      return [{ D: D2, time: u * D2.d, loop: true, w: 1, mask, amp: a2, dyC: I ? ANK - I.yC : 0 }]; }
+    const GA = (D0, am) => mcGait(Math.abs(am - 1) > 1e-3 ? mcClipAmp(D0, am) : D0), IZ = mcIdleZ();
+    const p0 = I => IZ && I ? I.phz(0, IZ[0]) : I?.ph ?? 0, pR = I => IZ && I ? I.phz(1, IZ[1]) : (I?.ph ?? 0) + 0.5;   // start: the left foot planted where idle has it · stop: either foot on its idle spot
+    const fit = (st, I) => { if (!(distE > 0)) return 1; const n = distE / st, dR = ((pR(I) - p0(I)) % 1 + 1) % 1; let best = 1, be = 1e9;
+      for (const c of [Math.round(n), Math.floor(n - dR) + dR, Math.ceil(n - dR) + dR]) { if (c < 0.3) continue; const e = Math.abs(c / n - 1); if (e < be) { be = e; best = c / n; } } return be < 0.15 ? best : 1; };
+    // v3.36 plant: the first stance (left foot, from the start until it lifts) and the last one (from touch-down to the stop) stay on their spot in the world (leg IK in _mcApply)
+    const plant = (I, st, k) => { if (!IZ || !I || !(distE > 0)) return null; const n = I.F[0].length, S = st / k, q0 = p0(I), fr = x => (x % 1 + 1) % 1, we = (I.win[1][0] + I.win[1][1]) / n, pe = fr(distE / S + q0);
+      const inW = (j, ph) => fr(ph - I.win[j][0] / n) <= I.win[j][1] / n + 1e-6, kE = inW(0, pe) && (!inW(1, pe) || Math.abs(fr(pe - q0)) < 0.02) ? 0 : 1;
+      return { dist, distE, IZ, sLo: fr(we - q0) * S, kE, sTd: inW(kE, pe) ? distE - fr(pe - I.win[kE][0] / n) * S : distE }; };
+    if (wj <= 1e-3 || wj >= 0.999 || !(mode === 'walk' || g === 'Jog_Fwd_Loop')) { const G2 = wj >= 0.999 ? 'Jog_Fwd_Loop' : g, D2 = mcClip(G2, true), a2 = mcAmp(G2, vs), st = mcStride(G2, a2), I = GA(D2, a2), fk = fit(st, I), u = dist / st * fk + p0(I);
+      return [{ D: D2, time: u * D2.d, loop: true, w: 1, mask, amp: a2, dyC: I ? Math.min(0, ANK - I.yC) : 0, plant: plant(I, st, fk) }]; }
     const DW = mcClip('Walk_Loop', true), DJ = mcClip('Jog_Fwd_Loop', true), aW = mcAmp('Walk_Loop', vs), aJ = mcAmp('Jog_Fwd_Loop', vs), IW = GA(DW, aW), IJ = GA(DJ, aJ), st = lerp(mcStride('Walk_Loop', aW), mcStride('Jog_Fwd_Loop', aJ), wj);
-    const u = dist / st * fit(st) + (IW?.ph ?? 0), dJ = IW && IJ ? IJ.ph - IW.ph : MC_PH.Jog_Fwd_Loop;   // one phase for both clips: the blended stride (left foot down in both at the same phase)
-    return [{ D: DW, time: u * DW.d, loop: true, w: 1, mask, amp: aW, D2: DJ, time2: (u + dJ) * DJ.d, amp2: aJ, k2: wj, dyC: lerp(IW ? ANK - IW.yC : 0, IJ ? ANK - IJ.yC : 0, wj) }]; }
+    const fk = fit(st, IW), u = dist / st * fk + p0(IW), dJ = IW && IJ ? IJ.ph - IW.ph : MC_PH.Jog_Fwd_Loop;   // one phase for both clips: the blended stride (left foot down in both at the same phase)
+    return [{ D: DW, time: u * DW.d, loop: true, w: 1, mask, amp: aW, D2: DJ, time2: (u + dJ) * DJ.d, amp2: aJ, k2: wj, dyC: lerp(IW ? Math.min(0, ANK - IW.yC) : 0, IJ ? Math.min(0, ANK - IJ.yC) : 0, wj), plant: plant(IW, st, fk) }]; }
   const tk = mode === 'idle' || mode === 'sit' ? _mcTalk(f, t) : 0, off = f.sd * 7.3;
   if (mode === 'idle') { if (zb) return E('Zombie_Idle_Loop', t + off);
     const base = f.idle ? (MOCAP.alias?.[f.idle] ?? f.idle) : 'Idle_Loop'; return [...E(base, t + off, 1 - tk), ...E('Idle_Talking_Loop', t + off, tk)]; }
@@ -14935,12 +14952,17 @@ function hitSample(f, j, r) {
     for (const q of P) one(q, true, 0.15);
     const d = lo + hi; dx = sx * d; dz = sz * d;
   }
-  S = [dx, dz, deep, what]; C.set(j, S); return S;
+  S = [dx, dz, deep, what, sp]; C.set(j, S); return S;
 }
-function hitWalker(f, t, r, out) {   // eased sidestep at time t: per axis the largest step in the window, weighted by how close in time it is
-  const j0 = Math.ceil((t - HB_WIN) / HB_DT), j1 = Math.floor((t + HB_WIN) / HB_DT); let xp = 0, xn = 0, zp = 0, zn = 0; out.deep = -1;
-  for (let j = j0; j <= j1; j++) { const S = hitSample(f, j, r); if (Math.abs(j * HB_DT - t) < HB_DT && S[2] > out.deep) { out.deep = S[2]; out.what = S[3]; } if (!S[0] && !S[1]) continue;
-    const k = 1 - sm01(Math.abs(j * HB_DT - t) / HB_WIN), x = S[0] * k, z = S[1] * k; if (x > xp) xp = x; if (x < xn) xn = x; if (z > zp) zp = z; if (z < zn) zn = z; }
+function hitWalker(f, t, r, out) {   // eased sidestep at time t: per axis the largest step along the path, weighted by how far along the path it is
+  // v3.36: weighted by distance along the path (D = HB_WIN × speed, at least 1.2 m/s), not by time — a figure standing before its walk (or turning on the spot) no longer
+  // slides toward a sidestep its path will need later (was: the look-ahead ±0.7 s pushed it sideways while its feet stood still)
+  const P0 = f._posAt(t), pa = f._posAt(t - 0.1), pb = f._posAt(t + 0.1), D = HB_WIN * Math.max(1.2, Math.hypot(pb.x - pa.x, pb.z - pa.z) / 0.2), jc = Math.round(t / HB_DT);
+  let xp = 0, xn = 0, zp = 0, zn = 0; out.deep = -1;
+  // a sidestep while moving eases in with the walker's speed (no jump as it sets off)
+  for (const dir of [1, -1]) for (let i = dir > 0 ? 0 : 1; i < 160; i++) { const j = jc + dir * i, p = f._posAt(j * HB_DT), d = Math.hypot(p.x - P0.x, p.z - P0.z); if (d > D) break;
+    const S = hitSample(f, j, r); if (Math.abs(j * HB_DT - t) < HB_DT && S[2] > out.deep) { out.deep = S[2]; out.what = S[3]; } if (!S[0] && !S[1]) continue;
+    const k = (1 - sm01(d / D)) * (S[4] < 0.08 ? 1 : sm01(S[4] / 0.8)), x = S[0] * k, z = S[1] * k; if (x > xp) xp = x; if (x < xn) xn = x; if (z > zp) zp = z; if (z < zn) zn = z; }
   return [xp + xn, zp + zn];
 }
 // v3.0 feet on the floor: after every pose, a standing or walking figure whose lowest sole would be in the floor (some gaits, dances and builds bend the legs
@@ -14959,7 +14981,9 @@ function hitResolve(t) {
   for (const f of RIGS) { const w = hitFree(f, t); if (w > 0) { F.push(f); W.push(w); R.push(0.21 * f.root.scale.x); } }
   const note = (f, deep, what) => { if (deep > 0.12) { const prev = HITBOX.rep.get(f.root); if (!prev || deep > prev.d) HITBOX.rep.set(f.root, { f, d: deep, t, B: what }); } };
   // 1) props: walkers ease round what their path runs into; everybody else is pushed out of what they were placed in
-  F.forEach((f, i) => { const p = f.root.position, wk = !!(f._posAt && f._yawAt), [dx, dz] = wk ? hitWalker(f, t, R[i], info) : hitPush(p.x, p.z, R[i], p.y, info); p.x += dx * W[i]; p.z += dz * W[i]; note(f, info.deep, info.what); });
+  F.forEach((f, i) => { const p = f.root.position, wk = !!(f._posAt && f._yawAt), [dx, dz] = wk ? hitWalker(f, t, R[i], info) : hitPush(p.x, p.z, R[i], p.y, info); p.x += dx * W[i]; p.z += dz * W[i]; note(f, info.deep, info.what);
+    if (wk && (dx || dz) && !f._crowdHero) { const h = 0.06, I = {}, a = f._posAt(t - h), b = f._posAt(t + h), A = hitWalker(f, t - h, R[i], I), B = hitWalker(f, t + h, R[i], I), vx = b.x - a.x, vz = b.z - a.z, ux = vx + (B[0] - A[0]) * W[i], uz = vz + (B[1] - A[1]) * W[i], sp = Math.hypot(ux, uz) / (2 * h);
+      if (sp > 0.2 && Math.hypot(vx, vz) > 1e-4) { const d = Math.atan2(ux, uz) - Math.atan2(vx, vz), R0 = f.root.rotation; if (Math.abs(R0.x) > 3 && Math.abs(R0.z) > 3) R0.set(0, Math.PI - R0.y, 0); R0.y += Math.atan2(Math.sin(d), Math.cos(d)) * sm01((sp - 0.2) / 0.3); } } });   // v3.36: a walker eased round something faces the way it actually goes (was: slid sideways, QA CRAB)
   // 2) people apart: each gives way by how free it is; seated or busy people and animals stay put and the others move
   const A = RIGS.map(f => { const i = F.indexOf(f), th = i >= 0 ? 1 : hitThere(f); return th > 0 ? { f, i, th, w: i >= 0 ? W[i] : 0, r: 0.21 * f.root.scale.x, x: f.root.position.x, z: f.root.position.z, y: f.root.position.y, dx: 0, dz: 0 } : null; }).filter(Boolean);
   for (let a = 0; a < A.length; a++) for (let b = a + 1; b < A.length; b++) { const P = A[a], Q = A[b]; if (!P.w && !Q.w) continue; const dx = Q.x - P.x, dz = Q.z - P.z, d = Math.hypot(dx, dz), m = P.r + Q.r;
