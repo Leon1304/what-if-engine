@@ -2,16 +2,21 @@
 // Every 4 days the season changes: Herbst → Winter → Frühling → Sommer. The landscape is recoloured (vertex colours of the ground,
 // foliage and roofs: snow on everything facing up in winter, green leaves in spring/summer), plants grow at different speeds
 // (nothing in winter), it is colder in winter and warmer in summer.
-// Weather comes and goes: klar, Regen, Nebel, Gewitter (rain + lightning + thunder), Schnee (winter).
+// Weather comes and goes: klar, Regen, Nebel, Gewitter (rain + lightning + thunder), Schnee (winter) – and now and then a severe
+// storm (Unwetter: hail, gale, lightning strikes near you; in winter a Schneesturm). A storm is announced an hour before (toast, radio):
+// find shelter in time – outside it hurts and chills you (game.update), under a roof, in a house or in the car you are safe.
 import * as THREE from 'three';
 
 export const SEASONS = ['Herbst', 'Winter', 'Frühling', 'Sommer'];
 export const SEASON_DAYS = 4;
 const ICON = { Herbst: '🍂', Winter: '❄️', Frühling: '🌱', Sommer: '☀️' };
 const WEATHER = {     // chance per season of the next weather
-  Herbst: { regen: .4, nebel: .25, gewitter: .15, klar: .2 }, Winter: { schnee: .55, nebel: .2, klar: .25 },
-  Frühling: { regen: .45, gewitter: .15, nebel: .1, klar: .3 }, Sommer: { klar: .45, gewitter: .3, regen: .15, nebel: .1 },
+  Herbst: { regen: .37, nebel: .23, gewitter: .14, unwetter: .08, klar: .18 }, Winter: { schnee: .48, nebel: .18, schneesturm: .11, klar: .23 },
+  Frühling: { regen: .42, gewitter: .14, nebel: .1, unwetter: .06, klar: .28 }, Sommer: { klar: .42, gewitter: .27, regen: .13, nebel: .08, unwetter: .1 },
 };
+export const STORMS = new Set(['unwetter', 'schneesturm']);
+const NAME = { klar: 'klar und trocken', regen: 'Regen', nebel: 'Nebel', gewitter: 'Gewitter', schnee: 'Schnee', unwetter: 'ein schweres Unwetter mit Hagel', schneesturm: 'ein Schneesturm' };
+const ICONW = { regen: '🌧️', nebel: '🌫️', gewitter: '⛈️', schnee: '🌨️', unwetter: '🌪️', schneesturm: '🌨️❄️' };
 const GROUND = new Set(['Gras', 'Gras_hell', 'Waldboden', 'Moos', 'Laub', 'Trampelpfad', 'Bankett', 'Bachufer', 'Schotter', 'Pflaster', 'Gehweg', 'Acker', 'Steinbruch', 'Laubstreu', 'Laubstreu_gelb', 'Nadelstreu', 'Moospolster']);
 const CONIFER = new Set(['Fichte_a', 'Fichte_b', 'Kiefer', 'Latsche']);
 const LEAVES = new Set(['Laub_orange', 'Laub_gelb', 'Laub_rot', 'Birke_Laub', 'Busch_herbst', 'Linde']);
@@ -69,42 +74,71 @@ export class Seasons {
     if (this.S.forecast) { const f = this.S.forecast; delete this.S.forecast; return f; }      // the radio's forecast comes true
     const tbl = WEATHER[this.season] || WEATHER.Herbst; let r = Math.random(), w = 'klar';
     for (const [k, p] of Object.entries(tbl)) { r -= p; if (r <= 0) { w = k; break; } }
+    if (STORMS.has(w) && (this.S.day < 2 || this.S.abs < (this.S.lastStorm || 0) + 30)) w = w === 'schneesturm' ? 'schnee' : 'gewitter';   // not on the first day, at most every 30 h
     return w;
   }
   update(dt) {
     const S = this.S, g = this.g, sky = g.sky;
     const season = SEASONS[this.index];
+    this.changed = false;
     if (season !== this.season) {
-      const first = this.season === null; this.season = season; this.recolor(season); S.season = season;
+      const first = this.season === null; this.season = season; this.recolor(season); S.season = season; this.changed = !first;
       if (!first) g.ui.toast(`${ICON[season]} Der ${season === 'Frühling' ? 'Frühling' : season} beginnt.${season === 'Winter' ? ' Es wird bitterkalt – auf den Feldern wächst nichts.' : season === 'Frühling' ? ' Die Felder wachsen schneller.' : ''}`, 'good');
     }
     // weather: S.weather = kind, S.weatherUntil / S.nextWeather (absolute game hours)
     if (!S.weather) S.weather = 'klar';
-    if (S.weather === 'klar' && S.abs > (S.nextWeather ?? S.nextRain ?? 19)) {
-      const w = this.pick(); if (w !== 'klar') { S.weather = w; S.weatherUntil = S.abs + 1 + Math.random() * 2.5;
+    if (S.weather === 'klar' && !S.stormAt && S.abs > (S.nextWeather ?? S.nextRain ?? 19)) {
+      const w = this.pick();
+      if (STORMS.has(w)) this.warn(w);
+      else if (w !== 'klar') { S.weather = w; S.weatherUntil = S.abs + 1 + Math.random() * 2.5;
         g.ui.toast({ regen: '🌧️ Es fängt an zu regnen.', nebel: '🌫️ Nebel zieht auf.', gewitter: '⛈️ Ein Gewitter zieht auf!', schnee: '🌨️ Es fängt an zu schneien.' }[w]); }
       else S.nextWeather = S.abs + 2 + Math.random() * 4;
+    }
+    // storm: warning an hour ahead, then 1–1.5 hours of hail / blizzard
+    if (S.stormAt && S.weather === 'klar' && S.abs >= S.stormAt) {
+      S.weather = S.stormKind || 'unwetter'; S.weatherUntil = S.abs + 1 + Math.random() * .5; S.stormHurt = 0; S.lastStorm = S.abs; delete S.stormAt;
+      g.audio.sfx('thunder'); g.ui.toast(S.weather === 'schneesturm' ? '🌨️ Der Schneesturm ist da! Draußen erfrierst du schnell – rein ins Warme!' : '🌪️ Das Unwetter ist da – Hagel und Blitze! Draußen bist du in Gefahr.', 'warn');
+    }
+    if (STORMS.has(S.weather) && S.abs > (S.weatherUntil || 0)) {           // the storm passes
+      const kind = S.weather, ok = (S.stormHurt || 0) < 8; g.progress.stat('storms'); if (ok) g.progress.stat('storm_ok');
+      g.album?.see(kind === 'schneesturm' ? 'n_schneesturm' : 'n_unwetter');
+      g.ui.toast(ok ? `${kind === 'schneesturm' ? '🌨️ Der Schneesturm' : '🌪️ Das Unwetter'} ist vorbei – gut, dass du rechtzeitig Schutz gesucht hast.` : `${kind === 'schneesturm' ? 'Der Schneesturm' : 'Das Unwetter'} zieht ab. Das war knapp.`, 'good');
     }
     if (S.weather !== 'klar' && S.abs > (S.weatherUntil || 0)) { S.weather = 'klar'; S.nextWeather = S.abs + 4 + Math.random() * 7; }
     if (season !== 'Winter' && S.weather === 'schnee') S.weather = 'regen';
     if (season === 'Winter' && S.weather === 'regen') S.weather = 'schnee';
-    const wet = { regen: 1, gewitter: 1, schnee: .8 }[S.weather] || 0, fog = { nebel: 1, gewitter: .3, schnee: .4 }[S.weather] || 0;
+    if (season !== 'Winter' && S.weather === 'schneesturm') S.weather = 'unwetter';
+    if (season === 'Winter' && S.weather === 'unwetter') S.weather = 'schneesturm';
+    const warnK = S.stormAt ? Math.max(0, 1 - (S.stormAt - S.abs)) : 0;        // the sky darkens before a storm
+    const wet = { regen: 1, gewitter: 1, schnee: .8, unwetter: 1, schneesturm: 1 }[S.weather] || 0, fog = Math.max({ nebel: 1, gewitter: .3, schnee: .4, unwetter: .5, schneesturm: .9 }[S.weather] || 0, warnK * .35);
+    this.storm = STORMS.has(S.weather) ? S.weather : null;
     sky.rainAmount += (wet - sky.rainAmount) * Math.min(1, dt * .2);
     sky.fogBoost += (fog - sky.fogBoost) * Math.min(1, dt * .15);
-    sky.setSnow(S.weather === 'schnee' || ((season === 'Winter' || g.region?.() === 'berg') && sky.rainAmount > .05));      // up in the mountains it snows
+    sky.setSnow(S.weather === 'schnee' || S.weather === 'schneesturm' || ((season === 'Winter' || g.region?.() === 'berg') && sky.rainAmount > .05));      // up in the mountains it snows
+    sky.gale = this.storm ? 1 : 0;
     S.rainUntil = wet ? S.weatherUntil : 0;        // older code paths / saves
     // lightning
-    if (S.weather === 'gewitter') {
-      this.boltT -= dt; if (this.boltT < 0) { this.boltT = 6 + Math.random() * 14; sky.flash = 1; const d = .4 + Math.random() * 2.5; setTimeout(() => g.audio.sfx('thunder'), d * 1000); }
+    if (S.weather === 'gewitter' || S.weather === 'unwetter') {
+      if (S.weather === 'gewitter') g.album?.see('n_gewitter');
+      this.boltT -= dt; if (this.boltT < 0) { const st = S.weather === 'unwetter'; this.boltT = st ? 3 + Math.random() * 6 : 6 + Math.random() * 14; sky.flash = 1;
+        if (st && Math.random() < .3 && g.stormStrike?.()) return;           // a strike right next to you (only out in the open)
+        const d = .4 + Math.random() * 2.5; setTimeout(() => g.audio.sfx('thunder'), d * 1000); }
     }
+  }
+  warn(kind) {
+    const S = this.S, g = this.g; if (this.season === 'Winter') kind = 'schneesturm'; else if (kind === 'schneesturm') kind = 'unwetter';
+    S.stormAt = S.abs + 1; S.stormKind = kind; g.audio.sfx('alarm');
+    g.ui.toast(kind === 'schneesturm' ? '⚠️ Unwetterwarnung: In einer Stunde kommt ein Schneesturm! Such dir rechtzeitig ein Dach über dem Kopf.' : '⚠️ Unwetterwarnung: In einer Stunde zieht ein schweres Unwetter mit Hagel auf! Such dir rechtzeitig Schutz.', 'warn');
   }
   // radio weather report (Funkstation): fixes the next weather so the report is right
   forecast() {
-    const S = this.S, N = { klar: 'klar und trocken', regen: 'Regen', nebel: 'Nebel', gewitter: 'Gewitter', schnee: 'Schnee' };
+    const S = this.S, N = NAME;
+    if (S.stormAt) return `⚠️ UNWETTERWARNUNG: In ${Math.max(1, Math.round((S.stormAt - S.abs) * 60))} Minuten kommt ${N[S.stormKind]}. Suchen Sie sofort Schutz!`;
     if (S.weather !== 'klar') { const h = Math.max(0, (S.weatherUntil || S.abs) - S.abs); return `Zurzeit ${N[S.weather]}, noch etwa ${Math.max(1, Math.round(h))} Stunde${Math.round(h) > 1 ? 'n' : ''}. Danach klart es auf.`; }
     if (!S.forecast) { let w = 'klar'; for (let i = 0; i < 4 && w === 'klar'; i++) w = this.pick(); S.forecast = w; }
+    if (STORMS.has(S.forecast)) { const h = Math.max(1, Math.round((S.nextWeather ?? S.abs + 3) - S.abs)); return `Die nächsten ${h} Stunde${h > 1 ? 'n' : ''} trocken, danach droht ${N[S.forecast]}. Halten Sie Ihre Hütte bereit!`; }
     const h = Math.max(1, Math.round((S.nextWeather ?? S.nextRain ?? S.abs + 3) - S.abs)); S.nextWeather = S.abs + h;
     return `Die nächsten ${h} Stunde${h > 1 ? 'n' : ''} bleibt es trocken, danach ${N[S.forecast]}.${this.season === 'Winter' ? ' Strenger Frost!' : ''}`;
   }
-  label() { return `${this.icon} ${this.season || ''}${this.S.weather && this.S.weather !== 'klar' ? ' · ' + { regen: '🌧️', nebel: '🌫️', gewitter: '⛈️', schnee: '🌨️' }[this.S.weather] : ''}`; }
+  label() { return `${this.icon} ${this.season || ''}${this.S.weather && this.S.weather !== 'klar' ? ' · ' + (ICONW[this.S.weather] || '') : ''}${this.S.stormAt ? ` · ⚠️ Unwetter in ${Math.max(1, Math.round((this.S.stormAt - this.S.abs) * 60))} min` : ''}`; }
 }

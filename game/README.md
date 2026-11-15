@@ -24,13 +24,15 @@ das Gebirge „Steinberg“. Bauen (Blockhütte, Felder …), Bäume fällen, Wa
 | N | Wegmarker an deiner Stelle (auf der Karte: Klick setzt/löscht) |
 | H | Bello: „Such!“ (führt zu Säcken, Kräutern, Kristallen, Schätzen) |
 | E am Ruderboot | einsteigen, rudern mit W S A D, E = aussteigen (Steg, Ufer, Insel) |
-| B | Handbuch: Tasten, Werte, Essen, Rezepte, Ausrüstung, Aktionen, Gefahren, Orte, Aufgaben (←/→ blättern) |
+| B · J | Handbuch: Tasten, Werte, Essen, Rezepte, Ausrüstung, Aktionen, Gefahren, Orte, Aufgaben, Sammelalbum (←/→ blättern) · Tagebuch & Funk |
+| K · V | nur im Kreativ-Modus: Kreativ-Menü (Gegenstände, Uhrzeit, Wetter, Jahreszeit, Ereignisse, Hinreisen) · fliegen (Leertaste hoch, Strg runter) |
 | Esc | Pause: Speicherplätze, Datei sichern/laden, Schwierigkeit, Orte, Grafik, Bildrate, „Gegenstände hervorheben“ |
 
 **Spielstand:** automatisch alle 20 s + 3 Speicherplätze im Browser, Export/Import als Datei. Gespeichert wird alles über Namen und Ids
 (Objekte, Gegenstände, Aufgaben, gefällte Bäume, Bauwerke) mit Versionsnummer: ein Spielstand aus einer älteren Version lädt in eine
 neuere – Unbekanntes wird übersprungen, Neues startet im Grundzustand, steht man nach einem Update in einer Wand, wird man freigeschoben.
 **Schwierigkeit:** Keine Feinde · Leicht · Mittel · Schwer (Start- und Pausenmenü).
+**🎨 Kreativ-Modus** (Startmenü): kein Hunger, Durst, Kälte oder Schaden, alles bauen, ausbauen und herstellen ohne Material, Werkzeug und Level; eigener Speicherplatz.
 
 ## Inhalt
 - **Tutorial (12 Schritte)** führt vom liegengebliebenen Auto zur Tankstelle, durch Hintereingang, Essen, Sicherungskasten,
@@ -62,9 +64,14 @@ neuere – Unbekanntes wird übersprungen, Neues startet im Grundzustand, steht 
   Stollen „Glück auf“ (Geröll sprengen: 2 Sprengpulver + Seil + Feuerzeug → Bergkristalle), Gipfelkreuz, Bergsee, Heustadel, Gämsen, Schnee, Kälte.
 - **Mehr Details (Blender, `game/blender/deco.py`):** Baukasten d_*() für Dachrinnen + Fallrohre, Ziegel-/Schindelreihen, Fachwerk-Giebel, Fensterbänke, Sprossen, Vorhänge, Vordächer, Wandlampen, Hausnummern, Briefkästen, Antennen, Regentonnen, Holzstapel, Mülltonnen, Fahrräder, Blumentöpfe, Bänke, Hydranten, Kanaldeckel, Strommasten mit Leitungen. Eingesetzt an Dorfhäusern, Kapelle (+ Friedhof), Scheune, Werkstatt, Tankstelle, Forsthaus (+ Bellos Hundehütte), Funkhütte, Mühle, Anglerhütte, Steinberghütte; Stromleitung Tankstelle → Trafohaus am Dorfeingang.
 - **Natur (`s15_natur.py`, eigene Zufallsfolgen – der Wald aus s06 bleibt gleich):** Blumenwiesen (Margerite, Hahnenfuß, Glockenblume, Mohn), hohes Gras, Laub- und Nadelstreu unter den Bäumen, Moos, Kiesel, umgestürzte Bäume mit Wurzelteller, Ameisenhaufen, Baumpilze, Schilf am Bach, Wegmarken, Aussichtsbänke; im Gebirge Enzian, Edelweiß, Alpenrosen, Latschen, Geröll, Altschnee, Steinmänner, Wegkreuz. Kleinkram wird in `world.js` in 48-m-Kacheln instanziert, wirft keinen Schatten und wird je nach Größe und Grafikstufe ausgeblendet (`W.detailDist`). Blumen verblassen im Herbst und liegen im Winter unter Schnee.
+- **Stimmung:** Bodennebel am Morgen (Höhennebel in den Senken, über dem See, Nebelmeer im Gebirge), Glühwürmchen in warmen Nächten, Sternschnuppen, ganz selten ein Feuerball mit Meteorit, Regen trommelt aufs Dach (`js/mood.js`).
+- **Die Wahrheit über Tannbach:** Kurts Handfunkgerät, 6 Tagebuchseiten von Hannes Brandt, Funksprüche auf Kanal 7 (J), Entscheidung an der Zündmaschine im Steinbruch – zwei Enden (`js/story.js`, Objekte in `blender/s16_extras.py`).
+- **Sammelalbum (Handbuch):** Tiere (auch weißer Hirsch und der alte Grimm), Fische (Forelle, Saibling, Hecht, Goldforelle), Pilze & Pflanzen (neu: Pfifferling, Edelweiß), Fundstücke mit Bildern, Naturschauspiele; 6 Geheimverstecke mit seltenen Gegenständen (goldener Rahmen, eigene Modelle).
+- **Herausforderungen:** Kurts Tagesaufträge mit Frist (`js/orders.js`), Boss „der alte Grimm“ an der Bärenhöhle im Gebirge (Lebensleiste, Ansturm, Wut), Unwetter und Schneesturm mit Warnung eine Stunde vorher (Hagel, Blitze – Schutz suchen).
+- **Winter:** Waldsee und Bergsee frieren zu – übers Eis zur Insel, Eisloch hacken (Axt/Spaten), Eisangeln (`js/ice.js`).
 - **Handbuch „Fundorte“:** für jeden Gegenstand, wo er liegt, wer ihn verkauft, wie man ihn herstellt oder kocht (automatisch aus Welt, Rezepten und Laden erzeugt; Test prüft, dass keiner fehlt).
 - **Inventar:** 10 Plätze in den Taschen, Rucksack 20, Großer Rucksack 28 (Werkbank), Trekkingrucksack 36 (Kurt 90 €, Steinberghütte), Expeditionsrucksack 48 (Werkbank, Stufe 7).
-- **Bello „Such!“**, **27 Abzeichen + Statistik** (Handbuch → Erfolge, Pause-Menü), 18 Nebenaufgaben.
+- **Bello „Such!“**, **36 Abzeichen + Statistik** (Handbuch → Erfolge, Pause-Menü), 22 Nebenaufgaben.
 - **Ereignisse:** nachts fährt ab und zu ein Auto vorbei (hält und hupt, wenn du auf der Straße stehst).
 - **Herstellen:** Fackel, Verband, Lagerfeuer überall; kochen am Feuer, in der Mikrowelle oder mit dem Gaskocher.
 - **Strom:** Licht, Kühlregale, Kaffeemaschine, Kasse, Geldautomat, Zapfsäulen und Schiebetür funktionieren erst mit dem Aggregat (Tank hält ~10 Spielstunden).
@@ -75,7 +82,7 @@ neuere – Unbekanntes wird übersprungen, Neues startet im Grundzustand, steht 
 | Pfad | Inhalt |
 |---|---|
 | `blender/core.py` | Helfer: Low-Poly-Materialien (Farbe je Facette als Vertex-Farbe), Wände, Texte, Lichter, Kartenlayout (Straße, Bach, Pfade) |
-| `blender/s00_world.py` … `s14_gebirge.py` | die Map in Abschnitten: Welt, Gelände, Straße, Vorplatz, Gebäude, Einrichtung, Wald, Hof & Auto, Wohnwagen, Dorf (+ Werkstatt, Kurt, Notizen), Sehenswürdigkeiten + Säcke, Baupläne/Ausbauten/Möbel/Lichter/Pflanzen/Waffen (`bp_*`-Vorlagen bei z −200, vom Spiel geklont), Waldsee + Insel + Boot, Forsthaus + Funkstation + Pass-Schranke, Gebirge (zweite Karte, eigene Region bei y 900 … 1160) |
+| `blender/s00_world.py` … `s16_extras.py` | die Map in Abschnitten: Welt, Gelände, Straße, Vorplatz, Gebäude, Einrichtung, Wald, Hof & Auto, Wohnwagen, Dorf (+ Werkstatt, Kurt, Notizen), Sehenswürdigkeiten + Säcke, Baupläne/Ausbauten/Möbel/Lichter/Pflanzen/Waffen (`bp_*`-Vorlagen bei z −200, vom Spiel geklont), Waldsee + Insel + Boot, Forsthaus + Funkstation + Pass-Schranke, Gebirge (zweite Karte, eigene Region bei y 900 … 1160) |
 | `blender/build_all.py` | baut alles ohne Blender-Oberfläche und exportiert `map.glb` (+ `blender/map.blend` zum Anschauen) |
 | `blender/shrink.mjs` | komprimiert `map.glb` (gltf-transform) |
 | `js/` | das Spiel (Three.js 0.170): `world.js` Laden/Instancing/Kollision/Vorlagen, `player.js`, `game.js` Logik + Speichern, `life.js` Tiere/Hund/Schwierigkeit/Feuer, `build.js` Bauen/Fällen/Felder/Möbel/Licht, `combat.js` Waffen/Taschenlampe/Angeln, `progress.js` Level + Nebenaufgaben + Abzeichen + Statistik, `vehicle.js` Auto, `boat.js` Ruderboot, `health.js` Krankheiten + Verderb, `regions.js` Tal/Gebirge (Pass, Grenzen, Seen), `seasons.js` Jahreszeiten + Wetter + Wetterbericht, `sky.js`, `audio.js`, `ui.js`, `items.js` (Gegenstände, Rezepte, Waffen, Pflanzen, Baupläne), `handbook.js` |

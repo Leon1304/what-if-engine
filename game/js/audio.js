@@ -19,6 +19,7 @@ export class Audio {
     this.loop('generator', null, 'lowpass', 400, 0, 1, 38, 'sawtooth');
     this.loop('radio', this.noiseBuf, 'bandpass', 1500, 0, .7);
     this.loop('engine', null, 'lowpass', 600, 0, 1, 42, 'sawtooth');
+    this.loop('roof', this.noiseBuf, 'bandpass', 1100, 0, .6);          // rain drumming on the roof above you
   }
   loop(name, buf, ftype, freq, vol, q = 1, osc = 0, wave = 'sine') {
     const ctx = this.ctx, g = ctx.createGain(); g.gain.value = vol;
@@ -48,7 +49,8 @@ export class Audio {
     const g = ctx.createGain(); this.env(g, t, .01, vol, dur); o.connect(g); g.connect(this.master); o.start(t); o.stop(t + dur + .05);
   }
   step(surface) {
-    const s = { asphalt: [1600, .12, .07], grass: [700, .18, .1], forest: [500, .2, .12], tile: [2600, .1, .06], wood: [400, .14, .08], gravel: [1200, .22, .14], water: [900, .25, .2] }[surface] || [1000, .15, .08];
+    const s = { asphalt: [1600, .12, .07], grass: [700, .18, .1], forest: [500, .2, .12], tile: [2600, .1, .06], wood: [400, .14, .08], gravel: [1200, .22, .14], water: [900, .25, .2], ice: [3400, .09, .05] }[surface] || [1000, .15, .08];
+    if (surface === 'ice') this.tone(1900 + Math.random() * 600, .05, .03, 'sine', 0, .7);
     this.noise(s[2], 'bandpass', s[0] * (.85 + Math.random() * .3), s[1], 1.2);
     if (surface === 'wood') this.tone(110 + Math.random() * 20, .08, .08, 'triangle');
   }
@@ -118,6 +120,10 @@ export class Audio {
       case 'key': this.tone(1200 + Math.random() * 400, .06, .08, 'square'); break;
       case 'badge': [659, 784, 988, 1318].forEach((f, i) => this.tone(f, .3, .1, 'triangle', i * .11)); this.tone(1976, .5, .05, 'sine', .45); break;
       case 'sniff': for (let i = 0; i < 4; i++) this.noise(.06, 'bandpass', 1800, .18, 2, i * .1); break;
+      case 'drip': this.tone(900 + Math.random() * 900, .05, .03 + Math.random() * .03, 'sine', 0, .5); this.noise(.03, 'highpass', 3000, .05); break;
+      case 'hail': for (let i = 0; i < 8; i++) this.noise(.03, 'highpass', 2500 + Math.random() * 2000, .12, 1, Math.random() * .6); break;
+      case 'strike': this.noise(.25, 'highpass', 1500, 1.0, 1, 0, .3); this.noise(2.4, 'lowpass', 300, 1.0, 1, .05, .35); this.tone(45, 1.8, .4, 'sine', .05, .5); break;
+      case 'musicbox': [784, 659, 523, 659, 784, 784, 659, 587, 523, 587, 659, 523].forEach((f, i) => { this.tone(f * 2, .5, .06, 'sine', i * .32); this.tone(f * 4, .25, .015, 'sine', i * .32); }); break;
       case 'coins': for (let i = 0; i < 3; i++) this.tone(1500 + i * 300, .08, .08, 'triangle', i * .07); break;
     }
   }

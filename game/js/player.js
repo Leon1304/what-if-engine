@@ -92,13 +92,15 @@ export class Player {
     this.crouch = !!(k.ControlLeft || k.KeyC && false);
     const wantSprint = !!(k.ShiftLeft || k.ShiftRight) && fw > 0 && !this.crouch;
     this.sprint = wantSprint && g.S.stats.stamina > 1;
-    const speed = this.crouch ? 1.5 : this.sprint ? 6.2 : 3.3;
+    const fly = this.fly && g.creative; if (fly) { this.sprint = wantSprint; this.crouch = false; }
+    const speed = fly ? (this.sprint ? 16 : 7) : this.crouch ? 1.5 : this.sprint ? 6.2 : 3.3;
     const wish = new THREE.Vector3(st, 0, -fw);
     if (wish.lengthSq() > 0) wish.normalize().applyAxisAngle(new THREE.Vector3(0, 1, 0), this.yaw).multiplyScalar(speed * g.slow);
-    const acc = this.onGround ? 14 : 2.5;
+    const acc = fly ? 8 : this.onGround ? (g.onIce ? 1.6 : 14) : 2.5;          // ice: you slide
     this.vel.x += (wish.x - this.vel.x) * Math.min(1, acc * dt); this.vel.z += (wish.z - this.vel.z) * Math.min(1, acc * dt);
-    if (k.Space && this.onGround && g.S.stats.stamina > 8) { this.vel.y = 4.8; this.onGround = false; g.S.stats.stamina -= 8; k.Space = false; }
-    this.vel.y -= 18 * dt;
+    if (fly) { const up = (k.Space ? 1 : 0) - (k.ControlLeft ? 1 : 0); this.vel.y += (up * (this.sprint ? 10 : 5) - this.vel.y) * Math.min(1, dt * 6); }
+    else { if (k.Space && this.onGround && g.S.stats.stamina > 8) { this.vel.y = 4.8; this.onGround = false; g.S.stats.stamina -= 8; k.Space = false; }
+      this.vel.y -= 18 * dt; }
     const wasGround = this.onGround; this.stepOk = wasGround || this.vel.y <= 0; this.onGround = false; this.fallV = 0; this.stepUp = 0;
     const N = 4;
     for (let i = 0; i < N; i++) { this.pos.addScaledVector(this.vel, dt / N); this.resolve(); }

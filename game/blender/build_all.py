@@ -4,7 +4,7 @@
 import bpy, os, sys, time, json
 HERE = os.path.dirname(os.path.abspath(__file__))
 p = os.path.join(HERE, 'core.py'); G = {'__file__': p}; exec(compile(open(p).read(), p, 'exec'), G)
-SECTIONS = ['s00_world', 's01_terrain', 's02_road', 's03_forecourt', 's04_building', 's05_interior', 's06_forest', 's07_props', 's08_camp', 's09_village', 's10_sights', 's11_build', 's12_lake', 's13_forst', 's14_gebirge', 's15_natur']
+SECTIONS = ['s00_world', 's01_terrain', 's02_road', 's03_forecourt', 's04_building', 's05_interior', 's06_forest', 's07_props', 's08_camp', 's09_village', 's10_sights', 's11_build', 's12_lake', 's13_forst', 's14_gebirge', 's16_extras', 's15_natur']
 args = sys.argv[sys.argv.index('--') + 1:] if '--' in sys.argv else []
 want = [a for a in args if not a.startswith('--')] or SECTIONS
 for o in list(bpy.data.objects): bpy.data.objects.remove(o, do_unlink=True)

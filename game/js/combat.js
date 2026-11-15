@@ -46,18 +46,30 @@ export class Combat {
   fish() {
     const g = this.g, W = g.W;
     if (this.cast) {
-      if (this.cast.state === 'bite') { if (g.add('fisch', 1)) { g.progress.stat('fish'); g.progress.add(10, 'Fisch'); g.audio.sfx('pickup'); g.ui.toast('🐟 Gefangen: eine Forelle!', 'good'); } }
+      if (this.cast.state === 'bite') { const k = this.species(this.cast);
+        if (g.add(k, 1, true)) { g.progress.stat('fish'); g.progress.stat('fish_' + k); if (this.cast.ice) g.S.flags.iceFish = 1; g.progress.add(k === 'goldforelle' ? 40 : k === 'hecht' ? 16 : 10, 'Fisch'); g.audio.sfx(k === 'goldforelle' ? 'badge' : 'pickup');
+          g.ui.toast({ fisch: '🐟 Gefangen: eine Forelle!', saibling: '🐟 Gefangen: ein Saibling!', hecht: '🐟 Ein Hecht – was für ein Brocken!', goldforelle: '🐠 Eine GOLDFORELLE! So eine sieht man selten. ★' }[k], 'good'); } }
       else g.ui.toast('Eingeholt – nichts dran.');
       return this.reel();
     }
-    const rc = new THREE.Raycaster(this.cam.position, g.P.forward(new THREE.Vector3()), 0, 16), h = rc.intersectObjects(W.waterMeshes, true)[0];
+    const fwd = g.P.forward(new THREE.Vector3()), ice = g.ice?.castPoint(this.cam.position, fwd);
+    if (ice === false) return g.ui.toast('🧊 Das Eis ist zu dick – hack erst ein Eisloch (E auf dem Eis, mit Axt oder Spaten) und ziel dann hinein.');
+    const rc = new THREE.Raycaster(this.cam.position, fwd, 0, 16), h = ice ? { point: ice.p, object: { name: ice.lake } } : rc.intersectObjects(W.waterMeshes, true)[0];
     if (!h) return g.ui.toast('Ziel aufs Wasser – Bach oder Waldsee.');
-    const wall = W.rayHit(this.cam.position, rc.ray.direction, h.distance); if (wall) return g.ui.toast('Da ist etwas im Weg.');
+    const wall = ice ? null : W.rayHit(this.cam.position, rc.ray.direction, h.distance); if (wall) return g.ui.toast('Da ist etwas im Weg.');
     const pose = this.g.W.bp.pose ? this.g.W.bp.pose.clone(true) : new THREE.Mesh(new THREE.SphereGeometry(.05), new THREE.MeshBasicMaterial({ color: '#d23a2a' }));
     const grp = new THREE.Group(); grp.add(pose); grp.position.copy(h.point); g.scene.add(grp);
     const lake = ['See', 'Bergsee'].includes(h.object.name) || ['See', 'Bergsee'].includes(h.object.parent?.name);
-    this.cast = { grp, state: 'wait', t: 3 + Math.random() * 8 * (g.sky.rainAmount > .3 ? .6 : 1) * (lake ? .8 : 1), from: g.P.pos.clone(), y: h.point.y };
+    // which water: the mountain lake (char), the forest lake (trout or pike) or the creek (trout) – decided by where the float lands
+    const bx = h.point.x, by = -h.point.z, water = g.region() === 'berg' ? 'berg' : Math.hypot(bx + 86, by - 18) < 30 ? 'see' : 'bach';
+    this.cast = { grp, state: 'wait', t: (3 + Math.random() * 8 * (g.sky.rainAmount > .3 ? .6 : 1) * (lake || water !== 'bach' ? .8 : 1)) * (ice ? .75 : 1), from: g.P.pos.clone(), y: h.point.y, water, ice: !!ice };
     g.audio.sfx('cast'); g.ui.toast('🎣 Ausgeworfen … warte, bis die Pose zuckt.');
+  }
+  species(c) {
+    const r = Math.random(); if (r < (c.ice ? .06 : .03)) return 'goldforelle';
+    if (c.water === 'berg') return r < .85 ? 'saibling' : 'fisch';
+    if (c.water === 'see') return r < (c.ice ? .65 : .35) ? 'hecht' : 'fisch';
+    return 'fisch';
   }
   reel() { if (this.cast) { this.g.scene.remove(this.cast.grp); this.cast = null; } }
   updateFishing(dt) {
@@ -130,8 +142,8 @@ export class Combat {
   wound(a, dmg, p) {
     const g = this.g; this.puff(p || a.pos, '#9a1a12', 8); g.ui.hitmark?.();
     const dead = g.life.hit(a, dmg);
-    if (dead) { g.ui.toast(({ wolf: '🐺 Wolf erlegt.', boar: '🐗 Wildschwein erlegt.', bear: '🐻 Bär erlegt!', deer: '🦌 Reh erlegt.', rabbit: '🐇 Kaninchen erlegt.', gams: '🐐 Gämse erlegt.' }[a.kind] || 'Erlegt.') + (a.kind === 'rabbit' ? ' Aufheben mit E.' : ' Mit Messer zerlegen (E).'), 'good');
-      g.progress.stat('kills'); g.progress.stat('kill_' + a.kind); g.progress.add({ wolf: 25, boar: 20, bear: 60, deer: 15, rabbit: 6, gams: 20 }[a.kind] || 10, 'Jagd'); }
+    if (dead) { g.ui.toast(({ wolf: '🐺 Wolf erlegt.', boar: '🐗 Wildschwein erlegt.', bear: '🐻 Bär erlegt!', deer: a.white ? '🤍 Der weiße Hirsch …' : '🦌 Reh erlegt.', rabbit: '🐇 Kaninchen erlegt.', gams: '🐐 Gämse erlegt.', grimm: '🐻 Der alte Grimm fällt!' }[a.kind] || 'Erlegt.') + (a.kind === 'rabbit' ? ' Aufheben mit E.' : ' Mit Messer zerlegen (E).'), 'good');
+      g.progress.stat('kills'); g.progress.stat('kill_' + a.kind); g.progress.add({ wolf: 25, boar: 20, bear: 60, deer: 15, rabbit: 6, gams: 20, grimm: 400 }[a.kind] || 10, 'Jagd'); }
     return dead;
   }
   puff(p, col, n = 5) {

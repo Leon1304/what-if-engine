@@ -128,6 +128,22 @@
   .book .badge.on { opacity: 1; box-shadow: inset 0 0 0 2px #b08a4a; } .book .badge b { display: block; font-size: 14px; } .book .badge i { font-style: normal; font-size: 22px; float: left; margin-right: 6px; }
   #found { list-style: none; padding: 0; columns: 2; color: var(--mut); margin: 0 0 4px; } #found li.on { color: var(--fg); } #found li.rest { column-span: all; margin-top: 4px; }
   @media (max-width: 700px) { #bars { width: 160px; } #quest { max-width: 60vw; font-size: 13px; } .slot { width: 44px; height: 44px; } }
+  /* creative mode, boss, album, diary, Kurt's order, rare items */
+  body.creative #bars, body.creative #lvl, body.creative #xpbox { display: none; }
+  body.creative #bookhint::before { content: "🎨 Kreativ · K Menü · V fliegen · "; color: #ffd77a; }
+  #bossbar { position: absolute; left: 50%; top: 46px; transform: translateX(-50%); width: min(420px, 70vw); display: none; text-align: center; font-weight: 800; color: #ffd9b0; text-shadow: 0 1px 3px #000; font-size: 14px; }
+  #bossbar div { height: 10px; margin-top: 3px; border-radius: 5px; background: rgba(0,0,0,.55); border: 1px solid rgba(255,200,150,.5); overflow: hidden; } #bossbar i { display: block; height: 100%; background: linear-gradient(90deg, #a3241a, #e0553f); transition: width .2s; }
+  .cell.rare { box-shadow: inset 0 0 0 2px #e2b84a, 0 0 12px rgba(226,184,74,.35); background: linear-gradient(160deg, rgba(226,184,74,.18), rgba(255,255,255,.05)); } .cell .rr { position: absolute; right: 8px; bottom: 6px; font-size: 10px; color: #ffd77a; }
+  .book .album { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 6px; } .book .alb { background: #fffaf0; border-radius: 6px; padding: 6px; text-align: center; opacity: .5; min-height: 92px; }
+  .book .alb.on { opacity: 1; box-shadow: inset 0 0 0 1px #c9b48a; } .book .alb.rare.on { box-shadow: inset 0 0 0 2px #d4a63a; background: #fff6dc; } .book .alb i { font-style: normal; font-size: 30px; display: block; } .book .alb img { width: 64px; height: 64px; display: block; margin: 0 auto; }
+  .book .alb b { display: block; font-size: 13px; } .book .alb small { display: block; font-size: 11px; color: #7a6a4a; } .book h4 small { font-weight: 400; color: #7a6a4a; }
+  .book .diary { background: #fffaf0; border-left: 4px solid #8a6a48; padding: 6px 12px; margin: 6px 0; border-radius: 4px; } .book .diary p { margin: 4px 0; font-family: "Bradley Hand", "Segoe Print", cursive; font-size: 15px; }
+  .book .diary.off { opacity: .45; font-style: italic; } .book .diary.radio { border-left-color: #3a7a9a; } .book .diary.radio p { font-family: inherit; } .book .diary.new { box-shadow: 0 0 0 2px #3a7a9a; }
+  .order { background: rgba(226,168,60,.12); border: 1px solid rgba(226,168,60,.5); border-radius: 8px; padding: 8px 12px; margin: 8px 0; font-size: 14px; } .order button { padding: 4px 12px; font-size: 13px; margin: 6px 0 0; }
+  #creativepanel h3 { margin: 12px 0 6px; font-size: 15px; } .cbtns button { padding: 5px 10px; font-size: 13px; margin: 3px 4px 3px 0; }
+  .cgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 4px; } .cgrid button { margin: 0; padding: 5px 8px; font-size: 12px; text-align: left; font-weight: 500; } .cgrid button i { font-style: normal; margin-right: 5px; }
+  .cgrid button.rare { box-shadow: inset 0 0 0 1px #e2b84a; }
+  #reader button { margin: 6px 6px 0 0; }
 </style>
 <script type="importmap">
 { "imports": {
@@ -152,7 +168,7 @@
   </div>
   <div id="pins"></div><div id="scope"></div><div id="compass"></div><div id="sidequest"></div><div id="lvl"></div><div id="xpbox"></div>
   <div id="selname"></div><div id="hotbar"></div><div id="bookhint"><kbd>B</kbd> Handbuch · <kbd>G</kbd> Bauen</div><div id="weaponhud"></div><div id="buildhint"></div>
-  <div id="frost"></div><div id="vignette"></div><div id="fade"></div>
+  <div id="frost"></div><div id="vignette"></div><div id="fade"></div><div id="bossbar">🐻 Der alte Grimm<div><i></i></div></div>
 </div>
 
 <div class="ov show" id="loading"><div class="card"><h1>WALDTANK<small>Überleben im Nordwald</small></h1><p id="loadtext">Lade …</p><div class="bar"><div id="loadbar"></div></div></div></div>
@@ -160,7 +176,7 @@
 <div class="ov" id="start"><div class="card">
   <h1>WALDTANK<small>Überleben im Nordwald</small></h1>
   <p class="story">Herbst, später Nachmittag. Mitten im Nordwald bleibt dein Auto liegen. Kein Netz. Ein Stück die Straße hinauf steht eine Tankstelle – dunkel und verlassen. Bald wird es Nacht, kalt … und du bist nicht allein im Wald.</p>
-  <button id="btn-new">Neues Spiel</button><button id="btn-continue" class="sec">Weiterspielen</button><button id="btn-book-start" class="sec">📖 Handbuch</button>
+  <button id="btn-new">Neues Spiel</button><button id="btn-continue" class="sec">Weiterspielen</button><button id="btn-creative" class="sec" title="Kein Hunger, kein Schaden, bauen und herstellen ohne Material – zum Ausprobieren">🎨 Kreativ-Modus</button><button id="btn-book-start" class="sec">📖 Handbuch</button>
   <div class="diff"><b>Schwierigkeit:</b> <button class="sec" data-diff="aus">Keine Feinde</button><button class="sec" data-diff="leicht">Leicht</button><button class="sec" data-diff="mittel">Mittel</button><button class="sec" data-diff="schwer">Schwer</button></div>
   <div class="keys">
     <b>WASD · Maus</b><span>laufen · umschauen</span><b>Shift · Leertaste · Strg</b><span>sprinten · springen · ducken</span>
@@ -168,7 +184,8 @@
     <b>1–5 · Mausrad · Q</b><span>Schnellleiste wählen · essen/trinken/benutzen</span><b>M</b><span>Karte (wenn du eine hast)</span>
     <b>Z (halten)</b><span>Zeit vergehen lassen – drinnen mit Strom, am Feuer, im Unterstand, am Bett oder mit Schlafsack</span>
     <b>Linksklick · R · rechte Maustaste</b><span>Waffe: schießen · nachladen · zielen — ohne Waffe: Taschenlampe an · aus (Fernglas)</span><b>G · X</b><span>Baumenü · Gebautes abbauen</span><b>N · H</b><span>Wegmarker setzen · Bello: „Such!“</span>
-    <b>B</b><span>Handbuch: alle Tasten, Rezepte, Tipps</span><b>Esc</b><span>Pause, Speichern, Schwierigkeit</span>
+    <b>B · J</b><span>Handbuch: alle Tasten, Rezepte, Tipps · Tagebuch &amp; Funk</span><b>Esc</b><span>Pause, Speichern, Schwierigkeit</span>
+    <b>🎨 Kreativ</b><span>K Kreativ-Menü (Gegenstände, Zeit, Wetter, Ereignisse, Hinreisen) · V fliegen</span>
   </div>
 </div></div>
 
@@ -197,6 +214,7 @@
 <div class="panel" id="buildpanel"></div>
 <div class="panel" id="tradepanel"></div>
 <div class="panel" id="codepanel"></div>
+<div class="panel" id="creativepanel"></div>
 
 <script type="module" src="js/main.js"></script>
 </body>

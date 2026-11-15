@@ -89,9 +89,26 @@ Taschenlampe per Links-/Rechtsklick, mehr Munition (Säcke, Händler, Werkbank).
 - **Inventar:** 10 Plätze in den Taschen, Rucksack 20, Großer Rucksack 28 (Werkbank), Trekkingrucksack 36 (Kurt 90 €, Steinberghütte), Expeditionsrucksack 48 (Werkbank, Stufe 7).
 - **Bello „Such!“** (H): führt zu Säcken, Kräutern, Kristallen, Schätzen. **27 Abzeichen + Statistikseite** (Handbuch, Pause-Menü).
 - 7 neue Nebenaufgaben, neue Gebirgskarte (Relief), Fisch/Kaninchen am Feuer braten, Töpfe kommen beim Kochen zurück.
+- **Stimmung (`js/mood.js`):** Bodennebel als Höhennebel in allen Shadern (eigene `ShaderChunk.fog_*`, Uniforms `uMist`/`uMistColor` werden je Programm
+  gesetzt) – morgens in den Senken, über dem See, im Gebirge als Nebelmeer unter der Hütte; Glühwürmchen in warmen Nächten (ein Points-Shader, 140 Stück
+  um den Spieler, am Wasser dichter), Sternschnuppen bei klarem Himmel, selten ein Feuerball → Meteorit als Bündel mit Glut (Wegmarker „Einschlag“);
+  Regen trommelt hörbar aufs Dach (Hütte, Häuser, Auto) mit einzelnen Tropfen.
+- **Geschichte, Teil 2 (`js/story.js`, Blender `s16_extras.py`):** Kurt gibt nach den 5 Notizen sein Handfunkgerät (Kanal 7). 6 Tagebuchseiten von Hannes Brandt
+  (Werkstatt, Steinbruch, Burgruine, Turm, Stollen-Eingang, hinter dem Geröll) erzählen: Kristallader unter dem Dorf, Probesprengung → Steinschlag am Pass,
+  erfundene Damm-Gefahr → Räumung, Ladungen im Steinbruch. Funksprüche (Lena, Brandt, Bergwacht) kommen nach und nach (J). Ende an der Zündmaschine:
+  Kabel kappen + Wahrheit funken (Dorf wird wieder bewohnt, abends Licht in den Fenstern) oder Brandts Umschlag nehmen (500 €, Sprengung in der Nacht).
+- **Sammelalbum (`js/album.js`):** Tiere (inkl. seltener weißer Hirsch, der alte Grimm), Fische (Forelle, Saibling, Hecht, Goldforelle), Pilze & Pflanzen
+  (Pfifferling, Edelweiß neu), Fundstücke mit Bildern der Blender-Modelle (`bp_r_*`), Naturschauspiele. 6 Geheimverstecke mit seltenen Gegenständen
+  (goldener Rahmen im Rucksack, eigenes Modell auch abgelegt).
+- **Herausforderungen:** Kurts Tagesaufträge (`js/orders.js`, jeden Morgen neu, Frist, Lohn); der alte Grimm (Boss-Bär an der Bärenhöhle im Gebirge:
+  schläft, stürmt geradeaus, rast unter 40 %, kehrt zum Heilen in die Höhle zurück, Lebensleiste oben); Unwetter/Schneesturm mit Warnung eine Stunde vorher
+  (Hagel, Blitzeinschläge in der Nähe, Kälte – sicher unter Dach, in Häusern, im Auto).
+- **Winter am See (`js/ice.js`):** Waldsee und Bergsee frieren zu (Eisfläche mit eigenem Kollider, rutschig), zu Fuß zur Insel, Eisloch mit Axt/Spaten, Eisangeln (Hechte).
+- **Kreativ-Modus:** keine Werte, kein Schaden, Bauen/Ausbauen/Herstellen ohne Material, Werkzeug und Level, Hütte sofort fertig; Kreativ-Menü (K) mit allen
+  Gegenständen, Uhrzeit, Wetter, Jahreszeit, Ereignissen und Reisezielen; Fliegen (V); eigener Speicherplatz „Kreativ (auto)“.
 
 ## Später (weitere Maps / Ausbau)
-Controller-Steuerung, Mehrspieler, Jagdhütte im Gebirge, Winter-Events (zugefrorener See), weitere Regionen.
+Controller-Steuerung, Mehrspieler, Jagdhütte im Gebirge, weitere Regionen.
 
 ## Technik
 - Blender: jedes benutzbare Ding ist ein eigenes Objekt mit Eigenschaften (`interact`, `label`, `item`, `angle`, `slide`, `group` …),

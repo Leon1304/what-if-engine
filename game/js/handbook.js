@@ -5,6 +5,7 @@ import { DIFF } from './life.js';
 import { LEVELS, SIDE, BADGES, STATS } from './progress.js';
 import { ILL } from './health.js';
 import { SEASONS, SEASON_DAYS } from './seasons.js';
+import { ALBUM_IDS } from './album.js';
 
 const STAT = { hunger: 'Hunger', thirst: 'Durst', warmth: 'Wärme', health: 'Gesundheit', stamina: 'Ausdauer' };
 const fx = use => Object.entries(use).map(([k, v]) => `<span class="${v > 0 ? 'pos' : 'neg'}">${STAT[k]} ${v > 0 ? '+' : '−'}${Math.abs(v)}</span>`).join(' ');
@@ -29,6 +30,9 @@ const EXTRA = {
   stamm: ['🪓 Bäume mit der Axt fällen'], ast: ['🌲 Liegt überall im Wald; beim Fällen fallen Äste ab'], holz: ['🪓 Holzstapel, gefällte Bäume'],
   fliegenpilz: ['🍄 Wächst im Wald (giftig!)'], steinpilz: ['🍄 Wächst im Wald'], kraeuter: ['🌼 Kamille wächst auf Wiesen und an Wegen'],
   bergkristall: ['💎 Erst das Geröll im Stollen sprengen: 2× Sprengpulver + Seil + Feuerzeug'],
+  saibling: ['🎣 Angeln im Bergsee (Gebirge)'], hecht: ['🎣 Angeln im Waldsee – im Winter am Eisloch beißen sie am besten'], goldforelle: ['🎣 Selten beim Angeln, überall (am Eisloch doppelt so oft)'],
+  meteorit: ['☄️ Ganz selten fällt nachts ein Feuerball vom Himmel – wo er einschlägt, liegt ein Meteorit (Wegmarker „Einschlag“)'], kralle: ['🐻 Den alten Grimm in der Bärenhöhle (Gebirge) erlegen und zerlegen'],
+  handfunk: ['🧔 Kurt gibt es dir, wenn du ihm von den 5 Notizen erzählt hast'], pfifferling: ['🍄 Wächst im Wald an den Wegen'], edelweiss: ['🤍 Wächst hoch oben im Fels am Steinberg'],
 };
 const near = (g, p) => { let best = null, bd = 1e9; for (const pl of g.places) { if (!pl.pos) continue; const d = Math.hypot(pl.pos.x - p.x, pl.pos.z - p.z) - (pl.r || 10); if (d < bd) { bd = d; best = pl; } }   // big places (village) win over small ones nearby
   return best && bd < 35 ? best.name : 'im Wald'; };
@@ -73,7 +77,7 @@ export function chapters(g) {
         ${keyRow('M', 'Wanderkarte (wenn du sie hast)')}${keyRow('Z (halten)', 'Zeit vorspulen – nur an sicheren Orten')}
         ${keyRow('Linksklick', 'Waffe: schießen / zustechen · beim Bauen: setzen')}${keyRow('E (am Auto)', 'reparieren · tanken · einsteigen / aussteigen; fahren: W S A D')}${keyRow('R', 'nachladen · beim Bauen: drehen')}
         ${keyRow('Rechte Maustaste', 'zielen (Gewehr: Zielfernrohr) · ohne Waffe: Fernglas')}${keyRow('G', 'Baumenü')}${keyRow('X', 'Gebautes abbauen · Bauen abbrechen')}
-        ${keyRow('N', 'Wegmarker an deiner Stelle setzen')}${keyRow('H', 'Bello: „Such!“ – er führt dich zu Säcken, Kräutern, Kristallen, Schätzen')}${keyRow('E (am Ruderboot)', 'einsteigen · W S rudern, A D drehen · E aussteigen')}${keyRow('B', 'dieses Handbuch')}${keyRow('Esc', 'Pause: Speichern, Laden, Schwierigkeit, Grafik')}
+        ${keyRow('N', 'Wegmarker an deiner Stelle setzen')}${keyRow('H', 'Bello: „Such!“ – er führt dich zu Säcken, Kräutern, Kristallen, Schätzen')}${keyRow('E (am Ruderboot)', 'einsteigen · W S rudern, A D drehen · E aussteigen')}${keyRow('J', 'Tagebuch &amp; Funk: Brandts Tagebuchseiten und Funksprüche')}${keyRow('K · V', 'nur im Kreativ-Modus: Kreativ-Menü · fliegen (Leertaste hoch, Strg runter)')}${keyRow('B', 'dieses Handbuch')}${keyRow('Esc', 'Pause: Speichern, Laden, Schwierigkeit, Grafik')}
       </table>
       <p class="tip">Im Buch: <kbd>←</kbd> <kbd>→</kbd> blättern, <kbd>B</kbd> oder <kbd>Esc</kbd> schließen.</p>` },
     { id: 'werte', icon: '❤️', t: 'Überleben', h: `
@@ -128,7 +132,11 @@ export function chapters(g) {
       <dt>🎣 Angeln</dt><dd>Angel auswählen, aufs Wasser (Bach oder Waldsee) zielen, Linksklick. Zuckt die Pose: sofort klicken!</dd>
       <dt>🐇 Fallen</dt><dd>Kaninchenfalle weit weg von deiner Hütte aufstellen – mit der Zeit sitzt ein Kaninchen drin. Kaninchen am Feuer braten.</dd>
       <dt>🍂 Jahreszeiten</dt><dd>Alle ${SEASON_DAYS} Tage: ${SEASONS.join(' → ')}. Im Winter Schnee, große Kälte und kein Wachstum auf den Feldern; im Frühling und Sommer wächst alles schneller. Jetzt: <b>${g.seasons.season || ''}</b>.</dd>
-      <dt>⛈️ Wetter</dt><dd>Regen, Nebel (kurze Sicht), Gewitter (Blitz und Donner), im Winter Schnee.</dd></dl>` },
+      <dt>⛈️ Wetter</dt><dd>Regen, Nebel (kurze Sicht), Gewitter (Blitz und Donner), im Winter Schnee. Früh am Morgen liegt oft <b>Nebel</b> in den Senken – über dem See, den Wiesen, im Dorf; Hügel und Turm ragen heraus.</dd>
+      <dt>🌪️ Unwetter</dt><dd>Ab und zu zieht ein schweres Unwetter auf (im Winter ein Schneesturm). Eine Stunde vorher kommt eine ⚠️ <b>Unwetterwarnung</b> (oben rechts mit Restzeit, auch im Wetterbericht der Funkstation). Draußen prasselt Hagel auf dich ein, Blitze schlagen in der Nähe ein, im Schneesturm erfrierst du schnell. Sicher bist du unter einem Dach, in Häusern, deiner Hütte, im Unterstand oder im Auto.</dd>
+      <dt>📋 Kurts Tagesaufträge</dt><dd>Jeden Morgen ab 7 Uhr hat Kurt einen Wunsch („5 Fische bis heute Abend“). Im Laden annehmen, bis zur Frist bringen, abgeben → Geld und EP.</dd>
+      <dt>🧊 Winter am See</dt><dd>Im Winter frieren Waldsee und Bergsee zu. Das Eis trägt – du kannst zur Insel laufen (Vorsicht, rutschig!). Mit Axt oder Spaten (<kbd>E</kbd> aufs Eis) hackst du ein Eisloch und angelst darin: Hechte beißen dort am besten.</dd>
+      <dt>✨ Nachts</dt><dd>In warmen Nächten tanzen Glühwürmchen über den Wiesen und am Wasser. Bei klarem Himmel ziehen Sternschnuppen vorbei – und ganz selten ein Feuerball.</dd></dl>` },
     { id: 'gesund', icon: '🤧', t: 'Gesundheit & Vorräte', h: `
       <p>Jetzt: ${g.health.label() || '<b>gesund</b> 😊'}</p>
       <dl><dt>${ILL.erk.icon} ${ILL.erk.name}</dt><dd>Holst du dir, wenn dir kalt ist (Wärme unter 30) oder du im Regen draußen nass wirst – im Gebirge besonders schnell. Du hustest, wirst schneller müde und frierst leichter; ab 60 % kommt Fieber dazu (kostet Gesundheit). Warm und satt heilt sie von selbst, im Bett am schnellsten.</dd>
@@ -173,6 +181,8 @@ export function chapters(g) {
         <dt>🐺 Wölfe</dt><dd>Kommen nachts aus dem Wald, umkreisen dich, beißen zu und ziehen sich kurz zurück. Sie fürchten Licht: leuchte sie mit der 🔦 Lampe an, trag eine Fackel oder bleib am Feuer. In Gebäuden, deiner Hütte und oben auf dem Hochsitz greifen sie nicht an.</dd>
         <dt>🐗 Wildschweine</dt><dd>Tagsüber im Wald. Kommst du zu nah, greifen sie an – kurz und heftig.</dd>
         <dt>🐻 Bären</dt><dd>Selten, vor allem im Norden. Sehr stark, Licht schreckt sie nicht – nur Feuer. Lieber ausweichen oder mit dem Gewehr.</dd>
+        <dt>🐻 Der alte Grimm</dt><dd>Ein Riesenbär, der in der Bärenhöhle am Steinberg schläft. Kommst du zu nah oder schießt du, wacht er auf. Kein Feuer hält ihn auf. Wenn er sich duckt, stürmt er geradeaus los – <b>spring zur Seite!</b> Unter 40 % wird er rasend. Läufst du weit weg, geht er zurück in die Höhle und erholt sich.</dd>
+        <dt>🌪️ Unwetter</dt><dd>Hagel und Blitze draußen, im Winter Schneesturm – rechtzeitig unter ein Dach!</dd>
         <dt>⚙️ Schwierigkeit</dt><dd>${Object.values(DIFF).map(d => `<b>${d.name}</b>`).join(' · ')} – jetzt: <b>${DIFF[g.S.diff]?.name || ''}</b>. Ändern im Startmenü oder mit <kbd>Esc</kbd>.</dd>
         <dt>🥶 Kälte</dt><dd>Nachts und bei Regen draußen sinkt die Wärme schnell. Bei wenig Wärme wirst du langsamer.</dd>
         <dt>🍄 Rote Pilze</dt><dd>Fliegenpilze sind giftig (−35 Gesundheit). Nur braune Pilze essen.</dd>
@@ -180,6 +190,11 @@ export function chapters(g) {
         <dt>🪜 Stürze</dt><dd>Wer von hoch oben springt, verletzt sich.</dd>
         <dt>🔦 Batterie</dt><dd>Die Taschenlampe verbraucht Batterie. Batterien gibt es im Laden.</dd>
       </dl>` },
+    { id: 'tagebuch', icon: '📖', t: `Tagebuch & Funk (${g.story.pages()}/6)`, h: g.story.html() },
+    { id: 'album', icon: '📔', t: `Sammelalbum (${g.album.count()}/${ALBUM_IDS.size})`, h: g.album.html() },
+    ...(g.creative ? [{ id: 'kreativ', icon: '🎨', t: 'Kreativ-Modus', h: `<p>Im Kreativ-Modus gibt es keinen Hunger, keinen Durst, keine Kälte und keinen Schaden. Alle Baupläne, Ausbauten und Rezepte gehen ohne Material, Werkzeug und Level – die Blockhütte steht sofort fertig.</p>
+      <ul><li><kbd>K</kbd> Kreativ-Menü: jeden Gegenstand holen (Shift+Klick = 10), Uhrzeit, Wetter (auch Unwetter), Jahreszeit (Winter = See friert zu), Ereignisse (Sternschnuppe, Feuerball, Wölfe, weißer Hirsch, Grimm), zu jedem Ort reisen.</li>
+      <li><kbd>V</kbd> fliegen: Leertaste hoch, Strg runter, Shift schnell.</li><li>Gespeichert wird in einem eigenen Platz „🎨 Kreativ (auto)“ – dein normales Spiel bleibt unberührt.</li></ul>` }] : []),
     { id: 'fund', icon: '🔎', t: 'Fundorte aller Gegenstände', h: fundorte(g) },
     { id: 'orte', icon: '🗺️', t: `Orte (${found}/${g.places.length})`, h: `
       ${['tal', 'berg'].map(r => `<h4>${r === 'tal' ? '🌲 Nordwald' : '⛰️ Gebirge Steinberg'}</h4><ul class="places">${g.places.filter(p => p.region === r).map(p => `<li class="${S.found[p.id] ? 'on' : ''}">${S.found[p.id] ? '📍 ' + p.name : S.known[p.id] ? '🗺️ ' + p.name + ' (noch nicht besucht)' : '❔ noch nicht entdeckt'}</li>`).join('')}</ul>`).join('')}

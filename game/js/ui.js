@@ -59,9 +59,12 @@ export class UI {
     if (!S.car?.fixed) talk.push('„Dein Auto ist liegengeblieben? Drüben in der Werkstatt von Brandt hängen Keilriemen, und Werkzeug liegt da auch.“');
     const notes = Object.keys(S.notes || {}).length;
     if (notes >= 5 && !S.flags.kurtStory) talk.push('<button data-talk="story">📜 Erzähl Kurt, was in den Notizen steht</button>');
-    else if (S.flags.kurtStory) talk.push('„Brandt und seine Sprengungen … Danke, dass du das rausgefunden hast. Das erzähl ich allen, wenn sie zurückkommen.“');
+    else if (S.flags.ending === 'wahrheit') talk.push(S.flags.villageBack ? '„Hörst du das? Kinderlachen in Tannbach! Das haben wir dir zu verdanken. Für dich ist der Kaffee immer umsonst.“' : '„Brandt sitzt! Ich hab’s im Radio gehört. Bald kommen die Leute zurück.“');
+    else if (S.flags.ending === 'schweigen') talk.push(S.flags.blastDone ? '„Brandt hat gesprengt. Der halbe Hang ist runter. … Du weißt was darüber, stimmt’s? Na ja. Geschäft ist Geschäft.“' : '„Du warst am Steinbruch, oder? Du siehst aus, als hättest du was gesehen.“');
+    else if (S.flags.kurtStory && !S.flags.gotRadio) talk.push('<button data-talk="radio">📻 Kurt nach Neuigkeiten fragen</button>');
+    else if (S.flags.kurtStory) talk.push(`„Brandt und seine Sprengungen … Hast du auf Kanal 7 was gehört? Find raus, was er vorhat!“${g.story.pages() ? ` (Tagebuchseiten: ${g.story.pages()}/6)` : ''}`);
     else if (notes) talk.push(`„Du liest die Zettel der Leute? (${notes}/5) Wenn du alles weißt, erzähl's mir.“`);
-    let h = `<h2>🧔 Kurt – Dorfladen <small>Dein Geld: <b>${eur(S.money || 0)}</b></small></h2><div class="talk">${talk.map(t => `<p>${t}</p>`).join('')}</div><div class="tradecols"><div><h3>Kaufen</h3>`;
+    let h = `<h2>🧔 Kurt – Dorfladen <small>Dein Geld: <b>${eur(S.money || 0)}</b></small></h2><div class="talk">${talk.map(t => `<p>${t}</p>`).join('')}</div>${g.orders.html()}<div class="tradecols"><div><h3>Kaufen</h3>`;
     for (const [id, pr] of Object.entries(TRADE.buy)) { const it = ITEMS[id]; if (!it) continue;
       h += `<div class="trow"><i>${it.icon}</i><span>${it.name}${it.ammo ? ` (${it.ammo[1]} Schuss)` : ''}</span><em>${eur(pr)}</em><button data-buy="${id}" ${S.money >= pr ? '' : 'disabled'}>Kaufen</button></div>`; }
     h += `</div><div><h3>Verkaufen</h3>`; let any = false;
@@ -84,13 +87,13 @@ export class UI {
     h += `<h2>Rucksack <small>${inv.length}/${cap} Plätze · Plätze 1–5 = Schnellleiste · Maus auf Gegenstand + Taste 1–5 = dorthin legen${g.S.flags.fur ? ' · 🧥 Fellmantel an' : g.S.flags.jacket ? ' · 🧥 Jacke an' : ''}</small></h2><div class="grid">`;
     for (let i = 0; i < cap; i++) {
       const s = inv[i], it = s && ITEMS[s.id];
-      h += it ? `<div class="cell${i < 5 ? ' qb' : ''}${i === g.S.sel ? ' hand' : ''}" data-i="${i}" title="${it.desc || ''}">${i < 5 ? `<b class="key">${i + 1}</b>` : ''}<i>${it.icon}</i><div>${it.name}${s.n > 1 ? ' ×' + s.n : ''}</div>
+      h += it ? `<div class="cell${i < 5 ? ' qb' : ''}${i === g.S.sel ? ' hand' : ''}${it.rare ? ' rare' : ''}" data-i="${i}" title="${it.desc || ''}">${i < 5 ? `<b class="key">${i + 1}</b>` : ''}${it.rare ? '<b class="rr">★ selten</b>' : ''}<i>${it.icon}</i><div>${it.name}${s.n > 1 ? ' ×' + s.n : ''}</div>
         <small>${it.desc || (it.use ? Object.entries(it.use).map(([k, v]) => ({ hunger: 'Hunger', thirst: 'Durst', warmth: 'Wärme', health: 'Gesundheit', stamina: 'Ausdauer' }[k] + (v > 0 ? ' +' : ' ') + v)).join(', ') : '')}${g.health.freshText(s) ? '<br>' + g.health.freshText(s) : ''}</small>
-        ${chest ? `<button data-put="${i}">→ In die Kiste</button>` : it.use ? `<button data-use="${i}">Benutzen</button>` : it.read ? `<button data-read="${i}">Lesen</button>` : ''}${!chest && i !== g.S.sel ? `<button data-hand="${i}" class="drop">✋ In die Hand</button>` : ''}<button data-drop="${i}" class="drop">Wegwerfen</button></div>`
+        ${chest ? `<button data-put="${i}">→ In die Kiste</button>` : it.use || s.id === 'spieluhr' ? `<button data-use="${i}">${s.id === 'spieluhr' ? 'Aufziehen' : 'Benutzen'}</button>` : it.read ? `<button data-read="${i}">Lesen</button>` : ''}${!chest && i !== g.S.sel ? `<button data-hand="${i}" class="drop">✋ In die Hand</button>` : ''}<button data-drop="${i}" class="drop">Wegwerfen</button></div>`
         : `<div class="cell empty"></div>`;
     }
-    h += `</div><h2>Herstellen <small>C</small></h2><div class="recipes">`;
-    const bench = g.build.hasBench(g.P.pos), L = g.progress.level;
+    h += `</div><h2>Herstellen <small>C${g.creative ? ' · 🎨 Kreativ: alles ohne Material' : ''}</small></h2><div class="recipes">`;
+    const bench = g.build.hasBench(g.P.pos) || g.creative, L = g.creative ? 99 : g.progress.level;
     for (const r of RECIPES) {
       if (r.bench && !bench) continue;
       const ok = g.canCraft(r);

@@ -12,14 +12,20 @@ import { Seasons } from './seasons.js';
 import { Health } from './health.js';
 import { Boat } from './boat.js';
 import { REGIONS, regionOf, PASS, BERG_IN, LAKES, bergRoadDist } from './regions.js';
+import { Mood } from './mood.js';
+import { Album } from './album.js';
+import { Story } from './story.js';
+import { Ice } from './ice.js';
+import { Orders } from './orders.js';
 
 // Save games: slots auto / 1 / 2 / 3 in localStorage (+ export / import as a file). Everything is stored by name or id, so a newer
 // version of the map or the game can load an older save: unknown objects / items are skipped, new ones start in their default state.
-export const SLOTS = ['auto', '1', '2', '3'];
+export const SLOTS = ['auto', 'kreativ', '1', '2', '3'];            // 'kreativ' = the automatic slot of the creative mode
 const SAVE_PREFIX = 'waldtank_save_', OLD_SAVE = 'waldtank_save_v1', SAVE_VERSION = 4;
 const POOL = 8;
 const clamp = (v, a = 0, b = 100) => Math.max(a, Math.min(b, v));
 const MOVING = new Set(['door', 'slide', 'lid', 'drawer']);
+const DIFF_DMG = g => g.creative ? 0 : Math.max(.5, DIFF[g.S.diff]?.dmg || .5);         // storms hurt a little even without enemies
 
 export class Game {
   constructor(scene, camera, W, player, audio, sky, ui) {
@@ -42,6 +48,7 @@ export class Game {
     this.progress = new Progress(this); this.build = new Build(this); this.combat = new Combat(this);
     this.vehicle = new Vehicle(this); this.seasons = new Seasons(this); this.drops = []; this.secT = 0;
     this.health = new Health(this); this.boat = new Boat(this); this.waterT = 0; this.edgeT = 0; this.traveling = false;
+    this.mood = new Mood(this); this.album = new Album(this); this.story = new Story(this); this.ice = new Ice(this); this.orders = new Orders(this); this.shake = 0;
     for (const it of W.interactives) if (it.u.hidden) it.node.visible = false;          // e.g. the treasure chest: shows up when dug out
     this.funkMats = []; scene.traverse(o => { if (o.isMesh) for (const m of [].concat(o.material)) if (m.name === 'Display_Funk' && !this.funkMats.includes(m)) { m.emissive = new THREE.Color('#000000'); this.funkMats.push(m); } });
     try { this.S.diff = localStorage.getItem('waldtank_diff') || 'mittel'; } catch { }
@@ -50,18 +57,26 @@ export class Game {
     return { time: 17.0, day: 1, abs: 17, stats: { health: 100, hunger: 78, thirst: 72, warmth: 85, stamina: 100 }, inv: [], sel: 0,
       battery: 65, genFuel: 0, quest: 0, flags: {}, found: {}, known: {}, marks: [], felled: {}, ammo: {}, mag: {}, diff: 'mittel',
       xp: 0, side: {}, stat: {}, notes: {}, money: 0, car: { fixed: 0, fuel: 0 }, dog: { tame: 0, sit: 0 }, drops: [], weather: 'klar', ill: { erk: 0, mag: 0 }, badges: {}, boat: null,
-      rain: 0, rainUntil: 0, nextRain: 19 + Math.random() * 6, rescueAt: 0 };
+      rain: 0, rainUntil: 0, nextRain: 19 + Math.random() * 6, rescueAt: 0, album: {}, diary: {}, radio: {}, iceHoles: [], creative: 0 };
+  }
+  // creative mode: no survival values, no damage, building and crafting without material, tools or level (Kreativ-Menü K)
+  get creative() { return !!this.S.creative; }
+  startCreative() {
+    const S = this.S; S.creative = 1; S.flags.free = 1; S.flags.bag = S.flags.expbag = 1; S.quest = this.quests.length; S.money = 999; S.time = 10;
+    for (const k of ['axt', 'hammer', 'spaten', 'saege', 'angel', 'messer', 'taschenlampe', 'karte', 'feuerzeug', 'handfunk']) if (!this.has(k)) this.add(k, 1, true);
+    for (const p of this.places) S.known[p.id] = 1;
+    this.ui.toast('🎨 Kreativ-Modus: kein Hunger, kein Schaden – bauen und herstellen ohne Material. K = Kreativ-Menü (Gegenstände, Zeit, Wetter, Ereignisse), V = fliegen.', 'good');
   }
 
   // ---------------------------------------------------------------- inventory
   // backpack tiers: pockets 10 · Rucksack 20 · Großer 28 · Trekking 36 · Expedition 48 (a bag you wear only ever upgrades)
-  capacity() { const f = this.S.flags; return f.expbag ? 48 : f.trekbag ? 36 : f.bigbag ? 28 : f.bag ? 20 : 10; }
+  capacity() { const f = this.S.flags; return this.creative ? 48 : f.expbag ? 48 : f.trekbag ? 36 : f.bigbag ? 28 : f.bag ? 20 : 10; }
   wearBag(flag, name, quiet) {
     const before = this.capacity(); this.S.flags.bag = true; this.S.flags[flag] = true; const now = this.capacity();
     if (!quiet) this.ui.toast(now > before ? `🎒 ${name} aufgesetzt – jetzt ${now} Plätze.${flag === 'bag' ? ' Tab öffnet ihn.' : ''}` : `🎒 ${name} – dein Rucksack ist schon größer (${now} Plätze).`, now > before ? 'good' : '');
     return true;
   }
-  hasAxe() { return this.has('axt') || this.has('profiaxt'); }
+  hasAxe() { return this.has('axt') || this.has('profiaxt') || this.creative; }
   blueprints() { return BLUEPRINTS; } recipes() { return RECIPES; }
   // several items at once – only if all fit
   addAll(gives) {
@@ -95,7 +110,8 @@ export class Game {
     const fresh = it?.spoil ? (f ?? it.spoil) : undefined;                 // food: the stack keeps the oldest freshness
     while (left > 0) { let s = inv.find(s => s.id === id && s.n < max); if (!s) { s = { id, n: 0 }; if (fresh !== undefined) s.f = fresh; inv.push(s); } else if (fresh !== undefined) s.f = Math.min(s.f ?? it.spoil, fresh);
       const k = Math.min(left, max - s.n); s.n += k; left -= k; }
-    if (!quiet) this.ui.toast(`+ ${n > 1 ? n + '× ' : ''}${it?.icon || ''} ${it?.name || id}`); this.ui.renderHotbar(inv, this.S.sel); return true;
+    this.album?.see('i_' + id);
+    if (!quiet) this.ui.toast(`+ ${n > 1 ? n + '× ' : ''}${it?.icon || ''} ${it?.name || id}${it?.rare ? ' ★ selten!' : ''}`, it?.rare ? 'good' : ''); this.ui.renderHotbar(inv, this.S.sel); return true;
   }
   take(id, n = 1) {
     for (let i = this.S.inv.length - 1; i >= 0 && n > 0; i--) { const s = this.S.inv[i]; if (s.id !== id) continue; const k = Math.min(n, s.n); s.n -= k; n -= k; if (!s.n) this.S.inv.splice(i, 1); }
@@ -116,6 +132,7 @@ export class Game {
       this.take('fackel'); this.torchOn = true; this.torchT = 240; this.audio.sfx('fire'); return this.ui.toast('🔥 Fackel angezündet (4 Minuten).'); }
     if (it.read) return this.read(s.id);
     if (it.weapon) return this.ui.toast(`${it.icon} ${it.name}: Linksklick = ${WEAPONS[it.weapon].melee ? 'zustechen' : 'schießen, R = nachladen, rechte Maustaste = zielen'}.`);
+    if (s.id === 'spieluhr') { this.audio.sfx('musicbox'); return this.ui.toast('🎶 Die Spieluhr klimpert ein altes Wiegenlied …'); }
     if (s.id === 'kerze') { if (!this.has('feuerzeug')) return this.ui.toast('Du brauchst ein Feuerzeug.'); this.take('kerze'); this.candleT = 180; return this.ui.toast('🕯️ Die Kerze brennt.'); }
     if (it.battery && this.has('taschenlampe')) { this.take(s.id); this.S.battery = 100; return this.ui.toast('🔋 Taschenlampe aufgeladen.'); }
     if (!it.use) return this.ui.toast(it.desc || 'Damit kann man so nichts anfangen.');
@@ -138,24 +155,34 @@ export class Game {
   }
   addDrop(d) {
     const it = ITEMS[d.id]; if (!it) return; const g = new THREE.Group(); g.position.fromArray(d.p);
-    const bag = new THREE.Mesh(new THREE.DodecahedronGeometry(.13, 0), new THREE.MeshStandardMaterial({ color: '#b08d57', flatShading: true, roughness: .95 })); bag.scale.set(1.2, .7, 1); bag.position.y = .08; bag.castShadow = true; g.add(bag);
+    const tpl = this.W.bp['r_' + d.id];
+    let bag; if (tpl) { bag = tpl.clone(true); bag.scale.multiplyScalar(d.id === 'meteorit' ? 2.2 : 1.6); bag.traverse(m => { if (m.isMesh) m.castShadow = true; }); }
+    else if (d.id === 'meteorit') { bag = new THREE.Mesh(new THREE.DodecahedronGeometry(.22, 0), new THREE.MeshStandardMaterial({ color: '#2a2422', emissive: '#ff6a1a', emissiveIntensity: .6, flatShading: true, roughness: .8 })); bag.position.y = .12; }
+    else { bag = new THREE.Mesh(new THREE.DodecahedronGeometry(.13, 0), new THREE.MeshStandardMaterial({ color: '#b08d57', flatShading: true, roughness: .95 })); bag.scale.set(1.2, .7, 1); bag.position.y = .08; bag.castShadow = true; }
+    g.add(bag);
+    if (d.id === 'meteorit') { d.light = { pos: g.position.clone().add(new THREE.Vector3(0, .5, 0)), color: new THREE.Color('#ff7a2a'), power: 14, group: 'fire' }; this.extraLights.push(d.light); }
     const c = document.createElement('canvas'); c.width = c.height = 64; const x = c.getContext('2d'); x.font = '48px system-ui'; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText(it.icon, 32, 36);
     const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(c), depthWrite: false })); sp.scale.setScalar(.32); sp.position.y = .42; g.add(sp);
-    this.scene.add(g); const rec = { ...d, g }; this.drops.push(rec); this.S.drops = this.drops.map(({ id, n, p, f }) => ({ id, n, p, f }));
+    this.scene.add(g); const rec = { ...d, g }; this.drops.push(rec); this.S.drops = this.drops.map(({ id, n, p, f }) => ({ id, n, p, f })); return rec;
   }
-  takeDrop(r) { if (!this.add(r.id, r.n, false, r.f)) return; this.scene.remove(r.g); this.drops.splice(this.drops.indexOf(r), 1); this.S.drops = this.drops.map(({ id, n, p, f }) => ({ id, n, p, f })); this.audio.sfx('pickup'); }
+  takeDrop(r) { if (!this.add(r.id, r.n, false, r.f)) return; this.scene.remove(r.g); if (r.light) { r.light.power = 0; this.extraLights.splice(this.extraLights.indexOf(r.light), 1); } this.drops.splice(this.drops.indexOf(r), 1); this.S.drops = this.drops.map(({ id, n, p, f }) => ({ id, n, p, f })); this.audio.sfx('pickup'); }
   dropTarget(o, f) { let best = null, ba = .2; for (const r of this.drops) { const d = r.g.position.clone().add(new THREE.Vector3(0, .15, 0)).sub(o), L = d.length(); if (L > 2.6) continue; const a = d.normalize().angleTo(f); if (a < ba) { ba = a; best = r; } } return best; }
   // trader Kurt
   buy(id) { const pr = TRADE.buy[id]; if (!pr || this.S.money < pr) return;
     const eq = ITEMS[id]?.equip; if (eq && this.S.flags[eq]) return this.ui.toast(`Kurt: „Den ${ITEMS[id].name} hast du doch schon auf dem Rücken.“`); if (!this.add(id, 1)) return; this.S.money = +(this.S.money - pr).toFixed(2); this.audio.sfx('coins'); this.progress.add(2, ''); }
   sell(id, all) { const pr = TRADE.sell[id], n = all ? this.count(id) : Math.min(1, this.count(id)); if (!pr || !n) return; this.take(id, n); this.S.money = +(this.S.money + pr * n).toFixed(2);
     this.progress.stat('sold_' + id, n); this.progress.stat('earned', pr * n); this.audio.sfx('coins'); this.ui.toast(`💶 ${n}× ${ITEMS[id].name} verkauft: +${(pr * n).toFixed(2).replace('.', ',')} €`); }
-  talk(what) { if (what === 'story' && Object.keys(this.S.notes).length >= 5) { this.S.flags.kurtStory = 1; this.add('patronen_gewehr', 1, true); this.ui.toast('Kurt: „Brandt! Hab ich’s doch gewusst. Hier, nimm die Patronen – für alle Fälle.“', 'good'); } }
+  talk(what) {
+    if (what === 'story' && Object.keys(this.S.notes).length >= 5) { this.S.flags.kurtStory = 1; this.add('patronen_gewehr', 1, true); this.ui.toast('Kurt: „Brandt! Hab ich’s doch gewusst. Hier, nimm die Patronen – für alle Fälle.“', 'good'); what = 'radio'; }
+    if (what === 'radio' && this.S.flags.kurtStory && !this.S.flags.gotRadio) { if (!this.add('handfunk', 1, true)) return; this.S.flags.gotRadio = 1; this.audio.sfx('radio');
+      setTimeout(() => this.ui.toast('Kurt: „Und nimm mein altes Funkgerät. Kanal 7 – abends hört man manchmal Leute aus der Stadt. Find raus, was Brandt vorhat!“', 'good'), 1800); }
+    if (what === 'order') this.orders.accept(); if (what === 'deliver') this.orders.deliver();
+  }
   // sleep in a bed until 7:00 (from 18:00): time passes, you heal, fields grow, the night's animals are gone
   sleep(bed) {
     const S = this.S, ui = this.ui, P = this.P;
     if (S.time > 6 && S.time < 18) return ui.toast('Du bist nicht müde. Schlafen geht ab 18 Uhr.');
-    const foe = this.life.animals.some(a => ['wolf', 'boar', 'bear'].includes(a.kind) && a.state !== 'dead' && a.pos.distanceTo(P.pos) < 30);
+    const foe = this.life.animals.some(a => ['wolf', 'boar', 'bear', 'grimm'].includes(a.kind) && a.state !== 'dead' && a.pos.distanceTo(P.pos) < 30);
     if (foe && !this.indoor(P.pos)) { this.audio.sfx('error'); return ui.toast('Zu gefährlich – Raubtiere in der Nähe!', 'warn'); }
     const hours = S.time >= 18 ? 24 - S.time + 7 : 7 - S.time;
     ui.fade?.(); this.audio.sfx('sleep');
@@ -171,6 +198,7 @@ export class Game {
     }, 1200);
   }
   canCraft(r) {
+    if (this.creative) return !(r.place === 'fire' && this.insideShop(this.P.pos));
     if (r.bench && !this.build.hasBench(this.P.pos)) return false;
     if (r.lvl && this.progress.level < r.lvl) return false;
     for (const t of r.tools || []) if (!this.has(t)) return false;
@@ -180,7 +208,7 @@ export class Game {
   }
   craft(id) {
     const r = RECIPES.find(r => r.id === id); if (!r || !this.canCraft(r)) return;
-    for (const [k, v] of Object.entries(r.needs)) {
+    if (!this.creative) for (const [k, v] of Object.entries(r.needs)) {
       if (k === 'brenn') { let n = v; const a = Math.min(n, this.count('ast')); this.take('ast', a); n -= a; this.take('holz', n); } else this.take(k, v);
     }
     if (r.place === 'fire') {
@@ -203,6 +231,7 @@ export class Game {
   surface(p) {
     const bx = p.x, by = -p.z;
     if (this.boat?.on) return 'water';
+    if (this.onIce) return 'ice';
     if (this.region(p) === 'berg') { const d = bergRoadDist(bx, by); return this.indoor(p) ? 'wood' : d < 3 ? 'asphalt' : d < 4.2 ? 'gravel' : p.y > 40 ? 'gravel' : 'grass'; }
     if (this.insideShop(p)) return 'tile';
     if (this.onHochsitz || (bx > 42.4 && bx < 45.6 && by > -13.4 && by < -10.6)) return 'wood';
@@ -215,7 +244,7 @@ export class Game {
   strom() { return this.S.genFuel > 0; }
   posOf(name) { const it = this.byName[name]; if (it) return it.center; const s = this.W.spots[name]; return s ? s.pos : null; }
   hurt(n, cause) {
-    if (this.S.flags.dead || this.S.flags.won) return;
+    if (this.S.flags.dead || this.S.flags.won || this.creative) return;
     this.S.stats.health = clamp(this.S.stats.health - n); this.ui.damage(); this.audio.sfx('hurt'); this.lastCause = cause;
   }
   respawnFall() { const s = this.W.spots.spawn; this.P.setPose(s.pos.clone().setY(s.pos.y - 1.6), this.P.yaw); }
@@ -236,6 +265,7 @@ export class Game {
     if (hits.length && (!wall || hits[0].distance <= wall.distance + .05) && (!bt || hits[0].distance < bt.d)) return { it: hits[0].object.userData._it };
     if (bt && (!wall || bt.d <= wall.distance + .05)) return bt;
     const carc = this.life.carcass(o, f); if (carc) return { carcass: carc };
+    const ice = this.ice.target(o, f); if (ice && !hits.length) { let near = false; for (const it of this.W.interactives) if (['pickup', 'search'].includes(it.u.interact) && it.node.visible && !it.state.taken && it.center.distanceTo(o) < 2.6 && it.center.clone().sub(o).normalize().angleTo(f) < .13) near = true; if (!near) return ice; }
     // small pickups: forgiving cone
     let best = null, ba = .13;
     for (const it of this.W.interactives) {
@@ -265,6 +295,7 @@ export class Game {
     if (t.dog) return this.life.dogVerb();
     if (t.drop) return `[E] ${ITEMS[t.drop.id].icon} ${ITEMS[t.drop.id].name}${t.drop.n > 1 ? ' ×' + t.drop.n : ''} aufheben`;
     if (t.carcass) return this.has('messer') ? '[E] Zerlegen (Messer)' : 'Erlegtes Tier – ein Messer zum Zerlegen fehlt';
+    if (t.ice) return this.ice.verb(t);
     if (t.fire) { const f = t.fire;
       if (!f.on) return this.brenn() && this.has('feuerzeug') ? '[E] Feuer wieder anzünden' : 'Feuer aus – Holz + Feuerzeug nötig';
       const c = this.cookable(); if (c) return `[E] ${c[2]}`; if (this.brenn()) return '[E] Holz nachlegen'; return 'Lagerfeuer – wärmt dich'; }
@@ -279,13 +310,14 @@ export class Game {
       case 'search': return it.state.searched ? L + ' (leer)' : `[E] ${L} durchsuchen`;
       case 'pickup': return `[E] ${L} aufheben`;
       case 'pump': return `[E] ${L} benutzen`;
-      case 'read': return `[E] ${L} lesen`;
+      case 'read': return u.diary && this.S.diary?.[u.diary] ? `[E] ${L} (gelesen) – nochmal lesen` : `[E] ${L} lesen`;
       case 'trade': return `[E] Mit ${L.split(' ')[0]} reden / handeln`;
       case 'talk': return `[E] Mit ${L.split(' ')[0]} reden`;
       case 'use':
         if (u.use === 'auto') return this.vehicle.verb(); if (u.use === 'bett') return `[E] ${L}: schlafen`; if (u.use === 'boot') return this.boat.verb();
         if (u.use === 'graben') return it.state.dug ? 'Hier ist schon alles ausgegraben' : this.has('spaten') ? '[E] Unter dem Steinkreuz graben (Spaten)' : 'Ein Kreuz aus Steinen – der Boden darunter ist locker';
         if (u.use === 'sprengen') return '[E] Geröll sprengen (2 Sprengpulver, Zündschnur, Feuerzeug)';
+        if (u.use === 'zuender') return this.S.flags.ending ? 'Zündmaschine – ' + (this.S.flags.ending === 'wahrheit' ? 'Kabel gekappt' : 'leer') : '[E] Zündmaschine untersuchen';
         if (u.use === 'funkaggregat') return this.S.flags.funkPower ? 'Notstrom-Aggregat läuft' : '[E] Aggregat betanken (voller Kanister)';
         if (u.use === 'sender') return this.S.flags.funkPower ? `[E] Funksender: ${this.S.flags.funkCalled ? 'Wetterbericht abfragen' : 'Bergwacht rufen'}` : 'Funksender – kein Strom';
         break;
@@ -304,6 +336,7 @@ export class Game {
     if (t.dog) return this.life.dogUse();
     if (t.drop) return this.takeDrop(t.drop);
     if (t.carcass) return this.life.butcher(t.carcass);
+    if (t.ice) return this.ice.interact(t);
     if (t.fire) return this.fireAction(t.fire);
     const it = t.it, u = it.u;
     if (u.ladder) {
@@ -346,6 +379,7 @@ export class Game {
           if (got.length) ui.toast(u.found && !keep.length && !it.state.left ? u.found : 'Gefunden: ' + got.map(([id, n]) => `${n > 1 ? n + '× ' : ''}${ITEMS[id].icon} ${ITEMS[id].name}`).join(', '), 'good');
           if (keep.length) { it.state.left = keep; ui.toast('Dein Rucksack ist voll – der Rest bleibt hier.', 'warn'); } else { it.state.searched = 1; delete it.state.left; this.emptySack(it); if (it.name.startsWith('Sack')) this.progress.stat('sacks'); }
           if (it.name === 'Schatzkiste' && got.length) { S.flags.treasure = 1; this.audio.sfx('win'); }
+          if (u.stash && got.length) { this.progress.stat('stash'); this.progress.add(40, 'Geheimversteck'); this.audio.sfx('badge'); setTimeout(() => ui.toast(`🗝️ Geheimversteck gefunden! (${this.W.interactives.filter(x => x.u.stash && (x.state.searched || x === it)).length}/${this.W.interactives.filter(x => x.u.stash).length})`, 'good'), 500); }
           if (got.length) A.sfx('pickup'); return;
         }
         if (this.add(u.item, u.item === 'dosenbohnen' ? 2 : 1, true)) { it.state.searched = 1; if (u.bonus) this.add(u.bonus, 1, true); ui.toast(u.found || `Gefunden: ${ITEMS[u.item].name}`); A.sfx('pickup'); }
@@ -354,6 +388,7 @@ export class Game {
       case 'trade': this.S.flags.metKurt = 1; return this.openPanel?.('trade');
       case 'talk': return this.talkNpc(it);
       case 'read':
+        if (u.diary) return this.story.readPage(it);
         if (u.note && !this.S.notes[u.note]) { this.S.notes[u.note] = 1; this.progress.add(15, 'Notiz'); setTimeout(() => ui.toast(`📜 Notiz ${Object.keys(this.S.notes).length}/5 gefunden (Nebenaufgabe „Das stille Dorf“).`, 'good'), 400); }
         if (it.name === 'Tagebuch_Henning') S.flags.diary = 1;
         if (u.reveal) { const ids = u.reveal === 'all' ? this.places.filter(p => p.region === 'tal').map(p => p.id) : u.reveal === 'berg_all' ? this.places.filter(p => p.region === 'berg').map(p => p.id) : u.reveal.split(','); let n = 0;
@@ -408,7 +443,7 @@ export class Game {
         A.sfx('drink'); this.S.stats.thirst = clamp(this.S.stats.thirst + 35); this.S.flags.drank = 1; return ui.toast('Klares, kaltes Brunnenwasser.');
       case 'wasserhahn': A.sfx('water'); this.S.stats.thirst = clamp(this.S.stats.thirst + 30); this.S.flags.drank = 1; return ui.toast('Du trinkst Leitungswasser.');
       case 'auto': return this.vehicle.use();
-      case 'boot': return this.boat.enter();
+      case 'boot': if (this.ice.frozen && this.region() === 'tal') { this.audio.sfx('error'); return ui.toast('Das Ruderboot ist im Eis festgefroren. Lauf einfach übers Eis!'); } return this.boat.enter();
       case 'graben': return this.dig(it);
       case 'sprengen': return this.blast(it);
       case 'funkaggregat':
@@ -416,6 +451,7 @@ export class Game {
         if (!this.has('kanister_voll')) { A.sfx('error'); return ui.toast('Der Tank ist leer. Ein voller Kanister Diesel würde reichen (Dieselfass im Schuppen der Tankstelle).'); }
         this.swap('kanister_voll', 'kanister'); S.flags.funkPower = 1; A.sfx('genstart'); this.progress.add(30, 'Notstrom'); return ui.toast('⚡ Das Aggregat springt an – in der Funkhütte leuchten die Anzeigen.', 'good');
       case 'sender': return this.radio();
+      case 'zuender': return this.story.zuender();
       case 'bett': return this.sleep(it);
       case 'bachwasser':
         if (this.has('topf')) { this.swap('topf', 'topf_wasser'); A.sfx('water'); return ui.toast('Topf mit Bachwasser gefüllt. Am Feuer abkochen!'); }
@@ -479,7 +515,10 @@ export class Game {
       return ui.read('Henning, der Förster', '„Mensch, ein Mensch! Ich sitz hier oben fest, seit mir der Steinschlag die Straße zugemacht hat – das Bein ist verstaucht, und das Funkgerät der Hütte ist hin. Du bist mit dem Auto über den Pass? Respekt.<br>Hier, nimm die Patronen und die Tabletten – ich hab genug. Und hör zu: Im alten <b>Stollen „Glück auf“</b> drüben am Osthang liegen hinter dem Geröll noch Bergkristalle. Mit Sprengpulver und einer Zündschnur kriegst du das frei. Die Kiste mit dem Pulver steht vorm Eingang.<br>Grüß mir Kurt – und Bello, falls du ihn findest!“');
     }
     const tips = ['„Auf den Gipfel geht’s hinter der Hütte rauf. Das Gipfelbuch trägt dir alle Wege ein.“', '„Im Bergsee beißen Saiblinge. Angel hast du?“', '„Hier oben wird’s nachts bitterkalt. Bleib nicht draußen, sonst holst du dir was weg.“',
-      '„Gämsen sind schnell – mit dem Gewehr musst du gut zielen.“', '„Die Bären kommen im Herbst bis an die Hütte. Feuer hilft.“'];
+      '„Gämsen sind schnell – mit dem Gewehr musst du gut zielen.“', '„Die Bären kommen im Herbst bis an die Hütte. Feuer hilft.“',
+      S.flags.grimm ? '„Du hast den alten Grimm erlegt? Respekt. Jetzt kann ich wieder ruhig schlafen.“' : '„Und lass dich nicht vom alten Grimm erwischen – drüben in der Bärenhöhle am Osthang.“'];
+    if (!S.flags.grimmTold && !S.flags.grimm) { S.flags.grimmTold = 1; this.audio.sfx('quest');
+      return ui.read('Henning, der Förster', '„Noch was: Drüben am Osthang, in der <b>Bärenhöhle</b>, haust der <i>alte Grimm</i> – ein Riesenbär, anderthalbmal so groß wie die anderen. Feuer schreckt ihn nicht. Wenn er sich duckt, stürmt er geradeaus los – dann spring zur Seite! Nimm das Gewehr und viel Munition mit. Wer ihn erlegt, dem zahl ich 40 Euro.“'); }
     this.npcTip = ((this.npcTip ?? -1) + 1) % tips.length; return ui.toast(`🧔 Henning: ${tips[this.npcTip]}`);
   }
   // ---------------------------------------------------------------- two maps: travel over the pass, region borders, deep water
@@ -520,13 +559,25 @@ export class Game {
     }
     if (P.onGround) (this.safePos ||= new THREE.Vector3()).copy(P.pos);
   }
+  // a lightning strike close by (storm): only when you stand in the open – a bright bolt, a bang, damage within 5 m
+  stormStrike() {
+    const P = this.P; if (this.roof || this.vehicle.driving || this.inside) return false;
+    const a = Math.random() * 6.283, d = 3 + Math.random() * 7, p = new THREE.Vector3(P.pos.x + Math.cos(a) * d, 0, P.pos.z + Math.sin(a) * d); p.y = this.W.groundY(p.x, p.z, P.pos.y + 20);
+    const pts = [], top = p.clone().setY(p.y + 60); let q = top.clone();
+    for (let i = 0; i < 9; i++) { pts.push(q.clone()); q.lerp(p, 1 / (9 - i)); q.x += (Math.random() - .5) * 2.4 * (i < 8 ? 1 : 0); q.z += (Math.random() - .5) * 2.4 * (i < 8 ? 1 : 0); }
+    pts.push(p.clone()); const bolt = new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), new THREE.LineBasicMaterial({ color: '#eef4ff', fog: false }));
+    this.scene.add(bolt); setTimeout(() => this.scene.remove(bolt), 180); this.audio.sfx('strike'); this.combat.puff(p, '#ffe9a0', 14);
+    if (d < 5) { this.hurt(28 * DIFF_DMG(this), 'Blitz'); this.ui.toast('⚡ Der Blitz schlägt direkt neben dir ein! Runter vom freien Feld!', 'warn'); }
+    else if (!this.S.flags.strikeTip) { this.S.flags.strikeTip = 1; this.ui.toast('⚡ Ein Blitz schlägt ganz in der Nähe ein – such dir Schutz!', 'warn'); }
+    return true;
+  }
   takeBrenn(n) { const a = Math.min(n, this.count('ast')); this.take('ast', a); this.take('holz', n - a); }
   fireAction(f) {
     const ui = this.ui;
     if (!f.on) { if (this.brenn() && this.has('feuerzeug')) { this.takeBrenn(1); f.on = true; f.fuel = 3; this.audio.sfx('fire'); return ui.toast('🔥 Wieder angezündet.'); } return; }
     const c = this.cookable();
     if (c) { const [from, to, , msg] = c; for (const [k, n] of Object.entries(from)) { this.take(k, n); const back = ITEMS[k].after; if (back && k !== Object.keys(from)[0] && to !== 'topf_abgekocht') this.add(back, 1, true); }
-      this.add(to, 1, true); this.audio.sfx('fire'); this.progress.stat('cooked'); return ui.toast(msg); }
+      this.add(to, from.hecht ? 2 : 1, true); this.audio.sfx('fire'); this.progress.stat('cooked'); return ui.toast(msg); }
     if (this.brenn()) { this.takeBrenn(1); f.fuel += this.has('holz') ? 3 : 2; this.audio.sfx('fire'); return ui.toast('Holz nachgelegt.'); }
   }
   // what can be cooked at a fire right now: [needs, gives, verb, message]
@@ -537,7 +588,8 @@ export class Game {
   cookList(water) {
     return [[{ dosensuppe: 1 }, 'suppe_warm', 'Suppe am Feuer erwärmen', '🍲 Heiße Suppe!'], [{ topf_wasser: 1 }, 'topf_abgekocht', 'Wasser abkochen', 'Wasser abgekocht – jetzt sicher trinkbar.'],
       [{ fleisch: 1 }, 'fleisch_gebraten', 'Fleisch braten', '🍖 Fleisch gebraten.'], [{ steinpilz: 1 }, 'pilz_gebraten', 'Pilze braten', '🍳 Pilze gebraten.'],
-      [{ fisch: 1 }, 'fisch_gebraten', 'Fisch braten', '🍣 Fisch gebraten.'], [{ kaninchen: 1 }, 'kaninchen_gebraten', 'Kaninchen braten', '🍗 Kaninchenbraten!'],
+      [{ fisch: 1 }, 'fisch_gebraten', 'Fisch braten', '🍣 Fisch gebraten.'], [{ saibling: 1 }, 'fisch_gebraten', 'Saibling braten', '🍣 Saibling gebraten.'], [{ hecht: 1 }, 'fisch_gebraten', 'Hecht braten', '🍣 Hecht gebraten – reicht für zwei.'],
+      [{ pfifferling: 1 }, 'pilz_gebraten', 'Pfifferlinge braten', '🍳 Pfifferlinge gebraten.'], [{ kaninchen: 1 }, 'kaninchen_gebraten', 'Kaninchen braten', '🍗 Kaninchenbraten!'],
       water && [{ kraeuter: 1, [water]: 1 }, 'tee', 'Kräutertee kochen', '🍵 Kräutertee – hilft gegen Erkältung.'],
       [{ kartoffel: 1 }, 'ofenkartoffel', 'Kartoffel in die Glut legen', '🥔 Ofenkartoffel!'], [{ kuerbis: 1, topf: 1 }, 'kuerbissuppe', 'Kürbissuppe kochen', '🍲 Kürbissuppe!'],
       water && [{ mehl: 1, [water]: 1 }, 'fladenbrot', 'Fladenbrot backen', '🫓 Fladenbrot gebacken.']].filter(Boolean);
@@ -631,10 +683,12 @@ export class Game {
     const S = this.S, st = S.stats, P = this.P;
     if (S.flags.dead || S.flags.won) return;
     this.waterT -= dt; this.edgeT -= dt; this.waterGuard(); this.borders();
+    this.onIce = this.ice.on(P.pos);
+    if (this.creative) { for (const k in st) st[k] = 100; this.S.battery = 100; }
     if (!this.vehicle.driving && !this.boat.on && P.onGround) { const m = this._lastP ? Math.hypot(P.pos.x - this._lastP.x, P.pos.z - this._lastP.z) : 0; if (m < 2) this.walkAcc = (this.walkAcc || 0) + m; }
     (this._lastP ||= new THREE.Vector3()).copy(P.pos);
     // time (1 real second = 1 game minute; Z = wait faster where it is safe and warm)
-    const wolfNear = this.life.animals.some(a => ['wolf', 'boar', 'bear'].includes(a.kind) && a.state !== 'dead' && a.pos.distanceTo(P.pos) < 45);
+    const wolfNear = this.life.animals.some(a => ['wolf', 'boar', 'bear', 'grimm'].includes(a.kind) && a.state !== 'dead' && a.pos.distanceTo(P.pos) < 45);
     const roof = this.build.shelter(P.pos), bed = this.build.near('bett', P.pos, 2.5), indoor = this.indoor(P.pos);
     this.roof = roof || indoor; this.bed = bed; this.inside = indoor;
     const safe = (this.insideShop(P.pos) && this.strom()) || this.life.fires.some(f => f.on && f.pos.distanceTo(P.pos) < 4) || ((this.has('schlafsack') || roof || bed) && !wolfNear)
@@ -645,7 +699,7 @@ export class Game {
     if (S.time >= 24) { S.time -= 24; S.day++; this.ui.toast(`Tag ${S.day} beginnt.`); }
     const dark = this.sky.darkness(S.time);
     // seasons + weather (seasons.js)
-    this.seasons.update(dt * scale);
+    this.seasons.update(dt * scale); this.ice.update();
     const rain = this.sky.rainAmount * (this.roof ? 0 : 1);
     this.build.update(dt, dt * scale / 60);
     for (const sp of this.W.spinners) sp.pivot.rotateOnAxis(sp.axis, sp.speed * dt);
@@ -665,6 +719,14 @@ export class Game {
     if (this.torchOn) env += .06;
     if (env < 0 && S.flags.fur) env *= .25; else if (env < 0 && S.flags.jacket) env *= .5;
     if (this.candleT > 0) { this.candleT -= dt; env += .02; }
+    // storm: hail and gale (Unwetter) or a blizzard (Schneesturm) hurt and chill you out in the open – shelter: a roof, a house, the car
+    const storm = this.seasons.storm, open = storm && !this.roof && !this.vehicle.driving && !this.onHochsitz;
+    if (open) {
+      env -= storm === 'schneesturm' ? .55 : .18; const hail = (storm === 'schneesturm' ? .15 : .6) * DIFF_DMG(this) * dt;
+      if (hail > 0) { st.health = clamp(st.health - hail); this.S.stormHurt = (this.S.stormHurt || 0) + hail; this.lastCause = storm === 'schneesturm' ? 'Schneesturm' : 'Hagel';
+        if ((this.hailT = (this.hailT || 0) - dt) < 0) { this.hailT = 1.2 + Math.random(); this.ui.damage(); this.audio.sfx(storm === 'schneesturm' ? 'none' : 'hail');
+          if (!this._stormTip) { this._stormTip = 1; this.ui.toast(storm === 'schneesturm' ? '🥶 Der Schneesturm frisst deine Wärme – schnell unter ein Dach!' : '🧊 Hagelkörner prasseln auf dich ein – such dir ein Dach!', 'warn'); setTimeout(() => this._stormTip = 0, 15000); } } }
+    }
     if (env < 0 && waiting && this.has('schlafsack')) env *= .3;
     st.warmth = clamp(st.warmth + env * dt * (waiting ? scale * .35 : 1));
     if (this.boostT > 0) this.boostT -= dt;
@@ -695,6 +757,8 @@ export class Game {
     // Hochsitz platform?
     const hs = this.W.spots.ziel_hochsitz; this.onHochsitz = !!hs && Math.hypot(P.pos.x - hs.pos.x, P.pos.z - hs.pos.z) < 1.3 && P.pos.y > hs.pos.y - 1;
     this.life.update(dt, P, dark);
+    this.mood.update(dt); this.album.update(dt); this.story.update(dt); this.story.frame(dark); this.orders.update(dt);
+    if (this.shake > 0) { this.shake = Math.max(0, this.shake - dt); const k = this.shake * .05; this.camera.position.x += (Math.random() - .5) * k; this.camera.position.y += (Math.random() - .5) * k; }
     this.updateLights(dt, dark);
     this.updateAudio(dt, dark, shop, rain);
     // quests + discoveries
@@ -741,7 +805,8 @@ export class Game {
   updateAudio(dt, dark, inside, rain) {
     const A = this.audio; if (!A.ctx) return;
     const p = this.P.pos, out = inside ? .25 : 1;
-    A.set('wind', (.05 + .14 * dark + .12 * rain) * out); A.set('rain', .16 * rain * out);
+    const gale = this.sky.gale || 0;
+    A.set('wind', (.05 + .14 * dark + .12 * rain + .3 * gale) * out); A.set('rain', .16 * rain * out * (1 + .5 * gale));
     A.set('creek', Math.max(0, 1 - Math.abs(p.x - creekX(-p.z)) / 26) * .22);
     const gen = this.posOf('Generator'); A.set('generator', this.strom() && gen ? Math.max(0, 1 - gen.distanceTo(p) / 45) * .12 : 0);
     A.set('fridge', this.strom() && inside ? .04 : 0);
@@ -751,7 +816,8 @@ export class Game {
   }
   die() {
     this.S.flags.dead = 1; this.audio.sfx('hurt'); document.exitPointerLock?.();
-    const cause = { Bär: 'Der Bär war stärker.', Wildschwein: 'Das Wildschwein hat dich erwischt.', Wolf: 'Die Wölfe waren schneller.', Kälte: 'Du bist erfroren.', Durst: 'Du bist verdurstet.', Hunger: 'Du bist verhungert.', Sturz: 'Ein böser Sturz.', Bachwasser: 'Das Bachwasser war keine gute Idee.', Unfall: 'Ein schwerer Unfall.', Fieber: 'Das Fieber war zu stark.', Magen: 'Dein Magen hat nicht mitgemacht.', Sprengung: 'Zu nah an der Sprengung.' }[this.lastCause] || 'Die Nacht war zu lang.';
+    const cause = { Bär: 'Der Bär war stärker.', Wildschwein: 'Das Wildschwein hat dich erwischt.', Wolf: 'Die Wölfe waren schneller.', Kälte: 'Du bist erfroren.', Durst: 'Du bist verdurstet.', Hunger: 'Du bist verhungert.', Sturz: 'Ein böser Sturz.', Bachwasser: 'Das Bachwasser war keine gute Idee.', Unfall: 'Ein schwerer Unfall.', Fieber: 'Das Fieber war zu stark.', Magen: 'Dein Magen hat nicht mitgemacht.', Sprengung: 'Zu nah an der Sprengung.',
+      Hagel: 'Das Unwetter hat dich draußen erwischt.', Blitz: 'Vom Blitz getroffen.', Schneesturm: 'Im Schneesturm erfroren.', Grimm: 'Der alte Grimm war stärker.' }[this.lastCause] || 'Die Nacht war zu lang.';
     document.getElementById('deadcause').textContent = cause; this.ui.show('dead', true);
   }
 
@@ -765,11 +831,11 @@ export class Game {
       fires: this.life.fires.filter(f => f.on && !f.owned).map(f => ({ p: f.pos.toArray(), fuel: f.fuel })), pos: this.P.pos.toArray(), yaw: this.P.yaw, torch: this.torchOn ? this.torchT : 0 };
   }
   save(slot = 'auto') {
-    if (this.S.flags.dead) return false;
+    if (this.S.flags.dead) return false; if (slot === 'auto' && this.creative) slot = 'kreativ';
     try { localStorage.setItem(SAVE_PREFIX + slot, JSON.stringify(this.snapshot())); return true; } catch { return false; }
   }
   slotInfo(slot) {
-    try { const d = this.readSlot(slot); if (!d) return null; return { at: d.at || 0, day: d.S?.day || 1, time: d.S?.time || 0, diff: d.S?.diff || 'mittel' }; } catch { return null; }
+    try { const d = this.readSlot(slot); if (!d) return null; return { at: d.at || 0, day: d.S?.day || 1, time: d.S?.time || 0, diff: d.S?.diff || 'mittel', creative: !!d.S?.creative }; } catch { return null; }
   }
   readSlot(slot) {
     let raw = null; try { raw = localStorage.getItem(SAVE_PREFIX + slot); if (!raw && slot === 'auto') raw = localStorage.getItem(OLD_SAVE); } catch { }
@@ -782,7 +848,7 @@ export class Game {
     if (!d || !d.S) return false;
     // state: defaults first, then the saved values (keys a newer version added keep their defaults)
     const F = this.fresh();
-    this.S = Object.assign(F, d.S); for (const k of ['stats', 'flags', 'found', 'known', 'ammo', 'mag', 'felled', 'side', 'stat', 'notes', 'car', 'dog', 'ill', 'badges']) this.S[k] = Object.assign(this.fresh()[k], d.S[k] || {});
+    this.S = Object.assign(F, d.S); for (const k of ['stats', 'flags', 'found', 'known', 'ammo', 'mag', 'felled', 'side', 'stat', 'notes', 'car', 'dog', 'ill', 'badges', 'album', 'diary', 'radio']) this.S[k] = Object.assign(this.fresh()[k], d.S[k] || {});
     this.S.marks = Array.isArray(d.S.marks) ? d.S.marks : []; this.S.flags.dead = 0;
     this.S.inv = (d.S.inv || []).filter(x => ITEMS[x.id] && x.n > 0);           // items removed in a newer version
     if (!DIFF[this.S.diff]) this.S.diff = 'mittel';
@@ -804,5 +870,5 @@ export class Game {
     return true;
   }
   exportSave() { return JSON.stringify(this.snapshot()); }
-  wipe() { try { localStorage.removeItem(SAVE_PREFIX + 'auto'); localStorage.removeItem(OLD_SAVE); } catch { } }
+  wipe(slot = 'auto') { try { localStorage.removeItem(SAVE_PREFIX + slot); if (slot === 'auto') localStorage.removeItem(OLD_SAVE); } catch { } }
 }

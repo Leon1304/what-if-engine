@@ -8,6 +8,8 @@ export const levelOf = xp => { let l = 1; while (l < LEVELS.length && xp >= LEVE
 export const SIDE = [
   { id: 'dorf', t: 'Das stille Dorf', x: 'Warum ist Tannbach verlassen? Lies die 5 Notizen (Häuser, Kapelle, Dorfladen, Steinbruch) und erzähl Kurt davon.',
     n: g => Object.keys(g.S.notes).length, max: 5, done: g => g.S.flags.kurtStory, xp: 250, money: 20 },
+  { id: 'wahrheit', t: 'Die Wahrheit über Tannbach', x: 'Kurt hat dir sein Handfunkgerät gegeben (Kanal 7). Finde Brandts 6 Tagebuchseiten (Werkstatt, Steinbruch, Burgruine, Turm, Stollen …), hör den Funk ab (J) – und entscheide an der Zündmaschine im Steinbruch.',
+    n: g => Object.keys(g.S.diary || {}).length, max: 6, done: g => g.S.flags.ending, xp: 300, show: g => g.S.flags.kurtStory, target: g => Object.keys(g.S.diary || {}).length >= 6 && !g.S.flags.ending ? g.posOf('Zuendmaschine') : null },
   { id: 'bello', t: 'Kurts Hund', x: 'Bello streunt bei der Burgruine herum. Gib ihm Fleisch, dann folgt er dir und warnt dich vor Raubtieren.', done: g => g.S.dog?.tame, xp: 150, target: g => g.posOf('ziel_bello') },
   { id: 'felle', t: 'Felle für Kurt', x: 'Kurt zahlt gut für 3 Felle (beim Händler verkaufen).', n: g => g.S.stat.sold_fell || 0, max: 3, xp: 80 },
   { id: 'auto', t: 'Wieder mobil', x: 'Repariere dein Auto: Keilriemen + Werkzeugkasten aus der Werkstatt „KFZ Brandt“ im Dorf, dann einen vollen Kanister in den Tank.', done: g => g.S.car?.fixed && g.S.car?.fuel > 0, xp: 200 },
@@ -23,6 +25,10 @@ export const SIDE = [
     done: g => g.S.flags.henning, xp: 200, money: 30, target: g => g.region() === 'berg' ? g.posOf('ziel_henning') : null },
   { id: 'stollen', t: 'Glück auf!', x: 'Im alten Stollen ist der hintere Teil verschüttet. Spreng das Geröll (2 Sprengpulver, Zündschnur = Seil, Feuerzeug) und hol die Bergkristalle.',
     n: g => g.S.stat.kristall || 0, max: 3, xp: 200 },
+  { id: 'grimm', t: 'Der alte Grimm', x: 'Henning erzählt von einem Riesenbären in der Bärenhöhle am Steinberg. Feuer schreckt ihn nicht – nimm das Gewehr, viel Munition und spring zur Seite, wenn er losstürmt.',
+    done: g => g.S.flags.grimm, xp: 300, money: 40, show: g => g.S.flags.henning, target: g => g.region() === 'berg' && !g.S.flags.grimm ? g.posOf('ziel_grimm') : null },
+  { id: 'kurt', t: 'Kurts Stammlieferant', x: 'Erledige 5 Tagesaufträge von Kurt (jeden Morgen ein neuer Auftrag im Dorfladen).', n: g => g.S.stat.orders || 0, max: 5, xp: 150, money: 25 },
+  { id: 'verstecke', t: 'Geheimverstecke', x: 'Irgendwo in Tal und Gebirge haben Leute Dinge versteckt: in hohlen Bäumen, Mauern, Nistkästen … Finde alle 6 (Bello hilft mit „Such!“).', n: g => g.S.stat.stash || 0, max: 6, xp: 200 },
   { id: 'gipfel', t: 'Gipfelstürmer', x: 'Steig von der Steinberghütte auf den Gipfel des Steinbergs und trag dich ins Gipfelbuch ein.', done: g => g.S.found.gipfel, xp: 120 },
   { id: 'fisch', t: 'Petri Heil', x: 'Fang 3 Fische (Angel: Anglerhütte am Waldsee oder Werkbank).', n: g => g.S.stat.fish || 0, max: 3, xp: 80 },
   { id: 'heim', t: 'Ein Dach über dem Kopf', x: 'Bau eine Blockhütte fertig (G → Bauwerke).', done: g => g.S.flags.cabin, xp: 200 },
@@ -63,12 +69,22 @@ export const BADGES = [
   { id: 'reich', icon: '💶', t: 'Gute Geschäfte', x: '250 € bei Kurt verdient.', ok: g => st(g, 'earned') >= 250 },
   { id: 'karte', icon: '🗺️', t: 'Kartograf', x: 'Alle Orte entdeckt (Tal und Gebirge).', ok: g => g.places.every(p => g.S.found[p.id]) },
   { id: 'level10', icon: '⭐', t: 'Alter Hase', x: 'Level 10 erreicht.', ok: g => g.progress.level >= 10 },
+  { id: 'wahrheit', icon: '⚖️', t: 'Ehrlich währt am längsten', x: 'Brandts Plan auffliegen lassen – Tannbach ist wieder bewohnt.', ok: g => g.S.flags.ending === 'wahrheit' },
+  { id: 'schweigen', icon: '🤐', t: 'Schweigegeld', x: 'Brandts Umschlag genommen und geschwiegen.', ok: g => g.S.flags.ending === 'schweigen' },
+  { id: 'grimm', icon: '🐻', t: 'Bärenbezwinger', x: 'Den alten Grimm im Gebirge besiegt.', ok: g => g.S.flags.grimm },
+  { id: 'sturm', icon: '🌪️', t: 'Sturmfest', x: '3 Unwetter oder Schneestürme sicher überstanden.', ok: g => st(g, 'storm_ok') >= 3 },
+  { id: 'eis', icon: '🧊', t: 'Eisfischer', x: 'Einen Fisch am Eisloch gefangen.', ok: g => g.S.flags.iceFish },
+  { id: 'stern', icon: '🌠', t: 'Sternengucker', x: '10 Sternschnuppen gesehen.', ok: g => st(g, 'meteor') >= 10 },
+  { id: 'album', icon: '📔', t: 'Naturforscher', x: 'Alle Tiere im Sammelalbum.', ok: g => g.album && g.album.count('tiere') >= 9 },
+  { id: 'verstecke', icon: '🗝️', t: 'Schatzjäger', x: 'Alle 6 Geheimverstecke gefunden.', ok: g => st(g, 'stash') >= 6 },
+  { id: 'kurt', icon: '📋', t: 'Stammlieferant', x: '5 Tagesaufträge für Kurt erledigt.', ok: g => st(g, 'orders') >= 5 },
 ];
 // statistics shown in the handbook: [key, label, format]
 export const STATS = [['walk', '🥾 zu Fuß', 'km'], ['drive', '🚗 mit dem Auto', 'km'], ['row', '🚣 gerudert', 'm'], ['trees', '🪓 Bäume gefällt'], ['kills', '🏹 Tiere erlegt'],
   ['kill_wolf', '   davon Wölfe'], ['kill_boar', '   Wildschweine'], ['kill_bear', '   Bären'], ['kill_deer', '   Rehe'], ['kill_gams', '   Gämsen'], ['fish', '🎣 Fische'], ['rabbits', '🐇 Kaninchen aus Fallen'],
   ['harvest', '🧺 Feldfrüchte geerntet'], ['sacks', '🎒 Säcke durchsucht'], ['crafted', '🛠️ Dinge hergestellt'], ['built', '🔨 Bauwerke gebaut'], ['cooked', '🍳 am Feuer gekocht'], ['eaten', '🍽️ gegessen & getrunken'],
-  ['ill', '🤧 krank geworden'], ['cured', '💊 wieder gesund'], ['slept', '🛏️ Nächte geschlafen'], ['dogfind', '🐕 Bellos Funde'], ['earned', '💶 bei Kurt verdient', '€'], ['kristall', '💎 Bergkristalle']];
+  ['ill', '🤧 krank geworden'], ['cured', '💊 wieder gesund'], ['slept', '🛏️ Nächte geschlafen'], ['dogfind', '🐕 Bellos Funde'], ['earned', '💶 bei Kurt verdient', '€'], ['kristall', '💎 Bergkristalle'],
+  ['orders', '📋 Aufträge für Kurt'], ['stash', '🗝️ Verstecke gefunden'], ['meteor', '🌠 Sternschnuppen gesehen'], ['storms', '🌪️ Unwetter erlebt'], ['fish_hecht', '🐟 Hechte'], ['fish_goldforelle', '🐠 Goldforellen']];
 
 export class Progress {
   constructor(game) { this.g = game; }
@@ -100,8 +116,9 @@ export class Progress {
   // badges: once per game, small XP bonus
   badges() {
     const g = this.g, S = g.S; S.badges = S.badges || {};
+    if (g.creative) return;              // creative mode: no badges
     for (const b of BADGES) if (!S.badges[b.id] && b.ok(g)) { S.badges[b.id] = S.day; this.add(25, ''); g.audio.sfx('badge'); g.ui.toast(`🏅 Abzeichen: ${b.icon} ${b.t} – ${b.x}`, 'good'); }
   }
-  active() { return SIDE.filter(q => !this.g.S.side[q.id]); }
+  active() { return SIDE.filter(q => !this.g.S.side[q.id] && (!q.show || q.show(this.g))); }
   progressText(q) { const g = this.g, max = typeof q.max === 'function' ? q.max(g) : q.max; return q.n ? ` (${Math.min(q.n(g), max)}/${max})` : ''; }
 }

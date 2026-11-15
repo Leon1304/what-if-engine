@@ -20,7 +20,8 @@ def build(c):
     timber = lp('Fachwerk', '#5b3d28', .8, var=.05); roof_m = [lp('Ziegel_rot', '#a8432e', .8, var=.08), lp('Ziegel_braun', '#7b4a34', .8, var=.08), lp('Schiefer', '#4d535a', .7, var=.06)]
     stone = lp('Sandstein', '#b9a888', .9, var=.08); stone_d = lp('Bruchstein', '#8f8576', .9, var=.1); plank = lp('Dielen', '#a07850', .8, var=.06)
     wood = lp('Holz_Tresen', '#9c6b43', .7, var=.05); wood_d = lp('Holz_dunkel', '#6b4630', .7, var=.05); door_m = lp('Haustuer', '#5e3a22', .7, var=.04)
-    gl = glass('Glas_Dorf', '#bcd3dc', .3); steel = lp('Stahl', '#9da2a6', .35, .8, var=.04); blk = lp('Kunststoff_schwarz', '#232426', .6, var=.03)
+    # village glass has its own alpha so shrink.mjs (dedup) keeps it apart – the windows light up when the villagers are back (js/story.js)
+    gl = glass('Glas_Dorf', '#bcd3dc', .32); steel = lp('Stahl', '#9da2a6', .35, .8, var=.04); blk = lp('Kunststoff_schwarz', '#232426', .6, var=.03)
     green_s = lp('Fensterladen', '#3f6a4a', .7, var=.04); white = lp('Weiss_glanz', '#f4f4f1', .3, var=.02); red = lp('Waldtank_rot', '#c42a26', .5, var=.03)
     yel = lp('Schild_gelb', '#f2c230', .5, var=.02); fabric = [lp('Stoff_blau', '#4a6a8a', .95), lp('Stoff_rot', '#9a3b32', .95), lp('Stoff_gruen', '#58744a', .95)]
     hay = lp('Heu', '#d8b863', .95, var=.1); soil = lp('Acker', '#5a3f2a', 1.0, var=.08); char = lp('Verkohlt', '#2a2420', .95, var=.06)

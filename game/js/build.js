@@ -37,11 +37,12 @@ export class Build {
     this.list = []; this.ghost = null; this.bp = null; this.rot = 0; this.valid = false; this.falling = []; this.logs = []; this.uid = 1;
     this.chest = null; this.cat = 'bau'; this.alarmT = 0;
   }
-  lvl() { return this.g.progress.level; }
-  can(bp) { const g = this.g; return (bp.tools || []).every(t => g.has(t)); }
+  // creative mode (game.creative): every plan, no level, no tools, no material
+  lvl() { return this.g.creative ? 99 : this.g.progress.level; }
+  can(bp) { const g = this.g; return g.creative || (bp.tools || []).every(t => g.has(t)); }
   costOf(bp, stage = 0) { return bp.stages ? bp.stages[stage].cost : bp.cost; }
-  hasCost(cost) { return Object.entries(cost).every(([k, n]) => this.g.count(k) >= n); }
-  pay(cost) { for (const [k, n] of Object.entries(cost)) this.g.take(k, n); }
+  hasCost(cost) { return this.g.creative || Object.entries(cost).every(([k, n]) => this.g.count(k) >= n); }
+  pay(cost) { if (!this.g.creative) for (const [k, n] of Object.entries(cost)) this.g.take(k, n); }
   costText(cost) { return Object.entries(cost).map(([k, n]) => `${n}× ${ITEMS[k]?.icon || ''} ${ITEMS[k]?.name || k}`).join(' · '); }
 
   // ---------------------------------------------------------------- menu + ghost
@@ -141,7 +142,9 @@ export class Build {
     if (!this.can(bp)) { g.audio.sfx('error'); return g.ui.toast(`Du brauchst: ${bp.tools.map(t => ITEMS[t].name).join(', ')}.`, 'warn'); }
     const cost = this.costOf(bp); if (!this.hasCost(cost)) { g.audio.sfx('error'); return g.ui.toast(`Es fehlt Material: ${this.costText(cost)}`, 'warn'); }
     this.pay(cost);
-    const s = this.make({ type: bp.id, x: this.ghostPos.x, y: this.ghostPos.y, z: this.ghostPos.z, rot: this.rot, stage: 1 });
+    const full = g.creative && bp.stages;          // creative: the cabin stands complete at once
+    const s = this.make({ type: bp.id, x: this.ghostPos.x, y: this.ghostPos.y, z: this.ghostPos.z, rot: this.rot, stage: full ? 4 : 1 });
+    if (full) { g.S.flags.cabin = 1; g.audio.sfx('build'); g.ui.toast('🛖 Blockhütte steht (Kreativ-Modus). E an der Hütte: ausbauen.', 'good'); this.cancel(); g.save(); return s; }
     g.audio.sfx('build'); g.progress.add(bp.stages ? 30 : 15, bp.name); g.progress.stat('built');
     g.ui.toast(bp.stages ? `🔨 ${bp.stages[0].name} steht. Nächster Abschnitt: ${bp.stages[1].name} (E an der Baustelle).` : `🔨 ${bp.name} gebaut.`, 'good');
     g.S.flags.built = 1; this.cancel(); g.save(); return s;
@@ -293,7 +296,7 @@ export class Build {
     const s = t.build, bp = bpOf(s.type);
     if (s.type === 'huette' && s.stage < 4) {
       const st = bp.stages[s.stage];
-      if (!g.has('hammer')) { A.sfx('error'); return g.ui.toast('Du brauchst einen Hammer.', 'warn'); }
+      if (!g.has('hammer') && !g.creative) { A.sfx('error'); return g.ui.toast('Du brauchst einen Hammer.', 'warn'); }
       if (!this.hasCost(st.cost)) { A.sfx('error'); return g.ui.toast(`Für „${st.name}“ fehlt: ${this.costText(st.cost)}`, 'warn'); }
       this.pay(st.cost); s.stage++; this.refresh(s); A.sfx('build'); g.progress.add(40, st.name);
       g.ui.toast(s.stage < 4 ? `🔨 ${st.name} fertig! Weiter: ${bp.stages[s.stage].name}.` : '🛖 Deine Blockhütte ist fertig! Im Kamin (E) Feuer machen – drinnen bist du sicher. Ab Level 3 kannst du anbauen.', 'good');
@@ -302,7 +305,7 @@ export class Build {
     if (s.type === 'huette') {
       const e = this.nextExt(s); if (!e) return g.ui.toast('Die Hütte ist voll ausgebaut.');
       if (this.lvl() < e.lvl) { A.sfx('error'); return g.ui.toast(`„${e.name}“ geht ab Level ${e.lvl} (du bist Level ${this.lvl()}).`, 'warn'); }
-      if (!g.has('hammer')) { A.sfx('error'); return g.ui.toast('Du brauchst einen Hammer.', 'warn'); }
+      if (!g.has('hammer') && !g.creative) { A.sfx('error'); return g.ui.toast('Du brauchst einen Hammer.', 'warn'); }
       if (!this.hasCost(e.cost)) { A.sfx('error'); return g.ui.toast(`Für „${e.name}“ fehlt: ${this.costText(e.cost)}`, 'warn'); }
       const why = this.check(this.extPos(s, e), s.rot, { id: 'ext', size: e.size, ext: 1 }, s, true); if (why) { A.sfx('error'); return g.ui.toast(`${e.name}: ${why}`, 'warn'); }
       this.pay(e.cost); s.ext++; const open = s.door?.target; this.removeDoor(s);

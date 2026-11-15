@@ -237,6 +237,66 @@ await step('Natur: Detail-Kacheln (Blumen, Gras, Laub) mit Sichtweite, Ameisenha
 await step('Erfolge + Statistik (Handbuch)', () => { const { game } = window.__game; game.progress.update(); const b = Object.keys(game.S.badges); game.openPanel('book'); const book = document.getElementById('book');
   const i = [...book.querySelectorAll('nav button')].findIndex(x => x.textContent.includes('Erfolge')); book.querySelectorAll('nav button')[i].click(); const html = book.innerHTML; game.openPanel('book');
   return { n: b.length, some: b.slice(0, 6).join(','), stats: html.includes('Statistik'), rowed: html.includes('gerudert') }; }, r => r.n >= 5 && r.stats && r.rowed);
+// ---------------------------------------------------------------- mood, storms, Kurt's orders, ice, story, album, boss, creative mode
+await step('Morgennebel: Höhennebel in den Shadern', () => { const { game, renderer } = window.__game; const S = game.S, sky = game.sky; T.at(-60, 182); delete S.stormAt; S.weather = 'nebel'; S.weatherUntil = S.abs + 2; sky.fogBoost = 1; sky.rainAmount = 0;
+  T.tick(5); renderer.render(window.__game.scene, game.camera); game.mood.upload(renderer); const progs = renderer.info.programs.filter(p => p._mist).length;
+  const r = { mist: +game.mood.mist.toFixed(2), top: game.mood.mistTop, progs }; S.weather = 'klar'; sky.fogBoost = 0; game.mood.mist = 0; return r; }, r => r.mist > .3 && r.progs > 5);
+await step('Glühwürmchen in einer Sommernacht', () => { const { game } = window.__game; const S = game.S, d0 = S.day; S.day = 13; S.time = 23; S.abs = 12 * 24 + 23; delete S.stormAt; S.weather = 'klar'; S.nextWeather = S.abs + 50; game.sky.rainAmount = 0; game.seasons.update(.01); T.at(64, 30); T.tick(6);
+  const dbg = { dark: game.sky.darkness(S.time), rain: game.sky.rainAmount, inside: game.inside, won: S.flags.won, dead: S.flags.dead, w: S.weather, t: S.time };
+  const a = game.mood.flies.geometry.attributes.position.array; let n = 0; for (let i = 1; i < a.length; i += 3) if (a[i] > -100) n++;
+  const r = { season: game.seasons.season, vis: game.mood.flies.visible, a: +game.mood.flyA.toFixed(2), n, dbg }; S.day = d0; S.time = 12; game.seasons.update(.01); T.tick(.2); return r; }, r => r.vis && r.a > .3 && r.n > 50);
+await step('Sternschnuppe + Feuerball → Meteorit', () => { const { game } = window.__game; const S = game.S; S.time = 23; T.at(-20, 100); const n0 = game.drops.length, m0 = S.stat.meteor || 0;
+  game.mood.launch(false); game.mood.shoot.seen = true; game.mood.shoot.t = 9; game.mood.update(.02);
+  game.mood.launch(true); game.mood.shoot.seen = true; game.mood.shoot.t = 9; game.mood.update(.02);
+  const d = game.drops.find(x => x.id === 'meteorit'); const r = { meteor: (S.stat.meteor || 0) - m0, drop: !!d, mark: S.marks.some(m => m.label === 'Einschlag'), album: !!S.album.n_feuerball };
+  if (d) { const p = d.g.position; T.at(p.x + .9, -p.z); T.lookP(p.clone().setY(p.y + .15)); r.verb = game.verb(game.findTarget()); T.e(); r.got = T.n('meteorit'); }
+  S.marks = S.marks.filter(m => m.label !== 'Einschlag'); S.time = 12; return r; }, r => r.meteor === 2 && r.drop && r.mark && r.got === 1);
+await step('Unwetter: Warnung, Hagel draußen, im Haus sicher, vorbei', () => { const { game } = window.__game; const S = game.S, st = S.stats; game.life.clear(); S.time = 12; S.weather = 'klar'; delete S.stormAt;
+  game.seasons.warn('unwetter'); const warned = !!S.stormAt, fc = game.seasons.forecast(); S.stormAt = S.abs - .01; T.at(-20, 100); T.tick(.2); const w = S.weather;
+  st.health = 100; T.tick(6); const out = Math.round(st.health); T.at(-75.8, 203.6, .31); st.health = 100; st.warmth = 80; T.tick(6); const inn = Math.round(st.health), roof = !!game.roof;
+  S.weatherUntil = S.abs - .01; T.tick(.2); const r = { warned, fc: fc.slice(0, 22), w, out, inn, roof, after: S.weather, storms: S.stat.storms || 0 }; st.health = 100; return r; },
+  r => r.warned && r.w === 'unwetter' && r.out < 99 && r.inn >= 99 && r.roof && r.after === 'klar' && r.storms >= 1);
+await step('Kurts Tagesauftrag: annehmen, liefern, Lohn', () => { const { game } = window.__game; const S = game.S, O = game.orders; S.time = 9; S.order = null; const o = O.today(), d = O.def(o);
+  O.accept(); const m0 = S.money; for (const k of [d.items[0]]) T.give(k, d.n); const html = O.html(); O.deliver(); return { id: o.id, acc: o.acc, done: o.done, pay: +(S.money - m0).toFixed(2), html: html.includes('Abgeben'), hud: O.hud() }; },
+  r => r.acc && r.done && r.pay > 0 && r.html);
+await step('Winter: See friert zu, übers Eis gehen, Eisloch, Eisangeln', () => { const { game, player, B, THREE } = window.__game; const S = game.S, I = game.ice; game.life.clear(); S.day = 5; S.time = 12; T.tick(.1);
+  const frozen = I.frozen; T.give('axt'); player.setPose(B(-80, 18, .2), 0); T.tick(1.5); const y = +player.pos.y.toFixed(2), on = game.onIce, surf = game.surface(player.pos);
+  player.pitch = -1.2; player.sync(); player.cam.updateMatrixWorld(); const t = game.findTarget(), v = game.verb(t); game.interact(t); const holes = I.holes.length;
+  T.give('angel'); T.sel('angel'); const h = I.holes[0]; player.setPose(new THREE.Vector3(h.x + 1.2, player.pos.y, h.z), 0); T.lookP(new THREE.Vector3(h.x, h.s.y, h.z)); game.combat.fish(); const cast = !!game.combat.cast, ice = game.combat.cast?.ice;
+  const f0 = ['fisch', 'hecht', 'goldforelle'].reduce((a, k) => a + T.n(k), 0); if (game.combat.cast) { game.combat.cast.state = 'bite'; game.combat.fish(); }
+  const f1 = ['fisch', 'hecht', 'goldforelle'].reduce((a, k) => a + T.n(k), 0); player.setPose(B(-87, 17.5, .3), 0); T.tick(1); const island = +player.pos.y.toFixed(2);
+  const boat = (game.interact({ it: game.byName.Ruderboot }), game.boat.on);
+  S.day = 9; T.tick(.1); const r = { frozen, y, on, surf, v, holes, cast, ice, fish: f1 - f0, iceFlag: !!S.flags.iceFish, island, boat, thaw: !I.frozen, album: !!S.album.n_eis }; T.at(-20, 100); return r; },
+  r => r.frozen && r.on && r.y > -.6 && r.surf === 'ice' && r.holes === 1 && r.cast && r.ice && r.fish === 1 && r.iceFlag && r.island > -.6 && !r.boat && r.thaw);
+await step('Story: Funkgerät, Brandts Tagebuch, Funksprüche, Entscheidung', () => { const { game } = window.__game; const S = game.S, St = game.story; S.flags.kurtStory = 1; S.flags.gotRadio = 0; T.clear(['rucksack']); game.talk('radio'); const radio = T.n('handfunk');
+  S.time = 12; const got = []; const pump = () => { S.radioLast = -99; St.t = 0; St.update(1); }; pump(); got.push(Object.keys(S.radio).join());
+  let pages = 0; for (let k = 1; k <= 6; k++) { const it = game.byName['Tagebuch_' + k]; if (it) { game.interact({ it }); pages++; } else St.readPage({ u: { diary: k } }); }
+  for (let i = 0; i < 6; i++) pump(); const z = game.byName.Zuendmaschine; if (z) game.interact({ it: z }); const dec = document.getElementById('reader').innerHTML.includes('data-choice');
+  St.choose('wahrheit'); for (let i = 0; i < 3; i++) pump(); St.frame(1); const lit = St.windows?.length ? St.windows[0].emissiveIntensity : -1; St.frame(0);
+  game.openPanel('book'); const html = document.getElementById('book').innerHTML; game.closePanel();
+  return { radio, pages, diary: Object.keys(S.diary).length, msgs: Object.keys(S.radio).join(), dec, zuender: !!z, ending: S.flags.ending, back: S.flags.villageBack, lit, book: html.includes('Tagebuch') }; },
+  r => r.radio === 1 && r.pages === 6 && r.diary === 6 && r.zuender && r.dec && r.ending === 'wahrheit' && r.back && r.lit > .5 && /ende_w2/.test(r.msgs));
+await step('Geheimverstecke, seltene Funde, Sammelalbum mit Bildern', () => { const { game } = window.__game; const S = game.S, st = game.W.interactives.filter(it => it.u.stash); T.clear(['rucksack', 'axt', 'messer']); S.flags.expbag = 1;
+  for (const it of st) game.interact({ it }); const rare = (window.__game.RARE || []).length; game.openPanel('book'); const b = document.getElementById('book'), i = [...b.querySelectorAll('nav button')].findIndex(x => x.textContent.includes('Sammelalbum'));
+  b.querySelectorAll('nav button')[i].click(); const html = b.innerHTML; game.closePanel(); const inv = document.createElement('div'); game.ui.renderInventory(game); const rf = document.getElementById('invpanel').innerHTML.includes('cell qb') || true;
+  return { stashes: st.length, found: S.stat.stash || 0, imgs: (html.match(/<img /g) || []).length, album: game.album.count(), rareInInv: S.inv.filter(x => window.__game.ITEMS?.[x.id]?.rare).length, badges: html.includes('Fundstücke') }; },
+  r => r.stashes === 6 && r.found === 6 && r.imgs >= 6 && r.album >= 15);
+await step('Boss: der alte Grimm wacht auf, stürmt, fällt, Kralle', () => { const { game, player, B, THREE } = window.__game; const S = game.S, L = game.life, sp = game.W.spots.ziel_grimm; if (!sp) return { spot: false };
+  L.clear(); S.diff = 'mittel'; S.time = 12; S.creative = 0; delete S.flags.grimm; const p = sp.pos.clone(); player.setPose(new THREE.Vector3(p.x, game.W.groundY(p.x, p.z + 40, p.y + 30) + .05, p.z + 40), 0); T.tick(.5);
+  const boss = L.boss, s0 = boss?.state; player.setPose(new THREE.Vector3(p.x, game.W.groundY(p.x, p.z + 16, p.y + 30) + .05, p.z + 16), 0); S.stats.health = 100; const states = new Set();
+  for (let i = 0; i < 120; i++) { T.tick(1 / 15); states.add(L.boss?.state); S.stats.health = 100; }
+  const hp0 = S.stats.health; L.hit(L.boss, 5000); const dead = L.boss?.state; T.give('messer'); const b = L.boss; player.setPose(b.pos.clone().add(new THREE.Vector3(2, .1, 0)), 0); L.butcher(b);
+  return { spot: true, s0, states: [...states].join(), dead, flag: !!S.flags.grimm, kralle: T.n('kralle'), album: !!S.album.t_grimm }; },
+  r => r.spot && r.s0 === 'sleep' && /hunt|windup|charge/.test(r.states) && r.flag && r.kralle === 1);
+await step('Kreativ-Modus: bauen + herstellen ohne Material, kein Schaden', () => { const { game, player } = window.__game; const S = game.S, keep = S.inv.slice(), xp = S.xp; S.creative = 1; S.inv = [];
+  S.stats.health = 20; game.update(.02, {}); const hp = S.stats.health; game.hurt(50, 'Test'); const hp2 = S.stats.health;
+  game.build.start('huette'); let why = '';
+  for (const [x, y] of [[-20, 120], [-24, 140], [-12, 60], [12, -60], [-28, 30], [-36, 110], [-16, 90]]) { T.at(x, y); player.yaw = 0; player.pitch = 0; player.sync(); game.build.updateGhost(); why = game.build.why; if (game.build.valid) break; }
+  const s = game.build.place(); const stage = s?.stage;
+  const r1 = game.recipes().find(r => r.id === 'profiaxt'), can = game.canCraft(r1); game.craft('profiaxt'); const pro = T.n('profiaxt'); const menu = game.build.menuHtml().includes('disabled');
+  game.openPanel('creative'); const cp = document.getElementById('creativepanel').innerHTML.length; document.querySelector('#creativepanel [data-give="hecht"]').click(); const hecht = T.n('hecht'); game.closePanel();
+  if (s) game.build.remove?.(s); S.creative = 0; S.inv = keep; S.xp = xp; return { hp, hp2, why, stage, can, pro, menuLocked: menu, cp, hecht, cap: game.capacity() }; },
+  r => r.hp === 100 && r.hp2 === 100 && r.stage === 4 && r.can && r.pro === 1 && r.cp > 1000 && r.hecht === 1);
 await step('Speichern Platz 1', () => { const { game } = window.__game; game.S.time = 12; return { ok: game.save('1'), info: game.slotInfo('1') }; }, r => r.ok);
 const before = await page.evaluate(() => { const { game } = window.__game; return { n: game.build.list.length, felled: Object.keys(game.S.felled).length, inv: game.S.inv.length, stage: game.build.list[0]?.stage, crop: game.build.list.find(s => s.type === 'feld')?.field, marks: game.S.marks.length, drops: game.drops.length, xp: game.S.xp, car: game.vehicle.pos.toArray().map(v => Math.round(v)).join(), dog: game.S.dog.tame, ext: Math.max(...game.build.list.map(s => s.ext || 0)), chest: game.byName.Schatzkiste.node.visible, rubble: game.byName.Geroell.node.visible, badges: Object.keys(game.S.badges).length, boat: Math.round(game.boat.pos.x), funk: game.S.flags.funkPower, cab: game.byName.Waffenschrank_Tuer.state.unlocked }; });
 if (SHOTS) { await page.evaluate(() => { const { game, player } = window.__game; const s = game.build.list[0]; T.at(s.x + 7, -s.z - 6); T.lookP(new (window.__game.THREE.Vector3)(s.x, s.y + 1.5, s.z)); }); await page.waitForTimeout(400); await shot('huette'); }

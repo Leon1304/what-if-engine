@@ -32,6 +32,7 @@ const KIND = {          // hit points, bite damage, run speed, body length / hei
   deer: { hp: 50, dmg: 0, run: 7.5, len: 1.0, hy: 1.0, r: .45, loot: { fleisch: 3, fell: 1 } },
   rabbit: { hp: 12, dmg: 0, run: 7, len: .3, hy: .2, r: .22, loot: { kaninchen: 1 } },
   gams: { hp: 45, dmg: 0, run: 8.5, len: .9, hy: .85, r: .4, loot: { fleisch: 2, fell: 1 } },     // chamois (mountains only)
+  grimm: { hp: 950, dmg: 30, run: 5.4, len: 2.4, hy: 1.55, r: 1.1, loot: { fleisch: 10, fell: 3, kralle: 1 } },   // the boss bear „der alte Grimm“ (mountains, at his den)
 };
 export { KIND };
 
@@ -52,6 +53,15 @@ function buildAnimal(kind) {
       const ear = new THREE.Mesh(new THREE.ConeGeometry(.06, .14, 4), dark); ear.position.set(s * .13, .78, -.6); g.add(ear); }
     const tail = bx(.04, .04, .22, dark, 0, .62, .55); tail.rotation.x = .9; g.add(tail);
     for (const [x, z] of [[-.15, -.32], [.15, -.32], [-.15, .32], [.15, .32]]) { const p = new THREE.Group(); p.position.set(x, .35, z); p.add(bx(.1, .35, .1, dark, 0, -.17, 0)); g.add(p); legs.push(p); }
+  } else if (kind === 'grimm') {                          // the old boss bear: half again as big, grizzled back, grey muzzle, torn ear, scar, claws
+    const fur = M('#4a3626'), grey = M('#8a8274'), dark = M('#2a1c12'), snout = M('#9a8a72'), claw = M('#e8e0cc'), scar = M('#c08a7a');
+    g.add(bx(.9, .9, 1.6, fur, 0, 1.05, 0), bx(.96, .3, 1.2, grey, 0, 1.55, .05), bx(.95, 1.0, .7, fur, 0, 1.15, -.5), bx(1.0, .35, .6, grey, 0, 1.6, -.5),
+      bx(.62, .56, .6, fur, 0, 1.25, -1.05), bx(.32, .28, .32, snout, 0, 1.15, -1.4), bx(.13, .11, .08, dark, 0, 1.2, -1.57), bx(.04, .22, .3, scar, .2, 1.36, -1.05));
+    g.add(bx(.16, .16, .1, dark, -.22, 1.6, -1.0), bx(.16, .09, .1, dark, .22, 1.56, -1.0));
+    for (const s of [-1, 1]) { const e = new THREE.Mesh(new THREE.SphereGeometry(.03, 6, 4), new THREE.MeshBasicMaterial({ color: '#ffb02a' })); e.position.set(s * .17, 1.35, -1.36); g.add(e); }
+    for (const [x, z] of [[-.3, -.5], [.3, -.5], [-.3, .55], [.3, .55]]) { const p = new THREE.Group(); p.position.set(x, .7, z); p.add(bx(.28, .7, .32, dark, 0, -.35, 0));
+      for (const k of [-1, 0, 1]) p.add(bx(.04, .05, .14, claw, k * .08, -.68, -.2)); g.add(p); legs.push(p); }
+    g.scale.setScalar(1.5);
   } else if (kind === 'bear') {
     const fur = M('#5a3f2a'), dark = M('#3a2818'), snout = M('#8a6a4a');
     g.add(bx(.9, .9, 1.6, fur, 0, 1.05, 0), bx(.95, 1.0, .7, fur, 0, 1.15, -.5), bx(.6, .55, .6, fur, 0, 1.25, -1.05), bx(.3, .26, .3, snout, 0, 1.15, -1.4), bx(.12, .1, .08, dark, 0, 1.2, -1.56));
@@ -107,14 +117,21 @@ export class Life {
     const p = at || this.forestSpot(near, kind === 'deer' || kind === 'gams' ? 25 : 45, 70); if (!p) return;
     const mesh = buildAnimal(kind); mesh.position.copy(p); this.scene.add(mesh);
     const a = { kind, mesh, pos: p, heading: Math.random() * 6.28, speed: 0, state: 'roam', t: 0, cool: 0, wander: Math.random() * 6.28, phase: 0, hp: KIND[kind].hp, angry: 0 };
+    if (kind === 'deer' && Math.random() < .05) {             // the rare white stag (album)
+      a.white = 1; mesh.traverse(m => { if (m.isMesh && m.material.color) { m.material = m.material.clone(); m.material.color.lerp(new THREE.Color('#f4f1ea'), .82); } });
+      mesh.scale.setScalar(1.12); if (!this.g.S.flags.whiteTip) { this.g.S.flags.whiteTip = 1; this.g.ui.toast('🤍 Zwischen den Bäumen schimmert etwas Weißes … ein weißer Hirsch!', 'good'); }
+    }
     this.animals.push(a); return a;
   }
   diff() { return DIFF[this.g.S.diff] || DIFF.mittel; }
   // weapon hit (combat.js): damage, reaction, death → carcass
   hit(a, dmg) {
     if (a.state === 'dead') return;
-    a.hp -= dmg; a.angry = 20; this.g.audio.sfx(a.kind === 'bear' ? 'roar' : a.kind === 'deer' ? 'none' : 'growl');
-    if (a.hp <= 0) { a.state = 'dead'; a.dead = 0; a.speed = 0; a.rotTo = (Math.random() < .5 ? 1 : -1) * Math.PI / 2; this.g.S.flags.hunted = 1; return true; }
+    a.hp -= dmg; a.angry = 20; this.g.audio.sfx(a.kind === 'bear' || a.kind === 'grimm' ? 'roar' : a.kind === 'deer' ? 'none' : 'growl');
+    if (a.hp <= 0) { a.state = 'dead'; a.dead = 0; a.speed = 0; a.rotTo = (Math.random() < .5 ? 1 : -1) * Math.PI / 2; this.g.S.flags.hunted = 1;
+      if (a.kind === 'grimm') { this.g.S.flags.grimm = this.g.S.day; this.g.audio.sfx('win'); setTimeout(() => this.g.ui.toast('🏆 Der alte Grimm ist besiegt! Zerleg ihn mit dem Messer – seine Kralle gehört dir.', 'good'), 600); }
+      return true; }
+    if (a.kind === 'grimm' && a.state === 'sleep') a.state = 'hunt';
     if (a.kind === 'deer' || a.kind === 'gams') { a.state = 'flee'; a.t = 6; }
     else if (a.kind === 'wolf' && Math.random() < .5) { a.state = 'flee'; a.t = 3; }
     return false;
@@ -132,7 +149,7 @@ export class Life {
   butcher(a) {
     const g = this.g; if (!g.has('messer') && a.kind !== 'rabbit') return g.ui.toast('Zum Zerlegen brauchst du ein Messer.');
     const loot = a.left || { ...KIND[a.kind].loot, ...(a.arrows ? { pfeil: a.arrows } : {}) }, got = [], left = {};
-    for (const [k, n] of Object.entries(loot)) { if (g.add(k, n, true)) got.push(`${n}× ${{ fleisch: 'Fleisch', fell: 'Fell', pfeil: 'Pfeil', kaninchen: 'Kaninchen' }[k] || k}`); else left[k] = n; }
+    for (const [k, n] of Object.entries(loot)) { if (g.add(k, n, true)) got.push(`${n}× ${{ fleisch: 'Fleisch', fell: 'Fell', pfeil: 'Pfeil', kaninchen: 'Kaninchen', kralle: '🦴 Grimms Kralle' }[k] || k}`); else left[k] = n; }
     g.audio.sfx('chop'); if (got.length) g.ui.toast(`🔪 Zerlegt: ${got.join(', ')}`);
     if (Object.keys(left).length) { a.left = left; g.ui.toast('Dein Rucksack ist voll – der Rest bleibt liegen.', 'warn'); } else this.remove(a);
   }
@@ -161,13 +178,14 @@ export class Life {
     if (!grace && live('bear') < D.bears && (-P.pos.z > 60 || g.S.diff === 'schwer') && Math.random() < dt * .006) { this.spawn('bear', P.pos); g.ui.toast('Irgendwo im Wald bricht Unterholz. Etwas Großes ist unterwegs …', 'warn'); }
     if (dark < .35 && live(berg ? 'gams' : 'deer') < (g.seasons?.season === 'Winter' ? 1 : 3) && Math.random() < dt * .1) this.spawn('deer', P.pos);
     if (dark < .6 && live('rabbit') < 3 && Math.random() < dt * .06) { const p = this.forestSpot(P.pos, 15, 40); if (p) this.spawn('rabbit', null, p); }
-    this.updateDog(dt, P);
+    this.updateDog(dt, P); this.updateBoss(P);
     this.howlT -= dt; if (live('wolf') && this.howlT < 0) { this.howlT = 25 + Math.random() * 40; g.audio.sfx('howl'); }
     for (const a of [...this.animals]) {
       const to = P.pos.clone().sub(a.pos); to.y = 0; const d = to.length(); a.t -= dt; a.cool -= dt; a.angry -= dt;
       let want = 0, dirA = a.heading; const K = KIND[a.kind];
       if (a.state === 'dead') { a.dead += dt; a.mesh.rotation.z += ((a.rotTo || 0) - a.mesh.rotation.z) * Math.min(1, dt * 6); if (a.dead > 600 || d > 160) this.remove(a); continue; }
-      if (a.kind === 'boar' || a.kind === 'bear') {
+      if (a.kind === 'grimm') { if (this.grimm(a, dt, P, d, to, inside || high, D)) { dirA = a.dirA; want = a.want; } }
+      else if (a.kind === 'boar' || a.kind === 'bear') {
         const aggro = a.kind === 'bear' ? (D.boarAggro ? 14 + D.boarAggro : 0) : D.boarAggro;
         if (this.scared(a, P)) { a.state = 'flee'; a.t = 3; }
         else if (a.state === 'flee' && a.t > 0) { }
@@ -223,7 +241,36 @@ export class Life {
     this.updateCar(dt, P, dark);
     for (const f of this.fires) this.animateFire(f, dt);
   }
-  remove(a) { this.scene.remove(a.mesh); this.animals.splice(this.animals.indexOf(a), 1); }
+  remove(a) { this.scene.remove(a.mesh); this.animals.splice(this.animals.indexOf(a), 1); if (a === this.boss) this.boss = null; }
+  // ---------------------------------------------------------------- boss: „der alte Grimm“ sleeps at his den in the mountains (spot ziel_grimm)
+  updateBoss(P) {
+    const g = this.g, spot = this.W.spots.ziel_grimm;
+    if (this.boss || !spot || g.S.flags.grimm || !this.diff().dmg || regionOf(-P.pos.z) !== 'berg' || P.pos.distanceTo(spot.pos) > 85) return;
+    const a = this.spawn('grimm', null, spot.pos.clone()); a.boss = 1; a.state = 'sleep'; a.home = spot.pos.clone(); a.chargeT = 3; a.heading = Math.PI; this.boss = a;
+  }
+  // his moves: wake up when you come close (or shoot him), chase you, wind up and charge in a straight line (step aside!),
+  // rage below 40 % (faster, charges more often), go back to the den and heal when you run away; fire does not scare him
+  grimm(a, dt, P, d, to, safe, D) {
+    const g = this.g, K = KIND.grimm, rage = a.hp < K.hp * .4, dh = a.pos.distanceTo(a.home), toward = Math.atan2(to.x, to.z);
+    a.dirA = a.heading; a.want = 0;
+    if (rage && !a.raged) { a.raged = 1; g.audio.sfx('roar'); g.ui.toast('🐻 Grimm brüllt vor Wut – jetzt wird er schneller!', 'warn'); }
+    if (a.state === 'sleep') { a.hp = Math.min(K.hp, a.hp + dt * 4); if (d < 24 || a.angry > 0) { a.state = 'hunt'; a.chargeT = 2.5; g.audio.sfx('roar'); g.ui.toast('🐻 DER ALTE GRIMM ist aufgewacht! Wenn er sich duckt und losstürmt: zur Seite springen!', 'warn'); } return true; }
+    if (a.state === 'return') { a.dirA = Math.atan2(a.home.x - a.pos.x, a.home.z - a.pos.z); a.want = 2.6; a.hp = Math.min(K.hp, a.hp + dt * 8); if (dh < 3) a.state = 'sleep'; if (d < 16 && !safe) a.state = 'hunt'; return true; }
+    if (a.state === 'windup') { a.heading = a.dirA = toward; a.want = 0; if (a.t <= 0) { a.state = 'charge'; a.t = 1.25; a.chargeDir = a.heading; } }
+    else if (a.state === 'charge') { a.heading = a.dirA = a.chargeDir; a.want = rage ? 12.5 : 10.5; a.speed = Math.max(a.speed, a.want * .7); if (a.t <= 0) { a.state = 'hunt'; a.chargeT = rage ? 3.2 : 5.5; } }
+    else {
+      a.state = 'hunt'; a.chargeT -= dt;
+      if (safe) { a.dirA = toward + Math.PI / 2; a.want = 1.8; } else { a.dirA = toward; a.want = rage ? 6.6 : K.run; }
+      if (!safe && d > 6 && d < 24 && a.chargeT < 0) { a.state = 'windup'; a.t = rage ? .45 : .7; g.audio.sfx('growl'); }
+      if (dh > 70 || d > 70) a.state = 'return';
+    }
+    if (a.state !== 'return' && !safe && d < 2.6 && a.cool < 0) {
+      a.cool = 1.4; g.hurt(K.dmg * D.dmg * (a.state === 'charge' ? 1.3 : 1), 'Grimm'); g.audio.sfx('roar');
+      const push = to.clone().normalize().multiplyScalar(-1); g.P.vel.x -= push.x * 7; g.P.vel.z -= push.z * 7; g.P.vel.y = Math.max(g.P.vel.y, 3);
+      if (a.state === 'charge') { a.state = 'hunt'; a.chargeT = rage ? 3 : 5; }
+    }
+    return true;
+  }
   // fences (built): keep animals (and the dog) on their side – segments from build.fences()
   fencePush(p, r) {
     for (const [x0, z0, x1, z1] of this.g.build?.fences() || []) {
@@ -245,7 +292,7 @@ export class Life {
     if (!S.dog.tame) { const h = D.home.clone().sub(D.pos); h.y = 0; if (h.length() > 5) { dirA = Math.atan2(h.x, h.z); want = 1.2; } else if (d < 8) { dirA = Math.atan2(to.x, to.z); want = 0; } }
     else {
       if (d > 45 && !S.dog.sit && !D.seek) { D.pos.copy(P.pos).add(new THREE.Vector3(1.5, 0, 1.5)); }
-      const foe = this.animals.find(a => ['wolf', 'boar', 'bear'].includes(a.kind) && a.state !== 'dead' && a.pos.distanceTo(D.pos) < 35);
+      const foe = this.animals.find(a => ['wolf', 'boar', 'bear', 'grimm'].includes(a.kind) && a.state !== 'dead' && a.pos.distanceTo(D.pos) < 35);
       if (foe && D.barkT < 0) { D.barkT = 25; g.audio.sfx('bark'); g.ui.toast(`🐕 Bello knurrt – ${foe.kind === 'wolf' ? 'Wölfe' : foe.kind === 'bear' ? 'ein Bär' : 'ein Wildschwein'} in der Nähe!`, 'warn'); }
       const near = foe && foe.kind === 'wolf' && foe.pos.distanceTo(D.pos) < 12 ? foe : null;
       if (near) { const t = near.pos.clone().sub(D.pos); t.y = 0; dirA = Math.atan2(t.x, t.z); want = 6.5; if (t.length() < 1.4 && D.biteT < 0) { D.biteT = 1.2; this.hit(near, 14); g.audio.sfx('bite'); } }

@@ -48,7 +48,7 @@ const W = await loadWorld(scene, p => $('loadbar').style.width = (p * 100).toFix
 const player = new Player(camera, W, audio);
 const game = new Game(scene, camera, W, player, audio, sky, ui);
 applyQuality(quality);
-window.__game = { game, player, W, scene, camera, renderer, B, THREE };
+window.__game = { game, player, W, scene, camera, renderer, B, THREE }; game.renderer = renderer;
 
 function spawnAtStart() {
   const s = W.spots.spawn, e = new THREE.Euler().setFromQuaternion(s.quat, 'YXZ');
@@ -81,8 +81,8 @@ $('btn-hl').onclick = () => { game.hlOn = !game.hlOn; applyHl(); }; applyHl();
 // save slots (pause menu): save / load (load = reload the page and start from that slot, so no state leaks from the current run)
 function renderSlots() {
   const fmt = i => i ? `Tag ${i.day}, ${String(Math.floor(i.time)).padStart(2, '0')}:${String(Math.floor(i.time % 1 * 60)).padStart(2, '0')} · ${DIFF[i.diff]?.name || ''} · ${new Date(i.at).toLocaleString('de-DE', { dateStyle: 'short', timeStyle: 'short' })}` : 'leer';
-  $('slots').innerHTML = SLOTS.map(sl => { const i = game.slotInfo(sl);
-    return `<div class="slotrow"><b>${sl === 'auto' ? 'Automatisch' : 'Platz ' + sl}</b><span>${fmt(i)}</span>${sl === 'auto' ? '' : `<button class="sec" data-save="${sl}">Speichern</button>`}<button class="sec" data-load="${sl}" ${i ? '' : 'disabled'}>Laden</button></div>`; }).join('');
+  $('slots').innerHTML = SLOTS.filter(sl => sl !== 'kreativ' || game.slotInfo(sl)).map(sl => { const i = game.slotInfo(sl), auto = sl === 'auto' || sl === 'kreativ';
+    return `<div class="slotrow"><b>${sl === 'auto' ? 'Automatisch' : sl === 'kreativ' ? '🎨 Kreativ (auto)' : 'Platz ' + sl}</b><span>${fmt(i)}${i?.creative && sl !== 'kreativ' ? ' · 🎨 Kreativ' : ''}</span>${auto ? '' : `<button class="sec" data-save="${sl}">Speichern</button>`}<button class="sec" data-load="${sl}" ${i ? '' : 'disabled'}>Laden</button></div>`; }).join('');
 }
 $('slots').addEventListener('click', e => {
   const b = e.target.closest('button'); if (!b) return;
@@ -98,10 +98,12 @@ function lock() { if (!AUTO) renderer.domElement.requestPointerLock?.(); }
 function begin(load) {
   audio.start(); book.show(false); ui.show('start', false); ui.show('pause', false);
   if (load === 'new') { game.wipe(); }
+  else if (load === 'creative') { game.wipe('kreativ'); game.startCreative(); }
   else if (load === 'load') game.load(slotToLoad);
   else if (load === 'import') game.load(importData);
   playing = true; applyDiff(game.S.diff); ui.renderHotbar(game.S.inv, game.S.sel); lock();
   if (load === 'new') ui.toast('Verdammt. Der Motor ist aus. Kein Netz. Und es wird bald dunkel …');
+  if (game.creative) applyDiff(game.S.diff);
 }
 const book = new Handbook(game);
 $('btn-book').onclick = () => { ui.show('pause', false); openPanel('book'); };
@@ -110,9 +112,10 @@ $('btn-book-start').onclick = () => book.show(true, 0);
 book.el.addEventListener('click', e => { if (e.target.closest('[data-close]')) { if (panel === 'book') closePanel(); else book.show(false); } });
 if (Q.has('book')) { panel = 'book'; book.show(true, +Q.get('book') || 0); }      // test aid: open the handbook at chapter n
 $('btn-new').onclick = () => begin('new');
+$('btn-creative').onclick = () => begin('creative');
 $('btn-continue').onclick = () => begin('load');
 $('btn-resume').onclick = () => { ui.show('pause', false); lock(); };
-$('btn-restart').onclick = () => { game.wipe(); location.reload(); };
+$('btn-restart').onclick = () => { game.wipe(game.creative ? 'kreativ' : 'auto'); location.reload(); };
 document.querySelectorAll('[data-q]').forEach(b => b.onclick = () => applyQuality(b.dataset.q));
 document.querySelectorAll('[data-fps]').forEach(b => b.onclick = () => applyFps(b.dataset.fps)); applyFps(fpsCap);
 $('btn-dead-load').onclick = () => location.reload();
@@ -143,10 +146,11 @@ function openPanel(name) {
   if (name === 'build') { $('buildpanel').innerHTML = game.build.menuHtml(); ui.show('buildpanel', true); }
   if (name === 'trade') { ui.renderTrade(game); ui.show('tradepanel', true); }
   if (name === 'code') { codeTyped = ''; renderCode(); ui.show('codepanel', true); }
+  if (name === 'creative') { $('creativepanel').innerHTML = creativeHtml(); ui.show('creativepanel', true); }
   if (name === 'book') book.show(true);
 }
 function closePanel(silent) {
-  if (!panel) return; book.show(false); ui.show('invpanel', false); ui.show('mappanel', false); ui.show('reader', false); ui.show('buildpanel', false); ui.show('tradepanel', false); ui.show('codepanel', false);
+  if (!panel) return; book.show(false); ui.show('invpanel', false); ui.show('mappanel', false); ui.show('reader', false); ui.show('buildpanel', false); ui.show('tradepanel', false); ui.show('codepanel', false); ui.show('creativepanel', false);
   if (panel === 'code') game.codeFor = null; game.build.chest = null; panel = null; if (!silent) lock();
 }
 $('invpanel').addEventListener('click', e => {
@@ -165,6 +169,7 @@ $('buildpanel').addEventListener('click', e => {
   const b = e.target.closest('[data-bp]'); if (!b) return; closePanel(); game.build.start(b.dataset.bp); });
 $('tradepanel').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return;
   if (b.dataset.buy) game.buy(b.dataset.buy); if (b.dataset.sell) game.sell(b.dataset.sell); if (b.dataset.sellall) game.sell(b.dataset.sellall, true); if (b.dataset.talk) game.talk(b.dataset.talk);
+  if (b.dataset.order) game.talk(b.dataset.order === 'accept' ? 'order' : 'deliver');
   ui.renderTrade(game); });
 // keypad for code locks (gun cabinet, radio hut)
 let codeTyped = '';
@@ -178,6 +183,38 @@ function codeKey(k) {
   renderCode();
 }
 $('codepanel').addEventListener('click', e => { const b = e.target.closest('[data-key]'); if (b) codeKey(b.dataset.key); });
+// the story's decision at the detonator (buttons inside the reader)
+$('reader').addEventListener('click', e => { const b = e.target.closest('[data-choice]'); if (!b) return; game.story.choose(b.dataset.choice); closePanel(); });
+// ---------------------------------------------------------------- creative menu (K): items, time, weather, season, events, teleport
+function creativeHtml() {
+  const S = game.S, row = (t, h) => `<h3>${t}</h3><div class="cbtns">${h}</div>`;
+  let h = `<h2>🎨 Kreativ-Menü <small>Klick = 1 Stück · Shift+Klick = 10 · V = fliegen (${player.fly ? 'an' : 'aus'}) · K / Esc schließen</small></h2>`;
+  h += row('⏰ Uhrzeit', [5.5, 7, 12, 17.5, 20, 23].map(t => `<button class="sec" data-time="${t}">${String(Math.floor(t)).padStart(2, '0')}:${t % 1 ? '30' : '00'}</button>`).join(''));
+  h += row('🌦️ Wetter', [['klar', '☀️ klar'], ['regen', '🌧️ Regen'], ['nebel', '🌫️ Nebel'], ['gewitter', '⛈️ Gewitter'], ['schnee', '🌨️ Schnee'], ['warn', '⚠️ Unwetter-Warnung'], ['unwetter', '🌪️ Unwetter'], ['schneesturm', '❄️ Schneesturm']].map(([k, n]) => `<button class="sec ${S.weather === k ? 'on' : ''}" data-weather="${k}">${n}</button>`).join(''));
+  h += row('🍂 Jahreszeit', ['🍂 Herbst', '❄️ Winter (See friert zu)', '🌱 Frühling', '☀️ Sommer'].map((n, i) => `<button class="sec ${game.seasons.index === i ? 'on' : ''}" data-season="${i}">${n}</button>`).join(''));
+  h += row('✨ Ereignisse', [['star', '🌠 Sternschnuppe'], ['fireball', '☄️ Feuerball'], ['wolf', '🐺 Wölfe'], ['white', '🤍 Weißer Hirsch'], ['grimm', '🐻 Zur Bärenhöhle (Grimm)'], ['xp', '⭐ +1000 EP'], ['money', '💶 +100 €'], ['fly', `✈️ Fliegen: ${player.fly ? 'an' : 'aus'}`]].map(([k, n]) => `<button class="sec" data-ev="${k}">${n}</button>`).join(''));
+  h += row('🧭 Hinreisen', game.places.filter(p => p.pos).map(p => `<button class="sec" data-tp="${p.id}">${p.icon || '📍'} ${p.name.replace(/ „.*“/, '')}</button>`).join(''));
+  h += `<h3>🎒 Gegenstände</h3><div class="cgrid">${Object.entries(ITEMS).map(([id, it]) => `<button class="sec ${it.rare ? 'rare' : ''}" data-give="${id}" title="${it.desc || ''}"><i>${it.icon}</i>${it.name}</button>`).join('')}</div>`;
+  return h;
+}
+$('creativepanel').addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return; const S = game.S, d = b.dataset;
+  const abs = () => { S.abs = (S.day - 1) * 24 + S.time; };
+  if (d.give) { game.add(d.give, e.shiftKey ? (ITEMS[d.give].mat ? 30 : 10) : 1); return; }
+  if (d.time) { S.time = +d.time; abs(); ui.toast(`⏰ ${d.time.replace('.5', ':30')} Uhr`); }
+  if (d.weather) { if (d.weather === 'warn') game.seasons.warn('unwetter'); else { delete S.stormAt; S.weather = d.weather; S.weatherUntil = S.abs + 2; S.stormHurt = 0; S.lastStorm = S.abs; } }
+  if (d.season) { const year = Math.floor((S.day - 1) / 16); S.day = year * 16 + +d.season * 4 + 1; abs(); }
+  if (d.tp) { const p = game.places.find(x => x.id === d.tp).pos.clone(); p.x += 2; p.y = W.groundY(p.x, p.z, p.y + 40) + .05; player.setPose(p, player.yaw); closePanel(); return; }
+  if (d.ev === 'star') { game.mood.launch(false); ui.toast('🌠 Nach oben schauen (nachts)!'); }
+  if (d.ev === 'fireball') { game.mood.launch(true); ui.toast('☄️ Nach oben schauen!'); }
+  if (d.ev === 'wolf') for (let i = 0; i < 2; i++) game.life.spawn('wolf', player.pos);
+  if (d.ev === 'white') { const a = game.life.spawn('deer', player.pos); if (a && !a.white) { a.white = 1; a.mesh.traverse(m => { if (m.isMesh && m.material.color) { m.material = m.material.clone(); m.material.color.lerp(new THREE.Color('#f4f1ea'), .82); } }); } }
+  if (d.ev === 'grimm') { const sp = W.spots.ziel_grimm; if (!sp) ui.toast('Keine Bärenhöhle auf dieser Karte.'); else { delete S.flags.grimm; const p = sp.pos.clone(); p.z += 26; p.y = W.groundY(p.x, p.z, p.y + 40) + .05; player.setPose(p, 0); closePanel(); return; } }
+  if (d.ev === 'xp') game.progress.add(1000, 'Kreativ');
+  if (d.ev === 'money') S.money += 100;
+  if (d.ev === 'fly') { player.fly = !player.fly; }
+  $('creativepanel').innerHTML = creativeHtml();
+});
 // reader opened by the game (notes, radio)
 new MutationObserver(() => { if ($('reader').classList.contains('show') && panel !== 'reader') { panel = 'reader'; document.exitPointerLock?.(); } }).observe($('reader'), { attributes: true });
 
@@ -202,7 +239,7 @@ addEventListener('keydown', e => {
     if (c) { game.toHand(+c.dataset.i, +d[1] - 1); game.ui.renderInventory(game); return; }
   }
   if (panel) {
-    if (['Tab', 'Escape', 'KeyC', 'KeyM', 'KeyE', 'KeyG'].includes(e.code)) { if (e.code === 'KeyC' && panel === 'inv') return; closePanel(); }
+    if (['Tab', 'Escape', 'KeyC', 'KeyM', 'KeyE', 'KeyG', 'KeyK'].includes(e.code)) { if (e.code === 'KeyC' && panel === 'inv') return; closePanel(); }
     return;
   }
   if (game.build.ghost && ['KeyX', 'Escape', 'KeyG'].includes(e.code)) { game.build.cancel(); ui.toast('Bauen abgebrochen.'); return; }
@@ -220,6 +257,9 @@ addEventListener('keydown', e => {
     case 'KeyM': if (game.has('karte')) openPanel('map'); else ui.toast('Du hast keine Karte. Vielleicht gibt es im Laden eine?'); break;
     case 'KeyQ': game.useSlot(game.S.sel); break;
     case 'KeyB': openPanel('book'); break;
+    case 'KeyJ': openPanel('book'); book.show(true, book.index('tagebuch')); break;
+    case 'KeyK': if (game.creative) openPanel('creative'); else ui.toast('Das Kreativ-Menü gibt es nur im Kreativ-Modus (Startmenü → 🎨 Kreativ-Modus).'); break;
+    case 'KeyV': if (game.creative) { player.fly = !player.fly; ui.toast(player.fly ? '✈️ Fliegen an: Leertaste hoch, Strg runter, Shift schnell.' : '🚶 Fliegen aus.'); } break;
     case 'Digit1': case 'Digit2': case 'Digit3': case 'Digit4': case 'Digit5': game.S.sel = +e.code.slice(5) - 1; ui.renderHotbar(game.S.inv, game.S.sel); break;
   }
 });
@@ -366,8 +406,11 @@ function step() {
     const extra = ` · ${game.seasons.label()}` + (ill ? ` · ${ill}` : '') + (game.S.money ? ` · ${game.S.money.toFixed(2).replace('.', ',')} €` : '') + (game.strom() ? ' · ⚡' : '') + (game.S.flags.flashOn ? ` · 🔦${Math.round(game.S.battery)}%` : '') + (game.torchOn ? ' · 🔥' : '') + (game.waiting ? ' · ⏩' : '') + (game.roof ? ' · 🏠' : '');
     $('weaponhud').textContent = game.vehicle.hud() || (game.boat.on ? '🚣 W/S rudern · A/D drehen · E aussteigen' : '') || game.combat.hud();
     const L = game.progress.level, lo = LEVELS[L - 1] || 0, hi = LEVELS[L]; ui.level(L, hi ? (game.S.xp - lo) / (hi - lo) * 100 : 100, game.S.xp);
-    const sq = game.S.quest >= 12 ? game.progress.active()[0] : null;
-    $('sidequest').innerHTML = sq ? `<b>Nebenaufgabe:</b> ${sq.t}${game.progress.progressText(sq)}` : '';
+    const sq = game.S.quest >= 12 && !game.creative ? game.progress.active()[0] : null, oh = game.orders.hud();
+    $('sidequest').innerHTML = (sq ? `<b>Nebenaufgabe:</b> ${sq.t}${game.progress.progressText(sq)}` : '') + (oh ? `${sq ? '<br>' : ''}${oh}` : '');
+    document.body.classList.toggle('creative', game.creative);
+    const bo = game.life.boss, showBoss = bo && bo.state !== 'sleep' && bo.state !== 'dead' && bo.pos.distanceTo(player.pos) < 75;
+    $('bossbar').style.display = showBoss ? 'block' : 'none'; if (showBoss) $('bossbar').querySelector('i').style.width = Math.max(0, bo.hp / 950 * 100) + '%';
     $('buildhint').style.display = game.build.ghost ? 'block' : 'none';
     if (game.build.ghost) $('buildhint').textContent = `${game.build.bp.icon} ${game.build.bp.name} – ${game.build.valid ? 'Linksklick / E: hier bauen' : game.build.why} · R / Mausrad: drehen · X: abbrechen`;
     game.highlight(target, player.pos);
@@ -399,6 +442,7 @@ function step() {
   cullT -= dt; if (cullT < 0) { cullT = .25; W.cull(camera.position); }
   // sun shadow map: every 2nd frame is enough (the shadow matrix stays consistent with the last shadow render)
   renderer.shadowMap.needsUpdate = (frameN++ & 1) === 0 || dt > .03;
+  game.mood.upload(renderer);
   renderer.render(scene, camera);
   game.combat.render(renderer);
 }

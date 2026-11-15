@@ -113,13 +113,31 @@ export const ITEMS = {
   schluessel_forst:{ name: 'Schlüssel „Forsthaus“', icon: '🗝️', desc: 'Passt zur Haustür des Forsthauses Eichengrund.' },
   schluessel_schranke: { name: 'Schlüssel „Pass-Schranke“', icon: '🔑', desc: 'Öffnet die Schranke am Nordende der Straße – dahinter führt die Passstraße ins Gebirge.' },
   bergkristall:    { name: 'Bergkristall', icon: '💎', desc: 'Funkelt violett. Kurt zahlt gut dafür.' },
+  // fish species (album), mushrooms, mountain flowers
+  saibling:        { name: 'Saibling', icon: '🐟', use: { hunger: 9, health: -5 }, poison: 1, desc: 'Aus dem Bergsee. Am Feuer braten.', spoil: 20, sick: 40, sickP: .5 },
+  hecht:           { name: 'Hecht', icon: '🐟', use: { hunger: 12, health: -5 }, poison: 1, desc: 'Ein Raubfisch aus dem Waldsee – am meisten beißt er im Winter am Eisloch. Am Feuer gebraten: 2 Portionen.', spoil: 24, sick: 40, sickP: .5 },
+  goldforelle:     { name: 'Goldforelle', icon: '🐠', desc: 'Selten! Golden schimmernd. Kurt zahlt 30 € – oder du brätst sie.', rare: 1, spoil: 30 },
+  pfifferling:     { name: 'Pfifferling', icon: '🍄', use: { hunger: 8 }, desc: 'Gelber Speisepilz. Am Feuer gebraten besser.', spoil: 40 },
+  edelweiss:       { name: 'Edelweiß', icon: '🤍', desc: 'Wächst nur hoch oben im Fels. Kurt und Henning freuen sich darüber.' },
+  // rare finds (secret stashes, the boss bear, a meteorite): own models bp_r_<id>, gold frame in the backpack, pictures in the album
+  taschenuhr:      { name: 'Goldene Taschenuhr', icon: '⌚', desc: 'Gravur: „H. Brandt 1923“. Sie tickt noch.', rare: 1 },
+  bernstein:       { name: 'Bernstein mit Mücke', icon: '🟠', desc: 'Eine Mücke, eingeschlossen seit Millionen Jahren.', rare: 1 },
+  kompass:         { name: 'Messingkompass', icon: '🧭', desc: 'Aus dem Nachlass von Opa Willi. Zeigt zuverlässig nach Norden.', rare: 1 },
+  medaille:        { name: 'Schützenmedaille 1962', icon: '🏅', desc: '„Schützenkönig Tannbach 1962 – W. Huber“.', rare: 1 },
+  abzeichen:       { name: 'Silbernes Edelweiß-Abzeichen', icon: '⚜️', desc: 'Bergwacht-Ehrenzeichen. Wer hat das hier oben versteckt?', rare: 1 },
+  spieluhr:        { name: 'Alte Spieluhr', icon: '🎶', desc: 'Q: aufziehen – sie spielt ein Wiegenlied.', rare: 1 },
+  meteorit:        { name: 'Meteorit', icon: '☄️', desc: 'Vom Himmel gefallen – noch warm, mit glühenden Adern.', rare: 1 },
+  kralle:          { name: 'Grimms Kralle', icon: '🦴', desc: 'Die Kralle des alten Grimm. Beweis für den härtesten Kampf im Gebirge.', rare: 1 },
+  handfunk:        { name: 'Handfunkgerät', icon: '📻', desc: 'Kanal 7. Abends hört man manchmal Stimmen. Funksprüche liest du im Handbuch nach (B → Tagebuch & Funk).', tool: 1 },
 };
+export const RARE = Object.keys(ITEMS).filter(k => ITEMS[k].rare);
 
 // trader Kurt (village shop): buy / sell prices in euro
 export const TRADE = {
   buy: { patronen_pistole: 12, patronen_schrot: 14, patronen_gewehr: 18, pfeil: 2, saat_kartoffel: 3, saat_karotte: 3, saat_kuerbis: 4, dosensuppe: 4, wasser: 2, sandwich: 5,
          batterien: 5, seil: 4, metall: 3, schwarzpulver: 9, kerze: 2, verband: 6, medizin: 9, kraeuter: 2, angel: 12, solarlampe: 15, baustrahler: 28, bewegungsmelder: 20, kuehlbox: 30, rucksack_gross: 40, rucksack_trekking: 90 },
-  sell: { fell: 8, fleisch: 3, fleisch_gebraten: 5, fisch: 4, fisch_gebraten: 6, kaninchen: 4, kartoffel: 1, karotte: 1, kuerbis: 4, goldmuenze: 25, bergkristall: 40, trockenfleisch: 6, brett: 1, holz: 1, mehl: 2 },
+  sell: { fell: 8, fleisch: 3, fleisch_gebraten: 5, fisch: 4, fisch_gebraten: 6, kaninchen: 4, kartoffel: 1, karotte: 1, kuerbis: 4, goldmuenze: 25, bergkristall: 40, trockenfleisch: 6, brett: 1, holz: 1, mehl: 2,
+          saibling: 5, hecht: 7, goldforelle: 30, pfifferling: 2, edelweiss: 6, taschenuhr: 45, bernstein: 35, kompass: 20, medaille: 15, abzeichen: 25, spieluhr: 20, meteorit: 60, kralle: 50 },
 };
 
 // weapons: damage per hit, range (m), shots per magazine, reload (s), cooldown (s), spread (rad), pellets; ammo = inventory item (bow: pfeil)
