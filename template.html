@@ -559,15 +559,16 @@ function shot(kind, t, dur, at, o = {}) {
   dur = Math.round((t + dur) * 1e6) / 1e6 - t;   // v2.40.27: 8.3 + 1.9 = 10.200000000000001 sorted the end key after a hand cut at 10.2 (the cut was lost)
   if (kind === 'pov') { const base = { pov: at, look: o.look, pitch: o.pitch, free: o.free, fov: o.fov ?? 66, fy: 0.5, dof: o.dof ?? 0, hand: o.hand ?? 0.5 };   // first person: through the eyes of a track()ed figure
     return [{ t, ...base, cut: true, tr: o.tr, td: o.td, dir: o.dir }, { t: t + dur, ...base, e: 'lin' }]; }
-  const [D, H, F, FY, DF] = { wide: [48, 26, 44, 0.5, 0], mid: [13, 3.5, 46, 0.5, 0], close: [4.2, 0.3, 34, 0.36, 0.5], macro: [1.7, 0.1, 28, 0.3, 0.9] }[kind] ?? [13, 3.5, 46, 0.5, 0];
-  const d = o.dist ?? D, h = o.h ?? H, az = (o.az ?? 30) * Math.PI / 180, mv = o.move ?? (kind === 'wide' ? 'orbit' : 'push'), fol = typeof at === 'string', dy = o.dy ?? 1.55;
+  const [D, H, F, FY, DF] = { wide: [48, 26, 44, 0.5, 0], mid: [13, 3.5, 46, 0.5, 0], close: [4.2, 0.3, 34, 0.36, 0.5], macro: [1.7, 0.1, 28, 0.3, 0.9], mini: [62, 58, 32, 0.52, 0] }[kind] ?? [13, 3.5, 46, 0.5, 0];   // mini (v3.37): toy-model view from high up, tilt-shift on
+  const d = o.dist ?? D, h = o.h ?? H, az = (o.az ?? 30) * Math.PI / 180, mv = o.move ?? (kind === 'wide' || kind === 'mini' ? 'orbit' : 'push'), fol = typeof at === 'string', dy = o.dy ?? 1.55;
   const d2 = mv === 'push' ? d * 0.8 : mv === 'pull' ? d * 1.3 : d, az2 = az + (mv === 'orbit' ? o.turn ?? 25 : mv === 'static' ? 0 : o.drift ?? 6) * Math.PI / 180, h2 = mv === 'crane' ? h + (o.rise ?? d * 0.4) : h;
-  const fov = o.fov ?? F, base = { fy: o.fy ?? FY, dof: o.dof ?? DF };
+  const fov = o.fov ?? F, base = { fy: o.fy ?? FY, dof: o.dof ?? DF }; if (o.mini != null || kind === 'mini') base.mini = o.mini ?? 1;
+  if (kind === 'mini' && o.turn == null) o = { ...o, turn: 14 };
   const key = (tt, dd, aa, hh, x) => {
     const off = [Math.sin(aa) * dd, hh + (fol ? dy : 0), Math.cos(aa) * dd];
     return fol ? { t: tt, follow: at, off, dy, ...base, ...x } : { t: tt, p: [at[0] + off[0], at[1] + off[1], at[2] + off[2]], l: at, ...base, ...x };
   };
-  return [key(t, d, az, h, { fov, cut: true, tr: o.tr, td: o.td, dir: o.dir, hand: o.hand ?? { wide: 0.8, mid: 1.15, close: 1.7, macro: 1.5 }[kind] ?? 1 }),
+  return [key(t, d, az, h, { fov, cut: true, tr: o.tr, td: o.td, dir: o.dir, hand: o.hand ?? { wide: 0.8, mid: 1.15, close: 1.7, macro: 1.5, mini: 0.4 }[kind] ?? 1 }),
     key(t + dur, d2, az2, h2, { fov: fov * (mv === 'push' ? 0.93 : 1), e: o.e ?? 'lin', around: mv === 'orbit' && !fol ? [at[0], at[2]] : undefined })];
 }
 
@@ -619,7 +620,8 @@ function skyEnv() {
 const NLIFT = { night: 1, storm: 0.7, dusk: 0.35, deepsea: 0.4, apocalypse: 0.3 };   // v2.30 long videos: how much darker skies get lifted
 const ENVI = { underwater: 0.2, deepsea: 0.08, day: 0.3, golden: 0.24, dusk: 0.14, night: 0.06, dawn: 0.17, storm: 0.26, apocalypse: 0.12, space: 0.04 }, WINDY = { storm: 2.6, apocalypse: 1.7, dusk: 1.1, underwater: 1.8, deepsea: 1.2 };
 scene.fog = new THREE.Fog('#000000', 40, 260);
-var FOGK = CFG.fogScale ?? Math.max(1, Math.min(2.2, (CFG.area ?? 36) / 60));   // fog distance × FOGK (ship() / aircraft() raise it for huge vessels so they don't vanish in the haze; v3.21: big sets with CFG.area > 60 m see further)
+var FOGK = CFG.fogScale ?? Math.max(1, Math.min(2.2, (CFG.area ?? 36) / 60));
+if (CFG.mini && CFG.fogScale == null) FOGK *= typeof CFG.mini === 'object' ? CFG.mini.clear ?? 1.8 : 1.8;   // v3.37 miniature look: clear air like a tilt-shift photo (haze starts further out)   // fog distance × FOGK (ship() / aircraft() raise it for huge vessels so they don't vanish in the haze; v3.21: big sets with CFG.area > 60 m see further)
 const world = new THREE.Group(); scene.add(world);
 const tickers = [];
 const tick = f => (tickers.push(f), f);   // f(t) runs every frame; must be a pure function of t
@@ -4464,6 +4466,143 @@ function meteor(o = {}) {   // from/to [x,y,z], t0 → t1 (impact), size: burnin
   return g;
 }
 
+// v3.37 asteroidImpact: a city-scale strike — a burning rock with a plasma trail comes in at an angle, white flash, a lumpy fireball that swells and darkens into a
+// mushroom cloud, a crater with a raised rim, a dust wall (shock front) racing out over the ground at `speed` m/s; every building in `breaks` collapses when the
+// front reaches it (near ones pancake, the rest topple away from the impact). Pure function of t; scene time like explode() (SLOWMO-safe).
+// o: at [x, z], t1 (impact), t0 (rock appears, default t1 − 3), from [dx, dy, dz] (direction it comes from), dist (start distance, 900), size (rock radius, 8),
+//    radius (reach of the shock front, 120), speed (front, m/s, 60), fireball (radius, 0.3 × radius), cloud (mushroom height, 0.9 × radius), crater (radius, 0.17 × radius),
+//    breaks: [tower() result | group …], fx: false (no flash / shake / sound), smoke (s the cloud stays, 30)
+const _impTex = {};
+function _impGrad(kind) {   // 'wall': dust wall (dense at the ground, thin at the top) · 'trail': plasma trail (bright head, fading tail)
+  if (_impTex[kind]) return _impTex[kind];
+  const cv = document.createElement('canvas'); cv.width = 8; cv.height = 128; const x = cv.getContext('2d'), g = x.createLinearGradient(0, 0, 0, 128);
+  if (kind === 'wall') { g.addColorStop(0, 'rgba(255,255,255,0)'); g.addColorStop(0.45, 'rgba(255,255,255,0.35)'); g.addColorStop(1, 'rgba(255,255,255,0.95)'); }
+  else { g.addColorStop(0, 'rgba(255,255,255,0)'); g.addColorStop(0.7, 'rgba(255,255,255,0.55)'); g.addColorStop(1, 'rgba(255,255,255,1)'); }
+  x.fillStyle = g; x.fillRect(0, 0, 8, 128); const tx = new THREE.CanvasTexture(cv); tx.colorSpace = THREE.SRGBColorSpace; return (_impTex[kind] = tx);
+}
+function asteroidImpact(o = {}) {
+  const [ix, iz] = o.at ?? [0, 0], gy = groundH(ix, iz), t1 = o.t1 ?? 3, t0 = o.t0 ?? t1 - 3, s = o.size ?? 8, R = o.radius ?? 120, v = o.speed ?? 60, sd = hash(ix * 0.37 + iz * 0.71 + 3);
+  const dir = new THREE.Vector3(...(o.from ?? [-0.55, 0.7, -0.45])).normalize(), L = o.dist ?? 900, A = [ix + dir.x * L, gy + dir.y * L, iz + dir.z * L];
+  const pos = t => { const k = clamp((t - t0) / (t1 - t0)); return [lerp(A[0], ix, k), lerp(A[1], gy + s * 0.4, k), lerp(A[2], iz, k)]; };
+  const front = t => t < t1 ? 0 : Math.min(R * 1.15, v * (t - t1) * (1 + 0.6 * Math.exp(-(t - t1) * 1.5)));   // starts faster, settles to `speed`
+  // the rock: a lumpy, faceted boulder with a glowing plasma sheath and a long trail behind it
+  const rock = dyn(grp(world)), rg = new THREE.IcosahedronGeometry(s, 2), P = rg.attributes.position, q = new THREE.Vector3();
+  for (let i = 0; i < P.count; i++) { q.fromBufferAttribute(P, i); const n = 0.78 + 0.32 * hash(Math.round(q.x * 7 / s) * 3.1 + Math.round(q.y * 7 / s) * 5.7 + Math.round(q.z * 7 / s) * 9.3 + sd); q.multiplyScalar(n); P.setXYZ(i, q.x, q.y, q.z); }
+  rg.computeVertexNormals();
+  const rm = new THREE.MeshStandardMaterial({ color: '#3E342E', roughness: 0.95, flatShading: true, emissive: new THREE.Color('#E0480E'), emissiveIntensity: 0 }); rock.add(new THREE.Mesh(rg, rm));
+  const sheath = new THREE.Mesh(new THREE.IcosahedronGeometry(s * 1.35, 2), new THREE.MeshBasicMaterial({ color: '#FFB050', transparent: true, opacity: 0.5, blending: THREE.AdditiveBlending, depthWrite: false, fog: false })); rock.add(sheath);   // glows through the haze
+  const trail = dyn(grp(world)), tl = s * 34;
+  for (const [r, c, a] of [[s * 1.25, '#FFE7A0', 0.85], [s * 2.3, '#FF7A2A', 0.45]]) { const g = new THREE.ConeGeometry(r, tl, 14, 1, true); g.translate(0, tl / 2, 0);
+    const m = new THREE.MeshBasicMaterial({ color: c, map: _impGrad('trail'), transparent: true, opacity: a, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, fog: false }); trail.add(new THREE.Mesh(g, m)); }
+  trail.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir);   // wide at the rock, thin far back along the path it came
+  tick(t => { const on = t >= t0 && t < t1, [x, y, z] = pos(t), k = clamp((t - t0) / (t1 - t0)); rock.visible = trail.visible = on; if (!on) return;
+    rock.position.set(x, y, z); rock.rotation.set(t * 0.9 + sd, t * 1.3, 0); trail.position.set(x, y, z);
+    rm.emissiveIntensity = 0.15 + 0.9 * k;   // dark crust, glowing more as it nears the ground (the sheath does the rest) sheath.material.opacity = 0.3 + 0.45 * k; sheath.scale.set(1 + 0.08 * Math.sin(t * 40), 1 + 0.08 * Math.sin(t * 37 + 1), 1 + 0.08 * Math.sin(t * 43 + 2));
+    trail.scale.setScalar(0.6 + 0.4 * k); });
+  emit('smoke', { at: pos, t0, t1, rate: 16, size: s * 1.6, jitter: s * 0.6, life: 6, colors: ['#6A5E58', '#857870', '#4E4642'] });
+  emit('fire', { at: pos, t0: t0 + (t1 - t0) * 0.3, t1, rate: 50, size: s * 1.1, jitter: s * 0.5, speed: 1 });
+  // fireball: a cluster of lumpy balls that swells white → orange → dark smoke, then rises into the mushroom's stem and cap
+  const Rf = o.fireball ?? R * 0.3, H = o.cloud ?? R * 0.9, ball6 = [], cg = new THREE.IcosahedronGeometry(1, 2);
+  for (let i = 0; i < 26; i++) { const m = new THREE.MeshStandardMaterial({ color: '#6A5E56', roughness: 1, flatShading: true, emissive: new THREE.Color('#FFD27A'), emissiveIntensity: 0 }), me = new THREE.Mesh(cg, m), g = dyn(grp(world)); g.add(me); ball6.push({ g, m, a: hash(i * 3.1 + sd) * TAU, r: 0.25 + 0.5 * hash(i * 5.3 + sd), h: i < 14 ? (i + 0.6 * hash(i * 7.7 + sd)) / 14 : hash(i * 7.7 + sd), k: 0.38 + 0.4 * hash(i * 2.9 + sd), cap: i >= 14 }); }
+  // the first 14 balls form the column (evenly stacked, no gaps), the rest the cap
+  const cWarm = new THREE.Color(), hot = new THREE.Color('#FFF2C0'), mid = new THREE.Color('#FF7A22'), dark = new THREE.Color('#5A2A14');
+  tick(t => { const u = t - t1, on = u >= 0 && u < (o.smoke ?? 30);
+    for (const b of ball6) { b.g.visible = on; if (!on) continue;
+      const grow = 1 - Math.exp(-u * 2.2), rise = sm01((u - 0.8) / 7), heat = Math.exp(-u * 0.9);
+      const capR = Rf * (0.55 + 0.9 * sm01((u - 1) / 8)), ring = b.cap ? capR * (0.35 + 0.65 * b.r) : Rf * b.r * 0.6 * grow * (1 - 0.55 * rise);   // column balls pull in to a stem as they rise
+      const y = b.cap ? gy + Rf * 0.5 + (H - Rf * 0.3) * rise + b.h * Rf * 0.25 : gy + Rf * 0.35 * grow + (H - Rf * 0.5) * rise * b.h;
+      b.g.position.set(ix + Math.cos(b.a) * ring, y, iz + Math.sin(b.a) * ring);
+      const sc = Rf * b.k * grow * (b.cap ? 0.75 + 0.35 * rise : 1 - 0.55 * rise * (0.6 + 0.4 * b.h)); b.g.scale.set(sc, sc * (b.cap ? 0.72 : 1), sc); b.g.rotation.set(b.a, u * 0.15 + b.h * 3, 0);
+      cWarm.copy(mid).lerp(hot, clamp(heat * 1.4 - 0.2)).lerp(dark, clamp(1 - heat * 1.6)); b.m.emissive.copy(cWarm); b.m.emissiveIntensity = 0.12 + 2.2 * heat * heat * (b.cap ? 0.6 : 1) + (b.cap ? 0 : 0.35 * (1 - b.h) * Math.exp(-u * 0.25)); } });   // hot core glows longest at the foot of the column
+  // crater: burnt ground plus a rim of broken rock
+  const Rc = o.crater ?? R * 0.17, [cgeo] = _drapeDisc(ix, iz, Rc * 1.9, 0.04), cm = new THREE.MeshStandardMaterial({ map: fxTex('scorch'), transparent: true, depthWrite: false, roughness: 1, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
+  const cr = new THREE.Mesh(cgeo, cm); cr.position.set(ix, gy, iz); cr.renderOrder = 1; world.add(dyn(cr)); const rim = dyn(grp(world, ix, gy, iz));
+  for (let i = 0; i < 26; i++) { const a = i / 26 * TAU + hash(i * 1.7 + sd) * 0.2, rr2 = Rc * (0.92 + 0.16 * hash(i * 4.1)), w = Rc * (0.16 + 0.12 * hash(i * 6.3)); box(rim, w, w * 0.55, w * 0.8, ['#5A4A3E', '#6E5C4C', '#3E342E'][i % 3], Math.cos(a) * rr2, -w * 0.12, Math.sin(a) * rr2, { ry: -a, rx: 0.3 * (hash(i * 2.2) - 0.5), rz: 0.35 }); }
+  tick(t => { const k = clamp((t - t1) / 0.25); cr.visible = rim.visible = k > 0; cm.opacity = k; rim.scale.set(1, Math.max(0.02, k), 1); });
+  // shock front: a soft dusty ring on the ground and a dust wall that races outward and thins away
+  const [sgeo] = _drapeDisc(ix, iz, R * 1.2, 0.08, 24), stx = fxTex('ring').clone(); stx.needsUpdate = true; stx.wrapS = stx.wrapT = THREE.ClampToEdgeWrapping;
+  const sm = new THREE.MeshBasicMaterial({ map: stx, color: '#E2D2B8', transparent: true, depthWrite: false, opacity: 0 }), sh = new THREE.Mesh(sgeo, sm); sh.position.set(ix, gy, iz); sh.renderOrder = 2; world.add(dyn(sh));
+  const wm = new THREE.MeshBasicMaterial({ color: '#C9B89C', map: _impGrad('wall'), transparent: true, depthWrite: false, side: THREE.DoubleSide, opacity: 0 }), wall = new THREE.Mesh(new THREE.CylinderGeometry(1, 1, 1, 48, 1, true), wm); world.add(dyn(wall));
+  tick(t => { const u = t - t1, f = front(t), on = u > 0 && f < R * 1.14; sh.visible = wall.visible = on; if (!on) return; const k = Math.max(0.03, f / (R * 1.2)), fade = 1 - sm01((f - R * 0.75) / (R * 0.4));
+    stx.repeat.set(1 / k, 1 / k); stx.offset.set(0.5 - 0.5 / k, 0.5 - 0.5 / k); sm.opacity = 0.75 * fade * clamp(u / 0.05);
+    const wh = Math.max(1, Rf * (0.9 - 0.5 * f / R)); wall.scale.set(f, wh, f); wall.position.set(ix, gy + wh / 2 - 0.3, iz); wm.opacity = 0.62 * fade; });
+  for (let i = 0; i < 12; i++) { const a = i / 12 * TAU + sd; emit('dust', { at: t => { const f = front(t); return [ix + Math.cos(a) * f, gy + 1, iz + Math.sin(a) * f]; }, t0: t1 + 0.05, t1: t1 + R / v, rate: 9, size: clamp(Rf * 0.18, 2, 9), jitter: 3, speed: 2, life: 3.5, grow: 1.8, colors: ['#B8A78C', '#9C8D76', '#CFC0A6'] }); }
+  emit('smoke', { at: [ix, gy + Rf * 0.4, iz], t0: t1 + 0.8, t1: t1 + (o.smoke ?? 30), rate: 6, size: Rf * 0.5, jitter: Rf * 0.6, speed: 2, life: 9, colors: ['#5A524C', '#6E6660', '#463F3A'] });
+  emit('debris', { at: [ix, gy + 1, iz], t0: t1, burst: 90, speed: 34, size: clamp(s * 0.25, 0.4, 3) });
+  // buildings in reach collapse when the front gets there (near: pancake into their own dust, further out: topple away from the blast)
+  let nfx = 0; for (const b of o.breaks ?? []) { const node = b.g ?? b.root ?? b; node.updateWorldMatrix(true, true); const c = _solidBox(node).getCenter(new THREE.Vector3()), dx = c.x - ix, dz = c.z - iz, d = Math.hypot(dx, dz);
+    if (d > R) continue; let tb = t1 + 0.05; for (let i = 0; i < 400 && front(tb) < d; i++) tb += 0.02;
+    if ((b.h ?? 99) > 12) { collapse(b, tb, { style: d < R * 0.4 ? 'pancake' : 'topple', dir: [dx / (d || 1), dz / (d || 1)], fx: nfx++ < 2, linger: 4 }); continue; }
+    // low buildings (houses): cheap knock-down — squashed flat and shoved away from the blast, the dust comes from the front (hundreds of houses stay fast)
+    dyn(node); node.userData.stat = false; const p0 = node.position.clone(), r0 = node.rotation.clone(), ux = dx / (d || 1), uz = dz / (d || 1), kk = 1 - d / R, gone = d < Rc * 1.1;
+    tick(t => { const k = sm01((t - tb) / 0.45); if (gone) { node.visible = t < tb; return; } node.visible = true;
+      node.position.set(p0.x + ux * k * 3 * kk, p0.y, p0.z + uz * k * 3 * kk); node.scale.set(1, 1 - k * (0.55 + 0.35 * kk), 1); node.rotation.copy(r0); }); }   // squashed about its base: nothing goes under the ground
+  if (o.fx !== false) { const tv = VT(t1);
+    SHAKES.push({ t: tv, amp: 0.85, dur: 2.6 }, { t: VT(t1 + R / v * 0.6), amp: 0.35, dur: 2 }); FLASHES.push({ t: tv, dur: 0.7, a: 0.95, color: '#FFF4D8' });
+    (AUDIO.hits ??= []).push({ t: VT(t1 - 2.2), k: 'riser', dur: 2.2 }, { t: tv, k: 'explosion', v: 1 }, { t: tv, k: 'boom', v: 1 }, { t: VT(t1 + 0.4), k: 'thunder', v: 0.8 });
+    glow(ix, gy + Rf, iz, { t0: t1, t1: t1 + 2.4, intensity: 900 * Math.max(1, R / 40), dist: R * 3, rampIn: 0.03, color: '#FFC27A', flicker: 0.2 }); }
+  return { rock, pos, front, t1, at: [ix, gy, iz], hitT: (x, z) => { const d = Math.hypot(x - ix, z - iz); let tb = t1; for (let i = 0; i < 400 && front(tb) < d; i++) tb += 0.02; return tb; } };
+}
+
+// v3.37 suburb(): L.A.-style suburb seen from above — rows of stucco bungalows (pastel walls, terracotta hip roofs or flat roofs with a parapet), framed windows,
+// door, garage with driveway and a parked car, front lawn, backyard pool with deck, palms, hedges; streets between the rows (houses face them from both sides)
+// o: at [x, z] (centre), nx (houses per row side, 6), rows (streets, 2), lot (width, 16), depth (lot depth, 22), street (9), seed, pools (0.6), cars (0.7), palms (0.55),
+//    walls / roofs (colour lists); houses can go into asteroidImpact({ breaks }) / collapse()
+// → { houses: [{ g, h }], loops (one round per street for traffic()), size: [w, d] }
+function suburb(o = {}) {
+  const [cx, cz] = o.at ?? [0, 0], nx = o.nx ?? 6, nr = o.rows ?? 2, L = o.lot ?? 16, D = o.depth ?? 22, S = o.street ?? 9, sd = o.seed ?? 1, houses = [], loops = [];
+  const WALLS = o.walls ?? ['#F2E3C6', '#F6D8C8', '#E6EDDF', '#FFF1D6', '#D8E6EE', '#F4C9A8', '#EAD9F0', '#F7EBDD'], ROOFS = o.roofs ?? ['#B5523B', '#A64B35', '#C0603F', '#8C8682'];
+  const W = nx * L, P = 2 * D + S, x0 = cx - W / 2, z0 = cz - nr * P / 2, hs = (i, k) => hash(i * 7.31 + k * 3.17 + sd * 11.3);
+  const lot = (x, z, ry, i) => {   // one lot, local frame: street at +z (front), backyard at −z
+    const g = grp(world, x, 0, z, ry), wall = WALLS[Math.floor(hs(i, 1) * WALLS.length)], flat = hs(i, 2) < 0.3, w = L * (0.5 + 0.12 * hs(i, 3)), d = 8.5 + 1.5 * hs(i, 4), h = 3.1 + (hs(i, 5) < 0.18 ? 2.9 : 0);
+    const hz = D / 2 - 6.5 - d / 2, hx = -L * 0.08;   // house a little back from the street, off-centre for the garage
+    box(g, L - 0.3, 0.06, D - 0.3, hs(i, 6) < 0.8 ? '#7FAE4E' : '#9DB866', 0, 0, 0, { cast: false });   // lawn
+    box(g, w, h, d, wall, hx, 0.06, hz, { surf: 'plaster' });
+    if (flat) { box(g, w + 0.3, 0.25, d + 0.3, '#E6E1D8', hx, h + 0.06, hz); for (const s of [-1, 1]) { box(g, w + 0.3, 0.45, 0.2, shade(wall, -0.06), hx, h + 0.31, hz + s * (d / 2 + 0.05)); box(g, 0.2, 0.45, d + 0.3, shade(wall, -0.06), hx + s * (w / 2 + 0.05), h + 0.31, hz); }
+      box(g, 1.1, 0.6, 0.8, '#B9BCC0', hx + w * 0.2, h + 0.31, hz - d * 0.15); }   // AC unit on the flat roof
+    else { const R = ROOFS[Math.floor(hs(i, 7) * ROOFS.length)]; prism(g, w + 0.8, 1.7, d + 0.8, R, hx, h + 0.06, hz, { surf: 'tile' }); }
+    for (const u of [-0.3, 0.12]) { box(g, 1.6, 1.3, 0.12, '#FFFFFF', hx + u * w, 0.95, hz + d / 2 + 0.02); box(g, 1.35, 1.08, 0.14, '#3A4E62', hx + u * w, 1.06, hz + d / 2 + 0.04); }
+    box(g, 1.0, 2.1, 0.14, shade(wall, -0.35), hx + 0.36 * w, 0.06, hz + d / 2 + 0.03);   // front door
+    const gx = hx + w / 2 + 2.4;   // garage beside the house, driveway to the street
+    box(g, 4.6, 2.8, 6, wall, gx, 0.06, hz + d / 2 - 3, { surf: 'plaster' }); box(g, 4.9, 0.2, 6.3, flat ? '#E6E1D8' : ROOFS[Math.floor(hs(i, 7) * ROOFS.length)], gx, 2.86, hz + d / 2 - 3);
+    box(g, 3.6, 2.2, 0.12, '#F4F1EA', gx, 0.06, hz + d / 2 + 0.02); for (let k = 1; k < 4; k++) box(g, 3.6, 0.04, 0.14, '#D8D3C8', gx, 0.06 + k * 0.55, hz + d / 2 + 0.03);
+    box(g, 4.4, 0.08, D / 2 - (hz + d / 2), '#C9C5BE', gx, 0.04, (hz + d / 2 + D / 2) / 2, { cast: false });   // driveway
+    box(g, 1.1, 0.08, D / 2 - (hz + d / 2), '#D6D1C6', hx + 0.36 * w, 0.045, (hz + d / 2 + D / 2) / 2, { cast: false });   // path to the door
+    if (hs(i, 8) < (o.cars ?? 0.7)) vehicle(g, gx, D / 2 - 3.2, { kind: pick(['car', 'car', 'pickup', 'van', 'sports']), color: pick(['#D94F3D', '#3D7BD9', '#F2F2F2', '#E3B23C', '#3DA56A', '#2A2D33', '#8A8F98']), ry: Math.PI });
+    if (hs(i, 9) < (o.pools ?? 0.6)) { const px = (hs(i, 10) - 0.5) * L * 0.3, pz = -D / 2 + 4.2, pw = 5 + 2 * hs(i, 11), pd = 3 + hs(i, 12);   // backyard pool with a deck
+      box(g, pw + 1.6, 0.1, pd + 1.6, '#EDE6D8', px, 0.06, pz, { cast: false }); box(g, pw, 0.06, pd, '#38C2E6', px, 0.16, pz, { cast: false, mat: mat('#38C2E6', { rough: 0.15, em: '#1E8FB8', ei: 0.25 }) });
+      box(g, 0.7, 0.12, 1.7, '#FFFFFF', px + pw / 2 + 0.5, 0.16, pz, { cast: false }); }
+    box(g, L - 0.3, 1.4, 0.5, '#4E7A3A', 0, 0.06, -D / 2 + 0.4);   // back hedge
+    if (hs(i, 13) < (o.palms ?? 0.55)) tree(g, -L / 2 + 1.6, D / 2 - 1.6, { kind: 'palm' }); else if (hs(i, 13) < 0.8) tree(g, -L / 2 + 1.8, D / 2 - 2, { kind: 'round', size: 0.8 });
+    stat(g); houses.push({ g, h: h + 1.7 });   // baked unless collapse() takes it
+  };
+  let i = 0;
+  for (let r = 0; r < nr; r++) { const zs = z0 + r * P + D + S / 2;
+    road(world, [[x0 - S, zs], [x0 + W + S, zs]], { w: S, curb: true });
+    for (let k = 0; k < nx; k++) { const x = x0 + (k + 0.5) * L; lot(x, zs - S / 2 - D / 2, 0, i++); lot(x, zs + S / 2 + D / 2, Math.PI, i++); }
+    loops.push([[x0, zs - S / 4], [x0 + W, zs - S / 4], [x0 + W, zs + S / 4], [x0, zs + S / 4]]); }
+  road(world, [[x0 - S / 2, z0], [x0 - S / 2, z0 + nr * P]], { w: S }); road(world, [[x0 + W + S / 2, z0], [x0 + W + S / 2, z0 + nr * P]], { w: S });
+  return { houses, loops, size: [W, nr * P] };
+}
+// v3.37 beachLife(): a busy beach from above — striped umbrellas, towels, coolers, surfboards in the sand, lifeguard towers. Static (baked).
+// o: x [x0, x1], z [z0, z1] (area), n (umbrellas, 30), towers ([[x, z], …], face the water at +z), keep ([[x, z, r], …] stays free, e.g. for a crowd), seed, colors
+function beachLife(o = {}) {
+  const [x0, x1] = o.x ?? [-40, 40], [z0, z1] = o.z ?? [38, 52], n = o.n ?? 30, sd = o.seed ?? 3, C = o.colors ?? ['#E84A5F', '#FFD23F', '#3DA5FF', '#3EE07A', '#FF8A3A', '#C77DFF', '#FFFFFF', '#FF5FCF'];
+  const g = stat(grp(world)), h = (i, k) => hash(i * 5.17 + k * 2.31 + sd * 7.7);
+  for (let i = 0; i < n; i++) { const x = lerp(x0, x1, h(i, 1)), z = lerp(z0, z1, h(i, 2)), c = C[i % C.length], c2 = C[(i + 3) % C.length], y = groundH(x, z);
+    if ((o.keep ?? []).some(([kx, kz, kr]) => Math.hypot(x - kx, z - kz) < kr)) continue;
+    cyl(g, 0.04, 0.04, 2.2, '#EDEDED', x, y, z, { seg: 5 });
+    const tl = (h(i, 3) - 0.5) * 0.3; cone(g, 1.35, 0.55, c, x, y + 1.95, z, { seg: 8, rz: tl }); cone(g, 0.7, 0.3, c2, x, y + 2.2, z, { seg: 8, rz: tl });   // two-tone canopy
+    for (const s of [-1, 1]) if (h(i, 4 + s) < 0.75) box(g, 0.9, 0.03, 1.9, C[(i + 2 + s) % C.length], x + s * 1.1, y + 0.02, z + 0.4, { cast: false, ry: (h(i, 6) - 0.5) * 0.4 });   // towels
+    if (h(i, 7) < 0.4) box(g, 0.55, 0.38, 0.38, h(i, 8) < 0.5 ? '#2F7FD8' : '#E84A3A', x + 0.6, y, z - 0.9);   // cooler
+    if (h(i, 9) < 0.22) box(g, 0.55, 2.1, 0.09, C[(i + 5) % C.length], x - 1.6, y, z - 0.6, { rx: -0.18, ry: h(i, 10) }); }   // surfboard in the sand
+  for (const [x, z] of o.towers ?? []) { const t = grp(g, x, groundH(x, z), z);   // lifeguard tower: stilts, platform, blue hut, ramp, flag
+    for (const [sx, sz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) box(t, 0.2, 2.2, 0.2, '#F2F2F2', sx * 1.1, 0, sz * 1.1);
+    box(t, 3.2, 0.2, 3.2, '#E8E8E8', 0, 2.2, 0); box(t, 2.6, 2.0, 2.4, '#7FC6E8', 0, 2.4, -0.1, { surf: 'plank' }); box(t, 2.2, 0.9, 0.08, '#2A3A48', 0, 3.3, 1.12);
+    prism(t, 3.0, 0.7, 2.8, '#E8E8E8', 0, 4.4, -0.1); box(t, 1.0, 0.12, 3.6, '#E0DACE', 0, 1.0, -2.7, { rx: 0.6 }); box(t, 0.6, 0.4, 0.04, '#E8423A', 1.4, 4.6, 1.2); cyl(t, 0.03, 0.03, 2, '#DDDDDD', 1.1, 3.0, 1.2, { seg: 4 }); }
+  return g;
+}
+
 // --- fireworks (v2.27): crate prop + rockets with spark trails and bursts, one shared coloured light, real fireworks sound ---
 function fireworkBox(p, x, y, z, o = {}) {   // wooden crate of fireworks: coloured tubes with fuses, yellow warning stripe; front = +z. o: size, ry, colors, color (wood)
   const s = o.size ?? 1, g = grp(p, x, y, z, o.ry ?? 0), wood = o.color ?? '#9A6B3E', cols = o.colors ?? ['#E84A5F', '#3DA5FF', '#FFD23F', '#6BE36B', '#C77DFF', '#FF8A3A'];
@@ -5121,7 +5260,7 @@ function busstop(p, x, z, ry = 0) {   // shelter (glass back and sides, roof, be
 }
 function city(o = {}) {   // nx × nz blocks of towers (taller in the centre), roads between, street furniture on the sidewalks; returns { loops } for traffic()
   const nx = o.nx ?? 3, nz = o.nz ?? 3, B = o.block ?? 14, S = o.street ?? 6, P = B + S, [cx, cz] = o.at ?? [0, 0];
-  const x0 = cx - (nx * P) / 2, z0 = cz - (nz * P) / 2, loops = []; _dressed = true;   // v3.5: a city is dressed → ground() adds no autoDress
+  const x0 = cx - (nx * P) / 2, z0 = cz - (nz * P) / 2, loops = [], towers = []; _dressed = true;   // v3.5: a city is dressed → ground() adds no autoDress
   for (let i = 0; i <= nx; i++) road(world, [[x0 + i * P, z0], [x0 + i * P, z0 + nz * P]], { w: S });
   for (let j = 0; j <= nz; j++) road(world, [[x0, z0 + j * P], [x0 + nx * P, z0 + j * P]], { w: S });
   const streetTree = (x, z, s = 1) => { const g = stat(grp(world, x, 0.14, z)), h = hash(x * 3.1 + z * 7.9); box(g, 1.0 * s, 0.3, 1.0 * s, '#8A8C8F'); box(g, 0.86 * s, 0.04, 0.86 * s, '#4A3A2A', 0, 0.3, 0, { cast: false });
@@ -5137,7 +5276,7 @@ function city(o = {}) {   // nx × nz blocks of towers (taller in the centre), r
     box(world, B, 0.14, B, o.walk ?? '#9A9C9F', bx, 0, bz, { cast: false, stat: true, surf: 'paving' });
     box(world, B + 0.3, 0.16, B + 0.3, '#7E8084', bx, 0, bz, { cast: false, stat: true, surf: 'concrete' });   // curb
     const spots = n === 1 ? [[0, 0]] : n === 2 ? [[-1, 0], [1, 0]] : [[-1, -1], [1, -1], [-1, 1], [1, 1]];
-    for (const [sx, sz] of spots) { const w = n === 1 ? B * 0.62 : B * 0.38; tower(world, bx + sx * B * 0.23, bz + sz * B * 0.23, { w, d: n === 2 ? B * 0.72 : w, h: rr(o.hmin ?? 10, o.hmax ?? 42) * c, lit: o.lit }); }
+    for (const [sx, sz] of spots) { const w = n === 1 ? B * 0.62 : B * 0.38; towers.push(tower(world, bx + sx * B * 0.23, bz + sz * B * 0.23, { w, d: n === 2 ? B * 0.72 : w, h: rr(o.hmin ?? 10, o.hmax ?? 42) * c, lit: o.lit })); }
     const e = P / 2 - S / 4, ed = B / 2 - 0.45, hs = k => hash(bx * 3.7 + bz * 5.3 + k * 1.3);   // street furniture: hash only, the seeded layout stays the same
     if (o.props !== false) {
       const pv = shade(o.walk ?? '#9A9C9F', -0.08), ed2 = B / 2 - 0.55;
@@ -5156,7 +5295,7 @@ function city(o = {}) {   // nx × nz blocks of towers (taller in the centre), r
   }
   if (LEAFSPOTS.length) leafLitter(LEAFSPOTS.splice(0), { per: 9 });
   if (o.backdrop !== false) DEFER.push(() => backdrop('skyline', { r0: Math.hypot(nx, nz) * P / 2 + 45 }));   // v2.34: far towers in the haze behind the last block
-  return { loops, size: [nx * P, nz * P] };
+  return { loops, size: [nx * P, nz * P], towers };   // v3.37 towers: every tower() result (e.g. asteroidImpact({ breaks: C.towers }))
 }
 function traffic(loops, o = {}) {   // cars driving around closed loops; until: time they stop
   const cars = [];
@@ -14934,7 +15073,10 @@ for (const f of POSTBAKE) f();   // e.g. underwater caustics on the baked materi
 /* ====================================================================== */
 const _tp2 = new THREE.Vector3(), _p = new THREE.Vector3(), _l = new THREE.Vector3(), _tp = new THREE.Vector3(), _pa = new THREE.Vector3(), _la = new THREE.Vector3(), _pb = new THREE.Vector3(), _lb = new THREE.Vector3();
 let shakeAmt = 0;
-const camFx = { blur: 0, dx: 1, zoom: 0, dip: 0, def: 0, dof: 0, fy: 0.5 };
+const camFx = { blur: 0, dx: 1, zoom: 0, dip: 0, def: 0, dof: 0, fy: 0.5, mini: 0 };
+// v3.37 miniature / tilt-shift look — CFG.mini: true | { amount: 1, band: 0.12, blur: 1, angle: 0, center, sat: 1.3, con: 1.1, warm: 0.04 }: a sharp band across the frame at the subject's height (fy, or `center` 0 = top),
+// everything above and below blurs more the further it is from the band, colours pop → the scene looks like a toy model. Per camera key `mini: 0–1` (shot(…, { mini }) / shot('mini', …)) blends it in and out; CFG.mini sets the default for keys without it
+const MINIO = (() => { const c = CFG.mini, o = c && typeof c === 'object' ? c : {}; return { base: c ? clamp(o.amount ?? 1) : 0, band: o.band ?? 0.12, blur: o.blur ?? 1, ang: (o.angle ?? 0) * Math.PI / 180, center: o.center, sat: o.sat ?? 1.3, con: o.con ?? 1.1, warm: o.warm ?? 0.04 }; })();
 // transitions on cut keys: whip (fast pan + motion blur) · zoom (punch through + radial blur) · dip (to black) · blur (defocus) · cut
 const TRANS = [];
 {
@@ -14978,13 +15120,13 @@ function camGuess(t) {   // v3.3: camera position at t without side effects (cro
 function updateCamera(t) {
   let i = 0; for (let j = 0; j < CAM.length; j++) if (CAM[j].t <= t) i = j;
   const a = CAM[i], b = CAM[i + 1];
-  let fov = a.fov ?? 45, fy = a.fy ?? 0.5, dof = a.dof ?? 0, kf = 0;
+  let fov = a.fov ?? 45, fy = a.fy ?? 0.5, dof = a.dof ?? 0, kf = 0, mini = a.mini ?? MINIO.base;
   POV_ON = null; keyPose(a, t, _pa, _la); const povOn = POV_ON;
   if (!b || b.cut) { _p.copy(_pa); _l.copy(_la); }
   else {
     const k = EASE[b.e ?? 'inOut'](clamp((t - a.t) / (b.t - a.t)));
     keyPose(b, t, _pb, _lb);
-    fy = lerp(fy, b.fy ?? fy, k); dof = lerp(dof, b.dof ?? dof, k); kf = k;
+    fy = lerp(fy, b.fy ?? fy, k); dof = lerp(dof, b.dof ?? dof, k); kf = k; mini = lerp(mini, b.mini ?? MINIO.base, k);
     if (b.follow || a.follow) { _p.lerpVectors(_pa, _pb, k); _l.lerpVectors(_la, _lb, k); }
     else if (b.around) {
       const [cx, cz] = b.around, ra = Math.hypot(_pa.x - cx, _pa.z - cz), rb = Math.hypot(_pb.x - cx, _pb.z - cz);
@@ -15022,7 +15164,7 @@ function updateCamera(t) {
   const fdist = f => f == null ? null : typeof f === 'number' ? f : Array.isArray(f) ? _p.distanceTo(_tp.fromArray(f)) : TRACK[f] ? _p.distanceTo(TRACK[f].obj.getWorldPosition(_tp).add(_tp2.set(0, TRACK[f].dy ?? 1.55, 0))) : null;
   const fd0 = _p.distanceTo(_l), focus = lerp(fdist(a.focus) ?? fd0, b && !b.cut ? fdist(b.focus) ?? fd0 : fdist(a.focus) ?? fd0, kf);   // rack focus: different focus on two keys
   if (a.dof == null && (!b || b.cut || b.dof == null) && CFG.dof !== false) dof = (CFG.dofAuto ?? 0.65) * sm01((10 - Math.min(fd0, focus)) / 7);   // auto: close shots get a soft background (v3.5: softer, 0.65 — the background stays readable)
-  camFx.dof = dof; camFx.fy = fy; camFx.focus = focus;
+  camFx.dof = dof; camFx.fy = fy; camFx.focus = focus; camFx.mini = clamp(mini);
   sky.position.copy(camera.position);
 }
 
@@ -15636,11 +15778,12 @@ const FinalShader = {
   uniforms: { tDiffuse: { value: null }, uRes: { value: new THREE.Vector2(1, 1) }, uTime: { value: 0 }, uExp: { value: 1 }, uMode: { value: 1 }, uGrain: { value: 0.05 }, uVig: { value: 0.4 }, uAb: { value: 0 }, uSat: { value: 1.05 }, uCon: { value: 1.05 },
     uBlur: { value: 0 }, uBlurDir: { value: new THREE.Vector2(1, 0) }, uZoom: { value: 0 }, uDip: { value: 0 }, uDef: { value: 0 }, uDof: { value: 0 }, uFocus: { value: new THREE.Vector2(0.5, 0.5) }, tDepth: { value: null }, uDofOn: { value: 0 }, uRain: { value: 0 }, uFocusD: { value: 5 }, uNear: { value: 0.1 }, uFar: { value: 1200 },
     tRays: { value: null }, uRays: { value: 0 }, uSh: { value: new THREE.Vector3() }, uHl: { value: new THREE.Vector3() }, uLift: { value: new THREE.Vector3() }, uOpen: { value: 0 }, uGSat: { value: 1 }, uGCon: { value: 1 },
-    tStreak: { value: null }, tHal: { value: null }, uStreak: { value: 0 }, uSTint: { value: new THREE.Vector3(1, 1, 1) }, uHal: { value: 0 }, uCAb: { value: 0 }, uBars: { value: 0 } },   // v3.23 cinema look (CinePass)
+    tStreak: { value: null }, tHal: { value: null }, uStreak: { value: 0 }, uSTint: { value: new THREE.Vector3(1, 1, 1) }, uHal: { value: 0 }, uCAb: { value: 0 }, uBars: { value: 0 },
+    uMini: { value: 0 }, uMiniC: { value: 0.5 }, uMiniBand: { value: 0.12 }, uMiniAng: { value: 0 }, uMiniWarm: { value: 0 } },   // v3.23 cinema look (CinePass) · v3.37 tilt-shift cinema look (CinePass)
   vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
   fragmentShader: `#include <packing>
     uniform sampler2D tDiffuse, tDepth, tRays, tStreak, tHal; uniform vec2 uRes, uBlurDir, uFocus; uniform float uTime, uExp, uMode, uGrain, uVig, uAb, uSat, uCon, uBlur, uZoom, uDip, uDef, uDof, uDofOn, uFocusD, uNear, uFar, uRain, uRays, uOpen, uGSat, uGCon;
-    uniform float uStreak, uHal, uCAb, uBars; uniform vec3 uSh, uHl, uLift, uSTint; varying vec2 vUv;
+    uniform float uStreak, uHal, uCAb, uBars, uMini, uMiniC, uMiniBand, uMiniAng, uMiniWarm; uniform vec3 uSh, uHl, uLift, uSTint; varying vec2 vUv;
     uniform vec4 uHeat[4]; uniform float uHeatN;   // v3.26 heat shimmer (heatShimmer): centre (uv), radius (frame heights), strength
     vec2 heatOff(vec2 uv){ vec2 o = vec2(0.0); for (int i = 0; i < 4; i++) { if (float(i) >= uHeatN) break; vec4 H = uHeat[i]; vec2 q = (uv - H.xy) * vec2(uRes.x / uRes.y, 1.0) / max(H.z, 1e-4);
         float m = (1.0 - smoothstep(0.3, 1.0, length(q * vec2(1.2, 0.75)))) * H.w; if (m > 0.0) o += m * vec2(sin(q.y * 19.0 - uTime * 7.3 + 1.7 * sin(q.x * 6.0 + uTime * 1.9)), 0.5 * cos(q.x * 15.0 + q.y * 4.0 + uTime * 6.1)); }
@@ -15666,6 +15809,7 @@ const FinalShader = {
       if (uMode > 2.5) { vec2 cc = uv - 0.5; uv = 0.5 + cc * (1.0 + 0.07 * dot(cc, cc)); }
       vec2 dir = uv - 0.5; float ab = uAb * 0.008 + (uMode > 2.5 ? 0.0018 : 0.0) + uCAb * 0.024 * dot(dir, dir);   // v3.23 cinema: lens colour fringes grow toward the edges (none in the centre)
       float cc = uDofOn > 0.5 ? coc(uv) : 0.0, r = uDef + (uDofOn > 0.5 ? cc : uDof * 0.012 * smoothstep(0.12, 0.45, length((uv - uFocus) * vec2(0.5625, 1.0))));   // depth of field (or the old screen-space focus look)
+      if (uMini > 0.001) { float my = abs(dot(uv - vec2(0.5, uMiniC), vec2(-sin(uMiniAng) * 0.5625, cos(uMiniAng)))); r = max(r, uMini * 0.0125 * smoothstep(uMiniBand, uMiniBand + 0.32, my)); }   // v3.37 tilt-shift: sharp band, blur grows above / below
       if (uBlur + uZoom + r > 0.0004) {   // whip / zoom motion blur and depth-of-field look (only on frames that need it)
         vec3 acc = texture2D(tDiffuse, uv).rgb * 0.5; float ws = 0.5;
         for (int i = 0; i < 16; i++) { float s = float(i) / 15.0 - 0.5, a = float(i) * 2.39996, q = sqrt((float(i) + 0.5) / 16.0);
@@ -15678,6 +15822,7 @@ const FinalShader = {
       if (uStreak > 0.0) { vec3 s = texture2D(tStreak, vUv).rgb; c += (1.0 - exp(-mix(vec3(dot(s, vec3(0.2126, 0.7152, 0.0722))), s, 0.3) * uStreak)) * uSTint; }   // v3.23 anamorphic streaks (CinePass); saturating: a tiny lamp still streaks, a big bright area never washes out
       if (uHal > 0.0) c += (1.0 - exp(-texture2D(tHal, vUv).a * uHal)) * vec3(0.55, 0.16, 0.06);   // v3.23 halation: warm red glow round hot lights
       c = grade(srgb(neutral(c * (1.0 + rmk * 0.12))));   // tone map + sRGB here: one full-screen pass less
+      if (uMiniWarm > 0.0) c = clamp(c + uMiniWarm * vec3(1.0, 0.45, -0.6) * (1.0 - c), 0.0, 1.0);   // v3.37 miniature: a little warm sunlight on the toy model
       if (uMode > 2.5) c *= 0.8 + 0.2 * sin(uv.y * uRes.y * 1.5708);
       c *= mix(1.0 - uVig, 1.0, smoothstep(0.9, 0.25, length((vUv - 0.5) * vec2(1.0, 1.2))));
       c += (h(vUv * uRes + fract(uTime * 13.7) * 97.0) - 0.5) * uGrain;
@@ -16496,6 +16641,9 @@ function update(t) {
   U.uDof.value = camFx.dof; U.uFocus.value.set(0.5, 1 - camFx.fy); U.uDofOn.value = dofPass.on || (CFG.dof !== false && camFx.dof > 0.01) ? 1 : 0; U.tDepth.value = dofRT.texture; U.uFocusD.value = camFx.focus ?? 5; U.uRain.value = THUMB_ON ? 0 : lensRainAt(t); U.uNear.value = camera.near; U.uFar.value = camera.far;
   scenePass.t0 = tv; scenePass.times = THUMB_ON || SPLIT_NOW ? null : mbTimes(tv);   // tv: motion-blur samples (and the camera reset in needsMB) stay in the teased moment
   if (THUMB_ON) { U.uBlur.value = U.uZoom.value = U.uDip.value = U.uDef.value = U.uAb.value = 0; }
+  { const mk = SPLIT_NOW ? 0 : THUMB_ON ? clamp(TH.mini ?? MINIO.base) : camFx.mini; U.uMini.value = mk * MINIO.blur; U.uMiniBand.value = MINIO.band; U.uMiniAng.value = MINIO.ang; U.uMiniWarm.value = mk * MINIO.warm;   // v3.37 tilt-shift: replaces the depth blur while on; colours pop
+    U.uMiniC.value = 1 - (MINIO.center ?? (THUMB_ON ? TH.miniY ?? 0.55 : camFx.fy)); if (mk > 0.001) { U.uDofOn.value = 0; U.uDof.value = 0; }
+    if (!THUMB_ON) { U.uSat.value *= lerp(1, MINIO.sat, mk); U.uCon.value = CFG.contrast * lerp(1, MINIO.con, mk); } }   // covers keep their own (stronger) grade
   if (CINE) { const H = renderer.domElement.height || 1; U.uBars.value = THUMB_ON || SPLIT_NOW ? 0 : Math.round(cineBars(t) * H) / H; U.uCAb.value = CINE.ab; stage.classList.toggle('cine', U.uBars.value > 0); stage.style.setProperty('--bar', (U.uBars.value * 100).toFixed(3)); }   // v3.23: bars on whole pixels; none on covers and split screens
 }
 // v2.23 smooth loop: in the last LOOPX s the scene + camera at t − DUR (the moments just before frame 0) render first and are kept on #loopv,
