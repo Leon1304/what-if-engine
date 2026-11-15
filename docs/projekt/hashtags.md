@@ -57,5 +57,6 @@ Erklärungen deutsch, Tags und Captions englisch: **Kategorie**, die 5 Tags je P
 | sperm-whale | Series (Swallowed Alive) | #whatif #swallowedalive #spermwhale #whales #oceantok | #oceanlife statt #oceantok | #shorts #whatif #swallowedalive #spermwhale #whales |
 | mongol-fleet-1281 (14.11.) | History | #whatif #mongolempire #shipwreck #historytok #history | #historyfacts statt #historytok | #shorts #whatif #mongolempire #shipwreck #history |
 | db-cooper-flight (14.11.) | True Crime | #whatif #dbcooper #hijacking #truecrime #unsolvedmysteries | gleich | #shorts #whatif #dbcooper #hijacking #truecrime |
+| krampus-night (15.11.) | Horror | #whatif #krampus #krampusnacht #horrortok #scarystories | #horrorstories statt #horrortok | #shorts #whatif #krampus #krampusnacht #horrorstory |
 
 Tag-Größen geprüft: nur #robotfight (5,2K) und #robotboxing (1,6K); die übrigen beim nächsten Upload in den Studio-Vorschlägen nachsehen und hier eintragen.

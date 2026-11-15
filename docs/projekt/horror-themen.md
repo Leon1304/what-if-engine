@@ -25,6 +25,6 @@ Ergänzt den Themen-Pool in what-if-content-plan.md (dort gruselige Erklärtheme
 - H9 What if the same stranger appeared in every photo you took? – Fremdes Gesicht taucht in jedem Foto weiter vorne auf. Trend: KI-Gruselgesichter (Loab-Story von ScienceAlert 1.11. neu veröffentlicht). Eigenes, erfundenes Gesicht.
 - H10 What if you left your window open… and a moth the size of a car flew in? – Horror-Comedy, familienfreundlich. Trend: Riesen-Insekten-Edits.
 - H11 What if you turned into a werewolf at the office Christmas party? – Horror-Comedy für Ende Dezember, um den Filmstart 25.12.
-- H12 What if Krampus came to your house? – um den 5.12., Brauchtum korrekt erklären (Alpenraum, Nacht vor Nikolaus).
+- H12 What if Krampus came to your house? – um den 5.12., Brauchtum korrekt erklären (Alpenraum, Nacht vor Nikolaus). ✅ auf GitHub (krampus-night, 15.11.)
 
 Slots-Vorschlag: H3 So 22.11. oder Di 24.11. · H1 und H2 in den nächsten 2 Wochen (Doppelgänger läuft jetzt) · H12 um den 5.12. · H11 um den 25.12. · H4 nach NPC Life auf den Mo-Slot ab 21.12.
