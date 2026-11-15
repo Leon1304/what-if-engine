@@ -617,7 +617,7 @@ function skyEnv() {
   scene.environment = tex;
 }
 const NLIFT = { night: 1, storm: 0.7, dusk: 0.35, deepsea: 0.4, apocalypse: 0.3 };   // v2.30 long videos: how much darker skies get lifted
-const ENVI = { underwater: 0.2, deepsea: 0.08, day: 0.3, golden: 0.24, dusk: 0.14, night: 0.06, dawn: 0.17, storm: 0.26, apocalypse: 0.12, space: 0.04 }, WINDY = { storm: 2.6, apocalypse: 1.7, dusk: 1.1, underwater: 1.8, deepsea: 1.2 };
+const ENVI = { underwater: 0.2, deepsea: 0.08, day: 0.3, golden: 0.24, dusk: 0.14, night: 0.15, dawn: 0.17, storm: 0.26, apocalypse: 0.12, space: 0.04 }, WINDY = { storm: 2.6, apocalypse: 1.7, dusk: 1.1, underwater: 1.8, deepsea: 1.2 };
 scene.fog = new THREE.Fog('#000000', 40, 260);
 var FOGK = CFG.fogScale ?? Math.max(1, Math.min(2.2, (CFG.area ?? 36) / 60));   // fog distance × FOGK (ship() / aircraft() raise it for huge vessels so they don't vanish in the haze; v3.21: big sets with CFG.area > 60 m see further)
 const world = new THREE.Group(); scene.add(world);
@@ -652,12 +652,12 @@ const sky = new THREE.Mesh(new THREE.SphereGeometry(900, 32, 16), new THREE.Shad
 }));
 sky.frustumCulled = false; sky.renderOrder = -10; scene.add(sky);
 const SKIES = {
-  day:        { top: '#3F86E0', bot: '#CDE9FF', fog: '#CFE6FA', near: 70, far: 320, sun: '#FFF3DC', si: 2.8, el: 52, hs: '#D8EBFF', hg: '#6F7F4F', hi: 1.15, stars: 0, orb: 0.0016, glow: 0.6, exp: 1, nk: 0, cl: [0.95, 0.53, '#FFFFFF', '#B4C6DE'] },
-  golden:     { top: '#3C6CB4', bot: '#FFC07A', fog: '#EDB585', near: 55, far: 280, sun: '#FFB066', si: 2.4, el: 13, hs: '#FFD9B0', hg: '#5A5A3A', hi: 0.85, stars: 0, orb: 0.002, glow: 1.2, exp: 1, nk: 0.1, cl: [0.9, 0.5, '#FFE4BC', '#C58A7C'] },
-  dusk:       { top: '#1B2552', bot: '#E07A5F', fog: '#8C5468', near: 45, far: 240, sun: '#FF8C5A', si: 1.45, el: 7, hs: '#A893C6', hg: '#4A3C4C', hi: 0.95, stars: 0.25, orb: 0.0022, glow: 1.4, exp: 1.22, nk: 0.65, cl: [0.85, 0.5, '#F0A088', '#463C66'] },
+  day:        { top: '#2C78E0', bot: '#BFE2FF', fog: '#C4E0FA', near: 70, far: 320, sun: '#FFF3DC', si: 3.1, el: 52, hs: '#B4D2FF', hg: '#7A8650', hi: 0.95, stars: 0, orb: 0.0016, glow: 0.6, exp: 1, nk: 0, cl: [0.95, 0.53, '#FFFFFF', '#B4C6DE'] },
+  golden:     { top: '#3C6CB4', bot: '#FFC07A', fog: '#E2AE8C', near: 55, far: 280, sun: '#FFB066', si: 2.8, el: 13, hs: '#A8B8D0', hg: '#5A4A3A', hi: 0.75, stars: 0, orb: 0.002, glow: 1.2, exp: 1, nk: 0.1, cl: [0.9, 0.5, '#FFE4BC', '#C58A7C'] },
+  dusk:       { top: '#1B2552', bot: '#E07A5F', fog: '#8C5468', near: 45, far: 240, sun: '#FF8C5A', si: 1.45, el: 7, hs: '#8C8CD0', hg: '#4A3C4C', hi: 0.9, stars: 0.25, orb: 0.0022, glow: 1.4, exp: 1.22, nk: 0.65, cl: [0.85, 0.5, '#F0A088', '#463C66'] },
   night:      { top: '#03050C', bot: '#1A2547', fog: '#141C34', near: 35, far: 190, sun: '#B4C6FF', si: 1.6, el: 26, hs: '#6478B8', hg: '#1C1C24', hi: 0.65, stars: 1, orb: 0.0014, glow: 0.5, exp: 1.3, nk: 1, cl: [0.6, 0.52, '#2C385C', '#0B1124'] },
-  dawn:       { top: '#27407A', bot: '#F6AA80', fog: '#C69A9E', near: 50, far: 260, sun: '#FFC29A', si: 1.6, el: 8, hs: '#C7B7D8', hg: '#514640', hi: 0.95, stars: 0.06, orb: 0.0022, glow: 1.2, exp: 1.15, nk: 0.45, cl: [0.9, 0.5, '#FFD4B4', '#766A96'] },
-  storm:      { top: '#2B313B', bot: '#5C6573', fog: '#4F5866', near: 28, far: 160, sun: '#C9D2E2', si: 0.8, el: 40, hs: '#8A96A8', hg: '#2E3238', hi: 0.8, stars: 0, orb: 0, glow: 0, exp: 1.1, nk: 0.5, cl: [1, 0.3, '#7A8494', '#394150'] },
+  dawn:       { top: '#27407A', bot: '#F6AA80', fog: '#C69A9E', near: 50, far: 260, sun: '#FFC29A', si: 1.6, el: 8, hs: '#A8B0D8', hg: '#514640', hi: 0.95, stars: 0.06, orb: 0.0022, glow: 1.2, exp: 1.15, nk: 0.45, cl: [0.9, 0.5, '#FFD4B4', '#766A96'] },
+  storm:      { top: '#2B313B', bot: '#5C6573', fog: '#4F5866', near: 28, far: 160, sun: '#C9D2E2', si: 0.8, el: 40, hs: '#8A96A8', hg: '#2E3238', hi: 0.8, stars: 0, orb: 0, glow: 0, exp: 1.25, nk: 0.5, cl: [1, 0.3, '#7A8494', '#394150'] },
   apocalypse: { top: '#2A0905', bot: '#C8441B', fog: '#6C2412', near: 35, far: 200, sun: '#FF7034', si: 1.8, el: 10, hs: '#C8603A', hg: '#2A1610', hi: 0.6, stars: 0, orb: 0.003, glow: 1.6, exp: 1.05, nk: 0.6, cl: [0.9, 0.42, '#D65E38', '#38120C'] },
   underwater: { top: '#0E5A7A', bot: '#1E8AA8', fog: '#17607E', near: 4, far: 60, sun: '#D8F6FF', si: 0.9, el: 72, hs: '#6FD0EE', hg: '#0A3346', hi: 0.75, stars: 0, orb: 0, glow: 0.15, exp: 1.05, nk: 0.3, cl: [0, 0.5, '#000000', '#000000'] },
   deepsea:    { top: '#031A2A', bot: '#06304A', fog: '#062A40', near: 2, far: 34, sun: '#7FD8FF', si: 0.7, el: 80, hs: '#2A7FA8', hg: '#02121C', hi: 0.55, stars: 0, orb: 0, glow: 0, exp: 1.2, nk: 0.8, cl: [0, 0.5, '#000000', '#000000'] },
@@ -670,6 +670,11 @@ const SKIES = {
 };
 // v3.5 night & storm: a moonlit key, cooler fill and a lifted ground colour of the hemisphere → shadowed sides stay readable (CFG.nightLook: false = the old, darker values)
 if (CFG.nightLook !== false) { Object.assign(SKIES.night, { sun: '#A9C1FF', si: 1.85, hs: '#7088CC', hg: '#2C3550', hi: 0.8 }); Object.assign(SKIES.storm, { si: 0.95, hs: '#93A0B4', hg: '#3C434E', hi: 0.9 }); }
+// look v2: readable nights (brighter moon key, blue-grey fill from the sky, lifted horizon and fog), storm a touch brighter — CFG.look: 1 = the v3.5 look (old values, no tone curve / separation / vibrance)
+const LOOKV2 = CFG.look !== 1 && CFG.look !== false;
+if (LOOKV2 && CFG.nightLook !== false) { Object.assign(SKIES.night, { top: '#040A18', bot: '#1F3560', fog: '#172846', sun: '#B0C8FF', si: 2.35, hs: '#5F82C8', hg: '#2A2C3C', hi: 0.95, exp: 1.45 }); Object.assign(SKIES.storm, { si: 1.15, hs: '#8EA0B0', hi: 0.95 }); }
+if (!LOOKV2) { Object.assign(SKIES.day, { top: '#3F86E0', bot: '#CDE9FF', fog: '#CFE6FA', si: 2.8, hs: '#D8EBFF', hg: '#6F7F4F', hi: 1.15 }); Object.assign(SKIES.golden, { fog: '#EDB585', si: 2.4, hs: '#FFD9B0', hg: '#5A5A3A', hi: 0.85 });
+  Object.assign(SKIES.dusk, { hs: '#A893C6', hi: 0.95 }); Object.assign(SKIES.dawn, { hs: '#C7B7D8' }); SKIES.storm.exp = 1.1; ENVI.night = 0.06; }
 // v3.5 look per sky, blended along the SKY keys like every other sky value:
 //   rim [colour, strength] · grade: sh / hl = [colour, amount] split toning (shadows / highlights), sat, con = × CFG.saturation / CFG.contrast,
 //   lift [colour, amount] = shadow floor (dark areas never go pure black, tinted), open = shadow gain (detail in the dark parts)
@@ -686,13 +691,40 @@ const LOOK = {
   deepsea:    { rim: ['#7FD8FF', 0.8], sh: ['#062A50', 0.05], hl: ['#80DCFF', 0.02], sat: 1, con: 1, lift: ['#0A3050', 0.03], open: 0.35, rays: 0.5, haze: 0, dust: 0.8 },
   space:      { rim: ['#DDE6FF', 0.6], rays: 0, haze: 0, dust: 0 }
 };
-const LOOK0 = { rim: ['#FFFFFF', 0.4], sh: ['#808080', 0], hl: ['#808080', 0], sat: 1, con: 1, lift: ['#000000', 0], open: 0, rays: 0.2, haze: 0, dust: 0 };   // planets
+// look v2: complementary light — warm key, cool shadows (each sky had one hue for key, fill, fog, rim and grade); contrast now comes from the tone curve (con 1 everywhere),
+//   nights and storms no longer desaturated. Golden / dusk / dawn: ground haze × 0.7 (it swallowed the background in the same colour).
+//   New keys: curve = S-curve strength (pivot 0.3: mids and highlights gain, deep shadows stay) · sep = warm / cool separation (warm gets warmer, cool cooler,
+//   neutral white untouched) · vib = vibrance (dull colours gain more than saturated ones). All blended along the SKY keys like the other values.
+if (LOOKV2) {
+  Object.assign(LOOK.day,    { sh: ['#3E6CC0', 0.04], hl: ['#FFDCA8', 0.035], sat: 1.08, con: 1.0, lift: ['#1E2A3C', 0.004], open: 0.04 });
+  Object.assign(LOOK.golden, { rim: ['#FFC080', 1.25], sh: ['#3A5CB8', 0.08], hl: ['#FFAA55', 0.065], sat: 1.1, con: 1.0, lift: ['#3A2A40', 0.01], open: 0.14, haze: 0.49 });
+  Object.assign(LOOK.dusk,   { rim: ['#FF9C80', 1.1], sh: ['#3A3CA8', 0.07], hl: ['#FF9C70', 0.06], sat: 1.1, con: 1.0, lift: ['#2A2460', 0.022], open: 0.26, haze: 0.63 });
+  Object.assign(LOOK.dawn,   { hl: ['#FFBC90', 0.055], sat: 1.1, con: 1.0, haze: 0.875 });
+  Object.assign(LOOK.night,  { rim: ['#BCD4FF', 2.0], sh: ['#1F6E9E', 0.05], hl: ['#FFE2B8', 0.015], sat: 1.12, con: 1.0, lift: ['#0E2240', 0.035], open: 0.55, rays: 0.5, dust: 0.15 });
+  Object.assign(LOOK.storm,  { rim: ['#C4D0E4', 0.9], sh: ['#2E6070', 0.06], hl: ['#E8E4D8', 0.012], sat: 1.0, con: 1.0, lift: ['#22323E', 0.02], open: 0.4 });
+  for (const n of ['apocalypse', 'underwater', 'deepsea']) LOOK[n].con = 1;
+}
+// look v2 per category (CFG.kind; a story with CFG.series = 'series'): applied on top of every sky's look. × = multiplies the sky value, = sets it,
+//   sh / hl / lift = an extra tint [colour, amount] added to the sky's; exp × exposure; vig / grain = at least this vignette / grain. CFG.lookKind: false = off
+const KINDLOOK = {
+  horror:     { exp: 0.88, sat: 0.9, sep: 0.8, vig: 0.55, sh: ['#3A58A8', 0.03], lift: ['#18264A', 0.012] },
+  truecrime:  { sat: 0.92, sh: ['#1E7480', 0.05], curve: 1.1, grain: 0.06 },
+  story:      { vib: 0.35, sat: 1.05 },
+  series:     { vib: 0.35, sat: 1.05 },
+  explain:    { vib: 0.4, haze: 0.6 },
+  conspiracy: { sh: ['#3C7A44', 0.05], sat: 0.9, vib: 0.3 },
+  history:    { hl: ['#FFC888', 0.015], sat: 0.98, curve: 1.05 }
+};
+const LKIND = CFG.kind === 'debunk' ? 'conspiracy' : (CFG.kind ?? 'story') === 'story' && CFG.series ? 'series' : CFG.kind ?? 'story', KL = LOOKV2 && CFG.lookKind !== false ? KINDLOOK[LKIND] ?? {} : {};
+const LOOK0 = { rim: ['#FFFFFF', 0.4], sh: ['#808080', 0], hl: ['#808080', 0], sat: 1, con: 1, lift: ['#000000', 0], open: 0, rays: 0.2, haze: 0, dust: 0, curve: LOOKV2 ? 1 : 0, sep: LOOKV2 ? 0.55 : 0, vib: LOOKV2 ? 0.3 : 0 };   // planets (and the defaults of every sky)
 const hx3 = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16) / 255);   // '#RRGGBB' → display-space rgb
-const LOOKV = {};   // per sky name: the look as plain numbers (tints as zero-mean chroma, lift as a colour of the given brightness)
+const LOOKV = {};   // per sky name: the look as plain numbers (tints as zero-mean chroma, lift as a colour of the given brightness), category look folded in
 for (const n of Object.keys(SKIES)) { const L = { ...LOOK0, ...(LOOK[n] ?? {}) }, tint = ([h, a]) => { const c = hx3(h), l = 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2], d = c.map(v => v - l), m = Math.max(...d.map(Math.abs)) || 1; return d.map(v => v / m * a); };
-  const lc = hx3(L.lift[0]), lm = Math.max(...lc) || 1;
-  LOOKV[n] = { rimC: hx3(L.rim[0]), rimI: L.rim[1], sh: tint(L.sh), hl: tint(L.hl), sat: L.sat, con: L.con, lift: lc.map(v => v / lm * L.lift[1]), open: L.open, rays: L.rays, haze: L.haze, dust: L.dust }; }
-const LOOKNOW = { rimC: new THREE.Color(), rimI: 0, sh: [0, 0, 0], hl: [0, 0, 0], sat: 1, con: 1, lift: [0, 0, 0], open: 0, rays: 0, haze: 0, dust: 0, st: 0 };
+  const lft = ([h, a]) => { const lc = hx3(h), lm = Math.max(...lc) || 1; return lc.map(v => v / lm * a); }, add = (a, b) => a.map((v, i) => v + b[i]);
+  LOOKV[n] = { rimC: hx3(L.rim[0]), rimI: L.rim[1], sh: KL.sh ? add(tint(L.sh), tint(KL.sh)) : tint(L.sh), hl: KL.hl ? add(tint(L.hl), tint(KL.hl)) : tint(L.hl), sat: L.sat * (KL.sat ?? 1), con: L.con,
+    lift: KL.lift ? add(lft(L.lift), lft(KL.lift)) : lft(L.lift), open: L.open, rays: L.rays, haze: L.haze * (KL.haze ?? 1), dust: L.dust,
+    curve: L.curve * (KL.curve ?? 1), sep: KL.sep ?? L.sep, vib: KL.vib ?? L.vib }; }
+const LOOKNOW = { rimC: new THREE.Color(), rimI: 0, sh: [0, 0, 0], hl: [0, 0, 0], sat: 1, con: 1, lift: [0, 0, 0], open: 0, rays: 0, haze: 0, dust: 0, curve: 0, sep: 0, vib: 0, st: 0 };
 const _lk = (a, b, k) => Array.isArray(a) ? a.map((v, i) => lerp(v, b[i], k)) : lerp(a, b, k);
 // v3.5 ground haze: the distance fog gets a low layer that sits on the ground and in hollows (world height, exponential falloff) and glows toward the sun.
 //   Patched into three's fog chunks once → every built-in material (and every ShaderMaterial with fog: true) gets it. Shared uniforms (plain objects,
@@ -753,7 +785,7 @@ function applySky(t) {
   skyU.orbDir.value.set(Math.cos(el) * Math.sin(az), Math.sin(el), Math.cos(el) * Math.cos(az));
   sun.position.copy(skyU.orbDir.value).multiplyScalar(160);
   mixC(skyU.orbCol.value, A.sun, B.sun, k); skyU.orbSize.value = lerp(A.orb, B.orb, k); skyU.orbGlow.value = lerp(A.glow, B.glow, k);
-  renderer.toneMappingExposure = lerp(A.exp, B.exp, k);
+  renderer.toneMappingExposure = lerp(A.exp, B.exp, k) * (KL.exp ?? 1);   // look v2: × category exposure (KINDLOOK)
   const na = SKY[i][1], nb = (SKY[i + 1] ?? SKY[i])[1];
   scene.environmentIntensity = lerp(ENVI[na] ?? 0.2, ENVI[nb] ?? 0.2, k) * (typeof CFG.env === 'number' ? CFG.env : 1);
   if (SKYENV.on) { skyEnv(); scene.environmentIntensity *= 0.9; hemi.intensity *= 0.82; }   // v3.0: part of the hemisphere fill now comes from the sky environment
@@ -763,9 +795,9 @@ function applySky(t) {
       skyU.bot.value.lerp(_cb.set('#4A5F8E'), 0.4 * lw); skyU.top.value.lerp(_cb.set('#16244A'), 0.35 * lw); scene.fog.color.lerp(_cb.set('#3A4A6E'), 0.4 * lw); }
     scene.fog.near *= CFG.haze ?? 0.6; }
   { const A2 = LOOKV[na] ?? LOOKV.day, B2 = LOOKV[nb] ?? LOOKV.day, L = LOOKNOW;   // v3.5 look of this moment (rim, grade, rays, haze, dust)
-    for (const q of ['sh', 'hl', 'lift', 'sat', 'con', 'open', 'rays', 'haze', 'dust', 'rimI']) L[q] = _lk(A2[q], B2[q], k);
+    for (const q of ['sh', 'hl', 'lift', 'sat', 'con', 'open', 'rays', 'haze', 'dust', 'rimI', 'curve', 'sep', 'vib']) L[q] = _lk(A2[q], B2[q], k);
     const rc = _lk(A2.rimC, B2.rimC, k); L.rimC.setRGB(rc[0], rc[1], rc[2], THREE.SRGBColorSpace); L.st = ST(t);
-    rim.color.copy(L.rimC); rim.intensity = L.rimI * RIMK * (LONG ? 1 + 0.4 * lerp(NLIFT[na] ?? 0, NLIFT[nb] ?? 0, k) : 1);
+    rim.color.copy(L.rimC); rim.intensity = rim.userData.base = L.rimI * RIMK * (LONG ? 1 + 0.4 * lerp(NLIFT[na] ?? 0, NLIFT[nb] ?? 0, k) : 1);   // rimFit() scales it for close shots
     const H = HAZE.value, hz = CFG.groundFog === false ? 0 : (typeof CFG.groundFog === 'number' ? CFG.groundFog : 1) * L.haze, o = skyU.orbDir.value;
     H.x = 0.0046 * hz / FOGK; H.y = 5.5; H.z = 12 * FOGK; H.w = 0;
     HAZED.value.x = o.x; HAZED.value.y = o.y; HAZED.value.z = o.z;
@@ -808,7 +840,9 @@ function rimFit() {
   if (RIMK > 0) {
     camera.getWorldDirection(_rv); _rv.y = 0; if (_rv.lengthSq() < 1e-6) _rv.set(0, 0, -1); _rv.normalize();
     const o = skyU.orbDir.value, cr = _rv.x * o.z - _rv.z * o.x, a = 0.6 * clamp(-cr * 4, -1, 1), c = Math.cos(a), s = Math.sin(a);
-    rim.target.position.copy(_l); rim.position.set(_l.x + (_rv.x * c - _rv.z * s) * 60, _l.y + 34, _l.z + (_rv.x * s + _rv.z * c) * 60);
+    const cd = camera.position.distanceTo(_l), ck = LOOKV2 ? 1 - clamp((cd - 4) / 8) : 0;   // look v2: lower (≈ 17° instead of 30°: catches the silhouette of dark figures, hulls) and × 1.5 in close shots
+    rim.intensity = (rim.userData.base ?? rim.intensity) * (1 + 0.5 * ck);
+    rim.target.position.copy(_l); rim.position.set(_l.x + (_rv.x * c - _rv.z * s) * 60, _l.y + (LOOKV2 ? 18 : 34), _l.z + (_rv.x * s + _rv.z * c) * 60);
     rim.target.updateMatrixWorld(); rim.updateMatrixWorld();
   }
   if (DUSTK > 0) {
@@ -823,7 +857,7 @@ function rimFit() {
 }
 
 // --- materials & primitives (y = bottom of the shape; ball is centred) ---
-const _mats = new Map(), _geo = new Map();
+const _mats = new Map(), _geo = new Map(), MROUGH = LOOKV2 && CFG.materials !== false ? 0.8 : 0.88;   // look v2: default roughness 0.8 (was 0.88 everywhere: no sheen at all)
 // v2.34 surfaces: mat(hex, { surf }) / box(…, { surf }) draws a pattern on walls and roofs per pixel — no extra geometry, fades with distance:
 //   brick · stone (big blocks) · plank (upright boards) · siding (lapped boards) · tile (roof tiles, shingles) · plaster · concrete (panels) · metal (corrugated sheet)
 const SURF = { brick: 1, stone: 2, plank: 3, siding: 4, tile: 5, plaster: 6, concrete: 7, metal: 8, asphalt: 9, paving: 10, boards: 11, tiles: 12, carpet: 13, wallpaper: 14 };
@@ -908,7 +942,7 @@ function mat(hex, o = {}) {   // o: rough, metal, em (emissive hex), ei, opacity
   const tr = o.opacity != null && o.opacity < 1, K = CFG.materials !== false && o.kind ? MATK[o.kind] ?? {} : {};
   const m = o.basic
     ? new THREE.MeshBasicMaterial({ color: hex, transparent: tr, opacity: o.opacity ?? 1, depthWrite: !tr })
-    : new THREE.MeshStandardMaterial({ color: hex, roughness: o.rough ?? K.rough ?? 0.88, metalness: o.metal ?? K.metal ?? 0, flatShading: o.flat ?? !K.smooth, emissive: o.em ?? '#000000', emissiveIntensity: o.ei ?? 1, transparent: tr, opacity: o.opacity ?? 1, depthWrite: !tr });
+    : new THREE.MeshStandardMaterial({ color: hex, roughness: o.rough ?? K.rough ?? MROUGH, metalness: o.metal ?? K.metal ?? 0, flatShading: o.flat ?? !K.smooth, emissive: o.em ?? '#000000', emissiveIntensity: o.ei ?? 1, transparent: tr, opacity: o.opacity ?? 1, depthWrite: !tr });
   if (o.wind && !o.basic) windify(m, o.wind === 'local' ? 'local' : 'attr');
   if (o.surf && !o.basic) surfFx(m, o.surf, { indoor: o.indoor });
   else if (!o.basic && (o.env ?? K.env) != null) envK(m, o.env ?? K.env);
@@ -4394,7 +4428,7 @@ function glow(x, y, z, o = {}) {   // flickering point light for fires, explosio
     tick(t => { S.intensity = I * env(t) * fk(t); });
     return S;
   }
-  const L = new THREE.PointLight(o.color ?? '#FF8A3A', 0, o.dist ?? 22, 1.6); L.position.set(x, y, z); world.add(L);
+  const L = new THREE.PointLight(o.color ?? '#FF8A3A', 0, o.dist ?? 22, o.decay ?? 1.6); L.position.set(x, y, z); world.add(L);   // o.decay: falloff (2 = physical; look v2 room lights)
   tick(t => { L.intensity = I * env(t) * fk(t); });
   return L;
 }
@@ -8379,6 +8413,34 @@ function roomVis(cam) {   // pure function of the camera: which camera-aware roo
 }
 function _roomVisInit() { if (_roomVisInit.on) return; _roomVisInit.on = true; POSTCAM.push(() => roomVis(camera));
   const prev = scene.onBeforeRender; scene.onBeforeRender = function (r, s, c, rt) { if (ROOMVIS.length && c?.isCamera) roomVis(c); return prev.call(this, r, s, c, rt); }; }
+// look v2 room rig: while the camera is inside an interior() room — exposure × 0.8, sky fill (hemisphere, environment) × 0.5, sun × 0.6 (it shone through the
+//   camera-aware ceiling), and a shadow-casting "window key": a spot from the window (back wall, else the side wall without the door) down into the room at ~38°,
+//   warm by day, moon blue at night (o.night or a dark sky). One spot for the whole video, placed per frame in POSTCAM (pure function of camera + t).
+//   interior(…, { windowKey: number = × strength, 0 = none }) · CFG.roomLight: false = off (with the old look: CFG.look: 1)
+const INROOMS = [], ROOMRIG = LOOKV2 && CFG.roomLight !== false, _rrV = new THREE.Vector3(), _rrC = new THREE.Color();
+let RKEY = null;
+function _roomRigInit() { if (RKEY) return;
+  RKEY = new THREE.SpotLight('#FFE0B0', 0, 14, Math.PI / 3.4, 0.85, 1.4); RKEY.castShadow = !!CFG.shadows; RKEY.shadow.mapSize.set(1024, 1024); RKEY.shadow.bias = -0.0004; RKEY.shadow.normalBias = 0.03;
+  Object.assign(RKEY.shadow.camera, { near: 0.2, far: 16 }); RKEY.userData.noHit = true; scene.add(RKEY, RKEY.target); RKEY.position.set(0, -50, 0);
+  POSTCAM.push(_roomRig); }
+function _roomRig() {
+  let best = null, bk = 0; const cp = camera.position;
+  for (const R of INROOMS) { R.inv ??= new THREE.Matrix4().copy(R.g.matrixWorld).invert(); const L = _rrV.copy(cp).applyMatrix4(R.inv);
+    if (Math.abs(L.x) > R.w / 2 + 0.05 || L.z < -R.d / 2 - 0.05 || L.y < -0.3 || L.y > R.h + 0.3) continue;
+    const k = 1 - sm01((L.z - R.d / 2 + 0.6) / 1.2);   // fades out over the last metre in front of the open side (no pop when the camera flies in or out)
+    if (k > bk) { bk = k; best = R; } }
+  const S = RKEY; S.shadow.autoUpdate = bk > 0.003;
+  const off = () => { S.intensity = 0; S.color.set('#FFE2B4'); S.distance = 14; S.position.set(0, -50, 0); S.target.position.set(0, -51, 0); S.target.updateMatrixWorld(); S.updateMatrixWorld(); };   // idle: nothing kept from earlier frames
+  if (!best) return off();
+  renderer.toneMappingExposure *= 1 - 0.08 * bk; hemi.intensity *= 1 - 0.3 * bk; scene.environmentIntensity *= 1 - 0.3 * bk; sun.intensity *= 1 - 0.2 * bk; rim.intensity *= 1 - 0.5 * bk;
+  const R = best, nk = R.night ? 1 : clamp(NIGHTK * 1.4), hy = Math.min(R.h - 0.25, 2.3), run = hy / Math.tan(0.66);
+  if (!R.side) return off();
+  if (R.side === 'back') { const x0 = clamp(R.wx, -R.w / 2 + 0.5, R.w / 2 - 0.5); _rrV.set(x0, hy, -R.d / 2 + 0.25); S.position.copy(R.g.localToWorld(_rrV)); _rrV.set(x0 * 0.4, 0, Math.min(-R.d / 2 + 0.25 + run, R.d / 2 - 0.4)); }
+  else { const sx = R.side === 'left' ? -1 : 1; _rrV.set(sx * (R.w / 2 - 0.25), hy, -R.d * 0.15); S.position.copy(R.g.localToWorld(_rrV)); _rrV.set(sx * Math.max(R.w / 2 - 0.25 - run, -R.w / 2 + 0.4), 0, 0); }
+  S.target.position.copy(R.g.localToWorld(_rrV)); S.distance = Math.max(R.w, R.d) * 2.2;
+  S.color.copy(_rrC.set('#FFE2B4')).lerp(_ca.set('#B8C8F0'), nk); S.intensity = bk * R.I * lerp(60, 16, nk);
+  S.target.updateMatrixWorld(); S.updateMatrixWorld();
+}
 function interior(p, x, z, o = {}) {
   const kind = o.kind ?? 'living', K = ROOMS[kind] ?? ROOMS.living, w = o.w ?? K.w ?? 7, d = o.d ?? K.d ?? 6, h = o.h ?? K.h ?? 2.8, ry = o.ry ?? 0, g = stat(grp(p, x, groundH(x, z) + (o.y ?? 0), z, ry));
   const wc = o.wall ?? K.wall, fl = o.floor ?? K.floor, NC = { cast: false }, R = { g, w, d, h, kind, o, K, seats: {}, anchors: {}, lamps: [], paintings: [], cases: [], _flush: [] };
@@ -8451,7 +8513,7 @@ function interior(p, x, z, o = {}) {
     q.userData.noHit = true; q.visible = fix; R.frontW = q; V.front = q; }
   if (o.items !== false) K.items(R);
   if (cl !== false) {
-    if (!o.ceiling) { const cg = dyn(grp(g, 0, h, 0)), ccol = o.ceilColor ?? K.ceil ?? '#EEECE6', cm = new THREE.MeshStandardMaterial({ color: ccol, roughness: 0.92, flatShading: true, emissive: ccol, emissiveIntensity: o.ceilGlow ?? 0.45 });   // lit by the room, not by the green hemisphere below
+    if (!o.ceiling) { const cg = dyn(grp(g, 0, h, 0)), ccol = o.ceilColor ?? K.ceil ?? '#EEECE6', cm = new THREE.MeshStandardMaterial({ color: ccol, roughness: 0.92, flatShading: true, emissive: ccol, emissiveIntensity: o.ceilGlow ?? (LOOKV2 ? 0.3 : 0.45) });   // lit by the room, not by the green hemisphere below
       cm.userData.own = true; V.mats.push(cm); box(cg, w + 0.28, 0.1, d + 0.28, '', 0, 0, 0, { mat: cm, cast: false, recv: false });
       const gm = new THREE.MeshBasicMaterial({ color: new THREE.Color('#FFF4D8').multiplyScalar(1.6) }); gm.userData.own = true; V.mats.push(gm);
       for (const [lx, lz] of R._flush) { cyl(cg, 0.24, 0.27, 0.05, '', lx, -0.05, lz, { mat: cm, seg: 18, cast: false }); cyl(cg, 0.2, 0.2, 0.01, '', lx, -0.058, lz, { mat: gm, seg: 18, cast: false }); }
@@ -8461,7 +8523,9 @@ function interior(p, x, z, o = {}) {
       cg.userData.noHit = true; cg.visible = fix; R.ceilG = cg; V.ceil = cg; }
     V.front?.traverse(m => { if (m.isMesh) m.castShadow = false; }); if (!fix && (V.front || V.ceil)) { ROOMVIS.push(V); _roomVisInit(); } }
   // light: one warm lamp (counts toward the 3–4 light budget); night rooms glow
-  if (o.light ?? (o.night || o.ceiling)) { g.updateWorldMatrix(true, false); const lp = g.localToWorld(v3(0, h - 0.6, 0)); R.light = glow(lp.x, lp.y, lp.z, { intensity: o.lightI ?? (kind === 'cellar' || kind === 'bunker' ? 14 : 20), dist: Math.max(w, d) * 1.6, flicker: kind === 'cellar' ? 0.25 : 0, color: kind === 'bunker' ? '#E8F0D8' : '#FFD8A0' }); }
+  if (o.light ?? (o.night || o.ceiling)) { g.updateWorldMatrix(true, false); const lp = g.localToWorld(v3(0, h - 0.6, 0)); R.light = glow(lp.x, lp.y, lp.z, { intensity: o.lightI ?? (kind === 'cellar' || kind === 'bunker' ? 14 : 20) * (ROOMRIG ? 0.6 : 1), dist: Math.max(w, d) * 1.6, flicker: kind === 'cellar' ? 0.25 : 0, color: kind === 'bunker' ? '#E8F0D8' : '#FFD8A0', decay: ROOMRIG ? 2 : undefined }); }   // look v2: physical falloff — a pool of light under the lamp, darker corners
+  if (ROOMRIG && p === world) { const ksd = wn && walls.back ? 'back' : walls[ds0 === 'left' ? 'right' : 'left'] ? (ds0 === 'left' ? 'right' : 'left') : null;
+    INROOMS.push({ g, w, d, h, side: ksd, wx: o.windowX ?? (w / 2 - 1.3), night: !!o.night, I: o.windowKey ?? 1 }); _roomRigInit(); }
   R.at = name => { const a = R.anchors[name] ?? [0, 0, 0]; g.updateWorldMatrix(true, false); return g.localToWorld(v3(...a)).toArray(); };
   R.seat = (name, i = 0) => { const s = (R.seats[name] ?? [])[i]; if (!s) return R.at(name); g.updateWorldMatrix(true, false); return g.localToWorld(v3(...s)).toArray(); };
   R.toWorld = (lx, lz, ly = 0) => { g.updateWorldMatrix(true, false); return g.localToWorld(v3(lx, ly, lz)).toArray(); };
@@ -14129,7 +14193,8 @@ const FIGRIM = { c: { value: new THREE.Color('#BFD4FF') }, k: { value: 0.12 } },
 function figMat(m, skin) {
   if (!m?.isMeshStandardMaterial || m.transparent || m.userData.fig || m.userData.surf || m.userData.own) return m;
   const key = m.uuid + (skin ? 's' : 'r'); let n = _figM.get(key); if (n) return n;
-  n = m.clone(); n.userData = { ...m.userData, fig: true }; if (skin) n.roughness = Math.min(n.roughness, 0.64);
+  n = m.clone(); n.userData = { ...m.userData, fig: true }; if (skin) n.roughness = Math.min(n.roughness, LOOKV2 ? 0.6 : 0.64);
+  else if (LOOKV2 && !m.userData.kind && m.roughness === MROUGH && m.metalness === 0) n.roughness = 0.95;   // look v2: clothing reads as fabric (matte), skin a little smoother
   const prev = m.onBeforeCompile !== THREE.Material.prototype.onBeforeCompile ? m.onBeforeCompile : null, pk = m.customProgramCacheKey();
   n.onBeforeCompile = (sh, r) => { if (prev) prev.call(n, sh, r); sh.uniforms.uRimC = FIGRIM.c; sh.uniforms.uRimK = FIGRIM.k;
     sh.fragmentShader = 'uniform vec3 uRimC; uniform float uRimK;\n' + sh.fragmentShader.replace('#include <opaque_fragment>', `{ float fr = pow(1.0 - clamp(dot(normalize(normal), normalize(vViewPosition)), 0.0, 1.0), 3.0);
@@ -14872,7 +14937,13 @@ function hitResolve(t) {
 }
 
 // --- bake: merge all static props (stat) into one mesh per material — far fewer draw calls, 2–3× faster frames ---
-const _vcm = new Map();
+const _vcm = new Map(), MVAR = LOOKV2 && CFG.materials !== false && CFG.matVar !== false;
+function roughVar(m) {   // look v2: roughness ± 0.08 per merged prop, read from its (already varied) vertex colour — one program for all, nothing changes per frame
+  const prev = m.onBeforeCompile !== THREE.Material.prototype.onBeforeCompile ? m.onBeforeCompile : null, pk = m.customProgramCacheKey();
+  m.onBeforeCompile = (sh, r) => { if (prev) prev.call(m, sh, r);
+    sh.fragmentShader = sh.fragmentShader.replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\n#ifdef USE_COLOR\n  roughnessFactor = clamp(roughnessFactor + (fract(sin(dot(vColor.rgb, vec3(12.9898, 78.233, 37.719)) * 91.7) * 43758.5453) - 0.5) * 0.16, 0.04, 1.0);\n#endif'); };
+  m.customProgramCacheKey = () => pk + '|rv'; return m;
+}
 // v3.24 prop QA (qaProps: FLOAT): the static props as they are before bake() merges them — one world box per mesh, its opt-out and a name for the report
 const PROPQA = { stat: [] };
 function propSnap() {
@@ -14913,9 +14984,11 @@ function bake() {
       g.setAttribute('sp', new THREE.BufferAttribute(sp, 3));
       if (!_SPM.has(mt)) { const c = mt.clone(); _SPM.set(mt, surfFx(c, mt.userData.surf, { sp: true, indoor: mt.userData.surfIn })); if (mt.userData.nightEi) NIGHTMATS.push(c); }
       bm = _SPM.get(mt); }   // plain colours become vertex colours: hundreds of props in a handful of draw calls
-    if (plain) { const cc = mt.color, n = g.attributes.position.count, ca = new Float32Array(n * 3); for (let k = 0; k < n; k++) { ca[3 * k] = cc.r; ca[3 * k + 1] = cc.g; ca[3 * k + 2] = cc.b; } g.setAttribute('color', new THREE.BufferAttribute(ca, 3));
-      const vk = [mt.flatShading, mt.roughness, mt.metalness, mt.side, mt.userData.wind ?? '', mt.userData.envK ?? 1].join('|'); bm = _vcm.get(vk);
-      if (!bm) { bm = new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: mt.flatShading, roughness: mt.roughness, metalness: mt.metalness, side: mt.side }); if (mt.userData.wind) windify(bm, mt.userData.wind); envK(bm, mt.userData.envK ?? 1); _vcm.set(vk, bm); } }
+    if (plain) { const cc = mt.color, n = g.attributes.position.count, ca = new Float32Array(n * 3), vr = MVAR && !mt.userData.kind, e = o.matrixWorld.elements;
+      let vr0 = 1, vr1 = 1, vr2 = 1; if (vr) { const hs = e[12] * 0.731 + e[13] * 1.37 + e[14] * 0.513, b = 1 + (hash(hs) - 0.5) * 0.08, w = (hash(hs + 17.3) - 0.5) * 0.03; vr0 = b * (1 + w); vr1 = b; vr2 = b * (1 - w); }   // look v2: every prop its own shade (± 4 %, slightly warmer / cooler), seeded by where it stands
+      for (let k = 0; k < n; k++) { ca[3 * k] = cc.r * vr0; ca[3 * k + 1] = cc.g * vr1; ca[3 * k + 2] = cc.b * vr2; } g.setAttribute('color', new THREE.BufferAttribute(ca, 3));
+      const vk = [mt.flatShading, mt.roughness, mt.metalness, mt.side, mt.userData.wind ?? '', mt.userData.envK ?? 1, vr ? 'v' : ''].join('|'); bm = _vcm.get(vk);
+      if (!bm) { bm = new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: mt.flatShading, roughness: mt.roughness, metalness: mt.metalness, side: mt.side }); if (mt.userData.wind) windify(bm, mt.userData.wind); if (vr) roughVar(bm); envK(bm, mt.userData.envK ?? 1); _vcm.set(vk, bm); } }
     const key = bm.uuid + (o.castShadow ? '|c' : '|') + (o.receiveShadow ? 'r' : '');
     if (!buckets.has(key)) buckets.set(key, { m: bm, cast: o.castShadow, recv: o.receiveShadow, gs: [] });
     buckets.get(key).gs.push(g); done.push(o);
@@ -15635,11 +15708,11 @@ function updateLoop(t) {
 const FinalShader = {
   uniforms: { tDiffuse: { value: null }, uRes: { value: new THREE.Vector2(1, 1) }, uTime: { value: 0 }, uExp: { value: 1 }, uMode: { value: 1 }, uGrain: { value: 0.05 }, uVig: { value: 0.4 }, uAb: { value: 0 }, uSat: { value: 1.05 }, uCon: { value: 1.05 },
     uBlur: { value: 0 }, uBlurDir: { value: new THREE.Vector2(1, 0) }, uZoom: { value: 0 }, uDip: { value: 0 }, uDef: { value: 0 }, uDof: { value: 0 }, uFocus: { value: new THREE.Vector2(0.5, 0.5) }, tDepth: { value: null }, uDofOn: { value: 0 }, uRain: { value: 0 }, uFocusD: { value: 5 }, uNear: { value: 0.1 }, uFar: { value: 1200 },
-    tRays: { value: null }, uRays: { value: 0 }, uSh: { value: new THREE.Vector3() }, uHl: { value: new THREE.Vector3() }, uLift: { value: new THREE.Vector3() }, uOpen: { value: 0 }, uGSat: { value: 1 }, uGCon: { value: 1 },
+    tRays: { value: null }, uRays: { value: 0 }, uSh: { value: new THREE.Vector3() }, uHl: { value: new THREE.Vector3() }, uLift: { value: new THREE.Vector3() }, uOpen: { value: 0 }, uGSat: { value: 1 }, uGCon: { value: 1 }, uCurve: { value: 0 }, uSep: { value: 0 }, uVib: { value: 0 },
     tStreak: { value: null }, tHal: { value: null }, uStreak: { value: 0 }, uSTint: { value: new THREE.Vector3(1, 1, 1) }, uHal: { value: 0 }, uCAb: { value: 0 }, uBars: { value: 0 } },   // v3.23 cinema look (CinePass)
   vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
   fragmentShader: `#include <packing>
-    uniform sampler2D tDiffuse, tDepth, tRays, tStreak, tHal; uniform vec2 uRes, uBlurDir, uFocus; uniform float uTime, uExp, uMode, uGrain, uVig, uAb, uSat, uCon, uBlur, uZoom, uDip, uDef, uDof, uDofOn, uFocusD, uNear, uFar, uRain, uRays, uOpen, uGSat, uGCon;
+    uniform sampler2D tDiffuse, tDepth, tRays, tStreak, tHal; uniform vec2 uRes, uBlurDir, uFocus; uniform float uTime, uExp, uMode, uGrain, uVig, uAb, uSat, uCon, uBlur, uZoom, uDip, uDef, uDof, uDofOn, uFocusD, uNear, uFar, uRain, uRays, uOpen, uGSat, uGCon, uCurve, uSep, uVib;
     uniform float uStreak, uHal, uCAb, uBars; uniform vec3 uSh, uHl, uLift, uSTint; varying vec2 vUv;
     uniform vec4 uHeat[4]; uniform float uHeatN;   // v3.26 heat shimmer (heatShimmer): centre (uv), radius (frame heights), strength
     vec2 heatOff(vec2 uv){ vec2 o = vec2(0.0); for (int i = 0; i < 4; i++) { if (float(i) >= uHeatN) break; vec4 H = uHeat[i]; vec2 q = (uv - H.xy) * vec2(uRes.x / uRes.y, 1.0) / max(H.z, 1e-4);
@@ -15658,6 +15731,11 @@ const FinalShader = {
       c *= 1.0 + uOpen * so * so;   // v3.5 per-sky look: shadow detail opened up, split toning (shadow / highlight tint), saturation, contrast, then a tinted black floor
       c += uSh * (1.0 - smoothstep(0.0, 0.5, l)) * smoothstep(0.0, 0.06, l) + uHl * smoothstep(0.4, 1.0, l);
       l = dot(c, vec3(0.2126, 0.7152, 0.0722)); c = mix(vec3(l), c, uSat * uGSat); c = clamp((c - 0.5) * uCon * uGCon + 0.5, 0.0, 1.0);
+      // look v2: S-curve pivoting at 0.3 (mids and highlights gain, deep shadows stay) · warm / cool separation (neutral white untouched) · vibrance (dull colours gain most)
+      c = clamp(c + uCurve * 0.9 * c * (1.0 - c) * (c - 0.3), 0.0, 1.0);
+      { float wc = clamp((c.r - c.b) * 2.5, -1.0, 1.0); c += (wc > 0.0 ? vec3(0.05, 0.012, -0.04) : vec3(-0.02, 0.006, 0.03)) * abs(wc) * uSep; }
+      { float sv = max(c.r, max(c.g, c.b)) - min(c.r, min(c.g, c.b)), lv = dot(c, vec3(0.2126, 0.7152, 0.0722)); c = mix(vec3(lv), c, 1.0 + uVib * (1.0 - smoothstep(0.08, 0.55, sv))); }
+      c = clamp(c, 0.0, 1.0);
       return uLift + c * (1.0 - uLift); }
     void main(){
       vec2 uv = vUv; vec3 c; float rmk = 0.0;
@@ -15743,7 +15821,7 @@ class DofDepthPass extends Pass {
   }
 }
 const dofPass = new DofDepthPass(); composer.addPass(dofPass);
-const AOI = CFG.ao ?? 0.55; let gtao = null;   // ambient occlusion: contact shadows where things meet (feet on the ground, walls, crowds)
+const AOI = CFG.ao ?? (LOOKV2 ? 0.8 : 0.55); let gtao = null;   // look v2: 0.8 (was 0.55)   // ambient occlusion: contact shadows where things meet (feet on the ground, walls, crowds)
 if (AOI > 0) {
   gtao = new GTAOPass(scene, camera, 4, 4); gtao.output = GTAOPass.OUTPUT.Default; gtao.blendIntensity = AOI;
   gtao.overrideVisibility = function () { const c = this._visibilityCache; this.scene.traverse(o => { c.set(o, o.visible); const m = o.material; if (o.isPoints || o.isLine || o.userData.fxPart || (o.isMesh && m && (m.transparent || m.depthWrite === false || m.blending === THREE.AdditiveBlending))) o.visible = false; }); };   // smoke, glass, beams: no AO from their quads
@@ -15899,7 +15977,7 @@ class LookPass extends Pass {
   setSize(w, h) { this.a.setSize(Math.max(1, w >> 2), Math.max(1, h >> 2)); this.b.setSize(Math.max(1, w >> 2), Math.max(1, h >> 2)); this.w = w; this.h = h; }
   render(r, wb, rb) {
     const U = fin.uniforms, L = LOOKNOW;
-    U.uSh.value.fromArray(L.sh).multiplyScalar(GRADEK); U.uHl.value.fromArray(L.hl).multiplyScalar(GRADEK); U.uGSat.value = lerp(1, L.sat, GRADEK); U.uGCon.value = lerp(1, L.con, GRADEK);
+    U.uSh.value.fromArray(L.sh).multiplyScalar(GRADEK); U.uHl.value.fromArray(L.hl).multiplyScalar(GRADEK); U.uGSat.value = lerp(1, L.sat, GRADEK); U.uGCon.value = lerp(1, L.con, GRADEK); U.uCurve.value = L.curve * GRADEK; U.uSep.value = L.sep * GRADEK; U.uVib.value = L.vib * GRADEK;
     U.uLift.value.fromArray(L.lift).multiplyScalar(LIFTK); U.uOpen.value = L.open * LIFTK;
     U.uRays.value = 0; if (!RAYK || scenePass.split || L.rays <= 0) return;
     const o = skyU.orbDir.value; camera.getWorldDirection(_rq); const fw = _rq.dot(o), up = clamp((o.y + 0.03) / 0.08); if (fw < 0.05 || up <= 0) return;
@@ -15958,8 +16036,8 @@ if (CINE) composer.addPass(new CinePass());
 Object.assign(FinalShader.uniforms, { uHeat: { value: [0, 1, 2, 3].map(() => new THREE.Vector4()) }, uHeatN: { value: 0 } });   // v3.26 heat shimmer
 const fin = new ShaderPass(FinalShader); composer.addPass(fin);
 Object.assign(fin.uniforms.uMode, { value: { none: 0, film: 1, crt: 3 }[CFG.filter] ?? 1 });
-fin.uniforms.uGrain.value = CFG.filter === 'none' ? 0 : CFG.grain;
-fin.uniforms.uVig.value = CFG.filter === 'none' ? 0 : CFG.vignette; fin.uniforms.uSat.value = CFG.saturation; fin.uniforms.uCon.value = CFG.contrast;
+fin.uniforms.uGrain.value = CFG.filter === 'none' ? 0 : Math.max(CFG.grain ?? 0, KL.grain ?? 0);   // look v2: a category look (KINDLOOK) can ask for at least this grain / vignette
+fin.uniforms.uVig.value = CFG.filter === 'none' ? 0 : Math.max(CFG.vignette ?? 0, KL.vig ?? 0); fin.uniforms.uSat.value = CFG.saturation; fin.uniforms.uCon.value = CFG.contrast;
 
 // --- sound: procedural score + SFX, identical offline (export) and live (preview) ---
 const SND = (() => {
