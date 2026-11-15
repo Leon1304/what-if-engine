@@ -54,7 +54,7 @@ Hauptmotive anleuchten mit `glow`, `lamp`, Fenstern über `lit` und hellen, satt
 
 ## Bild (läuft automatisch)
  **Himmelslicht (v3.0):** Das Umgebungslicht (weiches Fülllicht und Spiegelungen) ist der aktuelle Himmel – Zenit, Horizont, Boden und Sonnenschein –, statt eines grauen Studios; es folgt jedem `SKY`-Wechsel. `CFG.env: false` = aus, `true` / `'studio'` = altes Studio, Zahl = Stärke.
-Kontaktschatten (`CFG.ao`, Standard 0.55), Glühen auf Feuer, Explosionen, Fenstern, Neon und Zombie-Augen (`CFG.bloom` 0.45, `bloomThreshold` 1.2; nur der Überschuss glüht, angestrahlte Flächen überstrahlen nicht), Sonnenschatten passend zum Bildausschnitt (in Nahaufnahmen scharf, `CFG.shadowFit`), echte Bewegungsunschärfe auf schnellen Frames (`CFG.motionBlur: 'auto'`: Schüttler, schnelle Kamera, Rennende nah an der Linse; `MBLUR = [[t0, t1]]` erzwingt sie; nur im Export, nicht in der Vorschau; Zahl der Teilbilder passt sich der Bewegung an, `CFG.mbGap` / `mbMax`, siehe **Bewegungsunschärfe passt sich an**), abgerundete, weich schattierte Figuren (`CFG.smooth`). Umgebungslicht `CFG.env: true` nur bei „beste qualität“.
+Kontaktschatten (`CFG.ao`, Standard 0.8 seit Look v2, vorher 0.55), Glühen auf Feuer, Explosionen, Fenstern, Neon und Zombie-Augen (`CFG.bloom` 0.45, `bloomThreshold` 1.2; nur der Überschuss glüht, angestrahlte Flächen überstrahlen nicht), Sonnenschatten passend zum Bildausschnitt (in Nahaufnahmen scharf, `CFG.shadowFit`), echte Bewegungsunschärfe auf schnellen Frames (`CFG.motionBlur: 'auto'`: Schüttler, schnelle Kamera, Rennende nah an der Linse; `MBLUR = [[t0, t1]]` erzwingt sie; nur im Export, nicht in der Vorschau; Zahl der Teilbilder passt sich der Bewegung an, `CFG.mbGap` / `mbMax`, siehe **Bewegungsunschärfe passt sich an**), abgerundete, weich schattierte Figuren (`CFG.smooth`). Umgebungslicht `CFG.env: true` nur bei „beste qualität“.
 
 
 ## `CFG`-Schlüssel (Übersicht der bisher nicht beschriebenen)
@@ -148,7 +148,7 @@ Text und Bilder auf Schildern, Leuchtreklamen, Fernsehern und Anzeigetafeln komm
 
 ## Innenräume (v2.10)
 
-`interior(p,x,z,{kind, w, d, h, ry, door: 'left'|'right'|false, window: 'back'|'high'|false, night, lamps, items})` mit kind = living · kitchen · bedroom · bathroom · office · kids · cellar · garage · bunker · classroom · shop → `R` mit `R.at(name)` (Ankerpunkt eines Möbels), `R.seat(name, i)` (für `sit`), `R.doors` (für `openDoor`), `R.tv`, `R.fridge`, `R.bed`, `R.lamps`. Komplett eingerichtet (Sofa, Teppich, Fernseher, Regale, Pflanzen, Küche mit Herd und Kühlschrank, Bad, Werkbank …); einzelne Stücke mit `furnish(p, name, x, z, ry)`. Die Front (+z) ist offen, die Kamera steht davor.
+`interior(p,x,z,{kind, w, d, h, ry, door: 'left'|'right'|false, window: 'back'|'high'|false, night, lamps, items})` mit kind = living · kitchen · bedroom · bathroom · office · kids · cellar · garage · bunker · classroom · shop → `R` mit `R.at(name)` (Ankerpunkt eines Möbels), `R.seat(name, i)` (für `sit`), `R.doors` (für `openDoor`), `R.tv`, `R.fridge`, `R.bed`, `R.lamps`. Komplett eingerichtet (Sofa, Teppich, Fernseher, Regale, Pflanzen, Küche mit Herd und Kühlschrank, Bad, Werkbank …); einzelne Stücke mit `furnish(p, name, x, z, ry)`. Die Front (+z) ist offen, die Kamera steht davor. Look v2: Steht die Kamera im Raum, übernimmt das Raumlicht (Fensterlicht, Lampe mit physikalischem Abfall, weniger Himmelslicht; `windowKey: 0` = ohne Fensterlicht, siehe **Look v2**).
 
 ## Stadt
 
@@ -1350,6 +1350,31 @@ Hinweise:
 - Die Werte je Himmel stehen in `LOOK` (rim, sh/hl Tönung, sat, con, lift, open, rays, haze, dust); Planeten-Himmel nutzen neutrale Werte (`LOOK0`).
 - Test: `tests/v35-light` (Tag → golden → Nacht, weit und nah).
 
+
+### Look v2: Farbe, Kontrast, Licht (automatisch)
+
+Antwort auf „die Videos wirken trist“: Vorher hatte jeder Himmel nur einen Farbton (Sonne, Fülllicht, Nebel, Rim und Grading gleich), Nächte waren zu dunkel (mittlere Helligkeit 0,07–0,10, Schiffsrümpfe schwarz), Kontrast linear mit Abschneiden, Nacht/Sturm absichtlich entsättigt, Innenräume flach und ausgewaschen. Look v2 ist Standard für alle Videos (auch beim Neubau alter Seiten mit `reengine.py`). `CFG.look: 1` = alter Look v3.5 komplett (Himmel, `LOOK`, Kurve, AO, Rauheit, Raumlicht); jedes Bild bleibt eine reine Funktion von t.
+
+| Teil | Was passiert | Abschalten |
+|---|---|---|
+| **Tonkurve, Trennung, Vibrance** | Im letzten Durchgang (`grade()`): S-Kurve um 0,3 (`c += 0.9·c·(1−c)·(c−0.3)` × `curve`: Mitten und Lichter gewinnen, tiefe Schatten bleiben); Warm/Kalt-Trennung (`sep`: Warmes wird wärmer, Kühles kühler, neutrales Weiß bleibt weiß – Schnee bleibt Schnee); Vibrance (`vib`: matte Farben gewinnen mehr als schon satte). Kontrast kommt jetzt aus der Kurve: `con` = 1 überall. | `CFG.grade: false` (mit dem ganzen Farblook) |
+| **Komplementäres Licht** | Warmes Hauptlicht, kühles Fülllicht vom Himmel: golden Fülllicht `#A8B8D0` (vorher orange), dusk `#8C8CD0`, dawn `#A8B0D8`, Tag blauerer Himmel (`top #2C78E0`, Fülllicht `#B4D2FF`, Sonne 3,1). Golden: blaue Schatten (`sh #3A5CB8` 0,08), warme Lichter, Rim `#FFC080` 1,25. Bodennebel golden/dusk/dawn × 0,7. | `CFG.look: 1` |
+| **Nacht lesbar** | Mond 2,35 (`#B0C8FF`), Fülllicht `#5F82C8` 0,95, Horizont `#1F3560`, Nebel `#172846`, Belichtung 1,45, Umgebungslicht 0,15 (vorher 0,06); Grading Nacht sat 1,12 (vorher entsättigt 0,95), Schatten petrol, Lichter warm (Fenster, Lampen bleiben warm gegen den kühlen Mond), Rim `#BCD4FF` 2,0, Schattenboden `#0E2240`. Sturm: Belichtung 1,25, sat 1,0. | `CFG.nightLook: false` / `CFG.look: 1` |
+| **Rim tiefer, nah stärker** | Rim-Licht flacher (≈ 17° statt 30° über dem Motiv): dunkle Figuren (Krampus-Fell, schwarze Kleidung, Rümpfe) bekommen eine Silhouette. In nahen Einstellungen (Kamera < 4 m vom Blickpunkt, ausgeblendet bis 12 m) × 1,5. | `CFG.rim: false` · Zahl |
+| **Raumlicht** | Steht die Kamera in einem `interior()`-Raum (in `world`): Belichtung × 0,92, Himmels-Fülllicht und Umgebung × 0,7, Sonne × 0,8, Rim × 0,5; Decke leuchtet schwächer (`ceilGlow` 0,3 statt 0,45). Dazu ein schattenwerfendes **Fensterlicht**: ein Spot vom Fenster (Rückwand, sonst die Seitenwand ohne Tür) unter ≈ 38° schräg in den Raum, tagsüber warm `#FFE2B4`, nachts (`night: true` oder dunkler Himmel) mondblau `#B8C8F0`. Die Raumlampe fällt physikalisch ab (`decay` 2): Lichtpfütze unter der Lampe, dunklere Ecken. Ein Spot für das ganze Video, pro Bild in `POSTCAM` gesetzt; blendet über den letzten Meter vor der offenen Seite ein/aus. | `CFG.roomLight: false` · `interior(…, { windowKey: 0 })` = ohne Fensterlicht, Zahl = × Stärke |
+| **Material** | Standard-Rauheit 0,8 statt 0,88. Beim Zusammenfassen statischer Requisiten (`bake()`) bekommt jedes Teil ohne `kind` eine eigene Nuance (Helligkeit ± 4 %, etwas wärmer/kühler) und Rauheit ± 0,08, aus seiner Position beim Bau (nicht pro Bild; ein Programm für alle, kein Neukompilieren). Figuren: Haut 0,6, Kleidung matt wie Stoff (0,95). AO 0,8. | `CFG.matVar: false` · `CFG.materials: false` · `CFG.ao` |
+
+**Neue `LOOK`-Schlüssel** (je Himmel, überblendet entlang `SKY` wie die übrigen): `curve` (Stärke der S-Kurve, Standard 1), `sep` (Warm/Kalt-Trennung, Standard 0,55), `vib` (Vibrance, Standard 0,3). Standardwerte in `LOOK0`.
+
+**Look je Kategorie (`KINDLOOK`, nach `CFG.kind`; eine Story mit `CFG.series` = `series`, `debunk` = `conspiracy`)** – kommt auf den Look jedes Himmels obendrauf. `exp`, `sat`, `curve`, `haze` multiplizieren; `sep`, `vib` setzen; `sh` / `hl` / `lift` = zusätzliche Tönung `[Farbe, Menge]`; `vig` / `grain` = mindestens diese Vignette / Körnung.
+- `horror`: Belichtung × 0,88, sat × 0,9, sep 0,8, Vignette ≥ 0,55, kühle Schatten und kühler Schattenboden
+- `truecrime`: sat × 0,92, Petrol-Schatten `#1E7480`, Kurve × 1,1, Körnung ≥ 0,06
+- `story` / `series`: vib 0,35, sat × 1,05
+- `explain`: vib 0,4, Bodennebel × 0,6 (klarere Sicht)
+- `conspiracy`: grünliche Schatten `#3C7A44`, sat × 0,9
+- `history`: leicht warme Lichter, sat × 0,98, Kurve × 1,05
+
+`CFG.lookKind: false` = ohne Kategorie-Look. Test: `tests/look-v2` (Tag → golden → Nacht, dunkle Figur nah, Nachtraum mit Fensterlicht und Lampe).
 
 ### Neu in v3.5: Materialien, Lichtkegel, Lichtpfützen
 
