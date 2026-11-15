@@ -1561,6 +1561,11 @@ Schalter für den Kino-Look, standardmäßig aus. Läuft als eigener Schritt (`C
 - **Rezept „filmisch“** (Skill-Schlüsselwort): `cinema: true, motionBlur: 'all', grain: 0.07, vignette: 0.6, saturation: 0.96, contrast: 1.14, dofAuto: 1`, dazu ein Himmel mit tiefer Sonne (`golden`, `dusk`) oder Nacht mit vielen Lichtern (Laternen, `headlights`, Neon) – dort wirken Streifen und Halation. Gesichter nachts mit `glow` nur mäßig aufhellen (`intensity` ≤ 15 bei 2–3 m), sonst überstrahlen sie.
 - Test: `tests/cinema` (golden → dusk-Straße mit Laternen und Scheinwerfern → Nacht-Nahaufnahme mit breiter werdenden Balken).
 
+# Neu in v3.42 (kein Flackern in allen Videos)
+- **AO blendet in Totalen aus:** Die Umgebungsverdeckung (GTAO, Radius 0,7 m, halbe Auflösung) wird abgeschwächt, sobald ihr Radius im Bild nur noch wenige AO-Pixel groß ist (hohe/weite Einstellungen, ab ca. 40 m Abstand bei fov 45), und unter 0,5 % gar nicht mehr berechnet. Grund: Dort war sie nur noch Rauschen, das bei jeder Kamerafahrt über Fassaden und Boden kroch (in asteroid-la flimmerte die AO-Ebene stärker, als sie zum Bild beitrug: 2,05 vs. 1,81; jetzt 0,15). Nahaufnahmen und Halbtotalen behalten die volle AO. Wide-Shots rendern dadurch auch schneller.
+- **Filmkorn läuft in den Lichtern aus** (wie echter Film): auf hellem Himmel, Sand, Schnee nur noch 40 % Korn. Dort wurde das Korn nach dem Neu-Encodieren von TikTok/Instagram zu wabernden Flecken.
+- Gemessen mit fester Kamera (`--shots` mit stillgelegter Kamera): Unbewegtes flackert in keiner Ebene außer dem Korn; das Flackern kam aus Kamerafahrten (Schattenkarte v3.41, AO v3.42).
+
 # Neu in v3.41 (kein Flackern von Schatten und Himmel)
 - **Schattenkarte flimmert nicht mehr** (`fitShadow`): Die Größe der Schattenbox folgt der Kamera in Stufen von ×1,25 statt jeden Meter (jede Größenänderung zeichnet alle Schattenkanten neu, das krabbelte bei jedem Push-in); die Mitte rastet auf ganze Schatten-Texel im Koordinatensystem der Sonne ein (das alte Einrasten in Welt-x/z passte nicht zur schrägen Sonne und ließ Kanten bei jeder Kamerafahrt zittern); Miniatur-Einstellungen bekommen eine größere Box (`CFG.mini.shadow`, 320 m), damit ihr Rand nicht als wandernde Linie über den Boden läuft.
 - **Weniger Korn im Miniatur-Look** (`CFG.mini.grain`, 0.35): flache Flächen (Himmel, Sand, Wasser) flimmern nach dem Upload nicht mehr.

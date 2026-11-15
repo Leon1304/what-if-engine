@@ -17346,7 +17346,7 @@ const FinalShader = {
       if (uMiniWarm > 0.0) c = clamp(c + uMiniWarm * vec3(1.0, 0.45, -0.6) * (1.0 - c), 0.0, 1.0);   // v3.37 miniature: a little warm sunlight on the toy model
       if (uMode > 2.5) c *= 0.8 + 0.2 * sin(uv.y * uRes.y * 1.5708);
       c *= mix(1.0 - uVig, 1.0, smoothstep(0.9, 0.25, length((vUv - 0.5) * vec2(1.0, 1.2))));
-      c += (h(vUv * uRes + fract(uTime * 13.7) * 97.0) - 0.5) * uGrain;
+      c += (h(vUv * uRes + fract(uTime * 13.7) * 97.0) - 0.5) * uGrain * (1.0 - 0.6 * smoothstep(0.5, 0.9, dot(c, vec3(0.299, 0.587, 0.114))));   // v3.41: grain rolls off in the highlights like film (bright sky / sand no longer boil after the platforms' re-encode)
       c *= 1.0 - uDip;
       if (uBars > 0.0) c *= step(uBars, vUv.y) * step(uBars, 1.0 - vUv.y);   // v3.23 cinema bars (pure black, snapped to whole pixels in JS: no soft edge line)
       gl_FragColor = vec4(c, 1.0);
@@ -18155,6 +18155,8 @@ function stepScene(t) {   // everything in the 3D scene at time t (no HUD) — a
   updateEmitters(st);   // v3.26: after the camera — wrapped rain / snow fields sit round this frame's camera
   if (THUMB_ON) thumbCam();
   fitShadow();
+  if (gtao) { const dd = Math.max(0.5, camera.position.distanceTo(_l)), rpx = 0.7 / (2 * dd * Math.tan(camera.fov * Math.PI / 360)) * renderer.domElement.height * (CFG.aoRes ?? 0.5);
+    gtao.blendIntensity = AOI * sm01((rpx - 6) / 12); }   // v3.41: AO fades out once its 0.7 m radius is only a few AO pixels (wide / high shots): there it was only noise crawling over facades and ground while the camera moved
   lookPass(t);
   facePass(t);
   dressPass();
@@ -18165,7 +18167,7 @@ function update(t) {
   const tv = teaseV(t); stepScene(tv);   // flash-forward: scene + camera at the teased moment, HUD on video time
   const fa = updateHud(t), U = fin.uniforms;
   updateExplain(t); updateTease(t);
-  scenePass.split = SPLIT_NOW; if (SPLIT_NOW) camFx.dof = 0; if (gtao) gtao.enabled = !SPLIT_NOW;   // split screen: no AO / lens blur (one camera each)
+  scenePass.split = SPLIT_NOW; if (SPLIT_NOW) camFx.dof = 0; if (gtao) gtao.enabled = !SPLIT_NOW && gtao.blendIntensity > 0.005;   // v3.41: faded-out AO is not computed at all (wide shots render faster)   // split screen: no AO / lens blur (one camera each)
   if (!THUMB_ON) U.uSat.value = (CFG.saturation ?? 1.08) * (1 - 0.62 * frzK) * (1 - 0.94 * ccK);
   U.uTime.value = t; U.uExp.value = renderer.toneMappingExposure; U.uAb.value = Math.min(1.5, shakeAmt * 2.5 + fa);
   U.uBlur.value = camFx.blur; U.uBlurDir.value.set(camFx.dx, 0); U.uZoom.value = camFx.zoom; U.uDip.value = camFx.dip; U.uDef.value = camFx.def;
