@@ -860,7 +860,7 @@ function rimFit() {
 const _mats = new Map(), _geo = new Map(), MROUGH = LOOKV2 && CFG.materials !== false ? 0.8 : 0.88;   // look v2: default roughness 0.8 (was 0.88 everywhere: no sheen at all)
 // v2.34 surfaces: mat(hex, { surf }) / box(…, { surf }) draws a pattern on walls and roofs per pixel — no extra geometry, fades with distance:
 //   brick · stone (big blocks) · plank (upright boards) · siding (lapped boards) · tile (roof tiles, shingles) · plaster · concrete (panels) · metal (corrugated sheet)
-const SURF = { brick: 1, stone: 2, plank: 3, siding: 4, tile: 5, plaster: 6, concrete: 7, metal: 8, asphalt: 9, paving: 10, boards: 11, tiles: 12, carpet: 13, wallpaper: 14, marking: 15 };   // vNEXT marking: road paint (outdoor, snow like the asphalt under it)
+const SURF = { brick: 1, stone: 2, plank: 3, siding: 4, tile: 5, plaster: 6, concrete: 7, metal: 8, asphalt: 9, paving: 10, boards: 11, tiles: 12, carpet: 13, wallpaper: 14, marking: 15 };   // v3.37 marking: road paint (outdoor, snow like the asphalt under it)
 // v2.35 weather on the ground: rain makes surfaces dark and glossy and leaves puddles that mirror the sky, snow settles on everything that faces up.
 //   emit('rain') / emit('snow') drive it on their own (wet in ~5 s, dry in ~25 s; snow builds in ~16 s). By hand: wetGround(t0, t1, k) · snowCover(t0, t1, k),
 //   whole video: CFG.wet / CFG.snowCover 0..1. CFG.weather: false = off. Pure function of t.
@@ -893,7 +893,7 @@ function surfFx(m, kind, o = {}) {   // o.indoor: no weather (rooms) · o.sp: pa
       ` + sh.fragmentShader.replace('#include <color_fragment>', `#include <color_fragment>
       { vec3 fn = normalize(cross(dFdx(vSL), dFdy(vSL))); float sd = distance(cameraPosition, vSW), sf = 1.0 - smoothstep(35.0, 120.0, sd), nf = 1.0 - smoothstep(7.0, 22.0, sd), fl = step(0.92, abs(fn.y));
         vec3 tg = fl > 0.5 ? vec3(1.0, 0.0, 0.0) : normalize(cross(vec3(0.0, 1.0, 0.0), fn)); vec2 uv = vec2(dot(vSL, tg), fl > 0.5 ? vSL.z : vSL.y / max(0.3, sqrt(1.0 - fn.y * fn.y)));
-        float K = ${K}, ws = fl * max(max(step(abs(K - 9.0), 0.4), step(abs(K - 6.0), 0.4)), step(14.5, K)); if (ws > 0.5) uv = vSW.xz;   // vNEXT: flat asphalt, plaster and paint tops in world space — overlapping road boxes show the same pattern (no flicker)
+        float K = ${K}, ws = fl * max(max(step(abs(K - 9.0), 0.4), step(abs(K - 6.0), 0.4)), step(14.5, K)); if (ws > 0.5) uv = vSW.xz;   // v3.37: flat asphalt, plaster and paint tops in world space — overlapping road boxes show the same pattern (no flicker)
         vec2 wq = fl * step(5.5, K) * step(K, 10.5) + step(14.5, K) * fl > 0.5 ? vSW.xz : vSL.xz;   // weather noise: world space on flat street surfaces
         float k = 0.0, mo = (sfn(uv * 0.6) - 0.5) * 0.07 + (sfn(uv * 5.0 + 7.0) - 0.5) * 0.04;
         if (K < 1.5) k = sfBlock(uv, 0.62, 0.24, 0.022, 0.2, 0.24, 0.5) + mo * 0.6;
@@ -904,7 +904,7 @@ function surfFx(m, kind, o = {}) {   // o.indoor: no weather (rooms) · o.sp: pa
         else if (K < 6.5) k = mo * 1.4 + (sfn(vec2(uv.x * 2.6, uv.y * 0.22)) - 0.5) * 0.06;
         else if (K < 7.5) k = sfBlock(uv, 3.0, 3.1, 0.03, -0.16, 0.05, 0.0) + mo * 1.2 + (sfn(vec2(uv.x * 2.6, uv.y * 0.22)) - 0.5) * 0.07;
         else if (K < 8.5) k = sin(uv.x * 28.56) * 0.075 + sfBlock(uv, 40.0, 1.25, 0.02, -0.16, 0.05, 0.0) + mo * 0.5;
-        else if (K < 9.5) { vec2 cu = uv + vec2(sfn(uv * 2.3 + 1.0), sfn(uv * 2.3 + 8.0)) * 0.3 + vec2(sfn(uv * 9.0 + 4.0), sfn(uv * 9.0 + 11.0)) * 0.05;   // vNEXT cracks: jagged (jittered), broken into pieces, varying width, fading out
+        else if (K < 9.5) { vec2 cu = uv + vec2(sfn(uv * 2.3 + 1.0), sfn(uv * 2.3 + 8.0)) * 0.3 + vec2(sfn(uv * 9.0 + 4.0), sfn(uv * 9.0 + 11.0)) * 0.05;   // v3.37 cracks: jagged (jittered), broken into pieces, varying width, fading out
           float cw = 0.004 + 0.016 * sfn(uv * 0.8 + 5.0);
           float cr = (1.0 - smoothstep(0.0, cw, abs(sfn(cu * 0.55 + 3.0) - 0.5))) * smoothstep(0.5, 0.66, sfn(uv * 0.13 + 9.0)) * smoothstep(0.32, 0.6, sfn(uv * 1.6 + 13.0))
             + (1.0 - smoothstep(0.0, cw * 1.4, abs(sfn(cu * 1.7 + 21.0) - 0.5))) * smoothstep(0.62, 0.74, sfn(uv * 0.21 + 4.0)) * smoothstep(0.4, 0.65, sfn(uv * 3.1 + 2.0)) * 0.8;
@@ -920,10 +920,10 @@ function surfFx(m, kind, o = {}) {   // o.indoor: no weather (rooms) · o.sp: pa
         else k = (sfh(floor(uv * 40.0)) - 0.5) * 0.06 * nf + mo * 0.5 - smoothstep(0.62, 0.8, sfn(uv * 2.2 + 6.0)) * 0.22;   // road paint: grain and worn spots
         diffuseColor.rgb *= 1.0 + k * sf;
       #ifndef SURF_IN
-        float road = max(step(8.5, K) * step(K, 10.5), step(14.5, K)), up = max(smoothstep(0.35, 0.8, fn.y), road * step(0.001, uSnow)), sn = 0.0;   // vNEXT: the thin sides of asphalt, paving and paint take the snow too (no dark outlines)
+        float road = max(step(8.5, K) * step(K, 10.5), step(14.5, K)), up = max(smoothstep(0.35, 0.8, fn.y), road * step(0.001, uSnow)), sn = 0.0;   // v3.37: the thin sides of asphalt, paving and paint take the snow too (no dark outlines)
         if (uSnow > 0.001 && road < 0.5) { float am = uSnow; sn = up * smoothstep(0.1, 0.3, am * 1.25 - 0.3 + (sfn(vSL.xz * 1.3 + 2.0) - 0.5) * 0.9 * (1.0 - am * 0.7));
           diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.90, 0.94, 1.0) * (1.0 + mo * 0.6), sn); }
-        if (uSnow > 0.001 && road > 0.5) {   // vNEXT snow on streets: soft drifts (fbm, no hard blotches), piled up at the kerbs, compacted grey tyre tracks along the wheel bands of every lane (road(): rl);
+        if (uSnow > 0.001 && road > 0.5) {   // v3.37 snow on streets: soft drifts (fbm, no hard blotches), piled up at the kerbs, compacted grey tyre tracks along the wheel bands of every lane (road(): rl);
           // the paint uses the same function as the asphalt under it, so markings vanish under the snow with it and only show faintly in the tracks
           float nn = sfn(wq * 0.32 + 2.0) * 0.5 + sfn(wq * 1.1 + 7.0) * 0.3 + sfn(wq * 3.7 + 3.0) * 0.2, tk = 0.0, edge = 0.0;
           #ifdef SURF_RL
@@ -1005,12 +1005,30 @@ function wetSand(H, cz, size, bw, o) {
 }
 // v2.34 ground texture: fine grain close to the camera (grass speckle, wind ripples on sand, sparkle and bluish hollows on snow), soft mottling further out —
 // worked out per pixel from the ground colour, fades with distance (no shimmer in wide shots). ground({ detail: false }) or CFG.groundDetail: false = flat colour
+// v3.37 snow drifts on the ground: at bake time (only with snow) a map of what stands on the ground round the cameras (walls, fences, houses, props) → blurred → the ground
+//   shader lets snow pile up and settle first next to them (drifts against walls and fences). DRIFT.b = [x0, z0, 1 / size, on]
+const DRIFT = { tex: { value: new THREE.DataTexture(new Uint8Array(4), 1, 1) }, b: { value: new THREE.Vector4(0, 0, 0, 0) } }; DRIFT.tex.value.needsUpdate = true;
+function snowDriftMap() {
+  if (CFG.weather === false || !((CFG.snowCover ?? 0) > 0 || SNOWWIN.length)) return; let S; try { S = camSamples(0.5); } catch (e) { return; } if (!S.length) return;
+  let x0 = 1e9, x1 = -1e9, z0 = 1e9, z1 = -1e9; for (const q of S) for (const v of [q.P, q.L]) { x0 = Math.min(x0, v[0]); x1 = Math.max(x1, v[0]); z0 = Math.min(z0, v[2]); z1 = Math.max(z1, v[2]); }
+  const cx = (x0 + x1) / 2, cz = (z0 + z1) / 2, size = clamp(Math.max(x1 - x0, z1 - z0) + 90, 60, 420), N = 256, cs = size / N, ox = cx - size / 2, oz = cz - size / 2, M = new Float32Array(N * N);
+  world.updateMatrixWorld(true);
+  world.traverse(o => { if (!o.isMesh || o.isInstancedMesh || !o.visible || o.userData.cover || o.userData.noHit) return; let st = false; for (let q = o; q && q !== world; q = q.parent) { if (q.userData.dyn || !q.visible || q.userData.cover) return; if (q.userData.stat) st = true; } if (!st) return;
+    const B = _obbOf(o); if (!B || B.ly < 0.35 || Math.max(B.lx, B.lz) > 80 || B.lx * B.lz > 900) return; const gy = groundH(B.x, B.z); if (B.y0 > gy + 0.3 || B.y1 < gy + 0.35) return;   // stands on the ground and is at least knee high
+    const r = Math.hypot(B.hx, B.hz), i0 = Math.max(0, Math.floor((B.x - r - ox) / cs)), i1 = Math.min(N - 1, Math.floor((B.x + r - ox) / cs)), j0 = Math.max(0, Math.floor((B.z - r - oz) / cs)), j1 = Math.min(N - 1, Math.floor((B.z + r - oz) / cs));
+    for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) { const dx = ox + (i + 0.5) * cs - B.x, dz = oz + (j + 0.5) * cs - B.z; if (Math.abs(dx * B.ux + dz * B.uz) <= B.hx + cs * 0.5 && Math.abs(dx * B.vx + dz * B.vz) <= B.hz + cs * 0.5) M[j * N + i] = 1; } });
+  const rad = Math.max(1, Math.round(1.1 / cs)), T = new Float32Array(N * N);   // two box blurs ≈ a soft 1–2 m halo round everything standing
+  for (let it = 0; it < 2; it++) { for (let j = 0; j < N; j++) { let a = 0; for (let i = -rad; i < N + rad; i++) { if (i + rad < N) a += M[j * N + i + rad]; if (i - rad - 1 >= 0) a -= M[j * N + i - rad - 1]; if (i >= 0 && i < N) T[j * N + i] = a / (2 * rad + 1); } }
+    for (let i = 0; i < N; i++) { let a = 0; for (let j = -rad; j < N + rad; j++) { if (j + rad < N) a += T[(j + rad) * N + i]; if (j - rad - 1 >= 0) a -= T[(j - rad - 1) * N + i]; if (j >= 0 && j < N) M[j * N + i] = a / (2 * rad + 1); } } }
+  const D = new Uint8Array(N * N * 4); for (let k = 0; k < N * N; k++) { const v = Math.round(clamp(M[k] * 2.6) * 255); D[4 * k] = D[4 * k + 1] = D[4 * k + 2] = v; D[4 * k + 3] = 255; }
+  const tx = new THREE.DataTexture(D, N, N); tx.magFilter = tx.minFilter = THREE.LinearFilter; tx.wrapS = tx.wrapT = THREE.ClampToEdgeWrapping; tx.needsUpdate = true; DRIFT.tex.value = tx; DRIFT.b.value.set(ox, oz, 1 / size, 1);
+}
 function groundFx(m, o = {}) {
   if (CFG.groundDetail === false || o.detail === false) return m; const amp = (typeof o.detail === 'number' ? o.detail : 1).toFixed(2); m.userData.own = true;
   m.onBeforeCompile = sh => {
     sh.vertexShader = 'varying vec3 vGW;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n  vGW = (modelMatrix * vec4(transformed, 1.0)).xyz;');
-    Object.assign(sh.uniforms, { uWet: WX.wet, uSnow: WX.snow, uSkyT: skyU.top, uSkyB: skyU.bot, uSea: WX.sea, uWxT: WX.t });
-    sh.fragmentShader = WX_GLSL.head + `uniform float uSea, uWxT; varying vec3 vGW;
+    Object.assign(sh.uniforms, { uWet: WX.wet, uSnow: WX.snow, uSkyT: skyU.top, uSkyB: skyU.bot, uSea: WX.sea, uWxT: WX.t, uDrift: DRIFT.tex, uDriftB: DRIFT.b });
+    sh.fragmentShader = WX_GLSL.head + `uniform float uSea, uWxT; uniform sampler2D uDrift; uniform vec4 uDriftB; varying vec3 vGW;
       float gh(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
       float gvn(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f); return mix(mix(gh(i), gh(i + vec2(1.0, 0.0)), f.x), mix(gh(i + vec2(0.0, 1.0)), gh(i + vec2(1.0, 1.0)), f.x), f.y); }
       ` + sh.fragmentShader.replace('#include <color_fragment>', `#include <color_fragment>
@@ -1024,7 +1042,12 @@ function groundFx(m, o = {}) {
         gc *= 1.0 + v * 1.7 * ${amp};
         // v2.35 weather and shore: snow settles in patches that grow together, rain darkens the ground and fills flat spots with puddles, the sea leaves wet sand and a lapping foam line
         float gup = smoothstep(0.75, 0.93, normalize(cross(dFdx(vGW), dFdy(vGW))).y), gsn = 0.0;
-        if (uSnow > 0.001 && snowy < 0.5) { gsn = gup * smoothstep(0.1, 0.3, uSnow * 1.25 - 0.3 + (n1 * 1.1 + n2 * 0.5) * (1.0 - uSnow * 0.7)); gc = mix(gc, vec3(0.90, 0.94, 1.0) * (1.0 + n2 * 0.05) + step(0.988, gh(floor(gp * 24.0))) * gf * 0.25, gsn); }
+        if (uSnow > 0.001 && snowy < 0.5) {   // v3.37 soft snow cover: rotated fbm (no square value-noise blotches), a wide soft edge, full cover from ~0.8, drifts settle first against walls and fences (DRIFT map)
+          vec2 gq = mat2(0.8, -0.6, 0.6, 0.8) * gp; float sb = gvn(gq * 0.17 + 3.0) * 0.45 + gvn(mat2(0.8, -0.6, 0.6, 0.8) * gq * 0.53 + 7.0) * 0.28 + gvn(gq * 1.7 + 1.0) * 0.17 + gvn(gp * 5.3 + 9.0) * 0.1;
+          float dr = uDriftB.w > 0.5 ? texture2D(uDrift, (gp - uDriftB.xy) * uDriftB.z).r : 0.0, am = uSnow;
+          float cv = smoothstep(0.0, 0.6, am * 1.4 - 0.45 + (sb - 0.5) * 1.0 * (1.0 - am * 0.65) + dr * 0.5 * (1.0 - am * 0.4));
+          gsn = gup * cv; vec3 sc = vec3(0.90, 0.94, 1.0) * (0.95 + sb * 0.08 + dr * 0.03); sc = mix(sc, sc * vec3(0.86, 0.91, 1.0), clamp(0.45 - sb, 0.0, 0.45) * gm);   // bluish hollows, brighter crests
+          gc = mix(gc, sc + step(0.988, gh(floor(gp * 24.0))) * gf * 0.25, gsn); }
         if (uWet > 0.001) { float w = uWet * (1.0 - gsn); gc *= 1.0 - w * 0.2; wxGloss = w * 0.5;
           float pd = smoothstep(0.66, 0.71, gvn(gp * 0.4 + 5.0) * 0.7 + gvn(gp * 1.3 + 2.0) * 0.3) * smoothstep(0.3, 0.75, uWet) * smoothstep(0.985, 0.997, normalize(cross(dFdx(vGW), dFdy(vGW))).y) * (1.0 - gsn);
           gc = mix(gc, gc * vec3(0.62, 0.58, 0.52), pd); wxPud = pd * 0.8; wxGloss = max(wxGloss, pd); }
@@ -1042,7 +1065,7 @@ function ground(o = {}) {   // colour varies in soft patches (CFG.groundDetail: 
   const H0 = (x, z) => { const r = Math.hypot(x, z), k = clamp((r - flat) / 70); return k * k * hills * (0.65 + 0.35 * Math.sin(x * 0.045 + 1.3) * Math.cos(z * 0.05 + 0.7) + 0.25 * Math.sin(x * 0.13 + z * 0.11)); };
   const bw = o.beach ?? 5, fl = Math.max(30, bw + 14);   // v2.25 beach: width of the sand strip in m (Omaha at low tide: 40–60)
   const H = cz == null ? H0 : (x, z) => { const k = clamp((z - cz) / 12), s = k * k * (3 - 2 * k); return lerp(H0(x, z) * (1 - clamp((z - cz + fl) / fl)), -dep, s); };
-  const HR = (x, z) => { const h = H(x, z); return h === 0 || !ROADSEG.length ? h : h * roadFlatK(x, z); };   // vNEXT: terrain flattened under roads (see road)
+  const HR = (x, z) => { const h = H(x, z); return h === 0 || !ROADSEG.length ? h : h * roadFlatK(x, z); };   // v3.37: terrain flattened under roads (see road)
   groundH = HR;
   const _tc = new THREE.Color(), base0 = new THREE.Color(o.color ?? '#5F7F3B'), dirt = new THREE.Color(o.dirt || '#7A6650'), green = o.dirt !== false && base0.g > base0.r * 1.05;
   const tint = (c, x, z) => { if (CFG.groundDetail === false) return _tc.copy(c); const n = 0.07 * noise2(x * 0.045, z * 0.045) + 0.04 * noise2(x * 0.17 + 9, z * 0.17 + 3);
@@ -1062,7 +1085,7 @@ function ground(o = {}) {   // colour varies in soft patches (CFG.groundDetail: 
   const gm = mesh(world, mk(seg0), groundFx(new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 1 }), o), 0, 0, 0, { cast: false, stat: true });
   GROUND._fix = { m: gm, mk, H, HR, size, seg: seg0 }; return gm;
 }
-// vNEXT roads and terrain: every road() registers its segments (ROADSEG: ax, az, bx, bz, half width). groundH (and the ground mesh, rebuilt at bake time with ~1.8 m cells
+// v3.37 roads and terrain: every road() registers its segments (ROADSEG: ax, az, bx, bz, half width). groundH (and the ground mesh, rebuilt at bake time with ~1.8 m cells
 //   where a road leaves the flat area) is pulled down to the road's level within w/2 + 3 m of the centre line and rises back over ROADFALL m — roads beyond ground({ flat })
 //   are no longer buried by hills. Call road() / city() before placing props next to such roads (groundH changes when the road is added). QA: ROADBURIED.
 const ROADSEG = [], ROADS = [], ROADFALL = 20;
@@ -1424,11 +1447,11 @@ const BIOMES = {
   'plain-stone':  { trees: [['round', 0.5], ['pine', 0.5]], near: { pebble: 6, tuft: 6 }, ring: { tree: 0.12, rock: 0.15, bush: 0.15 }, grass: ['#6E7A55', '#7A8460'], flowers: [] }
 };
 function biome(kind = 'farm', o = {}) { _dressed = true; if (kind === 'snow' && o.cover !== false) snowCover(-100, 1e9, o.cover ?? 1); DEFER.push(() => runBiome(kind, o));
-  const dr = o.dress ?? CFG.dress; if (dr) { const dk = typeof dr === 'string' ? dr : dr.kind ?? BIOME_DRESS[kind]; if (dk) dress(dk, typeof dr === 'object' ? dr : {}); } }   // v3.27: biome(kind, { dress: true | 'kind' | { kind, density, … } }) or CFG.dress
+  const dr = o.dress ?? CFG.dress; if (dr) { const dk = typeof dr === 'string' ? dr : dr.kind ?? BIOME_DRESS[kind]; if (dk) dress(dk, typeof dr === 'object' ? dr : {}); } }   // v3.37: biome(kind, { dress: true | 'kind' | { kind, density, … } }) or CFG.dress
 function runBiome(kind, o) {
   const B = BIOMES[kind] ?? BIOMES.farm, A = o.area ?? CFG.area ?? 30, D = o.density ?? 1, R1 = o.ring?.[1] ?? A * 2.5, R0 = o.ring?.[0] ?? A * 1.05;
   let bs = Math.floor(hash((CFG.seed ?? 7) * 7.77 + kind.length * 3.1) * 2147483646) + 1; const br = () => (bs = (bs * 48271) % 2147483647) / 2147483647, bp = arr => arr[Math.floor(br() * arr.length)];
-  // occupancy grid (0.5 m) over ±R1 (v3.27: the shared _occGrid; bit 1 = keep free, bit 2 = no tall things — trees, rocks, bushes, logs keep 3 m from every lens)
+  // occupancy grid (0.5 m) over ±R1 (v3.37: the shared _occGrid; bit 1 = keep free, bit 2 = no tall things — trees, rocks, bushes, logs keep 3 m from every lens)
   const OG = _occGrid(-R1, -R1, R1, R1, 0.5), fillBox = (x0, x1, z0, z1) => OG.box(x0, x1, z0, z1, 1), fillSeg = (a, b, w) => OG.seg(a, b, w, 1);
   const free = (x, z, r = 0) => OG.free(x, z, r, 1), freeT = (x, z, r = 0) => OG.free(x, z, r, 3);
   const B3 = new THREE.Box3();
@@ -1441,7 +1464,7 @@ function runBiome(kind, o) {
   });
   for (const P of PATHS) for (let i = 1; i < P.p.length; i++) fillSeg(P.p[i - 1], P.p[i], 1.1);
   for (const [a, b, r] of HORDE_LANES) fillSeg(a, b, r * 0.9 + 1.5);
-  _clearCams(OG, camSamples(0.25), { lens: 1.0, tall: 3 });   // v3.27: lens box + cone to the subject along every shot (was: 1.6 m strip, 6 m box per key, 8 m box per track)
+  _clearCams(OG, camSamples(0.25), { lens: 1.0, tall: 3 });   // v3.37: lens box + cone to the subject along every shot (was: 1.6 m strip, 6 m box per key, 8 m box per track)
   for (const tr of Object.values(TRACK)) { const v = tr.obj.getWorldPosition(new THREE.Vector3()); OG.rect(v.x - 1, v.x + 1, v.z - 1, v.z + 1, 1); OG.rect(v.x - 4, v.x + 4, v.z - 4, v.z + 4, 2); }
   for (const [x, z, r] of o.keep ?? []) fillBox(x - r, x + r, z - r, z + r);
   const coast = GROUND.coast, wet = o.dry && waterH(0, 0, 0) > -900 ? (x, z) => groundH(x, z) < Math.max(waterH(x, z, 0), waterH(x, z, CFG.dur ?? 0)) + 0.4 : null;   // v3.5 o.dry: keep lakes / floods free
@@ -1463,7 +1486,7 @@ function runBiome(kind, o) {
   tries(Math.round(ringA * ((B.ring.bush ?? 0) + (B.ring.dry ?? 0)) * D), () => { const a = br() * TAU, r = Math.sqrt(lerp(R0 * R0, R1 * R1, br())), x = Math.cos(a) * r, z = Math.sin(a) * r;
     if (!onLand(z, x) || !freeT(x, z, 0.8)) return false; bush(world, x, z, { kind: B.ring.dry ? 'dry' : undefined, size: 0.7 + br() * 0.7 }); mark(x, z, 1.2); return true; });
   // play area: small props and ground cover
-  const LOWK = new Set(['tuft', 'pebble', 'flower', 'shell', 'star', 'beachgrass', 'reed', 'mushroom', 'drift']);   // v3.27: ground cover may come close to a lens, everything taller keeps 3 m
+  const LOWK = new Set(['tuft', 'pebble', 'flower', 'shell', 'star', 'beachgrass', 'reed', 'mushroom', 'drift']);   // v3.37: ground cover may come close to a lens, everything taller keeps 3 m
   const nearA = (2 * A) * (2 * A) / 100, rx = () => (br() * 2 - 1) * A, items = {};
   const put = (k, x, z, s, c) => (items[k] ??= []).push([x, z, s, br() * TAU, c]);
   for (const [k, rate] of Object.entries(B.near)) {
@@ -1527,7 +1550,7 @@ function autoDress() {
 }
 
 /* ---------------------------------------------------------------------- */
-/* v3.27 SET DRESSING — dress(kind, o): props where the cameras actually look (behind the subject, at the frame edges, along walls, a soft foreground piece)
+/* v3.37 SET DRESSING — dress(kind, o): props where the cameras actually look (behind the subject, at the frame edges, along walls, a soft foreground piece)
    _occGrid: the occupancy grid shared by biome() and dress() · camSamples: every camera shot sampled at build time · DOORS: kept free in front
 /* ---------------------------------------------------------------------- */
 const DOORS = [];   // house(), barn(), gate(), tent(), decoHotel(), prisonCell(), interior(), asset() doors and everything openDoor() opens — dress() keeps 2 m in front of them free
@@ -1587,8 +1610,8 @@ function camSamples(dt = 0.25) {
     const n = Math.max(1, Math.ceil((t1 - t0) / dt)); for (let k = 0; k <= n; k++) { const t = Math.min(t1 - 1e-3, t0 + (t1 - t0) * k / n), c = _camAt(a, b, t); if (c) S.push({ ...c, t, shot, i }); } });
   return S;
 }
-// v3.27 camera clearing (biome() and dress()): only what the lens needs — a small box round the lens (hard), no tall things within `tall` m of it, the cone from the lens to the
-// subject (0.45 m wide at the lens, subject radius + 0.4 m at the subject) and the subject itself. Before v3.27 a 1.6 m strip lens → target, a 6 m box round every key and an 8 m box
+// v3.37 camera clearing (biome() and dress()): only what the lens needs — a small box round the lens (hard), no tall things within `tall` m of it, the cone from the lens to the
+// subject (0.45 m wide at the lens, subject radius + 0.4 m at the subject) and the subject itself. Before v3.37 a 1.6 m strip lens → target, a 6 m box round every key and an 8 m box
 // round every track were cleared — the ground in front of / beside the subject, i.e. what a close-up shows, stayed bare.
 function _clearCams(O, S, o = {}) {
   const lens = o.lens ?? 1.0, tall = o.tall ?? 3;
@@ -1619,7 +1642,7 @@ const _surfMesh = m => { if (m.userData.qsurf != null) return !!m.userData.qsurf
    'fg' a soft piece 0.9–2 m before the lens in a bottom corner) · kinds: { suburb: 2, … } adds it to those kinds' tables with that weight · tall: needs the 3 m round every lens ·
    cover: 'tuft' | 'pebble' | … instanced ground cover (a little cluster) · face: 'cam' | 'wall' | 'path' | 'rand' (heading) · needs: 'road' (a drive() path within 7 m) ·
    indoor kinds take the floor under the subject (tunnels 10 m down, interiors); outdoor kinds stand on groundH */
-const DRESS = { props: {}, kinds: {} };
+const DRESS = { props: {}, kinds: {}, lanes: [] };   // lanes: traffic() loops (v3.37: kept free like drive() paths)
 function dressProp(name, def = {}) {
   const d = DRESS.props[name] = { r: 0.5, h: 1, where: ['edge'], face: 'rand', ...def, name };
   for (const [k, w] of Object.entries(def.kinds ?? {})) { const K = DRESS.kinds[k] ??= { bands: {} }; for (const b of [].concat(d.where)) { const L = K.bands[b] ??= []; const i = L.findIndex(e => e[0] === name); if (i >= 0) L[i][1] = w; else L.push([name, w]); } }
@@ -1686,6 +1709,64 @@ for (const [n, c, kinds, col] of [['tufts', 'tuft', { suburb: 3, farm: 3, beach:
   dressProp(n, { where: ['ground'], r: 0.5, h: 0.12, cover: c, colors: col, kinds });
 dressProp('leaves',  { where: ['ground'], r: 1.0, h: 0.03, flat: true, leaves: true, kinds: { suburb: 1.5, farm: 0.6, city: 0.4 } });
 dressProp('manhole', { where: ['ground'], r: 0.4, h: 0.03, flat: true, y0: true, fn: (p, x, z) => stat(manhole(p, x, z)), kinds: { city: 0.8, apron: 0.4 } });
+// ---- v3.37 the prop library (env-props, PROPS) in the dress tables. Extra fields: kerb: true (parked along the nearest road's kerb, len × w footprint) ·
+//   on: 'road' (flat decal on the asphalt) | 'ground' (never on a road) · lift / wallH (wall-mounted: starts lift m up, needs a wall that high) · dry (not in snow) · snowOnly
+const _wallPt = (x, z, ry, d) => [x - Math.sin(ry) * d, z - Math.cos(ry) * d];   // wall band: (x, z) stands r + 0.08 off the wall facing away from it → the point d back on the wall face
+const _sd = R => Math.floor(R() * 997);
+const _dk = (c, a, b) => (c.kind === 'suburb-winter' || c.kind === 'alpine') ? a : b;
+// street and yard
+dressProp('mailbox',    { where: ['edge'], r: 0.35, h: 1.3, face: 'cam', fn: (p, x, z, ry, R) => mailbox(p, x, z, { ry, kind: R() < 0.85 ? 'us' : 'post', seed: _sd(R) }), kinds: { suburb: 1.4, 'suburb-winter': 1.2, farm: 0.7 } });
+dressProp('wallMailbox', { where: ['wall'], r: 0.25, h: 0.45, lift: 1.0, wallH: 1.6, face: 'wall', fn: (p, x, z, ry, R) => { const [a, b] = _wallPt(x, z, ry, 0.33); return mailbox(p, a, b, { kind: 'wall', ry, seed: _sd(R) }); }, kinds: { city: 0.4, suburb: 0.3, 'suburb-winter': 0.3 } });
+dressProp('wheelieBin', { where: ['wall', 'edge'], r: 0.45, h: 1.1, face: 'wall', fn: (p, x, z, ry, R) => bin(p, x, z, { ry, kind: 'wheelie', seed: _sd(R) }), kinds: { suburb: 1.6, 'suburb-winter': 1.4, city: 0.5, farm: 0.4 } });
+dressProp('dumpster',   { where: ['wall', 'bg'], r: 1.15, h: 1.4, face: 'wall', fn: (p, x, z, ry, R) => bin(p, x, z, { ry, kind: 'dumpster', seed: _sd(R) }), kinds: { city: 1.0, apron: 0.4, military: 0.3 } });
+dressProp('recycling',  { where: ['edge', 'wall'], r: 0.9, h: 1.7, face: 'cam', fn: (p, x, z, ry, R) => bin(p, x, z, { ry, kind: 'recycling', seed: _sd(R) }), kinds: { city: 0.4, suburb: 0.2 } });
+dressProp('barrel',     { where: ['wall', 'edge', 'bg'], r: 0.38, h: 0.95, fn: (p, x, z, ry, R, c) => barrel(p, x, z, { ry, kind: c.kind === 'alpine' || c.kind === 'farm' ? (R() < 0.5 ? 'wood' : 'rain') : c.kind.startsWith('suburb') ? 'rain' : 'oil', rust: R(), seed: _sd(R) }),
+  kinds: { military: 1.0, apron: 0.8, deck: 0.8, tunnel: 0.4, desert: 0.6, farm: 0.6, alpine: 0.4, city: 0.3, suburb: 0.3, 'suburb-winter': 0.2 } });
+dressProp('crate',      { where: ['wall', 'edge', 'bg', 'fg'], r: 0.48, h: 1.0, face: 'wall', fn: (p, x, z, ry, R, c) => crate(p, x, z, { ry, seed: _sd(R), kind: c.kind === 'military' ? (R() < 0.5 ? 'ammo' : 'wood') : c.kind === 'room' || c.kind === 'cell' ? 'plastic' : R() < 0.75 ? 'wood' : 'plastic',
+  stack: c.kind === 'cell' || c.kind === 'room' ? 1 + Math.floor(R() * 2) : 1 + Math.floor(R() * R() * 3), size: 0.75 + R() * 0.3 }), kinds: { apron: 1, deck: 1.5, tunnel: 0.8, military: 1.2, farm: 0.5, room: 0.5, cell: 0.3, desert: 0.5, beach: 0.3, alpine: 0.3, city: 0.5 } });
+dressProp('ammoBox',    { where: ['ground', 'wall'], r: 0.25, h: 0.4, fn: (p, x, z, ry, R) => crate(p, x, z, { ry, kind: 'ammo', stack: 1 + Math.floor(R() * 2), seed: _sd(R) }), kinds: { military: 1.2 } });
+dressProp('pallet',     { where: ['wall', 'edge'], r: 0.75, h: 0.9, face: 'wall', fn: (p, x, z, ry, R) => pallet(p, x, z, { ry, seed: _sd(R), ...(R() < 0.5 ? { stack: 1 + Math.floor(R() * 4) } : { load: _pk(R, ['boxes', 'bags', 'bricks']) }) }), kinds: { apron: 0.8, city: 0.4, farm: 0.5, military: 0.6, deck: 0.3, tunnel: 0.2, desert: 0.3 } });
+dressProp('woodpile',   { where: ['wall'], r: 0.95, h: 1.2, face: 'wall', fn: (p, x, z, ry, R) => woodpile(p, x, z, { ry, len: 1.4 + R() * 0.3, block: false, seed: _sd(R) }), kinds: { 'suburb-winter': 1.2, alpine: 1.2, farm: 0.8, suburb: 0.3 } });
+dressProp('choppingBlock', { where: ['edge'], r: 1.6, h: 1.2, face: 'cam', fn: (p, x, z, ry, R) => woodpile(p, x, z, { ry, len: 1.4, seed: _sd(R) }), kinds: { alpine: 0.5, farm: 0.4, 'suburb-winter': 0.3 } });
+dressProp('cone',       { where: ['edge', 'ground'], r: 0.25, h: 0.75, fn: (p, x, z, ry, R, c) => cones(p, x, z, { ry, kind: c.kind === 'apron' ? 'apron' : 'traffic', seed: _sd(R) }), kinds: { city: 0.6, apron: 1.2, military: 0.2, suburb: 0.1, deck: 0.2 } });
+dressProp('coneRow',    { where: ['edge'], r: 1.3, h: 0.75, face: 'cam', fn: (p, x, z, ry, R, c) => cones(p, x, z, { ry, n: 3, gap: 0.9, kind: c.kind === 'apron' ? 'apron' : 'traffic', seed: _sd(R) }), kinds: { city: 0.4, apron: 0.6 } });
+dressProp('jersey',     { where: ['edge', 'bg'], r: 1.1, h: 0.85, face: 'cam', fn: (p, x, z, ry, R) => barrier(p, x, z, { ry, kind: 'jersey', stripes: R() < 0.4, seed: _sd(R) }), kinds: { city: 0.5, military: 1.2, apron: 0.5 } });
+dressProp('policeLine', { where: ['edge'], r: 0.9, h: 1.1, face: 'cam', fn: (p, x, z, ry, R) => barrier(p, x, z, { ry, kind: 'police', seed: _sd(R) }), kinds: { city: 0.25 } });
+dressProp('roadworks',  { where: ['edge', 'bg'], r: 0.9, h: 1.5, face: 'cam', fn: (p, x, z, ry, R) => barrier(p, x, z, { ry, kind: 'construction', seed: _sd(R) }), kinds: { city: 0.4, suburb: 0.1 } });
+dressProp('streetSign', { where: ['edge', 'bg'], r: 0.3, h: 3.0, tall: true, face: 'path', fn: (p, x, z, ry, R) => streetSign(p, x, z, { ry, kind: 'street', seed: _sd(R) }), kinds: { city: 0.6, suburb: 0.5, 'suburb-winter': 0.5 } });
+dressProp('stopSign',   { where: ['edge'], r: 0.3, h: 2.6, tall: true, face: 'path', needs: 'road', fn: (p, x, z, ry) => streetSign(p, x, z, { ry, kind: 'stop' }), kinds: { city: 0.3, suburb: 0.3, 'suburb-winter': 0.3, farm: 0.2 } });
+dressProp('aBoard',     { where: ['edge', 'wall'], r: 0.45, h: 1.0, face: 'cam', fn: (p, x, z, ry, R) => streetSign(p, x, z, { ry, kind: 'shop', seed: _sd(R) }), kinds: { city: 0.6, beach: 0.3 } });
+dressProp('realtor',    { where: ['edge'], r: 0.5, h: 1.6, face: 'cam', fn: (p, x, z, ry, R) => streetSign(p, x, z, { ry, kind: 'realtor', sold: R() < 0.3 }), kinds: { suburb: 0.4, 'suburb-winter': 0.2 } });
+dressProp('warnDiamond', { where: ['edge'], r: 0.3, h: 2.4, tall: true, face: 'path', fn: (p, x, z, ry, R, c) => streetSign(p, x, z, { ry, kind: 'warning', text: _dk(c, 'ICE', c.kind === 'military' ? 'MINES' : c.kind === 'farm' ? 'COWS' : '!') }), kinds: { alpine: 0.3, 'suburb-winter': 0.2, military: 0.2, farm: 0.2, desert: 0.2 } });
+dressProp('awning',     { where: ['wall'], r: 1.2, h: 0.6, lift: 1.8, wallH: 3.0, face: 'wall', fn: (p, x, z, ry, R) => { const [a, b] = _wallPt(x, z, ry, 1.28); return awning(p, a, b, { ry, w: 2.2 + R() * 0.5, colors: _pk(R, [['#B8202A', '#F2EEE2'], ['#2A5A3A', '#F2EEE2'], ['#2A4E7A', '#F2EEE2'], ['#C8862A', '#3A2A1E']]), seed: _sd(R) }); }, kinds: { city: 1.0, beach: 0.4 } });
+dressProp('acWall',     { where: ['wall'], r: 0.45, h: 1.4, lift: 1.4, wallH: 2.2, face: 'wall', fn: (p, x, z, ry, R) => { const [a, b] = _wallPt(x, z, ry, 0.53); return acUnit(p, a, b, { ry, kind: 'wall', y: groundH(a, b) + 1.4 + R() * 0.8, seed: _sd(R) }); }, kinds: { city: 1.0, desert: 0.3, beach: 0.3, suburb: 0.2 } });
+dressProp('acGround',   { where: ['wall'], r: 0.55, h: 0.9, face: 'wall', fn: (p, x, z, ry, R) => acUnit(p, x, z, { ry, kind: 'ground', seed: _sd(R) }), kinds: { suburb: 0.6, city: 0.3, 'suburb-winter': 0.3, desert: 0.4, apron: 0.3 } });
+dressProp('bollard',    { where: ['edge', 'ground'], r: 0.2, h: 1.0, fn: (p, x, z, ry, R, c) => bollard(p, x, z, { ry, kind: c.kind === 'apron' || c.kind === 'military' ? 'concrete' : _pk(R, ['steel', 'steel', 'post', 'concrete']), seed: _sd(R) }), kinds: { city: 1.0, apron: 0.6, military: 0.2 } });
+dressProp('bollardRow', { where: ['edge'], r: 1.6, h: 1.0, face: 'cam', fn: (p, x, z, ry, R) => bollard(p, x, z, { ry, n: 3, gap: 1.4, kind: _pk(R, ['steel', 'post']), seed: _sd(R) }), kinds: { city: 0.5 } });
+dressProp('bikeRack',   { where: ['wall', 'edge'], r: 1.1, h: 1.1, face: 'wall', fn: (p, x, z, ry, R) => bikeRack(p, x, z, { ry, n: 3, gap: 0.7, bikes: Math.floor(R() * 3), seed: _sd(R) }), kinds: { city: 0.6, suburb: 0.3 } });
+dressProp('newsBox',    { where: ['edge', 'wall'], r: 0.35, h: 1.1, face: 'cam', fn: (p, x, z, ry, R) => newsBox(p, x, z, { ry, seed: _sd(R) }), kinds: { city: 0.9 } });
+dressProp('parkedCar',  { where: ['bg', 'edge'], r: 2.4, w: 0.95, len: 4.6, h: 1.6, tall: true, kerb: true, along: true, y0: true, fn: (p, x, z, ry, R) => parkedCars(p, [[x, z, ry]], { seed: _sd(R) })[0]?.g, kinds: { suburb: 1.6, 'suburb-winter': 1.6, city: 2.0, farm: 0.3 } });
+dressProp('car', { ...DRESS.props.car, kinds: { suburb: 0.4, 'suburb-winter': 0.3, city: 0.4 } });   // free-standing cars (driveways, lots): fewer now that parked cars line the kerbs
+// winter / xmas
+dressProp('xmasLights', { where: ['wall'], r: 1.3, h: 0.4, lift: 2.15, wallH: 2.6, face: 'wall', snowOnly: true, fn: (p, x, z, ry, R) => { const [a, b] = _wallPt(x, z, ry, 1.3 + 0.08 - 0.06), tx = Math.cos(ry), tz = -Math.sin(ry), y = groundH(a, b) + 2.35, L = 1.2;
+    return xmasLights(p, [[a - tx * L, y, b - tz * L], [a, y - 0.05, b], [a + tx * L, y, b + tz * L]], { mode: _pk(R, ['twinkle', 'steady', 'chase']), seed: _sd(R), ...(R() < 0.4 ? { color: '#FFD9A0' } : {}) }).g; }, kinds: { 'suburb-winter': 1.2 } });
+dressProp('wreath',     { where: ['wall'], r: 0.3, h: 0.55, lift: 1.45, wallH: 2.1, face: 'wall', snowOnly: true, fn: (p, x, z, ry, R) => { const [a, b] = _wallPt(x, z, ry, 0.38 - 0.04); return wreath(p, a, groundH(a, b) + 1.75, b, { ry, seed: _sd(R) }); }, kinds: { 'suburb-winter': 0.4 } });
+dressProp('sled',       { where: ['edge', 'ground', 'wall'], r: 0.6, h: 0.35, fn: (p, x, z, ry, R) => sled(p, x, z, { ry, kind: R() < 0.5 ? 'wood' : 'plastic', seed: _sd(R) }), kinds: { 'suburb-winter': 0.8, alpine: 0.5 } });
+dressProp('snowman',    { where: ['edge'], r: 0.5, h: 1.7, face: 'cam', snowOnly: true, fn: (p, x, z, ry, R) => snowman(p, x, z, { ry, size: 0.8 + R() * 0.35, hat: _pk(R, ['top', 'bucket', false]), seed: _sd(R) }), kinds: { 'suburb-winter': 0.6, alpine: 0.15 } });
+dressProp('snowbank',   { where: ['edge', 'wall'], r: 1.3, h: 0.45, face: 'wall', snowOnly: true, fn: (p, x, z, ry, R) => groundDecal(p, x, z, { kind: 'snowbank', ry, len: 2.0 + R() * 0.6, seed: _sd(R) }), kinds: { 'suburb-winter': 1.0, alpine: 0.6, city: 0.3 } });
+// apron, deck, tunnel
+for (const [n, k, r, h, w, bands, tall] of [['tug', 'tug', 1.5, 1.6, 1.0, ['bg', 'edge'], 0], ['baggageCart', 'baggageCart', 1.8, 1.6, 1.0, ['bg', 'edge'], 0], ['fuelTruck', 'fuelTruck', 3.5, 3.0, 0.6, ['bg'], 1], ['airStairs', 'stairs', 2.5, 3.6, 0.5, ['bg'], 1], ['chocks', 'chocks', 0.45, 0.2, 0.8, ['ground'], 0]])
+  dressProp(n, { where: bands, r, h, tall: !!tall, face: 'rand', fn: (p, x, z, ry, R) => apronKit(p, x, z, { ry, kind: k, seed: _sd(R) }), kinds: { apron: w } });
+for (const k of ['crates', 'barrels', 'coils', 'nets']) dressProp('deck' + k[0].toUpperCase() + k.slice(1), { where: k === 'coils' || k === 'nets' ? ['wall', 'edge', 'ground'] : ['wall', 'edge'], r: 1.1, h: k === 'crates' ? 1.4 : 0.9, face: 'wall', fn: (p, x, z, ry, R) => deckCargo(p, x, z, { ry, kind: k, seed: _sd(R) }), kinds: { deck: k === 'crates' ? 1.4 : 0.9 } });
+for (const k of ['buckets', 'tools', 'debris', 'cable']) dressProp('tunnel' + k[0].toUpperCase() + k.slice(1), { where: k === 'debris' ? ['wall', 'ground'] : ['wall', 'ground'], r: 0.6, h: k === 'tools' ? 1.1 : 0.55, face: 'wall', fn: (p, x, z, ry, R) => tunnelClutter(p, x, z, { ry, kind: k, seed: _sd(R) }), kinds: { tunnel: k === 'buckets' ? 1.6 : 1.0, military: k === 'tools' ? 0.2 : 0 } });
+// loose bits and decals (flat: may lie on walk paths and in the line of sight)
+dressProp('paperLitter', { where: ['ground'], r: 1.0, h: 0.06, flat: true, fn: (p, x, z, ry, R) => debris(p, x, z, { kind: 'paper', r: 0.9, n: 8 + Math.floor(R() * 8), seed: _sd(R) }), kinds: { city: 0.8, cell: 0.6, room: 0.3, tunnel: 0.3, apron: 0.2 } });
+dressProp('leafLitter',  { where: ['ground'], r: 1.0, h: 0.03, flat: true, dry: true, fn: (p, x, z, ry, R) => debris(p, x, z, { kind: 'leaves', r: 1.0, seed: _sd(R) }), kinds: { suburb: 0.6, farm: 0.3, city: 0.2 } });
+dressProp('rubble',      { where: ['ground', 'wall'], r: 1.0, h: 0.15, flat: true, fn: (p, x, z, ry, R) => debris(p, x, z, { kind: 'rubble', r: 0.8, n: 25 + Math.floor(R() * 20), seed: _sd(R) }), kinds: { tunnel: 1.0, military: 0.8, desert: 0.4, city: 0.2 } });
+dressProp('puddle',      { where: ['ground'], r: 0.9, h: 0.02, flat: true, on: 'road', dry: true, y0: true, fn: (p, x, z, ry, R) => groundDecal(p, x, z, { kind: 'puddle', y: 0, r: 0.6 + R() * 0.5, seed: _sd(R) }), kinds: { city: 0.6, suburb: 0.4 } });
+dressProp('oilStain',    { where: ['ground'], r: 0.5, h: 0.02, flat: true, on: 'road', y0: true, fn: (p, x, z, ry, R) => groundDecal(p, x, z, { kind: 'oilStain', y: 0, r: 0.35 + R() * 0.25, seed: _sd(R) }), kinds: { city: 0.6, suburb: 0.3 } });
+dressProp('crack',       { where: ['ground'], r: 0.9, h: 0.02, flat: true, on: 'road', dry: true, y0: true, fn: (p, x, z, ry, R) => groundDecal(p, x, z, { kind: 'crack', y: 0, len: 1.0 + R() * 0.8, seed: _sd(R) }), kinds: { city: 0.5, suburb: 0.4 } });
+dressProp('apronStain',  { where: ['ground'], r: 0.6, h: 0.02, flat: true, fn: (p, x, z, ry, R) => groundDecal(p, x, z, { kind: 'oilStain', r: 0.4 + R() * 0.35, seed: _sd(R) }), kinds: { apron: 1.0, military: 0.3, deck: 0.3 } });
 dressKind('suburb', { indoor: false }); dressKind('suburb-winter', { indoor: false, rock: '#8E979F' }); dressKind('city', { indoor: false }); dressKind('alpine', { indoor: false, rock: '#8E979F' });
 dressKind('farm', { indoor: false }); dressKind('beach', { indoor: false }); dressKind('desert', { indoor: false, rock: '#B98A5A' }); dressKind('apron', { indoor: false }); dressKind('deck', { indoor: false });
 dressKind('military', { indoor: false }); dressKind('tunnel', { indoor: true, rock: '#6A5A48', budget: { wall: 5, ground: 4, edge: 2, bg: 1, fg: 0 } }); dressKind('cell', { indoor: true, budget: { wall: 3, ground: 1, edge: 1, bg: 0, fg: 0 } });
@@ -1711,7 +1792,8 @@ function _runDress(kind, o) {
   // ---- the scene as it stands: object boxes (screen coverage), walls (wall band, indoor test), flats (floors, ceilings) ----
   const OBJ = [], WALLS = [], FLATS = [], skip = new Set(); for (const f of RIGS) if (f.root) skip.add(f.root); for (const a of BEAST_ALL) skip.add(a.root ?? a.g);
   const S0 = camSamples(0.25), inside = (B, q, m = 0.2) => Math.abs((q[0] - B.x) * B.ux + (q[2] - B.z) * B.uz) < B.hx - m && Math.abs((q[0] - B.x) * B.vx + (q[2] - B.z) * B.vz) < B.hz - m && q[1] > B.y0 && q[1] < B.y1;
-  const scan = (m, hid) => { if (!m.visible || skip.has(m)) return; hid ||= !!(m.userData.crowd); if (m.isMesh && !m.isInstancedMesh && !hid && !_qpClear(m)) { const B = _obbOf(m); if (B && Number.isFinite(B.x) && !(B.lx > 90 && B.lz > 90)) { B.surf = _surfMesh(m);
+  const scan = (m, hid) => { if (!m.visible || skip.has(m)) return; hid ||= !!(m.userData.crowd); if (m.isMesh && !m.isInstancedMesh && !hid && !_qpClear(m)) { const B = _obbOf(m); if (B && Number.isFinite(B.x) && B.lx > 90 && B.lz > 90 && B.ly < 0.35) FLATS.push(B);   // v3.37: a huge slab (apron, yard, plaza) is a floor props stand on
+      else if (B && Number.isFinite(B.x) && !(B.lx > 90 && B.lz > 90)) { B.surf = _surfMesh(m);
       if (B.ly < 0.35) { if (B.lx * B.lz > 0.5) FLATS.push(B); if (!B.surf) OBJ.push(B); }
       else { B.hollow = Math.max(B.lx, B.lz) > 2 && S0.some(s => inside(B, s.L));   // a shell the cameras look around in (tunnel, room box): its inside is free, its inner faces take wall props
         if (B.ly >= 1.4 && Math.max(B.lx, B.lz) >= 1.2) WALLS.push(B); if (!B.hollow) OBJ.push(B.surf ? { ...B, wall: true } : B); } } }
@@ -1731,9 +1813,10 @@ function _runDress(kind, o) {
   let gx0 = 1e9, gx1 = -1e9, gz0 = 1e9, gz1 = -1e9; for (const s of S) { for (const q of [s.P, s.L]) { gx0 = Math.min(gx0, q[0]); gx1 = Math.max(gx1, q[0]); gz0 = Math.min(gz0, q[2]); gz1 = Math.max(gz1, q[2]); } }
   const PAD = 32, C = (gx1 - gx0 + 2 * PAD) * (gz1 - gz0 + 2 * PAD) > 6e5 ? 0.5 : 0.25, O = _occGrid(gx0 - PAD, gz0 - PAD, gx1 + PAD, gz1 + PAD, C);
   for (const B of [...OBJ, ...WALLS]) if (B.y1 > -1e8) { O.obb(B, 0, 4); O.obb(B, 0.6, 8); }
-  for (const P of PATHS) { const w = P.kind === 'drive' ? 2.5 : P.kind === 'sail' ? 3.2 : 1.1, bit = P.kind ? 1 | 32 : 1; for (let i = 1; i < P.p.length; i++) O.lane(P.p[i - 1], P.p[i], w, bit); }   // 32: roads, water lanes (no ground cover either)
+  for (const P of PATHS) { const w = P.kind === 'drive' ? 2.5 : P.kind === 'sail' ? 3.2 : 1.1, bit = P.kind ? 64 | 32 : 1; for (let i = 1; i < P.p.length; i++) { O.lane(P.p[i - 1], P.p[i], w, bit); if (P.kind) O.lane(P.p[i - 1], P.p[i], 1.3, 1); } }   // 32: roads, water lanes (no ground cover either)
+  for (const lp of DRESS.lanes) for (let i = 0; i < lp.length; i++) { O.lane(lp[i], lp[(i + 1) % lp.length], 2.5, 64 | 32); O.lane(lp[i], lp[(i + 1) % lp.length], 1.3, 1); }   // v3.37 traffic() loops · 64: the wide lane (2.5 m), 1: its core (1.3 m) — a car parked at the kerb only keeps out of the core
   for (const [a, b, r] of HORDE_LANES) O.lane(a, b, r * 0.9 + 1.5, 1);
-  for (const d of DOORS) { const q = _doorXZ(d); if (q) O.disk(q[0], q[1], 2.0, 1); }
+  for (const d of DOORS) { const q = _doorXZ(d); if (q) { O.disk(q[0], q[1], 1.3, 1); O.disk(q[0], q[1], 2.0, 128); } }   // v3.37: 1.3 m free for everything, 2 m for anything bigger than a bin (128)
   for (const f of RIGS) { const r = f.root; if (!r || r.parent !== world) continue; const v = r.getWorldPosition(_sfV); O.disk(v.x, v.z, 0.7, 1); }
   for (const a of BEAST_ALL) { const n = a.root ?? a.g; if (!n) continue; const v = n.getWorldPosition(_sfV); O.disk(v.x, v.z, (a.L ?? 1) * (a.sc ?? 1) * 0.7 + 0.5, 1); }
   for (const [x, z, r] of o.keep ?? []) O.disk(x, z, r, 1);
@@ -1741,6 +1824,16 @@ function _runDress(kind, o) {
   const dOBB = (B, x, z) => { const dx = x - B.x, dz = z - B.z, lx = dx * B.ux + dz * B.uz, lz = dx * B.vx + dz * B.vz; return Math.hypot(Math.max(0, Math.abs(lx) - B.hx), Math.max(0, Math.abs(lz) - B.hz)); };
   let NEAR = []; const hitsObj = (x, z, r, y0, y1, skipB) => NEAR.some(B => B !== skipB && B.y1 > y0 + 0.05 && B.y0 < y1 && dOBB(B, x, z) < r);   // the prop's footprint against everything built (exact, not the grid)
   const roads = PATHS.filter(P => P.kind === 'drive'), nearRoad = (x, z, d) => { let best = null; for (const P of roads) for (let i = 1; i < P.p.length; i++) { const [ax, az] = P.p[i - 1], [bx, bz] = P.p[i], ex = bx - ax, ez = bz - az, L2 = ex * ex + ez * ez || 1, u = clamp(((x - ax) * ex + (z - az) * ez) / L2), q = Math.hypot(x - ax - ex * u, z - az - ez * u); if (q < d && (!best || q < best.q)) best = { q, ang: Math.atan2(ex, ez) }; } return best; };
+  // v3.37 asphalt: onRoad(x, z, r) → { Rd, q, y } when a disc of radius r lies on a road (decals with on: 'road') · kerbAt(x, z, P) → the kerb lane of the nearest road (parked cars, kerb: true)
+  const roadY = Rd => 0.05 + (Rd.g.parent ? Rd.g.getWorldPosition(_sfV).y : 0);
+  const onRoad = (x, z, r) => { let best = null; for (const Rd of ROADS) { const q = roadAt(Rd, x, z); if (q.d <= Rd.w / 2 - r && (!best || q.d < best.q.d)) best = { Rd, q }; } return best && { ...best, y: roadY(best.Rd) }; };
+  const kerbAt = (x, z, P) => { let best = null; for (const Rd of ROADS) { const q = roadAt(Rd, x, z); if (q.d < Rd.w / 2 + 9 && (!best || q.d < best.q.d)) best = { Rd, q }; } if (!best || best.Rd.w < 5.5) return null;
+    const { Rd, q } = best, S = Rd.segs[q.seg], m = q.s - S.s0, hl = (P.len ?? 4.6) / 2 + 0.6; if (m < hl || m > S.L - hl) return null;   // not round a bend or past a road's end
+    const sd = q.c >= 0 ? 1 : -1, off = Rd.w / 2 - (P.kerbIn ?? 1.05), x2 = S.ax + S.dx * m + S.nx * sd * off, z2 = S.az + S.dz * m + S.nz * sd * off, ry = Math.atan2(S.dx, S.dz) + (sd > 0 ? 0 : Math.PI);
+    for (const e of [-hl, hl]) { const ex = x2 + S.dx * e, ez = z2 + S.dz * e; if (ROADS.some(R2 => R2 !== Rd && roadAt(R2, ex, ez).d < R2.w / 2 + 1.5)) return null; }   // keep junctions clear
+    return { x: x2, z: z2, ry, y: roadY(Rd), ax: S.dx, az: S.dz }; };
+  const caps = (x, z, P, ax, az) => { const w = P.w ?? 0.95, e = Math.max(0, (P.len ?? 4.6) / 2 - w); return [[x, z], [x + ax * e, z + az * e], [x - ax * e, z - az * e], [x + ax * e / 2, z + az * e / 2], [x - ax * e / 2, z - az * e / 2]].map(([a, b]) => [a, b, w]); };   // a long footprint as discs along its axis
+  const snowy = _snowOn({}) || kind === 'suburb-winter' || kind === 'alpine';
   const coast = GROUND.coast, wet = (x, z, y) => (coast != null && z > coast - 1.5 && !K.wetOk) || (typeof waterH === 'function' && waterH(x, z, 0) > y - 0.05);
   // ---- projection ----
   const cam = new THREE.PerspectiveCamera(45, LAND ? 16 / 9 : 9 / 16, 0.1, 400), _v = new THREE.Vector3(), _w = new THREE.Vector3(), _q = new THREE.Vector3();
@@ -1755,8 +1848,8 @@ function _runDress(kind, o) {
     return g; };
   // ---- placing ----
   const rej = {}; let curB = ''; const no = k => { k = curB + ':' + k; rej[k] = (rej[k] ?? 0) + 1; };
-  const placed = [], covers = {}, leaves = [], ctx = { kind, rock: K.rock ?? '#7D7F86', floor: 0, band: '' };
-  const table = band => (K.bands[band] ?? []).filter(([n]) => { const P = DRESS.props[n]; return P && (!P.asset || MODELS[P.asset]); }).concat((o.assets ?? []).filter(n => MODELS[n] && (band === 'bg' || band === 'edge')).map(n => ['asset:' + n, 1]));
+  const placed = [], at = [], covers = {}, leaves = [], ctx = { kind, rock: K.rock ?? '#7D7F86', floor: 0, band: '' };
+  const table = band => (K.bands[band] ?? []).filter(([n]) => { const P = DRESS.props[n]; return P && (!P.asset || MODELS[P.asset]) && !(P.dry && snowy) && !(P.snowOnly && !snowy); }).concat((o.assets ?? []).filter(n => MODELS[n] && (band === 'bg' || band === 'edge')).map(n => ['asset:' + n, 1]));
   const choose = L => { let tot = 0; for (const e of L) tot += e[1]; let r = R() * tot; for (const e of L) { r -= e[1]; if (r <= 0) return DRESS.props[e[0]]; } return DRESS.props[L[L.length - 1][0]]; };
   const lensOK = (x, z, y0, P, band, shotId) => { for (const s of S0) { const dd = Math.hypot(x - s.P[0], z - s.P[2]); if (dd > P.r + 3.5) continue; if (dd < P.r + 0.75) return false;
       if (band === 'fg' && s.shot === shotId) continue; setCam(s); const q = rectOf(x, z, y0, P.r, P.h); if (q.behind) { if (dd < P.r + 1.5) return false; continue; } if (q.off) continue;
@@ -1776,28 +1869,33 @@ function _runDress(kind, o) {
     const cov = reps.map(coverage), wide = d0 > 22; NEAR = [...OBJ, ...WALLS].filter(B => reps.some(r2 => Math.hypot(B.x - r2.P[0], B.z - r2.P[2]) < Math.hypot(B.hx, B.hz) + 60));
     for (const band of ['wall', 'bg', 'edge', 'ground', 'fg']) {
       curB = band; if (o[band] === false) continue; const L = table(band); if (!L.length) continue;
-      let n = Math.round(budget[band] * D * (wide ? { bg: 2, edge: 2, ground: 1, wall: 1, fg: 0 }[band] : 1)); if (band === 'fg' && (d0 > 7 || o.fg === false)) n = 0;
-      for (let made = 0, tries = 0; made < n && tries < n * 3; tries++) {
+      let n = Math.round(budget[band] * D * (wide ? { bg: 2, edge: 2, ground: 1, wall: 1, fg: 0 }[band] : d0 <= 7 ? { bg: 1, edge: 1.5, ground: 2, wall: 1.5, fg: 1 }[band] : 1)); if (band === 'fg' && (d0 > 7 || o.fg === false)) n = 0;   // v3.37: close-ups and mid shots get more small things
+      for (let made = 0, tries = 0; made < n && tries < n * 5; tries++) {
         let best = null;
-        for (let c = 0; c < 18; c++) {
+        for (let c = 0; c < 30; c++) {
           const ri = Math.floor(R() * reps.length), s = reps[ri], P = choose(L); if (!P) continue; setCam(s);
           let x, z, ry = R() * TAU, fl = s.fl, wallB = null;
           if (band === 'fg') { const side = R() < 0.5 ? -1 : 1, hf = Math.atan(Math.tan(THREE.MathUtils.degToRad(cam.fov) / 2) * cam.aspect), yaw = Math.atan2(s.L[0] - s.P[0], s.L[2] - s.P[2]) + side * hf * (0.75 + R() * 0.35), dd = 1.0 + P.r + R() * 0.9;
-            x = s.P[0] + Math.sin(yaw) * dd; z = s.P[2] + Math.cos(yaw) * dd; fl = K.indoor ? s.fl : groundH(x, z); }
+            x = s.P[0] + Math.sin(yaw) * dd; z = s.P[2] + Math.cos(yaw) * dd; fl = K.indoor ? s.fl : floorAt(x, z, s.fl + 0.15); }
           else if (band === 'wall') { const W = WALLS.filter(B => Math.hypot(B.x - s.P[0], B.z - s.P[2]) < 30); if (!W.length) break; const B = wallB = _pk(R, W), f = Math.floor(R() * 4), ax = f < 2, sg = f % 2 ? -1 : 1, hn = ax ? B.hx : B.hz, ht = ax ? B.hz : B.hx; let nx = (ax ? B.ux : B.vx) * sg, nz = (ax ? B.uz : B.vz) * sg;
             if (ht < P.r + 0.3 || (B.hollow && hn < P.r + 0.5)) continue; const tx = ax ? B.vx : B.ux, tz = ax ? B.vz : B.uz, u = (R() * 2 - 1) * (ht - P.r - 0.2), off = B.hollow ? hn - P.r - 0.08 : hn + P.r + 0.08;
-            x = B.x + nx * off + tx * u; z = B.z + nz * off + tz * u; if (((s.P[0] - x) * nx + (s.P[2] - z) * nz < 0) !== !!B.hollow) continue; if (B.hollow) { nx = -nx; nz = -nz; } ry = Math.atan2(nx, nz) + (P.face === 'wall' ? 0 : (R() - 0.5) * 0.6); fl = K.indoor ? s.fl : groundH(x, z);
-            if (B.y0 > fl + 0.3 || B.y1 < fl + 1.2) continue; }
+            x = B.x + nx * off + tx * u; z = B.z + nz * off + tz * u; if (((s.P[0] - x) * nx + (s.P[2] - z) * nz < 0) !== !!B.hollow) continue; if (B.hollow) { nx = -nx; nz = -nz; } ry = Math.atan2(nx, nz) + (P.face === 'wall' ? 0 : (R() - 0.5) * 0.6); fl = K.indoor ? s.fl : floorAt(x, z, s.fl + 0.15);
+            if (B.y0 > fl + 0.3 || B.y1 < fl + (P.wallH ?? 1.2)) continue; }   // v3.37 wallH: wall-mounted props need that much wall (awning, lights)
           else {   // a ground point at a distance along the view that suits the band, sideways inside the frame (edge: its outer 55 %)
             const vx = s.L[0] - s.P[0], vz = s.L[2] - s.P[2], vd = Math.hypot(vx, vz) || 1, ux = vx / vd, uz = vz / vd, tw = Math.tan(THREE.MathUtils.degToRad(cam.fov) / 2) * cam.aspect;
             const dl = band === 'bg' ? vd + 3 + R() * R() * 22 : band === 'edge' ? 2 + R() * (Math.min(16, vd + 6) - 2) : 1.5 + R() * (Math.min(10, vd + 4) - 1.5);
             const k = band === 'edge' ? (R() < 0.5 ? -1 : 1) * (0.5 + R() * 0.5) : R() * 2 - 1, lat = k * tw * dl;
-            x = s.P[0] + ux * dl - uz * lat; z = s.P[2] + uz * dl + ux * lat; fl = K.indoor ? s.fl : groundH(x, z); if (Math.hypot(x - s.P[0], z - s.P[2]) > 45) { no('band'); continue; } }
+            x = s.P[0] + ux * dl - uz * lat; z = s.P[2] + uz * dl + ux * lat; fl = K.indoor ? s.fl : floorAt(x, z, s.fl + 0.15); if (Math.hypot(x - s.P[0], z - s.P[2]) > 45) { no('band'); continue; } }
           if (P.face === 'cam') ry = Math.atan2(s.P[0] - x, s.P[2] - z) + Math.PI / 2 + (R() - 0.5) * 0.5;
-          if (P.face === 'path' || P.needs === 'road') { const q = nearRoad(x, z, 9); if (P.needs === 'road' && !q) continue; ry = q ? q.ang + (P.name === 'car' || P.name === 'truck' || P.name === 'farmtruck' ? (R() < 0.5 ? 0 : Math.PI) : Math.PI / 2) : Math.atan2(s.L[0] - s.P[0], s.L[2] - s.P[2]) + Math.PI / 2; }
-          if (!inA(x, z) || wet(x, z, fl) || Math.abs(fl - s.fl) > 1.2) { no('area'); continue; }
-          const mask = 1 | (band === 'wall' ? 0 : 8) | (P.tall && band !== 'fg' ? 2 : 0); if (!O.clear(x, z, band === 'wall' ? Math.max(0.1, P.r - 0.2) : P.r + (P.flat ? 0 : 0.1), P.cover ? 16 | 32 : P.flat ? 16 : mask)) { no('occupied'); continue; }   // ground cover and flat decals may lie on walk paths and in the line of sight
-          if (!P.flat && !P.cover && hitsObj(x, z, P.r + (band === 'wall' ? 0.02 : 0.15), fl, fl + P.h, wallB)) { no('touches'); continue; }
+          let kb = null, rd = null; if (P.kerb && band !== 'wall') { kb = kerbAt(x, z, P); if (!kb) { no('kerb'); continue; } x = kb.x; z = kb.z; ry = kb.ry; fl = kb.y; }   // v3.37 parked at the kerb, along the road
+          if (P.on === 'road') { rd = onRoad(x, z, P.r); if (!rd) { no('offroad'); continue; } fl = rd.y; } else if (P.on === 'ground' && onRoad(x, z, -0.3)) { no('onroad'); continue; }
+          if (!kb && (P.face === 'path' || P.needs === 'road')) { const q = nearRoad(x, z, 9); if (P.needs === 'road' && !q) continue; ry = q ? q.ang + (P.along || P.name === 'car' || P.name === 'truck' || P.name === 'farmtruck' ? (R() < 0.5 ? 0 : Math.PI) : Math.PI / 2) : Math.atan2(s.L[0] - s.P[0], s.L[2] - s.P[2]) + Math.PI / 2; }
+          if (!inA(x, z) || (!rd && !kb && wet(x, z, fl)) || Math.abs(fl - s.fl) > 1.2) { no('area'); continue; }
+          const lift = P.lift ?? 0;   // v3.37 lift: a wall-mounted prop starts that high (awning, AC unit, lights) — only that height band must be free
+          if (kb) { const D = caps(x, z, P, kb.ax, kb.az); if (D.some(([a, b, w]) => !O.clear(a, b, w + 0.05, 1 | 4 | 128 | (P.tall ? 2 : 0)))) { no('occupied'); continue; } if (D.some(([a, b, w]) => hitsObj(a, b, w + 0.05, fl + 0.12, fl + P.h, null))) { no('touches'); continue; } }
+          else { const sm = P.r <= 0.5 && !P.tall, mask = 1 | 64 | (band === 'wall' || sm ? 0 : 8) | (sm ? 0 : 128) | (P.tall && band !== 'fg' ? 2 : 0);   // v3.37: small props may stand right next to a building (the exact footprint test below still applies)
+            if (!O.clear(x, z, band === 'wall' ? Math.max(0.1, P.r - 0.2) : P.r + (P.flat ? 0 : 0.1), P.cover ? 16 | 32 : P.flat ? 16 : mask)) { no('occupied'); continue; }   // ground cover and flat decals may lie on walk paths and in the line of sight
+          if (!P.flat && !P.cover && hitsObj(x, z, P.r + (band === 'wall' ? 0.02 : 0.15), fl + lift, fl + lift + P.h, wallB)) { no('touches'); continue; } }
           if (!P.flat && FLATS.some(B => B.y0 > fl + 0.2 && B.y0 < fl + P.h + 0.15 && Math.abs((x - B.x) * B.ux + (z - B.z) * B.uz) <= B.hx + P.r && Math.abs((x - B.x) * B.vx + (z - B.z) * B.vz) <= B.hz + P.r)) { no('ceiling'); continue; }   // under a low ceiling / table
           // screen: how much empty frame it fills (all reps of the shot), never over the subject (bg: behind it is fine, a little)
           let sc = 0, bad = false;
@@ -1807,23 +1905,34 @@ function _runDress(kind, o) {
           if (bad || sc <= 0) { no(bad ? 'subject' : 'covered'); continue; }
           if (band === 'fg') { setCam(s); const q = rectOf(x, z, fl, P.r, P.h); if (q.behind || q.off || area(q) < 0.02 || area(q) > 0.14 || q.d > -0.05 || (q.a > -0.8 && q.c < 0.8) || q.dmin < 0.8) { no('fgframe'); continue; }
             if (SS.some(r2 => Math.hypot(x - r2.P[0], z - r2.P[2]) < P.r + 0.8)) continue; }
-          if (!lensOK(x, z, fl, P, band, sid)) { no('lens'); continue; }
-          sc += R() * 0.5; if (!best || sc > best.sc) best = { sc, P, x, z, ry, fl };
+          if (!lensOK(x, z, fl + lift, P, band, sid)) { no('lens'); continue; }
+          sc += R() * 0.5; if (!best || sc > best.sc) best = { sc, P, x, z, ry, fl, kb };
         }
         if (!best) continue;
         if (!put(best.P, best.x, best.z, best.ry, best.fl, band)) continue;
-        made++; nPut++; const { P, x, z, fl } = best; O.disk(x, z, P.r + (P.flat ? 0.1 : 0.35), 1); if (!P.flat && !P.cover) O.disk(x, z, P.r, 4);
-        if (!P.flat && !P.cover) { const B = { x, z, ux: 1, uz: 0, vx: 0, vz: 1, hx: P.r, hz: P.r, y0: fl, y1: fl + P.h, lx: 2 * P.r, ly: P.h, lz: 2 * P.r }; OBJ.push(B); NEAR.push(B); }
+        made++; nPut++; const { P, x, z, fl, kb } = best;
+        if (kb) { const w = P.w ?? 0.95, hl = (P.len ?? 4.6) / 2, B = { x, z, ux: kb.az, uz: -kb.ax, vx: kb.ax, vz: kb.az, hx: w, hz: hl, y0: fl, y1: fl + P.h, lx: 2 * w, ly: P.h, lz: 2 * hl }; O.obb(B, 0.35, 1); O.obb(B, 0, 4); OBJ.push(B); NEAR.push(B); }   // v3.37 a parked car: its real footprint
+        else { O.disk(x, z, P.r + (P.flat ? 0.1 : 0.35), 1); if (!P.flat && !P.cover) O.disk(x, z, P.r, 4);
+          if (!P.flat && !P.cover) { const B = { x, z, ux: 1, uz: 0, vx: 0, vz: 1, hx: P.r, hz: P.r, y0: fl + (P.lift ?? 0), y1: fl + (P.lift ?? 0) + P.h, lx: 2 * P.r, ly: P.h, lz: 2 * P.r }; OBJ.push(B); NEAR.push(B); } }
         reps.forEach((r2, k) => { setCam(r2); const q = rectOf(x, z, fl, P.r * 0.85, Math.max(P.h, 0.08)); if (q.behind || q.off) return; const g = cov[k];
           for (let j = Math.max(0, Math.floor((1 - q.d) / 2 * GY)); j <= Math.min(GY - 1, Math.floor((1 - q.b) / 2 * GY)); j++) for (let i = Math.max(0, Math.floor((q.a + 1) / 2 * GX)); i <= Math.min(GX - 1, Math.floor((q.c + 1) / 2 * GX)); i++) if (!g[j * GX + i]) g[j * GX + i] = 1; });
-        placed.push(best.P.name);
+        placed.push(best.P.name); at.push([best.P.name, band, +x.toFixed(1), +z.toFixed(1)]);
       }
     }
   }
+  // v3.37 traces: footprints behind walkers in snow (they appear as the feet pass), tyre tracks along drive() paths off the asphalt in snow, mud, sand (o.decals: false = none)
+  if (!K.indoor && o.decals !== false) { const nearShot = (x, z) => inA(x, z) && S.some(s2 => Math.hypot(x - s2.L[0], z - s2.L[2]) < 30); let nf = 0, nt = 0;
+    if (snowy || K.prints) for (const { obj: f } of WALKS) { if (!f?.legL || !f._posAt || f._crowdHero || f.root?.parent !== world || nf >= 12) continue; let a = null, b = null, best = [0, -1];
+      for (let t = 0; t <= DUR + 1e-6; t += 0.1) { const q = f._posAt(t), ok = q && nearShot(q.x, q.z) && Math.abs((q.y ?? 0) - groundH(q.x, q.z)) < 0.25;   /* on roads too: the prints sit on the asphalt, in its snow */ if (ok) { if (a == null) a = t; b = t; if (b - a > best[1] - best[0]) best = [a, b]; } else a = null; }
+      if (best[1] - best[0] >= 0.5) { groundDecal(world, 0, 0, { kind: 'footprints', of: f, t0: best[0], t1: best[1] }); nf++; placed.push('footprints'); } }
+    if (snowy || K.tracks) for (const P of PATHS) { if (P.kind !== 'drive' || nt >= 8) continue; let run = [];
+      const flush = () => { if (run.length >= 2 && Math.hypot(run[run.length - 1][0] - run[0][0], run[run.length - 1][1] - run[0][1]) > 3) { groundDecal(world, 0, 0, { kind: 'tyreTracks', pts: run, opacity: snowy ? 0.5 : 0.4, color: snowy ? '#7A8494' : undefined }); nt++; placed.push('tyreTracks'); } run = []; };
+      for (let i = 1; i < P.p.length; i++) { const [ax, az] = P.p[i - 1], [bx, bz] = P.p[i], n = Math.max(1, Math.ceil(Math.hypot(bx - ax, bz - az) / 3));
+        for (let j = i === 1 ? 0 : 1; j <= n; j++) { const x = lerp(ax, bx, j / n), z = lerp(az, bz, j / n); if (nearShot(x, z) && !onRoad(x, z, -1.2) && !wet(x, z, groundH(x, z))) run.push([x, z]); else flush(); } } flush(); } }
   for (const [k, list] of Object.entries(covers)) cover(k, list);
   if (leaves.length) leafLitter(leaves.map(([x, z, r, y]) => [x, z, r, K.indoor ? y : undefined]));
   if (o.debug) window.__dress = { O, S, OBJ, WALLS, FLATS };
-  DRESSLOG.push({ kind, shots: shots.length, skipped: [...shotIn].filter(([k, q]) => q.ok < q.n / 2).map(([k]) => k), props: nPut, rejected: rej, by: placed.reduce((m, n) => (m[n] = (m[n] ?? 0) + 1, m), {}) });
+  DRESSLOG.push({ kind, shots: shots.length, skipped: [...shotIn].filter(([k, q]) => q.ok < q.n / 2).map(([k]) => k), props: nPut, rejected: rej, by: placed.reduce((m, n) => (m[n] = (m[n] ?? 0) + 1, m), {}), at });   // v3.37 at: [name, band, x, z] of every prop
 }
 const DRESSLOG = [];   // what every dress() call put down: [{ kind, shots, props, by: { name: n } }] (render.mjs --probe 'DRESSLOG')
 
@@ -2368,7 +2477,7 @@ function beamSpot(beam, o = {}) {
 }
 // lightPool(p, x, y, z, { r, color, k, night, wall, ry, ignore }) — soft glow of a lamp on the floor below it (local to p). Follows the darkness
 //   (NIGHTK; night: false = always on, e.g. indoor lamps). wall: true = a vertical glow on a wall (local +z out of the wall). No real light.
-//   vNEXT: pools of static lamps are projected in the surface shaders (every lit built-in material: standard, physical, lambert, phong, toon): one world-space glow map
+//   v3.37: pools of static lamps are projected in the surface shaders (every lit built-in material: standard, physical, lambert, phong, toon): one world-space glow map
 //   (LPOOLT, ~0.12 m texels) is sampled per pixel and added to up-facing surfaces from 1.5 m below to 0.28 m above the lamp's foot — curbs, steps, snow and paving get it with
 //   no seams or hairlines, vertical faces (curb fronts, the lamp's base) none; benches, car roofs and anything else higher than 0.28 m stay out. Pools under moving lamps
 //   (dyn, not stat) and wall pools keep the old draped mesh. CFG.pools: false = none.
@@ -2413,7 +2522,7 @@ const LPOOLMAP = { list: [] };   // the static floor pools in the glow map (worl
 tick(() => { LPOOLU.value.x = POOLK.value; LPOOLU.value.y = POOLON.value; });
 function _buildPools() {
   world.updateMatrixWorld(true);
-  { const st = L => { let s = false; for (let q = L.g; q && q !== world; q = q.parent) { if (q.userData.dyn) return false; if (q.userData.stat) s = true; } return s; };   // vNEXT: static floor pools → shader glow map
+  { const st = L => { let s = false; for (let q = L.g; q && q !== world; q = q.parent) { if (q.userData.dyn) return false; if (q.userData.stat) s = true; } return s; };   // v3.37: static floor pools → shader glow map
     const map = LPOOLS.filter(L => !L.wall && st(L)); if (map.length) { _poolMap(map); LPOOLS.splice(0, LPOOLS.length, ...LPOOLS.filter(L => !map.includes(L))); } }
   const cands = [], bb = new THREE.Box3(), rc = new THREE.Raycaster(), dn = new THREE.Vector3(0, -1, 0), P = new THREE.Vector3(), C = new THREE.Vector3(), inv = new THREE.Matrix4();
   world.traverse(m => { if (!m.isMesh || m.isInstancedMesh || !m.visible || m.userData.pool) return; const mt = m.material; if (!mt || Array.isArray(mt) || mt.transparent || mt.isMeshBasicMaterial || mt.isShaderMaterial) return;
@@ -3673,10 +3782,10 @@ function asset(p, name, x = 0, z = 0, o = {}) {
     if (o.y == null && _SNAPUP.test(name)) { const b = new THREE.Box3().setFromObject(s); if (b.min.y < -0.05) s.position.y -= b.min.y; }   // v3.24: city/car_* (wheels 0.28 m below the origin), space/spacetruck* stood in the ground
     root.add(s);
   };
-  if (_ASRC.has(name)) attach(_ASRC.get(name)); else PENDING.push(ASSETS.get(name).then(attach));   // v3.27: a model that has already loaded (dress() at bake time) is attached at once
+  if (_ASRC.has(name)) attach(_ASRC.get(name)); else PENDING.push(ASSETS.get(name).then(attach));   // v3.37: a model that has already loaded (dress() at bake time) is attached at once
   return root;
 }
-const _ASRC = new Map();   // v3.27: parsed models by name (filled when a load finishes)
+const _ASRC = new Map();   // v3.37: parsed models by name (filled when a load finishes)
 function _assetLoad(name) {   // parse an embedded model once (the promise joins PENDING, so bake() waits for it)
   if (ASSETS.has(name) || !MODELS[name]) return ASSETS.get(name); const u8 = Uint8Array.from(atob(MODELS[name]), c => c.charCodeAt(0));
   const pr = new Promise(res => new GLTFLoader().parse(u8.buffer, '', g => { _ASRC.set(name, g.scene); res(g.scene); }, e => { console.error('asset ' + name + ': ' + (e?.message ?? e)); res(null); }));
@@ -4009,7 +4118,7 @@ function drive(v, pts, o = {}) {   // o.jumps: [[t, h, airtime]] · o.bumpy: 0..
   const g = dyn(v.g ?? v), D = v._drv ??= [], F = o.follow;
   const last = D.length ? D.reduce((a, b) => b.t0 >= a.t0 ? b : a) : null;
   const t0 = (o.t0 ?? (last ? Math.min(last.tE, 1e8) : F ? -1e9 : 0)) + (o.delay ?? 0), prev = o.t0 == null ? last : null, t1 = o.t1 ?? 1e9;   // chained (no t0): sets off from the end of the segment before; with t0 it is planned on its own and hands over at t0
-  if (!D.length) MOVERS.push({ node: g, kind: 'drive', ok: o.passThrough, v });   // v3.27 v: camSamples() finds where a tracked v.g will be
+  if (!D.length) MOVERS.push({ node: g, kind: 'drive', ok: o.passThrough, v });   // v3.37 v: camSamples() finds where a tracked v.g will be
   const setPos = () => { v._posAt = t => { const m = _drvG(v).pick(t), P = m.pos(m.sAt(t)); return new THREE.Vector3(P.x, groundH(P.x, P.z), P.z); }; v._yawAt = t => { const A = _drvG(v); return A.yawT(A.pick(t), t); }; };
   if (F) {   // convoy: the leader's track, gap m behind, lag s later — speed, braking, corners and stops as the leader
     if (!F._drv?.length) { console.error('drive: follow needs a vehicle that drives (call drive() on the leader first)'); return null; }
@@ -4021,7 +4130,7 @@ function drive(v, pts, o = {}) {   // o.jumps: [[t, h, airtime]] · o.bumpy: 0..
   }
   if (prev && !prev.follow && !o.teleport && !o.loop && prev.L() < 1e8) { const E = prev.pos(prev.L()); if (Math.hypot(pts[0][0] - E.x, pts[0][1] - E.z) > 0.05) pts = [[E.x, E.z], ...pts]; }   // the next segment sets off where the last one stopped (teleport: true = jump to its first point)
   const path = new Path(pts, o.loop), sp = o.speed ?? 8, ra = o.ramp ?? clamp(sp / 5, 0.6, 2.5);
-  PATHS.push(path); path.kind = 'drive';   // v3.27: dress() keeps 2.5 m either side free
+  PATHS.push(path); path.kind = 'drive';   // v3.37: dress() keeps 2.5 m either side free
   const Tp = o.loop ? 1e9 : path.len < sp * ra ? 2 * Math.sqrt(path.len * ra / sp) : path.len / sp + ra, Te = Math.min(Tp, t1 - t0), a = sp / ra, tr = Math.min(ra, Te / 2), vp = a * tr;
   const dist = u => u <= 0 ? 0 : u >= Te ? vp * (Te - tr) : u < tr ? 0.5 * a * u * u : u > Te - tr ? vp * (Te - tr) - 0.5 * a * (Te - u) ** 2 : 0.5 * a * tr * tr + vp * (u - tr);
   const cr = path.p.length > 2 && !v.bike ? o.corner ?? clamp(sp * 0.3, 1.2, 3) : 0;   // corners are driven as an arc (was: the position turned on the spot of the corner point); exact again at both ends of the path
@@ -4996,7 +5105,7 @@ function tower(p, x, z, o = {}) {   // city building with depth: style glass | b
     if (fi === 0 || hv(fi + 20) < 0.5) { const ac = pick2(['#C0392B', '#2E86AB', '#3DA56A', '#E3B23C', '#8E5BD9', '#E07A3A'], hv(fi + 10)); box(q, W * 0.74, 0.08, 1.0, ac, 0, 1.95, 0.6, { rx: 0.25, ...NC }); box(q, W * 0.74, 0.22, 0.04, ac, 0, 1.78, 1.08, NC); }
     if (fi === 0) { box(q, 1.3, 1.8, 0.06, '#1E2024', W * 0.3, 0.14, 0.12, NC); box(q, 1.6, 0.14, 0.4, trim, W * 0.3, 2.0, 0.2, NC);
       for (const s of [-1, 1]) { box(q, 0.54, 1.5, 0.03, '#3E5670', W * 0.3 + s * 0.3, 0.3, 0.155, { rough: 0.25, kind: 'glass', ...NC }); box(q, 0.035, 0.4, 0.05, '#C9CED6', W * 0.3 + s * 0.07, 0.85, 0.185, NC); box(q, 0.1, 1.86, 0.1, trim, W * 0.3 + s * 0.7, 0.14, 0.14, NC); }   // v2.40: glass double door with handles, frame, step, lamps that glow at night
-      box(q, 1.5, 0.1, 0.3, shade(c, -0.25), W * 0.3, 0.06, 0.26, NC);   // door step (vNEXT: 2 cm above the sidewalk paving, was level with it → z-fighting)
+      box(q, 1.5, 0.1, 0.3, shade(c, -0.25), W * 0.3, 0.06, 0.26, NC);   // door step (v3.37: 2 cm above the sidewalk paving, was level with it → z-fighting)
       if (!NIGHTGLOW.length) NIGHTGLOW.push(mat('#FFF1C8', { em: '#FFE2A0', ei: 0, own: true })); { const lx = W * 0.3 - 0.86; box(q, 0.12, 0.24, 0.1, '#2A2D33', lx, 1.62, 0.15, NC); box(q, 0.08, 0.15, 0.06, '', lx, 1.66, 0.2, { mat: NIGHTGLOW[0], ...NC }); } }
   });
   for (const [sx, sz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) box(g, 0.5, h, 0.5, style === 'brick' ? deep : c, sx * w / 2, 0, sz * d / 2, { cast: false });
@@ -5018,7 +5127,7 @@ function tower(p, x, z, o = {}) {   // city building with depth: style glass | b
 }
 // road(p, pts, { w: 6, color, dash, edges, curb, shoulder, shoulderColor, manholes, gaps, xing }) — flat road along [[x,z],…] with centre dashes and edge lines (edges: false = none). v2.35: asphalt with grain,
 //   cracks and patches (wet: puddles), gravel shoulders (shoulder: false) or curb: true (raised curbs with drain grates), manholes: true.
-//   vNEXT: the asphalt pattern, puddles and snow run in world space (overlapping boxes at joints and junctions look the same → no flicker); each road colour gets its own depth
+//   v3.37: the asphalt pattern, puddles and snow run in world space (overlapping boxes at joints and junctions look the same → no flicker); each road colour gets its own depth
 //   order (polygonOffset, first colour = none). Markings are built at bake time (roadMarks) when all roads are known: edge lines and dashes stop where another road crosses
 //   or joins (and xing m beyond its edge, default 0.6 — city() keeps the zebras free with 2.7), gaps: [[s0, s1], …] = extra stretches without markings (metres along the
 //   polyline). Paint is thin (edge 3 mm, dash 4 mm, zebra 5 mm above the asphalt: never one height; thick boxes showed dotted AO edges) and drawn in front by polygonOffset. Snow lies on markings like on the asphalt; tyre tracks follow the lanes (one per ~3.3 m).
@@ -5048,14 +5157,14 @@ function road(p, pts, o = {}) {
   for (let i = 0; i < pts.length - 1; i++) {
     const [ax, az] = pts[i], [bx, bz] = pts[i + 1], L = Math.hypot(bx - ax, bz - az), ang = Math.atan2(-(bz - az), bx - ax), nx = -(bz - az) / L, nz = (bx - ax) / L, mx = (ax + bx) / 2, mz = (az + bz) / 2;
     R.segs.push({ ax, az, bx, bz, L, ang, nx, nz, dx: (bx - ax) / L, dz: (bz - az) / L, s0, first: i === 0, last: i === pts.length - 2 }); s0 += L; ROADSEG.push(ax, az, bx, bz, w / 2);
-    const e0 = i === 0 ? w / 2 : 0, e1 = i === pts.length - 2 ? w / 2 : 0, ex = mx + (bx - ax) / L * (e1 - e0) / 2, ez = mz + (bz - az) / L * (e1 - e0) / 2;   // vNEXT: no overhang at inner joints (a disc fills the bend)
+    const e0 = i === 0 ? w / 2 : 0, e1 = i === pts.length - 2 ? w / 2 : 0, ex = mx + (bx - ax) / L * (e1 - e0) / 2, ez = mz + (bz - az) / L * (e1 - e0) / 2;   // v3.37: no overhang at inner joints (a disc fills the bend)
     const rg = new THREE.BoxGeometry(L + e0 + e1, 0.04, w), rp = rg.attributes.position, rl = new Float32Array(rp.count * 3); for (let k = 0; k < rp.count; k++) { rl[3 * k] = rp.getZ(k); rl[3 * k + 1] = w / 2; }
     rg.setAttribute('rl', new THREE.BufferAttribute(rl, 3)); mesh(g, rg, roadSurfMat(sc), ex, 0.03, ez, { ry: ang, cast: false });
     if (o.curb) for (const s of [-1, 1]) { box(g, L, 0.16, 0.22, '#8A8C90', mx + nx * s * (w / 2 + 0.11), 0, mz + nz * s * (w / 2 + 0.11), { ry: ang, surf: 'concrete', ...NC });
       for (let k = 6; k < L - 3; k += 14) { const u = (k + (s > 0 ? 5 : 0)) / L; if (u < 1) drain(g, lerp(ax, bx, u) + nx * s * (w / 2 - 0.2), lerp(az, bz, u) + nz * s * (w / 2 - 0.2), ang); } }
     else if (o.shoulder !== false && CFG.surfaces !== false) for (const s of [-1, 1]) box(g, L + e0 + e1, 0.03, 0.55, o.shoulderColor ?? '#8E877A', ex + nx * s * (w / 2 + 0.2), 0.005, ez + nz * s * (w / 2 + 0.2), { ry: ang, cast: false, surf: 'plaster' });
   }
-  for (let i = 1; i < pts.length - 1; i++) {   // vNEXT: round joints — a disc fills the wedge the two boxes leave open on the outside of a bend (asphalt and shoulder)
+  for (let i = 1; i < pts.length - 1; i++) {   // v3.37: round joints — a disc fills the wedge the two boxes leave open on the outside of a bend (asphalt and shoulder)
     const [x, z] = pts[i], dg = new THREE.CylinderGeometry(w / 2, w / 2, 0.04, 28), dp = dg.attributes.position, rl = new Float32Array(dp.count * 3);
     for (let k = 0; k < dp.count; k++) { rl[3 * k] = roadAt(R, x + dp.getX(k), z + dp.getZ(k)).c; rl[3 * k + 1] = w / 2; } dg.setAttribute('rl', new THREE.BufferAttribute(rl, 3)); mesh(g, dg, roadSurfMat(sc), x, 0.03, z, { cast: false });
     if (!o.curb && o.shoulder !== false && CFG.surfaces !== false) cyl(g, w / 2 + 0.47, w / 2 + 0.47, 0.03, o.shoulderColor ?? '#8E877A', x, 0.005, z, { seg: 28, cast: false, surf: 'plaster' }); }
@@ -5078,7 +5187,7 @@ function _cutGaps(G, a, b, min = 0.6) {   // [a, b] minus the gaps → pieces at
   let P = [[a, b]]; for (const [g0, g1] of G) P = P.flatMap(([p0, p1]) => g1 <= p0 || g0 >= p1 ? [[p0, p1]] : [[p0, Math.min(p1, g0)], [Math.max(p0, g1), p1]]);
   return P.filter(([p0, p1]) => p1 - p0 >= min);
 }
-const COPLANAR = [], MARKS = [];   // vNEXT QA: COPLANAR pairs found at bake (coplanarSnap) · flat road decals (dash, edge, zebra, manhole) → QA DECALOFF: [kind, x, z, length, width, ry]
+const COPLANAR = [], MARKS = [];   // v3.37 QA: COPLANAR pairs found at bake (coplanarSnap) · flat road decals (dash, edge, zebra, manhole) → QA DECALOFF: [kind, x, z, length, width, ry]
 function roadMarks() {   // bake: the markings of every road, now that all roads (and their crossings) are known — one merged mesh per road and paint colour
   for (const R of ROADS) { if (R.built) continue; R.built = true; const o = R.o, w = R.w, G = { edge: [], dash: [], zebra: [] };
     R.segs.forEach((S, si) => { const at = (t, c) => [S.ax + S.dx * t + S.nx * c, S.az + S.dz * t + S.nz * c];
@@ -5646,8 +5755,9 @@ PROPS.debris = debris;
 //   'puddle' (glossy, mirrors the sky) · 'oilStain' (dark blot with a rainbow sheen) · 'crack' (branching cracks) · 'snowbank' (heaped snow, len m along local x) ·
 //   'tyreTracks' (two tread strips along pts [[x, z], …]) · 'footprints' (left / right shoe prints along pts, or behind a walker: of: f (a figure with walk()), t0..t1 —
 //   each print appears when the foot passes, a pure function of t)
+const _roadTop = (x, z) => { for (const R of ROADS) if (roadAt(R, x, z).d <= R.w / 2) return 0.05 + (R.g.parent ? R.g.getWorldPosition(_sfV).y : 0); return null; };   // v3.37 top of the asphalt under (x, z) or null
 function groundDecal(p, x, z, o = {}) {
-  const k = o.kind ?? 'puddle', sd = o.seed ?? 0, h = i => hash(x * 5.17 + z * 9.33 + sd * 3.7 + i * 1.618), PO = { polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -3 }, gy = (px, pz) => (o.y ?? groundH(px, pz));
+  const k = o.kind ?? 'puddle', sd = o.seed ?? 0, h = i => hash(x * 5.17 + z * 9.33 + sd * 3.7 + i * 1.618), PO = { polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -3 }, gy = (px, pz) => (o.y ?? _roadTop(px, pz) ?? groundH(px, pz));   // v3.37: on a road, on its asphalt
   const blob = (r, n, seed, sq = 1) => { const s = new THREE.Shape(); for (let i = 0; i <= n; i++) { const a = i / n * TAU, rr = r * (0.75 + 0.25 * Math.sin(a * 3 + seed) * Math.cos(a * 2 + seed * 1.7) + 0.12 * Math.sin(a * 7 + seed * 3)); const px = Math.cos(a) * rr * sq, pz = Math.sin(a) * rr; if (i) s.lineTo(px, pz); else s.moveTo(px, pz); } return new THREE.ShapeGeometry(s, 2).rotateX(Math.PI / 2); };
   if (k === 'puddle' || k === 'oilStain') { const r = o.r ?? (k === 'puddle' ? 0.8 : 0.45), g = grp(p ?? world, x, gy(x, z) + 0.012, z, o.ry ?? h(1) * TAU); g.name = 'groundDecal'; g.userData.cover = true;
     const pm = k === 'puddle' ? new THREE.MeshStandardMaterial({ color: o.color ?? '#3A4048', roughness: 0.04, metalness: 0.6, transparent: true, opacity: 0.85, depthWrite: false, ...PO }) : new THREE.MeshStandardMaterial({ color: '#141416', roughness: 0.25, metalness: 0.35, transparent: true, opacity: 0.8, depthWrite: false, ...PO });
@@ -6331,13 +6441,13 @@ function busstop(p, x, z, ry = 0) {   // shelter (glass back and sides, roof, be
 function city(o = {}) {   // nx × nz blocks of towers (taller in the centre), roads between, street furniture on the sidewalks; returns { loops } for traffic()
   const nx = o.nx ?? 3, nz = o.nz ?? 3, B = o.block ?? 14, S = o.street ?? 6, P = B + S, [cx, cz] = o.at ?? [0, 0];
   const x0 = cx - (nx * P) / 2, z0 = cz - (nz * P) / 2, loops = []; _dressed = true;   // v3.5: a city is dressed → ground() adds no autoDress
-  const RV = [], RH = [];   // vNEXT: markings stop at the junctions and before the zebras (xing)
+  const RV = [], RH = [];   // v3.37: markings stop at the junctions and before the zebras (xing)
   for (let i = 0; i <= nx; i++) RV.push(road(world, [[x0 + i * P, z0], [x0 + i * P, z0 + nz * P]], { w: S, xing: 2.7 }).userData.road);
   for (let j = 0; j <= nz; j++) RH.push(road(world, [[x0, z0 + j * P], [x0 + nx * P, z0 + j * P]], { w: S, xing: 2.7 }).userData.road);
   const streetTree = (x, z, s = 1) => { const g = stat(grp(world, x, 0.14, z)), h = hash(x * 3.1 + z * 7.9); box(g, 1.0 * s, 0.3, 1.0 * s, '#8A8C8F'); box(g, 0.86 * s, 0.04, 0.86 * s, '#4A3A2A', 0, 0.3, 0, { cast: false });
     cyl(g, 0.08, 0.12, 1.7, '#5A4030', 0, 0.3, 0, { seg: 6 }); const c = ['#4C7A3A', '#5A8A40', '#3F6E35'][Math.floor(h * 3)]; ball(g, 0.95 * s, c, 0, 2.5, 0, { detail: 1 }); ball(g, 0.6 * s, shade(c, 0.06), 0.3 * s, 2.5 + 0.5 * s, 0.1, { detail: 1 }); };
   const xs = [...Array(nx + 1).keys()].map(i => x0 + i * P), zs = [...Array(nz + 1).keys()].map(j => z0 + j * P);
-  if (o.props !== false) xs.forEach((xi, i) => zs.forEach((zj, j) => { for (let k = 0; k < 6; k++) {   // zebra crossings on every arm of a junction (vNEXT: only where the road goes on — not out onto the grass at the city's edge) + manholes
+  if (o.props !== false) xs.forEach((xi, i) => zs.forEach((zj, j) => { for (let k = 0; k < 6; k++) {   // zebra crossings on every arm of a junction (v3.37: only where the road goes on — not out onto the grass at the city's edge) + manholes
     const off = -S / 2 + 0.55 + k * (S - 1.1) / 5;
     for (const s2 of [-1, 1]) { if (j + s2 >= 0 && j + s2 <= nz) RV[i].marks.push({ x: xi + off, z: zj + s2 * (S / 2 + 1.3), len: 0.45, wid: 2.0, ry: 0 });
       if (i + s2 >= 0 && i + s2 <= nx) RH[j].marks.push({ x: xi + s2 * (S / 2 + 1.3), z: zj + off, len: 2.0, wid: 0.45, ry: 0 }); }
@@ -6345,7 +6455,7 @@ function city(o = {}) {   // nx × nz blocks of towers (taller in the centre), r
   } }));
   for (let i = 0; i < nx; i++) for (let j = 0; j < nz; j++) {
     const bx = x0 + i * P + P / 2, bz = z0 + j * P + P / 2, n = pick([1, 2, 4, 4]), c = 1 - 0.45 * Math.hypot(i - (nx - 1) / 2, j - (nz - 1) / 2) / Math.max(nx, nz);
-    box(world, B, 0.14, B, o.walk ?? '#9A9C9F', bx, 0, bz, { cast: false, stat: true, surf: 'paving' });   // sidewalk paving inside a kerb ring (vNEXT: the kerb was a solid slab over the whole block)
+    box(world, B, 0.14, B, o.walk ?? '#9A9C9F', bx, 0, bz, { cast: false, stat: true, surf: 'paving' });   // sidewalk paving inside a kerb ring (v3.37: the kerb was a solid slab over the whole block)
     for (const s of [-1, 1]) { box(world, B + 0.3, 0.16, 0.15, '#7E8084', bx, 0, bz + s * (B / 2 + 0.075), { cast: false, stat: true, surf: 'concrete' }); box(world, 0.15, 0.16, B, '#7E8084', bx + s * (B / 2 + 0.075), 0, bz, { cast: false, stat: true, surf: 'concrete' }); }
     const spots = n === 1 ? [[0, 0]] : n === 2 ? [[-1, 0], [1, 0]] : [[-1, -1], [1, -1], [-1, 1], [1, 1]];
     for (const [sx, sz] of spots) { const w = n === 1 ? B * 0.62 : B * 0.38; tower(world, bx + sx * B * 0.23, bz + sz * B * 0.23, { w, d: n === 2 ? B * 0.72 : w, h: rr(o.hmin ?? 10, o.hmax ?? 42) * c, lit: o.lit }); }
@@ -6372,7 +6482,7 @@ function city(o = {}) {   // nx × nz blocks of towers (taller in the centre), r
 function traffic(loops, o = {}) {   // cars driving around closed loops; until: time they stop
   const cars = [];
   loops.forEach(lp => {
-    const path = new Path(lp, true);
+    const path = new Path(lp, true); DRESS.lanes.push(lp);   // v3.37: dress() keeps the loop free
     for (let k = 0; k < (o.per ?? 2); k++) {
       const kr = rnd(), col = pick(o.colors ?? ['#D94F3D', '#3D7BD9', '#F2F2F2', '#E3B23C', '#3DA56A', '#2A2D33']), kind = kr < 0.15 ? 'truck' : (o.kinds ?? ['car', 'car', 'taxi', 'van', 'sports', 'pickup', 'car', 'police'])[Math.floor(hash(k * 7.3 + lp[0][0] * 1.7 + lp[0][1]) * (o.kinds?.length ?? 8))];
       const v = vehicle(world, 0, 0, { kind, color: kind === 'taxi' || kind === 'police' ? undefined : col, siren: false }); dyn(v.g);
@@ -13961,7 +14071,7 @@ function river(p, pts, o = {}) {
       for (let k = 0; k < 5; k++) { const lat = w / 2 - 0.25 + hash(i * 9 + k) * 0.9, al = (hash(i * 4 + k * 3) - 0.5) * 1.6; it.push([P.x + D.z * sd * lat + D.x * al, P.z - D.x * sd * lat + D.z * al, 0.7 + hash(i + k * 7) * 0.7, hash(i * 3 + k) * TAU, cs[(i + k) % 4]]); } }
     cover('reed', it);
     if (o.lilies !== false) for (let i = 0; i < L / 7; i++) { const s = hash(i * 3.9 + 8) * L, P = path.at(s), D = path.dir(s), lat = (hash(i * 6.7) - 0.5) * w * 0.6, lx = P.x + D.z * lat, lz = P.z - D.x * lat, ly = groundH(P.x, P.z) + (o.y ?? 0.08) + 0.015;
-      for (let k = 0; k < 3; k++) cyl(world, 0.16 + hash(i + k) * 0.1, 0.16 + hash(i + k) * 0.1, 0.012, ['#4E8A44', '#5E9A4E', '#3F7A3C'][k], lx + (hash(i * 2 + k) - 0.5) * 0.9, ly, lz + (hash(i * 5 + k) - 0.5) * 0.9, { seg: 9, cast: false, stat: true }); if (hash(i * 8.1) < 0.5) ball(world, 0.06, '#F6D6E6', lx, ly + 0.05, lz, { detail: 0, cast: false, stat: true }); } }
+      for (let k = 0; k < 3; k++) cyl(world, 0.16 + hash(i + k) * 0.1, 0.16 + hash(i + k) * 0.1, 0.012, ['#4E8A44', '#5E9A4E', '#3F7A3C'][k], lx + (hash(i * 2 + k) - 0.5) * 0.9, ly + k * 0.006, lz + (hash(i * 5 + k) - 0.5) * 0.9, { seg: 9, cast: false, stat: true }); if (hash(i * 8.1) < 0.5) ball(world, 0.06, '#F6D6E6', lx, ly + 0.06, lz, { detail: 0, cast: false, stat: true }); } }
   return { g, path };
 }
 // cave(p, x, z, { r, len, ry, crystals }) — rock arch and tunnel going −z, stalactites and stalagmites, optional glowing crystals
@@ -16136,10 +16246,11 @@ function propSnap() {
 }
 const _qpClear = o => { const M = Array.isArray(o.material) ? o.material : [o.material]; return M.every(m => !m || m.visible === false || (m.transparent && (m.opacity ?? 1) < 0.5) || m.depthWrite === false || m.blending === THREE.AdditiveBlending || m.colorWrite === false); };   // glows, halos, light cones, decals: no solid object
 function bake() {
-  for (const f of DEFER.splice(0)) f();
-  roadMarks(); groundRoadFix();   // vNEXT: markings of all roads (gaps where roads cross) · ground mesh finer where roads leave the flat area
+  for (let k = 0; k < 8 && DEFER.length; k++) for (const f of DEFER.splice(0)) f();   // v3.37: DEFERs queued by DEFERs (snow caps, light pools, footprints of props that dress() / biome() put down) run too
+  roadMarks(); groundRoadFix();   // v3.37: markings of all roads (gaps where roads cross) · ground mesh finer where roads leave the flat area
   world.updateMatrixWorld(true);
-  coplanarSnap();   // vNEXT QA: COPLANAR (static boxes whose top faces fight)
+  snowDriftMap();   // v3.37 snow drifts against what stands on the ground (ground shader)
+  coplanarSnap();   // v3.37 QA: COPLANAR (static boxes whose top faces fight)
   hitBuild(); LATE.unshift(hitResolve); LATE.push(footFloor);   // v2.29 hitboxes (needs the props before they are merged)
   propSnap();   // v3.24 prop QA (FLOAT): boxes of the static props before they are merged
   const inv = world.matrixWorld.clone().invert(), M4 = new THREE.Matrix4(), buckets = new Map(), done = [];
@@ -16151,7 +16262,7 @@ function bake() {
     const g = o.geometry.index ? o.geometry.toNonIndexed() : o.geometry.clone();
     for (const k of Object.keys(g.attributes)) if (k !== 'position' && k !== 'normal' && !(k === 'color' && o.material.vertexColors) && !(k === 'rl' && o.material.userData.surfRl)) g.deleteAttribute(k);
     if (!g.attributes.normal) g.computeVertexNormals();
-    g.setAttribute('qobj', new THREE.BufferAttribute(new Float32Array(g.attributes.position.count).fill(_surfMesh(o) ? 0 : 1), 1));   // v3.27 QA SPARSE: bare surface (0) or object (1), per source mesh
+    g.setAttribute('qobj', new THREE.BufferAttribute(new Float32Array(g.attributes.position.count).fill(_surfMesh(o) ? 0 : 1), 1));   // v3.37 QA SPARSE: bare surface (0) or object (1), per source mesh
     g.applyMatrix4(M4.multiplyMatrices(inv, o.matrixWorld));
     if (o.material.userData.wind === 'attr') {   // sway weight: 0 at the foot of the plant, 1 at the top
       let wb = null; for (let q = o; q && q !== world; q = q.parent) if (q.userData.wb) { wb = q.userData.wb; break; }
@@ -17965,10 +18076,10 @@ function qaAudit() {
   try { out.push(...qaProps()); } catch (e) { out.push('prop QA failed: ' + e.message); }   // v3.24: FLOAT · BURIED
   try { out.push(...qaLook()); } catch (e) { out.push('look QA failed: ' + e.message); }   // v3.5: DARK · EMPTY · CAMCLIP · HEADCUT
   try { out.push(...qaLensFx()); } catch (e) { out.push('lens FX QA failed: ' + e.message); }   // v3.26: LENSFX
-  try { out.push(...qaRoads()); } catch (e) { out.push('road QA failed: ' + e.message); }   // vNEXT: ROADBURIED · DECALOFF · COPLANAR
+  try { out.push(...qaRoads()); } catch (e) { out.push('road QA failed: ' + e.message); }   // v3.37: ROADBURIED · DECALOFF · COPLANAR
   return out;
 }
-// --- vNEXT road QA (part of qaAudit): ROADBURIED – the terrain (groundH and the ground mesh between its vertices) comes up over a road's top (0.05) somewhere along its centre
+// --- v3.37 road QA (part of qaAudit): ROADBURIED – the terrain (groundH and the ground mesh between its vertices) comes up over a road's top (0.05) somewhere along its centre
 //   line or edges (sampled every metre) · DECALOFF – a flat road decal (dash, edge line, zebra stripe, manhole; MARKS) whose footprint is not on the asphalt of any road (lies
 //   on the grass) · COPLANAR – from bake (coplanarSnap): static boxes / discs near the ground (top < 0.6 m above it, ≥ 0.05 m² each) with different colour, pattern or depth
 //   order whose top faces lie within 2 mm of each other and overlap by more than 0.01 m² — they z-fight (flicker). One line per kind and road / pair, the worst first.
@@ -17990,6 +18101,7 @@ function coplanarSnap() {   // bake, before merging: flat static boxes / discs n
   COPLANAR.length = 0; if (CFG.qaCoplanar === false) return; const L = [], WS = new Set(['asphalt', 'plaster', 'marking']), _c = new THREE.Vector3(), cells = new Map(), CS = 4;
   world.traverse(o => { if (!o.isMesh || o.isInstancedMesh || !o.visible || o.userData.pool) return; let st = false; for (let q = o; q && q !== world; q = q.parent) { if (q.userData.dyn || !q.visible) return; if (q.userData.stat) st = true; } if (!st) return;
     const gm = o.geometry, ty = gm.type, pr = gm.parameters, mt = o.material; if (!mt || Array.isArray(mt) || mt.transparent || !(ty === 'BoxGeometry' || (ty === 'CylinderGeometry' && pr.radiusTop === pr.radiusBottom))) return;
+    gm.boundingBox ?? gm.computeBoundingBox(); const bb = gm.boundingBox; if (ty === 'BoxGeometry' && (Math.abs(bb.max.y - bb.min.y - pr.height) > 1e-4 || Math.abs(bb.max.x - bb.min.x - pr.width) > 1e-4 || Math.abs(bb.max.z - bb.min.z - pr.depth) > 1e-4)) return;   // v3.37: a reshaped box (tbox: tapered, bottom at 0) is no plain box — its parameters lie
     const e = o.matrixWorld.elements; if (Math.abs(e[4]) > 1e-3 || Math.abs(e[6]) > 1e-3 || e[5] <= 0) return;   // only upright parts (rotated about y)
     const hx = ty === 'BoxGeometry' ? pr.width / 2 : pr.radiusTop, hz = ty === 'BoxGeometry' ? pr.depth / 2 : pr.radiusTop, hh = (ty === 'BoxGeometry' ? pr.height : pr.height) / 2;
     const ax = [e[0], e[2]], az = [e[8], e[10]], sx = Math.hypot(...ax), sz = Math.hypot(...az); if (4 * hx * sx * hz * sz < 0.05) return;
@@ -18245,10 +18357,10 @@ function qalHeads(macro, edge = 1) {   // edge: the top edge in NDC (v3.23: 1 �
     R.push({ i, f, cut: Math.min(1, cut), big }); });
   return R;
 }
-// --- v3.27 SPARSE (part of qaLook, lines "QA: SPARSE – …"): an ID pass of the same tiny frame — every pixel is sky, bare surface (ground, road, floor, wall, a plain building
+// --- v3.37 SPARSE (part of qaLook, lines "QA: SPARSE – …"): an ID pass of the same tiny frame — every pixel is sky, bare surface (ground, road, floor, wall, a plain building
 //   block: see _isSurf) or object (props, plants, figures, vehicles, windows, doors …). An 8 × 8 px cell is bare when it shows ≤ 2 object pixels and at most half sky; SPARSE =
 //   bare cells / cells that are not sky (warn > 45 %, covers > 35 %, or the largest 4-connected bare patch > 20 % of the frame with > 75 % of that). Baked meshes carry their class
-//   per vertex (qobj, set in bake()), the rest is classed live; userData.qsurf = true / false on a mesh overrides. One extra 72 × 128 render per sample. CFG.qaSparse: false = off.
+//   per vertex (qobj, set in bake()), the rest is classed live; userData.qsurf = true / false on a mesh overrides. One extra 72 × 128 render per sample. CFG.qaSparse: false = off · 'info' (default since v3.37) = QA-INFO lines, not counted · true = counted by --gate.
 const _qiObj = new THREE.MeshBasicMaterial({ color: '#ff0000', side: THREE.DoubleSide, fog: false, toneMapped: false }), _qiSurf = new THREE.MeshBasicMaterial({ color: '#000000', side: THREE.DoubleSide, fog: false, toneMapped: false });
 const _qiBaked = new THREE.ShaderMaterial({ side: THREE.DoubleSide, fog: false, toneMapped: false, vertexShader: 'attribute float qobj; varying float vQ; void main(){ vQ = qobj; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
   fragmentShader: 'varying float vQ; void main(){ gl_FragColor = vec4(step(0.5, vQ), 0.0, 0.0, 1.0); }' });
@@ -18322,7 +18434,7 @@ function qaLook(o = {}) {
   const L = [...res.values()].sort((a, b) => b.sev - a.sev).map(x => x.msg), by = k => L.filter(m => m.startsWith(k + ' '));
   let cf = []; if (o.capface !== false) try { cf = qaCapFace(o); } catch (e) { cf = ['CAPFACE – check failed: ' + e.message]; }   // v3.24
   const out = [...['DARK', 'EMPTY', 'SPARSE', 'CAMCLIP', 'HEADCUT'].flatMap(k => { const A = by(k); return A.length > 6 ? [...A.slice(0, 6), `${k} – … and ${A.length - 6} more`] : A; }), ...cf];
-  return CFG.qaSparse === 'info' ? out.map(l => l.startsWith('SPARSE ') ? 'QA-INFO: ' + l + ' (not counted: CFG.qaSparse info)' : l) : out;   // v3.27
+  return (CFG.qaSparse ?? 'info') === 'info' ? out.map(l => l.startsWith('SPARSE ') ? 'QA-INFO: ' + l + ' (not counted: CFG.qaSparse info)' : l) : out;   // v3.37 · v3.37: 'info' is the default (CFG.qaSparse: true = counted by the gate)
 }
 // --- v3.24 CAPFACE (part of qaLook, lines "QA: CAPFACE – …"): a caption page lies over the face of a figure that is big in the frame ---
 //   For every caption page (the pages synced to the voice, see capPaginate) the HUD is set to that moment (updateHud) and the real on-screen boxes of its words / kick / who
