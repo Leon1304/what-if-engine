@@ -860,7 +860,7 @@ function rimFit() {
 const _mats = new Map(), _geo = new Map(), MROUGH = LOOKV2 && CFG.materials !== false ? 0.8 : 0.88;   // look v2: default roughness 0.8 (was 0.88 everywhere: no sheen at all)
 // v2.34 surfaces: mat(hex, { surf }) / box(…, { surf }) draws a pattern on walls and roofs per pixel — no extra geometry, fades with distance:
 //   brick · stone (big blocks) · plank (upright boards) · siding (lapped boards) · tile (roof tiles, shingles) · plaster · concrete (panels) · metal (corrugated sheet)
-const SURF = { brick: 1, stone: 2, plank: 3, siding: 4, tile: 5, plaster: 6, concrete: 7, metal: 8, asphalt: 9, paving: 10, boards: 11, tiles: 12, carpet: 13, wallpaper: 14 };
+const SURF = { brick: 1, stone: 2, plank: 3, siding: 4, tile: 5, plaster: 6, concrete: 7, metal: 8, asphalt: 9, paving: 10, boards: 11, tiles: 12, carpet: 13, wallpaper: 14, marking: 15 };   // vNEXT marking: road paint (outdoor, snow like the asphalt under it)
 // v2.35 weather on the ground: rain makes surfaces dark and glossy and leaves puddles that mirror the sky, snow settles on everything that faces up.
 //   emit('rain') / emit('snow') drive it on their own (wet in ~5 s, dry in ~25 s; snow builds in ~16 s). By hand: wetGround(t0, t1, k) · snowCover(t0, t1, k),
 //   whole video: CFG.wet / CFG.snowCover 0..1. CFG.weather: false = off. Pure function of t.
@@ -876,13 +876,16 @@ const WX_GLSL = {   // shared by walls, roads and the ground
   refl: `{ vec3 wV = normalize(vViewPosition), wN = normalize(normal); float wF = 0.22 + 0.78 * pow(1.0 - clamp(abs(dot(wN, wV)), 0.0, 1.0), 4.0); vec3 wR = (vec4(reflect(-wV, wN), 0.0) * viewMatrix).xyz;
       outgoingLight = mix(outgoingLight, mix(uSkyB, uSkyT, smoothstep(0.0, 0.7, wR.y)), wxPud * wF * 0.75); }
     #include <opaque_fragment>` };
-function surfFx(m, kind, o = {}) {   // o.indoor: no weather (rooms) · o.sp: pattern coordinates come from the vertex attribute sp (merged static geometry, see bake)
-  if (CFG.surfaces === false || !SURF[kind]) return m; m.userData.own = true; m.userData.surf = kind; m.userData.surfIn = !!o.indoor; const K = SURF[kind].toFixed(1);
-  m.defines = { ...(m.defines ?? {}) }; if (o.sp) m.defines.SURF_SP = ''; if (o.indoor || K > 10.5) m.defines.SURF_IN = '';
+function surfFx(m, kind, o = {}) {   // o.indoor: no weather (rooms) · o.sp: pattern coordinates come from the vertex attribute sp (merged static geometry, see bake) · o.rl: road lane attribute rl (across offset, half width; road())
+  if (CFG.surfaces === false || !SURF[kind]) return m; m.userData.own = true; m.userData.surf = kind; m.userData.surfIn = !!o.indoor; if (o.rl) m.userData.surfRl = true; const K = SURF[kind].toFixed(1);
+  m.defines = { ...(m.defines ?? {}) }; if (o.sp) m.defines.SURF_SP = ''; if (o.rl) m.defines.SURF_RL = ''; if (o.indoor || (K > 10.5 && K < 14.5)) m.defines.SURF_IN = '';
   m.onBeforeCompile = sh => {
     Object.assign(sh.uniforms, { uWet: WX.wet, uSnow: WX.snow, uSkyT: skyU.top, uSkyB: skyU.bot });
-    sh.vertexShader = '#ifdef SURF_SP\nattribute vec3 sp;\n#endif\nvarying vec3 vSW, vSL;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n  vSW = (modelMatrix * vec4(transformed, 1.0)).xyz;\n#ifdef SURF_SP\n  vSL = sp;\n#else\n  vSL = transformed;\n#endif');   // pattern in the part's own space: it travels with a building that is moved or flung
+    sh.vertexShader = '#ifdef SURF_SP\nattribute vec3 sp;\n#endif\n#ifdef SURF_RL\nattribute vec3 rl; varying vec3 vRL; uniform float uSnow;\n#endif\nvarying vec3 vSW, vSL;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n#ifdef SURF_RL\n  vRL = rl;' + (K > 14.5 ? '\n  if (rl.z > 0.0) transformed.y = rl.z + (transformed.y - rl.z) * (1.0 - smoothstep(0.1, 0.45, uSnow));   // paint sinks into the snow (polygonOffset keeps it above the asphalt)' : '') + '\n#endif\n  vSW = (modelMatrix * vec4(transformed, 1.0)).xyz;\n#ifdef SURF_SP\n  vSL = sp;\n#else\n  vSL = transformed;\n#endif');   // pattern in the part's own space: it travels with a building that is moved or flung
     sh.fragmentShader = WX_GLSL.head + `varying vec3 vSW, vSL;
+      #ifdef SURF_RL
+        varying vec3 vRL;
+      #endif
       float sfh(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
       float sfn(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f); return mix(mix(sfh(i), sfh(i + vec2(1.0, 0.0)), f.x), mix(sfh(i + vec2(0.0, 1.0)), sfh(i + vec2(1.0, 1.0)), f.x), f.y); }
       float sfBlock(vec2 uv, float bw, float bh, float joint, float jk, float var, float stag){ float row = floor(uv.y / bh), uu = uv.x / bw + stag * mod(row, 2.0); vec2 f = vec2(fract(uu), fract(uv.y / bh));
@@ -890,7 +893,9 @@ function surfFx(m, kind, o = {}) {   // o.indoor: no weather (rooms) · o.sp: pa
       ` + sh.fragmentShader.replace('#include <color_fragment>', `#include <color_fragment>
       { vec3 fn = normalize(cross(dFdx(vSL), dFdy(vSL))); float sd = distance(cameraPosition, vSW), sf = 1.0 - smoothstep(35.0, 120.0, sd), nf = 1.0 - smoothstep(7.0, 22.0, sd), fl = step(0.92, abs(fn.y));
         vec3 tg = fl > 0.5 ? vec3(1.0, 0.0, 0.0) : normalize(cross(vec3(0.0, 1.0, 0.0), fn)); vec2 uv = vec2(dot(vSL, tg), fl > 0.5 ? vSL.z : vSL.y / max(0.3, sqrt(1.0 - fn.y * fn.y)));
-        float k = 0.0, K = ${K}, mo = (sfn(uv * 0.6) - 0.5) * 0.07 + (sfn(uv * 5.0 + 7.0) - 0.5) * 0.04;
+        float K = ${K}, ws = fl * max(max(step(abs(K - 9.0), 0.4), step(abs(K - 6.0), 0.4)), step(14.5, K)); if (ws > 0.5) uv = vSW.xz;   // vNEXT: flat asphalt, plaster and paint tops in world space — overlapping road boxes show the same pattern (no flicker)
+        vec2 wq = fl * step(5.5, K) * step(K, 10.5) + step(14.5, K) * fl > 0.5 ? vSW.xz : vSL.xz;   // weather noise: world space on flat street surfaces
+        float k = 0.0, mo = (sfn(uv * 0.6) - 0.5) * 0.07 + (sfn(uv * 5.0 + 7.0) - 0.5) * 0.04;
         if (K < 1.5) k = sfBlock(uv, 0.62, 0.24, 0.022, 0.2, 0.24, 0.5) + mo * 0.6;
         else if (K < 2.5) k = sfBlock(uv, 1.05, 0.5, 0.03, -0.24, 0.2, 0.5) + mo;
         else if (K < 3.5) k = sfBlock(uv, 0.3, 40.0, 0.016, -0.3, 0.14, 0.0) + (sfn(vec2(uv.x * 26.0, uv.y * 1.3)) - 0.5) * 0.07;
@@ -899,7 +904,10 @@ function surfFx(m, kind, o = {}) {   // o.indoor: no weather (rooms) · o.sp: pa
         else if (K < 6.5) k = mo * 1.4 + (sfn(vec2(uv.x * 2.6, uv.y * 0.22)) - 0.5) * 0.06;
         else if (K < 7.5) k = sfBlock(uv, 3.0, 3.1, 0.03, -0.16, 0.05, 0.0) + mo * 1.2 + (sfn(vec2(uv.x * 2.6, uv.y * 0.22)) - 0.5) * 0.07;
         else if (K < 8.5) k = sin(uv.x * 28.56) * 0.075 + sfBlock(uv, 40.0, 1.25, 0.02, -0.16, 0.05, 0.0) + mo * 0.5;
-        else if (K < 9.5) { float cr = (1.0 - smoothstep(0.0, 0.02, abs(sfn(uv * 0.55 + 3.0) - 0.5))) * smoothstep(0.42, 0.6, sfn(uv * 0.13 + 9.0)) + (1.0 - smoothstep(0.0, 0.03, abs(sfn(uv * 1.7 + 21.0) - 0.5))) * smoothstep(0.6, 0.72, sfn(uv * 0.21 + 4.0));
+        else if (K < 9.5) { vec2 cu = uv + vec2(sfn(uv * 2.3 + 1.0), sfn(uv * 2.3 + 8.0)) * 0.3 + vec2(sfn(uv * 9.0 + 4.0), sfn(uv * 9.0 + 11.0)) * 0.05;   // vNEXT cracks: jagged (jittered), broken into pieces, varying width, fading out
+          float cw = 0.004 + 0.016 * sfn(uv * 0.8 + 5.0);
+          float cr = (1.0 - smoothstep(0.0, cw, abs(sfn(cu * 0.55 + 3.0) - 0.5))) * smoothstep(0.5, 0.66, sfn(uv * 0.13 + 9.0)) * smoothstep(0.32, 0.6, sfn(uv * 1.6 + 13.0))
+            + (1.0 - smoothstep(0.0, cw * 1.4, abs(sfn(cu * 1.7 + 21.0) - 0.5))) * smoothstep(0.62, 0.74, sfn(uv * 0.21 + 4.0)) * smoothstep(0.4, 0.65, sfn(uv * 3.1 + 2.0)) * 0.8;
           vec2 pc = floor(uv / vec2(3.4, 2.3)), pf = fract(uv / vec2(3.4, 2.3)); float pa = step(0.87, sfh(pc + 4.0)) * step(0.14, pf.x) * step(pf.x, 0.86) * step(0.2, pf.y) * step(pf.y, 0.8);   // asphalt: grain, cracks, repair patches
           k = (sfh(floor(uv * 55.0)) - 0.5) * 0.16 * nf + mo * 1.3 + (sfn(uv * 0.09) - 0.5) * 0.12 - clamp(cr, 0.0, 1.0) * 0.4 * nf - pa * 0.16; }
         else if (K < 10.5) k = sfBlock(uv, 0.8, 0.8, 0.02, -0.2, 0.1, 0.0) + mo + (sfh(floor(uv * 40.0)) - 0.5) * 0.07 * nf;   // paving slabs
@@ -908,18 +916,31 @@ function surfFx(m, kind, o = {}) {   // o.indoor: no weather (rooms) · o.sp: pa
         else if (K < 12.5) { float ts = fl > 0.5 ? 0.4 : 0.15; vec2 tc = floor(uv / ts), tf = fract(uv / ts); float e = min(min(tf.x, 1.0 - tf.x), min(tf.y, 1.0 - tf.y)) * ts;   // tiles: grout, chequer on floors, slight tone per tile
           k = mix(-0.22, (fl > 0.5 ? -0.1 * mod(tc.x + tc.y, 2.0) : 0.0) + (sfh(tc) - 0.5) * 0.05, smoothstep(0.004, 0.012, e)); }
         else if (K < 13.5) k = (sfh(floor(uv * 90.0)) - 0.5) * 0.14 * nf + mo * 1.5 + (sfn(uv * 1.3) - 0.5) * 0.06;   // carpet
-        else { vec2 q = fract(uv / 0.26) - 0.5; k = (step(0.5, fract(uv.x / 0.26)) - 0.5) * 0.045 + (1.0 - smoothstep(0.07, 0.09, abs(q.x) + abs(q.y))) * 0.06 * (0.3 + 0.7 * nf) + mo * 0.4; }   // wallpaper: stripes with a small diamond
+        else if (K < 14.5) { vec2 q = fract(uv / 0.26) - 0.5; k = (step(0.5, fract(uv.x / 0.26)) - 0.5) * 0.045 + (1.0 - smoothstep(0.07, 0.09, abs(q.x) + abs(q.y))) * 0.06 * (0.3 + 0.7 * nf) + mo * 0.4; }   // wallpaper: stripes with a small diamond
+        else k = (sfh(floor(uv * 40.0)) - 0.5) * 0.06 * nf + mo * 0.5 - smoothstep(0.62, 0.8, sfn(uv * 2.2 + 6.0)) * 0.22;   // road paint: grain and worn spots
         diffuseColor.rgb *= 1.0 + k * sf;
       #ifndef SURF_IN
-        float up = smoothstep(0.35, 0.8, fn.y), sn = 0.0, road = step(8.5, K) * step(K, 10.5);
-        if (uSnow > 0.001) { float am = uSnow * (1.0 - 0.6 * road); sn = up * smoothstep(0.1, 0.3, am * 1.25 - 0.3 + (sfn(vSL.xz * 1.3 + 2.0) - 0.5) * 0.9 * (1.0 - am * 0.7));
+        float road = max(step(8.5, K) * step(K, 10.5), step(14.5, K)), up = max(smoothstep(0.35, 0.8, fn.y), road * step(0.001, uSnow)), sn = 0.0;   // vNEXT: the thin sides of asphalt, paving and paint take the snow too (no dark outlines)
+        if (uSnow > 0.001 && road < 0.5) { float am = uSnow; sn = up * smoothstep(0.1, 0.3, am * 1.25 - 0.3 + (sfn(vSL.xz * 1.3 + 2.0) - 0.5) * 0.9 * (1.0 - am * 0.7));
           diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.90, 0.94, 1.0) * (1.0 + mo * 0.6), sn); }
+        if (uSnow > 0.001 && road > 0.5) {   // vNEXT snow on streets: soft drifts (fbm, no hard blotches), piled up at the kerbs, compacted grey tyre tracks along the wheel bands of every lane (road(): rl);
+          // the paint uses the same function as the asphalt under it, so markings vanish under the snow with it and only show faintly in the tracks
+          float nn = sfn(wq * 0.32 + 2.0) * 0.5 + sfn(wq * 1.1 + 7.0) * 0.3 + sfn(wq * 3.7 + 3.0) * 0.2, tk = 0.0, edge = 0.0;
+          #ifdef SURF_RL
+            float hw = max(vRL.y, 0.6), ac = vRL.x, nl = max(1.0, floor(hw * 2.0 / 3.3 + 0.5)), lw = hw * 2.0 / nl, li = clamp(floor((ac + hw) / lw), 0.0, nl - 1.0), lc = -hw + (li + 0.5) * lw;
+            float ta = min(0.8, lw * 0.3), wob = (sfn(wq * 0.09 + 4.0) - 0.5) * 0.35 + (sfn(wq * 0.6 + 9.0) - 0.5) * 0.06, dt = abs(abs(ac - lc + wob) - ta);
+            tk = (1.0 - smoothstep(0.08 + 0.06 * sfn(wq * 0.7 + 3.0), 0.32, dt)) * (0.5 + 0.3 * sfn(wq * 0.21 + 6.0) + 0.2 * sfn(wq * 2.4 + 1.0)); edge = smoothstep(hw - 1.0, hw - 0.15, abs(ac));
+          #endif
+          float am = uSnow, cov = smoothstep(0.12, 0.55, am * 1.2 - 0.22 + (nn - 0.5) * 0.7 + edge * 0.35), tr = tk * smoothstep(0.15, 0.6, am) * 0.8;
+          vec3 sc = vec3(0.90, 0.94, 1.0) * (1.0 + mo * 0.6 + (nn - 0.5) * 0.06), pk = mix(diffuseColor.rgb, vec3(0.46, 0.48, 0.52) * (0.85 + 0.3 * nn), 0.55 + 0.25 * nn);
+          sn = up * cov * (1.0 - 0.4 * tr); diffuseColor.rgb = mix(diffuseColor.rgb, mix(sc, pk, tr), up * cov);
+          if (K > 14.5 && up * cov > 0.995 && tr < 0.01) discard; }   // paint fully under snow: the asphalt beneath shows the same snow (no edge pixels)
         if (uWet > 0.001) { float w = uWet * (1.0 - sn); diffuseColor.rgb *= 1.0 - w * (0.2 + 0.16 * up); wxGloss = w * (0.3 + 0.5 * up);
-          if (road * fl > 0.5) { float pd = smoothstep(0.5, 0.58, sfn(vSL.xz * 0.3 + 5.0) * 0.7 + sfn(vSL.xz * 1.1) * 0.3) * smoothstep(0.25, 0.7, uWet) * (1.0 - sn); diffuseColor.rgb *= 1.0 - pd * 0.45; wxPud = pd; wxGloss = max(wxGloss, pd); } }
+          if (road * fl > 0.5) { float pd = smoothstep(0.5, 0.58, sfn(wq * 0.3 + 5.0) * 0.7 + sfn(wq * 1.1) * 0.3) * smoothstep(0.25, 0.7, uWet) * (1.0 - sn); diffuseColor.rgb *= 1.0 - pd * 0.45; wxPud = pd; wxGloss = max(wxGloss, pd); } }
       #endif
       }`).replace('#include <roughnessmap_fragment>', WX_GLSL.rough).replace('#include <opaque_fragment>', WX_GLSL.refl);
   };
-  m.customProgramCacheKey = () => 'surf' + K + (o.sp ? 's' : '') + (o.indoor ? 'i' : ''); return m;
+  m.customProgramCacheKey = () => 'surf' + K + (o.sp ? 's' : '') + (o.indoor ? 'i' : '') + (o.rl ? 'r' : ''); return m;
 }
 // v3.5 material presets: mat(hex, { kind }) — paint (car lacquer) · glass · metal · chrome · wood · fabric · plastic · rubber · stone · ceramic.
 //   A kind sets roughness, metalness and how strongly the surface mirrors the sky environment (env, 1 = engine default); glossy kinds are smooth-shaded on curved parts
@@ -1021,21 +1042,43 @@ function ground(o = {}) {   // colour varies in soft patches (CFG.groundDetail: 
   const H0 = (x, z) => { const r = Math.hypot(x, z), k = clamp((r - flat) / 70); return k * k * hills * (0.65 + 0.35 * Math.sin(x * 0.045 + 1.3) * Math.cos(z * 0.05 + 0.7) + 0.25 * Math.sin(x * 0.13 + z * 0.11)); };
   const bw = o.beach ?? 5, fl = Math.max(30, bw + 14);   // v2.25 beach: width of the sand strip in m (Omaha at low tide: 40–60)
   const H = cz == null ? H0 : (x, z) => { const k = clamp((z - cz) / 12), s = k * k * (3 - 2 * k); return lerp(H0(x, z) * (1 - clamp((z - cz + fl) / fl)), -dep, s); };
-  const geo = new THREE.PlaneGeometry(size, size, cz == null ? 90 : 140, cz == null ? 90 : 140); geo.rotateX(-Math.PI / 2);
-  const pos = geo.attributes.position;
-  for (let i = 0; i < pos.count; i++) pos.setY(i, H(pos.getX(i), pos.getZ(i)) - 0.005);
-  geo.computeVertexNormals();
-  groundH = H;
+  const HR = (x, z) => { const h = H(x, z); return h === 0 || !ROADSEG.length ? h : h * roadFlatK(x, z); };   // vNEXT: terrain flattened under roads (see road)
+  groundH = HR;
   const _tc = new THREE.Color(), base0 = new THREE.Color(o.color ?? '#5F7F3B'), dirt = new THREE.Color(o.dirt || '#7A6650'), green = o.dirt !== false && base0.g > base0.r * 1.05;
   const tint = (c, x, z) => { if (CFG.groundDetail === false) return _tc.copy(c); const n = 0.07 * noise2(x * 0.045, z * 0.045) + 0.04 * noise2(x * 0.17 + 9, z * 0.17 + 3);
     _tc.copy(c).offsetHSL(0.012 * noise2(x * 0.05 + 7, z * 0.05), 0.03 * n, n); if (green) _tc.lerp(dirt, clamp(noise2(x * 0.03 + 40, z * 0.03 - 20) * 2.2 - 1.2) * 0.2); return _tc; };
-  if (cz == null) { const cl = []; for (let i = 0; i < pos.count; i++) { const c = tint(base0, pos.getX(i), pos.getZ(i)); cl.push(c.r, c.g, c.b); }
-    geo.setAttribute('color', new THREE.Float32BufferAttribute(cl, 3)); return mesh(world, geo, groundFx(new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 1 }), o), 0, 0, 0, { cast: false, stat: true }); }
-  const g2 = geo.toNonIndexed(), p2 = g2.attributes.position, cols = [], cL = new THREE.Color(o.color ?? '#5F7F3B'), cS = new THREE.Color(o.sand ?? '#D8C38E');   // sand beach along the coast
-  for (let i = 0; i < p2.count; i += 3) { const z = (p2.getZ(i) + p2.getZ(i + 1) + p2.getZ(i + 2)) / 3, x = (p2.getX(i) + p2.getX(i + 1) + p2.getX(i + 2)) / 3, c = tint(z > cz - bw ? cS : cL, x, z); for (let k = 0; k < 3; k++) cols.push(c.r, c.g, c.b); }
-  g2.setAttribute('color', new THREE.Float32BufferAttribute(cols, 3)); g2.computeVertexNormals();
-  if (LONG && o.wet !== false) wetSand(H, cz, size, bw, o);   // v2.30
-  return mesh(world, g2, groundFx(new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 1 }), o), 0, 0, 0, { cast: false, stat: true });
+  const mk = seg => {   // the ground mesh at seg × seg cells (rebuilt finer at bake time when roads leave the flat area, see groundRoadFix)
+    const geo = new THREE.PlaneGeometry(size, size, seg, seg); geo.rotateX(-Math.PI / 2);
+    const pos = geo.attributes.position;
+    for (let i = 0; i < pos.count; i++) pos.setY(i, HR(pos.getX(i), pos.getZ(i)) - 0.005);
+    geo.computeVertexNormals();
+    if (cz == null) { const cl = []; for (let i = 0; i < pos.count; i++) { const c = tint(base0, pos.getX(i), pos.getZ(i)); cl.push(c.r, c.g, c.b); }
+      geo.setAttribute('color', new THREE.Float32BufferAttribute(cl, 3)); return geo; }
+    const g2 = geo.toNonIndexed(), p2 = g2.attributes.position, cols = [], cL = new THREE.Color(o.color ?? '#5F7F3B'), cS = new THREE.Color(o.sand ?? '#D8C38E');   // sand beach along the coast
+    for (let i = 0; i < p2.count; i += 3) { const z = (p2.getZ(i) + p2.getZ(i + 1) + p2.getZ(i + 2)) / 3, x = (p2.getX(i) + p2.getX(i + 1) + p2.getX(i + 2)) / 3, c = tint(z > cz - bw ? cS : cL, x, z); for (let k = 0; k < 3; k++) cols.push(c.r, c.g, c.b); }
+    g2.setAttribute('color', new THREE.Float32BufferAttribute(cols, 3)); g2.computeVertexNormals(); return g2; };
+  const seg0 = cz == null ? 90 : 140;
+  if (cz != null && LONG && o.wet !== false) wetSand(H, cz, size, bw, o);   // v2.30
+  const gm = mesh(world, mk(seg0), groundFx(new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 1 }), o), 0, 0, 0, { cast: false, stat: true });
+  GROUND._fix = { m: gm, mk, H, HR, size, seg: seg0 }; return gm;
+}
+// vNEXT roads and terrain: every road() registers its segments (ROADSEG: ax, az, bx, bz, half width). groundH (and the ground mesh, rebuilt at bake time with ~1.8 m cells
+//   where a road leaves the flat area) is pulled down to the road's level within w/2 + 3 m of the centre line and rises back over ROADFALL m — roads beyond ground({ flat })
+//   are no longer buried by hills. Call road() / city() before placing props next to such roads (groundH changes when the road is added). QA: ROADBURIED.
+const ROADSEG = [], ROADS = [], ROADFALL = 20;
+function roadFlatK(x, z) {   // 0 on / next to a road … 1 away from all roads
+  let k = 1;
+  for (let i = 0; i < ROADSEG.length; i += 5) { const ax = ROADSEG[i], az = ROADSEG[i + 1], bx = ROADSEG[i + 2], bz = ROADSEG[i + 3], m = ROADSEG[i + 4] + 3;
+    if (x < Math.min(ax, bx) - m - ROADFALL || x > Math.max(ax, bx) + m + ROADFALL || z < Math.min(az, bz) - m - ROADFALL || z > Math.max(az, bz) + m + ROADFALL) continue;
+    const dx = bx - ax, dz = bz - az, L2 = dx * dx + dz * dz || 1, u = clamp(((x - ax) * dx + (z - az) * dz) / L2), d = Math.hypot(x - ax - u * dx, z - az - u * dz), e = clamp((d - m) / ROADFALL);
+    k *= e * e * (3 - 2 * e); if (k === 0) return 0; }   // product, not min: no crease where two roads' bands meet (flat-shaded saw teeth)
+  return k;
+}
+function groundRoadFix() {   // bake: rebuild the ground mesh finer when a road runs where the terrain is not flat (its cells must not bridge the flattened band)
+  const F = GROUND._fix; if (!F || !ROADSEG.length) return; let need = false;
+  for (let i = 0; i < ROADSEG.length && !need; i += 5) { const ax = ROADSEG[i], az = ROADSEG[i + 1], bx = ROADSEG[i + 2], bz = ROADSEG[i + 3], m = ROADSEG[i + 4] + 3 + ROADFALL, L = Math.hypot(bx - ax, bz - az), nx = -(bz - az) / (L || 1), nz = (bx - ax) / (L || 1);
+    for (let s = 0; s <= L && !need; s += 2) for (const o of [-m, 0, m]) { const x = ax + (bx - ax) * s / (L || 1) + nx * o, z = az + (bz - az) * s / (L || 1) + nz * o; if (F.H(x, z) !== 0) { need = true; break; } } }
+  if (!need) return; const seg = Math.min(300, Math.ceil(F.size / 1.8)); if (seg <= F.seg) return; F.m.geometry = F.mk(seg); F.seg = seg;
 }
 
 // --- props (all face +z; ry rotates) ---
@@ -2323,17 +2366,55 @@ function beamSpot(beam, o = {}) {
     sp.position.set(A.x + B.x * d, fy, A.z + B.z * d); sp.rotation.set(0, Math.atan2(B.x, B.z), 0); sp.scale.set(r, 1, r * st); U.value = (o.k ?? 0.35) * fade * (o.strength?.() ?? 1); sp.visible = U.value > 0.002; });
   return sp;
 }
-// lightPool(p, x, y, z, { r, color, k, night, wall, ry, ignore }) — soft glow of a lamp on the floor below it (local to p): draped over curbs, steps and paving (built just before bake,
-//   so it follows whatever lies under the lamp; anything higher than 0.28 m — benches, cars, the lamp's own base (ignore: its group) — stays out), merged with all other static pools into one draw call. Follows the darkness
+// lightPool(p, x, y, z, { r, color, k, night, wall, ry, ignore }) — soft glow of a lamp on the floor below it (local to p). Follows the darkness
 //   (NIGHTK; night: false = always on, e.g. indoor lamps). wall: true = a vertical glow on a wall (local +z out of the wall). No real light.
+//   vNEXT: pools of static lamps are projected in the surface shaders (every lit built-in material: standard, physical, lambert, phong, toon): one world-space glow map
+//   (LPOOLT, ~0.12 m texels) is sampled per pixel and added to up-facing surfaces from 1.5 m below to 0.28 m above the lamp's foot — curbs, steps, snow and paving get it with
+//   no seams or hairlines, vertical faces (curb fronts, the lamp's base) none; benches, car roofs and anything else higher than 0.28 m stay out. Pools under moving lamps
+//   (dyn, not stat) and wall pools keep the old draped mesh. CFG.pools: false = none.
 const LPOOLS = [], _poolMats = {};
+const LPOOLT = new THREE.DataTexture(new Uint16Array(4), 1, 1, THREE.RGBAFormat, THREE.HalfFloatType), LPOOLB = { value: { x: 0, y: 0, z: 1, w: 1 } }, LPOOLU = { value: { x: 0, y: 1, z: 0, w: 0 } };   // map · bounds (x0, z0, sx, sz) · (night k, always-on k, on, both halves)
+LPOOLT.magFilter = LPOOLT.minFilter = THREE.LinearFilter; LPOOLT.generateMipmaps = false; LPOOLT.wrapS = LPOOLT.wrapT = THREE.ClampToEdgeWrapping;
+if (CFG.pools !== false) {
+  const SC = THREE.ShaderChunk;
+  SC.emissivemap_pars_fragment += `
+#if defined( STANDARD ) || defined( LAMBERT ) || defined( PHONG ) || defined( TOON )
+  uniform sampler2D uLpT; uniform vec4 uLpB, uLpU;
+#endif`;
+  SC.emissivemap_fragment += `
+#if defined( STANDARD ) || defined( LAMBERT ) || defined( PHONG ) || defined( TOON )
+  if (uLpU.z > 0.5) { vec3 pW = transpose(mat3(viewMatrix)) * (-vViewPosition - viewMatrix[3].xyz); vec2 pU = (pW.xz - uLpB.xy) / uLpB.zw;
+    if (pU.x > 0.0 && pU.x < 1.0 && pU.y > 0.0 && pU.y < 1.0) { float pN = smoothstep(0.5, 0.8, (vec4(normal, 0.0) * viewMatrix).y);
+      if (pN > 0.0) { vec4 pA = texture2D(uLpT, vec2(pU.x * (uLpU.w > 0.5 ? 0.5 : 1.0), pU.y)); vec3 pG = pA.rgb * uLpU.x; float pY = pA.a;
+        if (uLpU.w > 0.5) { vec4 pB = texture2D(uLpT, vec2(0.5 + pU.x * 0.5, pU.y)); pG += pB.rgb * uLpU.y; pY = max(pY, pB.a); }
+        totalEmissiveRadiance += pG * pN * step(pW.y, pY + 0.28) * step(pY - 1.5, pW.y); } } }
+#endif`;
+  for (const k of ['standard', 'physical', 'lambert', 'phong', 'toon']) Object.assign(THREE.ShaderLib[k].uniforms, { uLpT: { value: LPOOLT }, uLpB: LPOOLB, uLpU: LPOOLU });
+}
 function lightPool(p, x, y, z, o = {}) {
   if (CFG.pools === false || o.pool === false) return null;
   const g = grp(p, x, y, z, o.ry ?? 0); LPOOLS.push({ g, r: o.r ?? 3, c: new THREE.Color(o.color ?? '#FFC880').multiplyScalar(o.k ?? 0.45), night: o.night !== false, wall: !!o.wall, ign: o.ignore });
   if (LPOOLS.length === 1) DEFER.push(_buildPools); return g;
 }
+function _poolMap(list) {   // static floor pools → the glow map (left half: pools that follow the night, right half: always-on pools when there are any)
+  const C = new THREE.Vector3(), P = list.map(L => { L.g.updateWorldMatrix(true, false); L.g.getWorldPosition(C); return { x: C.x, y: C.y, z: C.z, r: L.r, c: L.c, night: L.night }; });
+  let x0 = 1e9, x1 = -1e9, z0 = 1e9, z1 = -1e9; for (const q of P) { x0 = Math.min(x0, q.x - q.r - 1); x1 = Math.max(x1, q.x + q.r + 1); z0 = Math.min(z0, q.z - q.r - 1); z1 = Math.max(z1, q.z + q.r + 1); }
+  const both = P.some(q => !q.night) && P.some(q => q.night), sx = x1 - x0, sz = z1 - z0, nx = clamp(Math.ceil(sx / 0.12), 4, both ? 1024 : 2048), nz = clamp(Math.ceil(sz / 0.12), 4, 2048), W = both ? nx * 2 : nx;
+  const rgb = new Float32Array(W * nz * 3), ya = new Float32Array(W * nz).fill(-1e4), wt = new Float32Array(W * nz), fall = u => Math.pow(1 - u * u, 2.2) * 0.85 + Math.exp(-u * u * 10) * 0.25;
+  for (const q of P) { const off = both && !q.night ? nx : 0, i0 = Math.max(0, Math.floor((q.x - q.r - x0) / sx * nx)), i1 = Math.min(nx - 1, Math.ceil((q.x + q.r - x0) / sx * nx)), j0 = Math.max(0, Math.floor((q.z - q.r - z0) / sz * nz)), j1 = Math.min(nz - 1, Math.ceil((q.z + q.r - z0) / sz * nz));
+    for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) { const wx = x0 + (i + 0.5) / nx * sx, wz = z0 + (j + 0.5) / nz * sz, u = Math.hypot(wx - q.x, wz - q.z) / q.r; if (u >= 1.05) continue;
+      const f = u < 1 ? fall(u) : 0, k = j * W + i + off; rgb[3 * k] += q.c.r * f; rgb[3 * k + 1] += q.c.g * f; rgb[3 * k + 2] += q.c.b * f; if (f + 1e-4 > wt[k]) { wt[k] = f + 1e-4; ya[k] = q.y; } } }
+  const ys = P.map(q => q.y).sort((a, b) => a - b), ymed = ys[ys.length >> 1], d = new Uint16Array(W * nz * 4), h = THREE.DataUtils.toHalfFloat;
+  for (let k = 0; k < W * nz; k++) { d[4 * k] = h(rgb[3 * k]); d[4 * k + 1] = h(rgb[3 * k + 1]); d[4 * k + 2] = h(rgb[3 * k + 2]); d[4 * k + 3] = h(ya[k] > -1e3 ? ya[k] : ymed); }
+  LPOOLT.image = { data: d, width: W, height: nz }; LPOOLT.needsUpdate = true;
+  Object.assign(LPOOLB.value, { x: x0, y: z0, z: sx, w: sz }); LPOOLU.value.z = 1; LPOOLU.value.w = both ? 1 : 0; LPOOLMAP.list = P;
+}
+const LPOOLMAP = { list: [] };   // the static floor pools in the glow map (world x, y, z, r) — QA / tests
+tick(() => { LPOOLU.value.x = POOLK.value; LPOOLU.value.y = POOLON.value; });
 function _buildPools() {
   world.updateMatrixWorld(true);
+  { const st = L => { let s = false; for (let q = L.g; q && q !== world; q = q.parent) { if (q.userData.dyn) return false; if (q.userData.stat) s = true; } return s; };   // vNEXT: static floor pools → shader glow map
+    const map = LPOOLS.filter(L => !L.wall && st(L)); if (map.length) { _poolMap(map); LPOOLS.splice(0, LPOOLS.length, ...LPOOLS.filter(L => !map.includes(L))); } }
   const cands = [], bb = new THREE.Box3(), rc = new THREE.Raycaster(), dn = new THREE.Vector3(0, -1, 0), P = new THREE.Vector3(), C = new THREE.Vector3(), inv = new THREE.Matrix4();
   world.traverse(m => { if (!m.isMesh || m.isInstancedMesh || !m.visible || m.userData.pool) return; const mt = m.material; if (!mt || Array.isArray(mt) || mt.transparent || mt.isMeshBasicMaterial || mt.isShaderMaterial) return;
     let st = false; for (let q = m; q && q !== world; q = q.parent) { if (q.userData.dyn || !q.visible) return; if (q.userData.stat) st = true; } if (!st) return;
@@ -4915,7 +4996,7 @@ function tower(p, x, z, o = {}) {   // city building with depth: style glass | b
     if (fi === 0 || hv(fi + 20) < 0.5) { const ac = pick2(['#C0392B', '#2E86AB', '#3DA56A', '#E3B23C', '#8E5BD9', '#E07A3A'], hv(fi + 10)); box(q, W * 0.74, 0.08, 1.0, ac, 0, 1.95, 0.6, { rx: 0.25, ...NC }); box(q, W * 0.74, 0.22, 0.04, ac, 0, 1.78, 1.08, NC); }
     if (fi === 0) { box(q, 1.3, 1.8, 0.06, '#1E2024', W * 0.3, 0.14, 0.12, NC); box(q, 1.6, 0.14, 0.4, trim, W * 0.3, 2.0, 0.2, NC);
       for (const s of [-1, 1]) { box(q, 0.54, 1.5, 0.03, '#3E5670', W * 0.3 + s * 0.3, 0.3, 0.155, { rough: 0.25, kind: 'glass', ...NC }); box(q, 0.035, 0.4, 0.05, '#C9CED6', W * 0.3 + s * 0.07, 0.85, 0.185, NC); box(q, 0.1, 1.86, 0.1, trim, W * 0.3 + s * 0.7, 0.14, 0.14, NC); }   // v2.40: glass double door with handles, frame, step, lamps that glow at night
-      box(q, 1.5, 0.08, 0.3, shade(c, -0.25), W * 0.3, 0.06, 0.26, NC);
+      box(q, 1.5, 0.1, 0.3, shade(c, -0.25), W * 0.3, 0.06, 0.26, NC);   // door step (vNEXT: 2 cm above the sidewalk paving, was level with it → z-fighting)
       if (!NIGHTGLOW.length) NIGHTGLOW.push(mat('#FFF1C8', { em: '#FFE2A0', ei: 0, own: true })); { const lx = W * 0.3 - 0.86; box(q, 0.12, 0.24, 0.1, '#2A2D33', lx, 1.62, 0.15, NC); box(q, 0.08, 0.15, 0.06, '', lx, 1.66, 0.2, { mat: NIGHTGLOW[0], ...NC }); } }
   });
   for (const [sx, sz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) box(g, 0.5, h, 0.5, style === 'brick' ? deep : c, sx * w / 2, 0, sz * d / 2, { cast: false });
@@ -4935,22 +5016,82 @@ function tower(p, x, z, o = {}) {   // city building with depth: style glass | b
   }
   return { g, h, style };
 }
-function road(p, pts, o = {}) {   // flat road along [[x,z],…] with centre dashes and edge lines (edges: false = none). v2.35: asphalt with grain, cracks and patches (wet: puddles),
-  const w = o.w ?? 6, g = stat(grp(p)), NC = { cast: false }, sc = o.color ?? '#3A3D44';   //   gravel shoulders (shoulder: false) or curb: true (raised curbs with drain grates), manholes: true
+// road(p, pts, { w: 6, color, dash, edges, curb, shoulder, shoulderColor, manholes, gaps, xing }) — flat road along [[x,z],…] with centre dashes and edge lines (edges: false = none). v2.35: asphalt with grain,
+//   cracks and patches (wet: puddles), gravel shoulders (shoulder: false) or curb: true (raised curbs with drain grates), manholes: true.
+//   vNEXT: the asphalt pattern, puddles and snow run in world space (overlapping boxes at joints and junctions look the same → no flicker); each road colour gets its own depth
+//   order (polygonOffset, first colour = none). Markings are built at bake time (roadMarks) when all roads are known: edge lines and dashes stop where another road crosses
+//   or joins (and xing m beyond its edge, default 0.6 — city() keeps the zebras free with 2.7), gaps: [[s0, s1], …] = extra stretches without markings (metres along the
+//   polyline). Paint is thin (edge 3 mm, dash 4 mm, zebra 5 mm above the asphalt: never one height; thick boxes showed dotted AO edges) and drawn in front by polygonOffset. Snow lies on markings like on the asphalt; tyre tracks follow the lanes (one per ~3.3 m).
+//   The road registers itself (ROADS, ROADSEG): the terrain is flattened under it (see roadFlatK) — call road() before placing props next to it out in the hills.
+//   Returns its group (g.userData.road = the registry entry).
+const _RMAT = new Map(), _MKMAT = new Map();
+function roadSurfMat(c) {   // asphalt of road(): world-space pattern, lane attribute (rl) for the snow tracks, depth order by colour
+  let m = _RMAT.get(c); if (m) return m; const n = _RMAT.size;
+  m = new THREE.MeshStandardMaterial({ color: c, roughness: 0.88, metalness: 0, flatShading: true }); m.userData.own = true; surfFx(m, 'asphalt', { rl: true });
+  if (n) { m.polygonOffset = true; m.polygonOffsetFactor = -n; m.polygonOffsetUnits = -2 * n; } _RMAT.set(c, m); return m;
+}
+function roadMarkMat(c) { let m = _MKMAT.get(c); if (!m) { m = new THREE.MeshStandardMaterial({ color: c, roughness: 0.88, metalness: 0, flatShading: true, polygonOffset: true, polygonOffsetFactor: -6, polygonOffsetUnits: -12 }); m.userData.own = true; surfFx(m, 'marking', { rl: true }); _MKMAT.set(c, m); } return m; }   // paint: always in front of any asphalt (it sinks to 2–3 mm in snow)
+function _rlBox(w, h, d, x, y, z, ry, R, out) {   // a box (w × h × d, bottom at y, rotated ry) for a road's merged marking mesh; rl = across offset from the road's centre line, half width
+  const g = new THREE.BoxGeometry(w, h, d); g.applyMatrix4(new THREE.Matrix4().makeRotationY(ry).setPosition(x, y + h / 2, z));
+  const P = g.attributes.position, rl = new Float32Array(P.count * 3); for (let i = 0; i < P.count; i++) { const q = roadAt(R, P.getX(i), P.getZ(i)); rl[3 * i] = q.c; rl[3 * i + 1] = R.w / 2; rl[3 * i + 2] = y; }   // rl.z: foot of the paint (sinks into snow)
+  g.setAttribute('rl', new THREE.BufferAttribute(rl, 3)); g.deleteAttribute('uv'); out.push(g); return g;
+}
+function roadAt(R, x, z) {   // nearest point of road R's centre line → { c: signed across offset (+ = the n side), s: metres along, d: distance, seg }
+  let best = { d: 1e9, c: 0, s: 0, seg: 0 };
+  R.segs.forEach((S, i) => { const u = clamp(((x - S.ax) * S.dx + (z - S.az) * S.dz) / S.L), px = S.ax + S.dx * u * S.L, pz = S.az + S.dz * u * S.L, d = Math.hypot(x - px, z - pz);
+    if (d < best.d - 1e-9) best = { d, c: (x - px) * S.nx + (z - pz) * S.nz, s: S.s0 + u * S.L, seg: i }; });
+  return best;
+}
+function road(p, pts, o = {}) {
+  const w = o.w ?? 6, g = stat(grp(p)), NC = { cast: false }, sc = o.color ?? '#3A3D44', R = { g, pts, w, o, segs: [], marks: [], gaps: (o.gaps ?? []).map(q => q.slice()), id: ROADS.length };   //   gravel shoulders (shoulder: false) or curb: true (raised curbs with drain grates), manholes: true
+  g.userData.road = R; ROADS.push(R); let s0 = 0;
   for (let i = 0; i < pts.length - 1; i++) {
     const [ax, az] = pts[i], [bx, bz] = pts[i + 1], L = Math.hypot(bx - ax, bz - az), ang = Math.atan2(-(bz - az), bx - ax), nx = -(bz - az) / L, nz = (bx - ax) / L, mx = (ax + bx) / 2, mz = (az + bz) / 2;
-    box(g, L + w, 0.04, w, sc, mx, 0.01, mz, { ry: ang, cast: false, surf: 'asphalt' });
-    if (o.dash !== false) for (let k = 1.5; k < L - 1; k += 4) box(g, 2, 0.02, 0.18, '#E8E2C8', lerp(ax, bx, k / L), 0.05, lerp(az, bz, k / L), { ry: ang, cast: false });
-    if (o.edges !== false && L > 3) for (const s of [-1, 1]) box(g, L - w * 0.3, 0.02, 0.12, '#D8D4C4', mx + nx * s * (w / 2 - 0.3), 0.05, mz + nz * s * (w / 2 - 0.3), { ry: ang, cast: false });
+    R.segs.push({ ax, az, bx, bz, L, ang, nx, nz, dx: (bx - ax) / L, dz: (bz - az) / L, s0, first: i === 0, last: i === pts.length - 2 }); s0 += L; ROADSEG.push(ax, az, bx, bz, w / 2);
+    const e0 = i === 0 ? w / 2 : 0, e1 = i === pts.length - 2 ? w / 2 : 0, ex = mx + (bx - ax) / L * (e1 - e0) / 2, ez = mz + (bz - az) / L * (e1 - e0) / 2;   // vNEXT: no overhang at inner joints (a disc fills the bend)
+    const rg = new THREE.BoxGeometry(L + e0 + e1, 0.04, w), rp = rg.attributes.position, rl = new Float32Array(rp.count * 3); for (let k = 0; k < rp.count; k++) { rl[3 * k] = rp.getZ(k); rl[3 * k + 1] = w / 2; }
+    rg.setAttribute('rl', new THREE.BufferAttribute(rl, 3)); mesh(g, rg, roadSurfMat(sc), ex, 0.03, ez, { ry: ang, cast: false });
     if (o.curb) for (const s of [-1, 1]) { box(g, L, 0.16, 0.22, '#8A8C90', mx + nx * s * (w / 2 + 0.11), 0, mz + nz * s * (w / 2 + 0.11), { ry: ang, surf: 'concrete', ...NC });
       for (let k = 6; k < L - 3; k += 14) { const u = (k + (s > 0 ? 5 : 0)) / L; if (u < 1) drain(g, lerp(ax, bx, u) + nx * s * (w / 2 - 0.2), lerp(az, bz, u) + nz * s * (w / 2 - 0.2), ang); } }
-    else if (o.shoulder !== false && CFG.surfaces !== false) for (const s of [-1, 1]) box(g, L + w, 0.03, 0.55, o.shoulderColor ?? '#8E877A', mx + nx * s * (w / 2 + 0.2), 0.005, mz + nz * s * (w / 2 + 0.2), { ry: ang, cast: false, surf: 'plaster' });
-    if (o.manholes) for (let k = 9; k < L - 4; k += 23) manhole(g, lerp(ax, bx, k / L) + nx * w * 0.2, lerp(az, bz, k / L) + nz * w * 0.2);
+    else if (o.shoulder !== false && CFG.surfaces !== false) for (const s of [-1, 1]) box(g, L + e0 + e1, 0.03, 0.55, o.shoulderColor ?? '#8E877A', ex + nx * s * (w / 2 + 0.2), 0.005, ez + nz * s * (w / 2 + 0.2), { ry: ang, cast: false, surf: 'plaster' });
   }
+  for (let i = 1; i < pts.length - 1; i++) {   // vNEXT: round joints — a disc fills the wedge the two boxes leave open on the outside of a bend (asphalt and shoulder)
+    const [x, z] = pts[i], dg = new THREE.CylinderGeometry(w / 2, w / 2, 0.04, 28), dp = dg.attributes.position, rl = new Float32Array(dp.count * 3);
+    for (let k = 0; k < dp.count; k++) { rl[3 * k] = roadAt(R, x + dp.getX(k), z + dp.getZ(k)).c; rl[3 * k + 1] = w / 2; } dg.setAttribute('rl', new THREE.BufferAttribute(rl, 3)); mesh(g, dg, roadSurfMat(sc), x, 0.03, z, { cast: false });
+    if (!o.curb && o.shoulder !== false && CFG.surfaces !== false) cyl(g, w / 2 + 0.47, w / 2 + 0.47, 0.03, o.shoulderColor ?? '#8E877A', x, 0.005, z, { seg: 28, cast: false, surf: 'plaster' }); }
+  R.len = s0;
   return g;
 }
+function _clipIn(P0, D, len, S, hw, e0, e1) {   // part [t0, t1] of the line P0 + t·D (0 ≤ t ≤ len) inside segment S's band (|across| < hw, along from -e0 to L + e1) or null
+  let lo = 0, hi = len; const a0 = (P0[0] - S.ax) * S.dx + (P0[1] - S.az) * S.dz, da = D[0] * S.dx + D[1] * S.dz, c0 = (P0[0] - S.ax) * S.nx + (P0[1] - S.az) * S.nz, dc = D[0] * S.nx + D[1] * S.nz;
+  const lim = (v0, dv, mn, mx) => { if (Math.abs(dv) < 1e-9) { if (v0 < mn || v0 > mx) hi = -1; return; } let t0 = (mn - v0) / dv, t1 = (mx - v0) / dv; if (t0 > t1) [t0, t1] = [t1, t0]; lo = Math.max(lo, t0); hi = Math.min(hi, t1); };
+  lim(a0, da, -e0, S.L + e1); lim(c0, dc, -hw, hw); return hi > lo ? [lo, hi] : null;
+}
+function roadGaps(R, si, off) {   // stretches [t0, t1] of segment si of road R (line at across offset off) that lie in another road (+ xing) or in R.gaps
+  const S = R.segs[si], P0 = [S.ax + S.nx * off, S.az + S.nz * off], D = [S.dx, S.dz], out = [], xg = R.o.xing ?? 0.6;
+  for (const Q of ROADS) { if (Q === R) continue; for (const T of Q.segs) { const r = _clipIn(P0, D, S.L, T, Q.w / 2, T.first ? 0.3 : Q.w / 2, T.last ? 0.3 : Q.w / 2); if (r) out.push([r[0] - xg, r[1] + xg]); } }
+  for (const [a, b] of R.gaps) out.push([a - S.s0, b - S.s0]);
+  return out;
+}
+const _inGap = (G, a, b) => G.some(([g0, g1]) => b > g0 && a < g1);
+function _cutGaps(G, a, b, min = 0.6) {   // [a, b] minus the gaps → pieces at least min long
+  let P = [[a, b]]; for (const [g0, g1] of G) P = P.flatMap(([p0, p1]) => g1 <= p0 || g0 >= p1 ? [[p0, p1]] : [[p0, Math.min(p1, g0)], [Math.max(p0, g1), p1]]);
+  return P.filter(([p0, p1]) => p1 - p0 >= min);
+}
+const COPLANAR = [], MARKS = [];   // vNEXT QA: COPLANAR pairs found at bake (coplanarSnap) · flat road decals (dash, edge, zebra, manhole) → QA DECALOFF: [kind, x, z, length, width, ry]
+function roadMarks() {   // bake: the markings of every road, now that all roads (and their crossings) are known — one merged mesh per road and paint colour
+  for (const R of ROADS) { if (R.built) continue; R.built = true; const o = R.o, w = R.w, G = { edge: [], dash: [], zebra: [] };
+    R.segs.forEach((S, si) => { const at = (t, c) => [S.ax + S.dx * t + S.nx * c, S.az + S.dz * t + S.nz * c];
+      if (o.dash !== false) for (const [a, b] of _cutGaps(roadGaps(R, si, 0), 0.5, S.L - 0.5, 2)) { const n = Math.floor((b - a + 2) / 4), k0 = (a + b) / 2 - (n - 1) * 2;   // dashes (2 m on, 2 m off) centred in every free stretch
+        for (let q = 0; q < n; q++) { const [x, z] = at(k0 + q * 4, 0); _rlBox(2, 0.004, 0.18, x, 0.05, z, S.ang, R, G.dash); MARKS.push(['dash', x, z, 2, 0.18, S.ang]); } }
+      if (o.edges !== false && S.L > 3) for (const sd of [-1, 1]) { const c = sd * (w / 2 - 0.3), gp = roadGaps(R, si, c);
+        for (const [a, b] of _cutGaps(gp, w * 0.15, S.L - w * 0.15)) { const [x, z] = at((a + b) / 2, c); _rlBox(b - a, 0.003, 0.12, x, 0.05, z, S.ang, R, G.edge); MARKS.push(['edge', x, z, b - a, 0.12, S.ang]); } }
+      if (o.manholes) { const gp = roadGaps(R, si, 0); for (let k = 9; k < S.L - 4; k += 23) { if (_inGap(gp, k - 0.5, k + 0.5)) continue; const [x, z] = at(k, w * 0.2); manhole(R.g, x, z); MARKS.push(['manhole', x, z, 0.72, 0.72, 0]); } } });
+    for (const m of R.marks) { _rlBox(m.len, 0.005, m.wid, m.x, 0.05, m.z, m.ry, R, G.zebra); MARKS.push(['zebra', m.x, m.z, m.len, m.wid, m.ry]); }
+    for (const [k, c] of [['edge', '#D8D4C4'], ['dash', '#E8E2C8'], ['zebra', '#EDEAE0']]) if (G[k].length) { const me = new THREE.Mesh(mergeGeometries(G[k]), roadMarkMat(c)); me.castShadow = false; me.receiveShadow = true; R.g.add(me); for (const q of G[k]) q.dispose(); } }
+}
 function drain(p, x, z, ry = 0) { const g = grp(p, x, 0.052, z, ry), NC = { cast: false }; box(g, 0.6, 0.012, 0.34, '#1C1D20', 0, 0, 0, NC); for (let i = 0; i < 5; i++) box(g, 0.05, 0.016, 0.3, '#4A4D52', -0.22 + i * 0.11, 0, 0, NC); return g; }   // storm drain grate at the curb
-function manhole(p, x, z) { const g = grp(p, x, 0.052, z), NC = { cast: false }; cyl(g, 0.36, 0.36, 0.012, '#2A2C30', 0, 0, 0, { seg: 14, ...NC }); cyl(g, 0.3, 0.3, 0.016, '#3A3D42', 0, 0, 0, { seg: 14, ...NC }); for (const a of [0, Math.PI / 2]) box(g, 0.5, 0.02, 0.03, '#2A2C30', 0, 0, 0, { ry: a, ...NC }); return g; }
+function manhole(p, x, z) { const g = grp(p, x, 0.051, z), NC = { cast: false }; cyl(g, 0.36, 0.36, 0.011, '#2A2C30', 0, 0, 0, { seg: 14, surf: 'marking', ...NC }); cyl(g, 0.3, 0.3, 0.017, '#3A3D42', 0, 0, 0, { seg: 14, surf: 'marking', ...NC }); for (const a of [0, Math.PI / 2]) box(g, 0.5, 0.02, 0.03, '#2A2C30', 0, 0, 0, { ry: a, surf: 'marking', ...NC }); return g; }
 function leafLitter(spots, o = {}) {   // fallen leaves on the ground: spots [[x, z, r, y?], …] → one instanced mesh (autumn colours by default)
   const n = o.per ?? 14, im = new THREE.InstancedMesh(G('leafL', () => new THREE.PlaneGeometry(0.13, 0.085).rotateX(-Math.PI / 2)), new THREE.MeshStandardMaterial({ color: '#ffffff', side: THREE.DoubleSide, roughness: 1, flatShading: true }), spots.length * n), o3 = new THREE.Object3D(), c = new THREE.Color(), cs = o.colors ?? ['#C98A3A', '#B5642E', '#8FA64A', '#D9B24A', '#A6542A', '#6E8A3E'];
   spots.forEach(([x, z, r = 1.2, y], si) => { for (let k = 0; k < n; k++) { const h1 = hash(x * 7.3 + z * 3.1 + k * 1.7), h2 = hash(x * 2.9 + z * 5.3 + k * 4.1), a = h1 * TAU, rr2 = r * Math.sqrt(h2), px = x + Math.cos(a) * rr2, pz = z + Math.sin(a) * rr2;
@@ -6190,20 +6331,22 @@ function busstop(p, x, z, ry = 0) {   // shelter (glass back and sides, roof, be
 function city(o = {}) {   // nx × nz blocks of towers (taller in the centre), roads between, street furniture on the sidewalks; returns { loops } for traffic()
   const nx = o.nx ?? 3, nz = o.nz ?? 3, B = o.block ?? 14, S = o.street ?? 6, P = B + S, [cx, cz] = o.at ?? [0, 0];
   const x0 = cx - (nx * P) / 2, z0 = cz - (nz * P) / 2, loops = []; _dressed = true;   // v3.5: a city is dressed → ground() adds no autoDress
-  for (let i = 0; i <= nx; i++) road(world, [[x0 + i * P, z0], [x0 + i * P, z0 + nz * P]], { w: S });
-  for (let j = 0; j <= nz; j++) road(world, [[x0, z0 + j * P], [x0 + nx * P, z0 + j * P]], { w: S });
+  const RV = [], RH = [];   // vNEXT: markings stop at the junctions and before the zebras (xing)
+  for (let i = 0; i <= nx; i++) RV.push(road(world, [[x0 + i * P, z0], [x0 + i * P, z0 + nz * P]], { w: S, xing: 2.7 }).userData.road);
+  for (let j = 0; j <= nz; j++) RH.push(road(world, [[x0, z0 + j * P], [x0 + nx * P, z0 + j * P]], { w: S, xing: 2.7 }).userData.road);
   const streetTree = (x, z, s = 1) => { const g = stat(grp(world, x, 0.14, z)), h = hash(x * 3.1 + z * 7.9); box(g, 1.0 * s, 0.3, 1.0 * s, '#8A8C8F'); box(g, 0.86 * s, 0.04, 0.86 * s, '#4A3A2A', 0, 0.3, 0, { cast: false });
     cyl(g, 0.08, 0.12, 1.7, '#5A4030', 0, 0.3, 0, { seg: 6 }); const c = ['#4C7A3A', '#5A8A40', '#3F6E35'][Math.floor(h * 3)]; ball(g, 0.95 * s, c, 0, 2.5, 0, { detail: 1 }); ball(g, 0.6 * s, shade(c, 0.06), 0.3 * s, 2.5 + 0.5 * s, 0.1, { detail: 1 }); };
   const xs = [...Array(nx + 1).keys()].map(i => x0 + i * P), zs = [...Array(nz + 1).keys()].map(j => z0 + j * P);
-  if (o.props !== false) for (const xi of xs) for (const zj of zs) for (let k = 0; k < 6; k++) {   // zebra crossings at every junction + manholes
+  if (o.props !== false) xs.forEach((xi, i) => zs.forEach((zj, j) => { for (let k = 0; k < 6; k++) {   // zebra crossings on every arm of a junction (vNEXT: only where the road goes on — not out onto the grass at the city's edge) + manholes
     const off = -S / 2 + 0.55 + k * (S - 1.1) / 5;
-    for (const s2 of [-1, 1]) { box(world, 0.45, 0.02, 2.0, '#EDEAE0', xi + off, 0.06, zj + s2 * (S / 2 + 1.3), { cast: false, stat: true }); box(world, 2.0, 0.02, 0.45, '#EDEAE0', xi + s2 * (S / 2 + 1.3), 0.06, zj + off, { cast: false, stat: true }); }
-    if (k === 0 && hash(xi * 2.3 + zj) < 0.6) cyl(world, 0.35, 0.35, 0.02, '#2A2C30', xi + S * 0.2, 0.05, zj + P / 2, { seg: 10, cast: false, stat: true });
-  }
+    for (const s2 of [-1, 1]) { if (j + s2 >= 0 && j + s2 <= nz) RV[i].marks.push({ x: xi + off, z: zj + s2 * (S / 2 + 1.3), len: 0.45, wid: 2.0, ry: 0 });
+      if (i + s2 >= 0 && i + s2 <= nx) RH[j].marks.push({ x: xi + s2 * (S / 2 + 1.3), z: zj + off, len: 2.0, wid: 0.45, ry: 0 }); }
+    if (k === 0 && j < nz && hash(xi * 2.3 + zj) < 0.6) { cyl(world, 0.35, 0.35, 0.018, '#2A2C30', xi + S * 0.2, 0.05, zj + P / 2, { seg: 10, cast: false, stat: true, surf: 'marking' }); MARKS.push(['manhole', xi + S * 0.2, zj + P / 2, 0.7, 0.7, 0]); }
+  } }));
   for (let i = 0; i < nx; i++) for (let j = 0; j < nz; j++) {
     const bx = x0 + i * P + P / 2, bz = z0 + j * P + P / 2, n = pick([1, 2, 4, 4]), c = 1 - 0.45 * Math.hypot(i - (nx - 1) / 2, j - (nz - 1) / 2) / Math.max(nx, nz);
-    box(world, B, 0.14, B, o.walk ?? '#9A9C9F', bx, 0, bz, { cast: false, stat: true, surf: 'paving' });
-    box(world, B + 0.3, 0.16, B + 0.3, '#7E8084', bx, 0, bz, { cast: false, stat: true, surf: 'concrete' });   // curb
+    box(world, B, 0.14, B, o.walk ?? '#9A9C9F', bx, 0, bz, { cast: false, stat: true, surf: 'paving' });   // sidewalk paving inside a kerb ring (vNEXT: the kerb was a solid slab over the whole block)
+    for (const s of [-1, 1]) { box(world, B + 0.3, 0.16, 0.15, '#7E8084', bx, 0, bz + s * (B / 2 + 0.075), { cast: false, stat: true, surf: 'concrete' }); box(world, 0.15, 0.16, B, '#7E8084', bx + s * (B / 2 + 0.075), 0, bz, { cast: false, stat: true, surf: 'concrete' }); }
     const spots = n === 1 ? [[0, 0]] : n === 2 ? [[-1, 0], [1, 0]] : [[-1, -1], [1, -1], [-1, 1], [1, 1]];
     for (const [sx, sz] of spots) { const w = n === 1 ? B * 0.62 : B * 0.38; tower(world, bx + sx * B * 0.23, bz + sz * B * 0.23, { w, d: n === 2 ? B * 0.72 : w, h: rr(o.hmin ?? 10, o.hmax ?? 42) * c, lit: o.lit }); }
     const e = P / 2 - S / 4, ed = B / 2 - 0.45, hs = k => hash(bx * 3.7 + bz * 5.3 + k * 1.3);   // street furniture: hash only, the seeded layout stays the same
@@ -15994,7 +16137,9 @@ function propSnap() {
 const _qpClear = o => { const M = Array.isArray(o.material) ? o.material : [o.material]; return M.every(m => !m || m.visible === false || (m.transparent && (m.opacity ?? 1) < 0.5) || m.depthWrite === false || m.blending === THREE.AdditiveBlending || m.colorWrite === false); };   // glows, halos, light cones, decals: no solid object
 function bake() {
   for (const f of DEFER.splice(0)) f();
+  roadMarks(); groundRoadFix();   // vNEXT: markings of all roads (gaps where roads cross) · ground mesh finer where roads leave the flat area
   world.updateMatrixWorld(true);
+  coplanarSnap();   // vNEXT QA: COPLANAR (static boxes whose top faces fight)
   hitBuild(); LATE.unshift(hitResolve); LATE.push(footFloor);   // v2.29 hitboxes (needs the props before they are merged)
   propSnap();   // v3.24 prop QA (FLOAT): boxes of the static props before they are merged
   const inv = world.matrixWorld.clone().invert(), M4 = new THREE.Matrix4(), buckets = new Map(), done = [];
@@ -16004,7 +16149,7 @@ function bake() {
     for (let p = o; p && p !== world; p = p.parent) { if (p.userData.dyn || !p.visible) return; if (p.userData.stat) inStat = true; }
     if (!inStat) return;
     const g = o.geometry.index ? o.geometry.toNonIndexed() : o.geometry.clone();
-    for (const k of Object.keys(g.attributes)) if (k !== 'position' && k !== 'normal' && !(k === 'color' && o.material.vertexColors)) g.deleteAttribute(k);
+    for (const k of Object.keys(g.attributes)) if (k !== 'position' && k !== 'normal' && !(k === 'color' && o.material.vertexColors) && !(k === 'rl' && o.material.userData.surfRl)) g.deleteAttribute(k);
     if (!g.attributes.normal) g.computeVertexNormals();
     g.setAttribute('qobj', new THREE.BufferAttribute(new Float32Array(g.attributes.position.count).fill(_surfMesh(o) ? 0 : 1), 1));   // v3.27 QA SPARSE: bare surface (0) or object (1), per source mesh
     g.applyMatrix4(M4.multiplyMatrices(inv, o.matrixWorld));
@@ -16019,7 +16164,7 @@ function bake() {
       const e = o.matrixWorld.elements, yaw = Math.atan2(e[8], e[10]), cs = Math.cos(yaw), sn = Math.sin(yaw), Pp = g.attributes.position, sp = new Float32Array(Pp.count * 3);
       for (let k = 0; k < Pp.count; k++) { const X = Pp.getX(k), Z = Pp.getZ(k); sp[3 * k] = X * cs - Z * sn; sp[3 * k + 1] = Pp.getY(k); sp[3 * k + 2] = X * sn + Z * cs; }
       g.setAttribute('sp', new THREE.BufferAttribute(sp, 3));
-      if (!_SPM.has(mt)) { const c = mt.clone(); _SPM.set(mt, surfFx(c, mt.userData.surf, { sp: true, indoor: mt.userData.surfIn })); if (mt.userData.nightEi) NIGHTMATS.push(c); }
+      if (!_SPM.has(mt)) { const c = mt.clone(); _SPM.set(mt, surfFx(c, mt.userData.surf, { sp: true, indoor: mt.userData.surfIn, rl: mt.userData.surfRl })); if (mt.userData.nightEi) NIGHTMATS.push(c); }
       bm = _SPM.get(mt); }   // plain colours become vertex colours: hundreds of props in a handful of draw calls
     if (plain) { const cc = mt.color, n = g.attributes.position.count, ca = new Float32Array(n * 3), vr = MVAR && !mt.userData.kind, e = o.matrixWorld.elements;
       let vr0 = 1, vr1 = 1, vr2 = 1; if (vr) { const hs = e[12] * 0.731 + e[13] * 1.37 + e[14] * 0.513, b = 1 + (hash(hs) - 0.5) * 0.08, w = (hash(hs + 17.3) - 0.5) * 0.03; vr0 = b * (1 + w); vr1 = b; vr2 = b * (1 - w); }   // look v2: every prop its own shade (± 4 %, slightly warmer / cooler), seeded by where it stands
@@ -17820,7 +17965,45 @@ function qaAudit() {
   try { out.push(...qaProps()); } catch (e) { out.push('prop QA failed: ' + e.message); }   // v3.24: FLOAT · BURIED
   try { out.push(...qaLook()); } catch (e) { out.push('look QA failed: ' + e.message); }   // v3.5: DARK · EMPTY · CAMCLIP · HEADCUT
   try { out.push(...qaLensFx()); } catch (e) { out.push('lens FX QA failed: ' + e.message); }   // v3.26: LENSFX
+  try { out.push(...qaRoads()); } catch (e) { out.push('road QA failed: ' + e.message); }   // vNEXT: ROADBURIED · DECALOFF · COPLANAR
   return out;
+}
+// --- vNEXT road QA (part of qaAudit): ROADBURIED – the terrain (groundH and the ground mesh between its vertices) comes up over a road's top (0.05) somewhere along its centre
+//   line or edges (sampled every metre) · DECALOFF – a flat road decal (dash, edge line, zebra stripe, manhole; MARKS) whose footprint is not on the asphalt of any road (lies
+//   on the grass) · COPLANAR – from bake (coplanarSnap): static boxes / discs near the ground (top < 0.6 m above it, ≥ 0.05 m² each) with different colour, pattern or depth
+//   order whose top faces lie within 2 mm of each other and overlap by more than 0.01 m² — they z-fight (flicker). One line per kind and road / pair, the worst first.
+function qaRoads() {
+  const out = [], F = GROUND._fix;
+  const meshH = (x, z) => { if (!F) return groundH(x, z); const c = F.size / F.seg, i = Math.floor((x + F.size / 2) / c), j = Math.floor((z + F.size / 2) / c); let h = F.HR(x, z);
+    for (const [di, dj] of [[0, 0], [1, 0], [0, 1], [1, 1]]) h = Math.max(h, F.HR(-F.size / 2 + (i + di) * c, -F.size / 2 + (j + dj) * c)); return h - 0.005; };   // highest corner of the mesh cell
+  for (const R of ROADS) { let worst = null;
+    for (const S of R.segs) for (let t = 0; t <= S.L + 1e-6; t += 1) for (const c of [-R.w / 2, 0, R.w / 2]) { const x = S.ax + S.dx * t + S.nx * c, z = S.az + S.dz * t + S.nz * c, d = meshH(x, z) - 0.045; if (d > 0 && (!worst || d > worst.d)) worst = { d, x, z }; }
+    if (worst) out.push(`ROADBURIED – road #${R.id} (${R.pts.length} points from (${R.pts[0].map(v => v.toFixed(0)).join(', ')})): the ground comes ${(worst.d * 100).toFixed(0)} cm over the asphalt at (${worst.x.toFixed(1)}, ${worst.z.toFixed(1)}) – build the road before the props, keep it on the flat ground, or lower the hills (ground({ flat }))`); }
+  const onRoad = (x, z) => ROADS.some(R => R.segs.some(S => { const a = (x - S.ax) * S.dx + (z - S.az) * S.dz, c = (x - S.ax) * S.nx + (z - S.az) * S.nz; return a >= -R.w / 2 - 0.02 && a <= S.L + R.w / 2 + 0.02 && Math.abs(c) <= R.w / 2 + 0.02; }));
+  const off = []; for (const [k, x, z, l, w, ry] of MARKS) { const cs = Math.cos(ry), sn = Math.sin(ry); for (const [u, v] of [[0, 0], [l / 2, w / 2], [-l / 2, w / 2], [l / 2, -w / 2], [-l / 2, -w / 2]]) { const px = x + u * cs + v * sn, pz = z - u * sn + v * cs; if (!onRoad(px, pz)) { off.push([k, x, z, l, w]); break; } } }
+  for (const [k, x, z, l, w] of off.slice(0, 6)) out.push(`DECALOFF – road ${k} ${l.toFixed(2)} × ${w.toFixed(2)} m at (${x.toFixed(1)}, ${z.toFixed(1)}) is not on the asphalt (it lies on the ground beside the road)`);
+  if (off.length > 6) out.push(`DECALOFF – … and ${off.length - 6} more`);
+  const C = COPLANAR.slice().sort((a, b) => b.a - a.a); out.push(...C.slice(0, 6).map(q => q.s)); if (C.length > 6) out.push(`COPLANAR – … and ${C.length - 6} more`);
+  return out;
+}
+function coplanarSnap() {   // bake, before merging: flat static boxes / discs near the ground whose top faces fight (see qaRoads)
+  COPLANAR.length = 0; if (CFG.qaCoplanar === false) return; const L = [], WS = new Set(['asphalt', 'plaster', 'marking']), _c = new THREE.Vector3(), cells = new Map(), CS = 4;
+  world.traverse(o => { if (!o.isMesh || o.isInstancedMesh || !o.visible || o.userData.pool) return; let st = false; for (let q = o; q && q !== world; q = q.parent) { if (q.userData.dyn || !q.visible) return; if (q.userData.stat) st = true; } if (!st) return;
+    const gm = o.geometry, ty = gm.type, pr = gm.parameters, mt = o.material; if (!mt || Array.isArray(mt) || mt.transparent || !(ty === 'BoxGeometry' || (ty === 'CylinderGeometry' && pr.radiusTop === pr.radiusBottom))) return;
+    const e = o.matrixWorld.elements; if (Math.abs(e[4]) > 1e-3 || Math.abs(e[6]) > 1e-3 || e[5] <= 0) return;   // only upright parts (rotated about y)
+    const hx = ty === 'BoxGeometry' ? pr.width / 2 : pr.radiusTop, hz = ty === 'BoxGeometry' ? pr.depth / 2 : pr.radiusTop, hh = (ty === 'BoxGeometry' ? pr.height : pr.height) / 2;
+    const ax = [e[0], e[2]], az = [e[8], e[10]], sx = Math.hypot(...ax), sz = Math.hypot(...az); if (4 * hx * sx * hz * sz < 0.05) return;
+    _c.set(0, hh, 0).applyMatrix4(o.matrixWorld); if (_c.y > groundH(_c.x, _c.z) + 0.6) return;
+    const yaw = Math.atan2(e[8], e[10]), sf = mt.userData?.surf, key = (mt.color?.getHexString?.() ?? '') + '|' + (sf ? sf + (WS.has(sf) ? '' : '@' + ((yaw % (Math.PI / 2) + Math.PI / 2) % (Math.PI / 2)).toFixed(2)) : '') + '|' + (mt.polygonOffset ? mt.polygonOffsetFactor : 0);
+    const it = { o, y: _c.y, cx: _c.x, cz: _c.z, u: [ax[0] / sx, ax[1] / sx], v: [az[0] / sz, az[1] / sz], hu: hx * sx, hv: hz * sz, key, cyl: ty !== 'BoxGeometry' }; const id = L.push(it) - 1, r = Math.hypot(it.hu, it.hv);
+    for (let i = Math.floor((it.cx - r) / CS); i <= Math.floor((it.cx + r) / CS); i++) for (let j = Math.floor((it.cz - r) / CS); j <= Math.floor((it.cz + r) / CS); j++) { const k = i * 100003 + j; (cells.get(k) ?? cells.set(k, []).get(k)).push(id); } });
+  const proj = (q, ax) => Math.abs(q.u[0] * ax[0] + q.u[1] * ax[1]) * q.hu + Math.abs(q.v[0] * ax[0] + q.v[1] * ax[1]) * q.hv, seen = new Set();
+  for (const ids of cells.values()) for (let a = 0; a < ids.length; a++) for (let b = a + 1; b < ids.length; b++) { const A = L[ids[a]], B = L[ids[b]]; if (A.key === B.key || A.key.split('|')[2] !== B.key.split('|')[2] || Math.abs(A.y - B.y) > 0.0019) continue;   // less than 2 mm apart (2 mm and more hold up to ~55 m) · same look · different depth order (polygonOffset): no fight
+    const pk = Math.min(ids[a], ids[b]) * 1e7 + Math.max(ids[a], ids[b]); if (seen.has(pk)) continue; seen.add(pk);
+    let pen = 1e9; for (const ax of [A.u, A.v, B.u, B.v]) { const d = Math.abs((B.cx - A.cx) * ax[0] + (B.cz - A.cz) * ax[1]); pen = Math.min(pen, proj(A, ax) + proj(B, ax) - d); } if (pen < 0.1) continue;   // separating axis: overlap depth
+    const ar = Math.min(pen, 2 * Math.min(A.hu, A.hv, B.hu, B.hv)) * Math.min(2 * Math.max(A.hu, A.hv), 2 * Math.max(B.hu, B.hv)); if (ar < 0.01) continue;
+    const nm = q => `${q.key.split('|')[0] ? '#' + q.key.split('|')[0].toUpperCase() + ' ' : ''}${q.key.split('|')[1] ? q.key.split('|')[1].split('@')[0] + ' ' : ''}${q.cyl ? 'disc' : 'box'} ${(2 * q.hu).toFixed(2)} × ${(2 * q.hv).toFixed(2)} m`;
+    COPLANAR.push({ a: ar, s: `COPLANAR – ${nm(A)} and ${nm(B)} at (${((A.cx + B.cx) / 2).toFixed(1)}, ${A.y.toFixed(3)}, ${((A.cz + B.cz) / 2).toFixed(1)}): top faces ${(Math.abs(A.y - B.y) * 1000).toFixed(1)} mm apart, overlapping – they flicker; lift one ≥ 5 mm or give it polygonOffset` }); }
 }
 // --- v3.26 lens FX QA (part of qaAudit, lines "QA: LENSFX – …"): an emitter whose particles would be huge on screen — the camera flies through debris, sparks, hail or rain
 //   streaks (hard particles bigger than 30 % of the frame height before the lens guard) or sits inside smoke / dust puffs (closer than ~their radius). The lens guard in the
