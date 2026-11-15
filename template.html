@@ -18191,7 +18191,8 @@ function qaMovers() {
     stepScene(teaseV(t)); world.updateMatrixWorld(true);
     for (const Mv of MOVERS) { if (Mv.ok) continue; const nd = Mv.node; if (!nd.visible || !nd.parent) continue; let vis = true; for (let p = nd; p; p = p.parent) if (!p.visible) vis = false; if (!vis) continue;
       const P = nd.getWorldPosition(new THREE.Vector3()), last = prev.get(nd); prev.set(nd, P); if (!last || P.distanceTo(last) < 0.15) continue;   // only while it moves
-      bx.setFromObject(nd); const who = Mv.kind === 'fly' ? 'flying object' : 'car on drive()', key = (k, x) => `${Mv.kind}${MOVERS.indexOf(Mv)}:${k}:${x}`;
+      bx.makeEmpty(); nd.traverse(o => { if ((o.isMesh || o.isSkinnedMesh) && o.visible && !_qpClear(o) && !o.userData.noHit) bx.expandByObject(o, false); }); if (bx.isEmpty()) bx.setFromObject(nd);   // v3.37: solid parts only — headlight beams, glows, halos are not the car
+      const who = Mv.kind === 'fly' ? 'flying object' : 'car on drive()', key = (k, x) => `${Mv.kind}${MOVERS.indexOf(Mv)}:${k}:${x}`;
       for (const B of HITBOX.boxes) if (ov(bx, B, 0.25)) put(key('s', B.nm ?? B.x.toFixed(0) + ',' + B.z.toFixed(0)), `VEHICLE – ${who} #${MOVERS.indexOf(Mv)} drives / flies through ${nm(B)} at ${t.toFixed(1)} s (${P.x.toFixed(1)}, ${P.y.toFixed(1)}, ${P.z.toFixed(1)}) – route it round or over (fly: higher points), or { passThrough: true } if it is meant`);
       if (bx.min.y < groundH(P.x, P.z) + 2.2) {   // low enough to hit people
         for (const f of RIGS) { const r = f.root; if (!f.legL || !r?.visible || r.parent !== world || f.isModel || hitFree(f, t) < 0.9) continue;

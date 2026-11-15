@@ -1661,6 +1661,7 @@ Zu jedem Bild der Look-Prüfung (Mitte jeder Einstellung, lange Einstellungen be
 # Integration v3.37 (Look v2, Props, Set-Dressing, Straßen)
 - **Schnee auf Gras und Boden** (`groundFx`): weiche Decke statt harter Tarnflecken – gedrehtes fbm (4 Oktaven), breite weiche Kante, ab `snowCover` ≈ 0,8 geschlossen, bläuliche Mulden und hellere Kuppen. **Verwehungen:** beim `bake()` (nur mit Schnee) entsteht eine Karte von allem, was um die Kameras auf dem Boden steht (Mauern, Zäune, Häuser, Requisiten ≥ 0,35 m hoch), weichgezeichnet (~1–2 m); dort liegt der Schnee zuerst und dichter (`snowDriftMap()`, `DRIFT`). Straßen behalten ihren eigenen Schnee (siehe oben).
 - **`bake()`**: `DEFER`s, die erst in einem `DEFER` entstehen (Schneehauben, Lichtpfützen, Fußspuren von Requisiten aus `dress()`/`biome()`), laufen jetzt auch (vorher fielen sie still weg).
+- **`QA: VEHICLE`** misst nur die festen Teile eines Fahrzeugs (Scheinwerferkegel, Glühen, Halos zählen nicht mehr; gaben in `vice-city-real` falsche Treffer).
 - Seerosenblätter (`river()`) liegen 6 mm übereinander (meldeten `COPLANAR`).
 - **`QA: COPLANAR`**: verformte Quader (`tbox`, z. B. Mülltonnen) zählen nicht mehr als 1 × 1-m-Kästen (falsche Meldungen in `tests/props-street`).
 - Test: `tests/dress-kit` (Stadtstraße mit Fahrbahn, Fassaden, Verkehr; Vorfeld; Tunnel – je Nah und Halbnah mit `dress()`).
