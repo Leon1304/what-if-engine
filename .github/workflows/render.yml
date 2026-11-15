@@ -28,6 +28,7 @@ env:
   WIDTH: ${{ inputs.width || '1440' }}
   PW_VERSION: 1.65.0
   WHATIF_START_TIMEOUT: 900   # v3.37: big scenes (hundreds of houses, asteroidImpact) take longer than 120 s to build on the CPU-only runners
+  WHATIF_FRAME_TIMEOUT: 1200   # v3.38: seconds per frame before a worker restarts its browser and retries (render.mjs)
 
 jobs:
   plan:

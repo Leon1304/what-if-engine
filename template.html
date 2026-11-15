@@ -17441,8 +17441,11 @@ function mbPlan(t, o = {}) {
   let lo = Math.max(a, t - sh / 2), hi = Math.min(b - 1e-4, t + sh / 2);
   if (mode === 'auto' && !needsMB(t, lo, hi)) return null;
   const P = { t, base, n: CFG.mbSamples ?? base, k: 1, D: 0, gap: 0, what: '' };
+  // v3.38: inside a whip / zoom transition the screen blur (uBlur / uZoom) already smears the camera sweep: at most CFG.mbTrMax (6) scene samples there
+  // (up to 16 full scene renders per frame made heavy scenes hang for 10+ min on the CPU-only render runners), and no GHOST line for those frames
+  P.tr = TRANS.some(x => (x.tr === 'whip' || x.tr === 'zoom') && Math.abs(t - x.t) < x.d / 2);
   if (CFG.mbSamples == null && CFG.mbAdapt !== false && hi - lo > 1e-4) {
-    const g = CFG.mbGap ?? 0.005, cap = Math.max(base, CFG.mbMax ?? 16), M = mbMeasure(t, lo, hi); P.D = M.D; P.what = M.what;
+    const g = CFG.mbGap ?? 0.005, cap = Math.max(base, P.tr ? Math.min(CFG.mbTrMax ?? 6, CFG.mbMax ?? 16) : CFG.mbMax ?? 16), M = mbMeasure(t, lo, hi); P.D = M.D; P.what = M.what;
     let need = Math.ceil(M.D / g - 1e-6) + 1;
     if (need > cap) { P.k = Math.max(CFG.mbMinShutter ?? 0.25, (cap - 1) * g / M.D); lo = t - (t - lo) * P.k; hi = t + (hi - t) * P.k; need = cap; }   // too fast for the cap: shorter shutter, copies stay touching
     P.n = Math.max(base, need); P.cap = cap;
@@ -18437,7 +18440,7 @@ function qaGhost(o = {}) {
   if (!(CFG.motionBlur ?? 'auto')) return [];
   const fps = o.fps ?? FPS, N = Math.floor(DUR * fps), g = CFG.mbGap ?? 0.005, step = o.step ?? 2, runs = []; let cur = null;   // every 2nd frame: ~half the cost, runs of ghost frames are longer than that
   for (let i = 0; i < N; i += step) { const t = i / fps, tv = teaseV(t); FRAME++; stepScene(tv);
-    const P = mbPlan(tv, { force: true, measure: true }), bad = P && P.gap > g * 1.02;
+    const P = mbPlan(tv, { force: true, measure: true }), bad = P && !P.tr && P.gap > g * 1.02;
     if (bad) { if (!cur || cur.i1 < i - step) runs.push(cur = { i0: i, i1: i, w: P }); cur.i1 = i; if (P.gap > cur.w.gap) cur.w = P; } }
   return runs.slice(0, 8).map(({ i0, i1, w }) => { const need = Math.ceil(w.D / g - 1e-6) + 1, pc = x => (x * 100).toFixed(1) + ' %';
     return `GHOST – fast motion at ${(i0 / fps).toFixed(1)}${i1 > i0 ? '–' + (i1 / fps).toFixed(1) : ''} s needs ${need} blur samples (cap ${w.cap ?? w.n}) – ${w.what} moves ${pc(w.D)} of the frame height in one shutter, copies stay ${pc(w.gap)} apart${w.k < 1 ? ` even at ${Math.round(w.k * 100)} % shutter` : ''}: keep it further from the lens or slower, or raise CFG.mbMax${CFG.mbSamples != null ? ' (CFG.mbSamples fixes the count)' : ''}`; });
