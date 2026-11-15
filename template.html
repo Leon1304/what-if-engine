@@ -1061,7 +1061,7 @@ function house(p, x, z, o = {}) {   // farmhouse: stone plinth, corner boards, f
   if (o.backWindows !== false) for (const sx of [-1, 1]) win(sx * w * 0.3, h * 0.38 + 0.425, -(d / 2 + 0.005), Math.PI, false, dt);
   if (o.chimney !== false) { cyl(dt, 0.11, 0.13, 0.24, '#B5654A', w * 0.26, h + 1.8, -d * 0.16, { seg: 6, ...NC }); }
   if (o.smoke) { g.updateWorldMatrix(true, false); const cp = g.localToWorld(new THREE.Vector3(w * 0.26, h + 2.1, -d * 0.16)); emit('smoke', { at: [cp.x, cp.y, cp.z], t0: o.smoke === true ? 0 : o.smoke, t1: DUR, rate: 3, size: 0.45, opacity: 0.4 }); }   // house(…, { smoke: true | t0 }): a thin plume from the chimney
-  return { g, winMat, w, d, h, door, doors: [door], windows };
+  doorReg(door); return { g, winMat, w, d, h, door, doors: [door], windows };
 }
 function barn(p, x, z, o = {}) {   // red barn: foundation, plank seams, white corner trims, side windows, X door, hayloft, ridge cap and a cupola with weathervane
   const w = o.w ?? 6.5, d = o.d ?? 8.5, h = o.h ?? 3.6, col = o.color ?? '#A8322A', trim = o.trim ?? '#F4EFE6', roofC = o.roof ?? '#4E535B', g = stat(grp(p, x, 0, z, o.ry ?? 0)), NC = { cast: false };
@@ -1093,7 +1093,7 @@ function barn(p, x, z, o = {}) {   // red barn: foundation, plank seams, white c
   box(dt, w * 0.92, 0.07, 0.07, '#3A3D44', 0, h * 0.72 + 0.14, d / 2 + 0.13, NC); mesh(dg, _boxesG([[0.1, 0.12, 0.06, -w * 0.16, h * 0.72 + 0.16, d / 2 + 0.13], [0.1, 0.12, 0.06, w * 0.16, h * 0.72 + 0.16, d / 2 + 0.13], [0.06, 0.36, 0.06, w * 0.19, h * 0.3 + 0.18, d / 2 + 0.15]]), mat('#3A3D44'), 0, 0, 0, NC);   // rollers + handle: one mesh (the door moves)
   box(dt, 0.14, 0.14, 1.0, '#5A4632', 0, h + 1.5, d / 2 + 0.6, NC); box(dt, 0.03, 0.35, 0.03, '#2A2D33', 0, h + 1.15, d / 2 + 1.0, NC);
   box(dt, w * 0.5, 0.07, 0.6, '#8A7A66', 0, 0.02, d / 2 + 0.36, { rx: 0.1, ...NC });
-  return { g, w, d, h, door: dg, doors: [dg] };
+  doorReg(dg); return { g, w, d, h, door: dg, doors: [dg] };
 }
 function silo(p, x, z, o = {}) {   // steel silo: concrete footing, rusty foot band, rings, railing and ladder
   const r = o.r ?? 1.6, h = o.h ?? 9, g = stat(grp(p, x, 0, z, o.ry ?? 0)), NC = { cast: false };
@@ -1343,15 +1343,14 @@ const BIOMES = {
   'plain-snow':   { trees: [['snowpine', 1]], near: { pebble: 1.5, drift: 0.12 }, ring: { tree: 0.32, rock: 0.1 }, grass: ['#8A9A7A'], rockColor: '#8E979F', flowers: [] },
   'plain-stone':  { trees: [['round', 0.5], ['pine', 0.5]], near: { pebble: 6, tuft: 6 }, ring: { tree: 0.12, rock: 0.15, bush: 0.15 }, grass: ['#6E7A55', '#7A8460'], flowers: [] }
 };
-function biome(kind = 'farm', o = {}) { _dressed = true; if (kind === 'snow' && o.cover !== false) snowCover(-100, 1e9, o.cover ?? 1); DEFER.push(() => runBiome(kind, o)); }
+function biome(kind = 'farm', o = {}) { _dressed = true; if (kind === 'snow' && o.cover !== false) snowCover(-100, 1e9, o.cover ?? 1); DEFER.push(() => runBiome(kind, o));
+  const dr = o.dress ?? CFG.dress; if (dr) { const dk = typeof dr === 'string' ? dr : dr.kind ?? BIOME_DRESS[kind]; if (dk) dress(dk, typeof dr === 'object' ? dr : {}); } }   // v3.27: biome(kind, { dress: true | 'kind' | { kind, density, … } }) or CFG.dress
 function runBiome(kind, o) {
   const B = BIOMES[kind] ?? BIOMES.farm, A = o.area ?? CFG.area ?? 30, D = o.density ?? 1, R1 = o.ring?.[1] ?? A * 2.5, R0 = o.ring?.[0] ?? A * 1.05;
   let bs = Math.floor(hash((CFG.seed ?? 7) * 7.77 + kind.length * 3.1) * 2147483646) + 1; const br = () => (bs = (bs * 48271) % 2147483647) / 2147483647, bp = arr => arr[Math.floor(br() * arr.length)];
-  // occupancy grid (0.5 m) over ±R1: 1 = keep free
-  const C = 0.5, N = Math.ceil(2 * R1 / C) + 1, grid = new Uint8Array(N * N), gi = (x, z) => { const i = Math.floor((x + R1) / C), j = Math.floor((z + R1) / C); return i < 0 || j < 0 || i >= N || j >= N ? -1 : j * N + i; };
-  const fillBox = (x0, x1, z0, z1) => { for (let x = Math.max(-R1, x0); x <= Math.min(R1, x1); x += C) for (let z = Math.max(-R1, z0); z <= Math.min(R1, z1); z += C) { const k = gi(x, z); if (k >= 0) grid[k] = 1; } };
-  const fillSeg = ([ax, az], [bx, bz], w) => { const L = Math.hypot(bx - ax, bz - az), n = Math.max(1, Math.ceil(L / C)); for (let i = 0; i <= n; i++) { const x = lerp(ax, bx, i / n), z = lerp(az, bz, i / n); fillBox(x - w, x + w, z - w, z + w); } };
-  const free = (x, z, r = 0) => { for (const [dx, dz] of [[0, 0], [r, 0], [-r, 0], [0, r], [0, -r]]) { const k = gi(x + dx, z + dz); if (k < 0 || grid[k]) return false; } return true; };
+  // occupancy grid (0.5 m) over ±R1 (v3.27: the shared _occGrid; bit 1 = keep free, bit 2 = no tall things — trees, rocks, bushes, logs keep 3 m from every lens)
+  const OG = _occGrid(-R1, -R1, R1, R1, 0.5), fillBox = (x0, x1, z0, z1) => OG.box(x0, x1, z0, z1, 1), fillSeg = (a, b, w) => OG.seg(a, b, w, 1);
+  const free = (x, z, r = 0) => OG.free(x, z, r, 1), freeT = (x, z, r = 0) => OG.free(x, z, r, 3);
   const B3 = new THREE.Box3();
   world.updateMatrixWorld(true);
   world.traverse(m => {   // everything already built stays clear: houses, fences, fields, roads, vehicles, figures …
@@ -1362,9 +1361,8 @@ function runBiome(kind, o) {
   });
   for (const P of PATHS) for (let i = 1; i < P.p.length; i++) fillSeg(P.p[i - 1], P.p[i], 1.1);
   for (const [a, b, r] of HORDE_LANES) fillSeg(a, b, r * 0.9 + 1.5);
-  for (const k of CAM) if (Array.isArray(k.p) && Array.isArray(k.l)) { fillSeg([k.p[0], k.p[2]], [k.l[0], k.l[2]], 1.6); fillBox(k.p[0] - 3, k.p[0] + 3, k.p[2] - 3, k.p[2] + 3); }
-  for (const k of CAM) if (k.follow && TRACK[k.follow] && Array.isArray(k.off)) { const v = TRACK[k.follow].obj.getWorldPosition(new THREE.Vector3()); fillSeg([v.x + k.off[0], v.z + k.off[2]], [v.x, v.z], 1.6); }
-  for (const tr of Object.values(TRACK)) { const v = tr.obj.getWorldPosition(new THREE.Vector3()); fillBox(v.x - 4, v.x + 4, v.z - 4, v.z + 4); }
+  _clearCams(OG, camSamples(0.25), { lens: 1.0, tall: 3 });   // v3.27: lens box + cone to the subject along every shot (was: 1.6 m strip, 6 m box per key, 8 m box per track)
+  for (const tr of Object.values(TRACK)) { const v = tr.obj.getWorldPosition(new THREE.Vector3()); OG.rect(v.x - 1, v.x + 1, v.z - 1, v.z + 1, 1); OG.rect(v.x - 4, v.x + 4, v.z - 4, v.z + 4, 2); }
   for (const [x, z, r] of o.keep ?? []) fillBox(x - r, x + r, z - r, z + r);
   const coast = GROUND.coast, wet = o.dry && waterH(0, 0, 0) > -900 ? (x, z) => groundH(x, z) < Math.max(waterH(x, z, 0), waterH(x, z, CFG.dur ?? 0)) + 0.4 : null;   // v3.5 o.dry: keep lakes / floods free
   const onLand = (z, x) => (coast == null || z < coast - 1.5) && !(wet && x != null && wet(x, z));
@@ -1377,14 +1375,15 @@ function runBiome(kind, o) {
   const tries = (count, fn) => { for (let i = 0, made = 0; i < count * 4 && made < count; i++) if (fn()) made++; };
   if (B.trees.length) tries(Math.min(maxT, Math.round(ringA * (B.ring.tree ?? 0) * (o.trees ?? 1) * D)), () => {
     const a = br() * TAU, r = Math.sqrt(lerp(R0 * R0, R1 * R1, br())), x = Math.cos(a) * r, z = Math.sin(a) * r;
-    if (!onLand(z, x) || !free(x, z, 1.5) || nT >= maxT) return false; treeAt(x, z, 1 + (r - R0) / (R1 - R0) * 0.4); mark(x, z, 2.2); return true; });
+    if (!onLand(z, x) || !freeT(x, z, 1.5) || nT >= maxT) return false; treeAt(x, z, 1 + (r - R0) / (R1 - R0) * 0.4); mark(x, z, 2.2); return true; });
   if (kind === 'beach' && coast != null) tries(Math.round(A * 0.5 * D), () => {   // palms line the beach
-    const x = (br() * 2 - 1) * R1 * 0.8, z = coast - 4 - br() * 12; if (!free(x, z, 1.5)) return false; tree(world, x, z, { kind: 'palm', size: 0.9 + br() * 0.5 }); mark(x, z, 2.5); return true; });
+    const x = (br() * 2 - 1) * R1 * 0.8, z = coast - 4 - br() * 12; if (!freeT(x, z, 1.5)) return false; tree(world, x, z, { kind: 'palm', size: 0.9 + br() * 0.5 }); mark(x, z, 2.5); return true; });
   tries(Math.round(ringA * (B.ring.rock ?? 0) * D), () => { const a = br() * TAU, r = Math.sqrt(lerp(R0 * R0, R1 * R1, br())), x = Math.cos(a) * r, z = Math.sin(a) * r;
-    if (!onLand(z, x) || !free(x, z, 1)) return false; rock(world, x, z, 0.8 + br() * 1.6, rockC); mark(x, z, 1.6); return true; });
+    if (!onLand(z, x) || !freeT(x, z, 1)) return false; rock(world, x, z, 0.8 + br() * 1.6, rockC); mark(x, z, 1.6); return true; });
   tries(Math.round(ringA * ((B.ring.bush ?? 0) + (B.ring.dry ?? 0)) * D), () => { const a = br() * TAU, r = Math.sqrt(lerp(R0 * R0, R1 * R1, br())), x = Math.cos(a) * r, z = Math.sin(a) * r;
-    if (!onLand(z, x) || !free(x, z, 0.8)) return false; bush(world, x, z, { kind: B.ring.dry ? 'dry' : undefined, size: 0.7 + br() * 0.7 }); mark(x, z, 1.2); return true; });
+    if (!onLand(z, x) || !freeT(x, z, 0.8)) return false; bush(world, x, z, { kind: B.ring.dry ? 'dry' : undefined, size: 0.7 + br() * 0.7 }); mark(x, z, 1.2); return true; });
   // play area: small props and ground cover
+  const LOWK = new Set(['tuft', 'pebble', 'flower', 'shell', 'star', 'beachgrass', 'reed', 'mushroom', 'drift']);   // v3.27: ground cover may come close to a lens, everything taller keeps 3 m
   const nearA = (2 * A) * (2 * A) / 100, rx = () => (br() * 2 - 1) * A, items = {};
   const put = (k, x, z, s, c) => (items[k] ??= []).push([x, z, s, br() * TAU, c]);
   for (const [k, rate] of Object.entries(B.near)) {
@@ -1392,7 +1391,7 @@ function runBiome(kind, o) {
     tries(n, () => {
       let x = rx(), z = rx();
       if (kind === 'beach' && coast != null && (k === 'shell' || k === 'star' || k === 'drift')) z = coast - 7 + br() * 8;
-      if ((k !== 'shell' && k !== 'star' && !onLand(z, x)) || !free(x, z, k === 'tuft' || k === 'pebble' ? 0 : 0.6)) return false;
+      if ((k !== 'shell' && k !== 'star' && !onLand(z, x)) || !(LOWK.has(k) ? free : freeT)(x, z, k === 'tuft' || k === 'pebble' ? 0 : 0.6)) return false;
       if (k === 'tuft') put('tuft', x, z, 0.7 + br() * 0.8, bp(grass));
       else if (k === 'beachgrass') { put('reed', x, z, 0.45 + br() * 0.4, bp(['#9AB85A', '#B8C46A', '#8AA04A'])); put('tuft', x + 0.15, z, 0.8, bp(grass)); }
       else if (k === 'reed') put('reed', x, z, 0.8 + br() * 0.6, bp(['#6E8A44', '#7E9A4A', '#8A8A50', '#5E7A3A']));
@@ -1407,13 +1406,13 @@ function runBiome(kind, o) {
       else if (k === 'rock') { rock(world, x, z, 0.35 + br() * 0.7, rockC); mark(x, z, 1); }
       else if (k === 'stump') { stump(world, x, z, 0.8 + br() * 0.6); mark(x, z, 0.8); }
       else if (k === 'log') { log(world, x, z, 0.7 + br() * 0.5); mark(x, z, 1.6); }
-      else if (k === 'coral') { if (!free(x, z, 0.8)) return false; for (let i = 0; i < 1 + Math.floor(br() * 3); i++) coral(world, x + (br() - 0.5) * 1.2, z + (br() - 0.5) * 1.2); mark(x, z, 1.4); }
+      else if (k === 'coral') { if (!freeT(x, z, 0.8)) return false; for (let i = 0; i < 1 + Math.floor(br() * 3); i++) coral(world, x + (br() - 0.5) * 1.2, z + (br() - 0.5) * 1.2); mark(x, z, 1.4); }
       else if (k === 'seaweed') { seaweed(world, x, z); mark(x, z, 0.8); }
-      else if (k === 'tree') { if (!free(x, z, 2)) return false; treeAt(x, z); mark(x, z, 2.5); }
+      else if (k === 'tree') { if (!freeT(x, z, 2)) return false; treeAt(x, z); mark(x, z, 2.5); }
       return true;
     });
   }
-  if (B.ring.kelp) tries(Math.round(ringA * B.ring.kelp * D), () => { const a = br() * TAU, rr = Math.sqrt(lerp(R0 * R0, R1 * R1, br())), x = Math.cos(a) * rr, z = Math.sin(a) * rr; if (!free(x, z, 1)) return false; seaweed(world, x, z, { h: 5 + br() * 7, n: 3, w: 0.3, color: '#5A7A2A' }); mark(x, z, 1.5); return true; });   // kelp forest around a reef
+  if (B.ring.kelp) tries(Math.round(ringA * B.ring.kelp * D), () => { const a = br() * TAU, rr = Math.sqrt(lerp(R0 * R0, R1 * R1, br())), x = Math.cos(a) * rr, z = Math.sin(a) * rr; if (!freeT(x, z, 1)) return false; seaweed(world, x, z, { h: 5 + br() * 7, n: 3, w: 0.3, color: '#5A7A2A' }); mark(x, z, 1.5); return true; });   // kelp forest around a reef
   if (B.craters && o.craters !== false) {   // impact craters: a few small ones in the play area, bigger ones around it (after everything else → other biomes unchanged)
     const [cn, cr] = B.craters;
     tries(Math.round(nearA * cn * D), () => { const r = 1.2 + br() * 2.3, x = rx(), z = rx(); if (!free(x, z, r + 0.6)) return false; crater(world, x, z, r, { color: rockC }); mark(x, z, r + 1); return true; });
@@ -1446,6 +1445,307 @@ function autoDress() {
   _seed = s0;
   backdrop(bd, { coast: GROUND.coast, r0: Math.max(150, R1 + 40) });
 }
+
+/* ---------------------------------------------------------------------- */
+/* v3.27 SET DRESSING — dress(kind, o): props where the cameras actually look (behind the subject, at the frame edges, along walls, a soft foreground piece)
+   _occGrid: the occupancy grid shared by biome() and dress() · camSamples: every camera shot sampled at build time · DOORS: kept free in front
+/* ---------------------------------------------------------------------- */
+const DOORS = [];   // house(), barn(), gate(), tent(), decoHotel(), prisonCell(), interior(), asset() doors and everything openDoor() opens — dress() keeps 2 m in front of them free
+const doorReg = d => { if (d != null && !DOORS.includes(d)) DOORS.push(d); return d; };
+const _doorXZ = d => { if (Array.isArray(d)) return d.length >= 3 ? [d[0], d[2]] : [d[0], d[1]]; const o = d?.isObject3D ? d : d?.g?.isObject3D ? d.g : null; if (!o) return null; o.updateWorldMatrix(true, false); const v = o.getWorldPosition(new THREE.Vector3()); return [v.x, v.z]; };
+// occupancy grid over [x0, x1] × [z0, z1] in C-m cells; bits: 1 = keep free (paths, lanes, lens, line of sight, doors, keep, placed props) · 2 = no tall things (round the lens)
+//   · 4 = inside something built (exact footprint) · 8 = within its pad · 16 = right at a lens · 32 = road / water lane (dress()). box / seg / mark / free keep the v2.34 biome() stepping (same layouts); rect / disk / clear are exact (every cell)
+function _occGrid(x0, z0, x1, z1, C = 0.5) {
+  const N = Math.ceil((x1 - x0) / C) + 1, M = Math.ceil((z1 - z0) / C) + 1, g = new Uint8Array(N * M);
+  const gi = (x, z) => { const i = Math.floor((x - x0) / C), j = Math.floor((z - z0) / C); return i < 0 || j < 0 || i >= N || j >= M ? -1 : j * N + i; };
+  const O = { C, g, gi, x0, z0, x1, z1,
+    box(a, b, c, d, bit = 1) { for (let x = Math.max(x0, a); x <= Math.min(x1, b); x += C) for (let z = Math.max(z0, c); z <= Math.min(z1, d); z += C) { const k = gi(x, z); if (k >= 0) g[k] |= bit; } },
+    seg([ax, az], [bx, bz], w, bit = 1) { const L = Math.hypot(bx - ax, bz - az), n = Math.max(1, Math.ceil(L / C)); for (let i = 0; i <= n; i++) { const x = lerp(ax, bx, i / n), z = lerp(az, bz, i / n); O.box(x - w, x + w, z - w, z + w, bit); } },
+    mark(x, z, r, bit = 1) { O.box(x - r, x + r, z - r, z + r, bit); },
+    free(x, z, r = 0, mask = 1) { for (const [dx, dz] of [[0, 0], [r, 0], [-r, 0], [0, r], [0, -r]]) { const k = gi(x + dx, z + dz); if (k < 0 || (g[k] & mask)) return false; } return true; },
+    rect(a, b, c, d, bit = 1) { const i0 = Math.max(0, Math.floor((a - x0) / C)), i1 = Math.min(N - 1, Math.floor((b - x0) / C)), j0 = Math.max(0, Math.floor((c - z0) / C)), j1 = Math.min(M - 1, Math.floor((d - z0) / C));
+      for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) g[j * N + i] |= bit; },
+    disk(x, z, r, bit = 1) { const i0 = Math.max(0, Math.floor((x - r - x0) / C)), i1 = Math.min(N - 1, Math.floor((x + r - x0) / C)), j0 = Math.max(0, Math.floor((z - r - z0) / C)), j1 = Math.min(M - 1, Math.floor((z + r - z0) / C)), rr = (r + C * 0.71) ** 2;
+      for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) { const cx = x0 + (i + 0.5) * C - x, cz = z0 + (j + 0.5) * C - z; if (cx * cx + cz * cz <= rr) g[j * N + i] |= bit; } },
+    lane([ax, az], [bx, bz], w, bit = 1) { const L = Math.hypot(bx - ax, bz - az), n = Math.max(1, Math.ceil(L / (C * 0.7))); for (let i = 0; i <= n; i++) O.disk(lerp(ax, bx, i / n), lerp(az, bz, i / n), w, bit); },
+    clear(x, z, r, mask) { const i0 = Math.floor((x - r - x0) / C), i1 = Math.floor((x + r - x0) / C), j0 = Math.floor((z - r - z0) / C), j1 = Math.floor((z + r - z0) / C);
+      if (i0 < 0 || j0 < 0 || i1 >= N || j1 >= M) return false; const rr = (r + C * 0.5) ** 2;
+      for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) { const cx = x0 + (i + 0.5) * C - x, cz = z0 + (j + 0.5) * C - z; if (cx * cx + cz * cz <= rr && (g[j * N + i] & mask)) return false; } return true; },
+    obb(B, pad, bit) { const r = Math.hypot(B.hx, B.hz) + pad, i0 = Math.max(0, Math.floor((B.x - r - x0) / C)), i1 = Math.min(N - 1, Math.floor((B.x + r - x0) / C)), j0 = Math.max(0, Math.floor((B.z - r - z0) / C)), j1 = Math.min(M - 1, Math.floor((B.z + r - z0) / C)), e = pad + C * 0.5;
+      for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) { const dx = x0 + (i + 0.5) * C - B.x, dz = z0 + (j + 0.5) * C - B.z;
+        if (Math.abs(dx * B.ux + dz * B.uz) <= B.hx + e && Math.abs(dx * B.vx + dz * B.vz) <= B.hz + e) g[j * N + i] |= bit; } }
+  };
+  return O;
+}
+// --- the cameras at build time: every shot (CAM keys between cuts) sampled every dt s → [{ t, shot, P, L, fov, fy, rs (subject radius), foot (floor under the subject), pov }]
+//   follow keys use the tracked thing where walk() / drive() will have put it at t (else where it stands now); first-person keys are left out
+const _trkR = new Map(), _tkB = new THREE.Box3();
+function _trkAt(T, t) {
+  const f = T?.rig?._posAt ? T.rig : T?.obj?._posAt ? T.obj : T ? MOVERS.find(m => m.node === T.obj && m.v?._posAt)?.v ?? null : null;   // walk() / drive() (a track on v.g) / sail()
+  if (f) try { const p = f._posAt(t); if (p && Number.isFinite(p.x)) return { x: p.x, y: p.y ?? 0, z: p.z }; } catch (e) { /* fall back to where it stands */ }
+  if (!T) return { x: 0, y: 0, z: 0 }; T.obj.updateWorldMatrix(true, false); const v = T.obj.getWorldPosition(new THREE.Vector3()); return { x: v.x, y: v.y, z: v.z };
+}
+function _trkRad(T) { if (!T) return 0.6; if (_trkR.has(T)) return _trkR.get(T); _tkB.setFromObject(T.obj); const r = _tkB.isEmpty() ? 0.6 : clamp(Math.max(_tkB.max.x - _tkB.min.x, _tkB.max.z - _tkB.min.z) / 2, 0.35, 4); _trkR.set(T, r); return r; }
+function _kp(k, t) {
+  if (!k || k.pov) return null;
+  if (k.follow) { const T = TRACK[k.follow], v = _trkAt(T, t), o = k.off ?? [2.5, 2.9, 3.5]; return { P: [v.x + o[0], v.y + o[1], v.z + o[2]], L: [v.x, v.y + (k.dy ?? T?.dy ?? 1.55), v.z], rs: _trkRad(T), foot: v.y }; }
+  if (!k.p || !k.l) return null;
+  try { const P = typeof k.p === 'function' ? k.p(t) : k.p, L = typeof k.l === 'function' ? k.l(t) : k.l; if (!P || !L || !P.every(Number.isFinite) || !L.every(Number.isFinite)) return null; return { P, L, rs: 0.6, foot: null }; } catch (e) { return null; }
+}
+function _camAt(a, b, t) {
+  const A = _kp(a, t); if (!A) return null; let P = A.P, L = A.L, fov = a.fov ?? 45, fy = a.fy ?? 0.5;
+  if (b && !b.cut && !b.pov) { const B = _kp(b, t); if (B) { const k = (EASE[b.e ?? 'inOut'] ?? EASE.inOut)(clamp((t - a.t) / ((b.t - a.t) || 1)));
+    if (b.around && !a.follow && !b.follow) { const [cx, cz] = b.around, ra = Math.hypot(P[0] - cx, P[2] - cz), rb = Math.hypot(B.P[0] - cx, B.P[2] - cz), aa = Math.atan2(P[0] - cx, P[2] - cz); let d = b.turn ?? Math.atan2(B.P[0] - cx, B.P[2] - cz) - aa;
+      if (b.turn == null) { while (d > Math.PI) d -= TAU; while (d < -Math.PI) d += TAU; } const r = lerp(ra, rb, k), an = aa + d * k; P = [cx + Math.sin(an) * r, lerp(P[1], B.P[1], k), cz + Math.cos(an) * r]; }
+    else P = [0, 1, 2].map(i => lerp(P[i], B.P[i], k));
+    L = [0, 1, 2].map(i => lerp(L[i], B.L[i], k)); fov = lerp(a.fov ?? 45, b.fov ?? a.fov ?? 45, k); fy = lerp(fy, b.fy ?? fy, k); } }
+  return { P, L, fov, fy, rs: A.rs, foot: A.foot };
+}
+function camSamples(dt = 0.25) {
+  const S = []; let shot = -1;
+  CAM.forEach((a, i) => { if (a.cut || i === 0) shot++; const b = CAM[i + 1], t0 = a.t, t1 = Math.min(b ? b.t : DUR, DUR + 0.5); if (a.pov || !(t1 - t0 > 1e-3)) return;
+    const n = Math.max(1, Math.ceil((t1 - t0) / dt)); for (let k = 0; k <= n; k++) { const t = Math.min(t1 - 1e-3, t0 + (t1 - t0) * k / n), c = _camAt(a, b, t); if (c) S.push({ ...c, t, shot, i }); } });
+  return S;
+}
+// v3.27 camera clearing (biome() and dress()): only what the lens needs — a small box round the lens (hard), no tall things within `tall` m of it, the cone from the lens to the
+// subject (0.45 m wide at the lens, subject radius + 0.4 m at the subject) and the subject itself. Before v3.27 a 1.6 m strip lens → target, a 6 m box round every key and an 8 m box
+// round every track were cleared — the ground in front of / beside the subject, i.e. what a close-up shows, stayed bare.
+function _clearCams(O, S, o = {}) {
+  const lens = o.lens ?? 1.0, tall = o.tall ?? 3;
+  for (const s of S) { const [px, , pz] = s.P, [lx, , lz] = s.L, d = Math.hypot(lx - px, lz - pz), rs = s.rs ?? 0.6;
+    O.rect(px - lens, px + lens, pz - lens, pz + lens, 1); if (tall) O.rect(px - tall, px + tall, pz - tall, pz + tall, 2);
+    const n = Math.max(1, Math.ceil(d / (O.C * 0.8))); for (let i = 0; i <= n; i++) { const u = i / n, w = lerp(0.45, rs + 0.4, u); O.disk(lerp(px, lx, u), lerp(pz, lz, u), w, 1); }
+    O.disk(lx, lz, rs + 0.35, 1); }
+}
+
+// --- scene analysis shared by dress() and QA: SPARSE: what is a bare surface (ground, road, floor, wall, a plain block of a building) and what is an object ---
+const _sfB = new THREE.Box3(), _sfV = new THREE.Vector3();
+function _obbOf(m) {   // world OBB of a mesh: { x, z, ux, uz, vx, vz, hx, hz, y0, y1, lx, ly, lz, n } (n = vertex count); lx / ly / lz = full sizes along its own axes
+  const g = m.geometry; if (!g?.attributes?.position) return null; g.boundingBox ?? g.computeBoundingBox(); const b = g.boundingBox; if (b.isEmpty()) return null;
+  const e = m.matrixWorld.elements, la = Math.hypot(e[0], e[1], e[2]), lb = Math.hypot(e[4], e[5], e[6]), lc = Math.hypot(e[8], e[9], e[10]), up = lb > 1e-6 && Math.abs(e[5]) / lb > 0.97;
+  _sfB.copy(b).applyMatrix4(m.matrixWorld); const n = g.attributes.position.count;
+  if (up && la > 1e-6 && lc > 1e-6) { _sfV.set((b.min.x + b.max.x) / 2, (b.min.y + b.max.y) / 2, (b.min.z + b.max.z) / 2).applyMatrix4(m.matrixWorld); const hu = Math.hypot(e[0], e[2]) || 1, hv = Math.hypot(e[8], e[10]) || 1;
+    return { x: _sfV.x, z: _sfV.z, ux: e[0] / hu, uz: e[2] / hu, vx: e[8] / hv, vz: e[10] / hv, hx: (b.max.x - b.min.x) / 2 * la, hz: (b.max.z - b.min.z) / 2 * lc, y0: _sfB.min.y, y1: _sfB.max.y, lx: (b.max.x - b.min.x) * la, ly: (b.max.y - b.min.y) * lb, lz: (b.max.z - b.min.z) * lc, n }; }
+  const sx = _sfB.max.x - _sfB.min.x, sz = _sfB.max.z - _sfB.min.z;
+  return { x: (_sfB.min.x + _sfB.max.x) / 2, z: (_sfB.min.z + _sfB.max.z) / 2, ux: 1, uz: 0, vx: 0, vz: 1, hx: sx / 2, hz: sz / 2, y0: _sfB.min.y, y1: _sfB.max.y, lx: sx, ly: _sfB.max.y - _sfB.min.y, lz: sz, n };
+}
+// surface: flat and big (floor, road, slab, rug ≥ 4 m²) · thin and long (wall ≥ 2 m, ≥ 1.2 m high) · a plain block (≤ 64 vertices, ≥ 1.5 m high, ≥ 2.5 m long: house body) · huge (> 30 m)
+const _isSurf = B => !!B && (Math.max(B.lx, B.lz) > 30 || (B.ly < 0.3 && B.lx * B.lz > 4) || (B.ly >= 1.2 && Math.max(B.lx, B.lz) >= 2 && Math.min(B.lx, B.lz) <= 0.8) || (B.n <= 64 && B.ly >= 1.5 && Math.max(B.lx, B.lz) >= 2.5));
+const _surfMesh = m => { if (m.userData.qsurf != null) return !!m.userData.qsurf; if (m.isInstancedMesh || m.isSkinnedMesh || m.isPoints || m.isLine) return false; return _isSurf(_obbOf(m)); };
+
+/* ---- the prop table: dressProp(name, { fn, r, h, where, kinds, tall, cover, face, needs }) ---------------------------------------------------------
+   fn(p, x, z, ry, R, ctx) → Object3D (or { g }) at the ground under (x, z) — R: dress()'s own random 0..1, ctx: { kind, floor, band }
+   r: footprint radius (m) · h: height (m) · where: bands it may go in ('bg' behind the subject · 'edge' frame edges · 'ground' small things near the subject · 'wall' against a wall ·
+   'fg' a soft piece 0.9–2 m before the lens in a bottom corner) · kinds: { suburb: 2, … } adds it to those kinds' tables with that weight · tall: needs the 3 m round every lens ·
+   cover: 'tuft' | 'pebble' | … instanced ground cover (a little cluster) · face: 'cam' | 'wall' | 'path' | 'rand' (heading) · needs: 'road' (a drive() path within 7 m) ·
+   indoor kinds take the floor under the subject (tunnels 10 m down, interiors); outdoor kinds stand on groundH */
+const DRESS = { props: {}, kinds: {} };
+function dressProp(name, def = {}) {
+  const d = DRESS.props[name] = { r: 0.5, h: 1, where: ['edge'], face: 'rand', ...def, name };
+  for (const [k, w] of Object.entries(def.kinds ?? {})) { const K = DRESS.kinds[k] ??= { bands: {} }; for (const b of [].concat(d.where)) { const L = K.bands[b] ??= []; const i = L.findIndex(e => e[0] === name); if (i >= 0) L[i][1] = w; else L.push([name, w]); } }
+  return d;
+}
+function dressKind(kind, o = {}) { const K = DRESS.kinds[kind] ??= { bands: {} }; Object.assign(K, o, { bands: K.bands }); return K; }   // indoor: true | false (which shots it dresses) · budget: { bg, edge, ground, wall, fg } per shot
+const _dz = x => x?.g?.isObject3D ? x.g : x?.isObject3D ? x : null;
+const _pk = (R, a) => a[Math.floor(R() * a.length) % a.length];
+const _dCar = (kinds, cols) => (p, x, z, ry, R) => { const v = vehicle(p, x, z, { kind: _pk(R, kinds), color: _pk(R, cols), ry, lights: 0 }); stat(v.g); return v.g; };   // vehicles stand at y 0 of their parent (y0)
+const CARCOL = ['#3A7BD5', '#C8C4B8', '#2A2D33', '#B8302A', '#E8E8EC', '#5A6A4A', '#8A8F96', '#D9A21E'];
+// nature
+dressProp('tree',      { where: ['bg'], r: 2.0, h: 6, tall: true, fn: (p, x, z, ry, R) => tree(p, x, z, { kind: 'round', size: 0.8 + R() * 0.5 }), kinds: { suburb: 3, farm: 2 } });
+dressProp('pine',      { where: ['bg'], r: 1.8, h: 7, tall: true, fn: (p, x, z, ry, R) => tree(p, x, z, { kind: 'pine', size: 0.8 + R() * 0.5 }), kinds: { suburb: 1, alpine: 1, farm: 0.5 } });
+dressProp('snowpine',  { where: ['bg'], r: 1.8, h: 7, tall: true, fn: (p, x, z, ry, R) => tree(p, x, z, { kind: 'snowpine', size: 0.8 + R() * 0.5 }), kinds: { 'suburb-winter': 3, alpine: 3, military: 0.5 } });
+dressProp('birch',     { where: ['bg'], r: 1.5, h: 6, tall: true, fn: (p, x, z, ry, R) => tree(p, x, z, { kind: 'birch', size: 0.8 + R() * 0.4 }), kinds: { suburb: 0.8, farm: 0.5 } });
+dressProp('deadtree',  { where: ['bg'], r: 1.5, h: 5, tall: true, fn: (p, x, z, ry, R) => tree(p, x, z, { kind: 'dead', size: 0.8 + R() * 0.4 }), kinds: { desert: 1, 'suburb-winter': 0.6, military: 0.6 } });
+dressProp('palm',      { where: ['bg'], r: 2.0, h: 7, tall: true, fn: (p, x, z, ry, R) => tree(p, x, z, { kind: 'palm', size: 0.9 + R() * 0.4 }), kinds: { beach: 3 } });
+dressProp('cactus',    { where: ['bg', 'edge'], r: 0.7, h: 2.6, tall: true, fn: (p, x, z, ry, R) => cactus(p, x, z, { size: 0.8 + R() * 0.5 }), kinds: { desert: 2 } });
+dressProp('sapling',   { where: ['fg', 'edge'], r: 0.7, h: 2.2, tall: true, fn: (p, x, z, ry, R) => tree(p, x, z, { kind: 'pine', size: 0.3 + R() * 0.12 }), kinds: { suburb: 0.6, alpine: 0.6, farm: 0.4 } });
+dressProp('snowsapling', { where: ['fg', 'edge'], r: 0.7, h: 2.2, tall: true, fn: (p, x, z, ry, R) => tree(p, x, z, { kind: 'snowpine', size: 0.3 + R() * 0.12 }), kinds: { 'suburb-winter': 1.2, alpine: 1.5 } });
+dressProp('bush',      { where: ['edge', 'fg', 'wall'], r: 0.75, h: 0.95, fn: (p, x, z, ry, R) => bush(p, x, z, { size: 0.55 + R() * 0.4 }), kinds: { suburb: 2, farm: 1.2, beach: 0.5, alpine: 0.5 } });
+dressProp('snowbush',  { where: ['edge', 'fg', 'wall'], r: 0.75, h: 0.9, fn: (p, x, z, ry, R) => bush(p, x, z, { size: 0.55 + R() * 0.35, color: '#6E8072' }), kinds: { 'suburb-winter': 1.5, alpine: 0.6 } });
+dressProp('drybush',   { where: ['edge', 'fg', 'ground'], r: 0.7, h: 0.8, fn: (p, x, z, ry, R) => bush(p, x, z, { kind: 'dry', size: 0.5 + R() * 0.4 }), kinds: { desert: 2, military: 0.4 } });
+dressProp('rock',      { where: ['edge', 'ground', 'fg'], r: 0.8, h: 0.7, fn: (p, x, z, ry, R, c) => rock(p, x, z, 0.4 + R() * 0.45, c.rock), kinds: { alpine: 2, desert: 1.5, beach: 1, farm: 0.5, tunnel: 0.6, military: 0.6, suburb: 0.3, 'suburb-winter': 0.5 } });
+dressProp('boulder',   { where: ['bg'], r: 2.2, h: 1.8, tall: true, fn: (p, x, z, ry, R, c) => rock(p, x, z, 1.2 + R() * 0.8, c.rock), kinds: { alpine: 1.5, desert: 1.5, beach: 0.6 } });
+dressProp('stump',     { where: ['edge', 'ground', 'wall'], r: 0.45, h: 0.5, fn: (p, x, z, ry, R) => stump(p, x, z, 0.8 + R() * 0.5), kinds: { alpine: 0.8, farm: 0.6, 'suburb-winter': 0.6 } });
+dressProp('log',       { where: ['edge', 'bg', 'wall'], r: 1.35, h: 0.5, face: 'wall', fn: (p, x, z, ry, R, c) => { const g = log(p, x, z, 0.7 + R() * 0.3, c.kind === 'beach' ? '#B8A68A' : undefined); g.rotation.y = ry + Math.PI / 2; return g; }, kinds: { alpine: 0.8, farm: 0.4, beach: 0.5, 'suburb-winter': 0.5, tunnel: 0.4 } });
+dressProp('haybale',   { where: ['bg', 'edge', 'wall'], r: 0.95, h: 1.3, fn: (p, x, z, ry) => haybale(p, x, z, ry), kinds: { farm: 2 } });
+// built
+dressProp('picket',    { where: ['bg', 'edge'], r: 1.75, h: 1.1, face: 'cam', y0: true, fn: (p, x, z, ry) => fence(p, [[x - Math.cos(ry) * 1.6, z + Math.sin(ry) * 1.6], [x + Math.cos(ry) * 1.6, z - Math.sin(ry) * 1.6]], { kind: 'picket' })[0]?.g, kinds: { suburb: 1.2, 'suburb-winter': 1 } });
+dressProp('railfence', { where: ['bg', 'edge'], r: 1.75, h: 1.2, face: 'cam', y0: true, fn: (p, x, z, ry) => fence(p, [[x - Math.cos(ry) * 1.6, z + Math.sin(ry) * 1.6], [x + Math.cos(ry) * 1.6, z - Math.sin(ry) * 1.6]], {})[0]?.g, kinds: { farm: 1.5, alpine: 0.6 } });
+dressProp('wirefence', { where: ['bg', 'edge'], r: 1.75, h: 1.3, face: 'cam', y0: true, fn: (p, x, z, ry) => fence(p, [[x - Math.cos(ry) * 1.6, z + Math.sin(ry) * 1.6], [x + Math.cos(ry) * 1.6, z - Math.sin(ry) * 1.6]], { kind: 'wire' })[0]?.g, kinds: { military: 1.2, apron: 0.6 } });
+dressProp('car',       { where: ['bg', 'edge'], r: 2.5, h: 1.6, tall: true, face: 'path', y0: true, fn: _dCar(['car', 'car', 'van', 'pickup'], CARCOL), kinds: { suburb: 1.2, 'suburb-winter': 1, city: 1.6 } });
+dressProp('farmtruck', { where: ['bg'], r: 2.6, h: 2.2, tall: true, face: 'path', y0: true, fn: _dCar(['pickup', 'tractor'], ['#C8C4B8', '#B8302A', '#3E6A3A']), kinds: { farm: 0.6 } });
+dressProp('truck',     { where: ['bg'], r: 3.6, h: 3, tall: true, face: 'path', y0: true, fn: _dCar(['truck', 'van'], ['#5A6A4A', '#8A8F96', '#E8E8EC']), kinds: { military: 0.8, apron: 1 } });
+dressProp('lamp',      { where: ['bg', 'edge'], r: 0.35, h: 3.1, tall: true, fn: (p, x, z) => lamp(p, x, z, { light: false, pool: false }).g, kinds: { suburb: 1, 'suburb-winter': 1, city: 0.6 } });
+dressProp('streetlight', { where: ['bg'], r: 0.4, h: 6.2, tall: true, face: 'path', fn: (p, x, z, ry) => streetlight(p, x, z, ry), kinds: { city: 1.2, apron: 0.8, suburb: 0.4 } });
+dressProp('trafficLight', { where: ['bg'], r: 0.4, h: 4.7, tall: true, face: 'path', needs: 'road', y0: true, fn: (p, x, z, ry) => trafficLight(p, x, z, { ry }), kinds: { city: 0.6 } });
+dressProp('bench',     { where: ['edge', 'bg', 'wall'], r: 0.9, h: 0.9, face: 'cam', fn: (p, x, z, ry) => bench(p, x, z, ry), kinds: { suburb: 0.6, city: 1, beach: 0.3 } });
+dressProp('hydrant',   { where: ['edge', 'ground'], r: 0.3, h: 0.8, fn: (p, x, z) => hydrant(p, x, z), kinds: { suburb: 0.6, city: 1, 'suburb-winter': 0.4 } });
+dressProp('trashcan',  { where: ['edge', 'wall', 'fg'], r: 0.35, h: 0.95, fn: (p, x, z) => trashcan(p, x, z), kinds: { suburb: 1, 'suburb-winter': 0.8, city: 1.2, apron: 0.6, beach: 0.3 } });
+dressProp('litterBin', { where: ['edge', 'wall'], r: 0.35, h: 1.0, y0: true, fn: (p, x, z, ry) => FURN.litterBin(p, x, z, ry), kinds: { city: 0.8 } });
+dressProp('planter',   { where: ['edge', 'wall'], r: 0.9, h: 0.8, face: 'wall', fn: (p, x, z, ry) => planter(p, x, z, ry), kinds: { city: 1, suburb: 0.5 } });
+dressProp('treePlanter', { where: ['bg', 'edge'], r: 0.9, h: 2.6, tall: true, y0: true, fn: (p, x, z, ry) => FURN.treePlanter(p, x, z, ry), kinds: { city: 0.8 } });
+dressProp('bollard',   { where: ['edge', 'ground'], r: 0.2, h: 0.95, fn: (p, x, z, ry) => FURN.bollard(p, x, z, ry), kinds: { city: 0.8, apron: 0.6 } });
+dressProp('flagpole',  { where: ['bg'], r: 0.4, h: 5.2, tall: true, fn: (p, x, z) => flagpole(p, x, z, {}), kinds: { suburb: 0.3, military: 0.4, apron: 0.3, beach: 0.2 } });
+dressProp('laundry',   { where: ['bg'], r: 1.8, h: 2.1, face: 'cam', fn: (p, x, z, ry) => { const c = Math.cos(ry) * 1.5, s = Math.sin(ry) * 1.5; return laundry(p, [[x - c, z + s], [x + c, z - s]], {}); }, kinds: { suburb: 0.4, farm: 0.4 } });
+dressProp('trashBag',  { where: ['wall', 'edge', 'ground'], r: 0.45, h: 0.8, y0: true, fn: (p, x, z, ry, R) => trashBag(p, x, 0, z, { ry, size: 0.8 + R() * 0.3 }), kinds: { city: 1.2, suburb: 0.4, apron: 0.5, tunnel: 0.4, cell: 0.4 } });
+dressProp('trashBox',  { where: ['wall', 'ground'], r: 0.4, h: 0.5, y0: true, fn: (p, x, z, ry) => trashBag(p, x, 0, z, { ry, kind: 'box' }), kinds: { city: 0.6, apron: 0.4, deck: 0.6, tunnel: 0.5, cell: 0.3 } });
+dressProp('crate',     { where: ['wall', 'edge', 'bg', 'fg'], r: 0.55, h: 0.8, face: 'wall', fn: (p, x, z, ry, R) => FURN.crate(p, x, z, ry, { size: 0.6 + R() * 0.3 }), kinds: { apron: 1, deck: 1.5, tunnel: 0.8, military: 0.8, farm: 0.4, room: 0.3 } });
+dressProp('tires',     { where: ['wall', 'edge'], r: 0.4, h: 0.9, fn: (p, x, z, ry) => FURN.tires(p, x, z, ry), kinds: { apron: 0.6, farm: 0.3, military: 0.4 } });
+dressProp('gascan',    { where: ['wall', 'ground'], r: 0.2, h: 0.35, fn: (p, x, z, ry) => FURN.gascan(p, x, z, ry), kinds: { apron: 0.6, tunnel: 0.5, military: 0.5, farm: 0.3 } });
+dressProp('warnSign',  { where: ['edge', 'bg'], r: 0.4, h: 1.2, face: 'cam', fn: (p, x, z, ry) => stat(warnSign(p, x, z, { ry })), kinds: { military: 0.5 } });
+dressProp('sandbags',  { where: ['edge', 'bg', 'wall', 'fg'], r: 1.35, h: 0.5, face: 'cam', y0: true, fn: (p, x, z, ry) => sandbags(p, x, z, { len: 2.4, rows: 2, ry, y: 0 }), kinds: { military: 2, tunnel: 0.4 } });
+dressProp('generator', { where: ['wall', 'edge'], r: 0.6, h: 0.8, face: 'wall', fn: (p, x, z, ry) => generator(p, x, z, { ry, quiet: true }).g, kinds: { apron: 0.8, military: 0.8, tunnel: 0.4, deck: 0.4 } });
+dressProp('tent',      { where: ['bg'], r: 1.9, h: 1.6, tall: true, face: 'cam', fn: (p, x, z, ry, R) => tent(p, x, z, { ry, color: _pk(R, ['#5A6A4A', '#E8772E', '#3A7AC8']) }).g, kinds: { military: 1, alpine: 0.25 } });
+dressProp('plant',     { where: ['wall'], r: 0.35, h: 1.0, face: 'wall', fn: (p, x, z, ry) => FURN.plant(p, x, z, ry), kinds: { room: 1.5 } });
+dressProp('floorLamp', { where: ['wall'], r: 0.3, h: 1.7, face: 'wall', y0: true, fn: (p, x, z, ry) => FURN.floorLamp(p, x, z, ry), kinds: { room: 0.8 } });
+dressProp('shelf',     { where: ['wall'], r: 0.9, h: 1.9, face: 'wall', fn: (p, x, z, ry) => FURN.shelf(p, x, z, ry, { w: 1.2 }), kinds: { room: 0.8, cell: 0.2 } });
+dressProp('toys',      { where: ['ground'], r: 0.35, h: 0.25, fn: (p, x, z, ry) => FURN.toys(p, x, z, ry), kinds: { room: 0.4 } });
+// ground cover (instanced, a few per spot) and decals
+for (const [n, c, kinds, col] of [['tufts', 'tuft', { suburb: 3, farm: 3, beach: 1, alpine: 0.6, military: 1 }, ['#5C8A3A', '#6E9A44', '#4E7A34']], ['pebbles', 'pebble', { alpine: 2, desert: 3, beach: 1.5, tunnel: 2, military: 1.5, farm: 0.8, apron: 0.6, 'suburb-winter': 0.8, suburb: 0.6 }, null],
+  ['drifts', 'drift', { 'suburb-winter': 2.5, alpine: 2 }, ['#F2F6FA']], ['shells', 'shell', { beach: 2 }, ['#F4E6D8', '#F2C9B8', '#E8D2A8']], ['reeds', 'reed', { beach: 1.5, farm: 0.4 }, ['#9AB85A', '#B8C46A']], ['flowers', 'bloom', { suburb: 1, farm: 1 }, ['#FFE15A', '#FFFFFF', '#E86AA8', '#9C7CE8']]])
+  dressProp(n, { where: ['ground'], r: 0.5, h: 0.12, cover: c, colors: col, kinds });
+dressProp('leaves',  { where: ['ground'], r: 1.0, h: 0.03, flat: true, leaves: true, kinds: { suburb: 1.5, farm: 0.6, city: 0.4 } });
+dressProp('manhole', { where: ['ground'], r: 0.4, h: 0.03, flat: true, y0: true, fn: (p, x, z) => stat(manhole(p, x, z)), kinds: { city: 0.8, apron: 0.4 } });
+dressKind('suburb', { indoor: false }); dressKind('suburb-winter', { indoor: false, rock: '#8E979F' }); dressKind('city', { indoor: false }); dressKind('alpine', { indoor: false, rock: '#8E979F' });
+dressKind('farm', { indoor: false }); dressKind('beach', { indoor: false }); dressKind('desert', { indoor: false, rock: '#B98A5A' }); dressKind('apron', { indoor: false }); dressKind('deck', { indoor: false });
+dressKind('military', { indoor: false }); dressKind('tunnel', { indoor: true, rock: '#6A5A48', budget: { wall: 5, ground: 4, edge: 2, bg: 1, fg: 0 } }); dressKind('cell', { indoor: true, budget: { wall: 3, ground: 1, edge: 1, bg: 0, fg: 0 } });
+dressKind('room', { indoor: true, budget: { wall: 4, ground: 1, edge: 1, bg: 0, fg: 0 } });
+const BIOME_DRESS = { farm: 'farm', forest: 'alpine', beach: 'beach', desert: 'desert', snow: 'alpine', swamp: 'farm', city: 'city', plain: 'suburb', 'plain-snow': 'suburb-winter', 'plain-sand': 'desert' };
+
+// dress(kind, { area, density, keep, wall, ground, fg, bg, edge, seed, assets }): runs after the scene is built (DEFER, like biome()), own random numbers.
+//   area: [x0, z0, x1, z1] or [x, z, r] — only shots whose subject is inside, only props inside (default: every shot that fits the kind: indoor kinds take shots under a roof
+//   or between walls, outdoor kinds the others) · density (1) · keep: [[x, z, r]] · band switches wall / ground / fg / bg / edge: false · assets: ['nature/bush_snow_1', …] CC0 models
+//   to mix in (the scene names them, so assemble.py embeds them; each joins the 'edge' and 'bg' bands with weight 1)
+const _DRQ = [];
+function dress(kind = 'suburb', o = {}) {
+  for (const n of o.assets ?? []) { if (!DRESS.props['asset:' + n]) { const m = assetMeta(n), sz = m?.size ?? [1, 2, 1]; dressProp('asset:' + n, { where: ['edge', 'bg'], r: clamp(Math.max(sz[0], sz[2]) / 2, 0.3, 4), h: sz[1], tall: sz[1] > 1.6, asset: n, fn: (p, x, z, ry) => asset(p, n, x, z, { ry }) }); }
+    if (MODELS[n]) _assetLoad(n); }
+  _DRQ.push(kind); DEFER.push(() => runDress(kind, o));
+}
+function runDress(kind, o = {}) { const s0 = _seed; try { _runDress(kind, o); } finally { _seed = s0; } }   // props that draw from the global rnd() (rock) leave the rest of the build unchanged
+function _runDress(kind, o) {
+  const K = DRESS.kinds[kind]; if (!K) { console.warn('dress: unknown kind ' + kind + ' (' + Object.keys(DRESS.kinds).join(', ') + ')'); return; }
+  let bs = Math.floor(hash((CFG.seed ?? 7) * 3.31 + kind.length * 7.7 + (o.seed ?? 0) * 13.1 + _DRQ.indexOf(kind) * 0.37) * 2147483646) + 1; const R = () => (bs = (bs * 48271) % 2147483647) / 2147483647;
+  const D = o.density ?? 1, A = o.area, inA = !A ? () => true : A.length === 3 ? (x, z) => Math.hypot(x - A[0], z - A[1]) <= A[2] : (x, z) => x >= Math.min(A[0], A[2]) && x <= Math.max(A[0], A[2]) && z >= Math.min(A[1], A[3]) && z <= Math.max(A[1], A[3]);
+  world.updateMatrixWorld(true);
+  // ---- the scene as it stands: object boxes (screen coverage), walls (wall band, indoor test), flats (floors, ceilings) ----
+  const OBJ = [], WALLS = [], FLATS = [], skip = new Set(); for (const f of RIGS) if (f.root) skip.add(f.root); for (const a of BEAST_ALL) skip.add(a.root ?? a.g);
+  const S0 = camSamples(0.25), inside = (B, q, m = 0.2) => Math.abs((q[0] - B.x) * B.ux + (q[2] - B.z) * B.uz) < B.hx - m && Math.abs((q[0] - B.x) * B.vx + (q[2] - B.z) * B.vz) < B.hz - m && q[1] > B.y0 && q[1] < B.y1;
+  const scan = (m, hid) => { if (!m.visible || skip.has(m)) return; hid ||= !!(m.userData.crowd); if (m.isMesh && !m.isInstancedMesh && !hid && !_qpClear(m)) { const B = _obbOf(m); if (B && Number.isFinite(B.x) && !(B.lx > 90 && B.lz > 90)) { B.surf = _surfMesh(m);
+      if (B.ly < 0.35) { if (B.lx * B.lz > 0.5) FLATS.push(B); if (!B.surf) OBJ.push(B); }
+      else { B.hollow = Math.max(B.lx, B.lz) > 2 && S0.some(s => inside(B, s.L));   // a shell the cameras look around in (tunnel, room box): its inside is free, its inner faces take wall props
+        if (B.ly >= 1.4 && Math.max(B.lx, B.lz) >= 1.2) WALLS.push(B); if (!B.hollow) OBJ.push(B.surf ? { ...B, wall: true } : B); } } }
+    for (const c of m.children) scan(c, hid); };
+  for (const c of world.children) scan(c, false);
+  const hit2 = (B, px, pz, dx, dz, L) => { const ox = px - B.x, oz = pz - B.z, a = [ox * B.ux + oz * B.uz, ox * B.vx + oz * B.vz], d = [dx * B.ux + dz * B.uz, dx * B.vx + dz * B.vz], h = [B.hx, B.hz]; let t0 = 0, t1 = L;
+    for (let k = 0; k < 2; k++) { if (Math.abs(d[k]) < 1e-9) { if (Math.abs(a[k]) > h[k]) return false; continue; } let u = (-h[k] - a[k]) / d[k], v = (h[k] - a[k]) / d[k]; if (u > v) [u, v] = [v, u]; t0 = Math.max(t0, u); t1 = Math.min(t1, v); if (t0 > t1) return false; } return true; };
+  const floorAt = (x, z, yRef) => { let best = -1e9; for (const B of FLATS) { if (B.y1 > yRef + 0.4 || B.y1 <= best) continue; const dx = x - B.x, dz = z - B.z; if (Math.abs(dx * B.ux + dz * B.uz) <= B.hx && Math.abs(dx * B.vx + dz * B.vz) <= B.hz) best = B.y1; }
+    const g = groundH(x, z); return g <= yRef + 0.4 && g > best ? g : best > -1e9 ? best : g; };
+  const indoorAt = s => { const [x, y, z] = s.L; if (FLATS.some(B => B.y0 > y - 0.3 && B.y0 < y + 6 && B.lx * B.lz > 6 && Math.abs((x - B.x) * B.ux + (z - B.z) * B.uz) <= B.hx - 0.8 && Math.abs((x - B.x) * B.vx + (z - B.z) * B.vz) <= B.hz - 0.8)) return true;   // a ceiling over the subject (not an eave)
+    let n = 0; for (let k = 0; k < 8; k++) { const a = k * Math.PI / 4, dx = Math.sin(a), dz = Math.cos(a); if (WALLS.some(B => B.y1 > y - 0.5 && B.y0 < y + 0.5 && hit2(B, x, z, dx, dz, 7))) n++; } return n >= 5; };
+  const IND = o.indoor !== undefined ? o.indoor : K.indoor;   // o.indoor: null = every shot in the area
+  const shotIn = new Map(); for (const s of S0) { if (!shotIn.has(s.shot)) shotIn.set(s.shot, { n: 0, ok: 0 }); const q = shotIn.get(s.shot); q.n++; if (inA(s.L[0], s.L[2]) && (IND == null || indoorAt(s) === IND)) q.ok++; }
+  const S = S0.filter(s => { const q = shotIn.get(s.shot); return q.ok >= q.n / 2 && inA(s.L[0], s.L[2]); }); if (!S.length) { DRESSLOG.push({ kind, shots: 0, props: 0, note: 'no shot fits (area / indoor)' }); return; }
+  for (const s of S) s.fl = s.foot ?? floorAt(s.L[0], s.L[2], s.L[1]);
+  // ---- occupancy ----
+  let gx0 = 1e9, gx1 = -1e9, gz0 = 1e9, gz1 = -1e9; for (const s of S) { for (const q of [s.P, s.L]) { gx0 = Math.min(gx0, q[0]); gx1 = Math.max(gx1, q[0]); gz0 = Math.min(gz0, q[2]); gz1 = Math.max(gz1, q[2]); } }
+  const PAD = 32, C = (gx1 - gx0 + 2 * PAD) * (gz1 - gz0 + 2 * PAD) > 6e5 ? 0.5 : 0.25, O = _occGrid(gx0 - PAD, gz0 - PAD, gx1 + PAD, gz1 + PAD, C);
+  for (const B of [...OBJ, ...WALLS]) if (B.y1 > -1e8) { O.obb(B, 0, 4); O.obb(B, 0.6, 8); }
+  for (const P of PATHS) { const w = P.kind === 'drive' ? 2.5 : P.kind === 'sail' ? 3.2 : 1.1, bit = P.kind ? 1 | 32 : 1; for (let i = 1; i < P.p.length; i++) O.lane(P.p[i - 1], P.p[i], w, bit); }   // 32: roads, water lanes (no ground cover either)
+  for (const [a, b, r] of HORDE_LANES) O.lane(a, b, r * 0.9 + 1.5, 1);
+  for (const d of DOORS) { const q = _doorXZ(d); if (q) O.disk(q[0], q[1], 2.0, 1); }
+  for (const f of RIGS) { const r = f.root; if (!r || r.parent !== world) continue; const v = r.getWorldPosition(_sfV); O.disk(v.x, v.z, 0.7, 1); }
+  for (const a of BEAST_ALL) { const n = a.root ?? a.g; if (!n) continue; const v = n.getWorldPosition(_sfV); O.disk(v.x, v.z, (a.L ?? 1) * (a.sc ?? 1) * 0.7 + 0.5, 1); }
+  for (const [x, z, r] of o.keep ?? []) O.disk(x, z, r, 1);
+  _clearCams(O, S0, { lens: 1.0, tall: 3 }); for (const s of S0) O.rect(s.P[0] - 0.8, s.P[0] + 0.8, s.P[2] - 0.8, s.P[2] + 0.8, 16);   // 16: right at the lens (no ground cover either)
+  const dOBB = (B, x, z) => { const dx = x - B.x, dz = z - B.z, lx = dx * B.ux + dz * B.uz, lz = dx * B.vx + dz * B.vz; return Math.hypot(Math.max(0, Math.abs(lx) - B.hx), Math.max(0, Math.abs(lz) - B.hz)); };
+  let NEAR = []; const hitsObj = (x, z, r, y0, y1, skipB) => NEAR.some(B => B !== skipB && B.y1 > y0 + 0.05 && B.y0 < y1 && dOBB(B, x, z) < r);   // the prop's footprint against everything built (exact, not the grid)
+  const roads = PATHS.filter(P => P.kind === 'drive'), nearRoad = (x, z, d) => { let best = null; for (const P of roads) for (let i = 1; i < P.p.length; i++) { const [ax, az] = P.p[i - 1], [bx, bz] = P.p[i], ex = bx - ax, ez = bz - az, L2 = ex * ex + ez * ez || 1, u = clamp(((x - ax) * ex + (z - az) * ez) / L2), q = Math.hypot(x - ax - ex * u, z - az - ez * u); if (q < d && (!best || q < best.q)) best = { q, ang: Math.atan2(ex, ez) }; } return best; };
+  const coast = GROUND.coast, wet = (x, z, y) => (coast != null && z > coast - 1.5 && !K.wetOk) || (typeof waterH === 'function' && waterH(x, z, 0) > y - 0.05);
+  // ---- projection ----
+  const cam = new THREE.PerspectiveCamera(45, LAND ? 16 / 9 : 9 / 16, 0.1, 400), _v = new THREE.Vector3(), _w = new THREE.Vector3(), _q = new THREE.Vector3();
+  const setCam = s => { cam.fov = s.fov * FOVK; cam.updateProjectionMatrix(); cam.position.fromArray(s.P); cam.lookAt(_v.fromArray(s.L)); if (Math.abs(s.fy - 0.5) > 1e-3) cam.rotateX(-Math.atan((0.5 - s.fy) * 2 * Math.tan(THREE.MathUtils.degToRad(cam.fov) / 2))); cam.updateMatrixWorld(); };
+  const rectOf = (x, z, y0, r, h) => { let a = 1e9, b = 1e9, c = -1e9, d = -1e9, dmin = 1e9; for (let k = 0; k < 8; k++) { _w.set(x + (k & 1 ? r : -r), y0 + (k & 2 ? h : 0), z + (k & 4 ? r : -r)); _q.copy(_w).applyMatrix4(cam.matrixWorldInverse); if (_q.z > -0.15) return { behind: true }; dmin = Math.min(dmin, -_q.z);
+      _w.project(cam); a = Math.min(a, _w.x); c = Math.max(c, _w.x); b = Math.min(b, _w.y); d = Math.max(d, _w.y); } return { a, b, c, d, dmin, off: c < -1 || a > 1 || d < -1 || b > 1 }; };
+  const area = q => q.behind || q.off ? 0 : (Math.min(1, q.c) - Math.max(-1, q.a)) * (Math.min(1, q.d) - Math.max(-1, q.b)) / 4;
+  const GX = LAND ? 16 : 9, GY = LAND ? 9 : 16;
+  const coverage = s => { setCam(s); const g = new Uint8Array(GX * GY); const fill = (q, v) => { if (q.behind || q.off) return; const i0 = Math.max(0, Math.floor((q.a + 1) / 2 * GX)), i1 = Math.min(GX - 1, Math.floor((q.c + 1) / 2 * GX)), j0 = Math.max(0, Math.floor((1 - q.d) / 2 * GY)), j1 = Math.min(GY - 1, Math.floor((1 - q.b) / 2 * GY)); for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) g[j * GX + i] = Math.max(g[j * GX + i], v); };
+    for (const B of OBJ) { if (B.wall || Math.hypot(B.x - s.P[0], B.z - s.P[2]) > 80) continue; fill(rectOf(B.x, B.z, B.y0, Math.max(B.hx, B.hz) * 0.8, B.ly), 1); }
+    fill(rectOf(s.L[0], s.L[2], s.fl, s.rs, Math.max(0.5, s.L[1] - s.fl + 0.35)), 2);   // the subject
+    return g; };
+  // ---- placing ----
+  const rej = {}; let curB = ''; const no = k => { k = curB + ':' + k; rej[k] = (rej[k] ?? 0) + 1; };
+  const placed = [], covers = {}, leaves = [], ctx = { kind, rock: K.rock ?? '#7D7F86', floor: 0, band: '' };
+  const table = band => (K.bands[band] ?? []).filter(([n]) => { const P = DRESS.props[n]; return P && (!P.asset || MODELS[P.asset]); }).concat((o.assets ?? []).filter(n => MODELS[n] && (band === 'bg' || band === 'edge')).map(n => ['asset:' + n, 1]));
+  const choose = L => { let tot = 0; for (const e of L) tot += e[1]; let r = R() * tot; for (const e of L) { r -= e[1]; if (r <= 0) return DRESS.props[e[0]]; } return DRESS.props[L[L.length - 1][0]]; };
+  const lensOK = (x, z, y0, P, band, shotId) => { for (const s of S0) { const dd = Math.hypot(x - s.P[0], z - s.P[2]); if (dd > P.r + 3.5) continue; if (dd < P.r + 0.75) return false;
+      if (band === 'fg' && s.shot === shotId) continue; setCam(s); const q = rectOf(x, z, y0, P.r, P.h); if (q.behind) { if (dd < P.r + 1.5) return false; continue; } if (q.off) continue;
+      if (area(q) > 0.12 || (q.d + q.b) / 2 > -0.2) return false; } return true; };   // near any lens: small and low in the frame (CAMCLIP), never straddling the lens plane
+  const put = (P, x, z, ry, fl, band) => { ctx.floor = fl; ctx.band = band;
+    if (P.cover) { const n = 3 + Math.floor(R() * 5), cols = P.colors ?? [shade(ctx.rock, (R() - 0.5) * 0.12)]; for (let i = 0; i < n; i++) { const xx = x + (R() - 0.5) * 2 * P.r, zz = z + (R() - 0.5) * 2 * P.r; (covers[P.cover] ??= []).push([xx, zz, P.cover === 'drift' ? 0.4 + R() * 0.7 : 0.6 + R() * 0.9, R() * TAU, _pk(R, cols)]); if (P.cover === 'bloom') (covers.stem ??= []).push([xx, zz, 0.9, 0, '#4E7A34']); } return true; }
+    if (P.leaves) { leaves.push([x, z, P.r, fl]); return true; }
+    const dy = fl - (P.y0 ? 0 : groundH(x, z)), hold = Math.abs(dy) > 0.005 ? grp(world, 0, dy, 0) : world;   // y0: the function builds at y 0 of its parent (FURN, vehicles, fences) · else on groundH → a holder lifts it onto the floor
+    let g = null; try { g = _dz(P.fn(hold, x, z, ry, R, ctx)); } catch (e) { console.warn('dress: ' + P.name + ' failed: ' + e.message); if (hold !== world && !hold.children.length) hold.removeFromParent(); return false; }
+    if (hold !== world) hold.name = 'dress:' + P.name; else if (g && g !== world && !g.name) g.name = 'dress:' + P.name;
+    return true; };
+  const budget = { bg: 4, edge: 3, ground: 3, wall: 2, fg: 1, ...(K.budget ?? {}) };
+  const shots = [...new Set(S.map(s => s.shot))];
+  let nPut = 0;
+  for (const sid of shots) {
+    const SS = S.filter(s => s.shot === sid), reps = [SS[0], SS[Math.floor(SS.length / 2)], SS[SS.length - 1]].filter((s, i, a) => a.indexOf(s) === i), d0 = Math.hypot(reps[1].P[0] - reps[1].L[0], reps[1].P[2] - reps[1].L[2]);
+    const cov = reps.map(coverage), wide = d0 > 22; NEAR = [...OBJ, ...WALLS].filter(B => reps.some(r2 => Math.hypot(B.x - r2.P[0], B.z - r2.P[2]) < Math.hypot(B.hx, B.hz) + 60));
+    for (const band of ['wall', 'bg', 'edge', 'ground', 'fg']) {
+      curB = band; if (o[band] === false) continue; const L = table(band); if (!L.length) continue;
+      let n = Math.round(budget[band] * D * (wide ? { bg: 2, edge: 2, ground: 1, wall: 1, fg: 0 }[band] : 1)); if (band === 'fg' && (d0 > 7 || o.fg === false)) n = 0;
+      for (let made = 0, tries = 0; made < n && tries < n * 3; tries++) {
+        let best = null;
+        for (let c = 0; c < 18; c++) {
+          const ri = Math.floor(R() * reps.length), s = reps[ri], P = choose(L); if (!P) continue; setCam(s);
+          let x, z, ry = R() * TAU, fl = s.fl, wallB = null;
+          if (band === 'fg') { const side = R() < 0.5 ? -1 : 1, hf = Math.atan(Math.tan(THREE.MathUtils.degToRad(cam.fov) / 2) * cam.aspect), yaw = Math.atan2(s.L[0] - s.P[0], s.L[2] - s.P[2]) + side * hf * (0.75 + R() * 0.35), dd = 1.0 + P.r + R() * 0.9;
+            x = s.P[0] + Math.sin(yaw) * dd; z = s.P[2] + Math.cos(yaw) * dd; fl = K.indoor ? s.fl : groundH(x, z); }
+          else if (band === 'wall') { const W = WALLS.filter(B => Math.hypot(B.x - s.P[0], B.z - s.P[2]) < 30); if (!W.length) break; const B = wallB = _pk(R, W), f = Math.floor(R() * 4), ax = f < 2, sg = f % 2 ? -1 : 1, hn = ax ? B.hx : B.hz, ht = ax ? B.hz : B.hx; let nx = (ax ? B.ux : B.vx) * sg, nz = (ax ? B.uz : B.vz) * sg;
+            if (ht < P.r + 0.3 || (B.hollow && hn < P.r + 0.5)) continue; const tx = ax ? B.vx : B.ux, tz = ax ? B.vz : B.uz, u = (R() * 2 - 1) * (ht - P.r - 0.2), off = B.hollow ? hn - P.r - 0.08 : hn + P.r + 0.08;
+            x = B.x + nx * off + tx * u; z = B.z + nz * off + tz * u; if (((s.P[0] - x) * nx + (s.P[2] - z) * nz < 0) !== !!B.hollow) continue; if (B.hollow) { nx = -nx; nz = -nz; } ry = Math.atan2(nx, nz) + (P.face === 'wall' ? 0 : (R() - 0.5) * 0.6); fl = K.indoor ? s.fl : groundH(x, z);
+            if (B.y0 > fl + 0.3 || B.y1 < fl + 1.2) continue; }
+          else {   // a ground point at a distance along the view that suits the band, sideways inside the frame (edge: its outer 55 %)
+            const vx = s.L[0] - s.P[0], vz = s.L[2] - s.P[2], vd = Math.hypot(vx, vz) || 1, ux = vx / vd, uz = vz / vd, tw = Math.tan(THREE.MathUtils.degToRad(cam.fov) / 2) * cam.aspect;
+            const dl = band === 'bg' ? vd + 3 + R() * R() * 22 : band === 'edge' ? 2 + R() * (Math.min(16, vd + 6) - 2) : 1.5 + R() * (Math.min(10, vd + 4) - 1.5);
+            const k = band === 'edge' ? (R() < 0.5 ? -1 : 1) * (0.5 + R() * 0.5) : R() * 2 - 1, lat = k * tw * dl;
+            x = s.P[0] + ux * dl - uz * lat; z = s.P[2] + uz * dl + ux * lat; fl = K.indoor ? s.fl : groundH(x, z); if (Math.hypot(x - s.P[0], z - s.P[2]) > 45) { no('band'); continue; } }
+          if (P.face === 'cam') ry = Math.atan2(s.P[0] - x, s.P[2] - z) + Math.PI / 2 + (R() - 0.5) * 0.5;
+          if (P.face === 'path' || P.needs === 'road') { const q = nearRoad(x, z, 9); if (P.needs === 'road' && !q) continue; ry = q ? q.ang + (P.name === 'car' || P.name === 'truck' || P.name === 'farmtruck' ? (R() < 0.5 ? 0 : Math.PI) : Math.PI / 2) : Math.atan2(s.L[0] - s.P[0], s.L[2] - s.P[2]) + Math.PI / 2; }
+          if (!inA(x, z) || wet(x, z, fl) || Math.abs(fl - s.fl) > 1.2) { no('area'); continue; }
+          const mask = 1 | (band === 'wall' ? 0 : 8) | (P.tall && band !== 'fg' ? 2 : 0); if (!O.clear(x, z, band === 'wall' ? Math.max(0.1, P.r - 0.2) : P.r + (P.flat ? 0 : 0.1), P.cover ? 16 | 32 : P.flat ? 16 : mask)) { no('occupied'); continue; }   // ground cover and flat decals may lie on walk paths and in the line of sight
+          if (!P.flat && !P.cover && hitsObj(x, z, P.r + (band === 'wall' ? 0.02 : 0.15), fl, fl + P.h, wallB)) { no('touches'); continue; }
+          if (!P.flat && FLATS.some(B => B.y0 > fl + 0.2 && B.y0 < fl + P.h + 0.15 && Math.abs((x - B.x) * B.ux + (z - B.z) * B.uz) <= B.hx + P.r && Math.abs((x - B.x) * B.vx + (z - B.z) * B.vz) <= B.hz + P.r)) { no('ceiling'); continue; }   // under a low ceiling / table
+          // screen: how much empty frame it fills (all reps of the shot), never over the subject (bg: behind it is fine, a little)
+          let sc = 0, bad = false;
+          reps.forEach((r2, k) => { if (bad) return; setCam(r2); const q = rectOf(x, z, fl, P.r * (P.cover ? 1 : 0.85), Math.max(P.h, 0.08)); if (q.behind) { if (band !== 'fg') bad = true; return; } if (q.off) return;
+            const g = cov[k], i0 = Math.max(0, Math.floor((q.a + 1) / 2 * GX)), i1 = Math.min(GX - 1, Math.floor((q.c + 1) / 2 * GX)), j0 = Math.max(0, Math.floor((1 - q.d) / 2 * GY)), j1 = Math.min(GY - 1, Math.floor((1 - q.b) / 2 * GY));
+            for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) { const v = g[j * GX + i]; if (v === 2) { if (band === 'bg') sc -= 0.6; else { bad = true; return; } } else if (v === 0) sc += 1; else sc += 0.1; } });
+          if (bad || sc <= 0) { no(bad ? 'subject' : 'covered'); continue; }
+          if (band === 'fg') { setCam(s); const q = rectOf(x, z, fl, P.r, P.h); if (q.behind || q.off || area(q) < 0.02 || area(q) > 0.14 || q.d > -0.05 || (q.a > -0.8 && q.c < 0.8) || q.dmin < 0.8) { no('fgframe'); continue; }
+            if (SS.some(r2 => Math.hypot(x - r2.P[0], z - r2.P[2]) < P.r + 0.8)) continue; }
+          if (!lensOK(x, z, fl, P, band, sid)) { no('lens'); continue; }
+          sc += R() * 0.5; if (!best || sc > best.sc) best = { sc, P, x, z, ry, fl };
+        }
+        if (!best) continue;
+        if (!put(best.P, best.x, best.z, best.ry, best.fl, band)) continue;
+        made++; nPut++; const { P, x, z, fl } = best; O.disk(x, z, P.r + (P.flat ? 0.1 : 0.35), 1); if (!P.flat && !P.cover) O.disk(x, z, P.r, 4);
+        if (!P.flat && !P.cover) { const B = { x, z, ux: 1, uz: 0, vx: 0, vz: 1, hx: P.r, hz: P.r, y0: fl, y1: fl + P.h, lx: 2 * P.r, ly: P.h, lz: 2 * P.r }; OBJ.push(B); NEAR.push(B); }
+        reps.forEach((r2, k) => { setCam(r2); const q = rectOf(x, z, fl, P.r * 0.85, Math.max(P.h, 0.08)); if (q.behind || q.off) return; const g = cov[k];
+          for (let j = Math.max(0, Math.floor((1 - q.d) / 2 * GY)); j <= Math.min(GY - 1, Math.floor((1 - q.b) / 2 * GY)); j++) for (let i = Math.max(0, Math.floor((q.a + 1) / 2 * GX)); i <= Math.min(GX - 1, Math.floor((q.c + 1) / 2 * GX)); i++) if (!g[j * GX + i]) g[j * GX + i] = 1; });
+        placed.push(best.P.name);
+      }
+    }
+  }
+  for (const [k, list] of Object.entries(covers)) cover(k, list);
+  if (leaves.length) leafLitter(leaves.map(([x, z, r, y]) => [x, z, r, K.indoor ? y : undefined]));
+  if (o.debug) window.__dress = { O, S, OBJ, WALLS, FLATS };
+  DRESSLOG.push({ kind, shots: shots.length, skipped: [...shotIn].filter(([k, q]) => q.ok < q.n / 2).map(([k]) => k), props: nPut, rejected: rej, by: placed.reduce((m, n) => (m[n] = (m[n] ?? 0) + 1, m), {}) });
+}
+const DRESSLOG = [];   // what every dress() call put down: [{ kind, shots, props, by: { name: n } }] (render.mjs --probe 'DRESSLOG')
 
 /* ---------------------------------------------------------------------- */
 /* v2.34 BACKDROP + AMBIENT LIFE — depth and small life in every outdoor shot; biome() and city() add both (CFG.backdrop / CFG.life: false = off)
@@ -3219,9 +3519,7 @@ function asset(p, name, x = 0, z = 0, o = {}) {
   if (o.float) root.userData.float = true; if (o.buried) root.userData.buried = true; if (!_NOSTAND.test(name)) root.userData.stand = name;   // v3.24 QA FLOAT / BURIED (trees, rocks, street tiles, terrain sit in the ground by design)
   const data = MODELS[name];
   if (!data) { console.error('asset: ' + name + ' missing (assets/' + name + '.glb; see work/asset-catalog.html)'); rbox(root, 1, 1, 1, '#FF00FF'); return root; }
-  if (!ASSETS.has(name)) { const u8 = Uint8Array.from(atob(data), c => c.charCodeAt(0));
-    const pr = new Promise(res => new GLTFLoader().parse(u8.buffer, '', g => res(g.scene), e => { console.error('asset ' + name + ': ' + (e?.message ?? e)); res(null); }));
-    ASSETS.set(name, pr); PENDING.push(pr); }
+  _assetLoad(name);
   const meta = assetMeta(name), k = o.h && meta?.size?.[1] ? o.h / meta.size[1] : 1;
   let hold = null; root.parts = {};
   if (meta) {   // v3.17: model inside a holder scaled synchronously (h), movable parts as groups on their pivots — usable before the mesh has loaded
@@ -3230,7 +3528,7 @@ function asset(p, name, x = 0, z = 0, o = {}) {
       const par = q.parent ? mk(q.parent) : hold, pp = q.parent ? P[q.parent].pivot : [0, 0, 0]; g.position.set(q.pivot[0] - pp[0], q.pivot[1] - pp[1], q.pivot[2] - pp[2]); par.add(g); return root.parts[n] = g; };
     for (const n in P) mk(n);
     const pick = re => Object.keys(root.parts).filter(n => re.test(n)).sort().map(n => root.parts[n]);
-    if (pick(/^door/).length) root.doors = pick(/^door/); if (pick(/^window/).length) root.windows = pick(/^window/);   // openDoor(obj, t, { i }) / openWindow(obj, t)
+    if (pick(/^door/).length) { root.doors = pick(/^door/); root.doors.forEach(doorReg); } if (pick(/^window/).length) root.windows = pick(/^window/);   // openDoor(obj, t, { i }) / openWindow(obj, t)
     if (pick(/^wheel/).length) { const sc = Math.abs(o.scale ?? 1); root.wheels = pick(/^wheel/); for (const w of root.wheels) { w.userData.r = (w.userData.r ?? (w.position.y || 0.35)) * k * sc; w.rotation.order = 'YXZ'; }   // v3.21: drive() turns parts named wheel* (radius = hub height; steer: 1 = front wheels steer)
       if (root.wheels.some(w => w.userData.steer)) root._steer = true;   // v3.26: steer: 1 in the build script now really steers (drive() only steered v._steer vehicles) · YXZ: steer about y, then roll about the axle (no wobble) · radius × scale
       const wx = root.wheels.map(w => Math.abs(w.position.x)), wz = root.wheels.map(w => w.position.z);
@@ -3244,7 +3542,7 @@ function asset(p, name, x = 0, z = 0, o = {}) {
     if (o.walk && meta.walk?.length) { WALKSURF.push({ root, tri: meta.walk, k });   // walk surface: figures stand on the model's stairs, roofs and walkways (groundH)
       if (WALKSURF.length === 1) DEFER.unshift(_walkSurf); }
   } else if (o.walk) console.warn('asset ' + name + ': no walk surface in this model');
-  PENDING.push(ASSETS.get(name).then(src => {
+  const attach = src => {
     if (!src) return; const s = src.clone();
     s.traverse(m => { if (!m.isMesh) return; m.castShadow = o.shadow !== false; m.receiveShadow = true;
       if (o.tint) { const one = mt => { const c = typeof o.tint === 'string' ? o.tint : o.tint[mt.name]; if (!c) return mt; const k = mt.clone(); k.color.set(c); if (k.emissive && k.emissive.getHex() !== 0) k.emissive.set(c); return k; };   // v3.12: glowing parts take the tint as glow too (signal on/off)
@@ -3256,8 +3554,15 @@ function asset(p, name, x = 0, z = 0, o = {}) {
     if (o.h) { const b = new THREE.Box3().setFromObject(s), hh = b.max.y - b.min.y; if (hh > 0) s.scale.multiplyScalar(o.h / hh); }
     if (o.y == null && _SNAPUP.test(name)) { const b = new THREE.Box3().setFromObject(s); if (b.min.y < -0.05) s.position.y -= b.min.y; }   // v3.24: city/car_* (wheels 0.28 m below the origin), space/spacetruck* stood in the ground
     root.add(s);
-  }));
+  };
+  if (_ASRC.has(name)) attach(_ASRC.get(name)); else PENDING.push(ASSETS.get(name).then(attach));   // v3.27: a model that has already loaded (dress() at bake time) is attached at once
   return root;
+}
+const _ASRC = new Map();   // v3.27: parsed models by name (filled when a load finishes)
+function _assetLoad(name) {   // parse an embedded model once (the promise joins PENDING, so bake() waits for it)
+  if (ASSETS.has(name) || !MODELS[name]) return ASSETS.get(name); const u8 = Uint8Array.from(atob(MODELS[name]), c => c.charCodeAt(0));
+  const pr = new Promise(res => new GLTFLoader().parse(u8.buffer, '', g => { _ASRC.set(name, g.scene); res(g.scene); }, e => { console.error('asset ' + name + ': ' + (e?.message ?? e)); res(null); }));
+  ASSETS.set(name, pr); PENDING.push(pr); return pr;
 }
 function _walkSurf() {   // v3.17: groundH also sees the walk surfaces of asset(…, { walk: true }) — highest surface under (x, z), 2-m grid
   const T = [], C = 2, grid = new Map(), A = new THREE.Vector3(), B = new THREE.Vector3(), D = new THREE.Vector3();
@@ -3400,7 +3705,7 @@ function wobble(obj, t0, o = {}) { const node = dyn(obj.g ?? obj.root ?? obj), a
 
 // doors: openDoor(house | barn | vehicle | gate, t0, { i, close: t, angle, dur }) — swings (or slides) open with a small overshoot, closes with a thud
 function openDoor(target, t0, o = {}) {
-  const h = (target.doors ?? [target.door ?? target])[o.i ?? 0]; if (!h) return console.warn('openDoor: nothing to open');
+  const h = (target.doors ?? [target.door ?? target])[o.i ?? 0]; if (!h) return console.warn('openDoor: nothing to open'); doorReg(h);
   dyn(h); const ud = h.userData, ang = o.angle ?? ud.angle ?? 1.5, d = o.dur ?? 0.55, tc = o.close;
   sfx(t0, 'tick', 0.5); if (tc != null) sfx(tc + 0.3, 'impact', 0.35);
   // v2.40: several calls on one door chain up (open at 2, close with { angle: 0 } at 6, open again …): each eases from where the door is at its t0.
@@ -3421,7 +3726,7 @@ function gate(p, x, z, o = {}) {   // farm gate on two posts; returns { g, door 
   const door = dyn(grp(g, -w / 2, 0, 0)); door.userData.sign = 1; door.userData.angle = 1.6;
   for (const y of [0.35, 0.75, 1.15]) box(door, w, 0.12, 0.07, c, w / 2, y, 0);
   box(door, 0.1, 1.1, 0.08, c, 0.08, 0.2, 0); box(door, 0.1, 1.1, 0.08, c, w - 0.08, 0.2, 0); box(door, Math.hypot(w, 0.8), 0.1, 0.07, c, w / 2, 0.75, 0.01, { rz: Math.atan2(0.8, w) });
-  return { g, door };
+  doorReg(door); return { g, door };
 }
 // sit(rig, t0, { t1, seat: bench | [x, y, z], ry, h }) — sits down (seat height h, default 0.45) and gets up again at t1
 function sit(f, t0, o = {}) {
@@ -3586,7 +3891,7 @@ function drive(v, pts, o = {}) {   // o.jumps: [[t, h, airtime]] · o.bumpy: 0..
   const g = dyn(v.g ?? v), D = v._drv ??= [], F = o.follow;
   const last = D.length ? D.reduce((a, b) => b.t0 >= a.t0 ? b : a) : null;
   const t0 = (o.t0 ?? (last ? Math.min(last.tE, 1e8) : F ? -1e9 : 0)) + (o.delay ?? 0), prev = o.t0 == null ? last : null, t1 = o.t1 ?? 1e9;   // chained (no t0): sets off from the end of the segment before; with t0 it is planned on its own and hands over at t0
-  if (!D.length) MOVERS.push({ node: g, kind: 'drive', ok: o.passThrough });
+  if (!D.length) MOVERS.push({ node: g, kind: 'drive', ok: o.passThrough, v });   // v3.27 v: camSamples() finds where a tracked v.g will be
   const setPos = () => { v._posAt = t => { const m = _drvG(v).pick(t), P = m.pos(m.sAt(t)); return new THREE.Vector3(P.x, groundH(P.x, P.z), P.z); }; v._yawAt = t => { const A = _drvG(v); return A.yawT(A.pick(t), t); }; };
   if (F) {   // convoy: the leader's track, gap m behind, lag s later — speed, braking, corners and stops as the leader
     if (!F._drv?.length) { console.error('drive: follow needs a vehicle that drives (call drive() on the leader first)'); return null; }
@@ -3598,7 +3903,7 @@ function drive(v, pts, o = {}) {   // o.jumps: [[t, h, airtime]] · o.bumpy: 0..
   }
   if (prev && !prev.follow && !o.teleport && !o.loop && prev.L() < 1e8) { const E = prev.pos(prev.L()); if (Math.hypot(pts[0][0] - E.x, pts[0][1] - E.z) > 0.05) pts = [[E.x, E.z], ...pts]; }   // the next segment sets off where the last one stopped (teleport: true = jump to its first point)
   const path = new Path(pts, o.loop), sp = o.speed ?? 8, ra = o.ramp ?? clamp(sp / 5, 0.6, 2.5);
-  PATHS.push(path);
+  PATHS.push(path); path.kind = 'drive';   // v3.27: dress() keeps 2.5 m either side free
   const Tp = o.loop ? 1e9 : path.len < sp * ra ? 2 * Math.sqrt(path.len * ra / sp) : path.len / sp + ra, Te = Math.min(Tp, t1 - t0), a = sp / ra, tr = Math.min(ra, Te / 2), vp = a * tr;
   const dist = u => u <= 0 ? 0 : u >= Te ? vp * (Te - tr) : u < tr ? 0.5 * a * u * u : u > Te - tr ? vp * (Te - tr) - 0.5 * a * (Te - u) ** 2 : 0.5 * a * tr * tr + vp * (u - tr);
   const cr = path.p.length > 2 && !v.bike ? o.corner ?? clamp(sp * 0.3, 1.2, 3) : 0;   // corners are driven as an arc (was: the position turned on the spot of the corner point); exact again at both ends of the path
@@ -4756,7 +5061,7 @@ function tent(p, x, z, o = {}) {   // kind 'dome' (default) | 'ridge'; color, fl
     body.scale.x = 1 + 0.008 * Math.sin(t * 2.3 + seed * 6); door.scale.y = 1 - 0.85 * EASE.inOut(clamp((t - open) / 0.8));
     if (cap) { const u = clamp((t - snow) / (o.snowDur ?? 4)); cap.visible = u > 0.01; cap.scale.y = H * (0.25 + 0.8 * u) * 1.05; cap.material.opacity = 1; } });
   for (const u of ups) if (u > -1e8) sfx(u, 'whoosh', 0.3);
-  return { g, door: [x, z + D / 2 + 0.6] };
+  return { g, door: doorReg([x, z + D / 2 + 0.6]) };
 }
 function countdownScreen(p, w, h, o = {}) {   // big LED screen: label + countdown, zero, a glitch, then messages. segs: [{ from, at, remain: t => seconds, glitch }] (one per countdown; default one
   // segment { from: -1e9, at: o.at, remain: (at − t) · scale }); msgs: [[t, title, sub, strike]] are shown outside the counting / glitch windows (strike: red line through the title).
@@ -4799,7 +5104,7 @@ function decoHotel(p, x, z, o = {}) {   // front +z; color (pastel), trim, neon 
   box(g, W * 0.45, 0.25, 3.2, tr, 0.6, 3.0, 1.6); for (const sx of [-1, 1]) cyl(g, 0.12, 0.12, 3.0, tr, 0.6 + sx * W * 0.2, 0, 3.0, { seg: 8 });   // porch canopy on columns
   box(g, W * 0.45, 0.04, 0.05, '', 0.6, 2.95, 3.2, { mat: mat(nc, { basic: true, glow: 1.4 }), ...NC });   // neon strip under the canopy
   box(g, 2.2, 2.5, 0.08, '#24323E', 0.6, 0.5, 0.03, { kind: 'glass', ...NC }); box(g, W * 0.6, 0.12, 3.6, '#D8D2C2', 0.6, 0.01, 1.8, NC);   // door + terrace
-  return { g, door: [x, z + 2.4], top: H };
+  return { g, door: doorReg([x, z + 2.4]), top: H };
 }
 function coldFall(obj, t, o = {}) {   // a cold-stunned animal (iguana, lizard, bird) lets go: before t it clings at `from` (body still), then drops stiff, turns over, bounces once and lies belly-up at `to`
   // o: from [x, y, z], to [x, z] (default straight down), ry, spin (turns while falling), thud (sound volume)
@@ -4990,7 +5295,7 @@ function prisonCell(p, x, z, o = {}) {
   if (o.cam !== false) { const led = dyn(box(g, 0.02, 0.02, 0.02, '', cp[0] + 0.1, H - 0.07, cp[2], { mat: mat('#FF3A2A', { basic: true, glow: 2.5 }), ...NC })); tick(t => { led.visible = Math.floor(t * 1.5) % 2 === 0; }); }
   if (o.light ?? o.night) { const lp = wp(0, H - 0.4, -D / 2); glow(lp[0], lp[1], lp[2], { intensity: o.lightI ?? 9, dist: 6, color: '#E8F0F4', flicker: 0 }); }
   const at = { bed: wp(-W / 2 + 0.45, 0.47, -D + 1.1), toilet: wp(-0.05, 0, -D + 0.6), shower: wp(sx, 0, sz), hole: SH ? SH.hole : wp(sx, 0, sz), cam: wp(cp[0], H - 0.12, cp[2]), door: wp(0.75, 0, 0.5) };
-  return { g, at, hole: SH, door, w: W, d: D, h: H };
+  doorReg(door); return { g, at, hole: SH, door, w: W, d: D, h: H };
 }
 // ---- v2.40.27 fight kit: arena hall, octagon cage (+ bell table), fight robot with a detachable head, boxing gloves ----
 function arenaHall(p, o = {}) {   // dark indoor arena around (x, z): floor, walls with exit signs, ceiling with trusses, aisle strip lights → { g }
@@ -5555,7 +5860,7 @@ function bob(obj, o = {}) {   // floats on the waves: pitches and rolls with the
 }
 // sail(boat, [[x,z], …], { t0, speed, depth, wake, spray }) — moves a boat on the water: rides the waves, leans into turns, white wake trail behind it, spray at the bow
 function sail(b, pts, o = {}) {
-  const g = dyn(b.g ?? b), path = new Path(pts, o.loop), t0 = o.t0 ?? 0, sp = o.speed ?? 6, ra = o.ramp ?? 2, dep = o.depth ?? 0.25; PATHS.push(path);
+  const g = dyn(b.g ?? b), path = new Path(pts, o.loop), t0 = o.t0 ?? 0, sp = o.speed ?? 6, ra = o.ramp ?? 2, dep = o.depth ?? 0.25; PATHS.push(path); path.kind = 'sail';
   const Te = path.len / sp + ra, a = sp / ra, dist = u => u <= 0 ? 0 : u < ra ? 0.5 * a * u * u : Math.min(path.len, 0.5 * a * ra * ra + sp * (u - ra));
   const yawAt = s => { const A = path.dir(s - 1.5), B = path.dir(s + 1.5); return Math.atan2(A.x + B.x, A.z + B.z); }, L = o.len ?? 6;
   g._posAt = t => { const P = path.at(dist(t - t0)); return new THREE.Vector3(P.x, 0, P.z); }; b._posAt = g._posAt; b._yawAt = t => yawAt(dist(t - t0));
@@ -8416,7 +8721,7 @@ function interior(p, x, z, o = {}) {
   if (K.tiles) { const tl = grp(g, 0, 0, -d / 2 + 0.005); FURN.tiles(tl, 0, 0, 0, { w, h: 1.6 }); }
   if (o.ceiling) box(g, w + 0.28, 0.1, d + 0.14, '#F2F2F0', 0, h, 0, { cast: true });
   // door (side wall), window (back wall)
-  if (hasDoor) { const sx = sxd, fr = grp(g, sx * (w / 2 + 0.02), 0, dz, -sx * Math.PI / 2), open = !!(o.doorway ?? KD.open), jc = KD.frame ?? '#F2F2F0', jm = KD.frame ? { mat: mat(jc, { rough: 0.3, metal: 0.8 }) } : {};
+  if (hasDoor) { const sx = sxd, fr = grp(g, sx * (w / 2 + 0.02), 0, dz, -sx * Math.PI / 2), open = !!(o.doorway ?? KD.open), jc = KD.frame ?? '#F2F2F0', jm = KD.frame ? { mat: mat(jc, { rough: 0.3, metal: 0.8 }) } : {}; doorReg(fr);
     if (!hallOn) box(fr, 1.0, 2.15, 0.16, kind === 'bunker' ? '#3A3D44' : '#2A2018', 0, 0, 0, NC);   // no hall: the old dark door slab
     const fdp = hallOn ? 0.26 : 0.2, fzc = hallOn ? -0.005 : 0.02; for (const s2 of [-1, 1]) box(fr, 0.08, DH + 0.08, fdp, jc, s2 * (DW / 2 + 0.04), 0, fzc, jm); box(fr, DW + 0.16, 0.08, fdp, jc, 0, DH, fzc, jm);   // v3.5: the casing wraps the whole reveal
     if (!open) { const pv = dyn(grp(fr, -DW / 2, 0, 0.06)); pv.userData.angle = 1.4; box(pv, DW, DH - 0.02, 0.05, kind === 'bunker' ? '#5A605A' : '#9A6A44', DW / 2, 0.02, 0); box(pv, DW - 0.12, 0.85, 0.01, kind === 'bunker' ? '#4A504A' : '#8A5A38', DW / 2, 1.1, 0.03, NC);
@@ -14898,6 +15203,7 @@ function bake() {
     const g = o.geometry.index ? o.geometry.toNonIndexed() : o.geometry.clone();
     for (const k of Object.keys(g.attributes)) if (k !== 'position' && k !== 'normal' && !(k === 'color' && o.material.vertexColors)) g.deleteAttribute(k);
     if (!g.attributes.normal) g.computeVertexNormals();
+    g.setAttribute('qobj', new THREE.BufferAttribute(new Float32Array(g.attributes.position.count).fill(_surfMesh(o) ? 0 : 1), 1));   // v3.27 QA SPARSE: bare surface (0) or object (1), per source mesh
     g.applyMatrix4(M4.multiplyMatrices(inv, o.matrixWorld));
     if (o.material.userData.wind === 'attr') {   // sway weight: 0 at the foot of the plant, 1 at the top
       let wb = null; for (let q = o; q && q !== world; q = q.parent) if (q.userData.wb) { wb = q.userData.wb; break; }
@@ -16858,6 +17164,37 @@ function qalHeads(macro, edge = 1) {   // edge: the top edge in NDC (v3.23: 1 �
     R.push({ i, f, cut: Math.min(1, cut), big }); });
   return R;
 }
+// --- v3.27 SPARSE (part of qaLook, lines "QA: SPARSE – …"): an ID pass of the same tiny frame — every pixel is sky, bare surface (ground, road, floor, wall, a plain building
+//   block: see _isSurf) or object (props, plants, figures, vehicles, windows, doors …). An 8 × 8 px cell is bare when it shows ≤ 2 object pixels and at most half sky; SPARSE =
+//   bare cells / cells that are not sky (warn > 45 %, covers > 35 %, or the largest 4-connected bare patch > 20 % of the frame with > 75 % of that). Baked meshes carry their class
+//   per vertex (qobj, set in bake()), the rest is classed live; userData.qsurf = true / false on a mesh overrides. One extra 72 × 128 render per sample. CFG.qaSparse: false = off.
+const _qiObj = new THREE.MeshBasicMaterial({ color: '#ff0000', side: THREE.DoubleSide, fog: false, toneMapped: false }), _qiSurf = new THREE.MeshBasicMaterial({ color: '#000000', side: THREE.DoubleSide, fog: false, toneMapped: false });
+const _qiBaked = new THREE.ShaderMaterial({ side: THREE.DoubleSide, fog: false, toneMapped: false, vertexShader: 'attribute float qobj; varying float vQ; void main(){ vQ = qobj; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+  fragmentShader: 'varying float vQ; void main(){ gl_FragColor = vec4(step(0.5, vQ), 0.0, 0.0, 1.0); }' });
+function qalIds(skip) {   // → Uint8Array w × h (top row first): 0 bare surface · 1 object · 2 sky
+  const Q = qalSetup(), r = renderer, { w, h } = Q; Q.it ??= new THREE.WebGLRenderTarget(w, h); Q.ipx ??= new Uint8Array(w * h * 4); Q.ids ??= new Uint8Array(w * h);
+  const sw = [], hid = [], prevT = r.getRenderTarget(), ac = r.autoClear, su = r.shadowMap.autoUpdate, bg = scene.background, ca = r.getClearAlpha(); r.getClearColor(_cc);
+  try {
+    scene.traverseVisible(o => { const m = o.material; if (o.isPoints || o.isLine || o.isSprite || (o.isMesh && m && (Array.isArray(m) ? m.some(x => x.transparent || x.depthWrite === false) : m.transparent || m.blending === THREE.AdditiveBlending || m.depthWrite === false))) { hid.push(o); return; }
+      if (o.isMesh && m) { sw.push([o, m]); o.material = o.userData.baked && o.geometry.attributes.qobj ? _qiBaked : _surfMesh(o) ? _qiSurf : _qiObj; } });
+    if (skip) skip.traverse(o => { if (o.visible) hid.push(o); });
+    for (const o of hid) o.visible = false;
+    scene.background = null; r.autoClear = true; r.shadowMap.autoUpdate = false; r.setClearColor(0x0000ff, 1); r.setRenderTarget(Q.it); r.clear(); r.render(scene, camera); r.readRenderTargetPixels(Q.it, 0, 0, w, h, Q.ipx);
+  } finally { for (const [o, m] of sw) o.material = m; for (const o of hid) o.visible = true; scene.background = bg; r.setClearColor(_cc, ca); r.shadowMap.autoUpdate = su; r.autoClear = ac; r.setRenderTarget(prevT); }
+  const P = Q.ipx; for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) { const i = ((h - 1 - y) * w + x) * 4; Q.ids[y * w + x] = P[i] > 127 ? 1 : P[i + 2] > 127 ? 2 : 0; }
+  return Q.ids;
+}
+function qalSparse(ids, w, h) {   // → { k: bare / non-sky cells, reg: largest bare patch / all cells, where: 'bottom-left' …, n: non-sky cells }
+  const C = 8, cw = Math.floor(w / C), ch = Math.floor(h / C), bare = new Uint8Array(cw * ch); let ns = 0, nb = 0;
+  for (let cy = 0; cy < ch; cy++) for (let cx = 0; cx < cw; cx++) { let ob = 0, sk = 0; for (let y = cy * C; y < cy * C + C; y++) for (let x = cx * C; x < cx * C + C; x++) { const v = ids[y * w + x]; if (v === 1) ob++; else if (v === 2) sk++; }
+    if (sk > C * C / 2) continue; ns++; if (ob <= 2) { bare[cy * cw + cx] = 1; nb++; } }
+  let best = 0, bx = 0, by = 0; const seen = new Uint8Array(cw * ch), st = [];
+  for (let i = 0; i < cw * ch; i++) { if (!bare[i] || seen[i]) continue; let n = 0, sx = 0, sy = 0; st.push(i); seen[i] = 1;
+    while (st.length) { const j = st.pop(), x = j % cw, y = (j - x) / cw; n++; sx += x; sy += y; for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const X = x + dx, Y = y + dy, k = Y * cw + X; if (X >= 0 && Y >= 0 && X < cw && Y < ch && bare[k] && !seen[k]) { seen[k] = 1; st.push(k); } } }
+    if (n > best) { best = n; bx = (sx / n + 0.5) / cw; by = (sy / n + 0.5) / ch; } }
+  const where = best ? `${by < 0.34 ? 'top' : by > 0.66 ? 'bottom' : 'middle'}${bx < 0.34 ? '-left' : bx > 0.66 ? '-right' : ''}`.replace(/^middle$/, 'centre') : '';
+  return { k: ns ? nb / ns : 0, reg: best / (cw * ch), where, n: ns };
+}
 // samples: every cover (THUMB, all A/B variants) and the middle of every camera shot (CAM keys between cuts; split screens, full-frame map cards and the end card left out),
 // at most 30 full frames; then depth-only probes near both ends of every shot (12 / 88 %) for CAMCLIP and HEADCUT (the camera moves into things). Time budget o.budget (ms, default 25 s) for the extras and probes.
 function qaLook(o = {}) {
@@ -16889,6 +17226,8 @@ function qaLook(o = {}) {
       if (o.stats) stats.push({ where, probe: !!s.probe, fd: +fd.toFixed(1), ...Object.fromEntries(Object.entries(M).map(([k, v]) => [k, +v.toFixed(3)])), sky: Object.keys(SKIES).find(k => SKIES[k] === skyNow), heads: heads.map(x => x.i + ':' + x.cut.toFixed(2)) });
       if (!s.probe) {
         if (M.dead > (darkSky ? 0.6 : 0.35)) put('DARK' + id, M.dead, `DARK – ${where}: ${(M.dead * 100).toFixed(0)} % of the frame is a near-black area (not counting the sky${darkSky ? '; dark sky, limit 60 %' : ''}) – light the subject (lamp, flashlight, lit windows, CFG.nightLift), use a lighter SKY there or turn the camera off the dark wall / shadow`);
+        if (CFG.qaSparse !== false) { const sp = qalSparse(qalIds(pov ? POV_ON?.root : null), QAL.w, QAL.h), lim = s.cover != null ? 0.35 : 0.45; if (o.stats) stats.push({ where, sparse: +sp.k.toFixed(3), region: +sp.reg.toFixed(3) });
+          if (sp.n >= 8 && (sp.k > lim || sp.reg > 0.3)) put('SPARSE' + id, sp.k, `SPARSE – ${where}: ${(sp.k * 100).toFixed(0)} % bare ground / wall / floor${sp.where ? ` (biggest patch ${(sp.reg * 100).toFixed(0)} % of the frame, ${sp.where})` : ''} – dress() the set (or biome(kind, { dress: true })), put props in, or move the camera`); }
         if (M.flat > 0.85 && M.clip < 0.2) put('EMPTY' + id, M.flat, `EMPTY – ${where}: ${(M.flat * 100).toFixed(0)} % of the frame shows no detail (flat sky, bare ground, fog or water; the subject tiny or missing) – move the camera closer (dist, fov), aim it at the subject${s.cover != null ? ' (THUMB.cam / THUMB.t)' : ''} or put something into the frame`);
       }
       if (!pov && M.clip > 0.2) { const nm = hitName(M.cx, M.cy, 0.8);
@@ -16901,7 +17240,8 @@ function qaLook(o = {}) {
   if (o.stats) return stats;
   const L = [...res.values()].sort((a, b) => b.sev - a.sev).map(x => x.msg), by = k => L.filter(m => m.startsWith(k + ' '));
   let cf = []; if (o.capface !== false) try { cf = qaCapFace(o); } catch (e) { cf = ['CAPFACE – check failed: ' + e.message]; }   // v3.24
-  return [...['DARK', 'EMPTY', 'CAMCLIP', 'HEADCUT'].flatMap(k => { const A = by(k); return A.length > 6 ? [...A.slice(0, 6), `${k} – … and ${A.length - 6} more`] : A; }), ...cf];
+  const out = [...['DARK', 'EMPTY', 'SPARSE', 'CAMCLIP', 'HEADCUT'].flatMap(k => { const A = by(k); return A.length > 6 ? [...A.slice(0, 6), `${k} – … and ${A.length - 6} more`] : A; }), ...cf];
+  return CFG.qaSparse === 'info' ? out.map(l => l.startsWith('SPARSE ') ? 'QA-INFO: ' + l + ' (not counted: CFG.qaSparse info)' : l) : out;   // v3.27
 }
 // --- v3.24 CAPFACE (part of qaLook, lines "QA: CAPFACE – …"): a caption page lies over the face of a figure that is big in the frame ---
 //   For every caption page (the pages synced to the voice, see capPaginate) the HUD is set to that moment (updateHud) and the real on-screen boxes of its words / kick / who
