@@ -3190,7 +3190,7 @@ function pose(f, mode, ph, t = 0, o = {}) {   // walk run shamble idle panic che
 function poseFin(f, S, m, t, o) {
   for (const fx of f.fx) fx(t, S);
   if (o.turn) S.broll = clamp(-o.turn * (o.v ?? 0) * 0.07, -0.3, 0.3);   // lean into curves
-  applyRig(f, S); _mcPass(f, m, t, o, S);
+  applyRig(f, S); _mcPass(f, m, t, o, S); _turnPlant(f, t);
   if (f.FC) { f._fq = FSEQ; f._fm = m; f._ft = t; }   // the face is drawn after the camera and the head turns: facePass()
   f._fast = (o.v ?? 0) > 2.6 ? FRAME : -1;
 }
@@ -3460,8 +3460,14 @@ function walk(obj, pts, o = {}) {
   if (TH && obj.legL && obj.fx) {   // stepping round on the spot: the feet lift in turn (inner foot first), the body yaws over them
     const n = Math.max(2, Math.round(dY / (Math.PI / 4))), first = wrap(y0 - yS) > 0 ? 0 : 1;
     obj.fx.push(fxw((t, S) => { const u = t - tA; if (u <= 0 || u >= TH) return; const q = u / TH * n, k = Math.floor(q), f = q - k, lift = 0.075 * Math.sin(Math.PI * f), L = (k + first) % 2 === 0;
+   // v3.38: the foot on the ground stays on its spot while the body turns over it (_turnPlant)
       const [z, y] = legFK(L ? S.lt : S.rt, L ? S.lk : S.rk), [a, b] = legIK(z + 0.03 * Math.sin(Math.PI * f), y + lift); if (L) { S.lt = a; S.lk = b; S.lf += 0.35 * Math.sin(Math.PI * f); } else { S.rt = a; S.rk = b; S.rf += 0.35 * Math.sin(Math.PI * f); }
-      S.hx += (L ? 0.018 : -0.018) * Math.sin(Math.PI * f); }, tA, tS)); }
+      S.hx += (L ? 0.018 : -0.018) * Math.sin(Math.PI * f); }, tA, tS));
+    (obj._tpF ??= []).push(t => { const u = t - tA; if (u <= 0 || u >= TH + 0.8) return null; const h = TH / n, Y = tt => me.yaw(Math.min(tt, tS)), lifts = k => (k + first) % 2 === 0 ? 0 : 1;   // foot index that lifts in step k
+      if (u >= TH) { const kp = 1 - lifts(n - 1), tl = tA + (n - 1) * h; return [{ k: kp, d: wrap(Y(t) - Y(tl)), w: 1, tl, ds: me.sAt(t) / sc }]; }   // after the turn: the foot that stood through the last step, until it lifts
+      const k = Math.floor(u / h), f = u / h - k, kl = lifts(k), tp = tA + k * h, tq = tA + Math.max(0, k - 1) * h;
+      const tn = tA + (k + 1) * h;   // the lifted foot goes from where it stood (landed at tq) to its spot at the end of the step (in the air)
+      return [{ k: 1 - kl, d: wrap(Y(t) - Y(tp)), w: 1, tl: tp }, { k: kl, d: wrap(Y(t) - Y(tq)), w: 1, tl: tq, air: true, f, d2: wrap(Y(t) - Y(tn)), t2: tn }]; }); }   // v3.38 the foot on the ground while turning (_turnPlant)
   if (o.prints && obj.legL) {   // footprints (snow, sand, mud): o.prints = true | hex colour; o.printLife (s)
     const g0 = GAIT[mode] ?? GAIT.walk, Sd = g0.b * Clw, items = [], fwd = s => yawAt(s) ?? y0;
     for (let k = 0; k < 600; k++) { const sk = (k / 2 - u0) * Clw, s = sk + Sd / 2; if (s > path.len && !o.loop) break; if (sk > dist(Te)) break;
@@ -3602,16 +3608,24 @@ function _mcLock(f, e, w) {
 const _fzT = { p: new THREE.Vector3(), q: {} }, _fzA = new THREE.Vector3(), _fzB = new THREE.Vector3();
 function _mcFootZ(D, time, k) {   // v3.38 ankle z ahead of the hips (body frame) of foot k in clip D at time
   if (!D) return null; mcSample(D, time, true, _fzT); const T = _fzT, [L, S, sx] = k ? ['legR', 'shinR', 1] : ['legL', 'shinL', -1];
-  return _fzA.set(0, -LEG2, 0).applyQuaternion(T.q[S]).add(_fzB.set(0, -LEG1, 0)).applyQuaternion(T.q[L]).add(_fzB.set(sx * 0.12, 0, 0)).applyQuaternion(T.q.hips).add(_fzB.set(T.p.x, HIP + T.p.y, T.p.z)).z; }
+  return _fzA.set(0, -LEG2, 0).applyQuaternion(T.q[S]).add(_fzB.set(0, -LEG1, 0)).applyQuaternion(T.q[L]).add(_fzB.set(sx * 0.12, 0, 0)).applyQuaternion(T.q.hips).add(_fzB.set(T.p.x, HIP + T.p.y, T.p.z)).z; }   // (_fzA keeps x, y, z)
 function _mcPlant(f, P, w) {   // v3.38 first / last stance of a walk: the foot stays where it stood (body-frame z = idle spot − distance walked since)
   const LG = [[f.legL, f.shinL, f.footL], [f.legR, f.shinR, f.footR]], one = (k, zt, ww) => { if (ww < 0.01) return; const [th, sh, ft] = LG[k];
     _lkA.copy(ft.position).applyQuaternion(sh.quaternion).add(sh.position).applyQuaternion(th.quaternion).add(th.position).applyQuaternion(f.hips.quaternion).add(f.hips.position);   // ankle in the body frame
     ww *= 1 - sm01((_lkA.y - ANK - 0.02) / 0.05); if (ww < 0.01) return; _legTo(f, th, sh, ft, (zt - _lkA.z) * ww, 0); };   // lets go as the foot lifts (the rest of the way is made in the air)
   const d = P.dist; if (d > 0 && d < P.sLo + 0.6) one(0, P.IZ[0] - d, w * (1 - sm01((d - P.sLo - 0.45) / 0.15)));
 }
-function _legTo(f, th, sh, ft, dz, dh) {   // v3.38 two-bone leg IK: move the ankle by (0, dh, dz) of the body frame (thigh and knee turn, the foot keeps its angle to the shin)
+function _turnPlant(f, t) {   // v3.38 turning on the spot (walk): the planted foot keeps its place in the world while the root yaws by d since it landed
+  let PL = null; for (const F of f._tpF ?? []) PL = F(t) ?? PL; if (!PL || !f.legL) return;
+  for (const P of PL) { if (Math.abs(P.d) < 1e-3 || P.w < 0.01) continue; const [th, sh, ft] = P.k ? [f.legR, f.shinR, f.footR] : [f.legL, f.shinL, f.footL];
+    _lkA.copy(ft.position).applyQuaternion(sh.quaternion).add(sh.position).applyQuaternion(th.quaternion).add(th.position).applyQuaternion(f.hips.quaternion).add(f.hips.position);
+    const w = P.w * (P.air ? 1 : 1 - sm01((_lkA.y - ANK - 0.02) / 0.05)); if (w < 0.01) continue;   // lets go as the foot lifts (the stepping foot is moved in the air)
+    const mc = _mcOnF(f) && !f.idle && f.kind !== 'zombie' && mcClip('Idle_Loop', true), ax = _lkA.x, ay = _lkA.y, az = _lkA.z;
+    const spot = (tl, d) => { let rx = ax, rz = az; if (mc) { _mcFootZ(mcClip('Idle_Loop', true), tl + f.sd * 7.3, P.k); rx = _fzA.x; rz = _fzA.z; } const c = Math.cos(-d), s = Math.sin(-d); return [rx * c + rz * s, -rx * s + rz * c]; };   // mocap: where the idle clip has the foot when it lands
+    let [x, z] = spot(P.tl, P.d); z -= P.ds ?? 0; if (P.air) { const [x2, z2] = spot(P.t2, P.d2), e = sm01(P.f); x = lerp(x, x2, e); z = lerp(z, z2, e); } _lkA.set(ax, ay, az); _legTo(f, th, sh, ft, (z - _lkA.z) * w, 0, (x - _lkA.x) * w); } }
+function _legTo(f, th, sh, ft, dz, dh, dx = 0) {   // v3.38 two-bone leg IK: move the ankle by (dx, dh, dz) of the body frame (thigh and knee turn, the foot keeps its angle to the shin)
   _lkA.copy(ft.position).applyQuaternion(sh.quaternion).add(sh.position).applyQuaternion(th.quaternion);   // ankle relative to the hip joint, in the hips frame
-  _lkB.set(0, dh, dz).applyQuaternion(_lkQ.copy(f.hips.quaternion).invert()).add(_lkA);
+  _lkB.set(dx, dh, dz).applyQuaternion(_lkQ.copy(f.hips.quaternion).invert()).add(_lkA);
   const L1 = sh.position.length(), L2 = ft.position.length(), d0 = _lkA.length(), d1 = clamp(_lkB.length(), 0.2, (L1 + L2) * 0.999), ang = d => Math.acos(clamp((L1 * L1 + L2 * L2 - d * d) / (2 * L1 * L2), -1, 1));
   sh.quaternion.multiply(_lkR.setFromAxisAngle(_lkX, ang(d0) - ang(d1)));   // knee: straighter / more bent for the new hip–ankle distance
   _lkC.copy(ft.position).applyQuaternion(sh.quaternion).add(sh.position).applyQuaternion(th.quaternion).normalize();
@@ -3665,8 +3679,8 @@ function _mcLayer(f, mode, ph, t, v, dist, distE, tS) {   // the clips a figure 
     // v3.38 plant: the first stance (left foot, from the start until it lifts) and the last one (from touch-down to the stop) stay on their spot in the world (leg IK in _mcApply)
     const plant = (I, st, k) => { if (!IZ || !I || !(distE > 0)) return null; const n = I.F[0].length, S = st / k, q0 = p0(I), fr = x => (x % 1 + 1) % 1, we = (I.win[0][0] + I.win[0][1]) / n, pe = fr(distE / S + q0);
       const inW = (j, ph) => fr(ph - I.win[j][0] / n) <= I.win[j][1] / n + 1e-6, kE = inW(0, pe) && (!inW(1, pe) || Math.abs(fr(pe - q0)) < 0.02) ? 0 : 1;
-      const zS = tS != null && !zb && !f.idle ? _mcFootZ(mcClip('Idle_Loop', true), tS + f.sd * 7.3, 0) : null;   // where this figure's idle left foot was when it set off
-      return { dist, distE, IZ: zS != null ? [zS, IZ[1]] : IZ, sLo: fr(we - q0) * S, kE, sTd: inW(kE, pe) ? distE - fr(pe - I.win[kE][0] / n) * S : distE }; };
+      const iT = tS != null && !zb && !f.idle ? tS + f.sd * 7.3 : null, DI = mcClip('Idle_Loop', true);   // where this figure's idle feet were when it set off
+      return { dist, distE, IZ: iT != null ? [_mcFootZ(DI, iT, 0), _mcFootZ(DI, iT, 1)] : IZ, sLo: fr(we - q0) * S, kE, sTd: inW(kE, pe) ? distE - fr(pe - I.win[kE][0] / n) * S : distE }; };
     if (wj <= 1e-3 || wj >= 0.999 || !(mode === 'walk' || g === 'Jog_Fwd_Loop')) { const G2 = wj >= 0.999 ? 'Jog_Fwd_Loop' : g, D2 = mcClip(G2, true), a2 = mcAmp(G2, vs), st = mcStride(G2, a2), I = GA(D2, a2), fk = fit(st, I), u = dist / st * fk + p0(I);
       return [{ D: D2, time: u * D2.d, loop: true, w: 1, mask, amp: a2, dyC: I ? Math.min(0, ANK - I.yC) : 0, plant: plant(I, st, fk) }]; }
     const DW = mcClip('Walk_Loop', true), DJ = mcClip('Jog_Fwd_Loop', true), aW = mcAmp('Walk_Loop', vs), aJ = mcAmp('Jog_Fwd_Loop', vs), IW = GA(DW, aW), IJ = GA(DJ, aJ), st = lerp(mcStride('Walk_Loop', aW), mcStride('Jog_Fwd_Loop', aJ), wj);
@@ -3708,7 +3722,8 @@ function _mcApply(f, L, S, S0, q) {   // L: clips with weights. On the joints no
     else { const dx = S0 ? S.hx - S0.hx : 0, dy = (S0 ? S.H - S0.H : 0) + (e.dy ?? 0); pos.x = lerp(pos.x, p.x + dx, w); if (!e.keepH) pos.y = lerp(pos.y, HIP + p.y + dy, w); pos.z = lerp(pos.z, p.z, w); } });
   f.hips.position.copy(pos); f._mcOn = on;
   for (const e of L) if (e.mode && e.wLo > 0.02 && _mcIn(e.mask, 'legL')) _mcLock(f, e, e.wLo * kl);
-  for (const e of L) if (e.plant && e.mode === 'walk' && !(e.k2 > 0.05) && e.wLo > 0.02 && _mcIn(e.mask, 'legL') && CFG.footLock !== false) _mcPlant(f, e.plant, kl);
+  for (const e of L) if (e.plant && !(e.k2 > 0.05) && e.wLo > 0.02 && _mcIn(e.mask, 'legL') && CFG.footLock !== false) _mcPlant(f, e.plant, kl);
+  if (f._wu > 1e-4) { f.hips.position.y -= f._wu; for (const [th, sh, ft] of [[f.legL, f.shinL, f.footL], [f.legR, f.shinR, f.footR]]) _legTo(f, th, sh, ft, 0, f._wu); }   // v3.38 wind-up: hips down, ankles where they were
   for (const e of L) if (e.legDy && e.w > 0.02) for (const [th, sh, ft] of [[f.legL, f.shinL, f.footL], [f.legR, f.shinR, f.footR]]) _legTo(f, th, sh, ft, 0, -e.legDy * e.w); }   // v3.38 sitting clips on a seat higher / lower than theirs (0.42 m): the feet stay on the floor
 function _mcPass(f, m, t, o, S) {   // after applyRig: the clip of the pose mode (automatic) + anim() schedule on the figure (pure function of t)
   f._mcOn = 0; if (!MOCAP) return;
@@ -15590,7 +15605,8 @@ function moodAt(f, t, src, out) {   // body language of the expression (src 'exp
   return out;
 }
 const _MW = { idle: 1, hold: 0.8, point: 0.8, sit: 0.6, walk: 0.65, limp: 0.5, tiptoe: 0.4, run: 0.35 };   // how much body language shows in each mode (acting modes keep their own)
-function bodyStyle(f, S, m, t) {   // posture (build) + body language (face, gait) + free leg + wind-up — runs before the acting layers (react, gesture, reach …)
+function bodyStyle(f, S, m, t) {
+  f._wu = 0;   // posture (build) + body language (face, gait) + free leg + wind-up — runs before the acting layers (react, gesture, reach …)
   if (f.kind === 'zombie' || f.isModel || f._seated && m !== 'sit') return;
   const B = f.B ?? {}, idle = m === 'idle' || m === 'hold' || m === 'point', walkish = m === 'walk' || m === 'run' || m === 'limp' || m === 'tiptoe';
   if (walkish) { const sw = B.sway ?? 1; if (sw !== 1) { S.hrz *= sw; S.hx *= sw; S.hry *= lerp(1, sw, 0.4); } }
@@ -15619,7 +15635,8 @@ function bodyStyle(f, S, m, t) {   // posture (build) + body language (face, gai
   // wind-up before walking off (knees give, a lean back) and an extra lean into the first steps — read from the walk path, so it is there in every frame
   if (f._walks && f._posAt && CFG.windup !== false) for (const [t0, v] of f._walks) { const d = t0 - t; if (d < -0.1 || d > 0.3) continue;
     const a = f._posAt(t0 - 0.12), b = f._posAt(t0 - 0.04); if (Math.hypot(b.x - a.x, b.z - a.z) / 0.08 > 0.3) continue;   // only from standing (not between chained walks)
-    const e = Math.sin(Math.PI * (0.3 - d) / 0.4) * clamp(0.45 + v / 4); _crouch(S, 0.045 * e); S.crx -= 0.06 * e; S.nrx += 0.03 * e; S.las += 0.2 * e; S.ras += 0.2 * e; }
+    // v3.38 mocap legs: the knees give by leg IK after the clip (_mcApply) — the feet stay on their spots
+    const e = Math.sin(Math.PI * (0.3 - d) / 0.4) * clamp(0.45 + v / 4); if (_mcOnF(f)) f._wu = Math.max(f._wu ?? 0, 0.045 * e); else _crouch(S, 0.045 * e); S.crx -= 0.06 * e; S.nrx += 0.03 * e; S.las += 0.2 * e; S.ras += 0.2 * e; }
 }
 { const _w = walk; walk = function (obj, pts, o = {}) { const r = _w(obj, pts, o); if (obj?.legL && !obj.isModel) (obj._walks ??= []).push([r?._tS ?? o.t0 ?? 0, o.speed ?? 1.4]); return r; }; }   // wind-up: when each walk starts
 // ---- rig layers: shoulder channels, IK shoulder offset, finger joints ----
@@ -18852,7 +18869,7 @@ function _gqReport() {
     let ws = null; const H = c => { const h = L.filter(r => r[4] > 0.9).map(r => r[c]).sort((a, b) => a - b); return h.length ? h[Math.floor(h.length * 0.03)] : 0; };
     for (const c of [6, 9]) { const hm = H(c); let a = -1;
       const end = (b) => { if (a < 0 || b - a < 2) return; const A = L[a], B = L[b], fm = Math.hypot(B[c - 1] - A[c - 1], B[c + 1] - A[c + 1]), bm = Math.hypot(B[2] - A[2], B[3] - A[3]);
-        if (fm > 0.08 && bm > 0.08 && fm > 0.15 * bm && (!ws || fm > ws.fm)) ws = { fm, bm, t: A[1], d: B[1] - A[1], side: c === 6 ? 'left' : 'right' }; };
+        if (fm > 0.08 && (bm <= 0.08 || fm > 0.15 * bm) && (!ws || fm > ws.fm)) ws = { fm, bm, t: A[1], d: B[1] - A[1], side: c === 6 ? 'left' : 'right' }; };
       for (let k = 0; k < L.length; k++) { const r = L[k], pl = r[4] > 0.9 && r[c] < hm + 0.012 && r[11] < 0.1, cont = k > 0 && L[k - 1][0] === r[0] - 1 && R.cut !== r[0] && !(R.cut > L[k - 1][0] && R.cut <= r[0]);
         if (pl && a >= 0 && cont) continue; end(k - 1); a = pl ? k : -1; }
       end(L.length - 1); }
