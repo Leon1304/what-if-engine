@@ -1,0 +1,39 @@
+# Puts the posting texts of a video next to its MP4: gallery/captions/<slug>.json → <slug>-captions.txt on the release render-<slug>
+# (YouTube title / description / tags, Instagram and TikTok captions, alternative hooks — plain text to copy from).
+# Trigger: push of gallery/captions/*.json (only the changed files), or manually (slug, or empty = every video with captions).
+# The render workflow also attaches it right after the encode when the captions already exist.
+name: captions
+
+on:
+  push:
+    branches: [main]
+    paths: ['gallery/captions/*.json']
+  workflow_dispatch:
+    inputs:
+      slug:
+        description: 'Video slug (empty = all videos that have captions and a release)'
+        required: false
+
+permissions:
+  contents: write
+
+jobs:
+  upload:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 2
+      - name: Upload <slug>-captions.txt to the releases
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [ "${{ github.event_name }}" = "push" ]; then
+            SLUGS=$(git diff --name-only --diff-filter=AM HEAD~1 HEAD -- 'gallery/captions/*.json' | sed 's#.*/##; s#\.json$##')
+          elif [ -n "${{ inputs.slug }}" ]; then SLUGS="${{ inputs.slug }}"
+          else SLUGS=$(ls gallery/captions/*.json | sed 's#.*/##; s#\.json$##'); fi
+          mkdir -p out
+          for S in $SLUGS; do
+            if ! gh release view render-$S >/dev/null 2>&1; then echo "skip $S: no release render-$S yet (the render workflow attaches it)"; continue; fi
+            python3 tools/captions_txt.py "$S" out/$S-captions.txt && gh release upload render-$S out/$S-captions.txt --clobber && echo "uploaded: render-$S/$S-captions.txt" | tee -a "$GITHUB_STEP_SUMMARY"
+          done

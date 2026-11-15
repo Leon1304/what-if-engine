@@ -45,6 +45,7 @@ Lokal für Testframes und Vorschau (schnelle Qualität; `--hq` für einen Qualit
 
 ## Lieferung pro Video
 `<slug>.mp4` (2K, 1440 × 2560), Cover A/B, YouTube-Shorts-Text (Titel, Beschreibung, Tags), Instagram-Caption, TikTok-Text.
+Die Posting-Texte liegen zusätzlich als Textdatei `<slug>-captions.txt` im Release neben MP4 und Cover (Leons Vorgabe ab 15.11.2026): kommt automatisch, sobald `gallery/captions/<slug>.json` gepusht ist (Workflow `captions`, Skript `tools/captions_txt.py`); im Chat den Direktlink mit ausgeben.
 Immer den GitHub-Download-Link mit ausgeben: Release-Seite `https://github.com/Leon1304/what-if-engine/releases/tag/render-<slug>` und direkt `https://github.com/Leon1304/what-if-engine/releases/download/render-<slug>/<slug>.mp4`. Danach `docs/projekt/running-gags.md` und ggf. Themenliste/Trend-Log aktualisieren und committen.
 
 ## Spiel „Waldtank“ (game/)

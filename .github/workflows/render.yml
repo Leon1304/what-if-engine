@@ -211,4 +211,6 @@ jobs:
           gh release edit $TAG --notes-file out/$S-notes.md --prerelease=$( [ "$OPEN" -gt 0 ] && echo true || echo false )
           gh release upload $TAG out/$S.mp4 out/$S-cover*.jpg out/$S-qa.txt $( [ -s out/$S.srt ] && echo out/$S.srt ) --clobber
           gh release delete-asset $TAG $S-ig.mp4 -y >/dev/null 2>&1 || true
+          # posting texts as plain text next to the MP4 (when the captions are already in the repo; otherwise the captions workflow adds them later)
+          if [ -f gallery/captions/$S.json ]; then python3 tools/captions_txt.py "$S" out/$S-captions.txt && gh release upload $TAG out/$S-captions.txt --clobber; fi
           echo "done: https://github.com/${{ github.repository }}/releases/tag/$TAG$( [ "$OPEN" -gt 0 ] && echo ' (pre-release: ⚠ QA warnings in the notes)')"

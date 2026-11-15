@@ -8,6 +8,7 @@ Alle gerenderten Videos mit Thumbnail, Posting-Texten (YouTube, Instagram, TikTo
 - Posting-Texte: `captions/<slug>.json` – schreibt der /whatif-Skill beim Liefern:
   `{ "youtube": { "title", "description", "tags": [..] }, "instagram": "…", "tiktok": "…", "hooks": ["…"] }`.
   Fehlt die Datei, erzeugt `build.py` Texte aus der Story (in der Übersicht als „automatisch“ markiert).
+- Als Textdatei im Release: Workflow `captions` (bei jedem Push von `captions/*.json`, auch von Hand für alle) und `render` (nach dem Encode) hängen `<slug>-captions.txt` an `render-<slug>` (Skript `tools/captions_txt.py`).
 - Live-Vorschau-Links: `previews.json` (slug → Artifact-URL).
 
 Aktualisieren (nach jedem neuen Video, der Skill macht das in Abschnitt 5):
