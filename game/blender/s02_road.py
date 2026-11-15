@@ -120,3 +120,27 @@ def build(c):
         tri = lambda s, yy, m: (move(prism([(-s, 0), (s, 0), (0, s * 1.73)], .02, y=yy), (0, 0, 1.95)), m)
         f = [tri(.4, -.03, red), tri(.32, -.05, wht), (box(.05, .01, .28, at=(-.03, -.062, 2.05), rz=0), blk), (box(.16, .01, .05, at=(.04, -.062, 2.3)), blk)]
         sign(nm, y, sd, f)
+
+    # ---- power line on wooden poles along the east side (station → village), ends at the transformer kiosk at the village entrance.
+    #      The grid is dead (that is why the station needs its generator) – the wires just hang there.
+    pts = []
+    for y in (38.0, 62.0, 86.0, 104.0, 128.0, 143.0):
+        t, n = tangent(y); q = Vector((road_x(y), y, 0)) + n * 6.4; pts.append((q.x, q.y))
+    poles, wires = d_power_line(pts, h=7.2)
+    multi('Strommasten', poles, c); multi('Stromleitung', wires, c, collide=0)
+    # transformer kiosk (brick, sheet-metal doors with a lightning sign, little hip roof)
+    tx, ty = pts[-1][0] + 3.2, pts[-1][1] + 2.4; tz = terrain_h(tx, ty)
+    brick = lp('Klinker', '#8b4b3a', .9, var=.1); door = lp('Blechtuer_gruen', '#4d6a52', .6, .3, var=.04); roofm = lp('Schiefer', '#4d535a', .7, var=.06)
+    K = [(box(2.2, 1.8, .2, at=(0, 0, -.1)), lp('Beton', '#9a978f', .9, var=.06)), (box(2.0, 1.6, 2.6, at=(0, 0, .1), bevel_w=.02), brick)]
+    for sx in (-.45, .45): K += [(box(.8, .04, 1.9, at=(sx, -.8, .2)), door), (box(.06, .03, .12, at=(sx + (.3 if sx < 0 else -.3), -.83, 1.1)), lp('Stahl', '#9da2a6', .35, .8))]
+    bolt = move(prism([(-.12, 0), (.04, .16), (-.02, .16), (.12, .34), (-.04, .18), (.02, .18)], .01, y=-.85), (-.45, 0, 1.45))   # lightning sign
+    K.append((bolt, lp('Signal_gelb', '#f2c230', .5)))
+    rf = cone(1.7, .7, at=(0, 0, 2.7), seg=4); rotz(rf, math.pi / 4); bmesh.ops.scale(rf, vec=(.95, .82, 1), verts=rf.verts)
+    K += [(rf, roofm), (box(2.2, 1.8, .1, at=(0, 0, 2.66)), lp('Gesims', '#c9c2b2', .8, var=.04)), (box(.3, .04, .3, at=(0, .82, 1.9)), lp('Lueftung', '#3a3c3e', .6, .4))]
+    multi('Trafohaus', [(place(b_, (tx, ty, tz), 0), m) for b_, m in K], c)
+    # last span: pole → kiosk roof
+    (ax, ay), az = pts[-1], terrain_h(*pts[-1]) + 7.2 - .26
+    for j, off in enumerate((-.65, 0, .65)):
+        p0 = Vector((ax + off * .6, ay, az)); p1 = Vector((tx - .4 + off * .4, ty, tz + 2.9)); d = p1 - p0
+        w_ = box(.018, d.length, .018, at=(0, 0, -.009)); bmesh.ops.rotate(w_, cent=(0, 0, 0), matrix=d.to_track_quat('Y', 'Z').to_matrix(), verts=w_.verts)
+        cc = sum((v.co for v in w_.verts), Vector()) / len(w_.verts); move(w_, p0 + d / 2 - cc); obj(f'Stromleitung_Trafo_{j}', w_, lp('Kabel', '#1a1a1a', .8, var=0), c, collide=0)

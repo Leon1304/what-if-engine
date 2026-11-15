@@ -63,6 +63,24 @@ def build(c):
     leaf = [(box(.06, .94, 2.03, at=(0, .47, 0), bevel_w=.01), door_m), (box(.07, .7, .5, at=(0, .47, 1.3)), lp('Haustuer_hell', '#7a4e30', .7)), (box(.14, .04, .04, at=(0, .82, 1.0)), steel)]
     multi('Forsthaus_Tuer', [(move(b_, hinge), m) for b_, m in leaf], c, pivot=hinge, interact='door', angle=math.radians(100), label='Haustür Forsthaus', locked=1, key='schluessel_forst',
           locked_msg='Abgeschlossen. An der Tür hängt ein Zettel.')
+    # details (deco.py kit): shingle courses, gutters, chimney hood, lamp at the door, aerial; outside: bench, rain barrel, Bello's kennel
+    D = []; ez = zt - ov * .78; rz_ = zt + rh - ov * .78
+    for s_ in (-1, 1):
+        ye = fy + s_ * half
+        D += d_roof_courses((ye, ez, fx), (fy, rz_, 0), 9 + 2 * ov, 'x', thick=.14, step=.27, mat=lp('Schindel_Forst', '#5a4632', .9, var=.1))
+        D += d_gutter((x0 - ov, ye), (x1 + ov, ye), ez, out=(0, s_), pipes=(1,), wall=ov)
+    D += d_chimney_cap(x0 + 1.2, fy - 1.6, zt + 3.28, .55) + d_aerial((x1 - 1.5, fy, rz_ + .15), 1.5)
+    D += d_wall_lamp((x1, y0 + T + DOOR[0] - .45, FL + 2.0), FACE['E']) + d_canopy((x1, y0 + T + DOOR[0] + .53, FL + 2.75), FACE['E'], w=1.7, d=.9)
+    multi('Forsthaus_Details', D, c, collide=0)
+    O = d_bench(fx - 1.2, y0 - .6, math.pi) + d_rain_barrel(x1 + .55, y1 - .6)
+    kx_, ky_ = x1 + 2.4, y0 - 1.2; kz_ = Z(kx_, ky_)               # dog kennel – Bello used to live here (name board over the opening)
+    K = [(box(1.0, 1.2, .8, at=(0, 0, .08), bevel_w=.02), lp('Hundehuette', '#8a5a36', .85, var=.08)), (box(1.1, 1.3, .08, at=(0, 0, 0)), wood_d),
+         (box(.45, .05, .5, at=(0, -.6, .14)), lp('Schatten', '#1c1814', .95, var=0)), (box(.5, .04, .14, at=(0, -.63, .7)), lp('Schild_creme', '#efe4c4', .6)),
+         (text_bm('BELLO', .08, at=(0, -.66, .72), depth=.006), wood_d), (cyl(.16, .07, at=(.55, -.75, 0), seg=10), lp('Napf_rot', '#b8322a', .5))]
+    for s2 in (-1, 1):
+        rf_ = box(.72, 1.4, .05, at=(0, 0, 0)); bmesh.ops.rotate(rf_, cent=(0, 0, 0), matrix=Matrix.Rotation(s2 * .7, 3, 'Y'), verts=rf_.verts); K.append((move(rf_, (s2 * .28, 0, 1.06)), roof))
+    O += [(move(rotz(b_, .3), (kx_, ky_, kz_)), m) for b_, m in K]
+    multi('Forsthaus_Hof', O, c)
     multi('Zettel_Forsthaus', [(box(.01, .2, .26, at=(x1 + .02, y0 + T + DOOR[0] - .3, FL + 1.45)), paper)], c, collide=0, interact='read', label='Zettel an der Tür',
           text='Bin oben im Revier und dann rauf zur Steinberghütte.<br>Den Schlüssel findet, wer ihn braucht – <b>wie immer bei den Rehen</b>.<br>– H.')
     # interior: desk with diary (west), calendar, gun cabinet (north), bed (south-west), tiled stove, table, shelf with herbs
@@ -148,6 +166,14 @@ def build(c):
     P += [(box(1.0, .04, .5, at=(hx - .2, y1 + .03, HF + 2.15)), yel), (text_bm('FUNKSTATION NORDWALD', .07, at=(hx - .2, y1 + .06, HF + 2.33), rz=math.pi, depth=.005), blk),
           (text_bm('Zutritt verboten', .06, at=(hx - .2, y1 + .06, HF + 2.21), rz=math.pi, depth=.005), blk)]
     P += [(box(.16, .05, .22, at=(x0 + 2.45, y1 + .03, HF + 1.1), bevel_w=.01), blk), (box(.1, .055, .05, at=(x0 + 2.45, y1 + .035, HF + 1.24)), lp('Display_Code', '#2a3a2a', .3))]     # keypad
+    # hut details: vent grilles, outdoor lamp over the door, high-voltage warning sign, rooftop aerial, gravel around, cable tray
+    D = [(box(.4, .04, .3, at=(x0 + .6, y1 + .03, HF + .35)), lp('Gitter', '#6d7277', .5, .5)), (box(.04, .4, .3, at=(x1 + .03, hy, HF + .4)), lp('Gitter', '#6d7277', .5, .5))]
+    D += [(box(.36, .02, .02, at=(x0 + .6, y1 + .055, HF + .37 + k * .06)), lp('Kunststoff_schwarz', '#232426', .6)) for k in range(4)]
+    D += d_wall_lamp((x0 + .7, y1, HF + 2.2), FACE['N'])
+    D += [(move(rotz(prism([(-.22, 0), (.22, 0), (0, .38)], .01, y=0), math.pi), (x1 - .5, y1 + .04, HF + 1.3)), lp('Signal_gelb', '#f2c230', .5))]
+    D += [(move(rotz(prism([(-.04, .06), (.03, .17), (-.01, .17), (.05, .3), (-.03, .18), (.01, .18)], .01, y=0), math.pi), (x1 - .5, y1 + .055, HF + 1.3)), lp('Kunststoff_schwarz', '#232426', .6))]
+    D += d_aerial((hx + .8, hy - .4, HF + Hh + .15), 1.2)
+    multi('Funkhuette_Details', D, c, collide=0)
     # rack with the transmitter, desk with logbook, chair; cable duct up to the mast
     P += [(box(.7, .6, 1.9, at=(x1 - .55, y0 + .5, HF), bevel_w=.01), lp('Rack_grau', '#4a4e52', .4, .4)), (box(1.4, .6, .05, at=(x0 + .9, y0 + .5, HF + .74)), wood),
           (box(.05, .55, .74, at=(x0 + .25, y0 + .5, HF)), steel), (box(.05, .55, .74, at=(x0 + 1.55, y0 + .5, HF)), steel), (box(.12, .12, 3.0, at=(x0 + .1, hy, HF + 2.3)), steel)]

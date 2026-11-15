@@ -76,6 +76,30 @@ def build(c):
         top = gz + (FL - gz) * (k + 1) / n; P.append((box(.45, 1.1, top - gz + .4, at=(x0 - .225 - .45 * (n - 1 - k), y0 + 1.35, gz - .4)), wood_d))
     multi('Anglerhuette', P, c, indoor=[x0, y0, x1, y1, hz - .5, FL + H])
     multi('Anglerhuette_Pritsche', [(box(1.85, .75, .02, at=(hx + .3, y1 - .5, FL + .53)), lp('Wolldecke', '#8a3b32', .95))], c, collide=0, interact='use', use='bett', label='Pritsche')
+    # hut details: life ring, fishing net, oars, stovepipe, lamp, club sign, drying rack with a fish, bucket, firewood
+    D = [(torus(.28, .07, at=(x1 + .08, hy + .85, FL + 1.3), seg=12, seg2=5, axis='X'), lp('Rettungsring', '#e8462e', .6))]
+    D += [(box(.04, .3, .08, at=(x1 + .09, hy + .85 + .28 * math.cos(k * math.pi / 2), FL + 1.3 + .28 * math.sin(k * math.pi / 2) - .04)), lp('Weiss_glanz', '#f4f4f1', .3)) for k in range(4)]
+    net = lp('Netz', '#8a8466', .95, var=.1)
+    for i in range(6): D.append((box(.02, 1.4, .02, at=(x0 + .3, y0 - .07, FL + .7 + i * .22), rz=math.pi / 2), net))
+    for j in range(7): D.append((box(.02, .02, 1.2, at=(x0 + .3 + j * .22, y0 - .07, FL + .65)), net))
+    D += [(box(.06, .6, .06, at=(x0 + 1.0, y0 - .1, FL + 1.85), rz=math.pi / 2), wood_d)]
+    D += [(cyl(.07, 1.2, at=(x1 - .5, y1 - .6, FL + H + .05), seg=8), lp('Ofenrohr', '#2b2c2e', .6, .5)), (cyl(.13, .06, at=(x1 - .5, y1 - .6, FL + H + 1.25), seg=8, r2=.03), lp('Ofenrohr', '#2b2c2e', .6, .5))]
+    D += d_wall_lamp((x0, y0 + .5, FL + 2.0), FACE['W'])
+    D += [(box(.04, 1.4, .3, at=(x0 - .04, hy + .45, FL + 1.75)), lp('Schild_creme', '#efe4c4', .6)), (text_bm('ANGELVEREIN TANNBACH', .085, at=(x0 - .07, hy + .45, FL + 1.85), rz=-math.pi / 2, depth=.006), wood_d)]
+    multi('Anglerhuette_Details', D, c, collide=0)
+    O = []
+    for k in range(2):                       # oars leaning on the south wall
+        oar = box(.05, .05, 2.3, at=(0, 0, 0)); bmesh.ops.rotate(oar, cent=(0, 0, 0), matrix=Matrix.Rotation(.18, 3, 'X'), verts=oar.verts)
+        bl = box(.03, .16, .6, at=(0, 0, 0)); bmesh.ops.rotate(bl, cent=(0, 0, 0), matrix=Matrix.Rotation(.18, 3, 'X'), verts=bl.verts)
+        ox, oy = x0 + 1.6 + k * .3, y0 - .35; oz = terrain_h(ox, oy)
+        O += [(move(oar, (ox, oy, oz)), wood), (move(bl, (ox, oy + .02, oz)), wood_d)]
+    rx_, ry_ = x1 + 1.3, y0 - .4; rz0 = terrain_h(rx_, ry_)            # fish drying rack
+    O += [(box(.06, .06, 1.6, at=(rx_ + sx * .6, ry_, rz0)), wood_d) for sx in (-1, 1)] + [(box(1.3, .05, .05, at=(rx_, ry_, rz0 + 1.55)), wood)]
+    for k in range(3): O += [(cyl(.004, .25, at=(rx_ - .35 + .35 * k, ry_, rz0 + 1.3), seg=3), lp('Kabel', '#1a1a1a', .8, var=0)), (ico(.08, at=(rx_ - .35 + .35 * k, ry_, rz0 + 1.2), sub=1, sz=2.2), lp('Fisch_trocken', '#8a7a5a', .7))]
+    O += d_woodpile(x1 + .55, hy + .3, FACE['E'], L=1.6, H=.9, roof=False)
+    bkx, bky = x0 - .9, y1 + .4; bkz = terrain_h(bkx, bky)
+    O += [(cyl(.17, .32, at=(bkx, bky, bkz), seg=10, r2=.2), lp('Eimer_blau', '#2a63b8', .6, var=.03)), (cyl(.25, .3, at=(bkx + .55, bky + .1, bkz), seg=10), lp('Angelkiste_gruen', '#3e5a3a', .6))]
+    multi('Anglerhuette_Hof', O, c)
     hinge = (x0 + T / 2, y0 + .9 + .03, FL)
     multi('Anglerhuette_Tuer', [(move(box(.05, .84, 1.95, at=(0, .42, 0)), hinge), wood), (move(box(.07, .03, .1, at=(-.03, .74, .95)), hinge), steel)], c, pivot=hinge, interact='door', angle=math.radians(-100), label='Hüttentür')
     rod = [(cyl(.012, 2.2, at=(0, 0, 0), seg=5, r2=.005), lp('Angelrute', '#3a2a1c', .6)), (torus(.04, .012, at=(0, .0, .35), seg=8, seg2=3, axis='X'), steel)]

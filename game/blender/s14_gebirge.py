@@ -161,6 +161,34 @@ def build(c):
     hinge = (x0 + DOOR[0] + .06, y0 + T / 2, FL)
     leaf = [(box(.94, .07, 2.03, at=(.47, 0, 0), bevel_w=.01), lp('Haustuer', '#5e3a22', .7, var=.04)), (box(.7, .08, .5, at=(.47, 0, 1.3)), lp('Haustuer_hell', '#7a4e30', .7)), (box(.04, .14, .04, at=(.82, 0, 1.0)), steel)]
     multi('Steinberghuette_Tuer', [(move(b_, hinge), m) for b_, m in leaf], c, pivot=hinge, interact='door', angle=math.radians(100), label='Hüttentür')
+    # hut details (deco.py kit): shingle courses, snow guards, stones on the roof, gutters, chimney hood, lamp, solar panel, flag, woodpile, trough
+    D = []; ez = zt - ov * .53; rz_ = zt + rh - ov * .53
+    for s_ in (-1, 1):
+        ye = hy + s_ * half
+        D += d_roof_courses((ye, ez, hx), (hy, rz_, 0), 11 + 2 * ov, 'x', thick=.16, step=.28, mat=lp('Schindel', '#4a3a2c', .9, var=.1))
+        D += d_snowguard((x0 - ov + .3, ye - s_ * 1.0), (x1 + ov - .3, ye - s_ * 1.0), ez + (rz_ - ez) * (1.0 / half) + .16)
+        D += d_gutter((x0 - ov, ye), (x1 + ov, ye), ez, out=(0, s_), pipes=(0, 1) if s_ > 0 else (), wall=ov)
+        R_ = random.Random(77 + s_)
+        for k in range(7):                      # heavy stones holding the shingles down
+            t = R_.uniform(.25, .75); xx = x0 - ov + .6 + k * (11 + 2 * ov - 1.2) / 6
+            D.append((ico(.22, at=(xx, ye + (hy - ye) * t, ez + (rz_ - ez) * t + .2), sub=1, jit=.35, seed=k * 3 + s_, sz=.7), lp('Fels_grau', '#7c7a74', .9, var=.1)))
+    D += d_chimney_cap(x1 - 1.4, hy + 1.6, zt + 3.68, .6)
+    D += d_wall_lamp((x0 + DOOR[0] - .5, y0, FL + 2.1), FACE['S']) + d_wall_lamp((x0 + DOOR[0] + 1.6, y0, FL + 2.1), FACE['S'])
+    # solar panel on the south slope (the hut's only power)
+    pz = ez + (rz_ - ez) * .45 + .22; pnl = box(2.2, 1.4, .06, at=(0, 0, 0)); bmesh.ops.rotate(pnl, cent=(0, 0, 0), matrix=Matrix.Rotation(math.radians(28), 3, 'X'), verts=pnl.verts)
+    D += [(move(pnl, (x0 + 2.4, hy - half * .55, pz)), lp('Solarzelle', '#1d2a44', .25, .3, var=.02)), (move(box(2.26, 1.46, .04, at=(0, 0, 0)), (x0 + 2.4, hy - half * .55, pz - .03)), lp('Alu', '#b9bdc0', .4, .7))]
+    multi('Steinberghuette_Details', D, c, collide=0)
+    # outside: flag pole, firewood along the west wall, water trough with a wooden spout, bench
+    fx, fy = x1 + 1.6, y0 - 3.6; fz = Z(fx, fy)
+    O = [(cyl(.06, 7.0, at=(fx, fy, fz), seg=8, r2=.04), lp('Mast_weiss', '#e8e6e0', .5)), (ico(.09, at=(fx, fy, fz + 7.05), sub=1), lp('Gold', '#d4a83a', .3, .8)),
+         (box(.02, 1.4, .45, at=(fx, fy + .72, fz + 6.4)), lp('Fahne_gruen', '#2f7a3e', .9)), (box(.021, 1.4, .45, at=(fx, fy + .72, fz + 5.95)), lp('Fahne_weiss', '#f0eee6', .9))]
+    O += d_woodpile(x0 - .55, hy + .4, FACE['W'], L=4.0, H=1.4)
+    tx_, ty_ = x0 - 1.2, y1 + 1.6; tz_ = Z(tx_, ty_)
+    O += [(box(2.0, .7, .55, at=(tx_, ty_, tz_ - .05), bevel_w=.03), wood_d), (box(1.84, .54, .05, at=(tx_, ty_, tz_ + .42)), lp('Wasser_Trog', '#5a8aa6', .1, var=0)),
+          (box(.18, .18, 1.3, at=(tx_ - 1.1, ty_, tz_ - .05)), wood_d), (box(.08, .5, .08, at=(tx_ - 1.1, ty_ + .0, tz_ + 1.05), rz=0), wood),
+          (box(.03, .03, .4, at=(tx_ - 1.1, ty_ + .25, tz_ + .62)), lp('Wasser_Trog', '#5a8aa6', .1, var=0))]
+    O += d_bench(x0 + 2.4, y1 + .6, 0.0)
+    multi('Steinberghuette_Hof', O, c)
     # interior: bunk platform (north-west), table + benches, tiled stove (north-east), cupboard (west), Henning by the table
     P = [(box(4.4, 1.9, .5, at=(x0 + T + 2.2, y1 - T - .95, FL)), wood_d), (box(4.3, 1.8, .12, at=(x0 + T + 2.2, y1 - T - .95, FL + .5)), lp('Matratze', '#8a7a5a', .9)),
          ]

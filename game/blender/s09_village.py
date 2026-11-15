@@ -47,9 +47,10 @@ def build(c):
                                           (box(.3, .45, .12, at=(x - side * .35, y, 4.2)), lp('Mast', '#3d4246', .5, .6)), (box(.26, .4, .03, at=(x - side * .35, y, 4.18)), lp('Lampenglas', '#e6e2c8', .3))], c)
 
     # ------------------------------------------------------------ houses
-    def house(name, x0, y0, x1, y1, wall_m, roof, door, windows, label, enter=True, locked=None, ruin=False, chimney=True, sign=None):
+    def house(name, x0, y0, x1, y1, wall_m, roof, door, windows, label, enter=True, locked=None, ruin=False, chimney=True, sign=None, nr=None, yard=1):
         """Axis-aligned house on a 0.3 m stone plinth; walls 2.6 m, gable roof along the long side. door / windows: (side 'W'|'E'|'S'|'N', offset)."""
         z = Z((x0 + x1) / 2, (y0 + y1) / 2); FL = z + .3; T = .25; H = 2.6
+        if nr is None and name[6:].isdigit(): nr = int(name[6:])
         P = [(box(x1 - x0 + .1, y1 - y0 + .1, .3, at=((x0 + x1) / 2, (y0 + y1) / 2, z - .02), bevel_w=.02), stone_d),
              (box(x1 - x0 - 2 * T, y1 - y0 - 2 * T, .03, at=((x0 + x1) / 2, (y0 + y1) / 2, FL - .02)), plank)]
         sides = {'S': ((x0, y0 + T / 2), (x1, y0 + T / 2)), 'N': ((x0, y1 - T / 2), (x1, y1 - T / 2)),
@@ -75,6 +76,8 @@ def build(c):
                     s, w = o[0], o[1]
                     if abs(a[1] - b[1]) < 1e-6:
                         cx = a[0] + s + w / 2; out = -1 if sd == 'S' else 1
+                        P += d_sill((cx, a[1] + out * T / 2, FL + .85), FACE[sd], w) + d_glazing((cx, a[1] + out * .015, FL + .9), FACE[sd], w - .1, 1.0)
+                        P += d_curtains((cx, a[1], FL + .9), FACE[sd], w - .1, 1.0, fabric[int(abs(cx * 3)) % 3])
                         P.append((box(w - .1, .02, 1.0, at=(cx, a[1], FL + .9)), gl))
                         for k in (-1, 1): P.append((box(.5, .04, 1.1, at=(cx + k * (w / 2 + .27), a[1] + out * (T / 2 + .03), FL + .85)), green_s))
                         P.append((box(w, .22, .18, at=(cx, a[1] + out * (T / 2 + .12), FL + .68)), wood_d))
@@ -82,6 +85,8 @@ def build(c):
                         P.append((ico(.13, at=(cx + .2, a[1] + out * (T / 2 + .12), FL + .9), sub=1, jit=.3, seed=int(cx * 9)), lp('Busch', '#4f7a34', .9, var=.1)))
                     else:
                         cy = a[1] + s + w / 2; out = -1 if sd == 'W' else 1
+                        P += d_sill((a[0] + out * T / 2, cy, FL + .85), FACE[sd], w) + d_glazing((a[0] + out * .015, cy, FL + .9), FACE[sd], w - .1, 1.0)
+                        P += d_curtains((a[0], cy, FL + .9), FACE[sd], w - .1, 1.0, fabric[int(abs(cy * 3)) % 3])
                         P.append((box(.02, w - .1, 1.0, at=(a[0], cy, FL + .9)), gl))
                         for k in (-1, 1): P.append((box(.04, .5, 1.1, at=(a[0] + out * (T / 2 + .03), cy + k * (w / 2 + .27), FL + .85)), green_s))
                         P.append((box(.22, w, .18, at=(a[0] + out * (T / 2 + .12), cy, FL + .68)), wood_d))
@@ -102,6 +107,16 @@ def build(c):
                 for yy, d in ((y0, T), (y1 - T, T)):
                     P.append((solid([(x0, yy, zt), (x1, yy, zt), (xm, yy, zt + (x1 - x0) / 2 * math.tan(math.radians(40)))], (0, d, 0)), wall_m))
                 P.append((box(.2, y1 - y0 + 2 * ov, .2, at=(xm, (y0 + y1) / 2, zt + rh - ov * .84 + .02)), roof))
+                for sgn in (-1, 1):
+                    P += d_gutter((xm + sgn * half, y0 - ov), (xm + sgn * half, y1 + ov), zt - ov * .84, out=(sgn, 0), pipes=(0, 1) if yard else (), wall=ov)
+                    P += d_roof_courses((xm + sgn * half, zt - ov * .84, (y0 + y1) / 2), (xm, zt + rh - ov * .84, 0), y1 - y0 + 2 * ov, 'y', mat=roof)
+                gh = (x1 - x0) / 2 * math.tan(math.radians(40))
+                for yy, o in ((y0, -1), (y1, 1)):          # half-timbered gables: king post, collar beam, two struts
+                    P += [(box(.16, .06, gh - .25, at=(xm, yy + o * .02, zt)), timber), (box((x1 - x0) * .55, .06, .14, at=(xm, yy + o * .02, zt + gh * .42)), timber)]
+                    for sx in (-1, 1):
+                        st = box(.14, .06, gh * .62, at=(0, 0, 0)); bmesh.ops.rotate(st, cent=(0, 0, 0), matrix=Matrix.Rotation(-sx * .62, 3, 'Y'), verts=st.verts)
+                        P.append((move(st, (xm + sx * (x1 - x0) * .2, yy + o * .02, zt + .02)), timber))
+                ridge = (xm, (y0 + y1) / 2 - (y1 - y0) * .25, zt + rh - ov * .84 + .2)
             else:
                 half = (y1 - y0) / 2 + ov; rh = half * math.tan(math.radians(40)); ym = (y0 + y1) / 2
                 for s in (-1, 1):
@@ -110,10 +125,21 @@ def build(c):
                 for xx in (x0, x1 - T):
                     P.append((solid([(xx, y0, zt), (xx, y1, zt), (xx, ym, zt + (y1 - y0) / 2 * math.tan(math.radians(40)))], (T, 0, 0)), wall_m))
                 P.append((box(x1 - x0 + 2 * ov, .2, .2, at=((x0 + x1) / 2, ym, zt + rh - ov * .84 + .02)), roof))
+                for sgn in (-1, 1):
+                    P += d_gutter((x0 - ov, ym + sgn * half), (x1 + ov, ym + sgn * half), zt - ov * .84, out=(0, sgn), pipes=(0, 1) if yard else (), wall=ov)
+                    P += d_roof_courses((ym + sgn * half, zt - ov * .84, (x0 + x1) / 2), (ym, zt + rh - ov * .84, 0), x1 - x0 + 2 * ov, 'x', mat=roof)
+                gh = (y1 - y0) / 2 * math.tan(math.radians(40))
+                for xx, o in ((x0, -1), (x1, 1)):
+                    P += [(box(.06, .16, gh - .25, at=(xx + o * .02, ym, zt)), timber), (box(.06, (y1 - y0) * .55, .14, at=(xx + o * .02, ym, zt + gh * .42)), timber)]
+                    for sx in (-1, 1):
+                        st = box(.06, .14, gh * .62, at=(0, 0, 0)); bmesh.ops.rotate(st, cent=(0, 0, 0), matrix=Matrix.Rotation(sx * .62, 3, 'X'), verts=st.verts)
+                        P.append((move(st, (xx + o * .02, ym + sx * (y1 - y0) * .2, zt + .02)), timber))
+                ridge = ((x0 + x1) / 2 - (x1 - x0) * .25, ym, zt + rh - ov * .84 + .2)
             if chimney:
                 cx_, cy_ = x0 + (x1 - x0) * .7, y0 + (y1 - y0) * .3
                 P.append((box(.5, .5, 3.4, at=(cx_, cy_, zt), bevel_w=.02), lp('Ziegel_Kamin', '#8a4a38', .9, var=.08)))
-                P.append((box(.6, .6, .08, at=(cx_, cy_, zt + 3.4)), stone_d))
+                P.append((box(.6, .6, .08, at=(cx_, cy_, zt + 3.4)), stone_d)); P += d_chimney_cap(cx_, cy_, zt + 3.48)
+            if yard and R.random() < .6: P += d_aerial(ridge, R.uniform(1.3, 1.9))
         multi(name, P, c, **({} if ruin else {'indoor': [x0, y0, x1, y1, round(z - .5, 2), round(FL + 3.2, 2)]}))
         if door:
             sd, off = door; a, b = sides[sd]
@@ -131,6 +157,30 @@ def build(c):
             # door step
             if sd == 'E': obj(name + '_Stufe', box(.5, 1.3, .15, at=(x1 + .25, hinge[1] + .47, z)), stone, c)
             if sd == 'W': obj(name + '_Stufe', box(.5, 1.3, .15, at=(x0 - .25, hinge[1] + .47, z)), stone, c)
+            if not ruin:
+                # door: canopy, lamp, house number, letter box (one object, no collision – it hangs above head height or flat on the wall)
+                if sd in 'EW': wx = x1 if sd == 'E' else x0; dm = hinge[1] + .47; at_ = lambda u, h: (wx, dm + u, FL + h)
+                else: wy = y0 if sd == 'S' else y1; dm = hinge[0] + .47; at_ = lambda u, h: (dm + u, wy, FL + h)
+                Dd = d_canopy(at_(0, 2.55), FACE[sd]) + d_wall_lamp(at_(-.95 if sd in 'WS' else .95, 2.05), FACE[sd])
+                if nr: Dd += d_house_no(at_(.95 if sd in 'WS' else -.95, 2.15), FACE[sd], nr) + d_mailbox(at_(.95 if sd in 'WS' else -.95, .95), FACE[sd])
+                multi(name + '_Eingang', Dd, c, collide=0)
+        if yard and not ruin:
+            # yard: firewood under the back eaves, rain barrel at a back downpipe, bins at the side, pots next to the door
+            Y = []
+            back = {'E': 'W', 'W': 'E', 'S': 'N', 'N': 'S'}[door[0]] if door else 'N'
+            if back in 'EW':
+                bx_ = (x0 - .5) if back == 'W' else (x1 + .5); Y += d_woodpile(bx_ + (-.05 if back == 'W' else .05), (y0 + y1) / 2, FACE[back], L=min(3.0, y1 - y0 - 3), H=1.25)
+                Y += d_rain_barrel(bx_ - (.15 if back == 'W' else -.15), y0 + .2)
+                sx_ = x1 - 1.2 if back == 'W' else x0 + 1.2; Y += d_bins(sx_, y1 + .6, 0.0) if R.random() < .5 else d_bins(sx_, y0 - .6, math.pi)
+            else:
+                by_ = (y0 - .5) if back == 'S' else (y1 + .5); Y += d_woodpile((x0 + x1) / 2, by_, FACE[back], L=min(3.0, x1 - x0 - 3), H=1.25)
+                Y += d_rain_barrel(x0 + .2, by_)
+            if door:
+                sd = door[0]
+                if sd == 'E': Y += d_pots(x1 + .45, hinge[1] + 1.55, 2, seed=int(y0))
+                if sd == 'W': Y += d_pots(x0 - .45, hinge[1] - .55, 2, seed=int(y0))
+            if R.random() < .5 and back in 'EW': Y += d_bike((x0 - .35) if back == 'W' else (x1 + .35), y1 - 1.2, FACE[back] + math.pi)
+            multi(name + '_Hof', Y, c)
         if sign:
             txt, sd = sign; a, b = sides[sd]; ym = (y0 + y1) / 2
             x = x1 + .02 if sd == 'E' else x0 - .02; rz = math.pi / 2 if sd == 'E' else -math.pi / 2
@@ -187,7 +237,7 @@ def build(c):
     pickup('Haus_3_Brot', [(box(.25, .14, .1, at=(-76.1, 161.5, FL + .77), bevel_w=.04, seg=2), lp('Brot', '#b07a3c', .8))], 'fladenbrot', 'Brot')
 
     # H2 village shop (west, y 168 … 180)
-    FL = house('Dorfladen', -79.5, 168, WEST_FRONT, 180, plaster[1], roof_m[1], ('E', 5.4), [('E', 1.4), ('E', 8.4), ('N', 3.0)], 'Ladentür', sign=('DORFLADEN', 'E'))
+    FL = house('Dorfladen', -79.5, 168, WEST_FRONT, 180, plaster[1], roof_m[1], ('E', 5.4), [('E', 1.4), ('E', 8.4), ('N', 3.0)], 'Ladentür', sign=('DORFLADEN', 'E'), nr=5)
     for k, y in enumerate((170.2, 172.6, 175.0)):
         P = [(box(4.6, .5, .08, at=(-75.8, y, FL)), wood_d)] + [(box(4.6, .5, .03, at=(-75.8, y, FL + .45 + .45 * i)), wood) for i in range(4)] + [(box(.05, .5, 1.85, at=(-75.8 + s * 2.28, y, FL)), wood_d) for s in (-1, 1)]
         multi(f'Dorfladen_Regal_{k}', P, c)
@@ -440,3 +490,60 @@ def build(c):
         return out
     multi('Kurt', person(-71.15, 177.2, .3, 0, lp('Hemd_kariert', '#8a3b32', .9, var=.12), lp('Schuerze', '#3f6a4a', .8)), c, interact='trade', label='Kurt (Händler)', collide=1)
     spot('ziel_dorf', (VILLAGE[0] + 14, VILLAGE[1], .2), quest='dorf')
+
+    # ------------------------------------------------------------ more detail: chapel gutters + tile courses, churchyard, barn weathervane,
+    #                                                              hydrants, manhole covers, workshop yard (detail kit d_* from deco.py)
+    cx0, cy0, cx1, cy1 = -54.0, 194.0, -42.0, 201.0; half = (cy1 - cy0) / 2 + .4; cym = (cy0 + cy1) / 2; czt = .3 + 4.2; crh = half * math.tan(math.radians(48))
+    D = []
+    for sgn in (-1, 1):
+        D += d_gutter((cx0 - .3, cym + sgn * half), (cx1 + .4, cym + sgn * half), czt - .4, out=(0, sgn), pipes=(1,), wall=.4)
+        D += d_roof_courses((cym + sgn * half, czt - .4, (cx0 + cx1) / 2 + .05), (cym, czt + crh - .4, 0), cx1 - cx0 + .7, 'x', thick=.15, step=.34, mat=roof_m[2])
+    for bx_ in (-50.0, -46.0):        # buttresses on the long walls
+        for by_, o in ((cy0, -1), (cy1, 1)): D.append((box(.5, .5, 2.4, at=(bx_, by_ + o * .25, .0), bevel_w=.03), stone))
+    multi('Kapelle_Details', D, c)
+    # churchyard east of the chapel: low stone wall with a gate gap, gravestones and wooden crosses, a yew
+    gx0_, gx1_, gy0_, gy1_ = -40.6, -33.0, 192.6, 203.0; W_ = []
+    for (a_, b_) in (((gx0_, gy0_), (gx1_, gy0_)), ((gx1_, gy0_), (gx1_, gy1_)), ((gx0_, gy1_), (gx1_, gy1_))):
+        L_ = math.hypot(b_[0] - a_[0], b_[1] - a_[1]); horiz = abs(a_[1] - b_[1]) < 1e-6
+        W_.append((box(L_ + .4 if horiz else .4, .4 if horiz else L_, .7, at=((a_[0] + b_[0]) / 2, (a_[1] + b_[1]) / 2, Z((a_[0] + b_[0]) / 2, (a_[1] + b_[1]) / 2) - .05), bevel_w=.04), stone_d))
+        W_.append((box(L_ + .5 if horiz else .5, .5 if horiz else L_ + .1, .08, at=((a_[0] + b_[0]) / 2, (a_[1] + b_[1]) / 2, Z((a_[0] + b_[0]) / 2, (a_[1] + b_[1]) / 2) + .65)), stone))
+    for yy in (gy0_ + 1.7, gy1_ - 1.7): W_.append((box(.4, 3.4, .7, at=(gx0_, yy, Z(gx0_, yy) - .05), bevel_w=.04), stone_d))      # west wall, gate gap in the middle
+    RG = random.Random(4711); gran = [lp('Grabstein_grau', '#8e8e8a', .8, var=.06), lp('Grabstein_dunkel', '#4c4f52', .5, var=.04), stone]
+    for i in range(3):
+        for j in range(4):
+            gx, gy = -38.8 + i * 2.2, 194.4 + j * 2.3; gz = Z(gx, gy); m = gran[RG.randrange(3)]
+            if RG.random() < .3:      # wooden cross
+                W_ += [(box(.08, .08, 1.0, at=(gx, gy, gz)), wood_d), (box(.5, .08, .08, at=(gx, gy, gz + .7)), wood_d)]
+            else:
+                W_ += [(box(.6, .14, .8 + RG.random() * .3, at=(gx, gy, gz), bevel_w=.04, seg=2), m), (box(.7, .2, .1, at=(gx, gy, gz)), m)]
+            W_ += [(box(.7, 1.4, .12, at=(gx, gy - .8, gz), bevel_w=.03), stone_d), (ico(.2, at=(gx, gy - .5, gz + .2), sub=1, jit=.3, seed=i * 9 + j), lp('Blumen', '#d6406a', .8, var=.15))]
+            if RG.random() < .5: W_.append((cyl(.05, .14, at=(gx + .2, gy - .3, gz + .12), seg=6), lp('Grablicht', '#b8322a', .4, var=.03)))
+    W_ += [(cyl(.18, 1.2, at=(-34.2, 201.6, Z(-34.2, 201.6)), seg=6), lp('Rinde', '#5a4636', .95, var=.1)), (cone(1.3, 3.8, at=(-34.2, 201.6, Z(-34.2, 201.6) + 1.0), seg=7, jit=.15, seed=5), lp('Eibe', '#2e4a2c', .9, var=.08))]
+    multi('Friedhof', W_, c)
+    # barn: corrugation on the roof, weathervane on the ridge, gutters
+    bx0_, bx1_, by0_, by1_ = -46.0, -36.0, 152.0, 164.0; bz_ = Z(-41, 158); bh = (bx1_ - bx0_) / 2 + .5; bxm = (bx0_ + bx1_) / 2; bzt = bz_ + .1 + 3.6; brh = bh * math.tan(math.radians(38))
+    D = []
+    for sgn in (-1, 1):
+        D += d_roof_courses((bxm + sgn * bh, bzt - .4, (by0_ + by1_) / 2), (bxm, bzt + brh - .4, 0), by1_ - by0_ + .8, 'y', thick=.12, step=.16, mat=lp('Wellblech_Rippe', '#6c7378', .5, .5, var=.04))
+        D += d_gutter((bxm + sgn * bh, by0_ - .4), (bxm + sgn * bh, by1_ + .4), bzt - .4, out=(sgn, 0), pipes=(1,), wall=.5)
+    vz = bzt + brh - .2
+    iron = lp('Eisen_schwarz', '#2b2c2e', .6, .5, var=.03)        # weathervane: mast, compass cross, rooster
+    D += [(cyl(.03, 1.4, at=(bxm, by1_ - 1.5, vz), seg=6), iron), (box(.9, .03, .03, at=(bxm, by1_ - 1.5, vz + .9)), iron), (box(.03, .9, .03, at=(bxm, by1_ - 1.5, vz + .9)), iron),
+          (move(prism([(-.3, 0), (.15, 0), (.3, .25), (.05, .45), (-.1, .3), (-.3, .35)], .02, y=0), (bxm, by1_ - 1.5, vz + 1.15)), iron)]
+    lei = lp('Scheune_Leiste', '#6a2a1e', .85)            # board-and-batten on the other three walls (openings left free)
+    for i in range(int((by1_ - by0_) / .6)):
+        yy = by0_ + .3 + .6 * i
+        if not (by0_ + 4.9 < yy < by0_ + 6.1): D.append((box(.05, .08, 3.6, at=(bx1_ + .02, yy, bz_ + .1)), lei))
+    for i in range(int((bx1_ - bx0_) / .6)):
+        xx = bx0_ + .3 + .6 * i; D.append((box(.08, .05, 3.6, at=(xx, by0_ - .02, bz_ + .1)), lei))
+        if not (bx0_ + 4.3 < xx < bx0_ + 5.5): D.append((box(.08, .05, 3.6, at=(xx, by1_ + .02, bz_ + .1)), lei))
+    multi('Scheune_Details', D, c, collide=0)
+    # street: hydrants on the pavement, manhole covers in the road, a parked bicycle at the shop
+    S_ = d_hydrant(RX + 5.45, 162.5) + d_hydrant(RX - 5.45, 194.5)
+    for y in (158.0, 176.0, 196.0, 212.0): S_ += d_manhole(RX + (1.2 if y % 2 else -1.2), y, z=.115)
+    multi('Strasse_Details', S_, c, collide=0)
+    # workshop yard: tyre stack, oil drums, old engine block on a pallet
+    Y_ = [(torus(.32, .11, at=(-48.2, 165.0 + (k // 4) * .8, GF + .11 + .22 * (k % 4)), seg=12, seg2=5, axis='Z'), lp('Reifen', '#1b1b1c', .9)) for k in range(7)]
+    Y_ += [(cyl(.3, .9, at=(-48.3, 170.5 + .65 * k, Z(-48.3, 170.5)), seg=10), lp(f'Oelfass_{k}', ('#2a5aa8', '#c42a26', '#3b6b3a')[k], .5, .3)) for k in range(2)]
+    Y_ += [(box(1.2, .8, .14, at=(-48.0, 168.0, Z(-48, 168))), lp('Palette', '#b08a5a', .9, var=.1)), (box(.7, .5, .55, at=(-48.0, 168.0, Z(-48, 168) + .14), bevel_w=.03), lp('Motorblock', '#5a5e62', .5, .6))]
+    multi('Werkstatt_Hof', Y_, c)

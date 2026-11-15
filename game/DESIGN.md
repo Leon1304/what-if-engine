@@ -83,6 +83,7 @@ Taschenlampe per Links-/Rechtsklick, mehr Munition (Säcke, Händler, Werkbank).
 - **Zweite Karte „Steinberg“:** eigene Region im selben GLB (y 900 … 1160, `s14_gebirge.py`, `js/regions.js`), per Auto über den Pass erreichbar:
   Serpentinen, Steinberghütte mit Förster Henning, Stollen mit Geröll zum Sprengen und Kristallkammer, Gipfelkreuz, Bergsee, Heustadel, Gämsen,
   Schnee statt Regen, kälter. Batches und Instanzen pro Region – die jeweils andere Karte wird nicht gezeichnet.
+- **Mehr Details (Blender, `game/blender/deco.py`):** Baukasten d_*() für Dachrinnen + Fallrohre, Ziegel-/Schindelreihen, Fachwerk-Giebel, Fensterbänke, Sprossen, Vorhänge, Vordächer, Wandlampen, Hausnummern, Briefkästen, Antennen, Regentonnen, Holzstapel, Mülltonnen, Fahrräder, Blumentöpfe, Bänke, Hydranten, Kanaldeckel, Strommasten mit Leitungen. Eingesetzt an Dorfhäusern, Kapelle (+ Friedhof), Scheune, Werkstatt, Tankstelle, Forsthaus (+ Bellos Hundehütte), Funkhütte, Mühle, Anglerhütte, Steinberghütte; Stromleitung Tankstelle → Trafohaus am Dorfeingang.
 - **Handbuch „Fundorte“:** für jeden Gegenstand, wo er liegt, wer ihn verkauft, wie man ihn herstellt oder kocht (automatisch aus Welt, Rezepten und Laden erzeugt; Test prüft, dass keiner fehlt).
 - **Inventar:** 10 Plätze in den Taschen, Rucksack 20, Großer Rucksack 28 (Werkbank), Trekkingrucksack 36 (Kurt 90 €, Steinberghütte), Expeditionsrucksack 48 (Werkbank, Stufe 7).
 - **Bello „Such!“** (H): führt zu Säcken, Kräutern, Kristallen, Schätzen. **27 Abzeichen + Statistikseite** (Handbuch, Pause-Menü).

@@ -156,6 +156,34 @@ def build(c):
     multi('Muehle', P, c, indoor=[x0, y0, x1, y1, mz - .5, FL + Hm])
     hinge = (x0 + T / 2, y0 + 2.0 + .03, FL)
     multi('Muehle_Tuer', [(move(box(.06, .95, 2.15, at=(0, .47, 0)), hinge), lp('Haustuer', '#5e3a22', .7)), (move(box(.08, .04, .14, at=(-.03, .8, 1.0)), hinge), steel)], c, pivot=hinge, interact='door', angle=math.radians(-100), label='Mühlentür')
+    # mill details: quoins, glazed windows with shutters, stone lintel, date stone, tile courses, gutters; outside millstone, hand cart, bench, woodpile
+    D = []; quoin = lp('Eckquader', '#c8bea9', .9, var=.06)
+    for (qx, qy) in ((x0, y0), (x1, y0), (x0, y1), (x1, y1)):
+        for k in range(7):
+            big = k % 2 == 0; sxq = .55 if big else .3; syq = .3 if big else .55
+            D.append((box(sxq + .04, syq + .04, .42, at=(qx + (sxq / 2 - .02 if qx == x0 else -sxq / 2 + .02), qy + (syq / 2 - .02 if qy == y0 else -syq / 2 + .02), FL + k * .45), bevel_w=.02), quoin))
+    gl_m = glass('Glas_Muehle', '#a9c3cc', .35); shut = lp('Fensterladen_rot', '#7a3326', .8, var=.06); fr = lp('Fensterrahmen_weiss', '#e6e2d8', .6)
+    # east window (wall x1, offset 1.9 from y0, 1.0 wide, 1.2 … 2.2) and south window (wall y0, offset 2.0 from x0 + T, .9 wide, 1.2 … 2.1)
+    ey = y0 + 1.9 + .5; D += [(box(.03, .9, .9, at=(x1 - T / 2, ey, FL + 1.25)), gl_m)] + d_glazing((x1 + .0, ey, FL + 1.25), FACE['E'], .9, .9) + d_sill((x1, ey, FL + 1.2), FACE['E'], 1.0)
+    D += [(box(.04, .5, 1.05, at=(x1 + .03, ey + k * .77, FL + 1.18)), shut) for k in (-1, 1)] + [(box(.12, 1.2, .2, at=(x1 + .02, ey, FL + 2.2)), quoin)]
+    sx_ = x0 + T + 2.0 + .45; D += [(box(.8, .03, .8, at=(sx_, y0 + T / 2, FL + 1.25)), gl_m)] + d_glazing((sx_, y0, FL + 1.25), FACE['S'], .8, .8) + d_sill((sx_, y0, FL + 1.2), FACE['S'], .9)
+    D += [(box(.45, .04, 1.0, at=(sx_ + k * .7, y0 - .03, FL + 1.15)), shut) for k in (-1, 1)] + [(box(1.1, .12, .2, at=(sx_, y0 - .02, FL + 2.1)), quoin)]
+    D += [(box(.14, 1.3, .25, at=(x0 - .02, y0 + 2.0 + .5, FL + 2.2)), quoin), (box(.06, .7, .45, at=(x0 - .04, y0 + 2.5, FL + 2.55)), quoin),
+          (text_bm('1789', .14, at=(x0 - .08, y0 + 2.5, FL + 2.68), rz=-math.pi / 2, depth=.01), lp('Schrift_dunkel', '#3a342c', .8))]
+    for s_ in (-1, 1):
+        D += d_roof_courses((my + s_ * half, zt - .36, mx), (my, zt + rh - .36, 0), 6.8, 'x', thick=.14, step=.3, mat=roof)
+        D += d_gutter((x0 - .4, my + s_ * half), (x1 + .4, my + s_ * half), zt - .36, out=(0, s_), pipes=(0,), wall=.4)
+    multi('Muehle_Details', D, c, collide=0)
+    O = d_bench(mx - .6, y0 - .7, math.pi) + d_woodpile(mx - .4, y1 + .55, 0.0, L=3.0, H=1.1)
+    msx, msy = x0 - .45, y1 - 1.0; msz = Z(msx, msy)      # old millstone leaning on the wall
+    ms = cyl(.75, .25, at=(0, 0, 0), seg=14, axis='X'); bmesh.ops.rotate(ms, cent=(0, 0, 0), matrix=Matrix.Rotation(-.18, 3, 'Y'), verts=ms.verts); O.append((move(ms, (msx - .1, msy, msz + .74)), stone))
+    O.append((cyl(.18, .27, at=(msx - .12, msy, msz + .74), seg=8, axis='X'), stone_d))
+    hcx, hcy = mx - 4.6, my + 2.6; hcz = Z(hcx, hcy)     # hand cart with flour sacks
+    O += [(box(1.4, .8, .08, at=(hcx, hcy, hcz + .55)), wood), (box(1.4, .05, .3, at=(hcx, hcy - .4, hcz + .6)), wood_d), (box(1.4, .05, .3, at=(hcx, hcy + .4, hcz + .6)), wood_d),
+          (torus(.42, .05, at=(hcx, hcy - .48, hcz + .42), seg=12, seg2=4, axis='Y'), wood_d), (torus(.42, .05, at=(hcx, hcy + .48, hcz + .42), seg=12, seg2=4, axis='Y'), wood_d),
+          (box(1.2, .05, .05, at=(hcx - 1.2, hcy - .3, hcz + .55)), wood), (box(1.2, .05, .05, at=(hcx - 1.2, hcy + .3, hcz + .55)), wood)]
+    for k in range(3): O.append((ico(.28, at=(hcx - .4 + .4 * k, hcy, hcz + .82), sub=2, jit=.1, seed=1250 + k, sz=1.1), flour))
+    multi('Muehle_Hof', O, c)
     WH = []; wr = 2.0; axle = (x1 + 1.6, my - .6, FL + 1.9)
     for side in (-.35, .35): WH.append((torus(wr, .08, at=(side, 0, 0), seg=16, seg2=4, axis='X'), wood_d))
     for i in range(12):

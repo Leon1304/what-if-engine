@@ -19,6 +19,9 @@ REPO = os.path.dirname(GAME)
 _h = os.path.join(REPO, 'tools', 'blender_asset.py')
 exec(compile(open(_h).read(), _h, 'exec'), globals())      # box, cyl, torus, prism, recess, bevel, dome, jitter, rotz, move, rect_pts, arch_pts, _lin …
 
+_d = os.path.join(os.path.dirname(os.path.abspath(globals().get('__file__', 'game/blender/core.py'))), 'deco.py')
+exec(compile(open(_d).read(), _d, 'exec'), globals())      # detail kit d_*(): gutters, lamps, mailboxes, woodpiles, bins, power lines …
+
 SCENE = 'Spielmap'
 
 # ---------------------------------------------------------------- scene / collections

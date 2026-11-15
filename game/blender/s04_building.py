@@ -156,3 +156,21 @@ def build(c):
     obj('Hintertuer_Dach', box(1.0, 1.8, .12, at=(X1 + .5, Y0 + 5.9, F + 2.5)), metal, c, collide=0)
     obj('Wandlampe_hinten', box(.15, .25, .2, at=(X1 + .08, Y0 + 7.1, F + 2.2)), glow('Leuchte_warm', '#ffd9a0', 5), c, collide=0, glow_group='aussen')
     light('hinten', (X1 + .4, Y0 + 7.1, F + 2.1), '#ffd9a0', 35, group='aussen')
+
+    # ---- more detail in front of the shop: ice-cream freezer, charcoal + firewood pallet, posters on the glass, bins at the back, ladder on the wall
+    ice = [(box(1.3, .7, .85, at=(X0 - .55, -6.2, F), bevel_w=.04), lp('Truhe_weiss', '#f2f3f0', .4, var=.02)), (box(1.26, .66, .05, at=(X0 - .55, -6.2, F + .85)), glass('Glas_Truhe', '#cfe3ea', .35)),
+           (box(1.32, .72, .06, at=(X0 - .55, -6.2, F + .9)), lp('Truhe_blau', '#2a63b8', .5, var=.02)), (box(.02, .9, .3, at=(X0 - .92, -6.2, F + .35)), lp('Truhe_blau', '#2a63b8', .5, var=.02)),
+           (text_bm('EIS', .16, at=(X0 - .94, -6.2, F + .4), rz=-math.pi / 2, depth=.01), lp('Weiss_glanz', '#f4f4f1', .3))]
+    multi('Eistruhe', ice, c)
+    pal = [(box(1.2, .8, .14, at=(X0 - .6, 6.6, F)), lp('Palette', '#b08a5a', .9, var=.1))]
+    for k in range(6): pal.append((box(.38, .55, .28, at=(X0 - .85 + (k % 3) * .4, 6.6, F + .14 + (k // 3) * .28), bevel_w=.03), (lp('Grillkohle', '#2b2b2b', .8), lp('Brennholz_Netz', '#c9a273', .9))[k % 2]))
+    pal += [(box(.3, .02, .2, at=(X0 - .6, 6.19, F + .9)), lp('Schild_gelb', '#f2c230', .5)), (text_bm('je 4,99 €', .06, at=(X0 - .6, 6.17, F + .96), depth=.005), blk)]
+    multi('Palette_Grillkohle', pal, c)
+    post = []
+    for k, (y, col, txt) in enumerate(((-8.2, '#c42a26', 'KAFFEE'), (-5.0, '#2f6b3a', 'BRÖTCHEN'), (5.0, '#e8b923', 'LOTTO'), (8.2, '#2a63b8', 'AUTOWÄSCHE'))):
+        post += [(box(.01, 1.0, .7, at=(X0 + .1, y, F + 1.0)), lp(f'Plakat_{k}', col, .6, var=.02)),
+                 (text_bm(txt, .09 if len(txt) > 8 else .14, at=(X0 + .09, y, F + 1.5), rz=-math.pi / 2, depth=.004), lp('Weiss_glanz', '#f4f4f1', .3))]
+    multi('Plakate', post, c, collide=0)
+    multi('Tonnen_Tankstelle', d_bins(X1 + .7, -8.0, -math.pi / 2, cols=('tonne_g', 'tonne_g', 'tonne_b', 'tonne_br')), c)
+    lad = [(box(.06, .06, 4.6, at=(X1 + .12, 3.7 + s * .22, .05)), metal) for s in (-1, 1)] + [(box(.04, .44, .04, at=(X1 + .12, 3.7, .35 + .3 * k)), metal) for k in range(14)]
+    multi('Leiter_Dach', lad, c, collide=0)
