@@ -4,6 +4,8 @@
 //   Cabin: four stages (foundation, walls, roof, fireplace) – E at the site adds the next stage; later three extensions (side room,
 //   veranda, workshop) that need levels 3 / 5 / 7.
 //   Trees: E with the axe chops (6 hits, 3 with saw or pro axe) → the tree falls (animated), leaves a stump and a log; E on the log → trunks.
+//   Stumps do not block building – whatever you build covers them. A stump nothing is built on grows back: after a day a sapling sprouts,
+//   two days later (faster in spring / summer, not in winter) the tree stands again and can be felled once more (S.felled[name].w / .g).
 //   Fields, chest/shelf storage, rain barrel, trap (rabbits), drying rack, stove, workbench (more recipes nearby), bed (sleep),
 //   lights (torch holder, lantern, solar lamp, flood light), motion sensor, solar charger, fences + gate (animals cannot pass).
 // Models are Blender templates (bp_*, game/blender/s11_build.py); everything here is saved in the game state (Build.save / load).
@@ -19,6 +21,8 @@ const box = new THREE.Box3(), mat4 = new THREE.Matrix4(), mat5 = new THREE.Matri
 const ghostOk = new THREE.MeshBasicMaterial({ color: '#6fe07a', transparent: true, opacity: .45, depthWrite: false });
 const ghostBad = new THREE.MeshBasicMaterial({ color: '#ff5a4a', transparent: true, opacity: .45, depthWrite: false });
 const STORE = { kiste: 20, regal: 12, kuehlbox: 12 }, WATER_MAX = 8, FH = .45;
+const REGROW_WAIT = 24, REGROW_H = 48;        // game hours: stump → sapling, sapling → full tree (× season growth)
+const m4a = new THREE.Matrix4(), m4b = new THREE.Matrix4();
 // cabin rooms (local x0, z0, x1, z1 in three axes: z = −Blender y) per extension level: main room, side room, veranda roof, workshop roof
 const ROOMS = [[-2.05, -1.75, 2.05, 1.75, 'in'], [2.3, -1.75, 5.85, 1.75, 'in'], [-2.3, 2.0, 6.1, 4.2, 'roof'], [-5.6, -2.0, -2.3, 2.0, 'roof']];
 // light structures: colour, power, when it shines, light group (game.updateLights)
@@ -35,7 +39,7 @@ export class Build {
   constructor(game) {
     this.g = game; this.W = game.W; this.scene = game.scene;
     this.list = []; this.ghost = null; this.bp = null; this.rot = 0; this.valid = false; this.falling = []; this.logs = []; this.uid = 1;
-    this.chest = null; this.cat = 'bau'; this.alarmT = 0;
+    this.chest = null; this.cat = 'bau'; this.alarmT = 0; this.stumps = new Map(); this.regrowT = 0;
   }
   // creative mode (game.creative): every plan, no level, no tools, no material
   lvl() { return this.g.creative ? 99 : this.g.progress.level; }
@@ -103,6 +107,7 @@ export class Build {
     if (hi - lo > (bp.id === 'huette' || bp.ext ? 1.1 : bp.id === 'feld' ? .45 : .6)) return 'Der Boden ist hier zu uneben.';
     const R = Math.hypot(w, d) / 2;
     for (const t of W.treesNear(p.x, p.z)) {
+      if (t.kind === 'stumpf') continue;                  // stumps disappear under whatever you build
       v1.set(t.x - p.x, 0, t.z - p.z).applyAxisAngle(up, -r);
       if (Math.abs(v1.x) < w / 2 + t.r && Math.abs(v1.z) < d / 2 + t.r) return 'Ein Baum steht im Weg – fäll ihn erst (Axt).';
     }
@@ -144,10 +149,10 @@ export class Build {
     this.pay(cost);
     const full = g.creative && bp.stages;          // creative: the cabin stands complete at once
     const s = this.make({ type: bp.id, x: this.ghostPos.x, y: this.ghostPos.y, z: this.ghostPos.z, rot: this.rot, stage: full ? 4 : 1 });
-    if (full) { g.S.flags.cabin = 1; g.audio.sfx('build'); g.ui.toast('🛖 Blockhütte steht (Kreativ-Modus). E an der Hütte: ausbauen.', 'good'); this.cancel(); g.save(); return s; }
+    if (full) { g.S.flags.cabin = 1; g.audio.sfx('build'); g.ui.toast('🛖 Blockhütte steht (Kreativ-Modus). E an der Hütte: ausbauen.', 'good'); this.cancel(); this.regrow(0, 0); g.save(); return s; }
     g.audio.sfx('build'); g.progress.add(bp.stages ? 30 : 15, bp.name); g.progress.stat('built');
     g.ui.toast(bp.stages ? `🔨 ${bp.stages[0].name} steht. Nächster Abschnitt: ${bp.stages[1].name} (E an der Baustelle).` : `🔨 ${bp.name} gebaut.`, 'good');
-    g.S.flags.built = 1; this.cancel(); g.save(); return s;
+    g.S.flags.built = 1; this.cancel(); this.regrow(0, 0); g.save(); return s;
   }
 
   // ---------------------------------------------------------------- structures
@@ -233,7 +238,7 @@ export class Build {
     const add = c => { for (const [k, n] of Object.entries(c)) back[k] = (back[k] || 0) + (GADGETS.includes(k) ? n : Math.floor(n / 2)); };
     if (bp.stages) { bp.stages.slice(0, s.stage).forEach(st => add(st.cost)); bp.ext.slice(0, s.ext).forEach(e => add(e.cost)); } else add(bp.cost);
     for (const [k, n] of Object.entries(back)) if (n) g.add(k, n, true);
-    this.remove(s); g.audio.sfx('chop'); g.ui.toast(`🔨 ${bp.name} abgebaut. ${bp.cat === 'licht' || bp.cat === 'nutz' ? 'Du hast es wieder eingepackt.' : 'Ein Teil des Materials ist zurück.'}`); g.save();
+    this.remove(s); this.regrow(0, 0); g.audio.sfx('chop'); g.ui.toast(`🔨 ${bp.name} abgebaut. ${bp.cat === 'licht' || bp.cat === 'nutz' ? 'Du hast es wieder eingepackt.' : 'Ein Teil des Materials ist zurück.'}`); g.save();
   }
   shelter(p) { const r = this.room(p); if (r) return r.s; return this.list.find(s => s.type === 'unterstand' && this.inLeanTo(s, p)) || null; }
   indoor(p) { return this.room(p, ['in']); }
@@ -308,7 +313,7 @@ export class Build {
       if (!g.has('hammer') && !g.creative) { A.sfx('error'); return g.ui.toast('Du brauchst einen Hammer.', 'warn'); }
       if (!this.hasCost(e.cost)) { A.sfx('error'); return g.ui.toast(`Für „${e.name}“ fehlt: ${this.costText(e.cost)}`, 'warn'); }
       const why = this.check(this.extPos(s, e), s.rot, { id: 'ext', size: e.size, ext: 1 }, s, true); if (why) { A.sfx('error'); return g.ui.toast(`${e.name}: ${why}`, 'warn'); }
-      this.pay(e.cost); s.ext++; const open = s.door?.target; this.removeDoor(s);
+      this.pay(e.cost); s.ext++; this.regrow(0, 0); const open = s.door?.target; this.removeDoor(s);
       this.refresh(s, { doorOpen: open }); A.sfx('build'); g.progress.add(80, e.name); g.ui.toast(`🏡 ${e.name} fertig!`, 'good'); g.save(); return;
     }
     if (s.type === 'feld') {
@@ -376,7 +381,10 @@ export class Build {
     const base = new THREE.Vector3(t.x, t.y, t.z);
     g.S.felled[t.name] = g.S.felled[t.name] || { rot: Math.atan2(-dir.z, dir.x), left: t.kind === 'Totholz' ? 2 : 3 };
     const rec = g.S.felled[t.name];
-    const st = clone(W.bp.stumpf); st.position.copy(base); this.scene.add(st); W.addTree({ x: t.x, z: t.z, y: t.y, r: .34, kind: 'stumpf', name: t.name + '_stumpf', parts: [] });
+    rec.w ??= 0; rec.g ??= 0;
+    const st = clone(W.bp.stumpf); st.position.copy(base); this.scene.add(st); const entry = { x: t.x, z: t.z, y: t.y, r: .34, kind: 'stumpf', name: t.name + '_stumpf', parts: [] }; W.addTree(entry);
+    this.stumps.set(t.name, { t, mesh: st, entry, shown: true }); t.hits = 0;
+    if (rec.g > 0) this.growVisual(t, rec.g);
     if (animate) {
       const piv = new THREE.Group(); piv.position.copy(base); this.scene.add(piv); piv.updateMatrixWorld(true);
       const inv = piv.matrixWorld.clone().invert();
@@ -400,6 +408,42 @@ export class Build {
     if (L.left <= 0) { this.scene.remove(L.obj); this.W.removeCollider(L.col); this.logs.splice(this.logs.indexOf(L), 1); }
   }
 
+  // ---------------------------------------------------------------- stumps under buildings, trees growing back
+  covered(x, z) {
+    for (const s of this.list) {
+      const bp = bpOf(s.type), areas = [[s.x, s.z, ...(bp.size || [1, 1])]];
+      if (s.type === 'huette') for (const e of bp.ext.slice(0, s.ext || 0)) { const c = this.extPos(s, e); areas.push([c.x, c.z, ...e.size]); }
+      for (const [cx, cz, w, d] of areas) { v1.set(x - cx, 0, z - cz).applyAxisAngle(up, -s.rot); if (Math.abs(v1.x) < w / 2 + .2 && Math.abs(v1.z) < d / 2 + .2) return true; }
+    }
+    return false;
+  }
+  // the stump: visible and solid only while nothing is built over it and no sapling grows there
+  setStump(st, on) {
+    if (st.shown === on) return; st.shown = on; st.mesh.visible = on;
+    if (on) this.W.addTree(st.entry); else this.W.removeTree(st.entry);
+  }
+  // the tree's instances scaled around its foot (g 0 … 1: sapling … full size)
+  growVisual(t, gr) {
+    const k = .12 + .88 * gr; m4a.makeTranslation(t.x, t.y, t.z).multiply(m4b.makeScale(k, k, k)).multiply(m4b.makeTranslation(-t.x, -t.y, -t.z));
+    for (const p of t.parts) { p.im.setMatrixAt(p.i, m4b.copy(m4a).multiply(p.m)); p.im.instanceMatrix.needsUpdate = true; }
+  }
+  regrow(hours, grow) {
+    const g = this.g, P = g.P;
+    for (const [name, st] of this.stumps) {
+      const rec = g.S.felled[name], t = st.t; if (!rec) continue;
+      const cov = this.covered(t.x, t.z);
+      this.setStump(st, !cov && !(rec.g > 0));
+      if (cov || !hours || !grow) continue;
+      if (rec.w < REGROW_WAIT) { rec.w = Math.min(REGROW_WAIT, rec.w + hours); if (rec.w < REGROW_WAIT) continue; }
+      rec.g = Math.min(1, rec.g + hours * grow / REGROW_H); this.setStump(st, false); this.growVisual(t, rec.g);
+      if (rec.g < 1 || Math.hypot(P.pos.x - t.x, P.pos.z - t.z) < t.r + 1.2) continue;
+      // grown: the tree stands again (the old log has rotted away)
+      delete g.S.felled[name]; this.stumps.delete(name); this.scene.remove(st.mesh); this.W.removeTree(st.entry);
+      for (const L of this.logs.filter(L => L.t === t)) { this.scene.remove(L.obj); this.W.removeCollider(L.col); this.logs.splice(this.logs.indexOf(L), 1); }
+      this.growVisual(t, 1); for (const p of t.parts) p.im.computeBoundingSphere(); t.hits = 0; this.W.addTree(t);
+    }
+  }
+
   // ---------------------------------------------------------------- per frame
   update(dt, hours) {
     const g = this.g; this.updateGhost();
@@ -410,6 +454,8 @@ export class Build {
     }
     const rain = g.sky.rainAmount, dark = g.sky.darkness(g.S.time), winter = g.seasons?.season === 'Winter', grow = g.seasons?.growth ?? 1;
     this.alarmT -= dt;
+    this.regrowH = (this.regrowH || 0) + hours; this.regrowT -= dt;
+    if (this.regrowT < 0 || this.regrowH > 6) { this.regrow(this.regrowH, winter ? 0 : grow); this.regrowH = 0; this.regrowT = 1; }
     for (const s of this.list) {
       if (s.type === 'feld' && s.field.crop && s.field.p < 1) {
         const f = s.field, k = ((f.wet > 0 || rain > .3) ? 1.6 : 1) * (winter ? 0 : grow);
@@ -446,9 +492,11 @@ export class Build {
   load(d) {
     for (const s of [...this.list]) this.remove(s);
     for (const L of this.logs) { this.scene.remove(L.obj); this.W.removeCollider(L.col); } this.logs = [];
+    for (const st of this.stumps.values()) { this.scene.remove(st.mesh); this.W.removeTree(st.entry); } this.stumps.clear();
     const L = (d?.list || []).filter(x => bpOf(x.type)).sort((a, b) => (b.type === 'huette') - (a.type === 'huette'));
     for (const x of L) this.make(x);
     const byName = new Map(this.W.trees.map(t => [t.name, t]));
     for (const name of Object.keys(this.g.S.felled || {})) { const t = byName.get(name); if (t && !t.fixed) this.fell(t, null, false); }
+    this.regrow(0, 0);
   }
 }

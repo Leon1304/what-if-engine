@@ -44,7 +44,7 @@ neuere – Unbekanntes wird übersprungen, Neues startet im Grundzustand, steht 
   Bären (selten, im Norden, nur Feuer schreckt sie), Rehe. Erlegte Tiere mit dem Messer zerlegen: Fleisch (braten), Felle (Fellmantel).
 - **Waffen:** Messer, Pistole (Büro-Spind), Schrotflinte (Scheune), Jagdgewehr mit Zielfernrohr (Hochsitz), Bogen + Pfeile (selbst gebaut); Munition in Säcken/Schränken.
 - **Bauen (G):** Unterstand, Feuerstelle, Blockhütte in 4 Abschnitten (Fundament, Wände, Dach, Kamin – mit Tür), Bett, Vorratskiste (20 Plätze),
-  Regentonne, Zaun, Feld. Bäume mit der Axt fällen (kippen um), Stamm zu Baumstämmen zerlegen, Bretter sägen, Steine im Steinbruch.
+  Regentonne, Zaun, Feld. Bäume mit der Axt fällen (kippen um), Stamm zu Baumstämmen zerlegen; über Stümpfe darf man bauen, sonst wachsen Bäume nach (1 Tag Stumpf, dann 2 Tage Setzling → Baum; Winter: Pause), Bretter sägen, Steine im Steinbruch.
 - **Felder:** Kartoffeln, Karotten, Kürbis (Saatgut: Dorfladen, Scheune, Säcke), Regen/Gießen beschleunigt, drei Wachstumsstufen.
 - **Säcke:** 24 Jutesäcke mit Beute (auch Munition) über die Karte verteilt; Gegenstände in der Nähe glitzern leicht. Weggeworfenes bleibt als Bündel liegen (gespeichert).
 - **Level & Erfahrung:** EP für Aufgaben, Orte, Fällen, Bauen, Herstellen, Ernten, Jagen, Angeln, Notizen; Level schalten Baupläne, Werkbank-Rezepte und Hausausbauten frei.

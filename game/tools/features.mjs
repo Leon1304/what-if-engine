@@ -42,6 +42,15 @@ await step('Baum fällen + Stamm zerlegen', () => { const { game, W, THREE } = w
   const lv = game.verb(game.findTarget()); for (let i = 0; i < 9; i++) T.e();
   return { v, fell, lv, stamm: T.n('stamm'), ast: T.n('ast'), logsLeft: game.build.logs.length, felled: Object.keys(game.S.felled).length }; }, r => r.fell === 1 && r.stamm === 3 && r.logsLeft === 0 && r.felled === 1);
 
+await step('Baumstumpf: drüberbauen erlaubt, sonst wächst der Baum nach', () => { const { game, W, THREE, player } = window.__game; const B = game.build, S = game.S;
+  const [name, st] = [...B.stumps][0] || []; if (!st) return { stump: false }; const t = st.t, rec = S.felled[name];
+  const wasSolid = W.treesNear(t.x, t.z).includes(st.entry), why = B.check(new THREE.Vector3(t.x, 0, t.z), 0, { id: 'kiste', size: [1, .7] });
+  const s = B.make({ type: 'kiste', x: t.x, y: t.y, z: t.z, rot: 0 }); B.regrow(0, 0); const hidden = !st.mesh.visible && !W.treesNear(t.x, t.z).includes(st.entry);
+  B.regrow(200, 1); const blocked = !!S.felled[name] && rec.g === 0;
+  B.remove(s); B.regrow(0, 0); const back = st.mesh.visible; T.at(t.x + 8, -t.z);
+  B.regrow(30, 1); const sap = rec.g > 0 && rec.g < 1 && !st.mesh.visible;
+  B.regrow(60, 1); const grown = !S.felled[name] && W.treesNear(t.x, t.z).includes(t);
+  return { stump: true, wasSolid, why, hidden, blocked, back, sap, grown }; }, r => r.stump && r.wasSolid && r.why === '' && r.hidden && r.blocked && r.back && r.sap && r.grown);
 await step('Blockhütte bauen (4 Abschnitte) + Tür + Kamin', () => { const { game, THREE, player } = window.__game;
   for (const [k, n] of [['stein', 30], ['stamm', 20], ['brett', 15], ['hammer', 1], ['feuerzeug', 1], ['holz', 3]]) T.give(k, n);
   T.at(-30, 200); player.yaw = 0; player.pitch = 0; player.sync(); game.build.start('huette'); game.build.updateGhost();
@@ -138,7 +147,7 @@ await step('Angeln am Waldsee', () => { const { game, player, THREE } = window._
   const dbg = (() => { const rc = new THREE.Raycaster(game.camera.position, player.forward(new THREE.Vector3()), 0, 16); const h = rc.intersectObjects(window.__game.W.waterMeshes, true)[0]; return { n: window.__game.W.waterMeshes.length, h: h?.distance, nm: h?.object.name, cam: game.camera.position.toArray().map(v => +v.toFixed(1)), sel: game.combat.selected() }; })();
   game.combat.primary(); const cast = !!game.combat.cast; let bite = false;
   for (let i = 0; i < 30 * 14 && !bite; i++) { game.combat.update(1 / 30, 1, false); bite = game.combat.cast?.state === 'bite'; }
-  game.combat.primary(); return { cast, bite, fisch: T.n('fisch'), dbg }; }, r => r.cast && r.bite && r.fisch === 1);
+  game.combat.primary(); return { cast, bite, fisch: T.n('fisch') + T.n('hecht') + T.n('goldforelle'), dbg }; }, r => r.cast && r.bite && r.fisch === 1);
 await step('Taschenlampe: Linksklick an, Rechtsklick aus', () => { const { game } = window.__game; T.give('taschenlampe'); game.S.sel = 9; game.S.battery = 80;
   game.combat.primary(); const on = game.S.flags.flashOn; game.combat.update(.1, 1, false); const held = game.combat.cur; game.combat.secondary(); return { on, held, off: !game.S.flags.flashOn }; }, r => r.on && r.held === 'taschenlampe' && r.off);
 await step('Schlafen bis zum Morgen', () => { const { game } = window.__game; game.life.clear(); game.S.time = 22; game.S.stats.health = 50; const it = game.byName.Haus_9_Bett; T.at(-75.8, 203.6, .31); game.interact({ it }); return game.S.day; }, r => true);
@@ -252,7 +261,7 @@ await step('Sternschnuppe + Feuerball → Meteorit', () => { const { game } = wi
   if (d) { const p = d.g.position; T.at(p.x + .9, -p.z); T.lookP(p.clone().setY(p.y + .15)); r.verb = game.verb(game.findTarget()); T.e(); r.got = T.n('meteorit'); }
   S.marks = S.marks.filter(m => m.label !== 'Einschlag'); S.time = 12; return r; }, r => r.meteor === 2 && r.drop && r.mark && r.got === 1);
 await step('Unwetter: Warnung, Hagel draußen, im Haus sicher, vorbei', () => { const { game } = window.__game; const S = game.S, st = S.stats; game.life.clear(); S.time = 12; S.weather = 'klar'; delete S.stormAt;
-  game.seasons.warn('unwetter'); const warned = !!S.stormAt, fc = game.seasons.forecast(); S.stormAt = S.abs - .01; T.at(-20, 100); T.tick(.2); const w = S.weather;
+  S.abs = (S.day - 1) * 24 + S.time; game.seasons.warn('unwetter'); const warned = !!S.stormAt, fc = game.seasons.forecast(); S.stormAt = S.abs - .01; T.at(-20, 100); T.tick(.2); const w = S.weather;
   st.health = 100; T.tick(6); const out = Math.round(st.health); T.at(-75.8, 203.6, .31); st.health = 100; st.warmth = 80; T.tick(6); const inn = Math.round(st.health), roof = !!game.roof;
   S.weatherUntil = S.abs - .01; T.tick(.2); const r = { warned, fc: fc.slice(0, 22), w, out, inn, roof, after: S.weather, storms: S.stat.storms || 0 }; st.health = 100; return r; },
   r => r.warned && r.w === 'unwetter' && r.out < 99 && r.inn >= 99 && r.roof && r.after === 'klar' && r.storms >= 1);
