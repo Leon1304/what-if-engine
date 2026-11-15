@@ -40,6 +40,19 @@ Badge „True Crime“, du als Zeuge mittendrin (Wachmann, Passagier, Mithäftli
 - TC4 What if you shared a cell block with the men who escaped Alcatraz? – 1962, nie gefunden
 - TC5 What if you saw the Mona Lisa disappear? – 1911, Diebstahl machte sie berühmt
 - Bewusst ausgelassen: aktuelle Mord-/Vermisstenfälle aus Dokus und Prozessen (Natalee Holloway, Karen Read u. a.) – echte Opfer/Familien, offene Verfahren.
+### Recherche 15.11.2026: TC6–TC15
+Aktuell (News, offene Fälle → keine Namen):
+- TC6 What if you were a Binance engineer the night $6 billion vanished? – 29.10.2026, größter Krypto-Diebstahl aller Zeiten (~6,3 Mrd. $), Nordkorea-Einheit TraderTraitor zugeschrieben (TRM/Chainalysis), Abhebungen gestoppt; Bild: Serverraum, Zähler läuft hoch. Sofort.
+- TC7 What if you rented a safe deposit box in Gelsenkirchen? – Weihnachten 2025, Bohrung vom Parkhaus in den Sparkassen-Tresor, ~3.000 Schließfächer, ~30 Mio. €, Täter unbekannt; Jahrestag Weihnachten → Ende Dez.
+- TC8 What if you were the manager when the scuba robber came? – Disney Springs 15.9.2025, Taucher schwimmt zum Restaurant, nimmt 10–20 Tsd. $, taucht davon, ungelöst; skurril und viral, keine Verletzten.
+- TC9 What if you worked the night shift when 10 thieves emptied a bank vault for 5 hours? – Concepción (Chile) 7./8.11.2026, Kameras 48 h vorher ausgeschaltet; sofort.
+Klassiker (abgeschlossen oder verjährt, ohne Mordopfer):
+- TC10 What if you were the guard at the Antwerp Diamond Centre in 2003? – „Heist of the century“, ~100 Mio. $, Beute nie gefunden; Tresor mit 10 Sicherungen.
+- TC11 What if you lived above the tunnel to the Brazilian central bank? – Fortaleza 2005, 78-m-Tunnel unter einer Fake-Gartenbaufirma, 3,5 t Geld. ✅ auf GitHub (fortaleza-tunnel, 15.11.)
+- TC12 What if you shared a cell with El Chapo the night he vanished? – 2015, 1,5-km-Tunnel mit Motorrad auf Schienen aus der Dusche; Badge True Crime, Häftling ist verurteilt (Name ok). Umgesetzt als „cell next to El Chapo“ (er saß in Einzelhaft). ✅ auf GitHub (el-chapo-tunnel, 15.11.)
+- TC13 What if you were a pensioner in the Hatton Garden heist crew? – 2015, Rentner-Bande bohrt sich über Ostern in den Tresor (verurteilt).
+- TC14 What if you were on the train during the Great Train Robbery? – 1963, 2,6 Mio. £, Ronnie Biggs flieht später.
+- TC15 What if you were the guard when the Green Vault was robbed? – Dresden 2019, Axt gegen Vitrine in Minuten, Strom gekappt (verurteilt, Teile zurück).
 
 ## Neue News-Themen V21–V26 (Recherche 12.11.2026 abends, humorvoll wo es passt)
 - ★ V21 What if the world ended tomorrow? Scientists picked the date in 1960. (Conspiracy/Mythos; Science 4.11.1960 „Doomsday: Friday, 13 November, A.D. 2026“, von Foerster: Bevölkerung → unendlich; Satire, Formel passte nur bis 1973 → FALSE; von Foersters 115. Geburtstag; **Fr 13.11.**, mit T13 kombinierbar; Gag: unendlich viele Menschen = unendliche Klo-Schlange)
