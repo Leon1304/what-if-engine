@@ -249,7 +249,7 @@ export class Game {
     if (this.onHochsitz) return { down: true };
     // trees (axe)
     if (this.hasAxe()) for (const t of this.W.treesNear(o.x, o.z)) {
-      if (t.kind === 'stumpf') continue;
+      if (t.kind === 'stumpf' || t.kind === 'fest') continue;          // felled stump / ant hill, cairn (collide only)
       const dx = t.x - o.x, dz = t.z - o.z, dist = Math.hypot(dx, dz); if (dist > 2.2) continue;
       const fl = Math.hypot(f.x, f.z) || 1; if ((dx * f.x + dz * f.z) / (dist * fl) > .92) return { tree: t };
     }

@@ -36,6 +36,7 @@ addEventListener('resize', () => { renderer.setSize(innerWidth, innerHeight); ca
 const ui = new UI(), audio = new Audio(), sky = new Sky(scene);
 function applyQuality(q) {
   quality = q; const [pr, sm, sh] = QUALITY[q]; renderer.setPixelRatio(pr);
+  W.detailDist = { hoch: 130, mittel: 90, niedrig: 55 }[q] || 90;     // flowers, grass, litter …
   sky.sun.shadow.mapSize.set(sm, sm); sky.sun.shadow.map?.dispose(); sky.sun.shadow.map = null; renderer.shadowMap.enabled = sh; renderer.shadowMap.needsUpdate = true;
   scene.traverse(o => { if (o.material) for (const m of [].concat(o.material)) m.needsUpdate = true; });
   try { localStorage.setItem('waldtank_quality', q); } catch { }

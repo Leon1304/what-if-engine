@@ -230,6 +230,10 @@ await step('Rucksack-Stufen: 10 / 20 / 28 / 36 / 48 Plätze, kein Rückschritt',
 await step('Handbuch: Fundorte für jeden Gegenstand', async () => { const { game } = window.__game; const { ITEMS } = await import('./js/items.js'); const { itemSources } = await import('./js/handbook.js');
   game._src = null; const src = itemSources(game), miss = Object.keys(ITEMS).filter(k => !src[k]?.length); game.openPanel('book'); const i = window.__game.book?.index?.('fund');
   const html = document.getElementById('book').innerHTML; game.closePanel(); return { miss, n: Object.keys(src).length, axt: src.axt, book: html.length > 0 }; }, r => !r.miss.length && r.axt?.length);
+await step('Natur: Detail-Kacheln (Blumen, Gras, Laub) mit Sichtweite, Ameisenhaufen nicht fällbar', () => { const { game, W } = window.__game;
+  const kinds = new Set(W.detail.map(im => im.material.name)); const ant = W.trees.find(t => t.name.startsWith('Ameisenhaufen')); const tree = W.trees.find(t => t.kind === 'Fichte');
+  return { tiles: W.detail.length, flowers: kinds.has('Bluete_Mohn') && kinds.has('Enzian'), grass: kinds.has('Gras_hoch'), litter: kinds.has('Nadelstreu'), ant: ant?.kind, tree: !!tree }; },
+  r => r.tiles > 100 && r.flowers && r.grass && r.litter && r.ant === 'fest' && r.tree);
 await step('Erfolge + Statistik (Handbuch)', () => { const { game } = window.__game; game.progress.update(); const b = Object.keys(game.S.badges); game.openPanel('book'); const book = document.getElementById('book');
   const i = [...book.querySelectorAll('nav button')].findIndex(x => x.textContent.includes('Erfolge')); book.querySelectorAll('nav button')[i].click(); const html = book.innerHTML; game.openPanel('book');
   return { n: b.length, some: b.slice(0, 6).join(','), stats: html.includes('Statistik'), rowed: html.includes('gerudert') }; }, r => r.n >= 5 && r.stats && r.rowed);

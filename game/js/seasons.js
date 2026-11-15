@@ -12,10 +12,12 @@ const WEATHER = {     // chance per season of the next weather
   Herbst: { regen: .4, nebel: .25, gewitter: .15, klar: .2 }, Winter: { schnee: .55, nebel: .2, klar: .25 },
   Frühling: { regen: .45, gewitter: .15, nebel: .1, klar: .3 }, Sommer: { klar: .45, gewitter: .3, regen: .15, nebel: .1 },
 };
-const GROUND = new Set(['Gras', 'Gras_hell', 'Waldboden', 'Moos', 'Laub', 'Trampelpfad', 'Bankett', 'Bachufer', 'Schotter', 'Pflaster', 'Gehweg', 'Acker', 'Steinbruch']);
-const CONIFER = new Set(['Fichte_a', 'Fichte_b', 'Kiefer']);
+const GROUND = new Set(['Gras', 'Gras_hell', 'Waldboden', 'Moos', 'Laub', 'Trampelpfad', 'Bankett', 'Bachufer', 'Schotter', 'Pflaster', 'Gehweg', 'Acker', 'Steinbruch', 'Laubstreu', 'Laubstreu_gelb', 'Nadelstreu', 'Moospolster']);
+const CONIFER = new Set(['Fichte_a', 'Fichte_b', 'Kiefer', 'Latsche']);
 const LEAVES = new Set(['Laub_orange', 'Laub_gelb', 'Laub_rot', 'Birke_Laub', 'Busch_herbst', 'Linde']);
-const GREEN = new Set(['Laub_gruen', 'Busch', 'Farn', 'Grasbuesche', 'Blattwerk', 'Blattwerk_d']);
+const GREEN = new Set(['Laub_gruen', 'Busch', 'Farn', 'Grasbuesche', 'Blattwerk', 'Blattwerk_d', 'Gras_hoch', 'Schilf', 'Bluete_Stiel']);
+// flowers: faded in autumn, under snow in winter, bright in spring / summer
+const BLOOM = new Set(['Bluete_Margerite', 'Bluete_Hahnenfuss', 'Bluete_Glocke', 'Bluete_Mohn', 'Enzian', 'Alpenrose']);
 const ROOF = new Set(['Ziegel_rot', 'Ziegel_braun', 'Schiefer', 'Wellblech', 'Holzschindeln', 'Dachpappe', 'Dach_Bus', 'Hochsitz_Dach', 'Schindeln', 'Dach_Tankstelle', 'Tankdach']);
 const C = h => new THREE.Color(h);
 
@@ -26,7 +28,7 @@ export class Seasons {
     const seen = new Set();
     game.scene.traverse(o => {
       if (!(o.isMesh || o.isInstancedMesh) || !o.geometry?.attributes.color || seen.has(o.geometry)) return;
-      const n = o.material?.name || ''; let kind = GROUND.has(n) ? 'ground' : CONIFER.has(n) ? 'conifer' : LEAVES.has(n) ? 'leaves' : GREEN.has(n) ? 'green' : ROOF.has(n) ? 'roof' : null;
+      const n = o.material?.name || ''; let kind = GROUND.has(n) ? 'ground' : CONIFER.has(n) ? 'conifer' : LEAVES.has(n) ? 'leaves' : GREEN.has(n) ? 'green' : ROOF.has(n) ? 'roof' : BLOOM.has(n) ? 'bloom' : null;
       if (!kind) return; seen.add(o.geometry);
       const a = o.geometry.attributes.color, c0 = new Float32Array(a.count * 3);
       for (let i = 0; i < a.count; i++) { c0[i * 3] = a.getX(i); c0[i * 3 + 1] = a.getY(i); c0[i * 3 + 2] = a.getZ(i); }
@@ -48,9 +50,11 @@ export class Seasons {
         const ny = nrm ? nrm.getY(i) : 1;
         if (season === 'Winter') {
           const k = Math.max(0, Math.min(1, (ny - .45) / .4));
-          if (t.kind === 'ground') col.lerp(snow, .9 * k); else if (t.kind === 'roof') col.lerp(snow, .95 * k); else if (t.kind === 'conifer') col.lerp(snow, .75 * k);
+          if (t.kind === 'bloom') col.lerp(snow, .85);
+          else if (t.kind === 'ground') col.lerp(snow, .9 * k); else if (t.kind === 'roof') col.lerp(snow, .95 * k); else if (t.kind === 'conifer') col.lerp(snow, .75 * k);
           else if (t.kind === 'leaves') col.lerp(frost, .5).lerp(snow, .6 * k); else col.lerp(snow, .55 * k);
-        } else if (season === 'Frühling' || season === 'Sommer') {
+        } else if (season === 'Herbst' && t.kind === 'bloom') col.lerp(C('#9a8a5a'), .35);
+        else if (season === 'Frühling' || season === 'Sommer') {
           const s = season === 'Sommer' ? 1 : .7;
           if (t.kind === 'leaves') col.lerp(season === 'Sommer' ? lush : green, .8 * s);
           else if (t.kind === 'ground') col.lerp(green, .18 * s);

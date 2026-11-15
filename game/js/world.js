@@ -62,7 +62,7 @@ export async function loadWorld(scene, onProgress) {
       const a = u.spin_axis || [1, 0, 0]; W.spinners.push({ pivot, axis: new THREE.Vector3(a[0], a[2], -a[1]).normalize(), speed: u.spin_speed || 1 }); continue; }
     if (n.name.startsWith('light_')) { W.lights.push({ pos: n.getWorldPosition(new THREE.Vector3()), color: new THREE.Color(u.color || '#ffffff'), power: u.power || 30, group: u.group || '', kind: u.kind || 'point', name: n.name }); continue; }
     if (n.name === 'spawn' || n.name.startsWith('ziel_') || (u.quest && n.type === 'Object3D')) { W.spots[n.name] = { pos: n.getWorldPosition(new THREE.Vector3()), quat: n.getWorldQuaternion(new THREE.Quaternion()), ...u }; continue; }
-    if (u.collide_r && u.pos_w) { const p = Bv(u.pos_w); const t = { x: p.x, z: p.z, y: p.y, r: u.collide_r, kind: u.tree || '', name: n.name, parts: [] }; W.trees.push(t); u._tree = t; }
+    if (u.collide_r && u.pos_w) { const p = Bv(u.pos_w); const t = { x: p.x, z: p.z, y: p.y, r: u.collide_r, kind: u.tree || (u.nochop ? 'fest' : ''), name: n.name, parts: [] }; W.trees.push(t); u._tree = t; }
     if (u.indoor) { const r = u.indoor; W.indoor.push({ x0: r[0], y0: r[1], x1: r[2], y1: r[3], z0: r[4], z1: r[5], name: n.name }); }
     if (u.vehicle) n.traverse(m => { m.userData._veh = 1; });
     if (u.vehicle && !u.interact) {           // car parts that are not interactive (hood): own pivot, moved by the vehicle
@@ -142,6 +142,26 @@ export async function loadWorld(scene, onProgress) {
   const byGeo = new Map();
   for (const m of staticMeshes) { const k = m.geometry.uuid + '|' + m.material.uuid + '|' + regionKey(m); (byGeo.get(k) || byGeo.set(k, []).get(k)).push(m); }
   const batch = new Map();
+  // small, numerous things (flowers, grass, litter, pebbles …): instanced per 48 m tile, no sun shadow, hidden beyond W.detailDist
+  W.detail = [];
+  const sphere = new THREE.Sphere();
+  for (const [key, list] of byGeo) {
+    const g0 = list[0].geometry; if (!g0.boundingSphere) g0.computeBoundingSphere(); sphere.copy(g0.boundingSphere);
+    const sc = new THREE.Vector3().setFromMatrixScale(list[0].matrixWorld).x;
+    if (list.length < 40 || sphere.radius * sc > 1.6 || list.some(m => ud(m)._tree || ud(m).collide_r || ud(m).collide !== 0)) continue;
+    const tiles = new Map(), p = new THREE.Vector3();
+    for (const m of list) { p.setFromMatrixPosition(m.matrixWorld); const tk = Math.floor(p.x / 48) + ',' + Math.floor(p.z / 48); (tiles.get(tk) || tiles.set(tk, []).get(tk)).push(m); }
+    for (const tl of tiles.values()) {
+      const im = new THREE.InstancedMesh(g0, list[0].material, tl.length);
+      tl.forEach((m, i) => im.setMatrixAt(i, m.matrixWorld)); im.instanceMatrix.needsUpdate = true; im.computeBoundingSphere();
+      im.castShadow = false; im.receiveShadow = true; im.userData.instanced = true; im.userData.detail = true; im.userData.r = sphere.radius * sc; scene.add(im); W.detail.push(im);
+    }
+    for (const m of list) m.removeFromParent();
+    byGeo.delete(key);
+  }
+  W.detailDist = 90;
+  // draw distance per kind: tiny things (flowers, pebbles) only close by, bigger ones (bushes, litter) further; scaled by the quality setting
+  W.cullDetail = cam => { const q = W.detailDist / 90; for (const im of W.detail) { const d = Math.min(W.detailDist, (28 + 55 * im.userData.r) * q) + im.boundingSphere.radius; im.visible = im.boundingSphere.center.distanceToSquared(cam) < d * d; } };
   for (const list of byGeo.values()) {
     if (list.length >= 4) {
       const im = new THREE.InstancedMesh(list[0].geometry, list[0].material, list.length);
@@ -170,7 +190,7 @@ export async function loadWorld(scene, onProgress) {
     if (sph.radius < .45 && !it.u.ladder) it.node.traverse(m => { if (m.isMesh) m.castShadow = false; });
   }
   // distance culling (called a few times per second): hides far-away small interactives via their pivot
-  W.cull = (cam) => { for (const it of W.interactives) if (it.center) { const d = it.drawDist; it.pivot.visible = it.center.distanceToSquared(cam) < d * d; } };
+  W.cull = (cam) => { for (const it of W.interactives) if (it.center) { const d = it.drawDist; it.pivot.visible = it.center.distanceToSquared(cam) < d * d; } W.cullDetail(cam); };
 
   // tree lookup grid (10 m cells)
   W.treeGrid = new Map();
