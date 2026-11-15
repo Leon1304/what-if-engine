@@ -129,7 +129,10 @@ document.addEventListener('pointerlockchange', () => {
 });
 renderer.domElement.addEventListener('click', () => { if (playing && !panel && !document.pointerLockElement) { ui.show('pause', false); lock(); } });
 function updatePause() {
-  $('found').innerHTML = game.places.map(p => `<li class="${game.S.found[p.id] ? 'on' : ''}">${game.S.found[p.id] ? '📍 ' + p.name : '❔ ???'}</li>`).join('');
+  // only the places you found (a full list of „???“ made the pause menu taller than the screen)
+  const got = game.places.filter(p => game.S.found[p.id]), rest = game.places.length - got.length;
+  $('found-n').textContent = `${got.length}/${game.places.length} entdeckt`;
+  $('found').innerHTML = got.map(p => `<li class="on">📍 ${p.name}</li>`).join('') + (rest ? `<li class="rest">❔ ${rest} ${rest > 1 ? 'Orte' : 'Ort'} noch unentdeckt</li>` : '');
 }
 function openPanel(name) {
   if (panel === name) return closePanel();
@@ -149,6 +152,7 @@ $('invpanel').addEventListener('click', e => {
   const b = e.target.closest('button'); if (!b) return;
   if (b.dataset.use) game.useSlot(+b.dataset.use);
   if (b.dataset.drop) game.drop(+b.dataset.drop);
+  if (b.dataset.hand) game.toHand(+b.dataset.hand);
   if (b.dataset.read) { closePanel(true); panel = 'reader'; game.read(game.S.inv[+b.dataset.read].id); return; }
   if (b.dataset.craft) game.craft(b.dataset.craft);
   if (b.dataset.put) game.build.chestMove(1, +b.dataset.put);
@@ -191,6 +195,10 @@ addEventListener('keydown', e => {
     const m = e.code.match(/^(?:Digit|Numpad)(\d)$/); if (m) codeKey(m[1]); else if (e.code === 'Backspace') codeKey('C'); else if (['Enter', 'NumpadEnter'].includes(e.code)) codeKey('OK');
     else if (['Escape', 'KeyE', 'Tab'].includes(e.code)) closePanel();
     return;
+  }
+  if (panel === 'inv' && !game.build.chest) {                                // hover an item + 1–5 = put it into that quick-bar slot
+    const d = e.code.match(/^Digit([1-5])$/), c = d && document.querySelector('#invpanel .cell[data-i]:hover');
+    if (c) { game.toHand(+c.dataset.i, +d[1] - 1); game.ui.renderInventory(game); return; }
   }
   if (panel) {
     if (['Tab', 'Escape', 'KeyC', 'KeyM', 'KeyE', 'KeyG'].includes(e.code)) { if (e.code === 'KeyC' && panel === 'inv') return; closePanel(); }

@@ -51,7 +51,8 @@ export function chapters(g) {
       <p class="tip">Brennholz: mit der 🪓 Axt umgestürzte Stämme und Totholz hacken (3 × E = 1 Holz) oder vom Holzstapel hinter der Tankstelle nehmen. Äste liegen im Wald.</p>` },
     { id: 'dinge', icon: '🎒', t: 'Ausrüstung', h: `
       <table class="list">${tools.map(([, it]) => `<tr><td>${it.icon} ${it.name}</td><td>${it.desc || ''}</td></tr>`).join('')}</table>
-      <p class="tip">Ohne Rucksack hast du nur 4 Plätze, mit Rucksack 16. Mit <kbd>Tab</kbd> kannst du Dinge benutzen oder wegwerfen.</p>` },
+      <p class="tip">In deine Taschen passen 10 Sachen, mit Rucksack 20. Größer geht's: Großer Rucksack 28 (Werkbank), Trekkingrucksack 36 (Kurt, Steinberghütte), Expeditionsrucksack 48 (Werkbank, Stufe 7). Mit <kbd>Tab</kbd> kannst du Dinge benutzen oder wegwerfen.</p>
+      <p class="tip">Die ersten 5 Plätze im Rucksack sind deine Schnellleiste. Etwas anderes in die Hand nehmen: im Rucksack „✋ In die Hand“ – oder mit der Maus auf den Gegenstand zeigen und <kbd>1</kbd>–<kbd>5</kbd> drücken.</p>` },
     { id: 'bauen', icon: '🔨', t: 'Bauen & Felder', h: `
       <p>Mit <kbd>G</kbd> öffnest du das Baumenü. Wähle einen Bauplan: vor dir erscheint ein Umriss – <b style="color:#2f6b3a">grün</b> = passt, <b style="color:#a33224">rot</b> = geht nicht (der Grund steht unten).
       <kbd>R</kbd> oder Mausrad dreht, Linksklick oder <kbd>E</kbd> baut, <kbd>X</kbd> bricht ab. Später baut <kbd>X</kbd> ein Bauwerk wieder ab (halbes Material zurück).</p>

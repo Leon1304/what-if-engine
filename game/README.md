@@ -15,7 +15,7 @@ das Gebirge „Steinberg“. Bauen (Blockhütte, Felder …), Bäume fällen, Wa
 | E | benutzen, öffnen, aufheben, durchsuchen, klettern, Baum fällen, bauen, pflanzen/ernten, zerlegen |
 | F | Taschenlampe |
 | Tab / C | Rucksack & Herstellen |
-| 1–5 · Mausrad · Q | Schnellleiste wählen · essen / trinken / benutzen |
+| 1–5 · Mausrad · Q | Schnellleiste wählen · essen / trinken / benutzen (im Rucksack: „✋ In die Hand“ oder Maus auf Gegenstand + 1–5) |
 | M | Wanderkarte (wenn gefunden) |
 | Z halten | Zeit vorspulen (drinnen mit Strom, am Feuer oder mit Schlafsack) |
 | Linksklick · R · rechte Maustaste | Waffe: schießen/zustechen · nachladen · zielen (Gewehr: Zielfernrohr); ohne Waffe: Taschenlampe an · aus (Fernglas mit rechter Taste, wenn die Lampe aus ist); Angel: auswerfen · einholen |
@@ -60,7 +60,8 @@ neuere – Unbekanntes wird übersprungen, Neues startet im Grundzustand, steht 
   Sender: Bergwacht + Wetterbericht, Schlüssel der Pass-Schranke).
 - **Zweite Karte – Gebirge „Steinberg“:** Schranke am Nordende aufschließen, mit dem Auto über den Pass. Serpentinen, Steinberghütte mit Förster Henning,
   Stollen „Glück auf“ (Geröll sprengen: 2 Sprengpulver + Seil + Feuerzeug → Bergkristalle), Gipfelkreuz, Bergsee, Heustadel, Gämsen, Schnee, Kälte.
-- **Bello „Such!“**, **26 Abzeichen + Statistik** (Handbuch → Erfolge, Pause-Menü), 18 Nebenaufgaben.
+- **Inventar:** 10 Plätze in den Taschen, Rucksack 20, Großer Rucksack 28 (Werkbank), Trekkingrucksack 36 (Kurt 90 €, Steinberghütte), Expeditionsrucksack 48 (Werkbank, Stufe 7).
+- **Bello „Such!“**, **27 Abzeichen + Statistik** (Handbuch → Erfolge, Pause-Menü), 18 Nebenaufgaben.
 - **Ereignisse:** nachts fährt ab und zu ein Auto vorbei (hält und hupt, wenn du auf der Straße stehst).
 - **Herstellen:** Fackel, Verband, Lagerfeuer überall; kochen am Feuer, in der Mikrowelle oder mit dem Gaskocher.
 - **Strom:** Licht, Kühlregale, Kaffeemaschine, Kasse, Geldautomat, Zapfsäulen und Schiebetür funktionieren erst mit dem Aggregat (Tank hält ~10 Spielstunden).

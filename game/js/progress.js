@@ -38,6 +38,7 @@ const st = (g, k) => g.S.stat[k] || 0;
 export const BADGES = [
   { id: 'nacht', icon: '🌙', t: 'Erste Nacht', x: 'Die erste Nacht überlebt.', ok: g => g.S.day >= 2 },
   { id: 'gerettet', icon: '🚁', t: 'Gerettet', x: 'Die Bergwacht hat dich geholt.', ok: g => g.S.flags.won || g.S.flags.free },
+  { id: 'packesel', icon: '🎒', t: 'Packesel', x: 'Den Expeditionsrucksack (48 Plätze) getragen.', ok: g => g.S.flags.expbag },
   { id: 'woche', icon: '📅', t: 'Eine Woche Wildnis', x: '7 Tage überlebt.', ok: g => g.S.day >= 8 },
   { id: 'monat', icon: '🏕️', t: 'Waldläufer', x: '28 Tage überlebt – ein ganzes Jahr mit allen Jahreszeiten.', ok: g => g.S.day >= 29 },
   { id: 'jaeger', icon: '🏹', t: 'Jäger', x: '10 Tiere erlegt.', ok: g => st(g, 'kills') >= 10 },

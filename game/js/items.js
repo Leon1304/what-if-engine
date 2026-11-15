@@ -2,7 +2,7 @@
 // use: hunger / thirst / warmth / health / stamina change when eaten or drunk (Q or click in the backpack).
 // mat: building material (stacks to 30). weapon: id in WEAPONS. seed: crop id in CROPS.
 export const ITEMS = {
-  rucksack:        { name: 'Rucksack', icon: '🎒', desc: 'Mehr Platz: 16 statt 4 Plätze.', equip: 'bag' },
+  rucksack:        { name: 'Rucksack', icon: '🎒', desc: 'Mehr Platz: 20 statt 10 Plätze.', equip: 'bag' },
   taschenlampe:    { name: 'Taschenlampe', icon: '🔦', desc: 'F = an/aus. Verbraucht Batterie.', tool: 1 },
   taschenlampe2:   { name: 'Ersatz-Taschenlampe', icon: '🔦', desc: 'Volle Batterie. Nimmt man sie auf, wird die Lampe geladen.', battery: 100 },
   batterien:       { name: 'Batterien (AA)', icon: '🔋', desc: 'Lädt die Taschenlampe auf 100 %.', battery: 100 },
@@ -94,7 +94,9 @@ export const ITEMS = {
   kaninchen:       { name: 'Kaninchen', icon: '🐇', desc: 'Am Feuer braten.', spoil: 30 },
   kaninchen_gebraten: { name: 'Kaninchenbraten', icon: '🍗', use: { hunger: 45, warmth: 6 }, spoil: 48 },
   trockenfleisch:  { name: 'Trockenfleisch', icon: '🥓', use: { hunger: 30, thirst: -4 }, desc: 'Vom Trockengestell. Verdirbt nie.' },
-  rucksack_gross:  { name: 'Großer Rucksack', icon: '🎒', desc: '+8 Plätze (24).', equip: 'bigbag' },
+  rucksack_gross:  { name: 'Großer Rucksack', icon: '🎒', desc: '28 Plätze.', equip: 'bigbag' },
+  rucksack_trekking: { name: 'Trekkingrucksack', icon: '🎒', desc: '36 Plätze – mit Hüftgurt und Seitentaschen.', equip: 'trekbag' },
+  rucksack_expedition: { name: 'Expeditionsrucksack', icon: '🎒', desc: '48 Plätze – der größte Rucksack im Spiel.', equip: 'expbag' },
   profiaxt:        { name: 'Profi-Axt', icon: '🪓', desc: 'Fällt Bäume in 3 Schlägen.', tool: 1 },
   // modern gadgets (placeable with G)
   solarlampe:      { name: 'Solarlampe', icon: '💡', desc: 'G → Licht: aufstellen. Leuchtet nachts von selbst.' },
@@ -116,7 +118,7 @@ export const ITEMS = {
 // trader Kurt (village shop): buy / sell prices in euro
 export const TRADE = {
   buy: { patronen_pistole: 12, patronen_schrot: 14, patronen_gewehr: 18, pfeil: 2, saat_kartoffel: 3, saat_karotte: 3, saat_kuerbis: 4, dosensuppe: 4, wasser: 2, sandwich: 5,
-         batterien: 5, seil: 4, metall: 3, schwarzpulver: 9, kerze: 2, verband: 6, medizin: 9, kraeuter: 2, angel: 12, solarlampe: 15, baustrahler: 28, bewegungsmelder: 20, kuehlbox: 30, rucksack_gross: 40 },
+         batterien: 5, seil: 4, metall: 3, schwarzpulver: 9, kerze: 2, verband: 6, medizin: 9, kraeuter: 2, angel: 12, solarlampe: 15, baustrahler: 28, bewegungsmelder: 20, kuehlbox: 30, rucksack_gross: 40, rucksack_trekking: 90 },
   sell: { fell: 8, fleisch: 3, fleisch_gebraten: 5, fisch: 4, fisch_gebraten: 6, kaninchen: 4, kartoffel: 1, karotte: 1, kuerbis: 4, goldmuenze: 25, bergkristall: 40, trockenfleisch: 6, brett: 1, holz: 1, mehl: 2 },
 };
 
@@ -188,7 +190,8 @@ export const RECIPES = [
   { id: 'mun_gewehr', name: '5 Gewehrpatronen', needs: { metall: 2, schwarzpulver: 1 }, bench: 1, lvl: 6, gives: { patronen_gewehr: 1 }, ammoN: 5 },
   { id: 'angel', name: 'Angelrute', needs: { ast: 2, seil: 1, metall: 1 }, bench: 1, lvl: 2, gives: { angel: 1 } },
   { id: 'profiaxt', name: 'Profi-Axt', needs: { axt: 1, metall: 3 }, bench: 1, lvl: 5, gives: { profiaxt: 1 } },
-  { id: 'rucksack_gross', name: 'Großer Rucksack (+8)', needs: { fell: 3, seil: 2 }, bench: 1, lvl: 4, gives: { rucksack_gross: 1 } },
+  { id: 'rucksack_gross', name: 'Großer Rucksack (28 Plätze)', needs: { fell: 3, seil: 2 }, bench: 1, lvl: 4, gives: { rucksack_gross: 1 } },
+  { id: 'rucksack_expedition', name: 'Expeditionsrucksack (48 Plätze)', needs: { fell: 6, seil: 3, metall: 2 }, bench: 1, lvl: 7, gives: { rucksack_expedition: 1 } },
   { id: 'kerze', name: '2 Kerzen', needs: { fleisch: 1, lappen: 1 }, bench: 1, gives: { kerze: 2 }, desc: 'Talg aus Fleisch + Docht' },
   { id: 'lagerfeuer', name: 'Lagerfeuer (vor dir)', needs: { brenn: 3 }, tools: ['feuerzeug'], place: 'fire', desc: '3 × Ast oder Brennholz' },
 ];

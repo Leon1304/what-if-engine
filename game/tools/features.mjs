@@ -85,7 +85,7 @@ await step('Pistole gegen Wolf + Zerlegen mit Messer', () => { const { game, pla
 
 await step('Schwierigkeit „Keine Feinde“: nachts keine Wölfe', () => { const { game } = window.__game;
   game.life.clear(); game.S.diff = 'aus'; game.S.time = 23.5; game.S.day = 3; T.at(-10, 70); T.tick(40);
-  const hostile = game.life.animals.filter(a => a.kind !== 'deer').length; game.S.diff = 'schwer'; T.tick(60); const hard = game.life.animals.filter(a => a.kind === 'wolf').length; game.life.clear(); game.S.diff = 'mittel';
+  const hostile = game.life.animals.filter(a => a.kind !== 'deer').length; game.S.diff = 'schwer'; for (let k = 0; k < 10 && !game.life.animals.some(a => a.kind === 'wolf'); k++) T.tick(60); const hard = game.life.animals.filter(a => a.kind === 'wolf').length; game.life.clear(); game.S.diff = 'mittel';
   return { hostile, hard }; }, r => r.hostile === 0 && r.hard > 0);
 
 await step('Wegmarker + Karte', () => { const { game } = window.__game; T.give('karte'); game.S.found.dorf = 1;
@@ -219,6 +219,14 @@ await step('Zurück ins Tal (Passstraße bergab)', async () => { const { game } 
 await step('Bello: „Such!“ findet einen Sack', () => { const { game } = window.__game; const g = game, L = g.life; T.at(-60, 60); g.S.dog.sit = 0; T.tick(3); const d0 = g.S.stat.dogfind || 0;
   L.dogSeek(); const sk = L.dog.seek; if (!sk) return { none: true }; const name = sk.it.name; T.tick(30); const dd = +L.dog.pos.distanceTo(sk.pos).toFixed(1);
   T.at(sk.pos.x + 1.5, -sk.pos.z); T.tick(1); return { name, dd, finds: (g.S.stat.dogfind || 0) - d0, seek: !!L.dog.seek }; }, r => r.dd < 3 && r.finds === 1 && !r.seek);
+await step('In die Hand nehmen: Rucksack → Schnellleiste', () => { const { game } = window.__game; const inv = game.S.inv, keep = inv.slice(); inv.length = 0;
+  for (const id of ['stein', 'brett', 'seil', 'kerze', 'wasser', 'axt', 'messer']) game.add(id, 1, true); game.S.sel = 1; game.toHand(5);
+  const a = inv[1].id, sel1 = game.combat.selected(); game.openPanel('inv'); const btn = !!document.querySelector('#invpanel [data-hand="6"]'); game.closePanel?.();
+  game.toHand(6, 3); const b = inv[3].id, sel = game.S.sel; inv.length = 0; inv.push(...keep); game.S.sel = 0; game.ui.renderHotbar(inv, 0); return { a, sel1, btn, b, sel }; }, r => r.a === 'axt' && r.sel1 === 'axt' && r.btn && r.b === 'messer' && r.sel === 3);
+await step('Rucksack-Stufen: 10 / 20 / 28 / 36 / 48 Plätze, kein Rückschritt', () => { const { game } = window.__game; const f = game.S.flags, keep = { ...f }; const cap = [];
+  for (const k of ['bag', 'bigbag', 'trekbag', 'expbag']) delete f[k]; cap.push(game.capacity()); for (const id of ['rucksack', 'rucksack_gross', 'rucksack_trekking', 'rucksack_expedition']) { game.add(id, 1, true); cap.push(game.capacity()); }
+  game.add('rucksack', 1, true); cap.push(game.capacity()); const m0 = game.S.money = 200; game.buy('rucksack_trekking'); const rebuy = game.S.money === m0;
+  const r = game.recipes().find(r => r.id === 'rucksack_expedition'); Object.assign(f, keep); return { cap: cap.join(), rebuy, recipe: !!r && r.lvl === 7 }; }, r => r.cap === '10,20,28,36,48,48' && r.rebuy && r.recipe);
 await step('Erfolge + Statistik (Handbuch)', () => { const { game } = window.__game; game.progress.update(); const b = Object.keys(game.S.badges); game.openPanel('book'); const book = document.getElementById('book');
   const i = [...book.querySelectorAll('nav button')].findIndex(x => x.textContent.includes('Erfolge')); book.querySelectorAll('nav button')[i].click(); const html = book.innerHTML; game.openPanel('book');
   return { n: b.length, some: b.slice(0, 6).join(','), stats: html.includes('Statistik'), rowed: html.includes('gerudert') }; }, r => r.n >= 5 && r.stats && r.rowed);

@@ -83,7 +83,8 @@ Taschenlampe per Links-/Rechtsklick, mehr Munition (Säcke, Händler, Werkbank).
 - **Zweite Karte „Steinberg“:** eigene Region im selben GLB (y 900 … 1160, `s14_gebirge.py`, `js/regions.js`), per Auto über den Pass erreichbar:
   Serpentinen, Steinberghütte mit Förster Henning, Stollen mit Geröll zum Sprengen und Kristallkammer, Gipfelkreuz, Bergsee, Heustadel, Gämsen,
   Schnee statt Regen, kälter. Batches und Instanzen pro Region – die jeweils andere Karte wird nicht gezeichnet.
-- **Bello „Such!“** (H): führt zu Säcken, Kräutern, Kristallen, Schätzen. **26 Abzeichen + Statistikseite** (Handbuch, Pause-Menü).
+- **Inventar:** 10 Plätze in den Taschen, Rucksack 20, Großer Rucksack 28 (Werkbank), Trekkingrucksack 36 (Kurt 90 €, Steinberghütte), Expeditionsrucksack 48 (Werkbank, Stufe 7).
+- **Bello „Such!“** (H): führt zu Säcken, Kräutern, Kristallen, Schätzen. **27 Abzeichen + Statistikseite** (Handbuch, Pause-Menü).
 - 7 neue Nebenaufgaben, neue Gebirgskarte (Relief), Fisch/Kaninchen am Feuer braten, Töpfe kommen beim Kochen zurück.
 
 ## Später (weitere Maps / Ausbau)

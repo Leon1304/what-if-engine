@@ -173,7 +173,7 @@ def build(c):
     multi('Matratzenlager', [(box(4.2, 1.7, .03, at=(x0 + T + 2.2, y1 - T - .95, FL + .63)), fabric)], c, collide=0, interact='use', use='bett', label='Matratzenlager')
     cp = [(box(.5, 1.0, 1.9, at=(0, 0, 0), bevel_w=.02), wood_d), (box(.02, .47, 1.7, at=(.26, -.25, .1)), wood), (box(.02, .47, 1.7, at=(.26, .25, .1)), wood), (box(.03, .03, .12, at=(.28, -.04, 1.0)), steel), (box(.03, .03, .12, at=(.28, .04, 1.0)), steel)]
     multi('Huettenschrank', [(move(rotz(b_, math.pi), (x1 - T - .26, hy - 1.8, FL)), m) for b_, m in cp], c, interact='search', label='Hüttenschrank', item='dosensuppe',
-          loot=[['dosensuppe', 2], ['kraeuter', 2], ['medizin', 1], ['kerze', 2]], found='Zwei Dosensuppen, getrocknete Kamille, Medizin und Kerzen.')
+          loot=[['rucksack_trekking', 1], ['dosensuppe', 2], ['kraeuter', 2], ['medizin', 1], ['kerze', 2]], found='Ein alter Trekkingrucksack, zwei Dosensuppen, getrocknete Kamille, Medizin und Kerzen.')
     multi('Henning', person(hx + 2.0, hy - 1.75, FL, math.pi / 2, lp('Jacke_Loden', '#4a5a3a', .9, var=.08), beard='#8a6a4a', hat='#3a4a2a', trousers='#4a4036'), c, interact='talk', npc='henning', label='Henning (Förster)')
     multi('Wandkarte_Berg', [(box(1.2, .03, .8, at=(hx - .2, y1 - T - .02, FL + 1.3)), paper), (box(1.26, .02, .86, at=(hx - .2, y1 - T - .01, FL + 1.27)), wood_d),
                              (box(.3, .035, .2, at=(hx - .5, y1 - T - .03, FL + 1.65)), lp('Karte_gruen', '#7f9a48', .9)), (box(.25, .035, .15, at=(hx + .1, y1 - T - .03, FL + 1.45)), lp('Karte_blau', '#4f8fae', .9))], c,

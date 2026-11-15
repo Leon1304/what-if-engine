@@ -11,6 +11,7 @@
   canvas { display: block; }
   .ov { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; z-index: 20; background: radial-gradient(ellipse at center, rgba(10,14,10,.55), rgba(5,7,5,.92)); }
   .ov.show { display: flex; }
+  .ov .card { max-height: calc(100vh - 32px); overflow-y: auto; box-sizing: border-box; overscroll-behavior: contain; }
   .card { max-width: 620px; width: calc(100% - 32px); background: var(--bg); border: 1px solid rgba(255,255,255,.12); border-radius: 14px; padding: 26px 28px; backdrop-filter: blur(6px); }
   h1 { margin: 0 0 4px; font-size: 44px; letter-spacing: .06em; color: var(--acc); }
   h1 small { display: block; font-size: 15px; letter-spacing: .02em; color: var(--mut); font-weight: 500; }
@@ -56,7 +57,8 @@
            background: rgba(20,22,19,.94); border: 1px solid rgba(255,255,255,.14); border-radius: 14px; padding: 20px 22px; }
   .panel.show { display: block; }
   .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 8px; }
-  .cell { background: rgba(255,255,255,.06); border-radius: 9px; padding: 9px; min-height: 92px; } .cell.empty { opacity: .35; }
+  .cell { background: rgba(255,255,255,.06); border-radius: 9px; padding: 9px; min-height: 92px; } .cell.empty { opacity: .35; } .cell { position: relative; } .cell.qb { background: rgba(255,255,255,.09); } .cell.hand { outline: 2px solid var(--acc); }
+  .cell .key { position: absolute; right: 8px; top: 6px; font-size: 11px; color: var(--mut); border: 1px solid rgba(255,255,255,.2); border-radius: 4px; padding: 0 5px; }
   .cell i { font-style: normal; font-size: 24px; } .cell div { font-weight: 600; } .cell small { display: block; color: var(--mut); font-size: 12px; margin: 3px 0; }
   .cell button { padding: 4px 9px; font-size: 12px; margin: 4px 4px 0 0; } .cell button.drop { background: rgba(255,255,255,.1); color: var(--fg); }
   .recipe { display: flex; justify-content: space-between; align-items: center; padding: 8px 10px; border-radius: 8px; background: rgba(255,255,255,.05); margin-bottom: 6px; opacity: .6; }
@@ -124,7 +126,7 @@
   .keypad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; } .keypad button { margin: 0; padding: 14px 0; font-size: 20px; }
   .book .badges { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 6px; } .book .badge { background: #fffaf0; border-radius: 6px; padding: 6px 8px; font-size: 13px; opacity: .45; }
   .book .badge.on { opacity: 1; box-shadow: inset 0 0 0 2px #b08a4a; } .book .badge b { display: block; font-size: 14px; } .book .badge i { font-style: normal; font-size: 22px; float: left; margin-right: 6px; }
-  #found { list-style: none; padding: 0; columns: 2; color: var(--mut); } #found li.on { color: var(--fg); }
+  #found { list-style: none; padding: 0; columns: 2; color: var(--mut); margin: 0 0 4px; } #found li.on { color: var(--fg); } #found li.rest { column-span: all; margin-top: 4px; }
   @media (max-width: 700px) { #bars { width: 160px; } #quest { max-width: 60vw; font-size: 13px; } .slot { width: 44px; height: 44px; } }
 </style>
 <script type="importmap">
@@ -176,7 +178,7 @@
   <h2>Spielstand</h2><div id="slots"></div>
   <button class="sec" id="btn-export">⬇️ Spielstand als Datei sichern</button><button class="sec" id="btn-import">⬆️ Datei laden</button><input type="file" id="importfile" accept=".json,application/json" hidden>
   <h2>Schwierigkeit</h2><div class="diff"><button class="sec" data-diff="aus">Keine Feinde</button><button class="sec" data-diff="leicht">Leicht</button><button class="sec" data-diff="mittel">Mittel</button><button class="sec" data-diff="schwer">Schwer</button></div>
-  <h2>Orte</h2><ul id="found"></ul>
+  <h2>Orte <small id="found-n"></small></h2><ul id="found"></ul>
   <h2>Grafik</h2><button class="sec" data-q="hoch">Hoch</button><button class="sec" data-q="mittel">Mittel</button><button class="sec" data-q="niedrig">Niedrig</button>
   <h2>Bildrate</h2><button class="sec" data-fps="30">30 FPS (Akku)</button><button class="sec" data-fps="60">60 FPS</button><button class="sec" data-fps="0">Unbegrenzt</button>
   <h2>Hilfen</h2><button class="sec" id="btn-hl">✨ Gegenstände hervorheben: an</button>

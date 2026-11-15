@@ -54,7 +54,13 @@ export class Game {
   }
 
   // ---------------------------------------------------------------- inventory
-  capacity() { return this.S.flags.bag ? (this.S.flags.bigbag ? 24 : 16) : 4; }
+  // backpack tiers: pockets 10 · Rucksack 20 · Großer 28 · Trekking 36 · Expedition 48 (a bag you wear only ever upgrades)
+  capacity() { const f = this.S.flags; return f.expbag ? 48 : f.trekbag ? 36 : f.bigbag ? 28 : f.bag ? 20 : 10; }
+  wearBag(flag, name, quiet) {
+    const before = this.capacity(); this.S.flags.bag = true; this.S.flags[flag] = true; const now = this.capacity();
+    if (!quiet) this.ui.toast(now > before ? `🎒 ${name} aufgesetzt – jetzt ${now} Plätze.${flag === 'bag' ? ' Tab öffnet ihn.' : ''}` : `🎒 ${name} – dein Rucksack ist schon größer (${now} Plätze).`, now > before ? 'good' : '');
+    return true;
+  }
   hasAxe() { return this.has('axt') || this.has('profiaxt'); }
   blueprints() { return BLUEPRINTS; } recipes() { return RECIPES; }
   // several items at once – only if all fit
@@ -76,16 +82,15 @@ export class Game {
   brenn() { return this.count('ast') + this.count('holz'); }
   add(id, n = 1, quiet = false, f) {
     const it = ITEMS[id];
-    if (it?.equip === 'bag') { this.S.flags.bag = true; if (!quiet) this.ui.toast('🎒 Rucksack aufgesetzt – jetzt 16 Plätze. Tab öffnet ihn.'); return true; }
+    if (['bag', 'bigbag', 'trekbag', 'expbag'].includes(it?.equip)) return this.wearBag(it.equip, it.name, quiet);
     if (it?.equip === 'jacket') { this.S.flags.jacket = true; if (!quiet) this.ui.toast('🧥 Jacke angezogen – du frierst nur noch halb so schnell.'); return true; }
     if (it?.battery && this.has('taschenlampe')) { this.S.battery = 100; if (!quiet) this.ui.toast('🔋 Taschenlampe aufgeladen.'); return true; }
     if (it?.ammo) { for (let i = 0; i < n; i++) this.combat.addAmmo(id); return true; }
-    if (it?.equip === 'bigbag') { this.S.flags.bag = true; this.S.flags.bigbag = true; if (!quiet) this.ui.toast('🎒 Großer Rucksack – jetzt 24 Plätze.', 'good'); return true; }
     if (id === 'geld') { this.S.money = +(this.S.money + 43.2 * n).toFixed(2); if (!quiet) this.ui.toast('💶 43,20 € eingesteckt. Im Dorf gibt es einen Händler …'); return true; }
     if (it?.equip === 'fur') { this.S.flags.fur = true; if (!quiet) this.ui.toast('🧥 Fellmantel angezogen – dir wird so schnell nicht mehr kalt.'); return true; }
     const max = it?.mat ? 30 : 10, inv = this.S.inv;
     const room = inv.filter(s => s.id === id).reduce((a, s) => a + max - s.n, 0) + (this.capacity() - inv.length) * max;
-    if (room < n) { this.ui.toast(this.S.flags.bag ? 'Dein Rucksack ist voll.' : 'Kein Platz mehr – du brauchst einen Rucksack.', 'warn'); this.audio.sfx('error'); return false; }
+    if (room < n) { this.ui.toast(this.S.flags.bag ? 'Dein Rucksack ist voll.' : 'Deine Taschen sind voll – du brauchst einen Rucksack.', 'warn'); this.audio.sfx('error'); return false; }
     let left = n;
     const fresh = it?.spoil ? (f ?? it.spoil) : undefined;                 // food: the stack keeps the oldest freshness
     while (left > 0) { let s = inv.find(s => s.id === id && s.n < max); if (!s) { s = { id, n: 0 }; if (fresh !== undefined) s.f = fresh; inv.push(s); } else if (fresh !== undefined) s.f = Math.min(s.f ?? it.spoil, fresh);
@@ -97,6 +102,14 @@ export class Game {
     this.S.sel = Math.min(this.S.sel, 4); this.ui.renderHotbar(this.S.inv, this.S.sel);
   }
   swap(a, b) { this.take(a); this.add(b, 1, true); }
+  // put backpack slot i into hand slot k (1–5 bar = the first five backpack slots): swap the two; a gap in the bar → it goes to the end
+  toHand(i, k = this.S.sel) {
+    const inv = this.S.inv; if (!inv[i] || k < 0 || k > 4) return false;
+    if (k >= inv.length) k = inv.length - 1;
+    if (i !== k) [inv[i], inv[k]] = [inv[k], inv[i]];
+    this.S.sel = k; this.audio.sfx('pickup'); this.ui.renderHotbar(inv, k);
+    this.ui.toast(`✋ ${ITEMS[inv[k].id].icon} ${ITEMS[inv[k].id].name} in der Hand (Platz ${k + 1}).`); return true;
+  }
   useSlot(i) {
     const s = this.S.inv[i]; if (!s) return; const it = ITEMS[s.id];
     if (s.id === 'fackel') { if (this.torchOn) return this.ui.toast('Die Fackel brennt schon.'); if (!this.has('feuerzeug')) return this.ui.toast('Du brauchst ein Feuerzeug.');
@@ -133,7 +146,8 @@ export class Game {
   takeDrop(r) { if (!this.add(r.id, r.n, false, r.f)) return; this.scene.remove(r.g); this.drops.splice(this.drops.indexOf(r), 1); this.S.drops = this.drops.map(({ id, n, p, f }) => ({ id, n, p, f })); this.audio.sfx('pickup'); }
   dropTarget(o, f) { let best = null, ba = .2; for (const r of this.drops) { const d = r.g.position.clone().add(new THREE.Vector3(0, .15, 0)).sub(o), L = d.length(); if (L > 2.6) continue; const a = d.normalize().angleTo(f); if (a < ba) { ba = a; best = r; } } return best; }
   // trader Kurt
-  buy(id) { const pr = TRADE.buy[id]; if (!pr || this.S.money < pr) return; if (!this.add(id, 1)) return; this.S.money = +(this.S.money - pr).toFixed(2); this.audio.sfx('coins'); this.progress.add(2, ''); }
+  buy(id) { const pr = TRADE.buy[id]; if (!pr || this.S.money < pr) return;
+    const eq = ITEMS[id]?.equip; if (eq && this.S.flags[eq]) return this.ui.toast(`Kurt: „Den ${ITEMS[id].name} hast du doch schon auf dem Rücken.“`); if (!this.add(id, 1)) return; this.S.money = +(this.S.money - pr).toFixed(2); this.audio.sfx('coins'); this.progress.add(2, ''); }
   sell(id, all) { const pr = TRADE.sell[id], n = all ? this.count(id) : Math.min(1, this.count(id)); if (!pr || !n) return; this.take(id, n); this.S.money = +(this.S.money + pr * n).toFixed(2);
     this.progress.stat('sold_' + id, n); this.progress.stat('earned', pr * n); this.audio.sfx('coins'); this.ui.toast(`💶 ${n}× ${ITEMS[id].name} verkauft: +${(pr * n).toFixed(2).replace('.', ',')} €`); }
   talk(what) { if (what === 'story' && Object.keys(this.S.notes).length >= 5) { this.S.flags.kurtStory = 1; this.add('patronen_gewehr', 1, true); this.ui.toast('Kurt: „Brandt! Hab ich’s doch gewusst. Hier, nimm die Patronen – für alle Fälle.“', 'good'); } }
