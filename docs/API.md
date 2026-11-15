@@ -1496,6 +1496,13 @@ Kuppelzelt (Außenzelt, zwei Bögen mit Gestänge, Überzelt, Bodenrand) oder Fi
 ## Countdown-Leinwand `countdownScreen(p, w, h, { segs, msgs, accent, label: 'LAUNCH IN', span, ticks, sound, x, y, z, ry, wall, … })`
 LED-Leinwand (über `screenPanel`). `segs: [{ from, at, remain: t => Sekunden, glitch }]`: in jedem Abschnitt zählt sie von `from` bis `at` herunter (Anzeige `Xd HH:MM:SS`, die letzten 10 s groß in der Akzentfarbe, Fortschrittsbalken über `span` s), steht kurz auf 0 und flackert dann `glitch` s lang digital. `remain` darf beliebig sein (Zeitraffer, Sprünge zwischen Shots), Standard `(at − t) · scale`. Außerhalb der Abschnitte zeigt sie `msgs: [[t, Titel, Untertitel, strike]]` (der jüngste mit t ≤ jetzt; `strike: true` = grau mit rotem Strich durch, z. B. verschobene Termine). `ticks: [t …]` = Tick-Geräusche, beim Glitch kommt `glitch` von selbst (`sound: false` = still). Ohne Marken/Logos. Test: `tests/camp-out`.
 
+# Neu in v3.33 (Thumbnails: Wow-Look und Logo)
+- **Wow-Look ist Standard** für jedes Cover (`THUMB.pop`, global `CFG.thumbPop`; `false` = alter Look): Hintergrund um das Motiv weich unscharf und dunkler (Motiv bleibt scharf), Lichtfleck auf dem Motiv, Rand-Glühen in der Akzentfarbe (`THUMB.edgeColor: '#hex'`), Titel mit 3D-Extrusion, Highlight-Box glüht, Grading kräftiger (Sättigung ×1,38, Kontrast ×1,18). Motivstelle: `pop: [x%, y%, breite%, höhe%]`, sonst aus `glow` / `rays` / `ring`, sonst Mitte (50 / 56). Darum `glow`/`rays` immer auf das Motiv legen.
+- **`THUMB.logo`** = `'name'` oder `{ name, src, x, y, w, rot }`: Logo nur auf dem Cover, nie im Video. `assemble.py` bettet `assets/logos/<name>.svg|png|webp` als data-URI ein (`assets/logos/README.md`: Herkunft/Lizenz). Standard unten mittig (x 50, y 84, Breite 36 %), liegt über Titel und Overlays. `src` = eigene URL/data-URI. Fehlt die Datei: Warnung `logo missing`, Cover ohne Logo.
+- Marken-Logos (z. B. `gta6`) nur, wenn das Video wirklich davon handelt; keine offizielle Zugehörigkeit andeuten.
+- `assemble.py work/<slug>` (Slug mit Ordner) prüft die Syntax jetzt auch (vorher FileNotFoundError beim Check).
+- Test: `tests/thumb-logo` (A: Pop + Logo, B: ohne Pop, Logo gedreht unten rechts).
+
 # Neu in v3.32 (Strandstadt: Art-déco-Hotel, Kältestarre)
 
 ## Art-déco-Hotel `decoHotel(p, x, z, { color, trim, neon, name, floors: 3, w: 14, d: 10, ry, corner: 'round' | false, flicker })` → `{ g, door, top }`

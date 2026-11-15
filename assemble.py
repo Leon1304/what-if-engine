@@ -131,6 +131,16 @@ if names:
             if os.path.exists(f): found[nm] = base64.b64encode(open(f, 'rb').read()).decode(); print('model:', f); break
         else: print('model missing:', nm + '.glb')
     t = t.replace('/* @MODELS */{}', '/* @MODELS */' + json.dumps(found, separators=(',', ':')), 1)
+# v3.33 thumbnail logos: THUMB logo: 'name' | logo: { name: 'name', … } → assets/logos/<name>.svg|png embedded as data URI
+_logos = sorted(set(re.findall(r"\blogo\s*:\s*(?:\{[^}]*?\bname\s*:\s*)?'([A-Za-z0-9_-]+)'", _code)))
+if _logos:
+    LG = {}
+    for nm in _logos:
+        for d in (os.path.join(_here, 'assets', 'logos'), os.path.join(_here, '.engine', 'assets', 'logos')):
+            f = next((os.path.join(d, nm + e) for e in ('.svg', '.png', '.webp') if os.path.exists(os.path.join(d, nm + e))), None)
+            if f: LG[nm] = 'data:' + {'.svg': 'image/svg+xml', '.png': 'image/png', '.webp': 'image/webp'}[os.path.splitext(f)[1]] + ';base64,' + base64.b64encode(open(f, 'rb').read()).decode(); print('logo:', f); break
+        else: print('logo missing:', nm)
+    t = t.replace('/* @LOGOS */{}', '/* @LOGOS */' + json.dumps(LG, separators=(',', ':')), 1)
 # v3.17 camera paths from Blender: camPath('name', …) → assets/cams/<name>.json embedded
 _cams = sorted(set(re.findall(r"camPath\(\s*'([^']+)'", _code)))
 if _cams:
@@ -208,7 +218,8 @@ t = re.sub(r'<html lang="[^"]*">', f'<html lang="{opt("lang", "en")}">', t, coun
 open(f'{OUT}.html', 'w', encoding='utf-8').write(t)
 
 code = re.search(r'<script type="module">(.*?)</script>', t, re.S).group(1)
-open(f'.{OUT}.check.mjs', 'w', encoding='utf-8').write(code)
-r = subprocess.run(['node', '--check', f'.{OUT}.check.mjs'], capture_output=True, text=True)
+_chk = os.path.join(os.path.dirname(OUT), '.' + os.path.basename(OUT) + '.check.mjs')   # v3.33: slug with a folder (work/<slug>) works too
+open(_chk, 'w', encoding='utf-8').write(code)
+r = subprocess.run(['node', '--check', _chk], capture_output=True, text=True)
 print(f'wrote {OUT}.html · syntax ok' if r.returncode == 0 else 'SYNTAX ERROR\n' + r.stderr[-2000:])
 sys.exit(r.returncode)
