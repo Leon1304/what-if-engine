@@ -2639,6 +2639,7 @@ function runTickers(st) {
     if (f._out) for (const [r, B] of f._out) { if (r.isModel || r._S0t !== st || B.w >= 1) continue; const o = r._o0 ?? {}, A = rigState(B.from, 0, st, _poseOpt(r, o)), S = { ...r._S0 }, k = EASE.inOut(B.w); for (const key in S) S[key] = lerp(A[key], S[key], k); r._mcq = { mode: r._m0, ph: 0, v: o.v, from: B.from, w: B.w }; poseFin(r, S, r._m0, st, o); } }
   TK = null;
 }
+const _LOK = new Set(['lt', 'lk', 'lf', 'lz', 'rt', 'rk', 'rf', 'rz', 'H', 'hx', 'hrx', 'hry', 'hrz', 'by']);
 function pose(f, mode, ph, t = 0, o = {}) {   // walk run shamble idle panic cheer point hold — o: { v: speed m/s, w: weight of mode (0..1), from: mode blended in with 1 − w, turn }
   if (TKP) { if (o.from == null || o.rec) TKP.mode.set(f, o.rec ?? mode); return; }   // v3.22 o.rec: a caller blending on its own (from / w) names the mode the switch detection sees
   let X = null; if (TK && (o.from == null || o.rec) && !TK._idle) { if (!TK._poser) TK._poser = TK._redo = true; X = TK._blend?.get(f) ?? null; }   // X: cross-fade from what was shown a moment ago
@@ -2646,9 +2647,9 @@ function pose(f, mode, ph, t = 0, o = {}) {   // walk run shamble idle panic che
   const opt = _poseOpt(f, o);
   const S = rigState(mode, ph / TAU, t, opt);
   let m = mode;
-  if (o.from && o.w != null && o.w < 1) {
-    const A = rigState(o.from, ph / TAU, t, opt), k = EASE.inOut(clamp(o.w));
-    for (const key in S) S[key] = lerp(A[key], S[key], k);
+  if (o.from && o.w != null && (o.w < 1 || (o.wLo != null && o.wLo < 1))) {
+    const A = rigState(o.from, ph / TAU, t, opt), k = EASE.inOut(clamp(o.w)), kl = o.wLo != null ? clamp(o.wLo) : k;   // v3.36 wLo: legs and hips by their own weight (walk(): by distance)
+    for (const key in S) S[key] = lerp(A[key], S[key], _LOK.has(key) ? kl : k);
     if (k < 0.5) m = o.from;
   }
   const mine = f._S0t === t && f._S0own === TK; if (!mine) f._S0p = f._S0t === t ? f._S0 : null;   // _S0p: what the ticks before this one showed this frame (kept when this tick runs twice)
@@ -2883,10 +2884,23 @@ const PATHS = [];   // every walk() path — biome() keeps them free of trees an
 // move a figure/animal rig (or any Object3D) along [[x, z], …]: speeds up and slows down smoothly, turns ahead of corners, blends walk ↔ idle.
 // o: t0, t1, speed, mode, loop, endMode, startMode, ramp (s to reach full speed; 0 = instant), face (fixed heading), y, stride (animals), graze
 function walk(obj, pts, o = {}) {
+  const t00 = o.t0 ?? 0, pvt = !(obj.beast || obj.chk || obj.bird) && (obj.legL || obj.isModel) && !o.loop && o.face == null, SX = pvt ? (obj._sitX ?? []).find(X => t00 >= X.t0 && t00 < X.ex()) : null, SP = SX?.stand?.();
+  if (SP && Math.hypot(SP[0] - pts[0][0], SP[1] - pts[0][1]) > 0.05) pts = [[SP[0], SP[1]], ...pts];   // v3.36 after sit(): sets off from where it stood up
   const path = new Path(pts, o.loop), node = dyn(obj.root ?? obj), t0 = o.t0 ?? 0, t1 = o.t1 ?? 1e9, v = o.speed ?? 1.4, m0 = o.mode ?? 'walk', mode = obj.legL && o.gait !== false && ((m0 === 'walk' && v > 2.4) || (m0 === 'shamble' && v > 1.7)) ? 'run' : m0;   // v2.31 gait by speed: too fast for a walk / shamble (legs would flicker) → runs (zombies: arms out); gait: false keeps the mode
   PATHS.push(path); WALKS.push({ obj, path });
-  const rig = !!(obj.legL || obj.quad || obj.isModel), ra = o.ramp ?? (rig ? clamp(0.16 + 0.07 * v, 0.2, 0.55) : 0);
-  const Tp = o.loop ? 1e9 : ra && path.len < v * ra ? 2 * Math.sqrt(path.len * ra / v) : path.len / v + ra, Te = Math.min(Tp, t1 - t0);
+  const rig = !!(obj.legL || obj.quad || obj.isModel), ra = o.ramp ?? (rig ? clamp(0.16 + 0.07 * v, 0.2, 0.55) : 0), wrap = a => Math.atan2(Math.sin(a), Math.cos(a));
+  const tw = clamp(0.3 * v, 0.35, 2.2), yawAt = s => { const a = path.at(s - tw), b = path.at(s + tw), x = b.x - a.x, z = b.z - a.z; return Math.hypot(x, z) > 1e-3 ? Math.atan2(x, z) : null; };   // v2.31: heading = chord over ±tw m (grows with speed) → turns through a corner evenly (was: two 45° steps, one frame each for anything fast)
+  const rt = obj.root ?? obj, WK = rt._walks ??= [], iW = WK.length, ani = !!(obj.beast || obj.chk || obj.bird);
+  let y0 = yawAt(0) ?? 0;
+  // v3.36 turn on the spot: a figure (or model) whose walk sets off more than 40° away from the way it faces — the end of the walk before it, or for the first walk its built
+  // facing (root.rotation.y set before walk(); 0 = not set: faces the path as before) — first turns on the spot, stepping (TH s: 0.8 s for 90°, 1.3 s for 180°), then walks off.
+  // Smaller turns blend over 0.45 s while it sets off. Before t0 the first walk keeps the built facing (was: faced the path the whole time before it started).
+  // A walk that would take over while the walk before is still under way hands over once that one has stopped (tA), and one that starts while the figure is getting up
+  // from sit() waits until it stands (was: it glided off the seat with the feet still)
+  const pv = iW > 0 ? WK[iW - 1] : null, yB = SP ? SP[2] : node.rotation.y, hasB = !!pv || !!SP || (!ani && Math.abs(yB) > 1e-4), pivot = pvt, pE = pv?.tE ?? -1e9;
+  let tA = Math.max(t0, SX ? SX.ex() : -1e9); if (pivot && pv && pE > tA && pE < 1e8 && Math.abs(wrap(y0 - pv.yaw(pE))) > 0.7) tA = pE;
+  const yS = pv && !SP ? pv.yaw(tA) : yB, dY = hasB && o.face == null ? Math.abs(wrap(y0 - yS)) : 0, TH = pivot && dY > 0.7 ? (0.3 + 0.32 * dY) * (mode === 'run' || mode === 'panic' ? 0.55 : 1) : 0, tS = tA + TH;   // tS: when it sets off (running off: spins round faster)
+  const Tp = o.loop ? 1e9 : ra && path.len < v * ra ? 2 * Math.sqrt(path.len * ra / v) : path.len / v + ra, Te = Math.min(Tp, t1 - tS);
   const dist = tau => {   // trapezoid speed profile: accelerate (ra), cruise, brake — stops exactly at Te
     if (tau <= 0) return 0; if (!ra) return v * Math.min(tau, Te);
     const a = v / ra, tr = Math.min(ra, Te / 2), vp = a * tr;
@@ -2895,41 +2909,54 @@ function walk(obj, pts, o = {}) {
     if (tau > Te - tr) { const r = Te - tau; return vp * (Te - tr) - 0.5 * a * r * r; }
     return 0.5 * a * tr * tr + vp * (tau - tr);
   };
-  const tw = clamp(0.3 * v, 0.35, 2.2), yawAt = s => { const a = path.at(s - tw), b = path.at(s + tw), x = b.x - a.x, z = b.z - a.z; return Math.hypot(x, z) > 1e-3 ? Math.atan2(x, z) : null; };   // v2.31: heading = chord over ±tw m (grows with speed) → turns through a corner evenly (was: two 45° steps, one frame each for anything fast)
+  const sE = o.loop ? 1e9 : dist(Te);
   const sc = (obj.root ?? obj).scale.x, Cl = obj.legL ? cycleLen(mode, v) * sc : 0, stride = o.stride ?? (obj.kind === 'chicken' ? 16 : 4), bl = Math.max(ra, 0.22);
-  let y0 = yawAt(0) ?? 0;
+  // v3.36 feet planted while starting and stopping (procedural legs): the step phase starts with the left foot under the body (mid-stance, the right one in the air) and the
+  // cycle length is fitted (± 15 %) so the walk ends that way too — blending in / out of the idle pose no longer drags a foot that is still or about to be planted
+  const u0 = (GAIT[mode] ?? GAIT.walk).b / 2, nC = Cl && sE < 1e8 ? sE / Cl : 0, nH = Math.max(0.5, Math.round(2 * nC) / 2), Clw = nC && Math.abs(nH / nC - 1) < 0.15 ? sE / nH : Cl;
   const gW = (s, P) => { if (!rig || !(STAIRS.length || WALKSURF.length)) return groundH(P.x, P.z); let h = 0; for (let k = -2; k <= 2; k++) { const Q = path.at(s + k * 0.075); h += groundH(Q.x, Q.z); } return h / 5; };   // v2.29 (v3.22: also walk surfaces of models): on stairs the body rises smoothly (was: 18 cm jump per step); the feet still find the steps (foot IK)
-  const rt = obj.root ?? obj; const me = { t0, v, pos: t => { const s = dist(t - t0), P = path.at(s); return new THREE.Vector3(P.x, gW(s, P) + (o.y ?? 0), P.z); }, yaw: t => { let y = o.face ?? (yawAt(dist(t - t0)) ?? y0); const i = rt._walks.indexOf(me), u = t - t0;   // v2.31: a walk that follows another one turns into its new heading over 0.45 s (was: spun round in one frame)
-      const TT = me.turnT(); if (i > 0 && o.face == null && u < TT) { const yp = rt._walks[i - 1].yaw(t0); y = yp + Math.atan2(Math.sin(y - yp), Math.cos(y - yp)) * sm01(Math.max(0, u) / TT); } return y; },
-    turnT: () => me._tT ??= (() => { const i = rt._walks.indexOf(me); if (!(obj.beast || obj.chk || obj.bird) || i < 1 || o.face != null) return 0.45; const yp = rt._walks[i - 1].yaw(t0), y1 = yawAt(0) ?? y0, d = Math.abs(Math.atan2(Math.sin(y1 - yp), Math.cos(y1 - yp))); return 0.45 * Math.max(1, d / (Math.PI / 2)); })() }; (rt._walks ??= []).push(me);   // v2.40.x animals: a turn of more than 90° takes proportionally longer (stepping round instead of sliding)
-  if (obj.beast || obj.chk || obj.bird) {   // v2.40.x beast / chicken / bird feet: stride amplitude as a function of the distance walked (w at the moment a foot touched down) → feet stay planted while starting and stopping
-    const a0 = ra ? v / ra : 0, tr = Math.min(ra, Te / 2), vp = a0 * tr, s1 = 0.5 * a0 * tr * tr, sE = ra ? vp * (Te - tr) : v * Te;
+  const me = { t0: tA, tS, TH, tE: o.loop ? 1e9 : tS + Te, v, sE, pos: t => { const s = dist(t - tS), P = path.at(s); return new THREE.Vector3(P.x, gW(s, P) + (o.y ?? 0), P.z); }, yaw: t => { const u = t - tA;
+      if (o.face != null) return o.face;
+      if (TH) return u < TH ? yS + wrap(y0 - yS) * sm01(Math.max(0, u) / TH) : yawAt(dist(t - tS)) ?? y0;
+      let y = yawAt(dist(t - tS)) ?? y0; if (!pv && hasB && u <= 0) return yB;   // before the first walk: the built facing
+      const TT = me.turnT(); if (hasB && u < TT) y = yS + wrap(y - yS) * sm01(Math.max(0, u) / TT); return y; },   // v2.31: a walk that follows another one turns into its new heading over 0.45 s (was: spun round in one frame)
+    turnT: () => me._tT ??= (() => { if (!ani || iW < 1 || o.face != null) return 0.45; const y1 = yawAt(0) ?? y0, d = Math.abs(wrap(y1 - yS)); return 0.45 * Math.max(1, d / (Math.PI / 2)); })() }; WK.push(me);   // v2.40.x animals: a turn of more than 90° takes proportionally longer (stepping round instead of sliding)
+  if (ani) {   // v2.40.x beast / chicken / bird feet: stride amplitude as a function of the distance walked (w at the moment a foot touched down) → feet stay planted while starting and stopping
+    const a0 = ra ? v / ra : 0, tr = Math.min(ra, Te / 2), vp = a0 * tr, s1 = 0.5 * a0 * tr * tr;
     const tauS = q => { q = clamp(q, 0, sE); return !ra ? q / v : q < s1 ? Math.sqrt(2 * q / a0) : q < sE - s1 ? tr + (q - s1) / vp : Te - Math.sqrt(Math.max(0, 2 * (sE - q) / a0)); }, wAt = tau => (tau <= 0 || tau >= Te ? 0 : clamp(Math.min(tau, Te - tau) / bl));
     Object.assign(me, { Te, bl, sE, dist, tauS, wAt: tt => wAt(tt - t0), wS: q => (q <= 0 || q >= sE ? 0 : wAt(tauS(q))) }); }
-  const pick = t => { let w = rt._walks[0]; for (const x of rt._walks) if (x.t0 <= t) w = x; return w; };
-  obj._posAt = t => pick(t).pos(t); obj._yawAt = t => pick(t).yaw(t); me.sAt = t => dist(t - t0); obj._sAt = t => pick(t).sAt(t);   // distance walked on the current walk (stepping legs of spiders etc.)
+  const pick = t => { let w = WK[0]; for (const x of WK) if (x.t0 <= t) w = x; return w; };
+  obj._posAt = t => pick(t).pos(t); obj._yawAt = t => pick(t).yaw(t); me.sAt = t => dist(t - tS); obj._sAt = t => pick(t).sAt(t);   // distance walked on the current walk (stepping legs of spiders etc.)
+  if (o.face != null || o.side) (obj._sideW ??= []).push([tA, tS + Te]);   // v3.36 QA CRAB: walking sideways on purpose (fixed heading)
+  if (TH && obj.legL && obj.fx) {   // stepping round on the spot: the feet lift in turn (inner foot first), the body yaws over them
+    const n = Math.max(2, Math.round(dY / (Math.PI / 4))), first = wrap(y0 - yS) > 0 ? 0 : 1;
+    obj.fx.push(fxw((t, S) => { const u = t - tA; if (u <= 0 || u >= TH) return; const q = u / TH * n, k = Math.floor(q), f = q - k, lift = 0.075 * Math.sin(Math.PI * f), L = (k + first) % 2 === 0;
+      const [z, y] = legFK(L ? S.lt : S.rt, L ? S.lk : S.rk), [a, b] = legIK(z + 0.03 * Math.sin(Math.PI * f), y + lift); if (L) { S.lt = a; S.lk = b; S.lf += 0.35 * Math.sin(Math.PI * f); } else { S.rt = a; S.rk = b; S.rf += 0.35 * Math.sin(Math.PI * f); }
+      S.hx += (L ? 0.018 : -0.018) * Math.sin(Math.PI * f); }, tA, tS)); }
   if (o.prints && obj.legL) {   // footprints (snow, sand, mud): o.prints = true | hex colour; o.printLife (s)
-    const g0 = GAIT[mode] ?? GAIT.walk, Sd = g0.b * Cl, items = [], fwd = s => yawAt(s) ?? y0;
-    for (let k = 0; k < 600; k++) { const sk = k * Cl / 2, s = sk + Sd / 2; if (s > path.len && !o.loop) break; if (sk > dist(Te)) break;
+    const g0 = GAIT[mode] ?? GAIT.walk, Sd = g0.b * Clw, items = [], fwd = s => yawAt(s) ?? y0;
+    for (let k = 0; k < 600; k++) { const sk = (k / 2 - u0) * Clw, s = sk + Sd / 2; if (s > path.len && !o.loop) break; if (sk > dist(Te)) break;
       let lo = 0, hi = Math.min(Te, 1e4); for (let i = 0; i < 40; i++) { const m = (lo + hi) / 2; if (dist(m) < sk) lo = m; else hi = m; }
-      const P = path.at(s), yw = fwd(s), lx = (k % 2 ? 1 : -1) * 0.12 * sc; items.push([P.x + Math.cos(yw) * lx, P.z - Math.sin(yw) * lx, yw, t0 + hi]); }
+      const P = path.at(s), yw = fwd(s), lx = (k % 2 ? 1 : -1) * 0.12 * sc; items.push([P.x + Math.cos(yw) * lx, P.z - Math.sin(yw) * lx, yw, tS + hi]); }
     const im = new THREE.InstancedMesh(G('print', () => new THREE.CylinderGeometry(0.07, 0.07, 0.01, 8).scale(1, 1, 2)), mat(typeof o.prints === 'string' ? o.prints : '#4A3A2A', { opacity: 0.55 }), items.length), o3 = new THREE.Object3D();
     im.castShadow = false; im.frustumCulled = false; im.userData.cover = true; world.add(dyn(im)); const life = o.printLife ?? 1e9;
     tick(t => { items.forEach(([x, z, yw, ta], i) => { const u = t - ta, k = u < 0 ? 0 : u > life ? Math.max(0, 1 - (u - life) / 2) : 1; o3.position.set(x, groundH(x, z) + 0.012, z); o3.rotation.set(0, yw, 0); o3.scale.setScalar(k * sc); o3.updateMatrix(); im.setMatrixAt(i, o3.matrix); }); im.instanceMatrix.needsUpdate = true; });
   }
-  return tick(t => {
-    if (rt._walks.length > 1 && pick(t) !== me) return;   // v2.31: several walks on one figure hand over at their t0 (was: the walk written last held the figure at its start the whole time)
-    const tau = t - t0, s = dist(tau), moving = tau > 0 && tau < Te;
+  if (SX) { let lo = 0, hi = Math.max(0, Te); for (let i = 0; i < 30; i++) { const m = (lo + hi) / 2; if (dist(m) < Math.min(0.6, sE)) lo = m; else hi = m; } SX.clr = tS + hi; }   // hitboxes back once it walked 0.6 m off the seat
+  const T = tick(t => {
+    if (WK.length > 1 && pick(t) !== me) return;   // v2.31: several walks on one figure hand over at their t0 (was: the walk written last held the figure at its start the whole time)
+    const tau = t - tS, s = dist(tau), moving = tau > 0 && tau < Te;
     const P = path.at(s); node.position.set(P.x, gW(s, P) + (o.y ?? 0), P.z);
-    const yw = yawAt(s) ?? y0; node.rotation.y = me.yaw(t);
+    const yw = yawAt(s) ?? y0; if (pv || !hasB || t > tA) { const R = node.rotation; if (Math.abs(R.x) > 3 && Math.abs(R.z) > 3) R.set(0, Math.PI - R.y, 0); R.y = me.yaw(t); }   // before it starts, the first walk leaves the built facing alone · v3.36: a built yaw beyond ±90° comes back from the reset as (π, π − yaw, π): unfold it first (setting y alone flipped the figure)
     const w = moving ? clamp(Math.min(tau, Te - tau) / bl) : 0, vn = moving ? (dist(tau + 0.02) - dist(tau - 0.02)) / 0.04 : 0;
     const from = tau < Te / 2 ? (o.startMode ?? 'idle') : (o.endMode ?? 'idle');
     let turn = (yawAt(s + 0.5) ?? yw) - (yawAt(s - 0.5) ?? yw); turn = Math.atan2(Math.sin(turn), Math.cos(turn));
-    if (obj.beast || obj.chk || obj.bird) obj._wk = me;
+    if (ani) obj._wk = me;
     if (obj.quad) animalPose(obj, moving, s * stride / sc, t, o.graze ?? 0.6, w, s);
     else if (obj.isModel) obj.pose(mode, s / ((obj.stride[mode] ?? 1.3) * sc), t, { w, from, v: vn });
-    else if (obj.legL) pose(obj, mode, TAU * s / Cl, t, { v, w, from, turn: mode === 'run' ? turn : 0, dist: s / sc });
+    else if (obj.legL) pose(obj, mode, TAU * (u0 + s / Clw), t, { v, w, wLo: moving ? sm01(Math.min(1, tau / 0.3, (Te - tau) / 0.3, s / (0.2 * sc), (sE - s) / (0.2 * sc))) : 0, from, turn: mode === 'run' ? turn : 0, dist: s / sc, distE: sE < 1e8 ? sE / sc : null, cl: Clw / sc });
   });
+  T._tS = tS; return T;
 }
 
 function appear(obj, t0, o = {}) {   // from: pop | rise | drop
@@ -3010,9 +3037,45 @@ const MOCAP = /* @MOCAP */null, _mcD = new Map(), _mcV = new THREE.Vector3();
 const MC_STRIDE = { Walk_Loop: 1.3, Jog_Fwd_Loop: 5, Sprint_Loop: 5.5, Crouch_Fwd_Loop: 1.5, Zombie_Walk_Fwd_Loop: 1.4 };   // m per clip cycle (mannequin, root-motion versions)
 // v3.26 stride grows with speed (was: a fixed distance per clip cycle → slow motion at 0.6 m/s, fast-forward at 2.3 m/s): stride scale = (v / v0)^e within [min, max],
 // v0 = the clip's own speed; the leg (and arm, hip bob) swing is scaled around the clip's mean pose by the same factor, so the feet stay planted. Walk ↔ jog blend over 1.8 … 3 m/s.
-const MC_GAIT = { Walk_Loop: [0.5, 0.6, 1.35], Jog_Fwd_Loop: [1, 0.5, 1.3], Sprint_Loop: [0.8, 0.6, 1.2], Crouch_Fwd_Loop: [0.5, 0.6, 1.3], Zombie_Walk_Fwd_Loop: [0.5, 0.6, 1.3] };   // exponent e, min, max
+const MC_GAIT = { Walk_Loop: [0.5, 0.6, 1.35], Jog_Fwd_Loop: [1, 0.5, 1.4], Sprint_Loop: [0.8, 0.6, 1.4], Crouch_Fwd_Loop: [0.5, 0.6, 1.3], Zombie_Walk_Fwd_Loop: [0.5, 0.6, 1.3] };   // exponent e, min, max
 const MC_PH = { Jog_Fwd_Loop: -0.134 };   // cycle offset against Walk_Loop: the left leg forward at the same phase (blends without scissoring)
-function mcAmp(g, v) { const D = mcClip(g, true), G = MC_GAIT[g]; if (!D || !G || !(v > 0)) return 1; return clamp((v / (MC_STRIDE[g] * (MOCAP.k ?? 0.9) / D.d)) ** G[0], G[1], G[2]); }
+function mcAmp(g, v) { const D = mcClip(g, true), G = MC_GAIT[g]; if (!D || !G || !(v > 0)) return 1; return clamp((v / (mcStride(g) / D.d)) ** G[0], G[1], G[2]); }
+// v3.36 gait of a locomotion clip, measured from its foot contacts on the figure's own legs (was: a fixed stride per clip — Sprint_Loop's feet covered 2.9 m per cycle
+// where 4.8 m were assumed, so the planted foot slid 2 m/s at a sprint): win = the frames each foot is down (the longest run within 2.5 cm of its lowest point; a
+// swing-scaled copy keeps the windows of its clip), stride = the backward sweep over the window → m per cycle (the walk's clip time follows it), yC = ankle height
+// in contact (the hips go down / up by ANK − yC: the sprint no longer floats 3 cm), ph = the clip phase with the left foot under the body (walks start and stop there).
+// The clips' feet do not move back evenly (a sprint foot lands, waits, then whips back): _mcLock() spreads that sweep evenly over the window with leg IK.
+function mcGait(D) {
+  if (!D) return null; if (D.gait) return D.gait; const T = { p: new THREE.Vector3(), q: {} }, a = new THREE.Vector3(), b = new THREE.Vector3(), n = D.n, F = [[], []], dt = 1 / MOCAP.fps;
+  for (let i = 0; i < n; i++) { mcSample(D, i / MOCAP.fps, false, T); [['legL', 'shinL', -1], ['legR', 'shinR', 1]].forEach(([L, S, sx], k) => {
+    a.set(0, -LEG2, 0).applyQuaternion(T.q[S]).add(b.set(0, -LEG1, 0)).applyQuaternion(T.q[L]).add(b.set(sx * 0.12, 0, 0)).applyQuaternion(T.q.hips).add(b.set(T.p.x, HIP + T.p.y, T.p.z)); F[k].push([a.y, a.z]); }); }
+  const B = D.base ? mcGait(D.base) : null, Y = F.map(R => Math.min(...R.map(r => r[0])));
+  const win = B ? B.win : F.map((R, k) => { const on = R.map(r => r[0] < Y[k] + 0.025); let best = [0, 0]; for (let i = 0; i < n; i++) { if (!on[i] || on[(i - 1 + n) % n]) continue; let l = 0; while (l < n - 1 && on[(i + l + 1) % n]) l++; if (l > best[1]) best = [i, l]; } return best; });
+  const V = win.map(([w0, l], k) => l >= 1 ? (F[k][w0][1] - F[k][(w0 + l) % n][1]) / (l * dt) : 0).filter(x => x > 0.2), v = V.length ? V.reduce((x, y) => x + y) / V.length : 0;
+  let ph = 0, bz = 1e9; { const [w0, l] = win[0]; for (let o = 0; o <= l; o++) { const i = (w0 + o) % n; if (Math.abs(F[0][i][1]) < bz) { bz = Math.abs(F[0][i][1]); ph = i / n; } } }
+  return (D.gait = { stride: v > 0.2 ? v * D.d : null, yC: (Y[0] + Y[1]) / 2, ph, win, F }); }
+// v3.36 planted feet in walk / run clips: inside a foot's contact window the ankle moves back evenly (the window's sweep spread over its frames; the ends stay where the clip
+// has them, so nothing pops) and sits at ANK — two-bone IK on the thigh and the knee, weighted by the clip's share of the legs
+const _lkA = new THREE.Vector3(), _lkB = new THREE.Vector3(), _lkC = new THREE.Vector3(), _lkQ = new THREE.Quaternion(), _lkR = new THREE.Quaternion(), _lkX = new THREE.Vector3(1, 0, 0);
+function _mcLock(f, e, w) {
+  if (CFG.footLock === false || !(w > 0.02) || !MC_STRIDE[e.D.name] || (e.D2 && e.k2 > 0.05 && e.k2 < 0.95)) return;
+  const D = e.amp && Math.abs(e.amp - 1) > 1e-3 ? mcClipAmp(e.D, e.amp) : e.D, G = mcGait(D); if (!G?.stride) return;
+  const n = D.n, fr = ((e.time / D.d % 1 + 1) % 1) * n, dy = e.dyC ?? 0;
+  [[f.legL, f.shinL, f.footL], [f.legR, f.shinR, f.footR]].forEach(([th, sh, ft], k) => { const [w0, l] = G.win[k]; if (l < 1) return; const o = ((fr - w0) % n + n) % n; if (o > l) return;
+    const R = G.F[k], i0 = Math.floor(fr) % n, i1 = (i0 + 1) % n, fk = fr - Math.floor(fr), yc = lerp(R[i0][0], R[i1][0], fk), zc = lerp(R[i0][1], R[i1][1], fk);
+    const zt = lerp(R[w0][1], R[(w0 + l) % n][1], o / l), ed = Math.min(o, l - o) / Math.max(1e-3, l), wy = sm01(ed / 0.25);   // the height eases in / out at the window ends
+    const dz = (zt - zc) * w, dh = clamp(ANK - (yc + dy), -0.04, 0.04) * w * wy; if (Math.abs(dz) + Math.abs(dh) < 1e-3) return;
+    _legTo(f, th, sh, ft, dz, dh); });
+}
+function _legTo(f, th, sh, ft, dz, dh) {   // v3.36 two-bone leg IK: move the ankle by (0, dh, dz) of the body frame (thigh and knee turn, the foot keeps its angle to the shin)
+  _lkA.copy(ft.position).applyQuaternion(sh.quaternion).add(sh.position).applyQuaternion(th.quaternion);   // ankle relative to the hip joint, in the hips frame
+  _lkB.set(0, dh, dz).applyQuaternion(_lkQ.copy(f.hips.quaternion).invert()).add(_lkA);
+  const L1 = sh.position.length(), L2 = ft.position.length(), d0 = _lkA.length(), d1 = clamp(_lkB.length(), 0.2, (L1 + L2) * 0.999), ang = d => Math.acos(clamp((L1 * L1 + L2 * L2 - d * d) / (2 * L1 * L2), -1, 1));
+  sh.quaternion.multiply(_lkR.setFromAxisAngle(_lkX, ang(d0) - ang(d1)));   // knee: straighter / more bent for the new hip–ankle distance
+  _lkC.copy(ft.position).applyQuaternion(sh.quaternion).add(sh.position).applyQuaternion(th.quaternion).normalize();
+  th.quaternion.premultiply(_lkR.setFromUnitVectors(_lkC, _lkB.normalize()));
+}
+function mcStride(g, amp = 1) { const D = mcClip(g, true), A = D && Math.abs(amp - 1) > 1e-3 ? mcClipAmp(D, amp) : D, m = mcGait(A)?.stride; return m ?? MC_STRIDE[g] * (MOCAP.k ?? 0.9) * amp; }   // metres per clip cycle at swing scale amp
 function mcAvg(D) {   // mean pose of a clip (per joint, sign-aligned quaternion average; hips offset)
   if (D.avg) return D.avg; const A = { p: new THREE.Vector3(), q: {} }, T = { p: new THREE.Vector3(), q: {} };
   for (let i = 0; i < D.n; i++) { mcSample(D, i / MOCAP.fps, false, T); A.p.add(T.p); for (const j in T.q) { const a = A.q[j] ??= new THREE.Quaternion(0, 0, 0, 0), q = T.q[j], sg = i && a.x * q.x + a.y * q.y + a.z * q.z + a.w * q.w < 0 ? -1 : 1; a.set(a.x + sg * q.x, a.y + sg * q.y, a.z + sg * q.z, a.w + sg * q.w); } }
@@ -3024,7 +3087,7 @@ function mcClipAmp(D, s) {   // the clip with its swing scaled by s (quantised t
   const W = 3 + 4 * MOCAP.joints.length, A = mcAvg(D), a = new Float32Array(D.n * W), T = { p: new THREE.Vector3(), q: {} };
   for (let i = 0; i < D.n; i++) { mcSample(D, i / MOCAP.fps, false, T); mcScale(T, A, k); const B = i * W; a[B] = T.p.x * 1e4; a[B + 1] = T.p.y * 1e4; a[B + 2] = T.p.z * 1e4;
     MOCAP.joints.forEach((j, m) => { const q = T.q[j], o = B + 3 + 4 * m; a[o] = q.x; a[o + 1] = q.y; a[o + 2] = q.z; a[o + 3] = q.w; }); }
-  return (C[k] = { n: D.n, d: D.d, a, name: D.name + '@' + k }); }
+  return (C[k] = { n: D.n, d: D.d, a, name: D.name + '@' + k, base: D }); }
 function mcMix(P, B, k) { P.p.lerp(B.p, k); for (const j in P.q) if (B.q[j]) P.q[j].slerp(B.q[j], k); return P; }
 const MC_REG = { hips: 'lo', legL: 'lo', shinL: 'lo', footL: 'lo', legR: 'lo', shinR: 'lo', footR: 'lo', chest: 'to', neck: 'to', armL: 'aL', foreL: 'aL', handL: 'aL', armR: 'aR', foreR: 'aR', handR: 'aR' };
 const MC_KEYS = { lo: [['lt', 1], ['lk', 1], ['lf', 1], ['lz', 1], ['rt', 1], ['rk', 1], ['rf', 1], ['rz', 1], ['hrx', 1], ['hry', 1], ['hrz', 1], ['H', 3], ['hx', 3]],
@@ -3043,20 +3106,22 @@ const _mcJ = f => f._mcJ ??= Object.fromEntries((MOCAP?.joints ?? []).map(j => [
 function _mcTalk(f, t) {   // share of the last 0.5 s the figure was talking (talk: [[t0, t1]] | t => bool, or its lines in BEATS) — clips cross-fade with it
   const on = s => (typeof f.talk === 'function' ? !!f.talk(s) : Array.isArray(f.talk) && f.talk.some(([a, b]) => s >= a && s <= b)) || (!!f.who && BEATS.some(b => b.who === f.who && s >= b.t && s <= b.t + (b.dur ?? 3)));
   if (!f.talk && !f.who) return 0; let n = 0; for (let k = 0; k < 6; k++) n += on(t - k * 0.1) ? 1 : 0; return n / 6; }
-function _mcLayer(f, mode, ph, t, v, dist) {   // the clips a figure shows for a pose mode → [{ D, time, loop, w, mask, keepH }] (weights < 1: the rest is its own pose)
+function _mcLayer(f, mode, ph, t, v, dist, distE) {   // the clips a figure shows for a pose mode → [{ D, time, loop, w, mask, keepH }] (weights < 1: the rest is its own pose)
   if (!MOCAP || !f.legL || !(f.mocap ?? CFG.mocap ?? true)) return [];
   const zb = f.kind === 'zombie', E = (name, time, w = 1, x = {}) => { const D = mcClip(name, true); return D && w > 0 ? [{ D, time, loop: true, w, ...x }] : []; };
   const run = mode === 'run' || (mode === 'panic' && (v ?? 0) > 0.3), g = run ? ((v ?? 4.5) >= 6 || mode === 'panic' ? 'Sprint_Loop' : 'Jog_Fwd_Loop') : { walk: 'Walk_Loop', sneak: 'Crouch_Fwd_Loop', shamble: 'Zombie_Walk_Fwd_Loop' }[mode];
   if (g) { const D = mcClip(g, true); if (!D) return [];
-    const sl = MC_STRIDE[g] * (MOCAP.k ?? 0.9), vv = run ? 4.5 : mode === 'shamble' ? 0.8 : 1.4, mask = mode === 'panic' || (zb && run) ? 'lower' : null;   // panic / zombies running: arms stay their own
+    const sl = mcStride(g), vv = run ? 4.5 : mode === 'shamble' ? 0.8 : 1.4, mask = mode === 'panic' || (zb && run) ? 'lower' : null;   // panic / zombies running: arms stay their own
     if (dist == null) { const u = ph / TAU * cycleLen(mode, vv) / sl; return [{ D, time: u * D.d, loop: true, w: 1, mask }]; }   // the figure's own cycle (phase) at the mode's usual speed → metres → clip cycles (independent of v: a tick switching modes never jumps a clip)
     // walk(): by distance (feet stay planted) — v is the walk's cruise speed (one value per walk(): the stride never changes under way)
+    // v3.36: stride measured from the clip (mcGait); the walk starts with the left foot under the body and the stride is fitted (± 15 %) so it ends with a foot under it (distE)
     const vs = (v ?? vv) / (f.root?.scale.x || 1), a = mcAmp(g, vs), wj = !zb && (mode === 'walk' || g === 'Jog_Fwd_Loop') && mcClip('Walk_Loop', true) && mcClip('Jog_Fwd_Loop', true) ? (mode === 'run' && vs < 2.4 ? 1 : sm01((vs - 1.8) / 1.2)) : g === 'Jog_Fwd_Loop' ? 1 : 0;
-    if (wj <= 1e-3 || wj >= 0.999 || !(mode === 'walk' || g === 'Jog_Fwd_Loop')) { const G2 = wj >= 0.999 ? 'Jog_Fwd_Loop' : g, D2 = mcClip(G2, true), a2 = mcAmp(G2, vs), u = dist / (MC_STRIDE[G2] * (MOCAP.k ?? 0.9) * a2) + (MC_PH[G2] ?? 0);
-      return [{ D: D2, time: u * D2.d, loop: true, w: 1, mask, amp: a2 }]; }
-    const DW = mcClip('Walk_Loop', true), DJ = mcClip('Jog_Fwd_Loop', true), aW = mcAmp('Walk_Loop', vs), aJ = mcAmp('Jog_Fwd_Loop', vs), K = MOCAP.k ?? 0.9;
-    const u = dist / lerp(MC_STRIDE.Walk_Loop * K * aW, MC_STRIDE.Jog_Fwd_Loop * K * aJ, wj);   // one phase for both clips: the blended stride
-    return [{ D: DW, time: u * DW.d, loop: true, w: 1, mask, amp: aW, D2: DJ, time2: (u + MC_PH.Jog_Fwd_Loop) * DJ.d, amp2: aJ, k2: wj }]; }
+    const fit = st => { if (!(distE > 0)) return 1; const n = distE / st, nh = Math.max(0.5, Math.round(2 * n) / 2); return Math.abs(nh / n - 1) < 0.15 ? nh / n : 1; }, GA = (D0, am) => mcGait(Math.abs(am - 1) > 1e-3 ? mcClipAmp(D0, am) : D0);
+    if (wj <= 1e-3 || wj >= 0.999 || !(mode === 'walk' || g === 'Jog_Fwd_Loop')) { const G2 = wj >= 0.999 ? 'Jog_Fwd_Loop' : g, D2 = mcClip(G2, true), a2 = mcAmp(G2, vs), st = mcStride(G2, a2), I = GA(D2, a2), u = dist / st * fit(st) + (I?.ph ?? 0);
+      return [{ D: D2, time: u * D2.d, loop: true, w: 1, mask, amp: a2, dyC: I ? ANK - I.yC : 0 }]; }
+    const DW = mcClip('Walk_Loop', true), DJ = mcClip('Jog_Fwd_Loop', true), aW = mcAmp('Walk_Loop', vs), aJ = mcAmp('Jog_Fwd_Loop', vs), IW = GA(DW, aW), IJ = GA(DJ, aJ), st = lerp(mcStride('Walk_Loop', aW), mcStride('Jog_Fwd_Loop', aJ), wj);
+    const u = dist / st * fit(st) + (IW?.ph ?? 0), dJ = IW && IJ ? IJ.ph - IW.ph : MC_PH.Jog_Fwd_Loop;   // one phase for both clips: the blended stride (left foot down in both at the same phase)
+    return [{ D: DW, time: u * DW.d, loop: true, w: 1, mask, amp: aW, D2: DJ, time2: (u + dJ) * DJ.d, amp2: aJ, k2: wj, dyC: lerp(IW ? ANK - IW.yC : 0, IJ ? ANK - IJ.yC : 0, wj) }]; }
   const tk = mode === 'idle' || mode === 'sit' ? _mcTalk(f, t) : 0, off = f.sd * 7.3;
   if (mode === 'idle') { if (zb) return E('Zombie_Idle_Loop', t + off);
     const base = f.idle ? (MOCAP.alias?.[f.idle] ?? f.idle) : 'Idle_Loop'; return [...E(base, t + off, 1 - tk), ...E('Idle_Talking_Loop', t + off, tk)]; }
@@ -3066,7 +3131,8 @@ const _mcHp = new THREE.Vector3(), _mcPos = new THREE.Vector3(), _mcI = new THRE
 function _mcApply(f, L, S, S0, q) {   // L: clips with weights. On the joints now: the pose S (own pose of the mode(s) + layers: body language, react, gestures, IK …)
   // automatic clips (e.mode) swap their mode's own pose for the clip inside that pose: joint · (own pose of the mode → clip)^w — cross-fades with modes without a clip stay even,
   // every layer stays on top. Clips from anim() replace the pose: slerp to clip · (S0 → S, the layers). Big layers (wave, grab, point, IK) take their limb back (R).
-  if (!L.some(e => e.w > 1e-3)) return;
+  for (const e of L) e.wLo ??= e.w;   // v3.36 wLo: the clip's weight on the legs and hips (walk(): the legs follow the gait from the first centimetre)
+  if (!L.some(e => e.w > 1e-3 || e.wLo > 1e-3)) return;
   const J = _mcJ(f), P = f._mcP ??= [], Q = f._mcQ ??= {}, Q0 = f._mcQ0 ??= {}, PM = f._mcPM ??= {}, hp = _mcHp.copy(f.hips.position);
   L.forEach((e, i) => { const Pi = mcSample(e.amp ? mcClipAmp(e.D, e.amp) : e.D, e.time, e.loop, P[i] ??= { p: new THREE.Vector3(), q: {} });   // v3.26: stride-scaled swing, walk ↔ jog blend
     if (e.D2 && e.k2 > 1e-3) mcMix(Pi, mcSample(e.amp2 ? mcClipAmp(e.D2, e.amp2) : e.D2, e.time2, true, f._mcB ??= { p: new THREE.Vector3(), q: {} }), e.k2); });
@@ -3076,28 +3142,31 @@ function _mcApply(f, L, S, S0, q) {   // L: clips with weights. On the joints no
     if (act.length) for (let i = 1; i <= 6; i++) for (let sg = -1; sg <= 1; sg += 2) { const dt = sg * i * 0.05, T = { ...S0 }; try { for (const fx of act) fx(tm + dt, T); } catch (e) { continue; } Sx.push([T, 1 - i / 7]); } }
   for (const r in MC_KEYS) { let R0 = 0; if (S0) for (const [X, w] of Sx) { let d = 0; for (const [k, m] of MC_KEYS[r]) d = Math.max(d, Math.abs((X[k] ?? 0) - (S0[k] ?? 0)) * m); R0 = Math.max(R0, sm01(d / 0.8) * w); } R[r] = R0; } f._mcR = R;   // a sample further away counts less: R rises over ~0.3 s
   for (const j in J) if (J[j]) (Q[j] ??= new THREE.Quaternion()).copy(J[j].quaternion);
-  const modes = [...new Set(L.filter(e => e.mode && e.w > 1e-3).map(e => e.mode))], opt = _poseOpt(f, q?.o ?? { v: q?.v });
+  const modes = [...new Set(L.filter(e => e.mode && (e.w > 1e-3 || e.wLo > 1e-3)).map(e => e.mode))], opt = _poseOpt(f, q?.o ?? { v: q?.v });
   for (const md of modes) { const Sm = rigState(md, (q?.ph ?? 0) / TAU, f._mcT, opt); applyRig(f, Sm); const M = PM[md] ??= { q: {}, p: new THREE.Vector3() }; for (const j in J) if (J[j]) (M.q[j] ??= new THREE.Quaternion()).copy(J[j].quaternion); M.p.set(Sm.hx, Sm.H, 0); }
   const ex = L.some(e => !e.mode && e.w > 1e-3);
   if (ex && S0) { applyRig(f, S0); for (const j in J) if (J[j]) (Q0[j] ??= new THREE.Quaternion()).copy(J[j].quaternion); }
   if (modes.length || (ex && S0)) applyRig(f, S);
   const I = _mcI, d = _mcD2, d2 = _mcD3, o = _mcO, pos = _mcPos.copy(hp); let on = 0;   // v3.26: temporaries instead of clones per joint and layer
   for (const j in J) { if (!J[j]) continue; o.copy(Q[j]); const keep = 1 - R[MC_REG[j]];
-    for (let i = 0; i < L.length; i++) { const e = L[i]; if (!e.mode || e.w <= 1e-3 || !_mcIn(e.mask, j)) continue; d.copy(PM[e.mode].q[j]).invert().multiply(P[i].q[j]); o.multiply(I.identity().slerp(d, e.w * keep)); on = Math.max(on, e.w); }
+    const lo = MC_REG[j] === 'lo'; for (let i = 0; i < L.length; i++) { const e = L[i], ew = lo ? e.wLo : e.w; if (!e.mode || ew <= 1e-3 || !_mcIn(e.mask, j)) continue; d.copy(PM[e.mode].q[j]).invert().multiply(P[i].q[j]); o.multiply(I.identity().slerp(d, ew * keep)); on = Math.max(on, ew); }
     for (let i = 0; i < L.length; i++) { const e = L[i]; if (e.mode || e.w <= 1e-3 || !_mcIn(e.mask, j)) continue; d.copy(P[i].q[j]); if (S0) d.multiply(d2.copy(Q0[j]).invert().multiply(Q[j])); o.slerp(d.normalize(), e.w * (e.noR ? 1 : keep)); on = Math.max(on, e.w); }
     J[j].quaternion.copy(o.normalize()); }
   const kl = 1 - R.lo;   // hips: the same for the position
-  L.forEach((e, i) => { if (e.w <= 1e-3 || !_mcIn(e.mask, 'hips')) return; const p = P[i].p, w = e.w * (e.noR ? 1 : kl);
-    if (e.mode) { const M = PM[e.mode].p; pos.x += (p.x - M.x) * w; if (!e.keepH) pos.y += (HIP + p.y - M.y) * w; pos.z += p.z * w; }
+  L.forEach((e, i) => { if (e.wLo <= 1e-3 || !_mcIn(e.mask, 'hips')) return; const p = P[i].p, w = e.wLo * (e.noR ? 1 : kl);
+    if (e.mode) { const M = PM[e.mode].p; pos.x += (p.x - M.x) * w; if (!e.keepH) pos.y += (HIP + p.y - M.y + (e.dyC ?? 0)) * w; pos.z += p.z * w; }
     else { const dx = S0 ? S.hx - S0.hx : 0, dy = (S0 ? S.H - S0.H : 0) + (e.dy ?? 0); pos.x = lerp(pos.x, p.x + dx, w); if (!e.keepH) pos.y = lerp(pos.y, HIP + p.y + dy, w); pos.z = lerp(pos.z, p.z, w); } });
-  f.hips.position.copy(pos); f._mcOn = on; }
+  f.hips.position.copy(pos); f._mcOn = on;
+  for (const e of L) if (e.mode && e.wLo > 0.02 && _mcIn(e.mask, 'legL')) _mcLock(f, e, e.wLo * kl);
+  for (const e of L) if (e.legDy && e.w > 0.02) for (const [th, sh, ft] of [[f.legL, f.shinL, f.footL], [f.legR, f.shinR, f.footR]]) _legTo(f, th, sh, ft, 0, -e.legDy * e.w); }   // v3.36 sitting clips on a seat higher / lower than theirs (0.42 m): the feet stay on the floor
 function _mcPass(f, m, t, o, S) {   // after applyRig: the clip of the pose mode (automatic) + anim() schedule on the figure (pure function of t)
   f._mcOn = 0; if (!MOCAP) return;
   const q = f._mcq; f._mcq = null; let L = []; f._mcT = t;
-  if (q) { const lay = (md, k) => _mcLayer(f, md, q.ph, t, q.v, q.o?.dist).map(e => ({ ...e, mode: md, w: e.w * k }));
+  if (q) { const lay = (md, k, kl = k) => _mcLayer(f, md, q.ph, t, q.v, q.o?.dist, q.o?.distE).map(e => ({ ...e, mode: md, w: e.w * k, wLo: e.w * kl }));
     let kA = 1, kB = 0; if (q.from != null && q.w != null && q.w < 1) { kA = EASE.inOut(clamp(q.w)); kB = 1 - kA; }
+    let kAL = kA; if (q.from != null && q.o?.wLo != null) kAL = clamp(q.o.wLo);   // v3.36 walk(): legs by distance, upper body by time
     const kX = q.X && q.X.w < 1 ? EASE.inOut(q.X.w) : 1;
-    L = [...lay(q.mode, kA * kX), ...(kB ? lay(q.from, kB * kX) : [])];
+    L = [...lay(q.mode, kA * kX, kAL * kX), ...(kB || kAL < 1 ? lay(q.from, kB * kX, (1 - kAL) * kX) : [])];
     if (kX < 1 && typeof q.X.from === 'string' && q.X.from !== PREVPOSE) L.push(...lay(q.X.from, 1 - kX)); }
   if (f._mcSched) { const E = f._mcSched(t); if (E) for (const e of E) if (e.D) L.push(e); }   // anim() clips on top (their weight: fade in / out)
   // the engine takes the body over (falls, held / pinned poses, ragdoll): mocap fades out 0.25 s before and back in after
@@ -3108,8 +3177,8 @@ function _mcPass(f, m, t, o, S) {   // after applyRig: the clip of the pose mode
     off = Math.max(off, U < 0.88 ? sm01((t - F.t + 0.15) / 0.15) : 1 - sm01((U - 0.88) / 0.22));
     if (U >= 0 && U < 1.1 && F.geo().mc) { const D = mcClip('LayToIdle', true); if (D) X.push({ D, time: Math.min(U, 1) * (D.d - 1e-3), loop: false, w: sm01(U / 0.12) * (1 - sm01((U - 0.88) / 0.22)), noR: true }); } }
   if (f._mcX) for (const fn of f._mcX) fn(t, X, q);
-  if (off > 0) for (const e of L) e.w *= 1 - off;
-  for (const e of X) if (e.w > 1e-3) { if (!e.add) for (const l of L) l.w *= 1 - e.w; L.push(e); }   // a transition clip replaces what was there (add: on top, e.g. a short hit)
+  if (off > 0) for (const e of L) { e.w *= 1 - off; if (e.wLo != null) e.wLo *= 1 - off; }
+  for (const e of X) if (e.w > 1e-3) { if (!e.add) for (const l of L) { l.w *= 1 - e.w; if (l.wLo != null) l.wLo *= 1 - e.w; } L.push(e); }   // a transition clip replaces what was there (add: on top, e.g. a short hit)
   _mcApply(f, L, S, f._S0t === t ? f._S0 : null, q); }
 // v3.8 crowds: the members of horde()/crowd draw the same rig from S (no groups) — local joint quaternions of that rig, and the member's mocap pose
 const _mcEq = (() => { const E = new THREE.Euler(); return (S, out) => { const st = (k, x, y, z, o = 'XYZ') => (out[k] ??= new THREE.Quaternion()).setFromEuler(E.set(x, y, z, o)), comp = -S.hx / 0.78 - S.hrz;
@@ -3425,7 +3494,11 @@ function gate(p, x, z, o = {}) {   // farm gate on two posts; returns { g, door 
 }
 // sit(rig, t0, { t1, seat: bench | [x, y, z], ry, h }) — sits down (seat height h, default 0.45) and gets up again at t1
 function sit(f, t0, o = {}) {
-  const t1 = o.t1 ?? 1e9, sh = o.h ?? 0.45, opt = { sd: f.sd };
+  // v3.36 seat: [x, y, z] is the floor point under the seat (R.seat / P.seat / F.seat give that, R.seat with .h = seat height); a point on the cushion itself
+  // (0.15–1 m above the ground there, no h) counts as the seat top: the figure stands on the floor below it and h = its height (was: stood on the sofa cushion)
+  let fy = null, h0 = o.h ?? (Array.isArray(o.seat) ? o.seat.h : null);
+  if (Array.isArray(o.seat)) { const gy = groundH(o.seat[0], o.seat[2]), dh = o.seat[1] - gy; if (h0 == null && dh > 0.15 && dh < 1) { h0 = dh; fy = gy; } else fy = o.seat[1]; }
+  const t1 = o.t1 ?? 1e9, sh = h0 ?? 0.45, opt = { sd: f.sd };
   // v3.26 mocap figures sit down with Sitting_Enter, sit with Sitting_Idle / _Talking and stand up with Sitting_Exit (the hips go back onto the seat, the feet stay planted);
   // own poses (mocap: false or o.clip: false): the feet stay in front of the seat while the hips go back (was: the whole figure slid onto the chair)
   let mcv; const mc = () => mcv ??= o.clip !== false && _mcOnF(f) && !!mcClip('Sitting_Enter', true) && !!mcClip('Sitting_Exit', true) && !!mcClip('Sitting_Idle_Loop', true);
@@ -3433,17 +3506,19 @@ function sit(f, t0, o = {}) {
   f.fx.push(fxw((t, S) => { if (mc()) return; const e = env3(t, t0, t1, 0.5, 0.5); if (!e) return; const A = rigState('sit', 0, t, { ...opt, seatH: sh }); for (const k in S) S[k] = lerp(S[k], A[k], e); }, t0, t1));
   (f._mcX ??= []).push((t, X) => { if (!mc() || t < t0 || t > ex + 0.3) return;
     const DE = mcClip('Sitting_Enter', true), DX = mcClip('Sitting_Exit', true), w = (dE ? sm01((t - t0) / 0.15) : 1) * (1 - sm01((t - ex) / 0.3)), dy = sh - 0.42;
-    if (t < t0 + dE) X.push({ D: DE, time: Math.min((t - t0) * DE.d / dE, DE.d - 1e-3), loop: false, w, noR: true, dy: dy * sm01((t - t0) / dE) });
+    if (t < t0 + dE) X.push({ D: DE, time: Math.min((t - t0) * DE.d / dE, DE.d - 1e-3), loop: false, w, noR: true, dy: dy * sm01((t - t0) / dE), legDy: dy * sm01((t - t0) / dE) });
     else if (t < t1) { const tk = _mcTalk(f, t), ti = t - t0 - dE + f.sd * 3.1, k = dE ? sm01((t - t0 - dE) / 0.3) : 1, DT = mcClip('Sitting_Talking_Loop', true);
-      if (k < 1 && dE) X.push({ D: DE, time: DE.d - 1e-3, loop: false, w: w * (1 - k), noR: true, dy });
-      X.push({ D: mcClip('Sitting_Idle_Loop', true), time: ti, loop: true, w: w * k * (DT ? 1 - tk : 1), noR: true, dy }); if (DT && tk > 0) X.push({ D: DT, time: ti, loop: true, w: w * k * tk, noR: true, dy }); }
-    else X.push({ D: DX, time: Math.min((t - t1) * DX.d / dX, DX.d - 1e-3), loop: false, w, noR: true, dy: dy * (1 - sm01((t - t1) / dX)) }); });
+      if (k < 1 && dE) X.push({ D: DE, time: DE.d - 1e-3, loop: false, w: w * (1 - k), noR: true, dy, legDy: dy });
+      X.push({ D: mcClip('Sitting_Idle_Loop', true), time: ti, loop: true, w: w * k * (DT ? 1 - tk : 1), noR: true, dy, legDy: dy }); if (DT && tk > 0) X.push({ D: DT, time: ti, loop: true, w: w * k * tk, noR: true, dy, legDy: dy }); }
+    else X.push({ D: DX, time: Math.min((t - t1) * DX.d / dX, DX.d - 1e-3), loop: false, w, noR: true, dy: dy * (1 - sm01((t - t1) / dX)), legDy: dy * (1 - sm01((t - t1) / dX)) }); });
   const sp = new THREE.Vector3(), fw = new THREE.Vector3();
+  const seatAt = () => { let sy = o.ry ?? 0; if (Array.isArray(o.seat)) sp.set(o.seat[0], fy, o.seat[2]); else { const g = o.seat.g ?? o.seat; g.updateWorldMatrix(true, false); sp.set(0, 0, 0.12).applyMatrix4(g.matrixWorld); sy = new THREE.Euler().setFromQuaternion(g.getWorldQuaternion(_iq), 'YXZ').y; } return sy; };
+  (f._sitX ??= []).push({ t0, t1, ex: () => mc() ? ex : t1 + 0.4, stand: () => { if (!o.seat || t1 > 1e8) return null; const sy = seatAt(), ft = mc() ? 0.25 : 0.44; return [sp.x + Math.sin(sy) * ft, sp.z + Math.cos(sy) * ft, sy]; }, w: t => mc() ? (t < t0 || t > ex ? 0 : t < t0 + dE ? sm01((t - t0) / Math.max(dE, 0.01)) : t < t1 ? 1 : 1 - sm01((t - t1) / dX)) : env3(t, t0, t1, 0.5, 0.5),
+    floor: () => o.seat ? (Array.isArray(o.seat) ? fy : null) : null });   // v3.36: walk() sets off once the figure stood up · QA SIT (seated share, floor height)
   if (o.seat) late(t => { const m = mc(), e = m ? env3(t, dE ? t0 : -1e9, ex, 0.35, 0.4) : env3(t, t0, t1 + 0.4, 0.3, 0.4); if (!e) return;
-    let sy = o.ry ?? 0;   // the seat at t (pure: a moving seat is read in every frame — was: whatever the first frame a render block drew saw)
-    if (Array.isArray(o.seat)) sp.set(...o.seat); else { const g = o.seat.g ?? o.seat; g.updateWorldMatrix(true, false); sp.set(0, 0, 0.12).applyMatrix4(g.matrixWorld); sy = new THREE.Euler().setFromQuaternion(g.getWorldQuaternion(_iq), 'YXZ').y; }
+    const sy = seatAt();   // the seat at t (pure: a moving seat is read in every frame — was: whatever the first frame a render block drew saw)
     const ft = m ? 0.25 : 0.44 * (1 - env3(t, t0, t1, 0.5, 0.5)); fw.set(Math.sin(sy) * ft, 0, Math.cos(sy) * ft);   // the feet stay in front of the seat (clip: its hips go back 0.25 m; own pose: the hips go back as the pose blends in)
-    const r = f.root; r.position.lerp(sp.add(fw), e); r.rotation.y = lerp(r.rotation.y, sy, e); });
+    const r = f.root; r.position.lerp(sp.add(fw), e); r.rotation.y = lerp(r.rotation.y, sy, e); f._sitFloor = sp.y; });
   else late(t => { if (!mc()) return; const e = env3(t, dE ? t0 : -1e9, ex, 0.35, 0.4); if (!e) return; const y = f.root.rotation.y; f.root.position.x += Math.sin(y) * 0.25 * e; f.root.position.z += Math.cos(y) * 0.25 * e; });   // no seat: the clip's hips land where the root was
   return f;
 }
@@ -3466,9 +3541,12 @@ function enter(f, v, t0, o = {}) {
   if (v.doors?.length) { openDoor(v, t0, { i: di, close: t0 + dur + 0.15 }); if (out < 1e8) openDoor(v, out - 0.15, { i: di, close: out + dur + 0.1 }); }   // v3.26: the door opens for getting out too
   if (!standing) sit(f, t0 + 0.25, { t1: out, h, clip: false });
   f.fx.push((t, S) => { S.crx -= 0.12 * env3(t, t0 + 0.4, out + 0.6, 0.3, 0.3); });   // leaning back in the seat
+  // v3.36 in through the door: a curve from the outside mark past the door opening (level with the seat, 55 % of the way out) onto the seat, lifting the feet over the sill
+  // (was: a straight line from the mark to the seat — through the door pillar when the mark is not level with the seat)
+  const door = new THREE.Vector3(lerp(seat.x, outside.x, 0.55), lerp(outside.y, seat.y, 0.25), seat.z);
   late(t => { if (t < t0 || t > out + dur) return;
-    const k = t > out ? 1 - sm01((t - out) / dur) : sm01((t - t0) / dur), g = v.g ?? v.root ?? v; g.updateWorldMatrix(true, false);
-    _ia.copy(outside).lerp(seat, k).applyMatrix4(g.matrixWorld); if (k < 1) _ia.y += 0.12 * Math.sin(Math.PI * k);
+    const k = t > out ? 1 - sm01((t - out) / dur) : sm01((t - t0) / dur), g = v.g ?? v.root ?? v, a = (1 - k) * (1 - k), b = 2 * k * (1 - k), c = k * k; g.updateWorldMatrix(true, false);
+    _ia.set(a * outside.x + b * door.x + c * seat.x, a * outside.y + b * door.y + c * seat.y, a * outside.z + b * door.z + c * seat.z).applyMatrix4(g.matrixWorld); if (k < 1) _ia.y += 0.14 * Math.sin(Math.PI * Math.min(1, k * 1.4));
     f.root.position.copy(_ia); f.root.rotation.y = new THREE.Euler().setFromQuaternion(g.getWorldQuaternion(_iq), 'YXZ').y + sy; });
   return f;
 }
@@ -3582,11 +3660,25 @@ const _drvG = v => v._drvG ??= (() => { const D = v._drv, wrap = a => Math.atan2
   const at = s => { if (s < 0) { const A = D[0].pos(0), y = D[0].yaw(0); return { x: A.x + Math.sin(y) * s, z: A.z + Math.cos(y) * s, y }; }   // before the start: straight back along the first heading (convoy members wait behind the leader)
     let b = 0; for (let i = 0; i < D.length; i++) { const me = D[i], L = Math.min(me.L(), 1e7); if (s <= b + L || i === D.length - 1) { const q = Math.min(s - b, L), P = me.pos(q); return { x: P.x, z: P.z, y: me.yaw(q) }; } b += L; } };
   return { pick, base, yawT, S, at }; })();
+// v3.36 a chained drive() segment that sets off in another direction starts on an arc (radius R, default 0.7 × speed within 5–9 m; smaller where the first leg is short,
+// arc: false = off) tangent to the way the car stands, then straight on to its next point — was: the car turned up to 90° in 0.8 s while it rolled off sideways
+function _drvArc(pts, yp, R0) {
+  if (pts.length < 2) return pts; const [ex, ez] = pts[0], [px, pz] = pts[1], fx = Math.sin(yp), fz = Math.cos(yp), nx = Math.cos(yp), nz = -Math.sin(yp), dx = px - ex, dz = pz - ez;
+  if (Math.abs(Math.atan2(dx * nx + dz * nz, dx * fx + dz * fz)) < 0.2) return pts;   // (nearly) straight on
+  const sg = dx * nx + dz * nz > 0 ? 1 : -1;
+  for (let R = R0; R >= 2; R *= 0.75) { const cx = ex + sg * R * nx, cz = ez + sg * R * nz, wx = px - cx, wz = pz - cz, d = Math.hypot(wx, wz); if (d < R * 1.05) continue;
+    const th0 = Math.atan2(ez - cz, ex - cx), dir = -Math.sin(th0) * fx + Math.cos(th0) * fz > 0 ? 1 : -1, al = Math.acos(R / d), tw = Math.atan2(wz, wx);
+    const thT = [tw + al, tw - al].find(th => { const tx = cx + R * Math.cos(th), tz = cz + R * Math.sin(th); return (px - tx) * -Math.sin(th) * dir + (pz - tz) * Math.cos(th) * dir > 0; }); if (thT == null) continue;
+    const sw = (((thT - th0) * dir) % TAU + TAU) % TAU; if (sw > 1.6 * Math.PI) continue; const n = Math.max(2, Math.ceil(sw / 0.12)), A = [];
+    for (let i = 1; i <= n; i++) { const th = th0 + dir * sw * i / n; A.push([cx + R * Math.cos(th), cz + R * Math.sin(th)]); }
+    return [pts[0], ...A, ...pts.slice(1)]; }
+  return pts;
+}
 function drive(v, pts, o = {}) {   // o.jumps: [[t, h, airtime]] · o.bumpy: 0..2 (off-road) · see crash() for accidents
   const g = dyn(v.g ?? v), D = v._drv ??= [], F = o.follow;
   const last = D.length ? D.reduce((a, b) => b.t0 >= a.t0 ? b : a) : null;
   const t0 = (o.t0 ?? (last ? Math.min(last.tE, 1e8) : F ? -1e9 : 0)) + (o.delay ?? 0), prev = o.t0 == null ? last : null, t1 = o.t1 ?? 1e9;   // chained (no t0): sets off from the end of the segment before; with t0 it is planned on its own and hands over at t0
-  if (!D.length) MOVERS.push({ node: g, kind: 'drive', ok: o.passThrough });
+  if (!D.length) MOVERS.push({ node: g, kind: 'drive', ok: o.passThrough, drift: o.drift });
   const setPos = () => { v._posAt = t => { const m = _drvG(v).pick(t), P = m.pos(m.sAt(t)); return new THREE.Vector3(P.x, groundH(P.x, P.z), P.z); }; v._yawAt = t => { const A = _drvG(v); return A.yawT(A.pick(t), t); }; };
   if (F) {   // convoy: the leader's track, gap m behind, lag s later — speed, braking, corners and stops as the leader
     if (!F._drv?.length) { console.error('drive: follow needs a vehicle that drives (call drive() on the leader first)'); return null; }
@@ -3596,7 +3688,8 @@ function drive(v, pts, o = {}) {   // o.jumps: [[t, h, airtime]] · o.bumpy: 0..
     D.push(me); D.sort((a, b) => a.t0 - b.t0); setPos();
     return tick(_drvTick(v, me, o));
   }
-  if (prev && !prev.follow && !o.teleport && !o.loop && prev.L() < 1e8) { const E = prev.pos(prev.L()); if (Math.hypot(pts[0][0] - E.x, pts[0][1] - E.z) > 0.05) pts = [[E.x, E.z], ...pts]; }   // the next segment sets off where the last one stopped (teleport: true = jump to its first point)
+  if (prev && !prev.follow && !o.teleport && !o.loop && prev.L() < 1e8) { const E = prev.pos(prev.L()); if (Math.hypot(pts[0][0] - E.x, pts[0][1] - E.z) > 0.05) pts = [[E.x, E.z], ...pts];   // the next segment sets off where the last one stopped (teleport: true = jump to its first point)
+    if (o.arc !== false && !v.bike) pts = _drvArc(pts, prev.yaw(prev.L()), typeof o.arc === 'number' ? o.arc : clamp(0.7 * (o.speed ?? 8), 5, 9)); }
   const path = new Path(pts, o.loop), sp = o.speed ?? 8, ra = o.ramp ?? clamp(sp / 5, 0.6, 2.5);
   PATHS.push(path);
   const Tp = o.loop ? 1e9 : path.len < sp * ra ? 2 * Math.sqrt(path.len * ra / sp) : path.len / sp + ra, Te = Math.min(Tp, t1 - t0), a = sp / ra, tr = Math.min(ra, Te / 2), vp = a * tr;
@@ -3754,14 +3847,19 @@ function horde(o = {}) {
   const tfOf = q => { if (!o.flee) return 1e9; if (q.tf != null) return q.tf; let w = q.dl * 0.45;
     if (o.flee.wave !== false && o.flee.at) { const S = q.fixed ? [q.x0, q.z0] : state0(q, o.flee.t); w = Math.hypot(S[0] - o.flee.at[0], S[1] - o.flee.at[1]) / (typeof o.flee.wave === 'number' ? o.flee.wave : 9) + q.dl * 0.18; }
     return (q.tf = o.flee.t + w); };
+  // v3.36 jostle: where a member wants to be drifts (the old figure-eight, ±0.12 m × jostle); it stands on that spot and takes a short step (0.45 s, a foot lifts) to the next
+  // one every 3.5–6.5 s, turning a little with it — in between only the hips lean toward the drift (was: the whole body slid and turned with planted feet)
+  const JO = o.jostle ? o.jostle * 0.12 : 0, josD = (q, t, k = 1) => [k * JO * Math.sin(t * 0.9 + q.ph), k * JO * Math.cos(t * 0.7 + q.ph * 1.3), 0.15 * Math.sin(t * 0.5 + q.ph)], josP = q => q.jP ??= 3.5 + 3 * hash(q.ph * 5.1 + 0.3);
+  const jos = (q, t) => { const P = josP(q), u = t / P + q.ph, k = Math.floor(u), T0 = (k - q.ph) * P, A = josD(q, T0, 0.5), B = josD(q, T0 + P, 0.5), f = (t - T0 - (P - 0.45)) / 0.45, w = sm01(f);
+    return [lerp(A[0], B[0], w), lerp(A[1], B[1], w), lerp(A[2], B[2], w), f > 0 && f < 1 ? f : -1, k]; };
   const state1 = (q, t) => {   // v2.19 layer: fixed spots (q.cy = height of the spot), jostle, flee (o.flee.path(i, d, q) → [x, z, y, yaw] for custom escape routes)
     const tf = tfOf(q); q.cy = q.y ?? 0;
-    if (q.fixed && t <= tf) { const j = o.jostle ? o.jostle * 0.12 : 0; return [q.x0 + j * Math.sin(t * 0.9 + q.ph), q.z0 + j * Math.cos(t * 0.7 + q.ph * 1.3), false, q.yaw + (o.jostle ? 0.15 * Math.sin(t * 0.5 + q.ph) : 0), 0]; }
+    if (q.fixed && t <= tf) { const J = JO ? jos(q, t) : [0, 0, 0]; return [q.x0 + J[0], q.z0 + J[1], false, q.yaw + J[2], 0]; }
     if (o.flee && t > tf) { const d = (o.flee.speed ?? 4.5) * (0.8 + 0.4 * hash(q.ph * 3)) * (t - tf);
       if (o.flee.path && q.fixed) { const r = o.flee.path(q.i, d, q); q.cy = r[2]; return [r[0], r[1], true, r[3], d]; }
       const S = q.fixed ? [q.x0, q.z0, false, q.yaw, 0] : state0(q, tf), [fx, fz] = o.flee.at, a = Math.atan2(S[0] - fx, S[1] - fz) + (hash(q.ph * 9) - 0.5) * 0.9;
       q.cy = (q.y ?? 0) * (1 - EASE.inOut(clamp((t - tf) / 0.7))); return [S[0] + Math.sin(a) * d, S[1] + Math.cos(a) * d, true, a, S[4] + d]; }
-    const r = state0(q, t); if (o.jostle && !r[2]) { r[0] += o.jostle * 0.12 * Math.sin(t * 0.9 + q.ph); r[1] += o.jostle * 0.12 * Math.cos(t * 0.7 + q.ph * 1.3); } return r;
+    const r = state0(q, t); if (JO && !r[2]) { const J = jos(q, t); r[0] += J[0]; r[1] += J[1]; } return r;
   };
   // v2.27 gaze: { t, at: [x,y,z], spread, turn, tilt, arms: 'down' | 'up', face } — from t (+ up to spread s per member) everyone stops, turns to `at` and looks up at it (fireworks, UFO, eclipse); zombies stop hammering
   const GZ = o.gaze, gT = q => q.gt ??= GZ.t + hash(q.ph * 7.31 + 2.2) * (GZ.spread ?? 0.8);
@@ -3997,7 +4095,10 @@ function horde(o = {}) {
             fa = al <= 0 ? 0 : (Math.PI / 2 - 0.05) * EASE.in(clamp(al / 0.42)) - (al > 0.42 ? 0.1 * Math.exp(-(al - 0.42) * 7) * Math.abs(Math.sin((al - 0.42) * 16)) : 0); }
           else { fa = 0; y = groundH(x, z) - Math.min(3.2, 4.9 * (t - dn.t) ** 2); } } if (dn?.squash) fa = 0;
         base.compose(V.set(x, y, z), Q.setFromEuler(E.set(-fa * (dn?.dir ?? 1) + ft, yaw, 0, 'YXZ')), dn?.squash ? SC.set(q.sc * 1.35, q.sc * Math.max(0.12, 1 - 14 * (t - dn.t)), q.sc * 1.35) : SC.setScalar(q.sc));
-        const S = rigState(moving ? mode : 'idle', u, t, q.o), S0 = MCON ? Object.assign(S0b, S) : null, gk = GZ && !dn ? sm01((t - gT(q)) / (GZ.turn ?? 0.7)) : 0, up = !dn && ((o.armsUp ? o.armsUp(t, i) : false) || (GZ?.arms === 'up' && gk > 0.5));
+        const S = rigState(moving ? mode : 'idle', u, t, q.o), S0 = MCON ? Object.assign(S0b, S) : null, JS = JO && !moving && !dn && ta < 0 ? jos(q, t) : null;
+        if (JS) { const D = josD(q, t), dx = D[0] - JS[0], dz = D[1] - JS[1], c = Math.cos(yaw0), sn = Math.sin(yaw0); S.hx += clamp(0.6 * (dx * c - dz * sn), -0.05, 0.05); S.crx += clamp(0.5 * (dx * sn + dz * c), -0.04, 0.04);   // v3.36 jostle: lean toward the drift
+          if (JS[3] >= 0) { const L = JS[4] % 2 === 0, e = Math.sin(Math.PI * JS[3]), [zz, yy] = legFK(L ? S.lt : S.rt, L ? S.lk : S.rk), [a, b] = legIK(zz, yy + 0.06 * e); if (L) { S.lt = a; S.lk = b; S.lf += 0.3 * e; } else { S.rt = a; S.rk = b; S.rf += 0.3 * e; } } }   // the step: one foot lifts
+        const gk = GZ && !dn ? sm01((t - gT(q)) / (GZ.turn ?? 0.7)) : 0, up = !dn && ((o.armsUp ? o.armsUp(t, i) : false) || (GZ?.arms === 'up' && gk > 0.5));
         if (dn) { const a = t - dn.t, k = clamp(a / 0.45), tw = human ? 0 : 0.12 * Math.sin(t * 9 + q.ph) * Math.exp(-a * 0.8);
           S.las = lerp(S.las, -2.5 + tw, k); S.ras = lerp(S.ras, -2.4 - tw, k); S.laz = -0.4 * k; S.raz = 0.4 * k; S.lae = S.rae = -0.2; S.lt = S.rt = lerp(S.lt, -0.12, k); S.lk = S.rk = lerp(S.lk, 0.3, k); S.lz = -0.1 * k; S.rz = 0.1 * k; S.crx = 0; S.nrx = -0.1 * k; S.nry *= 1 - k;
           if (cd > 0.005) _crouch(S, cd); }
@@ -4024,7 +4125,7 @@ function horde(o = {}) {
         if (S0) { const flee = !!o.flee && t > tfOf(q); let w = (dn ? 1 - sm01((t - dn.t) / 0.6) : 1) * (1 - cl) * (rise ? em : 1); if (ta >= 0) w *= 1 - Math.min(1, ta / 0.25, Math.max(0, TD - ta) / 0.4);
           if (w > 1e-3) { let g, mask = null; if (moving) { g = run || flee ? ((flee ? (o.flee.speed ?? 4.5) : q.v * 1.4) >= 6 ? 'Sprint_Loop' : 'Jog_Fwd_Loop') : human ? 'Walk_Loop' : 'Zombie_Walk_Fwd_Loop'; if (!human && (run || flee)) mask = 'lower'; } else g = human ? 'Idle_Loop' : 'Zombie_Idle_Loop';
             const D = mcClip(g, true); if (D) { const am = moving ? (q.am ??= {})[g + flee] ??= mcAmp(g, (flee ? (o.flee.speed ?? 4.5) * (0.8 + 0.4 * hash(q.ph * 3)) : q.v * (run ? 1.4 : 1)) / q.sc) : 1;   // v3.26: stride by the member's planned speed
-              const time = moving ? (q.ph / TAU + walked / (q.sc * MC_STRIDE[g] * (MOCAP.k ?? 0.9) * am)) * D.d : t + q.ph * 1.7; JQ = mcCrowd(S, S0, D, time, w, mask, MCO, am).q; } } }
+              const time = moving ? (q.ph / TAU + walked / (q.sc * mcStride(g, am))) * D.d : t + q.ph * 1.7; JQ = mcCrowd(S, S0, D, time, w, mask, MCO, am).q; } } }
         if (JQ) jq(Mh, base, S.hx + MCO.p.x, S.H + S.by + MCO.p.y, MCO.p.z, JQ.hips); else j(Mh, base, S.hx, S.H + S.by, 0, S.hrx, S.hry, S.hrz);
         if (JQ) jq(Mc, Mh, 0, 0.02, 0, JQ.chest); else j(Mc, Mh, 0, 0.02, 0, S.crx, S.cry, S.crz); TM.multiplyMatrices(Mc, T.compose(V.set(0, 0.29, 0), Q.identity(), SC.set(q.bw, 1, q.bd))); torso.setMatrixAt(i, TM);   // v2.41: everyone a little different in build
         const X = XT[i]; jackIM.setMatrixAt(i, X.jk && !far ? TM : Z); ragIM.setMatrixAt(i, X.rag && !far ? TM : Z); bloodT.setMatrixAt(i, X.bl && !far ? TM : Z);
@@ -4110,6 +4211,7 @@ function horde(o = {}) {
       hat: HEAD[i] === 2 ? hx(capIM, i) : undefined, hatStyle: HEAD[i] === 2 ? 'cap' : undefined, build: human ? ['man', 'woman', 'slim', 'heavy', 'teen'][Math.floor(hash(i * 3.3 + hid) * 5)] : undefined, fidget: false });
     world.add(f.root); f.root.scale.multiplyScalar(q.sc); f._crowdHero = true; q.hero = f;
     f._posAt = t => { const r = state(q, t); return new THREE.Vector3(r[0], groundH(r[0], r[1]), r[1]); }; f._yawAt = t => yawS(t);
+    if (JO && q.fixed) f.fx.push((t, S) => { if (t > tfOf(q)) return; const J = jos(q, t); if (J[3] < 0) return; const L = J[4] % 2 === 0, e = Math.sin(Math.PI * J[3]), [zz, yy] = legFK(L ? S.lt : S.rt, L ? S.lk : S.rk), [a, b] = legIK(zz, yy + 0.06 * e); if (L) { S.lt = a; S.lk = b; S.lf += 0.3 * e; } else { S.rt = a; S.rk = b; S.rf += 0.3 * e; } });   // v3.36 jostle step (a foot lifts)
     // v3.22: in a pressing crowd the sim's moving flag flips every frame (creeping at ~0.4 m/s) and the yaw wobbles: the hero blends idle → gait by its speed (mean of
     // the last 0.4 s) and faces the mean heading of the last 0.24 s (was: the flag picked the mode, every flip snapped the limbs, MOTION snaps).
     const spd = t => { const a = Math.max(q.b, t - 0.1); return t - a < 0.02 ? 1 : clamp(((state(q, t)[4] - state(q, a)[4]) / (t - a) - 0.3) / 0.7); };
@@ -8462,7 +8564,7 @@ function interior(p, x, z, o = {}) {
   // light: one warm lamp (counts toward the 3–4 light budget); night rooms glow
   if (o.light ?? (o.night || o.ceiling)) { g.updateWorldMatrix(true, false); const lp = g.localToWorld(v3(0, h - 0.6, 0)); R.light = glow(lp.x, lp.y, lp.z, { intensity: o.lightI ?? (kind === 'cellar' || kind === 'bunker' ? 14 : 20), dist: Math.max(w, d) * 1.6, flicker: kind === 'cellar' ? 0.25 : 0, color: kind === 'bunker' ? '#E8F0D8' : '#FFD8A0' }); }
   R.at = name => { const a = R.anchors[name] ?? [0, 0, 0]; g.updateWorldMatrix(true, false); return g.localToWorld(v3(...a)).toArray(); };
-  R.seat = (name, i = 0) => { const s = (R.seats[name] ?? [])[i]; if (!s) return R.at(name); g.updateWorldMatrix(true, false); return g.localToWorld(v3(...s)).toArray(); };
+  R.seat = (name, i = 0) => { const s = (R.seats[name] ?? [])[i]; if (!s) return R.at(name); g.updateWorldMatrix(true, false); const a = g.localToWorld(v3(s[0], 0, s[2])).toArray(); a.h = s[1]; return a; };   // v3.36: the floor point under the seat, .h = seat height (sit() takes both)
   R.toWorld = (lx, lz, ly = 0) => { g.updateWorldMatrix(true, false); return g.localToWorld(v3(lx, ly, lz)).toArray(); };
   return R;
 }
@@ -14004,7 +14106,7 @@ function bodyStyle(f, S, m, t) {   // posture (build) + body language (face, gai
     const a = f._posAt(t0 - 0.12), b = f._posAt(t0 - 0.04); if (Math.hypot(b.x - a.x, b.z - a.z) / 0.08 > 0.3) continue;   // only from standing (not between chained walks)
     const e = Math.sin(Math.PI * (0.3 - d) / 0.4) * clamp(0.45 + v / 4); _crouch(S, 0.045 * e); S.crx -= 0.06 * e; S.nrx += 0.03 * e; S.las += 0.2 * e; S.ras += 0.2 * e; }
 }
-{ const _w = walk; walk = function (obj, pts, o = {}) { const r = _w(obj, pts, o); if (obj?.legL && !obj.isModel) (obj._walks ??= []).push([o.t0 ?? 0, o.speed ?? 1.4]); return r; }; }   // wind-up: when each walk starts
+{ const _w = walk; walk = function (obj, pts, o = {}) { const r = _w(obj, pts, o); if (obj?.legL && !obj.isModel) (obj._walks ??= []).push([r?._tS ?? o.t0 ?? 0, o.speed ?? 1.4]); return r; }; }   // wind-up: when each walk starts
 // ---- rig layers: shoulder channels, IK shoulder offset, finger joints ----
 { const _rs = rigState; rigState = function (mode, u, t, o = {}) { const S = _rs(mode, u, t, o); S.lsh ??= 0; S.rsh ??= 0; return S; }; }
 { const _pf = poseFin; poseFin = function (f, S, m, t, o) {
@@ -14800,6 +14902,7 @@ function hitFree(f, t) {
   let w = f.hips ? sm01((f.hips.position.y - HIP * 0.62) / (HIP * 0.16)) : 1;   // sitting, crouching, kneeling
   w *= sm01((_hbUp.set(0, 1, 0).applyQuaternion(r.quaternion).y - 0.8) / 0.14);   // lying, tumbling, hanging upside down
   w *= 1 - sm01((r.position.y - groundH(r.position.x, r.position.z) - 0.3) / 0.3);   // up in the air (jumps, ladders)
+  if (w > 0 && f._sitX) for (const X of f._sitX) w *= _hbRamp(t, X.t0 - 0.1, X.clr ?? X.ex());   // v3.36 seated, getting up and walking clear of the seat: not pushed out of the furniture (it slid them sideways while they stood up)
   if (w > 0 && f._falls) for (const F of f._falls) w *= _hbRamp(t, F.t - 0.15, F.up == null ? 1e9 : F.up + F.upDur + 0.1);
   if (w > 0) for (const h of HOLDS) if (h.f === f) w *= _hbRamp(t, h.t0 - 0.1, h.t1 + 0.4);
   return w;
@@ -16612,6 +16715,7 @@ function qaAudit() {
   finally { const sk = SKINQA; SKINQA = null; for (const f of sk) out.push(`${name(f)}: arm or leg drawn as old boxes for a moment (a joint was pulled apart or a part came off) – fine for gore and ragdolls, otherwise check the pose`); }
   for (const [f, S] of sink) out.push(`${name(f)}: foot ${(S.d * 100).toFixed(0)} cm in the floor around ${S.t.toFixed(2)} s while standing – raise the figure or its floor (y) or check the pose`);
   try { out.push(...qaMovers()); } catch (e) { out.push('mover QA failed: ' + e.message); }   // v3.19: VEHICLE · BACKWARD
+  try { out.push(...qaGait()); } catch (e) { out.push('gait QA failed: ' + e.message); }   // v3.36: CRAB · FOOTSLIDE · SIT · SLIP
   try { out.push(...qaGhost()); } catch (e) { out.push('ghost QA failed: ' + e.message); }   // v3.24: GHOST (motion blur too coarse even at CFG.mbMax)
   try { out.push(...qaProps()); } catch (e) { out.push('prop QA failed: ' + e.message); }   // v3.24: FLOAT · BURIED
   try { out.push(...qaLook()); } catch (e) { out.push('look QA failed: ' + e.message); }   // v3.5: DARK · EMPTY · CAMCLIP · HEADCUT
@@ -16707,7 +16811,7 @@ function qaMovers() {
     // backwards: figures (root) and crowd members
     for (const f of RIGS) { const r = f.root; if (!f.legL || !r?.visible || r.parent !== world || f.isModel || f.back) continue;
       const P = [r.position.x, r.position.z], k = 'f' + RIGS.indexOf(f), L = prev.get(k); prev.set(k, P); if (!L) continue;
-      const vx = (P[0] - L[0]) / dt, vz = (P[1] - L[1]) / dt, v = Math.hypot(vx, vz), yw = r.rotation.y, d = v > 1.2 && hitFree(f, t) > 0.5 ? (vx * Math.sin(yw) + vz * Math.cos(yw)) / v : 1;
+      const vx = (P[0] - L[0]) / dt, vz = (P[1] - L[1]) / dt, v = Math.hypot(vx, vz), yw = _gqYaw(r), d = v > 1.2 && hitFree(f, t) > 0.5 ? (vx * Math.sin(yw) + vz * Math.cos(yw)) / v : 1;
       const n = d < -0.3 ? (runB.get(k) ?? 0) + 1 : 0; runB.set(k, n); if (n >= 2) put('b' + k, `BACKWARD – ${name(f)} moves ${v.toFixed(1)} m/s against the way it faces around ${t.toFixed(1)} s – turn it (walk / faceTo) or { back: true } on the figure if it is meant`); }
     for (const [hi, h] of hordes.entries()) { const L = h._qaMembers?.(t) ?? [], N = h._qaMembers?.(t + 0.1) ?? [], at = new Map(N.map(m => [m[0], m])); let c = 0, worst = 0;
       for (const [i, x, z, yw] of L) { const m = at.get(i); if (!m) continue; const vx = (m[1] - x) / 0.1, vz = (m[2] - z) / 0.1, v = Math.hypot(vx, vz); if (v < 1.2) continue;
@@ -16989,6 +17093,70 @@ function qaCapFace(o = {}) {
     return `CAPFACE – caption "${cap}" covers the face of ${who(F)}${n.size > 1 ? ` (+${n.size - 1} more in the crowd)` : ''} at ${t.toFixed(1)} s (${c.eye >= 0.5 ? `eyes ${(c.eye * 100).toFixed(0)} %` : `face ${(c.face * 100).toFixed(0)} %`} under the words, beat ${i}) – set pos: '${low ? 'mid' : 'low'}' on the beat${CFG.capDodge ? '' : ' (or CFG.capDodge: true)'}, move the camera (fy / az) or the figure`; });
   return A.length > 6 ? [...A.slice(0, 6), `CAPFACE – … and ${A.length - 6} more`] : A;
 }
+// --- v3.36 gait QA (part of qaAudit, lines "QA: CRAB / FOOTSLIDE / SIT / SLIP – …"): how things move while the viewer sees them, sampled at 30 Hz of video time —
+//   fed by the motion audit's straight run (motionAudit), or its own pass when qaAudit runs alone. Only what is in the frame (≥ 3 % of the frame height), never across a cut.
+//   CRAB: a figure, model, animal or crowd member moving faster than 0.3 m/s more than 60° off the way it faces for longer than 0.15 s (sliding sideways / turning while it walks
+//         on). Sideways on purpose: walk(…, { face }) or { side: true }, f.back / f.side = true on the figure.
+//   FOOTSLIDE: a figure's foot within 1.2 cm of its lowest height for ≥ 3 frames (planted) that slides more than 8 cm (and > 15 % of what the body moved) over the ground
+//         while the body moves more than 8 cm (feet that skate: starting, stopping, gliding off a seat, stride too short for the speed).
+//   SIT: a figure seated by sit() (more than half way) whose lowest foot is more than 15 cm above the floor below the seat (standing on the cushion, hanging in the air).
+//   SLIP: a car on drive() moving faster than 1 m/s with more than 25 % of its speed sideways for longer than 0.1 s (turning on the spot, sliding round a corner).
+//         Drift on purpose: drive(…, { drift: true }). Crashes (physics) are left out.
+const GQ = { R: null }, _gqV = new THREE.Vector3(), _gqA = new THREE.Vector3(), _gqB = new THREE.Vector3(), _gqF = new THREE.Vector3(), _gqYaw = n => { _gqF.set(0, 0, 1).applyQuaternion(n.quaternion); return Math.atan2(_gqF.x, _gqF.z); };
+function _gqBegin() { GQ.R = { rig: new Map(), car: new Map(), crowd: new Map(), crab: new Map(), fr: 0 }; }
+function _gqFrame(tv, tvid, cut) {   // one sample of the moment shown (scene time ST(tv), video time tvid); cut: a camera cut lies before it
+  const R = GQ.R; if (!R) return; const fr = ++R.fr, ts = ST(tv); if (cut) R.cut = fr; camera.updateMatrixWorld(true);
+  const onS = (x, y, z, r) => audOn(x, y, z, r) >= 0.03;
+  const crab = (key, nm, x, z, yaw, on, ok) => {   // CRAB on the fly (velocity from the last sample)
+    const C = R.crab.get(key), now = { fr, ts, x, z }; if (!C) { R.crab.set(key, { p: now, run: 0, ang: 0 }); return; }
+    const p = C.p; C.p = now; if (p.fr !== fr - 1 || R.cut === fr || !(ts - p.ts > 1e-4) || !on || !ok) { C.run = 0; C.ang = 0; return; }
+    const vx = (x - p.x) / (ts - p.ts), vz = (z - p.z) / (ts - p.ts), sp = Math.hypot(vx, vz); if (sp < 0.3) { C.run = 0; C.ang = 0; return; }
+    const ang = Math.acos(clamp((vx * Math.sin(yaw) + vz * Math.cos(yaw)) / sp, -1, 1)); if (ang < 1.047 || (ang > 2.09 && sp > 1.2)) { C.run = 0; C.ang = 0; return ang > 2.09 && sp > 1.2; }   // fast and backwards: QA BACKWARD's case
+    C.run += 1 / 30; C.ang = Math.max(C.ang, ang); if (C.run > 0.15 && (!C.w || C.ang > C.w.ang)) C.w = { ang: C.ang, t: tvid, sp, nm }; };
+  const seen = new Set();
+  for (const f of RIGS) { const r = f.root; if (!r) continue; seen.add(r);
+    if (!f.legL || !r.visible || r.parent !== world) { crab(r, null, 0, 0, 0, false, false); continue; }
+    const sc = r.scale.x, x = r.position.x, z = r.position.z, on = onS(x, r.position.y + 0.9 * sc, z, 0.9 * sc), fw = hitFree(f, ts), side = f.back || f.side || (f._sideW ?? []).some(([a, b]) => ts >= a && ts <= b);
+    const bk = crab(r, f, x, z, _gqYaw(r), on, fw > 0.5 && !side) === true;
+    let L = R.rig.get(f); if (!L) R.rig.set(f, L = []); if (!on) continue;
+    f.footL.getWorldPosition(_gqA); f.footR.getWorldPosition(_gqB); const so = ANK * sc;
+    let sw = 0, fl = null; for (const X of f._sitX ?? []) { const w = X.w(ts); if (w > sw) { sw = w; fl = X.floor(); } }
+    L.push([fr, tvid, x, z, bk ? 0 : fw, _gqA.x, _gqA.y - so - groundH(_gqA.x, _gqA.z), _gqA.z, _gqB.x, _gqB.y - so - groundH(_gqB.x, _gqB.z), _gqB.z, sw, sw > 0.5 ? Math.min(_gqA.y, _gqB.y) - so - (fl ?? f._sitFloor ?? r.position.y) : 0]); }
+  for (const W of WALKS) { const n = W.obj.root ?? W.obj; if (seen.has(n)) continue; seen.add(n); const ok = n.visible && n.parent === world && !W.obj.back && !W.obj.side && !(W.obj._sideW ?? []).some(([a, b]) => ts >= a && ts <= b);
+    const sc = n.scale.x || 1, on = ok && onS(n.position.x, n.position.y + 0.6 * sc, n.position.z, 0.6 * sc); crab(n, W.obj, n.position.x, n.position.z, _gqYaw(n), on, ok); }
+  hordes.forEach((h, hi) => { const M = h._qaMembers?.(ts) ?? []; for (const [i, x, z, yaw, s = 1] of M) crab('h' + hi + ':' + i, 'crowd #' + hi, x, z, yaw, onS(x, groundH(x, z) + 0.9 * s, z, 0.9 * s), true); });
+  for (const Mv of MOVERS) { if (Mv.kind !== 'drive' || Mv.drift) continue; const nd = Mv.node; let vis = nd.visible && !!nd.parent; for (let p = nd.parent; vis && p; p = p.parent) vis = p.visible;
+    nd.getWorldPosition(_gqV); const C = R.car.get(nd) ?? { run: 0 }, P = { fr, ts, x: _gqV.x, z: _gqV.z }, p = C.p; C.p = P; R.car.set(nd, C);
+    const crashed = PHYS.bodies.some(B => B.node === nd && ts >= B.t0 - 0.1);
+    if (!vis || crashed || !p || p.fr !== fr - 1 || R.cut === fr || !(ts - p.ts > 1e-4) || !onS(_gqV.x, _gqV.y + 0.8, _gqV.z, 1.5)) { C.run = 0; continue; }
+    const vx = (P.x - p.x) / (ts - p.ts), vz = (P.z - p.z) / (ts - p.ts), sp = Math.hypot(vx, vz), yw = new THREE.Euler().setFromQuaternion(nd.getWorldQuaternion(_iq), 'YXZ').y;
+    const sd = sp > 1 ? Math.abs(vx * Math.cos(yw) - vz * Math.sin(yw)) / sp : 0; if (sd > 0.25) { C.run += 1 / 30; C.sd = Math.max(C.sd ?? 0, sd); if (C.run > 0.1 && (!C.w || C.sd > C.w.sd)) C.w = { sd: C.sd, sp, t: tvid }; } else { C.run = 0; C.sd = 0; } }
+}
+function _gqReport() {
+  const R = GQ.R; if (!R) return []; GQ.R = null; const out = { CRAB: [], FOOTSLIDE: [], SIT: [], SLIP: [] };
+  const nm = f => { if (typeof f === 'string') return f; const i = RIGS.indexOf(f); return f?.who ? `'${f.who}'${i >= 0 ? ' #' + i : ''}` : i >= 0 ? (f.kind === 'zombie' ? 'zombie #' : 'figure #') + i : f?.kind ? `a ${f.kind}` : 'a walker'; };
+  const cw = new Map(); for (const [k, C] of R.crab) { if (!C.w) continue; const key = typeof C.w.nm === 'string' ? C.w.nm : k; const o = cw.get(key); if (!o || C.w.ang > o.w.ang) cw.set(key, { w: C.w, n: (o?.n ?? 0) + 1 }); else o.n++; }
+  for (const [, { w, n }] of cw) out.CRAB.push([w.ang, `CRAB – ${nm(w.nm)}${n > 1 ? ` (${n} members)` : ''} moves ${w.sp.toFixed(1)} m/s ${(w.ang * 57.3).toFixed(0)}° off the way it faces around ${w.t.toFixed(2)} s – it slides sideways: let it turn first (walk turns on the spot from a stop), give the path a curve, or walk { face } / { side: true } if it is meant`]);
+  for (const [f, L] of R.rig) { if (L.length < 4) continue;
+    let ws = null; const H = c => { const h = L.filter(r => r[4] > 0.9).map(r => r[c]).sort((a, b) => a - b); return h.length ? h[Math.floor(h.length * 0.03)] : 0; };
+    for (const c of [6, 9]) { const hm = H(c); let a = -1;
+      const end = (b) => { if (a < 0 || b - a < 2) return; const A = L[a], B = L[b], fm = Math.hypot(B[c - 1] - A[c - 1], B[c + 1] - A[c + 1]), bm = Math.hypot(B[2] - A[2], B[3] - A[3]);
+        if (fm > 0.08 && bm > 0.08 && fm > 0.15 * bm && (!ws || fm > ws.fm)) ws = { fm, bm, t: A[1], d: B[1] - A[1], side: c === 6 ? 'left' : 'right' }; };
+      for (let k = 0; k < L.length; k++) { const r = L[k], pl = r[4] > 0.9 && r[c] < hm + 0.012 && r[11] < 0.1, cont = k > 0 && L[k - 1][0] === r[0] - 1 && R.cut !== r[0] && !(R.cut > L[k - 1][0] && R.cut <= r[0]);
+        if (pl && a >= 0 && cont) continue; end(k - 1); a = pl ? k : -1; }
+      end(L.length - 1); }
+    if (ws) out.FOOTSLIDE.push([ws.fm, `FOOTSLIDE – ${nm(f)}: the ${ws.side} foot slides ${(ws.fm * 100).toFixed(0)} cm while planted around ${ws.t.toFixed(2)} s (the body moves ${(ws.bm * 100).toFixed(0)} cm in ${ws.d.toFixed(2)} s) – check where it starts / stops, sit → walk timing, or the speed for its gait`]);
+    let st = null; for (const r of L) if (r[11] > 0.5 && r[12] > 0.15 && (!st || r[12] > st.h)) st = { h: r[12], t: r[1] };
+    if (st) out.SIT.push([st.h, `SIT – ${nm(f)} sits with the feet ${(st.h * 100).toFixed(0)} cm above the floor around ${st.t.toFixed(2)} s – seat: the floor point under the seat plus h (R.seat / P.seat do that), not the cushion`]); }
+  for (const [nd, C] of R.car) if (C.w) { const i = MOVERS.findIndex(M => M.node === nd); out.SLIP.push([C.w.sd, `SLIP – car on drive() #${i} slides ${Math.round(C.w.sd * 100)} % sideways at ${C.w.sp.toFixed(1)} m/s around ${C.w.t.toFixed(2)} s – it turns on the spot or slides through a corner: let the path curve (corner, a longer segment), or drive { drift: true } if it is meant`]); }
+  return Object.entries(out).flatMap(([k, L]) => { L.sort((a, b) => b[0] - a[0]); const M = L.map(x => x[1]); return M.length > 6 ? [...M.slice(0, 6), `${k} – … and ${M.length - 6} more`] : M; });
+}
+function qaGait(o = {}) {   // own pass (qaAudit without the motion audit, --probe "qaGait()")
+  if (GQ.done) { const r = GQ.done; GQ.done = null; return r; }
+  _gqBegin(); const fps = o.fps ?? 30, N = Math.floor(DUR * fps); let tvP = null;
+  for (let i = 0; i <= N; i++) { const t = i / fps, tv = teaseV(t); stepScene(tv); world.updateMatrixWorld(true); const cut = tvP != null && (Math.abs(tv - tvP - 1 / fps) > 0.05 || CUTS.some(c => c > tvP + 1e-6 && c <= tv + 1e-6)); tvP = tv; _gqFrame(tv, t, cut); }
+  return _gqReport();
+}
 function motionAudit(o = {}) {
   const fps = o.fps ?? 30, dt = 1 / fps, N = Math.floor(DUR * fps), L = audItems(), W = new Map(), warn = (key, sev, msg) => { const w = W.get(key); if (!w || sev > w.sev) W.set(key, { sev, msg }); };
   const at = (n, p) => `(${p[0].toFixed(1)}, ${p[2].toFixed(1)})`, Q = audParts(L), keyT = o.purity === false ? [] : audFrames(Math.round(DUR * fps), N), CB = o.purity === false ? [] : audChunks(Math.round(DUR * fps), N), keyS = new Set([...keyT, ...CB]), ref = new Map(), JMP = new Map(), FWD = new Map();
@@ -16998,9 +17166,10 @@ function motionAudit(o = {}) {
   let prev = null, prev2 = null, tvP = 0, cam1 = null, cam2 = null; const flips = L.map(() => []), _cd = new THREE.Vector3(), physN = new Map(PHYS.bodies.map(B => [B.node, B]));
   const hitNow = (n, ts) => { const B = physN.get(n); return !!B && (Math.abs(ts - B.t0) < 0.25 || PHYS.blasts.some(b => Math.abs(ts - b.t) < 0.25)); };   // simulated things may be kicked off violently (impact, blast)
   const cutAt = (a, b) => Math.abs(b - a - dt) > 0.05 || CUTS.some(c => c > a + 1e-6 && c <= b + 1e-6);   // a camera cut or the jump into / out of a TEASE flash-forward lies between two frames
+  _gqBegin();   // v3.36 gait QA rides along the straight run
   for (let i = 0; i <= N; i++) {
     const t = i * dt, tv = teaseV(t); stepScene(tv); const cut = i > 0 && cutAt(tvP, tv); tvP = tv; if (cut) { prev = prev2 = cam1 = cam2 = null; flips.forEach(F => { F.length = 0; }); }   // v2.31: as the viewer sees it — nothing is compared across a cut
-    const S = audSnap(L), mbw = MBAUTO.some(([x, y]) => t >= x - 0.02 && t <= y + 0.02); if (keyS.has(i)) ref.set(i, { S, U: audPure(Q) });   // mbw: fast action with motion blur — only big flips count
+    const S = audSnap(L); _gqFrame(tv, t, cut); const mbw = MBAUTO.some(([x, y]) => t >= x - 0.02 && t <= y + 0.02); if (keyS.has(i)) ref.set(i, { S, U: audPure(Q) });   // mbw: fast action with motion blur — only big flips count
     { camera.getWorldDirection(_cd); const cm = { p: camera.position.clone(), d: _cd.clone() }, shk = SHAKES.some(s => t >= s.t - 0.05 && t <= s.t + (s.dur ?? 0.6) + 0.1);   // camera: a jump that is not a cut
       if (cam1 && cam2 && !shk) { const a1 = cm.d.angleTo(cam1.d), a0 = cam1.d.angleTo(cam2.d), m1 = cm.p.distanceTo(cam1.p), m0 = cam1.p.distanceTo(cam2.p), ref2 = Math.max(2, cm.p.distanceTo(_l));
         if (a1 > 0.1 && a1 > 3 * a0 + 0.05) warn('cam:turn', 6 + a1, `the camera turns ${(a1 * 57.3).toFixed(0)}° in one frame at ${t.toFixed(2)} s without a cut – make it a cut (tr: 'cut') or a real move`);
@@ -17019,6 +17188,7 @@ function motionAudit(o = {}) {
         if (ang > (mbw ? 2.1 : 0.75) && ang > 3 * angPrev + 0.2) warn(it.name + ':snap:' + it.JN[k], ang, `${it.name}: ${it.JN[k]} snaps ${(ang * 57.3).toFixed(0)}° in one frame at ${t.toFixed(2)} s ${at(it.n, a.p)}`); }); });
     prev2 = prev; prev = S;
   }
+  GQ.done = _gqReport();
   // purity: the same moment reached in other ways must match the straight run exactly — every part, not only the main joints
   const P = Q.P, nP = P.length, n0 = nP * AUD_N, n1 = n0 + Q.mats.length * 5, n2 = n1 + Q.lights.length * 2, n3 = n2 + Q.inst.length, TAIL = '– depends on earlier frames', cm = x => x >= 0.995 ? x.toFixed(2) + ' m' : (x * 100).toFixed(1) + ' cm';
   const cmp = (i, A, how) => { const R = ref.get(i); if (!R) return; const B = R.U, t = (i * dt).toFixed(2), per = new Map();
