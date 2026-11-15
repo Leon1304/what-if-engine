@@ -15441,7 +15441,7 @@ const CCTVS = (typeof CCTV === 'undefined' || !CCTV ? [] : [].concat(CCTV)).map(
 const ccClock = (s0, dt) => { const [h, m, sc] = String(s0).split(':').map(Number), v = Math.max(0, Math.floor((h || 0) * 3600 + (m || 0) * 60 + (sc || 0) + dt)), P = n => String(n).padStart(2, '0'); return `${P(Math.floor(v / 3600) % 24)}:${P(Math.floor(v / 60) % 60)}:${P(v % 60)}`; };
 let ccK = 0;
 function updateCctv(t) {
-  const c = THUMB_ON ? null : CCTVS.find(x => t >= x.t0 && t < x.t1);
+  const c = THUMB_ON || teaseV(t) !== t ? null : CCTVS.find(x => t >= x.t0 && t < x.t1);   // v3.35.1: never over a TEASE flash-forward (it shows another moment)
   if (!c) { ccK = 0; if (cctvEl.style.display !== 'none') cctvEl.style.display = 'none'; return; }
   ccK = 1; cctvEl.style.display = 'block'; const clk = typeof c.clock === 'function' ? c.clock(t) : c.clock ? ccClock(c.clock, t - c.t0) : '';
   cctvEl.innerHTML = `<b class="cr${Math.floor(t * 1.6) % 2 ? ' off' : ''}">● REC</b><b class="cl">${esc(c.label ?? 'CAM 01')}</b><b class="cd">${esc(c.date ?? '')}${c.date && clk ? '  ' : ''}${esc(clk)}</b>`;
