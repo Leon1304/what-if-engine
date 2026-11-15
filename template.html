@@ -148,6 +148,9 @@
   .xc.k-arrow b { font-size: calc(3.3 * var(--u)); }
   .xc.k-tag { border-left: 0; background: var(--c); padding: calc(1.2 * var(--u)) calc(2 * var(--u)) calc(1.05 * var(--u)); } .xc.k-tag b { color: var(--ink); } .xc.k-tag span { color: var(--ink); opacity: .7; }
   .xc.k-tag::after { content: ''; position: absolute; left: 50%; bottom: calc(-1.5 * var(--u)); transform: translateX(-50%); border: calc(1.6 * var(--u)) solid transparent; border-top-color: var(--c); border-bottom: 0; }
+  #cctv { position: absolute; inset: 0; pointer-events: none; display: none; background: repeating-linear-gradient(0deg, rgba(0, 0, 0, .2) 0 calc(.22 * var(--u)), transparent calc(.22 * var(--u)) calc(.55 * var(--u))); box-shadow: inset 0 0 calc(16 * var(--u)) rgba(0, 0, 0, .7); }
+  #cctv b { position: absolute; font: 700 calc(2.7 * var(--u))/1 ui-monospace, Menlo, Consolas, monospace; color: #F2F2F2; letter-spacing: .08em; text-shadow: 0 0 calc(.5 * var(--u)) #000, 0 0 calc(.2 * var(--u)) #000; white-space: pre; }
+  #cctv .cr { right: 14%; top: 8%; color: #FF3A2A; } #cctv .cr.off { opacity: 0; } #cctv .cl { right: 14%; top: 12%; } #cctv .cd { left: 7%; bottom: 23%; }
   #frz { position: absolute; inset: calc(2.4 * var(--u)); border: calc(.6 * var(--u)) solid rgba(255, 255, 255, .92); border-radius: calc(2.6 * var(--u)); box-shadow: inset 0 0 calc(6 * var(--u)) rgba(140, 200, 255, .25), 0 0 calc(2 * var(--u)) rgba(0, 0, 0, .35); pointer-events: none; opacity: 0; }
   #frz .fl { position: absolute; left: 0; right: 0; top: calc(36cqh - calc(2.4 * var(--u))); text-align: center; }
   #frz .fl b { display: inline-flex; align-items: center; gap: calc(1.3 * var(--u)); font: 900 calc(3.1 * var(--u))/1 var(--ui); letter-spacing: .1em; text-transform: uppercase; background: #fff; color: #111; padding: calc(1.5 * var(--u)) calc(2.4 * var(--u)) calc(1.35 * var(--u)); border-radius: calc(1.3 * var(--u)); box-shadow: 0 calc(1 * var(--u)) calc(3 * var(--u)) rgba(0, 0, 0, .5); }
@@ -196,7 +199,7 @@
   .stat .gr { width: calc(19 * var(--u)); height: calc(4.6 * var(--u)); align-self: center; flex: none; overflow: visible; }
   .stat .gr .gl { fill: none; stroke: var(--accent); stroke-width: 2.2; stroke-linejoin: round; stroke-linecap: round; vector-effect: non-scaling-stroke; }
   .stat .gr .ga { fill: var(--accent); opacity: .22; } .stat .gr .gm { stroke: rgba(255, 255, 255, .6); stroke-width: 1.2; stroke-dasharray: 4 3; vector-effect: non-scaling-stroke; }
-  .thumbmode #xl, .thumbmode #frz, .thumbmode #gauge { display: none; }
+  .thumbmode #xl, .thumbmode #frz, .thumbmode #cctv, .thumbmode #gauge { display: none; }
   /* v2.7: meter (needle gauge) + timeline stats, split screen */
   .stat .mt { width: calc(24 * var(--u)); height: calc(13.6 * var(--u)); align-self: center; flex: none; overflow: visible; }
   .stat.big .mt { width: calc(30 * var(--u)); height: calc(17 * var(--u)); }
@@ -262,6 +265,7 @@
   <div id="dim"></div>
   <div id="thumb"></div>
   <div id="xl"><svg id="xlsvg" viewBox="0 0 100 177.78" preserveAspectRatio="none"></svg></div>
+  <div id="cctv"></div>
   <div id="frz"></div>
   <div id="gauge"></div>
   <div id="split"></div>
@@ -4900,6 +4904,93 @@ function walkie(f, o = {}) {   // walkie-talkie clipped to the chest (left), LED
   const led = box(w, 0.018, 0.018, 0.01, '', 0.03, 0.135, 0.026, { mat: mat('#FF3A2A', { basic: true, glow: 2.4 }), ...NC }); dyn(led);
   tick(t => { led.visible = (o.talk ?? []).some(([a, b]) => t >= a && t < b) && Math.floor(t * 6) % 2 === 0; });
   return w;
+}
+// ---- v3.35 tunnel-heist kit: hand-dug smuggling tunnel (shafts, lining, bulb string, air duct, rails), breach slab, prison cell with shower ----
+// smuggleTunnel(p, x, z, { len, w, h, y, ry, lining: 'wood' | 'plastic' | 'earth', every, bulbs, pipe, rails, gauge, cut: 'left' | 'right', shaft, endShaft, glows, color })
+//   narrow tunnel running from (x, z) toward −z (local), floor at y (default 4 m under the ground). cut = leave one side open (cross-section view).
+//   shaft / endShaft = { h, w, ladder } vertical shaft at the start / end up to y + h. → { g, w, h, len, y, at(u) → [x, y, z] floor centre, bulbs }
+function smuggleTunnel(p, x, z, o = {}) {
+  const w = o.w ?? 0.8, h = o.h ?? 1.0, L = o.len ?? 60, Y = o.y ?? groundH(x, z) - 4, ry = o.ry ?? 0, g = stat(grp(p ?? world, x, Y, z, ry)), NC = { cast: false };
+  const ec = o.color ?? '#7E5634', lin = o.lining ?? 'wood', cut = o.cut ?? false, ev = o.every ?? 1.2, TB = ['#9A7448', '#8A6640', '#A57E50'], PL = ['#26303A', '#2E3844', '#222A33'];
+  const side = s => !(cut === 'left' && s < 0) && !(cut === 'right' && s > 0), S = [-1, 1].filter(side), n = Math.max(1, Math.round(L / ev)), sl = L / n;
+  box(g, w + 0.7, 0.3, L, shade(ec, -0.12), 0, -0.3, -L / 2, { recv: true }); box(g, w + 0.7, 0.4, L, shade(ec, -0.04), 0, h, -L / 2);
+  for (const s of S) { box(g, 0.35, h, L, ec, s * (w / 2 + 0.175), 0, -L / 2); if (lin === 'earth') for (let i = 0; i < L / 0.55; i++) ball(g, 0.07 + hash(i * 3 + s) * 0.08, shade(ec, (hash(i + s * 9) - 0.5) * 0.3), s * (w / 2 + 0.02), 0.12 + hash(i * 5 + s) * (h - 0.24), -0.2 - i * 0.55 - hash(i * 7 + s) * 0.3, { detail: 0, ...NC }); }
+  for (let i = 0; i < n; i++) { const zc = -(i + 0.5) * sl, zf = -i * sl - 0.05;
+    if (lin === 'wood') { for (const s of S) for (let k = 0; k < 3; k++) box(g, 0.025, h / 3 - 0.02, sl - 0.03, TB[Math.floor(hash(i * 11 + k * 3 + s) * 3)], s * (w / 2 - 0.0125), k * h / 3 + 0.01, zc, NC);
+      for (let k = 0; k < 3; k++) box(g, w / 3 - 0.015, 0.025, sl - 0.03, TB[Math.floor(hash(i * 13 + k) * 3)], -w / 3 + k * w / 3, h - 0.025, zc, NC); }
+    else if (lin === 'plastic') { for (const s of S) box(g, 0.012, h, sl + 0.04, PL[i % 3], s * (w / 2 - 0.006), 0, zc, { rz: s * (hash(i * 3) - 0.5) * 0.03, rough: 0.35, metal: 0.1, ...NC }); box(g, w, 0.012, sl + 0.04, PL[(i + 1) % 3], 0, h - 0.012, zc, { rough: 0.35, ...NC }); }
+    if (lin !== 'earth' || i % 2 === 0) { for (const s of S) box(g, 0.08, h - 0.08, 0.08, '#6B4A2A', s * (w / 2 - 0.06), 0, zf, NC); box(g, w, 0.08, 0.1, '#6B4A2A', 0, h - 0.08, zf, NC); }
+    if (!o.rails) box(g, w - 0.04, 0.025, sl - 0.03, lin === 'earth' ? shade(ec, -0.08) : TB[Math.floor(hash(i * 17) * 3)], 0, 0, zc, NC); }
+  if (o.rails) { const ga = o.gauge ?? Math.min(0.42, w * 0.55); box(g, w, 0.02, L, shade(ec, -0.18), 0, 0, -L / 2, NC); for (let i = 0; i < L / 0.6; i++) box(g, ga + 0.2, 0.05, 0.1, '#5A4632', 0, 0.02, -0.3 - i * 0.6, NC); for (const s of [-1, 1]) box(g, 0.035, 0.06, L, '#8A8F96', s * ga / 2, 0.07, -L / 2, { metal: 0.7, rough: 0.35, ...NC }); }
+  const bulbs = [], bs = o.bulbs ?? 2.5, bx = cut === 'right' ? -w * 0.22 : w * 0.22;
+  if (bs) { cyl(g, 0.006, 0.006, L, '#141414', bx, h - 0.06 - L / 2, -L / 2, { rx: Math.PI / 2, seg: 4, ...NC }); const bm = mat('#FFD58A', { basic: true, glow: 2.2 });
+    for (let i = 0; i * bs < L - 0.2; i++) { const zz = -0.6 - i * bs; cyl(g, 0.012, 0.012, 0.05, '#1E1E1E', bx, h - 0.11, zz, { seg: 6, ...NC }); ball(g, 0.028, '', bx, h - 0.14, zz, { mat: bm, detail: 1, ...NC }); bulbs.push([x + Math.sin(ry) * zz + Math.cos(ry) * bx, Y + h - 0.14, z + Math.cos(ry) * zz - Math.sin(ry) * bx]); } }
+  if (o.pipe !== false) { const px = (cut === 'left' ? 1 : -1) * (w / 2 - 0.1), r = Math.min(0.08, h * 0.08); cyl(g, r, r, L, '#B8BEC6', px, h - 0.12 - r - L / 2, -L / 2, { rx: Math.PI / 2, seg: 10, metal: 0.6, rough: 0.35 }); for (let i = 0; i < L / 0.25; i++) cyl(g, r * 1.12, r * 1.12, 0.03, '#9AA0A8', px, h - 0.12 - r - 0.015, -0.12 - i * 0.25, { rx: Math.PI / 2, seg: 10, metal: 0.6, ...NC }); }
+  const shaft = (sz, q) => { if (!q) return; const sw = q.w ?? 0.6, SH = q.h ?? 4, zc = sz > 0 ? sw / 2 : -L - sw / 2;
+    for (const [dx, dz, ww, dd] of [[-1, 0, 0.3, sw + 0.6], [1, 0, 0.3, sw + 0.6], [0, -1, sw, 0.3], [0, 1, sw, 0.3]]) { if (dx && !side(dx)) continue; const inner = dz === -sz, y0 = inner ? h + 0.4 : 0;   // the wall toward the tunnel starts above its roof (the passage stays open)
+      box(g, ww, SH + h - y0, dd, ec, dx * (sw / 2 + 0.15), y0, zc + dz * (sw / 2 + 0.15)); if (lin === 'wood' && dx) box(g, 0.025, SH + h, sw, TB[1], dx * (sw / 2 - 0.0125), 0, zc, NC); }
+    box(g, sw, 0.025, sw, '#4A3A28', 0, 0, zc, NC); if (q.ladder !== false) { const lz = zc - sz * (sw / 2 - 0.07); for (const s of [-1, 1]) box(g, 0.04, SH + h + 0.4, 0.04, '#8A8F96', s * 0.19, 0, lz, { metal: 0.6, ...NC }); for (let k = 0; k * 0.3 < SH + h; k++) cyl(g, 0.014, 0.014, 0.38, '#9AA0A8', 0, 0.25 + k * 0.3, lz, { rz: Math.PI / 2, seg: 6, metal: 0.6, ...NC }); } };
+  shaft(1, o.shaft); shaft(-1, o.endShaft);
+  if (cut && o.fill) {   // cross-section: earth (and a street layer) above the roof and below the floor, flush with the open side; the shafts stay open
+    const F = o.fill, fw = w + 0.7, topY = (F.top ?? Y + 5) - Y, botY = (F.bottom ?? Y - 3) - Y, st = F.street ?? 0.25, ext = F.ext ?? 4, c2 = F.color ?? ec, sw0 = o.shaft ? (o.shaft.w ?? 0.6) + 0.3 : 0, sw1 = o.endShaft ? (o.endShaft.w ?? 0.6) + 0.3 : 0;
+    const col = (za, zb) => { if (zb - za < 0.01) return; box(g, fw, topY - st - h - 0.4, zb - za, c2, 0, h + 0.4, (za + zb) / 2); if (st) box(g, fw, st, zb - za, F.streetColor ?? '#3A3A3E', 0, topY - st, (za + zb) / 2); };
+    col(-L, 0); col(sw0, sw0 + ext); col(-L - sw1 - ext, -L - sw1);
+    box(g, fw, -0.3 - botY, L + sw0 + sw1 + 2 * ext, shade(c2, -0.06), 0, botY, (sw0 + ext - (L + sw1 + ext)) / 2); } if (!o.shaft) box(g, w + 0.7, h + 0.4, 0.35, ec, 0, -0.3, 0.175); if (!o.endShaft) box(g, w + 0.7, h + 0.4, 0.35, ec, 0, -0.3, -L - 0.175);
+  for (let i = 0; i < (o.glows ?? 0); i++) { const b = bulbs[Math.floor((i + 0.5) / (o.glows) * bulbs.length)]; if (b) glow(b[0], b[1] - 0.05, b[2], { intensity: o.glowI ?? 2.6, dist: o.glowDist ?? 5, color: '#FFC878', flicker: 0.05 }); }
+  const at = u => { const zz = -clamp(u) * L; return [x + Math.sin(ry) * zz, Y, z + Math.cos(ry) * zz]; };
+  return { g, w, h, len: L, y: Y, at, bulbs };
+}
+// slabHole(p, x, y, z, { w, d, thick, hole: [hw, hd], at: [hx, hz], open, drill: [t0, t1], top, color, ry, rebar }) — concrete slab whose top is at y with a hole;
+//   with open: t the plug breaks out downward (chunks, dust, crack) — a vault floor cut from below, a shower floor that gives way. Without open the hole is there from the start.
+//   drill = sparks + dust + grinding under the slab before it gives. → { g, hole: [x, y, z] top centre of the hole }
+function slabHole(p, x, y, z, o = {}) {
+  const W = o.w ?? 3, D = o.d ?? 3, T = o.thick ?? 0.4, [hw, hd] = o.hole ?? [0.7, 0.7], [hx, hz] = o.at ?? [0, 0], ry = o.ry ?? 0, NC = { cast: false }, c = o.color ?? '#9A9892', g = stat(grp(p ?? world, x, y, z, ry));
+  const top = o.top, tS = top ? { surf: 'tiles' } : { surf: 'concrete' }, x0 = -W / 2, x1 = W / 2, z0 = -D / 2, z1 = D / 2, ha = hx - hw / 2, hb = hx + hw / 2, za = hz - hd / 2, zb = hz + hd / 2;
+  const piece = (a, b, cc, dd) => { if (b - a < 0.005 || dd - cc < 0.005) return; box(g, b - a, T, dd - cc, top ?? c, (a + b) / 2, -T, (cc + dd) / 2, tS); };
+  piece(x0, ha, z0, z1); piece(hb, x1, z0, z1); piece(ha, hb, z0, za); piece(ha, hb, zb, z1);
+  for (const s of [-1, 1]) for (let i = 0; i < 4; i++) { box(g, 0.1, 0.025, 0.025, '#6A4A34', hx + s * (hw / 2 - 0.04), -T * (0.3 + 0.35 * (i % 2)), za + (i + 0.5) * hd / 4, { metal: 0.5, ...NC }); box(g, 0.025, 0.025, 0.1, '#6A4A34', ha + (i + 0.5) * hw / 4, -T * (0.45 + 0.3 * (i % 2)), hz + s * (hd / 2 - 0.04), { metal: 0.5, ...NC }); }
+  const R = { g, hole: [x + Math.cos(ry) * hx + Math.sin(ry) * hz, y, z - Math.sin(ry) * hx + Math.cos(ry) * hz] };
+  if (o.open != null) { const t0 = o.open, pg = dyn(grp(g, hx, 0, hz)), ch = [];
+    for (let i = 0; i < 4; i++) { const q = grp(pg, (i % 2 - 0.5) * hw / 2, 0, (Math.floor(i / 2) - 0.5) * hd / 2); box(q, hw / 2 - 0.01, T, hd / 2 - 0.01, top ?? c, 0, -T, 0, tS); ch.push(q); }
+    tick(t => { const u = t - t0; ch.forEach((q, i) => { const a = Math.max(0, u - i * 0.06); q.position.y = a > 0 ? -4.9 * a * a : 0; q.rotation.set(a * (1.5 + i), 0, a * (i % 2 ? -1.2 : 1.4)); }); pg.visible = u < 1.6; });
+    emit('dust', { at: [R.hole[0], y - T, R.hole[2]], t0, t1: t0 + 0.5, rate: 60, size: 0.35, jitter: hw * 0.5 }); emit('debris', { at: [R.hole[0], y - 0.05, R.hole[2]], t0, burst: 14, size: 0.06, jitter: hw * 0.4 });
+    sfx(t0, 'crack', 0.8); sfx(t0 + 0.15, 'rumble', 0.5); }
+  if (o.drill) { const [a, b] = o.drill, P = [R.hole[0], y - T - 0.05, R.hole[2]]; emit('spark', { at: P, t0: a, t1: b, rate: 30, size: 0.04, jitter: hw * 0.3 }); emit('dust', { at: P, t0: a, t1: b, rate: 8, size: 0.25, jitter: hw * 0.3 }); _sfxDur(a, 'saw', 0.6, b - a); }
+  return R;
+}
+// prisonCell(p, x, z, { w, d, h, ry, shower: true, hole: t, holeOpen: t, cam: true, night, light }) — solitary cell, front (+z) = bars and a barred door:
+//   concrete walls (two-tone paint), bed plinth with mattress, blanket and pillow, steel toilet-sink, shower corner behind a low privacy wall (tiles, shower head, drain),
+//   ceiling with a caged light, dome CCTV camera with a blinking LED. hole: true = 0.5 m hole in the shower floor (holeOpen: t = it breaks open then).
+//   → { g, at: { bed, toilet, shower, hole, cam, door }, hole } (world points; at.cam = the camera lens, aim at.bed)
+function prisonCell(p, x, z, o = {}) {
+  const W = o.w ?? 3, D = o.d ?? 3.8, H = o.h ?? 2.7, ry = o.ry ?? 0, Y = groundH(x, z), g = stat(grp(p ?? world, x, Y, z, ry)), NC = { cast: false }, lo = '#B8B09A', hi = '#DCD8CC', cs = '#9A9892';
+  const wp = (lx, ly, lz) => [x + Math.cos(ry) * lx + Math.sin(ry) * lz, Y + ly, z - Math.sin(ry) * lx + Math.cos(ry) * lz];
+  const SW = 1.05, SD = 1.1, sx = W / 2 - SW / 2, sz = -D + SD / 2;   // shower corner: back right
+  box(g, W, 0.12, D - SD, cs, 0, -0.12, -(D - SD) / 2, { surf: 'concrete' }); box(g, W - SW, 0.12, SD, cs, -SW / 2, -0.12, sz, { surf: 'concrete' });
+  const SP = wp(sx, 0, sz), SH = o.shower !== false && o.hole ? slabHole(world, SP[0], Y, SP[2], { w: SW, d: SD, thick: 0.12, hole: [0.5, 0.5], at: [0.1, -0.1], ry, top: '#C8CCC6', open: o.holeOpen }) : null;
+  if (!SH) box(g, SW, 0.12, SD, o.shower !== false ? '#C8CCC6' : cs, sx, -0.12, sz, { surf: o.shower !== false ? 'tiles' : 'concrete' });
+  for (const [lx, lz, ww, dd] of [[0, -D - 0.1, W + 0.4, 0.2], [-W / 2 - 0.1, -D / 2, 0.2, D], [W / 2 + 0.1, -D / 2, 0.2, D]]) { box(g, ww, 1.15, dd, lo, lx, 0, lz, { surf: 'plaster' }); box(g, ww, H - 1.15, dd, hi, lx, 1.15, lz, { surf: 'plaster' }); }
+  box(g, W + 0.4, 0.2, D + 0.2, '#C8C4B8', 0, H, -D / 2, { surf: 'concrete' }); box(g, 0.5, 0.06, 0.5, '#5A5E64', 0, H - 0.06, -D / 2, NC); box(g, 0.4, 0.03, 0.4, '', 0, H - 0.08, -D / 2, { mat: mat('#F4FBFF', { basic: true, glow: 1.0 }), ...NC });
+  for (let k = 0; k < 5; k++) box(g, 0.012, 0.012, 0.5, '#3A3D44', -0.2 + k * 0.1, H - 0.1, -D / 2, NC);
+  // bed plinth + mattress, blanket, pillow (left wall)
+  box(g, 0.9, 0.42, 2.0, '#A8A49A', -W / 2 + 0.45, 0, -D + 1.05, { surf: 'concrete' }); rbox(g, 0.82, 0.1, 1.92, '#E4E0D4', -W / 2 + 0.45, 0.42, -D + 1.05, { rf: 0.3 }); rbox(g, 0.84, 0.05, 1.2, '#6A6E74', -W / 2 + 0.45, 0.52, -D + 1.45, { rf: 0.4 }); rbox(g, 0.5, 0.1, 0.32, '#F2F0EA', -W / 2 + 0.45, 0.52, -D + 0.3, { rf: 0.6 });
+  // steel toilet-sink combo (back wall, middle)
+  { const tx = -0.05, tz = -D + 0.3; box(g, 0.55, 0.9, 0.3, '#B8BEC6', tx, 0, tz - 0.05, { metal: 0.7, rough: 0.3 }); cyl(g, 0.2, 0.17, 0.4, '#C9CDD3', tx, 0, tz + 0.22, { seg: 14, metal: 0.7, rough: 0.3 }); cyl(g, 0.21, 0.21, 0.03, '#9AA0A8', tx, 0.4, tz + 0.22, { seg: 14, metal: 0.7, ...NC }); box(g, 0.4, 0.06, 0.24, '#9AA0A8', tx, 0.9, tz + 0.02, { metal: 0.7, ...NC }); cyl(g, 0.012, 0.012, 0.1, '#7A7E84', tx, 0.96, tz - 0.06, { seg: 6, ...NC }); }
+  // shower: privacy wall 1.2 m, tiles, head and pipe, drain
+  if (o.shower !== false) { box(g, 0.1, 1.2, SD, '#C8C4B8', W / 2 - SW - 0.05, 0, sz, { surf: 'tiles' }); box(g, 0.12, 0.05, SD + 0.02, '#A8A49A', W / 2 - SW - 0.05, 1.2, sz, NC);
+    for (const [lx, lz, ww, dd] of [[sx, -D + 0.012, SW, 0.024], [W / 2 - 0.012, sz, 0.024, SD]]) box(g, ww, 1.9, dd, '#C8CCC6', lx, 0, lz, { surf: 'tiles', ...NC });
+    cyl(g, 0.016, 0.016, 0.9, '#9AA0A8', W / 2 - 0.35, 1.1, -D + 0.04, { seg: 6, metal: 0.7, ...NC }); _seg(g, [W / 2 - 0.35, 2.0, -D + 0.04], [W / 2 - 0.35, 2.0, -D + 0.22], 0.016, 0.016, '#9AA0A8'); cyl(g, 0.06, 0.03, 0.05, '#C9CDD3', W / 2 - 0.35, 1.94, -D + 0.24, { seg: 10, metal: 0.7, ...NC });
+    cyl(g, 0.05, 0.05, 0.006, '#5A5E64', sx - 0.25, 0.002, sz + 0.25, { seg: 10, ...NC }); }
+  // bars + barred door at the front
+  for (let i = 0; i < 15; i++) { const bx = -W / 2 + 0.1 + i * (W - 0.2) / 14; if (bx > 0.35 && bx < 1.2) continue; box(g, 0.035, H, 0.035, '#4A4E54', bx, 0, 0, { metal: 0.5, ...NC }); }
+  for (const yy of [0.05, 1.1, H - 0.12]) box(g, W, 0.08, 0.06, '#4A4E54', 0, yy, 0, { metal: 0.5 });
+  const door = dyn(grp(g, 0.3, 0, 0.06)); for (let i = 0; i < 5; i++) box(door, 0.035, H - 0.2, 0.035, '#3E4248', 0.1 + i * 0.18, 0.05, 0, { metal: 0.5, ...NC }); for (const yy of [0.1, 1.1, H - 0.3]) box(door, 0.85, 0.07, 0.05, '#3E4248', 0.47, yy, 0, { metal: 0.5, ...NC }); box(door, 0.12, 0.18, 0.08, '#2A2D33', 0.8, 1.0, 0.03, NC);
+  // dome CCTV camera (front-left ceiling corner) with blinking LED
+  const cp = [-W / 2 + 0.25, H - 0.18, -0.3]; box(g, 0.18, 0.04, 0.18, '#E4E4E0', cp[0], H - 0.04, cp[2], NC); const dome = new THREE.Mesh(new THREE.SphereGeometry(0.09, 14, 8, 0, TAU, Math.PI / 2, Math.PI / 2), mat('#1E2026', { rough: 0.15, metal: 0.4 })); dome.position.set(cp[0], H - 0.04, cp[2]); g.add(dome);
+  if (o.cam !== false) { const led = dyn(box(g, 0.02, 0.02, 0.02, '', cp[0] + 0.1, H - 0.07, cp[2], { mat: mat('#FF3A2A', { basic: true, glow: 2.5 }), ...NC })); tick(t => { led.visible = Math.floor(t * 1.5) % 2 === 0; }); }
+  if (o.light ?? o.night) { const lp = wp(0, H - 0.4, -D / 2); glow(lp[0], lp[1], lp[2], { intensity: o.lightI ?? 9, dist: 6, color: '#E8F0F4', flicker: 0 }); }
+  const at = { bed: wp(-W / 2 + 0.45, 0.47, -D + 1.1), toilet: wp(-0.05, 0, -D + 0.6), shower: wp(sx, 0, sz), hole: SH ? SH.hole : wp(sx, 0, sz), cam: wp(cp[0], H - 0.12, cp[2]), door: wp(0.75, 0, 0.5) };
+  return { g, at, hole: SH, door, w: W, d: D, h: H };
 }
 // ---- v2.40.27 fight kit: arena hall, octagon cage (+ bell table), fight robot with a detachable head, boxing gloves ----
 function arenaHall(p, o = {}) {   // dark indoor arena around (x, z): floor, walls with exit signs, ceiling with trusses, aisle strip lights → { g }
@@ -12150,7 +12241,15 @@ function bike(p, o = {}) {
     _seg(g, [0, r, 0.35], [0, 0.92, 0.3], 0.018, 0.018, '#C9CDD3'); box(g, 0.48, 0.025, 0.025, '#2A2A2E', 0, 0.92, 0.3); V.len = 0.8; V.seatH = 0.13; V.seatZ = -0.05; V.barH = 0.92; V.barZ = 0.3; }
   else { const r = 0.03; V.wheels.push(_wheel(g, r, 0.035, '#F4F1E8', '#F4F1E8', 0.08, r, 0.28, { spokes: 2 }), _wheel(g, r, 0.035, '#F4F1E8', '#F4F1E8', -0.08, r, 0.28, { spokes: 2 }), _wheel(g, r, 0.035, '#F4F1E8', '#F4F1E8', 0.08, r, -0.28, { spokes: 2 }), _wheel(g, r, 0.035, '#F4F1E8', '#F4F1E8', -0.08, r, -0.28, { spokes: 2 }));
     rbox(g, 0.21, 0.02, 0.8, c, 0, 0.065, 0, { rf: 0.45 }); box(g, 0.2, 0.004, 0.72, '#1E1E22', 0, 0.086, 0, NC); for (const z of [-0.28, 0.28]) box(g, 0.2, 0.025, 0.05, '#9A9EA4', 0, 0.04, z, NC); V.len = 0.8; V.seatH = 0.09; V.seatZ = 0; }
-  if (k !== 'skateboard') late(t => { if (!V._yawAt) return; let tr = V._yawAt(t + 0.4) - V._yawAt(t - 0.4); tr = Math.atan2(Math.sin(tr), Math.cos(tr)); const v = V._posAt(t + 0.1).distanceTo(V._posAt(t - 0.1)) / 0.2; g.rotation.z = clamp(-tr * v * 0.12, -0.55, 0.55); });
+  if (o.rail && k === 'motorcycle') {   // v3.35 rail bike: the motorcycle rides a steel cradle with flanged rollers on narrow rails, towing a flat cart (tunnel escapes, mine rails)
+    const ga = o.gauge ?? 0.42, RH = 0.16, fr = '#3A3D44'; for (const c of g.children) c.position.y += RH; V.seatH += RH; V.barH += RH; V.exhaust[1] += RH;
+    box(g, 0.2, 0.05, 1.7, fr, 0, 0.11, 0, { metal: 0.5 }); for (const s of [-1, 1]) box(g, 0.05, 0.08, 1.5, fr, s * 0.13, 0.11, 0, { metal: 0.5, ...NC });
+    for (const zz of [0.6, -0.6]) { box(g, ga + 0.1, 0.05, 0.08, fr, 0, 0.1, zz, { metal: 0.5 }); for (const s of [-1, 1]) V.wheels.push(_wheel(g, 0.065, 0.03, '#5A5E64', '#8A8F96', s * ga / 2, 0.13 + 0.065, zz, { disc: true, spokes: 3 })); }
+    box(g, 0.05, 0.05, 0.6, fr, 0, 0.12, -1.1, { metal: 0.5, ...NC }); const cz = -1.95; box(g, ga + 0.16, 0.05, 1.1, '#5A5E64', 0, 0.2, cz, { metal: 0.5 });
+    for (const s of [-1, 1]) box(g, 0.03, 0.16, 1.1, '#6A6E74', s * (ga / 2 + 0.065), 0.25, cz, { metal: 0.5, ...NC }); for (const s of [-1, 1]) box(g, ga + 0.16, 0.16, 0.03, '#6A6E74', 0, 0.25, cz + s * 0.535, { metal: 0.5, ...NC });
+    for (const zz of [cz + 0.4, cz - 0.4]) for (const s of [-1, 1]) V.wheels.push(_wheel(g, 0.065, 0.03, '#5A5E64', '#8A8F96', s * ga / 2, 0.13 + 0.065, zz, { disc: true, spokes: 3 }));
+    V.len = 3.2; V.cart = [0, 0.27, cz]; V.rail = true; }
+  if (k !== 'skateboard' && !V.rail) late(t => { if (!V._yawAt) return; let tr = V._yawAt(t + 0.4) - V._yawAt(t - 0.4); tr = Math.atan2(Math.sin(tr), Math.cos(tr)); const v = V._posAt(t + 0.1).distanceTo(V._posAt(t - 0.1)) / 0.2; g.rotation.z = clamp(-tr * v * 0.12, -0.55, 0.55); });
   return V;
 }
 // rideBike(rig, V, { t0, t1 }) — sits (bicycle: pedals in sync with the wheels, motorcycle: knees in, hands on the bars), stands (scooter: kicks, skateboard: sideways, pushes)
@@ -15249,7 +15348,7 @@ function updateHud(t) {
 }
 
 // --- explainer layer (v2.6): callouts on 3D points, freeze frames, gauge, fact / myth / guess cards (all HUD, video time) ---
-const xlEl = $('xl'), xlSvg = $('xlsvg'), frzEl = $('frz'), gaugeEl = $('gauge'), xcardEl = $('xcard'), XHITS = [];
+const xlEl = $('xl'), xlSvg = $('xlsvg'), frzEl = $('frz'), cctvEl = $('cctv'), gaugeEl = $('gauge'), xcardEl = $('xcard'), XHITS = [];
 const NS = 'http://www.w3.org/2000/svg', svgEl = (tag, attrs, parent) => { const e = document.createElementNS(NS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); parent?.appendChild(e); return e; };
 const rich = s => esc(tr(String(s ?? ''))).replace(/\*([^*]+)\*/g, '<span class="hl">$1</span>').replace(/_([^_]+)_/g, '<span class="bd">$1</span>').replace(/~/g, '&nbsp;');
 const SAFE = { x0: 6, x1: 87, y0: 33, y1: 121 };   // label area in cqw (frame = 100 × 177.8): clear of the badge row, the app buttons on the right and the lower-third caption
@@ -15337,6 +15436,16 @@ frzEl.innerHTML = '<div class="fl"></div>';
 const frzLab = frzEl.querySelector('.fl');
 FREEZES.forEach(f => { XHITS.push({ t: f.t, k: 'scratch', v: 0.9 }, { t: f.t + f.dur - 0.18, k: 'whoosh', v: 0.5 }); FLASHES.push({ t: f.t, dur: 0.16, a: 0.4 }); });
 STATS.forEach(s => { if (s.type === 'meter' && s.keys) for (let i = 1; i < s.keys.length; i++) { const [a, va] = s.keys[i - 1], [b, vb] = s.keys[i]; if (Math.abs(vb - va) > 2 && b > a) XHITS.push({ t: a, k: 'needle', v: 0.8, dur: Math.min(1.2, b - a) }); } });   // the needle ticks while it moves
+// v3.35 CCTV = [{ t0, t1 | dur, label: 'CAM 20', date: '07-11-2015', clock: '20:52:00' | t => text }] — security-camera look: colour drained, scanlines, dark edges, blinking REC, label, date + running clock
+const CCTVS = (typeof CCTV === 'undefined' || !CCTV ? [] : [].concat(CCTV)).map(c => { const a = evT(c.t0 ?? c.t ?? 0); return { ...c, t0: a, t1: c.t1 != null ? evT(c.t1) : a + (c.dur ?? 3) }; });
+const ccClock = (s0, dt) => { const [h, m, sc] = String(s0).split(':').map(Number), v = Math.max(0, Math.floor((h || 0) * 3600 + (m || 0) * 60 + (sc || 0) + dt)), P = n => String(n).padStart(2, '0'); return `${P(Math.floor(v / 3600) % 24)}:${P(Math.floor(v / 60) % 60)}:${P(v % 60)}`; };
+let ccK = 0;
+function updateCctv(t) {
+  const c = THUMB_ON ? null : CCTVS.find(x => t >= x.t0 && t < x.t1);
+  if (!c) { ccK = 0; if (cctvEl.style.display !== 'none') cctvEl.style.display = 'none'; return; }
+  ccK = 1; cctvEl.style.display = 'block'; const clk = typeof c.clock === 'function' ? c.clock(t) : c.clock ? ccClock(c.clock, t - c.t0) : '';
+  cctvEl.innerHTML = `<b class="cr${Math.floor(t * 1.6) % 2 ? ' off' : ''}">● REC</b><b class="cl">${esc(c.label ?? 'CAM 01')}</b><b class="cd">${esc(c.date ?? '')}${c.date && clk ? '  ' : ''}${esc(clk)}</b>`;
+}
 let frzK = 0;
 function updateFreeze(t) {
   const f = THUMB_ON ? null : FREEZES.find(x => t >= x.t - 0.01 && t < x.t + x.dur + 0.25);
@@ -15428,7 +15537,7 @@ function updateCards(t) {
   }
   if (dimK > 0) dimEl.style.opacity = Math.max(parseFloat(dimEl.style.opacity) || 0, 0.32 * dimK).toFixed(3);
 }
-function updateExplain(t) { updateSplit(t); updateCalls(t); updateFreeze(t); updateGauge(t); updateCards(t); updateLoop(t); updateMap2d(t); }
+function updateExplain(t) { updateSplit(t); updateCalls(t); updateFreeze(t); updateCctv(t); updateGauge(t); updateCards(t); updateLoop(t); updateMap2d(t); }
 // v2.30 MAP2D: full-frame 1940s-style map, drawn crisp at output resolution every frame (drawWarMap), with a slow push / pan between two views,
 // arrows that draw themselves, pins, areas and labels. While a card fully covers the frame the 3D scene is not rendered (faster).
 //   MAP2D = [{ t, dur: 6, region: 'europe' | 'channel' | 'normandy' | [lon0, lat0, lon1, lat1], view: [[lon, lat, widthDeg], [lon, lat, widthDeg]], fade: 0.45, textScale: 1.5,
@@ -16292,7 +16401,7 @@ function update(t) {
   const fa = updateHud(t), U = fin.uniforms;
   updateExplain(t); updateTease(t);
   scenePass.split = SPLIT_NOW; if (SPLIT_NOW) camFx.dof = 0; if (gtao) gtao.enabled = !SPLIT_NOW;   // split screen: no AO / lens blur (one camera each)
-  if (!THUMB_ON) U.uSat.value = (CFG.saturation ?? 1.08) * (1 - 0.62 * frzK);
+  if (!THUMB_ON) U.uSat.value = (CFG.saturation ?? 1.08) * (1 - 0.62 * frzK) * (1 - 0.94 * ccK);
   U.uTime.value = t; U.uExp.value = renderer.toneMappingExposure; U.uAb.value = Math.min(1.5, shakeAmt * 2.5 + fa);
   U.uBlur.value = camFx.blur; U.uBlurDir.value.set(camFx.dx, 0); U.uZoom.value = camFx.zoom; U.uDip.value = camFx.dip; U.uDef.value = camFx.def;
   U.uDof.value = camFx.dof; U.uFocus.value.set(0.5, 1 - camFx.fy); U.uDofOn.value = dofPass.on || (CFG.dof !== false && camFx.dof > 0.01) ? 1 : 0; U.tDepth.value = dofRT.texture; U.uFocusD.value = camFx.focus ?? 5; U.uRain.value = THUMB_ON ? 0 : lensRainAt(t); U.uNear.value = camera.near; U.uFar.value = camera.far;
