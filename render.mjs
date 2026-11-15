@@ -61,7 +61,7 @@ async function openPage(W0 = W) {   // W0: render width of this page (the audit 
   page.on('pageerror', e => errors.push(e.message));
   page.on('console', m => { if (m.type() === 'error' && !/favicon|fonts\.g/.test(m.text())) errors.push(m.text()); });
   await page.goto('http://whatif.local/');
-  try { await page.waitForFunction(() => window.whatif, null, { timeout: 120000 }); }
+  try { await page.waitForFunction(() => window.whatif, null, { timeout: 1000 * (+process.env.WHATIF_START_TIMEOUT || 120) }); }   // v3.37: WHATIF_START_TIMEOUT=s for big scenes on a busy machine
   catch { console.log('PAGE DID NOT START\n' + errors.join('\n')); await browser.close(); process.exit(1); }
   await page.evaluate(async ([w, F]) => { await document.fonts.ready; window.whatif.setRenderWidth(w); window.whatif.fps?.(F); window.whatif.seek(0); }, [LAND ? Math.round(W0 * 16 / 9) : W0, fps]);
   return { browser, page, errors };

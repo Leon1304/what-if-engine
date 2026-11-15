@@ -96,8 +96,9 @@ Du stehst als Maßstab im Bild, die Kamera fährt hoch/runter, ein Zähler (METE
 - Reserve: Knocker-upper (weckt Menschen mit Blasrohr und Erbsen), Vomitorium-Mythos (Ausgänge im Amphitheater, kein Brechraum).
 
 ### Katastrophen-Simulation am echten Ort KS1–KS8 (Kategorie Story/Erklärung, 40–55 s)
-**Look: Miniatur/Tilt-Shift** (Stadt als Spielzeugmodell, unscharfe Ränder, kräftige Farben); wird gerade in einer anderen Sitzung getestet (Worktree `tilt-shift`). Erst bauen, wenn der Look steht. Du-Perspektive über eine Figur in der Miniaturstadt, Zähler (MINUTES UNTIL IMPACT, WAVE HEIGHT), Faktenkarte mit Quelle, keine Opferzahlen-Spektakel, GORE-QA leer. `tsunami`, `flood`, `asteroid` gibt es schon in der Engine.
+**Look: Miniatur/Tilt-Shift** (Stadt als Spielzeugmodell, unscharfe Ränder, kräftige Farben); steht seit Engine v3.37 (`CFG.mini`, `shot('mini')`, dazu `asteroidImpact()`, `suburb()`, `beachLife()`; erstes Video: asteroid-la, 15.11.). Du-Perspektive über eine Figur in der Miniaturstadt, Zähler (MINUTES UNTIL IMPACT, WAVE HEIGHT), Faktenkarte mit Quelle, keine Opferzahlen-Spektakel, GORE-QA leer. `tsunami`, `flood`, `asteroid` gibt es schon in der Engine.
 - ★ KS1 What if a tsunami hit New York? – Wellenhöhe-Zähler, Wasser läuft durch die Straßenschluchten; Fakt: Long Island hat realistisch kaum Tsunami-Risiko → Rate-Frage am Ende.
+- KS2a What if an asteroid hit Los Angeles? (asteroid-la, 140 m, 43 s, Render 15.11. läuft)
 - ★ KS2 What if an asteroid hit your city? – 50 m (Tunguska 1908, Wald von 2.000 km²) vs 1 km vs 10 km; drei Größen nacheinander auf derselben Miniaturstadt.
 - KS3 What if Vesuvius erupted today? – Neapel, ~600.000 in der roten Zone, Evakuierungsplan 72 h; Bezug Pompeji 79 n. Chr.
 - KS4 What if the Hoover Dam broke? – Lake Mead läuft aus, Welle durch die Schlucht; Fakt: Damm hält gegen fast alles (Beton kühlt noch heute aus → Mythos-Karte).

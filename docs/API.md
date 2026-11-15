@@ -25,7 +25,8 @@ vertikale FOV 45–55°, horizontal sieht man nur ca. 0,55 davon. Totalen aus 40
 ## `CAM` mit `shot()` schreiben
 
 (kurz, spart Tokens): `...shot(art, t, dauer, ziel, {az, dist, h, fov, fy, dof, move, tr})` liefert Start-Key (Schnitt + Übergang) und End-Key (Bewegung).
-- `art`: `wide` (48 m, Orbit) · `mid` (13 m) · `close` (4,2 m, fov 34, Motiv bei 36 % von oben, Tiefenunschärfe) · `macro` (1,7 m, für Objekte).
+- `art`: `wide` (48 m, Orbit) · `mid` (13 m) · `close` (4,2 m, fov 34, Motiv bei 36 % von oben, Tiefenunschärfe) · `macro` (1,7 m, für Objekte) · `mini` (v3.37: Spielzeug-Modell von hoch oben, 62 m weg und 58 m hoch, fov 32, langsamer Orbit 14°, Tilt-Shift an; siehe **Miniatur-Look**).
+- `mini: 0–1` in den Optionen jeder Art blendet den Tilt-Shift für diese Einstellung ein (1) oder aus (0).
 - `ziel`: `[x,y,z]` (Blickpunkt) oder ein Name aus `track('name', rig|obj, dy)` in der Szene: Dann fährt die Kamera mit, auch bei laufenden Figuren. `dy` = Blickhöhe über dem Objekt (Kopf 1,55).
 - `az`: Blickwinkel in Grad, 0 = Kamera auf +z-Seite des Ziels. Für Gesichter `az` = Blickrichtung der Figur (heading in Grad), sonst sieht man den Hinterkopf.
 - `move`: push (Standard nah) · pull · orbit (Standard Totale, `turn`) · crane (`rise`) · static.
@@ -34,7 +35,7 @@ vertikale FOV 45–55°, horizontal sieht man nur ca. 0,55 davon. Totalen aus 40
 
 ## `CAM`-Keys von Hand
 
-`{ t, p, l, fov, e, cut, tr, td, dir, around, follow, off, dy, fy, dof }`. `p`/`l` dürfen Funktionen `t => [x,y,z]` sein. Zwei Keys mit gleichem t, der zweite mit `cut: true`, ergeben einen Schnitt; `tr` wählt den Übergang (whip · zoom · dip · blur · cut), `td` dessen Dauer (0,34 s), `dir` die Whip-Richtung ±1. `e` ist das Easing in diesen Key (`inOut` · `out` · `lin` · `in`). `around: [x, z]` fährt einen Bogen um diesen Punkt. `fy` (0 = oben) setzt das Motiv auf diese Bildhöhe. **Tiefenschärfe ist echt (nach Entfernung):** Nahaufnahmen bekommen automatisch einen weichen Hintergrund; `dof` 0–1 stellt die Stärke ein (0 = aus), `focus: Meter | [x,y,z] | 'trackName'` legt die Schärfe fest. Zwei Keys mit verschiedenem `focus` ergeben eine Schärfeverlagerung (Rack Focus), z. B. vom Gesicht auf die Gefahr im Hintergrund: pro Video höchstens einmal, an einem Schlüsselmoment.
+`{ t, p, l, fov, e, cut, tr, td, dir, around, follow, off, dy, fy, dof, mini }`. `p`/`l` dürfen Funktionen `t => [x,y,z]` sein. Zwei Keys mit gleichem t, der zweite mit `cut: true`, ergeben einen Schnitt; `tr` wählt den Übergang (whip · zoom · dip · blur · cut), `td` dessen Dauer (0,34 s), `dir` die Whip-Richtung ±1. `e` ist das Easing in diesen Key (`inOut` · `out` · `lin` · `in`). `around: [x, z]` fährt einen Bogen um diesen Punkt. `fy` (0 = oben) setzt das Motiv auf diese Bildhöhe. **Tiefenschärfe ist echt (nach Entfernung):** Nahaufnahmen bekommen automatisch einen weichen Hintergrund; `dof` 0–1 stellt die Stärke ein (0 = aus), `focus: Meter | [x,y,z] | 'trackName'` legt die Schärfe fest. Zwei Keys mit verschiedenem `focus` ergeben eine Schärfeverlagerung (Rack Focus), z. B. vom Gesicht auf die Gefahr im Hintergrund: pro Video höchstens einmal, an einem Schlüsselmoment.
 
 ## Nahaufnahmen
 
@@ -78,6 +79,7 @@ Alle übrigen `CFG`-Schlüssel stehen bei ihrer Funktion in diesem Dokument (`gr
 | `statStagger` (0.45) · `countUp` (0.7) | Zähler erscheinen nacheinander (s Abstand); Zahlen zählen beim Erscheinen so lange hoch (s) |
 | `units` ('both') | Einheiten der Zähler: both (metrisch · imperial) · metric · imperial |
 | `dof` | `false` = keine Tiefenunschärfe (auch nicht automatisch in Nahaufnahmen) |
+| `mini` | Miniatur-/Tilt-Shift-Look (v3.37) für alle Keys ohne eigenes `mini`: `true` oder `{ amount: 1, band: 0.12, blur: 1, angle: 0, center, sat: 1.3, con: 1.1, warm: 0.04 }`, siehe **Miniatur-Look** |
 | `bloomThreshold` (1.2) | ab welcher Helligkeit etwas glüht |
 | `aoRes` (0.5) | Auflösung der Kontaktschatten (AO) relativ zum Bild |
 | `mbThreshold` (0.02) | Bewegung pro Bild, ab der `motionBlur: 'auto'` einsetzt |
@@ -266,6 +268,7 @@ Brauchtum im Alpenraum (Österreich, Bayern, Südtirol …): In der Nacht auf de
 
 - `explode(x,y,z,t0,{size,crater})` bringt Feuerball, Trümmer, Rauch, Licht, Krater, Shake, Flash und Sound selbst mit.
 - `meteor({from:[x,y,z], to:[x,y,z], t0, t1, size})` fliegt mit Feuerschweif und explodiert bei t1.
+- `asteroidImpact({ at, t1, size, radius, speed, breaks })` (v3.37): Einschlag in Stadtgröße mit Pilzwolke, Krater, Druckwelle und einstürzenden Gebäuden, siehe „Asteroideneinschlag“.
 - Jede Explosion belegt für 1,2 s ein Licht. Zusammen mit `glow`/`lamp` höchstens 3–4 Lichter gleichzeitig.
 - **Explosion (v3.26):** weicher Brandfleck, der sich über den Boden legt (statt harter dunkler Scheibe; `crater: false` = keiner), eine staubige Druckwelle als Ring über den Boden, seitlich weggeschleuderter Staub, ein Funkenregen; das Licht kommt aus dem Licht-Pool (siehe Partikel und Licht). `ring: false` = ohne Ring und Staubring. Trümmer bleiben liegen, wo sie landen.
 - `lightning(t, {x, z, h, branches, width, light, lightDist})` (v3.26): verzweigter Blitz (gezackter Hauptkanal, `branches` Äste, Standard 3) und ein Lichtblitz am Einschlag über den Licht-Pool (`light`: Stärke, Standard 1400, `false` = keiner). `lightningStorm(t0, t1, {every})` wie bisher.
@@ -1556,6 +1559,42 @@ Schalter für den Kino-Look, standardmäßig aus. Läuft als eigener Schritt (`C
 - **Prüfung:** `QA: HEADCUT` misst die Oberkante am Balken. Ein Kopf, der unter dem Balken verschwindet, gilt als abgeschnitten (Meldung „under the cinema bar“). Für Nahaufnahmen also `fy` etwas tiefer setzen (ca. 0,42 statt 0,36).
 - **Rezept „filmisch“** (Skill-Schlüsselwort): `cinema: true, motionBlur: 'all', grain: 0.07, vignette: 0.6, saturation: 0.96, contrast: 1.14, dofAuto: 1`, dazu ein Himmel mit tiefer Sonne (`golden`, `dusk`) oder Nacht mit vielen Lichtern (Laternen, `headlights`, Neon) – dort wirken Streifen und Halation. Gesichter nachts mit `glow` nur mäßig aufhellen (`intensity` ≤ 15 bei 2–3 m), sonst überstrahlen sie.
 - Test: `tests/cinema` (golden → dusk-Straße mit Laternen und Scheinwerfern → Nacht-Nahaufnahme mit breiter werdenden Balken).
+
+# Neu in v3.37 (Miniatur-Look: Tilt-Shift)
+Die Szene sieht aus wie ein Modellbau: Ein scharfes Band liegt quer durchs Bild auf Höhe des Motivs, darüber und darunter wird es immer unschärfer, die Farben werden kräftiger und etwas warm. Das wirkt am besten von hoch oben auf Städte, Straßen, Menschenmengen, Fahrzeuge und Katastrophen. Der Effekt läuft im letzten Nachbearbeitungsschritt (FinalShader, keine zusätzlichen Durchgänge) und kostet beim Rendern auf GitHub fast nichts.
+- **Einzelne Einstellungen:** `...shot('mini', t, dauer, [x, y, z], { az, dist, h, fov, turn })` = Blick von hoch oben (Standard 62 m Abstand, 58 m Höhe, fov 32), langsamer Orbit, Tilt-Shift an. Jede andere Art mit `{ mini: 1 }`, eigene Keys mit `mini: 0–1`. Zwischen zwei Keys wird `mini` überblendet (z. B. normale Totale, die beim Hochziehen zum Modellbau wird).
+- **Ganzes Video:** `CFG.mini: true` oder als Objekt. Das gilt dann für jeden Key ohne eigenes `mini`. Nahaufnahmen von Gesichtern mit `mini: 0` ausnehmen, die wirken als Modell nicht.
+  - `amount` (1): Stärke für Keys ohne `mini` (0 = nur, wo Keys es setzen; so lassen sich `band` usw. einstellen, ohne den Look überall einzuschalten),
+  - `band` (0.12): halbe Höhe des scharfen Bands als Bildanteil, kleiner = stärkerer Modell-Eindruck,
+  - `blur` (1): × Unschärfe außerhalb des Bands (maximal 1,25 % der Bildbreite bei 1),
+  - `angle` (0): Neigung des Bands in Grad (schräge Straße),
+  - `center`: Höhe des Bands (0 = oben, 1 = unten). Ohne Angabe folgt das Band `fy` der Kamera, liegt also immer auf dem Motiv,
+  - `sat` (1.3) · `con` (1.1): × Sättigung und Kontrast, `warm` (0.04): warmes Sonnenlicht auf dem Modell,
+  - `clear` (1.8): × Sichtweite im Dunst, solange `CFG.mini` gesetzt ist (klare Luft wie auf einem Tilt-Shift-Foto; `CFG.fogScale` hat Vorrang).
+- Solange `mini` > 0 ist, ersetzt der Tilt-Shift die Tiefenunschärfe dieses Frames. Split-Screens bleiben ohne.
+- **Cover:** `THUMB.mini: 0–1` (Standard wie `CFG.mini`), `THUMB.miniY` (0.55) = Höhe des Bands. Die Farben des Covers bleiben beim Wow-Look.
+- **Tipps:** Sonne hoch und klar (`day`), viele kleine bewegte Dinge (Autos, Menschen, Rauch). Der Blick schräg von oben (35–50°) macht den Modell-Eindruck, flach von der Seite wirkt es nur unscharf.
+- Test: `tests/tilt-shift` (Stadt von oben mit `shot('mini')` → normale Totale mit `mini: 0` → Key-Überblendung in den Modell-Look, Cover mit `THUMB.mini`).
+
+## L.A.-Vororte und Strandleben (v3.37)
+- `suburb({ at: [x, z], nx: 6, rows: 2, lot: 16, depth: 22, street: 9, seed, pools: 0.6, cars: 0.7, palms: 0.55, walls, roofs })` → `{ houses, loops, size }`: Reihen von Bungalows im L.A.-Stil (pastellfarbener Putz, Walmdach mit Ziegeln oder Flachdach mit Attika und Klimagerät), gerahmte Fenster, Tür, Garage mit Einfahrt und geparktem Auto, Vorgarten, Pool mit Deck im Garten, Hecke hinten, Palmen. Straßen zwischen den Reihen, die Häuser stehen beidseitig dazu. `loops` für `traffic()`, `houses` für `asteroidImpact({ breaks })` / `collapse()`. Statisch (gebacken).
+- `beachLife({ x: [x0, x1], z: [z0, z1], n: 30, towers: [[x, z], …], keep: [[x, z, r], …], seed, colors })`: belebter Strand von oben – zweifarbige Sonnenschirme, Handtücher, Kühlboxen, Surfbretter im Sand, Rettungsschwimmer-Türme (Stelzen, blaue Hütte, Rampe, Fahne; Blick nach +z zum Wasser). `keep` hält Plätze frei (z. B. für eine Menge).
+- Test: `tests/asteroid-impact` (Vorort und Strand neben der Stadt).
+
+## Asteroideneinschlag `asteroidImpact()` (v3.37)
+Ein Einschlag in Stadtgröße, alles in einem Aufruf: `const I = asteroidImpact({ at: [x, z], t1, t0, from: [dx, dy, dz], dist: 900, size: 8, radius: 120, speed: 60, fireball, cloud, crater, breaks: [...], smoke: 30, fx })`.
+- **Anflug** (`t0` → `t1`, Standard 3 s): kantiger, glühender Gesteinsbrocken (Radius `size`) mit pulsierender Plasmahülle, doppeltem Feuerschweif nach hinten (breit am Brocken, dünn am Ende), Rauchspur und Flammen. `from` = Richtung, aus der er kommt (Standard schräg von oben, −x/−z), `dist` = Startabstand. Darf schon lange vorher am Himmel stehen (`t0` früh: „eine zweite Sonne“).
+- **Einschlag** bei `t1`: weißer Blitz, starkes Wackeln, Riser davor, Explosion, Donner, großes Licht. Ein klumpiger Feuerball (Radius `fireball`, Standard 0,3 × `radius`) schwillt an, glüht weiß → orange → dunkel und steigt zur Pilzwolke auf (Stiel aus gestapelten Wolkenballen, Kappe in Höhe `cloud`, Standard 0,9 × `radius`). Der Fuß glüht am längsten nach.
+- **Krater** (`crater`, Standard 0,17 × `radius`): verbrannter Boden mit aufgeworfenem Rand aus Gesteinsbrocken.
+- **Druckwelle:** heller Staubring am Boden und eine Staubwand, die mit `speed` m/s nach außen rast (am Anfang schneller), mit Staubwolken an der Front, und bei `radius` ausdünnt.
+- **Zerstörung:** Alles in `breaks` (z. B. `C.towers` aus `city()`, einzelne `tower()`-Ergebnisse oder Gruppen) stürzt ein, sobald die Front ankommt: nah am Krater `pancake`, weiter draußen `topple` weg vom Einschlag. Nur die ersten zwei bekommen eigenen Ton und Wackler.
+- Gibt `{ rock, pos(t), front(t), t1, at, hitT(x, z) }` zurück: `track('rock', I.rock)` für Kameras auf den Brocken, `I.hitT(x, z)` = wann die Front diesen Punkt erreicht (z. B. Massen davor fliehen lassen, Shots schneiden).
+- Szenenzeit wie `explode()` (Zeitlupe auf dem Einschlag geht).
+- `city()` gibt seit v3.37 zusätzlich `towers` zurück (jedes `tower()`-Ergebnis).
+- Niedrige Gebäude (Höhe ≤ 12 m, z. B. aus `suburb()`) werden nicht über `collapse()` zerlegt, sondern von der Welle plattgedrückt und weggeschoben (schnell, auch bei Hunderten Häusern); im Krater verschwinden sie.
+- **Tipps:** Bester Blick schräg von oben auf die Stadt, gern mit `shot('mini', …)` (Miniatur-Look, die Stadt als Modellbau). Die Skyline im Hintergrund (`backdrop`) kann hinter der Wolke wie ein Stiel aussehen; dann `city({ backdrop: false })` oder Kamera drehen.
+- **Große Szenen** (Hunderte Häuser, viele Fahrzeuge) brauchen beim Start länger; auf einem ausgelasteten Rechner `WHATIF_START_TIMEOUT=600 node render.mjs …` (Sekunden, Standard 120).
+- Test: `tests/asteroid-impact` (Anflug über einer kleinen Stadt, Einschlag, Druckwelle mit einstürzenden Türmen im Miniatur-Look, Pilzwolke).
 
 # Neu in v3.30 (Launch-Tag: Stromausfall, Konsole, Spielbildschirm, Controller, Wecker, Aggregat)
 
