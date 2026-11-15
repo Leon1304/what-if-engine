@@ -234,22 +234,48 @@ if (opt('video')) {
   const mine = i => sn === 1 || Math.floor(i / chunk) % sn === si;
   const todo = [...Array(total).keys()].filter(i => mine(i) && !(existsSync(fr(i)) && statSync(fr(i)).size > 0));
   console.log(`${total} frames at ${W}px, ${fps} fps${HQ ? ' (HQ: full-res 3D, 4× MSAA)' : ''} · ${total - todo.length} already done · ${workers} worker(s)`);
-  const started = Date.now(); let done = 0;
-  await Promise.all([...Array(Math.min(workers, todo.length || 1)).keys()].map(async w => {
-    if (!todo.length) return;
-    const { browser, page, errors } = await openPage();
-    for (let j = w; j < todo.length; j += workers) {
-      const i = todo[j], tmp = fr(i) + '.part.jpg';
-      await page.evaluate(t => window.whatif.seek(t), i / fps);
-      await page.screenshot({ path: tmp, type: 'jpeg', quality: 92 });
+  const started = Date.now(); let done = 0, next = 0;
+  // v3.38: memory-aware workers — the first worker renders one frame, its browser's memory (all processes) decides how many more fit into RAM
+  // (measured over all child processes of this node process — only this one browser runs then; heavy scenes take 7+ GB per HQ page; three of them on a 16 GB runner swap until a screenshot times out). A frame that hangs gets a fresh browser and
+  // up to 2 retries (WHATIF_FRAME_TIMEOUT s per frame, default 600).
+  const FT = 1000 * (+process.env.WHATIF_FRAME_TIMEOUT || 600);
+  const rssMB = pid => { const r = spawnSync('ps', ['-axo', 'pid=,ppid=,rss='], { encoding: 'utf8' }); if (r.status !== 0) return 0;
+    const rows = r.stdout.trim().split('\n').map(l => l.trim().split(/\s+/).map(Number)), keep = new Set([pid]); let grew = true;
+    while (grew) { grew = false; for (const [p, pp] of rows) if (keep.has(pp) && !keep.has(p)) { keep.add(p); grew = true; } }
+    return rows.reduce((s, [p, , kb]) => s + (keep.has(p) ? kb : 0), 0) / 1024; };
+  const runWorker = async first => {
+    let pg = await openPage(), errors = pg.errors;
+    for (let i0 = 0; ; i0++) {
+      if (next >= todo.length) break;
+      const i = todo[next++], tmp = fr(i) + '.part.jpg';
+      for (let tries = 0; ; tries++) {
+        try {
+          await pg.page.evaluate(t => window.whatif.seek(t), i / fps);
+          await pg.page.screenshot({ path: tmp, type: 'jpeg', quality: 92, timeout: FT });
+          break;
+        } catch (e) {
+          if (tries >= 2) throw e;
+          console.log(`frame ${i} (${(i / fps).toFixed(2)} s): ${String(e.message).split('\n')[0]} — new browser, retry ${tries + 1}/2`);
+          await pg.browser.close().catch(() => {}); pg = await openPage(); errors.push(...pg.errors); pg.errors = errors;
+        }
+      }
       renameSync(tmp, fr(i)); done++;
+      if (first && i0 === 0) await first(pg);
       if (done % 30 === 0 || done === todo.length) {
         const per = (Date.now() - started) / done;
         console.log(`frame ${done}/${todo.length} · ${(per / 1000).toFixed(2)} s/frame · ~${Math.ceil((todo.length - done) * per / 60000)} min left`);
       }
     }
-    report(errors); await browser.close();
-  }));
+    report(errors); await pg.browser.close();
+  };
+  const more = [];
+  if (todo.length) await runWorker(async pg => {
+    const os = await import('os'), mb = rssMB(process.pid), ram = os.totalmem() / 1048576;
+    const fit = mb > 0 ? Math.max(1, Math.floor(ram * 0.8 / mb)) : workers, n = Math.min(workers, fit, todo.length);
+    console.log(`workers: ${n} of ${workers} (one page takes ${(mb / 1024).toFixed(1)} GB of ${(ram / 1024).toFixed(0)} GB RAM)`);
+    for (let k = 1; k < n; k++) more.push(runWorker());
+  });
+  await Promise.all(more);
   if (framesOnly) { console.log(`shard ${si}/${sn} (chunks of ${chunk} frames) done in ${Math.round((Date.now() - started) / 60000)} min`); process.exit(0); }
   const missing = [...Array(total).keys()].filter(i => !existsSync(fr(i)));
   if (missing.length) { console.log(`failed: ${missing.length} frames missing (first ${missing[0]})`); process.exit(1); }
