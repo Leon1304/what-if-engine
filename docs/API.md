@@ -1520,6 +1520,7 @@ Ein Einschlag in Stadtgröße, alles in einem Aufruf: `const I = asteroidImpact(
 - Niedrige Gebäude (Höhe ≤ 12 m, z. B. aus `suburb()`) werden nicht über `collapse()` zerlegt, sondern von der Welle plattgedrückt und weggeschoben (schnell, auch bei Hunderten Häusern); im Krater verschwinden sie.
 - **Tipps:** Bester Blick schräg von oben auf die Stadt, gern mit `shot('mini', …)` (Miniatur-Look, die Stadt als Modellbau). Die Skyline im Hintergrund (`backdrop`) kann hinter der Wolke wie ein Stiel aussehen; dann `city({ backdrop: false })` oder Kamera drehen.
 - **Große Szenen** (Hunderte Häuser, viele Fahrzeuge) brauchen beim Start länger; auf einem ausgelasteten Rechner `WHATIF_START_TIMEOUT=600 node render.mjs …` (Sekunden, Standard 120).
+- **v3.38 Renderer und Speicher:** Beim Video-Export rendert erst ein Worker ein Bild; danach misst `render.mjs` den Speicher seines Browsers und startet nur so viele weitere Worker, wie in 80 % des RAM passen (Ausgabe `workers: n of m (one page takes X GB …)`). Grund: Schwere Szenen (L.A. mit Vororten) brauchen in HQ rund 7 GB pro Seite, drei davon auf einem 16-GB-Runner lagern aus, bis ein Screenshot nach 600 s abbricht. Hängt ein Bild trotzdem, startet der Worker einen neuen Browser und versucht es bis zu zweimal (`WHATIF_FRAME_TIMEOUT`, Sekunden pro Bild, Standard 600).
 - Test: `tests/asteroid-impact` (Anflug über einer kleinen Stadt, Einschlag, Druckwelle mit einstürzenden Türmen im Miniatur-Look, Pilzwolke).
 
 # Neu in v3.30 (Launch-Tag: Stromausfall, Konsole, Spielbildschirm, Controller, Wecker, Aggregat)
