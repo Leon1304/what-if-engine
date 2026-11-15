@@ -3459,7 +3459,8 @@ function walk(obj, pts, o = {}) {
   if (o.face != null || o.side) (obj._sideW ??= []).push([tA, tS + Te]);   // v3.38 QA CRAB: walking sideways on purpose (fixed heading)
   if (TH && obj.legL && obj.fx) {   // stepping round on the spot: the feet lift in turn (inner foot first), the body yaws over them
     const n = Math.max(2, Math.round(dY / (Math.PI / 4))), first = wrap(y0 - yS) > 0 ? 0 : 1;
-    obj.fx.push(fxw((t, S) => { const u = t - tA; if (u <= 0 || u >= TH) return; const q = u / TH * n, k = Math.floor(q), f = q - k, lift = 0.075 * Math.sin(Math.PI * f), L = (k + first) % 2 === 0;
+    obj.fx.push(fxw((t, S) => { const u = t - tA; if (u <= 0 || u >= TH || _mcOnF(obj)) return;   // mocap figures: the step is lifted by IK in _turnPlant (a layer on the legs would hand both legs over to the own pose)
+      const q = u / TH * n, k = Math.floor(q), f = q - k, lift = 0.075 * Math.sin(Math.PI * f), L = (k + first) % 2 === 0;
    // v3.38: the foot on the ground stays on its spot while the body turns over it (_turnPlant)
       const [z, y] = legFK(L ? S.lt : S.rt, L ? S.lk : S.rk), [a, b] = legIK(z + 0.03 * Math.sin(Math.PI * f), y + lift); if (L) { S.lt = a; S.lk = b; S.lf += 0.35 * Math.sin(Math.PI * f); } else { S.rt = a; S.rk = b; S.rf += 0.35 * Math.sin(Math.PI * f); }
       S.hx += (L ? 0.018 : -0.018) * Math.sin(Math.PI * f); }, tA, tS));
@@ -3617,12 +3618,12 @@ function _mcPlant(f, P, w) {   // v3.38 first / last stance of a walk: the foot 
 }
 function _turnPlant(f, t) {   // v3.38 turning on the spot (walk): the planted foot keeps its place in the world while the root yaws by d since it landed
   let PL = null; for (const F of f._tpF ?? []) PL = F(t) ?? PL; if (!PL || !f.legL) return;
-  for (const P of PL) { if (Math.abs(P.d) < 1e-3 || P.w < 0.01) continue; const [th, sh, ft] = P.k ? [f.legR, f.shinR, f.footR] : [f.legL, f.shinL, f.footL];
+  for (const P of PL) { if ((!P.air && Math.abs(P.d) < 1e-3) || P.w < 0.01) continue; const [th, sh, ft] = P.k ? [f.legR, f.shinR, f.footR] : [f.legL, f.shinL, f.footL];
     _lkA.copy(ft.position).applyQuaternion(sh.quaternion).add(sh.position).applyQuaternion(th.quaternion).add(th.position).applyQuaternion(f.hips.quaternion).add(f.hips.position);
     const w = P.w * (P.air ? 1 : 1 - sm01((_lkA.y - ANK - 0.02) / 0.05)); if (w < 0.01) continue;   // lets go as the foot lifts (the stepping foot is moved in the air)
-    const mc = _mcOnF(f) && !f.idle && f.kind !== 'zombie' && mcClip('Idle_Loop', true), ax = _lkA.x, ay = _lkA.y, az = _lkA.z;
-    const spot = (tl, d) => { let rx = ax, rz = az; if (mc) { _mcFootZ(mcClip('Idle_Loop', true), tl + f.sd * 7.3, P.k); rx = _fzA.x; rz = _fzA.z; } const c = Math.cos(-d), s = Math.sin(-d); return [rx * c + rz * s, -rx * s + rz * c]; };   // mocap: where the idle clip has the foot when it lands
-    let [x, z] = spot(P.tl, P.d); z -= P.ds ?? 0; if (P.air) { const [x2, z2] = spot(P.t2, P.d2), e = sm01(P.f); x = lerp(x, x2, e); z = lerp(z, z2, e); } _lkA.set(ax, ay, az); _legTo(f, th, sh, ft, (z - _lkA.z) * w, 0, (x - _lkA.x) * w); } }
+    const ax = _lkA.x, ay = _lkA.y, az = _lkA.z, mc = _mcOnF(f);
+    const spot = (tl, d) => { const c = Math.cos(-d), s = Math.sin(-d); return [ax * c + az * s, -ax * s + az * c]; };   // the stance it had (the idle pose stands still while it turns)   // mocap: where the idle clip has the foot when it lands
+    let [x, z] = spot(P.tl, P.d); z -= P.ds ?? 0; if (P.air) { const [x2, z2] = spot(P.t2, P.d2), e = sm01(P.f); x = lerp(x, x2, e); z = lerp(z, z2, e); } _lkA.set(ax, ay, az); _legTo(f, th, sh, ft, (z - _lkA.z) * w, P.air && mc ? 0.075 * Math.sin(Math.PI * P.f) : 0, (x - _lkA.x) * w); } }
 function _legTo(f, th, sh, ft, dz, dh, dx = 0) {   // v3.38 two-bone leg IK: move the ankle by (dx, dh, dz) of the body frame (thigh and knee turn, the foot keeps its angle to the shin)
   _lkA.copy(ft.position).applyQuaternion(sh.quaternion).add(sh.position).applyQuaternion(th.quaternion);   // ankle relative to the hip joint, in the hips frame
   _lkB.set(dx, dh, dz).applyQuaternion(_lkQ.copy(f.hips.quaternion).invert()).add(_lkA);
