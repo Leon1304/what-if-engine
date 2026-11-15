@@ -862,7 +862,7 @@ function rimFit() {
 const _mats = new Map(), _geo = new Map(), MROUGH = LOOKV2 && CFG.materials !== false ? 0.8 : 0.88;   // look v2: default roughness 0.8 (was 0.88 everywhere: no sheen at all)
 // v2.34 surfaces: mat(hex, { surf }) / box(…, { surf }) draws a pattern on walls and roofs per pixel — no extra geometry, fades with distance:
 //   brick · stone (big blocks) · plank (upright boards) · siding (lapped boards) · tile (roof tiles, shingles) · plaster · concrete (panels) · metal (corrugated sheet)
-const SURF = { brick: 1, stone: 2, plank: 3, siding: 4, tile: 5, plaster: 6, concrete: 7, metal: 8, asphalt: 9, paving: 10, boards: 11, tiles: 12, carpet: 13, wallpaper: 14, marking: 15 };   // v3.38 marking: road paint (outdoor, snow like the asphalt under it)
+const SURF = { brick: 1, stone: 2, plank: 3, siding: 4, tile: 5, plaster: 6, concrete: 7, metal: 8, asphalt: 9, paving: 10, boards: 11, tiles: 12, carpet: 13, wallpaper: 14, marking: 15 };   // v3.39 marking: road paint (outdoor, snow like the asphalt under it)
 // v2.35 weather on the ground: rain makes surfaces dark and glossy and leaves puddles that mirror the sky, snow settles on everything that faces up.
 //   emit('rain') / emit('snow') drive it on their own (wet in ~5 s, dry in ~25 s; snow builds in ~16 s). By hand: wetGround(t0, t1, k) · snowCover(t0, t1, k),
 //   whole video: CFG.wet / CFG.snowCover 0..1. CFG.weather: false = off. Pure function of t.
@@ -895,7 +895,7 @@ function surfFx(m, kind, o = {}) {   // o.indoor: no weather (rooms) · o.sp: pa
       ` + sh.fragmentShader.replace('#include <color_fragment>', `#include <color_fragment>
       { vec3 fn = normalize(cross(dFdx(vSL), dFdy(vSL))); float sd = distance(cameraPosition, vSW), sf = 1.0 - smoothstep(35.0, 120.0, sd), nf = 1.0 - smoothstep(7.0, 22.0, sd), fl = step(0.92, abs(fn.y));
         vec3 tg = fl > 0.5 ? vec3(1.0, 0.0, 0.0) : normalize(cross(vec3(0.0, 1.0, 0.0), fn)); vec2 uv = vec2(dot(vSL, tg), fl > 0.5 ? vSL.z : vSL.y / max(0.3, sqrt(1.0 - fn.y * fn.y)));
-        float K = ${K}, ws = fl * max(max(step(abs(K - 9.0), 0.4), step(abs(K - 6.0), 0.4)), step(14.5, K)); if (ws > 0.5) uv = vSW.xz;   // v3.38: flat asphalt, plaster and paint tops in world space — overlapping road boxes show the same pattern (no flicker)
+        float K = ${K}, ws = fl * max(max(step(abs(K - 9.0), 0.4), step(abs(K - 6.0), 0.4)), step(14.5, K)); if (ws > 0.5) uv = vSW.xz;   // v3.39: flat asphalt, plaster and paint tops in world space — overlapping road boxes show the same pattern (no flicker)
         vec2 wq = fl * step(5.5, K) * step(K, 10.5) + step(14.5, K) * fl > 0.5 ? vSW.xz : vSL.xz;   // weather noise: world space on flat street surfaces
         float k = 0.0, mo = (sfn(uv * 0.6) - 0.5) * 0.07 + (sfn(uv * 5.0 + 7.0) - 0.5) * 0.04;
         if (K < 1.5) k = sfBlock(uv, 0.62, 0.24, 0.022, 0.2, 0.24, 0.5) + mo * 0.6;
@@ -906,7 +906,7 @@ function surfFx(m, kind, o = {}) {   // o.indoor: no weather (rooms) · o.sp: pa
         else if (K < 6.5) k = mo * 1.4 + (sfn(vec2(uv.x * 2.6, uv.y * 0.22)) - 0.5) * 0.06;
         else if (K < 7.5) k = sfBlock(uv, 3.0, 3.1, 0.03, -0.16, 0.05, 0.0) + mo * 1.2 + (sfn(vec2(uv.x * 2.6, uv.y * 0.22)) - 0.5) * 0.07;
         else if (K < 8.5) k = sin(uv.x * 28.56) * 0.075 + sfBlock(uv, 40.0, 1.25, 0.02, -0.16, 0.05, 0.0) + mo * 0.5;
-        else if (K < 9.5) { vec2 cu = uv + vec2(sfn(uv * 2.3 + 1.0), sfn(uv * 2.3 + 8.0)) * 0.3 + vec2(sfn(uv * 9.0 + 4.0), sfn(uv * 9.0 + 11.0)) * 0.05;   // v3.38 cracks: jagged (jittered), broken into pieces, varying width, fading out
+        else if (K < 9.5) { vec2 cu = uv + vec2(sfn(uv * 2.3 + 1.0), sfn(uv * 2.3 + 8.0)) * 0.3 + vec2(sfn(uv * 9.0 + 4.0), sfn(uv * 9.0 + 11.0)) * 0.05;   // v3.39 cracks: jagged (jittered), broken into pieces, varying width, fading out
           float cw = 0.004 + 0.016 * sfn(uv * 0.8 + 5.0);
           float cr = (1.0 - smoothstep(0.0, cw, abs(sfn(cu * 0.55 + 3.0) - 0.5))) * smoothstep(0.5, 0.66, sfn(uv * 0.13 + 9.0)) * smoothstep(0.32, 0.6, sfn(uv * 1.6 + 13.0))
             + (1.0 - smoothstep(0.0, cw * 1.4, abs(sfn(cu * 1.7 + 21.0) - 0.5))) * smoothstep(0.62, 0.74, sfn(uv * 0.21 + 4.0)) * smoothstep(0.4, 0.65, sfn(uv * 3.1 + 2.0)) * 0.8;
@@ -922,10 +922,10 @@ function surfFx(m, kind, o = {}) {   // o.indoor: no weather (rooms) · o.sp: pa
         else k = (sfh(floor(uv * 40.0)) - 0.5) * 0.06 * nf + mo * 0.5 - smoothstep(0.62, 0.8, sfn(uv * 2.2 + 6.0)) * 0.22;   // road paint: grain and worn spots
         diffuseColor.rgb *= 1.0 + k * sf;
       #ifndef SURF_IN
-        float road = max(step(8.5, K) * step(K, 10.5), step(14.5, K)), up = max(smoothstep(0.35, 0.8, fn.y), road * step(0.001, uSnow)), sn = 0.0;   // v3.38: the thin sides of asphalt, paving and paint take the snow too (no dark outlines)
+        float road = max(step(8.5, K) * step(K, 10.5), step(14.5, K)), up = max(smoothstep(0.35, 0.8, fn.y), road * step(0.001, uSnow)), sn = 0.0;   // v3.39: the thin sides of asphalt, paving and paint take the snow too (no dark outlines)
         if (uSnow > 0.001 && road < 0.5) { float am = uSnow; sn = up * smoothstep(0.1, 0.3, am * 1.25 - 0.3 + (sfn(vSL.xz * 1.3 + 2.0) - 0.5) * 0.9 * (1.0 - am * 0.7));
           diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.90, 0.94, 1.0) * (1.0 + mo * 0.6), sn); }
-        if (uSnow > 0.001 && road > 0.5) {   // v3.38 snow on streets: soft drifts (fbm, no hard blotches), piled up at the kerbs, compacted grey tyre tracks along the wheel bands of every lane (road(): rl);
+        if (uSnow > 0.001 && road > 0.5) {   // v3.39 snow on streets: soft drifts (fbm, no hard blotches), piled up at the kerbs, compacted grey tyre tracks along the wheel bands of every lane (road(): rl);
           // the paint uses the same function as the asphalt under it, so markings vanish under the snow with it and only show faintly in the tracks
           float nn = sfn(wq * 0.32 + 2.0) * 0.5 + sfn(wq * 1.1 + 7.0) * 0.3 + sfn(wq * 3.7 + 3.0) * 0.2, tk = 0.0, edge = 0.0;
           #ifdef SURF_RL
@@ -1007,7 +1007,7 @@ function wetSand(H, cz, size, bw, o) {
 }
 // v2.34 ground texture: fine grain close to the camera (grass speckle, wind ripples on sand, sparkle and bluish hollows on snow), soft mottling further out —
 // worked out per pixel from the ground colour, fades with distance (no shimmer in wide shots). ground({ detail: false }) or CFG.groundDetail: false = flat colour
-// v3.38 snow drifts on the ground: at bake time (only with snow) a map of what stands on the ground round the cameras (walls, fences, houses, props) → blurred → the ground
+// v3.39 snow drifts on the ground: at bake time (only with snow) a map of what stands on the ground round the cameras (walls, fences, houses, props) → blurred → the ground
 //   shader lets snow pile up and settle first next to them (drifts against walls and fences). DRIFT.b = [x0, z0, 1 / size, on]
 const DRIFT = { tex: { value: new THREE.DataTexture(new Uint8Array(4), 1, 1) }, b: { value: new THREE.Vector4(0, 0, 0, 0) } }; DRIFT.tex.value.needsUpdate = true;
 function snowDriftMap() {
@@ -1044,7 +1044,7 @@ function groundFx(m, o = {}) {
         gc *= 1.0 + v * 1.7 * ${amp};
         // v2.35 weather and shore: snow settles in patches that grow together, rain darkens the ground and fills flat spots with puddles, the sea leaves wet sand and a lapping foam line
         float gup = smoothstep(0.75, 0.93, normalize(cross(dFdx(vGW), dFdy(vGW))).y), gsn = 0.0;
-        if (uSnow > 0.001 && snowy < 0.5) {   // v3.38 soft snow cover: rotated fbm (no square value-noise blotches), a wide soft edge, full cover from ~0.8, drifts settle first against walls and fences (DRIFT map)
+        if (uSnow > 0.001 && snowy < 0.5) {   // v3.39 soft snow cover: rotated fbm (no square value-noise blotches), a wide soft edge, full cover from ~0.8, drifts settle first against walls and fences (DRIFT map)
           vec2 gq = mat2(0.8, -0.6, 0.6, 0.8) * gp; float sb = gvn(gq * 0.17 + 3.0) * 0.45 + gvn(mat2(0.8, -0.6, 0.6, 0.8) * gq * 0.53 + 7.0) * 0.28 + gvn(gq * 1.7 + 1.0) * 0.17 + gvn(gp * 5.3 + 9.0) * 0.1;
           float dr = uDriftB.w > 0.5 ? texture2D(uDrift, (gp - uDriftB.xy) * uDriftB.z).r : 0.0, am = uSnow;
           float cv = smoothstep(0.0, 0.6, am * 1.4 - 0.45 + (sb - 0.5) * 1.0 * (1.0 - am * 0.65) + dr * 0.5 * (1.0 - am * 0.4));
@@ -1067,7 +1067,7 @@ function ground(o = {}) {   // colour varies in soft patches (CFG.groundDetail: 
   const H0 = (x, z) => { const r = Math.hypot(x, z), k = clamp((r - flat) / 70); return k * k * hills * (0.65 + 0.35 * Math.sin(x * 0.045 + 1.3) * Math.cos(z * 0.05 + 0.7) + 0.25 * Math.sin(x * 0.13 + z * 0.11)); };
   const bw = o.beach ?? 5, fl = Math.max(30, bw + 14);   // v2.25 beach: width of the sand strip in m (Omaha at low tide: 40–60)
   const H = cz == null ? H0 : (x, z) => { const k = clamp((z - cz) / 12), s = k * k * (3 - 2 * k); return lerp(H0(x, z) * (1 - clamp((z - cz + fl) / fl)), -dep, s); };
-  const HR = (x, z) => { const h = H(x, z); return h === 0 || !ROADSEG.length ? h : h * roadFlatK(x, z); };   // v3.38: terrain flattened under roads (see road)
+  const HR = (x, z) => { const h = H(x, z); return h === 0 || !ROADSEG.length ? h : h * roadFlatK(x, z); };   // v3.39: terrain flattened under roads (see road)
   groundH = HR;
   const _tc = new THREE.Color(), base0 = new THREE.Color(o.color ?? '#5F7F3B'), dirt = new THREE.Color(o.dirt || '#7A6650'), green = o.dirt !== false && base0.g > base0.r * 1.05;
   const tint = (c, x, z) => { if (CFG.groundDetail === false) return _tc.copy(c); const n = 0.07 * noise2(x * 0.045, z * 0.045) + 0.04 * noise2(x * 0.17 + 9, z * 0.17 + 3);
@@ -1087,7 +1087,7 @@ function ground(o = {}) {   // colour varies in soft patches (CFG.groundDetail: 
   const gm = mesh(world, mk(seg0), groundFx(new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 1 }), o), 0, 0, 0, { cast: false, stat: true });
   GROUND._fix = { m: gm, mk, H, HR, size, seg: seg0 }; return gm;
 }
-// v3.38 roads and terrain: every road() registers its segments (ROADSEG: ax, az, bx, bz, half width). groundH (and the ground mesh, rebuilt at bake time with ~1.8 m cells
+// v3.39 roads and terrain: every road() registers its segments (ROADSEG: ax, az, bx, bz, half width). groundH (and the ground mesh, rebuilt at bake time with ~1.8 m cells
 //   where a road leaves the flat area) is pulled down to the road's level within w/2 + 3 m of the centre line and rises back over ROADFALL m — roads beyond ground({ flat })
 //   are no longer buried by hills. Call road() / city() before placing props next to such roads (groundH changes when the road is added). QA: ROADBURIED.
 const ROADSEG = [], ROADS = [], ROADFALL = 20;
@@ -1449,11 +1449,11 @@ const BIOMES = {
   'plain-stone':  { trees: [['round', 0.5], ['pine', 0.5]], near: { pebble: 6, tuft: 6 }, ring: { tree: 0.12, rock: 0.15, bush: 0.15 }, grass: ['#6E7A55', '#7A8460'], flowers: [] }
 };
 function biome(kind = 'farm', o = {}) { _dressed = true; if (kind === 'snow' && o.cover !== false) snowCover(-100, 1e9, o.cover ?? 1); DEFER.push(() => runBiome(kind, o));
-  const dr = o.dress ?? CFG.dress; if (dr) { const dk = typeof dr === 'string' ? dr : dr.kind ?? BIOME_DRESS[kind]; if (dk) dress(dk, typeof dr === 'object' ? dr : {}); } }   // v3.38: biome(kind, { dress: true | 'kind' | { kind, density, … } }) or CFG.dress
+  const dr = o.dress ?? CFG.dress; if (dr) { const dk = typeof dr === 'string' ? dr : dr.kind ?? BIOME_DRESS[kind]; if (dk) dress(dk, typeof dr === 'object' ? dr : {}); } }   // v3.39: biome(kind, { dress: true | 'kind' | { kind, density, … } }) or CFG.dress
 function runBiome(kind, o) {
   const B = BIOMES[kind] ?? BIOMES.farm, A = o.area ?? CFG.area ?? 30, D = o.density ?? 1, R1 = o.ring?.[1] ?? A * 2.5, R0 = o.ring?.[0] ?? A * 1.05;
   let bs = Math.floor(hash((CFG.seed ?? 7) * 7.77 + kind.length * 3.1) * 2147483646) + 1; const br = () => (bs = (bs * 48271) % 2147483647) / 2147483647, bp = arr => arr[Math.floor(br() * arr.length)];
-  // occupancy grid (0.5 m) over ±R1 (v3.38: the shared _occGrid; bit 1 = keep free, bit 2 = no tall things — trees, rocks, bushes, logs keep 3 m from every lens)
+  // occupancy grid (0.5 m) over ±R1 (v3.39: the shared _occGrid; bit 1 = keep free, bit 2 = no tall things — trees, rocks, bushes, logs keep 3 m from every lens)
   const OG = _occGrid(-R1, -R1, R1, R1, 0.5), fillBox = (x0, x1, z0, z1) => OG.box(x0, x1, z0, z1, 1), fillSeg = (a, b, w) => OG.seg(a, b, w, 1);
   const free = (x, z, r = 0) => OG.free(x, z, r, 1), freeT = (x, z, r = 0) => OG.free(x, z, r, 3);
   const B3 = new THREE.Box3();
@@ -1466,7 +1466,7 @@ function runBiome(kind, o) {
   });
   for (const P of PATHS) for (let i = 1; i < P.p.length; i++) fillSeg(P.p[i - 1], P.p[i], 1.1);
   for (const [a, b, r] of HORDE_LANES) fillSeg(a, b, r * 0.9 + 1.5);
-  _clearCams(OG, camSamples(0.25), { lens: 1.0, tall: 3 });   // v3.38: lens box + cone to the subject along every shot (was: 1.6 m strip, 6 m box per key, 8 m box per track)
+  _clearCams(OG, camSamples(0.25), { lens: 1.0, tall: 3 });   // v3.39: lens box + cone to the subject along every shot (was: 1.6 m strip, 6 m box per key, 8 m box per track)
   for (const tr of Object.values(TRACK)) { const v = tr.obj.getWorldPosition(new THREE.Vector3()); OG.rect(v.x - 1, v.x + 1, v.z - 1, v.z + 1, 1); OG.rect(v.x - 4, v.x + 4, v.z - 4, v.z + 4, 2); }
   for (const [x, z, r] of o.keep ?? []) fillBox(x - r, x + r, z - r, z + r);
   const coast = GROUND.coast, wet = o.dry && waterH(0, 0, 0) > -900 ? (x, z) => groundH(x, z) < Math.max(waterH(x, z, 0), waterH(x, z, CFG.dur ?? 0)) + 0.4 : null;   // v3.5 o.dry: keep lakes / floods free
@@ -1488,7 +1488,7 @@ function runBiome(kind, o) {
   tries(Math.round(ringA * ((B.ring.bush ?? 0) + (B.ring.dry ?? 0)) * D), () => { const a = br() * TAU, r = Math.sqrt(lerp(R0 * R0, R1 * R1, br())), x = Math.cos(a) * r, z = Math.sin(a) * r;
     if (!onLand(z, x) || !freeT(x, z, 0.8)) return false; bush(world, x, z, { kind: B.ring.dry ? 'dry' : undefined, size: 0.7 + br() * 0.7 }); mark(x, z, 1.2); return true; });
   // play area: small props and ground cover
-  const LOWK = new Set(['tuft', 'pebble', 'flower', 'shell', 'star', 'beachgrass', 'reed', 'mushroom', 'drift']);   // v3.38: ground cover may come close to a lens, everything taller keeps 3 m
+  const LOWK = new Set(['tuft', 'pebble', 'flower', 'shell', 'star', 'beachgrass', 'reed', 'mushroom', 'drift']);   // v3.39: ground cover may come close to a lens, everything taller keeps 3 m
   const nearA = (2 * A) * (2 * A) / 100, rx = () => (br() * 2 - 1) * A, items = {};
   const put = (k, x, z, s, c) => (items[k] ??= []).push([x, z, s, br() * TAU, c]);
   for (const [k, rate] of Object.entries(B.near)) {
@@ -1552,7 +1552,7 @@ function autoDress() {
 }
 
 /* ---------------------------------------------------------------------- */
-/* v3.38 SET DRESSING — dress(kind, o): props where the cameras actually look (behind the subject, at the frame edges, along walls, a soft foreground piece)
+/* v3.39 SET DRESSING — dress(kind, o): props where the cameras actually look (behind the subject, at the frame edges, along walls, a soft foreground piece)
    _occGrid: the occupancy grid shared by biome() and dress() · camSamples: every camera shot sampled at build time · DOORS: kept free in front
 /* ---------------------------------------------------------------------- */
 const DOORS = [];   // house(), barn(), gate(), tent(), decoHotel(), prisonCell(), interior(), asset() doors and everything openDoor() opens — dress() keeps 2 m in front of them free
@@ -1612,8 +1612,8 @@ function camSamples(dt = 0.25) {
     const n = Math.max(1, Math.ceil((t1 - t0) / dt)); for (let k = 0; k <= n; k++) { const t = Math.min(t1 - 1e-3, t0 + (t1 - t0) * k / n), c = _camAt(a, b, t); if (c) S.push({ ...c, t, shot, i }); } });
   return S;
 }
-// v3.38 camera clearing (biome() and dress()): only what the lens needs — a small box round the lens (hard), no tall things within `tall` m of it, the cone from the lens to the
-// subject (0.45 m wide at the lens, subject radius + 0.4 m at the subject) and the subject itself. Before v3.38 a 1.6 m strip lens → target, a 6 m box round every key and an 8 m box
+// v3.39 camera clearing (biome() and dress()): only what the lens needs — a small box round the lens (hard), no tall things within `tall` m of it, the cone from the lens to the
+// subject (0.45 m wide at the lens, subject radius + 0.4 m at the subject) and the subject itself. Before v3.39 a 1.6 m strip lens → target, a 6 m box round every key and an 8 m box
 // round every track were cleared — the ground in front of / beside the subject, i.e. what a close-up shows, stayed bare.
 function _clearCams(O, S, o = {}) {
   const lens = o.lens ?? 1.0, tall = o.tall ?? 3;
@@ -1644,7 +1644,7 @@ const _surfMesh = m => { if (m.userData.qsurf != null) return !!m.userData.qsurf
    'fg' a soft piece 0.9–2 m before the lens in a bottom corner) · kinds: { suburb: 2, … } adds it to those kinds' tables with that weight · tall: needs the 3 m round every lens ·
    cover: 'tuft' | 'pebble' | … instanced ground cover (a little cluster) · face: 'cam' | 'wall' | 'path' | 'rand' (heading) · needs: 'road' (a drive() path within 7 m) ·
    indoor kinds take the floor under the subject (tunnels 10 m down, interiors); outdoor kinds stand on groundH */
-const DRESS = { props: {}, kinds: {}, lanes: [] };   // lanes: traffic() loops (v3.38: kept free like drive() paths)
+const DRESS = { props: {}, kinds: {}, lanes: [] };   // lanes: traffic() loops (v3.39: kept free like drive() paths)
 function dressProp(name, def = {}) {
   const d = DRESS.props[name] = { r: 0.5, h: 1, where: ['edge'], face: 'rand', ...def, name };
   for (const [k, w] of Object.entries(def.kinds ?? {})) { const K = DRESS.kinds[k] ??= { bands: {} }; for (const b of [].concat(d.where)) { const L = K.bands[b] ??= []; const i = L.findIndex(e => e[0] === name); if (i >= 0) L[i][1] = w; else L.push([name, w]); } }
@@ -1711,7 +1711,7 @@ for (const [n, c, kinds, col] of [['tufts', 'tuft', { suburb: 3, farm: 3, beach:
   dressProp(n, { where: ['ground'], r: 0.5, h: 0.12, cover: c, colors: col, kinds });
 dressProp('leaves',  { where: ['ground'], r: 1.0, h: 0.03, flat: true, leaves: true, kinds: { suburb: 1.5, farm: 0.6, city: 0.4 } });
 dressProp('manhole', { where: ['ground'], r: 0.4, h: 0.03, flat: true, y0: true, fn: (p, x, z) => stat(manhole(p, x, z)), kinds: { city: 0.8, apron: 0.4 } });
-// ---- v3.38 the prop library (env-props, PROPS) in the dress tables. Extra fields: kerb: true (parked along the nearest road's kerb, len × w footprint) ·
+// ---- v3.39 the prop library (env-props, PROPS) in the dress tables. Extra fields: kerb: true (parked along the nearest road's kerb, len × w footprint) ·
 //   on: 'road' (flat decal on the asphalt) | 'ground' (never on a road) · lift / wallH (wall-mounted: starts lift m up, needs a wall that high) · dry (not in snow) · snowOnly
 const _wallPt = (x, z, ry, d) => [x - Math.sin(ry) * d, z - Math.cos(ry) * d];   // wall band: (x, z) stands r + 0.08 off the wall facing away from it → the point d back on the wall face
 const _sd = R => Math.floor(R() * 997);
@@ -1794,7 +1794,7 @@ function _runDress(kind, o) {
   // ---- the scene as it stands: object boxes (screen coverage), walls (wall band, indoor test), flats (floors, ceilings) ----
   const OBJ = [], WALLS = [], FLATS = [], skip = new Set(); for (const f of RIGS) if (f.root) skip.add(f.root); for (const a of BEAST_ALL) skip.add(a.root ?? a.g);
   const S0 = camSamples(0.25), inside = (B, q, m = 0.2) => Math.abs((q[0] - B.x) * B.ux + (q[2] - B.z) * B.uz) < B.hx - m && Math.abs((q[0] - B.x) * B.vx + (q[2] - B.z) * B.vz) < B.hz - m && q[1] > B.y0 && q[1] < B.y1;
-  const scan = (m, hid) => { if (!m.visible || skip.has(m)) return; hid ||= !!(m.userData.crowd); if (m.isMesh && !m.isInstancedMesh && !hid && !_qpClear(m)) { const B = _obbOf(m); if (B && Number.isFinite(B.x) && B.lx > 90 && B.lz > 90 && B.ly < 0.35) FLATS.push(B);   // v3.38: a huge slab (apron, yard, plaza) is a floor props stand on
+  const scan = (m, hid) => { if (!m.visible || skip.has(m)) return; hid ||= !!(m.userData.crowd); if (m.isMesh && !m.isInstancedMesh && !hid && !_qpClear(m)) { const B = _obbOf(m); if (B && Number.isFinite(B.x) && B.lx > 90 && B.lz > 90 && B.ly < 0.35) FLATS.push(B);   // v3.39: a huge slab (apron, yard, plaza) is a floor props stand on
       else if (B && Number.isFinite(B.x) && !(B.lx > 90 && B.lz > 90)) { B.surf = _surfMesh(m);
       if (B.ly < 0.35) { if (B.lx * B.lz > 0.5) FLATS.push(B); if (!B.surf) OBJ.push(B); }
       else { B.hollow = Math.max(B.lx, B.lz) > 2 && S0.some(s => inside(B, s.L));   // a shell the cameras look around in (tunnel, room box): its inside is free, its inner faces take wall props
@@ -1816,9 +1816,9 @@ function _runDress(kind, o) {
   const PAD = 32, C = (gx1 - gx0 + 2 * PAD) * (gz1 - gz0 + 2 * PAD) > 6e5 ? 0.5 : 0.25, O = _occGrid(gx0 - PAD, gz0 - PAD, gx1 + PAD, gz1 + PAD, C);
   for (const B of [...OBJ, ...WALLS]) if (B.y1 > -1e8) { O.obb(B, 0, 4); O.obb(B, 0.6, 8); }
   for (const P of PATHS) { const w = P.kind === 'drive' ? 2.5 : P.kind === 'sail' ? 3.2 : 1.1, bit = P.kind ? 64 | 32 : 1; for (let i = 1; i < P.p.length; i++) { O.lane(P.p[i - 1], P.p[i], w, bit); if (P.kind) O.lane(P.p[i - 1], P.p[i], 1.3, 1); } }   // 32: roads, water lanes (no ground cover either)
-  for (const lp of DRESS.lanes) for (let i = 0; i < lp.length; i++) { O.lane(lp[i], lp[(i + 1) % lp.length], 2.5, 64 | 32); O.lane(lp[i], lp[(i + 1) % lp.length], 1.3, 1); }   // v3.38 traffic() loops · 64: the wide lane (2.5 m), 1: its core (1.3 m) — a car parked at the kerb only keeps out of the core
+  for (const lp of DRESS.lanes) for (let i = 0; i < lp.length; i++) { O.lane(lp[i], lp[(i + 1) % lp.length], 2.5, 64 | 32); O.lane(lp[i], lp[(i + 1) % lp.length], 1.3, 1); }   // v3.39 traffic() loops · 64: the wide lane (2.5 m), 1: its core (1.3 m) — a car parked at the kerb only keeps out of the core
   for (const [a, b, r] of HORDE_LANES) O.lane(a, b, r * 0.9 + 1.5, 1);
-  for (const d of DOORS) { const q = _doorXZ(d); if (q) { O.disk(q[0], q[1], 1.3, 1); O.disk(q[0], q[1], 2.0, 128); } }   // v3.38: 1.3 m free for everything, 2 m for anything bigger than a bin (128)
+  for (const d of DOORS) { const q = _doorXZ(d); if (q) { O.disk(q[0], q[1], 1.3, 1); O.disk(q[0], q[1], 2.0, 128); } }   // v3.39: 1.3 m free for everything, 2 m for anything bigger than a bin (128)
   for (const f of RIGS) { const r = f.root; if (!r || r.parent !== world) continue; const v = r.getWorldPosition(_sfV); O.disk(v.x, v.z, 0.7, 1); }
   for (const a of BEAST_ALL) { const n = a.root ?? a.g; if (!n) continue; const v = n.getWorldPosition(_sfV); O.disk(v.x, v.z, (a.L ?? 1) * (a.sc ?? 1) * 0.7 + 0.5, 1); }
   for (const [x, z, r] of o.keep ?? []) O.disk(x, z, r, 1);
@@ -1826,7 +1826,7 @@ function _runDress(kind, o) {
   const dOBB = (B, x, z) => { const dx = x - B.x, dz = z - B.z, lx = dx * B.ux + dz * B.uz, lz = dx * B.vx + dz * B.vz; return Math.hypot(Math.max(0, Math.abs(lx) - B.hx), Math.max(0, Math.abs(lz) - B.hz)); };
   let NEAR = []; const hitsObj = (x, z, r, y0, y1, skipB) => NEAR.some(B => B !== skipB && B.y1 > y0 + 0.05 && B.y0 < y1 && dOBB(B, x, z) < r);   // the prop's footprint against everything built (exact, not the grid)
   const roads = PATHS.filter(P => P.kind === 'drive'), nearRoad = (x, z, d) => { let best = null; for (const P of roads) for (let i = 1; i < P.p.length; i++) { const [ax, az] = P.p[i - 1], [bx, bz] = P.p[i], ex = bx - ax, ez = bz - az, L2 = ex * ex + ez * ez || 1, u = clamp(((x - ax) * ex + (z - az) * ez) / L2), q = Math.hypot(x - ax - ex * u, z - az - ez * u); if (q < d && (!best || q < best.q)) best = { q, ang: Math.atan2(ex, ez) }; } return best; };
-  // v3.38 asphalt: onRoad(x, z, r) → { Rd, q, y } when a disc of radius r lies on a road (decals with on: 'road') · kerbAt(x, z, P) → the kerb lane of the nearest road (parked cars, kerb: true)
+  // v3.39 asphalt: onRoad(x, z, r) → { Rd, q, y } when a disc of radius r lies on a road (decals with on: 'road') · kerbAt(x, z, P) → the kerb lane of the nearest road (parked cars, kerb: true)
   const roadY = Rd => 0.05 + (Rd.g.parent ? Rd.g.getWorldPosition(_sfV).y : 0);
   const onRoad = (x, z, r) => { let best = null; for (const Rd of ROADS) { const q = roadAt(Rd, x, z); if (q.d <= Rd.w / 2 - r && (!best || q.d < best.q.d)) best = { Rd, q }; } return best && { ...best, y: roadY(best.Rd) }; };
   const kerbAt = (x, z, P) => { let best = null; for (const Rd of ROADS) { const q = roadAt(Rd, x, z); if (q.d < Rd.w / 2 + 9 && (!best || q.d < best.q.d)) best = { Rd, q }; } if (!best || best.Rd.w < 5.5) return null;
@@ -1871,7 +1871,7 @@ function _runDress(kind, o) {
     const cov = reps.map(coverage), wide = d0 > 22; NEAR = [...OBJ, ...WALLS].filter(B => reps.some(r2 => Math.hypot(B.x - r2.P[0], B.z - r2.P[2]) < Math.hypot(B.hx, B.hz) + 60));
     for (const band of ['wall', 'bg', 'edge', 'ground', 'fg']) {
       curB = band; if (o[band] === false) continue; const L = table(band); if (!L.length) continue;
-      let n = Math.round(budget[band] * D * (wide ? { bg: 2, edge: 2, ground: 1, wall: 1, fg: 0 }[band] : d0 <= 7 ? { bg: 1, edge: 1.5, ground: 2, wall: 1.5, fg: 1 }[band] : 1)); if (band === 'fg' && (d0 > 7 || o.fg === false)) n = 0;   // v3.38: close-ups and mid shots get more small things
+      let n = Math.round(budget[band] * D * (wide ? { bg: 2, edge: 2, ground: 1, wall: 1, fg: 0 }[band] : d0 <= 7 ? { bg: 1, edge: 1.5, ground: 2, wall: 1.5, fg: 1 }[band] : 1)); if (band === 'fg' && (d0 > 7 || o.fg === false)) n = 0;   // v3.39: close-ups and mid shots get more small things
       for (let made = 0, tries = 0; made < n && tries < n * 5; tries++) {
         let best = null;
         for (let c = 0; c < 30; c++) {
@@ -1882,20 +1882,20 @@ function _runDress(kind, o) {
           else if (band === 'wall') { const W = WALLS.filter(B => Math.hypot(B.x - s.P[0], B.z - s.P[2]) < 30); if (!W.length) break; const B = wallB = _pk(R, W), f = Math.floor(R() * 4), ax = f < 2, sg = f % 2 ? -1 : 1, hn = ax ? B.hx : B.hz, ht = ax ? B.hz : B.hx; let nx = (ax ? B.ux : B.vx) * sg, nz = (ax ? B.uz : B.vz) * sg;
             if (ht < P.r + 0.3 || (B.hollow && hn < P.r + 0.5)) continue; const tx = ax ? B.vx : B.ux, tz = ax ? B.vz : B.uz, u = (R() * 2 - 1) * (ht - P.r - 0.2), off = B.hollow ? hn - P.r - 0.08 : hn + P.r + 0.08;
             x = B.x + nx * off + tx * u; z = B.z + nz * off + tz * u; if (((s.P[0] - x) * nx + (s.P[2] - z) * nz < 0) !== !!B.hollow) continue; if (B.hollow) { nx = -nx; nz = -nz; } ry = Math.atan2(nx, nz) + (P.face === 'wall' ? 0 : (R() - 0.5) * 0.6); fl = K.indoor ? s.fl : floorAt(x, z, s.fl + 0.15);
-            if (B.y0 > fl + 0.3 || B.y1 < fl + (P.wallH ?? 1.2)) continue; }   // v3.38 wallH: wall-mounted props need that much wall (awning, lights)
+            if (B.y0 > fl + 0.3 || B.y1 < fl + (P.wallH ?? 1.2)) continue; }   // v3.39 wallH: wall-mounted props need that much wall (awning, lights)
           else {   // a ground point at a distance along the view that suits the band, sideways inside the frame (edge: its outer 55 %)
             const vx = s.L[0] - s.P[0], vz = s.L[2] - s.P[2], vd = Math.hypot(vx, vz) || 1, ux = vx / vd, uz = vz / vd, tw = Math.tan(THREE.MathUtils.degToRad(cam.fov) / 2) * cam.aspect;
             const dl = band === 'bg' ? vd + 3 + R() * R() * 22 : band === 'edge' ? 2 + R() * (Math.min(16, vd + 6) - 2) : 1.5 + R() * (Math.min(10, vd + 4) - 1.5);
             const k = band === 'edge' ? (R() < 0.5 ? -1 : 1) * (0.5 + R() * 0.5) : R() * 2 - 1, lat = k * tw * dl;
             x = s.P[0] + ux * dl - uz * lat; z = s.P[2] + uz * dl + ux * lat; fl = K.indoor ? s.fl : floorAt(x, z, s.fl + 0.15); if (Math.hypot(x - s.P[0], z - s.P[2]) > 45) { no('band'); continue; } }
           if (P.face === 'cam') ry = Math.atan2(s.P[0] - x, s.P[2] - z) + Math.PI / 2 + (R() - 0.5) * 0.5;
-          let kb = null, rd = null; if (P.kerb && band !== 'wall') { kb = kerbAt(x, z, P); if (!kb) { no('kerb'); continue; } x = kb.x; z = kb.z; ry = kb.ry; fl = kb.y; }   // v3.38 parked at the kerb, along the road
+          let kb = null, rd = null; if (P.kerb && band !== 'wall') { kb = kerbAt(x, z, P); if (!kb) { no('kerb'); continue; } x = kb.x; z = kb.z; ry = kb.ry; fl = kb.y; }   // v3.39 parked at the kerb, along the road
           if (P.on === 'road') { rd = onRoad(x, z, P.r); if (!rd) { no('offroad'); continue; } fl = rd.y; } else if (P.on === 'ground' && onRoad(x, z, -0.3)) { no('onroad'); continue; }
           if (!kb && (P.face === 'path' || P.needs === 'road')) { const q = nearRoad(x, z, 9); if (P.needs === 'road' && !q) continue; ry = q ? q.ang + (P.along || P.name === 'car' || P.name === 'truck' || P.name === 'farmtruck' ? (R() < 0.5 ? 0 : Math.PI) : Math.PI / 2) : Math.atan2(s.L[0] - s.P[0], s.L[2] - s.P[2]) + Math.PI / 2; }
           if (!inA(x, z) || (!rd && !kb && wet(x, z, fl)) || Math.abs(fl - s.fl) > 1.2) { no('area'); continue; }
-          const lift = P.lift ?? 0;   // v3.38 lift: a wall-mounted prop starts that high (awning, AC unit, lights) — only that height band must be free
+          const lift = P.lift ?? 0;   // v3.39 lift: a wall-mounted prop starts that high (awning, AC unit, lights) — only that height band must be free
           if (kb) { const D = caps(x, z, P, kb.ax, kb.az); if (D.some(([a, b, w]) => !O.clear(a, b, w + 0.05, 1 | 4 | 128 | (P.tall ? 2 : 0)))) { no('occupied'); continue; } if (D.some(([a, b, w]) => hitsObj(a, b, w + 0.05, fl + 0.12, fl + P.h, null))) { no('touches'); continue; } }
-          else { const sm = P.r <= 0.5 && !P.tall, mask = 1 | 64 | (band === 'wall' || sm ? 0 : 8) | (sm ? 0 : 128) | (P.tall && band !== 'fg' ? 2 : 0);   // v3.38: small props may stand right next to a building (the exact footprint test below still applies)
+          else { const sm = P.r <= 0.5 && !P.tall, mask = 1 | 64 | (band === 'wall' || sm ? 0 : 8) | (sm ? 0 : 128) | (P.tall && band !== 'fg' ? 2 : 0);   // v3.39: small props may stand right next to a building (the exact footprint test below still applies)
             if (!O.clear(x, z, band === 'wall' ? Math.max(0.1, P.r - 0.2) : P.r + (P.flat ? 0 : 0.1), P.cover ? 16 | 32 : P.flat ? 16 : mask)) { no('occupied'); continue; }   // ground cover and flat decals may lie on walk paths and in the line of sight
           if (!P.flat && !P.cover && hitsObj(x, z, P.r + (band === 'wall' ? 0.02 : 0.15), fl + lift, fl + lift + P.h, wallB)) { no('touches'); continue; } }
           if (!P.flat && FLATS.some(B => B.y0 > fl + 0.2 && B.y0 < fl + P.h + 0.15 && Math.abs((x - B.x) * B.ux + (z - B.z) * B.uz) <= B.hx + P.r && Math.abs((x - B.x) * B.vx + (z - B.z) * B.vz) <= B.hz + P.r)) { no('ceiling'); continue; }   // under a low ceiling / table
@@ -1913,7 +1913,7 @@ function _runDress(kind, o) {
         if (!best) continue;
         if (!put(best.P, best.x, best.z, best.ry, best.fl, band)) continue;
         made++; nPut++; const { P, x, z, fl, kb } = best;
-        if (kb) { const w = P.w ?? 0.95, hl = (P.len ?? 4.6) / 2, B = { x, z, ux: kb.az, uz: -kb.ax, vx: kb.ax, vz: kb.az, hx: w, hz: hl, y0: fl, y1: fl + P.h, lx: 2 * w, ly: P.h, lz: 2 * hl }; O.obb(B, 0.35, 1); O.obb(B, 0, 4); OBJ.push(B); NEAR.push(B); }   // v3.38 a parked car: its real footprint
+        if (kb) { const w = P.w ?? 0.95, hl = (P.len ?? 4.6) / 2, B = { x, z, ux: kb.az, uz: -kb.ax, vx: kb.ax, vz: kb.az, hx: w, hz: hl, y0: fl, y1: fl + P.h, lx: 2 * w, ly: P.h, lz: 2 * hl }; O.obb(B, 0.35, 1); O.obb(B, 0, 4); OBJ.push(B); NEAR.push(B); }   // v3.39 a parked car: its real footprint
         else { O.disk(x, z, P.r + (P.flat ? 0.1 : 0.35), 1); if (!P.flat && !P.cover) O.disk(x, z, P.r, 4);
           if (!P.flat && !P.cover) { const B = { x, z, ux: 1, uz: 0, vx: 0, vz: 1, hx: P.r, hz: P.r, y0: fl + (P.lift ?? 0), y1: fl + (P.lift ?? 0) + P.h, lx: 2 * P.r, ly: P.h, lz: 2 * P.r }; OBJ.push(B); NEAR.push(B); } }
         reps.forEach((r2, k) => { setCam(r2); const q = rectOf(x, z, fl, P.r * 0.85, Math.max(P.h, 0.08)); if (q.behind || q.off) return; const g = cov[k];
@@ -1922,7 +1922,7 @@ function _runDress(kind, o) {
       }
     }
   }
-  // v3.38 traces: footprints behind walkers in snow (they appear as the feet pass), tyre tracks along drive() paths off the asphalt in snow, mud, sand (o.decals: false = none)
+  // v3.39 traces: footprints behind walkers in snow (they appear as the feet pass), tyre tracks along drive() paths off the asphalt in snow, mud, sand (o.decals: false = none)
   if (!K.indoor && o.decals !== false) { const nearShot = (x, z) => inA(x, z) && S.some(s2 => Math.hypot(x - s2.L[0], z - s2.L[2]) < 30); let nf = 0, nt = 0;
     if (snowy || K.prints) for (const { obj: f } of WALKS) { if (!f?.legL || !f._posAt || f._crowdHero || f.root?.parent !== world || nf >= 12) continue; let a = null, b = null, best = [0, -1];
       for (let t = 0; t <= DUR + 1e-6; t += 0.1) { const q = f._posAt(t), ok = q && nearShot(q.x, q.z) && Math.abs((q.y ?? 0) - groundH(q.x, q.z)) < 0.25;   /* on roads too: the prints sit on the asphalt, in its snow */ if (ok) { if (a == null) a = t; b = t; if (b - a > best[1] - best[0]) best = [a, b]; } else a = null; }
@@ -1934,7 +1934,7 @@ function _runDress(kind, o) {
   for (const [k, list] of Object.entries(covers)) cover(k, list);
   if (leaves.length) leafLitter(leaves.map(([x, z, r, y]) => [x, z, r, K.indoor ? y : undefined]));
   if (o.debug) window.__dress = { O, S, OBJ, WALLS, FLATS };
-  DRESSLOG.push({ kind, shots: shots.length, skipped: [...shotIn].filter(([k, q]) => q.ok < q.n / 2).map(([k]) => k), props: nPut, rejected: rej, by: placed.reduce((m, n) => (m[n] = (m[n] ?? 0) + 1, m), {}), at });   // v3.38 at: [name, band, x, z] of every prop
+  DRESSLOG.push({ kind, shots: shots.length, skipped: [...shotIn].filter(([k, q]) => q.ok < q.n / 2).map(([k]) => k), props: nPut, rejected: rej, by: placed.reduce((m, n) => (m[n] = (m[n] ?? 0) + 1, m), {}), at });   // v3.39 at: [name, band, x, z] of every prop
 }
 const DRESSLOG = [];   // what every dress() call put down: [{ kind, shots, props, by: { name: n } }] (render.mjs --probe 'DRESSLOG')
 
@@ -2479,7 +2479,7 @@ function beamSpot(beam, o = {}) {
 }
 // lightPool(p, x, y, z, { r, color, k, night, wall, ry, ignore }) — soft glow of a lamp on the floor below it (local to p). Follows the darkness
 //   (NIGHTK; night: false = always on, e.g. indoor lamps). wall: true = a vertical glow on a wall (local +z out of the wall). No real light.
-//   v3.38: pools of static lamps are projected in the surface shaders (every lit built-in material: standard, physical, lambert, phong, toon): one world-space glow map
+//   v3.39: pools of static lamps are projected in the surface shaders (every lit built-in material: standard, physical, lambert, phong, toon): one world-space glow map
 //   (LPOOLT, ~0.12 m texels) is sampled per pixel and added to up-facing surfaces from 1.5 m below to 0.28 m above the lamp's foot — curbs, steps, snow and paving get it with
 //   no seams or hairlines, vertical faces (curb fronts, the lamp's base) none; benches, car roofs and anything else higher than 0.28 m stay out. Pools under moving lamps
 //   (dyn, not stat) and wall pools keep the old draped mesh. CFG.pools: false = none.
@@ -2524,7 +2524,7 @@ const LPOOLMAP = { list: [] };   // the static floor pools in the glow map (worl
 tick(() => { LPOOLU.value.x = POOLK.value; LPOOLU.value.y = POOLON.value; });
 function _buildPools() {
   world.updateMatrixWorld(true);
-  { const st = L => { let s = false; for (let q = L.g; q && q !== world; q = q.parent) { if (q.userData.dyn) return false; if (q.userData.stat) s = true; } return s; };   // v3.38: static floor pools → shader glow map
+  { const st = L => { let s = false; for (let q = L.g; q && q !== world; q = q.parent) { if (q.userData.dyn) return false; if (q.userData.stat) s = true; } return s; };   // v3.39: static floor pools → shader glow map
     const map = LPOOLS.filter(L => !L.wall && st(L)); if (map.length) { _poolMap(map); LPOOLS.splice(0, LPOOLS.length, ...LPOOLS.filter(L => !map.includes(L))); } }
   const cands = [], bb = new THREE.Box3(), rc = new THREE.Raycaster(), dn = new THREE.Vector3(0, -1, 0), P = new THREE.Vector3(), C = new THREE.Vector3(), inv = new THREE.Matrix4();
   world.traverse(m => { if (!m.isMesh || m.isInstancedMesh || !m.visible || m.userData.pool) return; const mt = m.material; if (!mt || Array.isArray(mt) || mt.transparent || mt.isMeshBasicMaterial || mt.isShaderMaterial) return;
@@ -3177,7 +3177,7 @@ function pose(f, mode, ph, t = 0, o = {}) {   // walk run shamble idle panic che
   const S = rigState(mode, ph / TAU, t, opt);
   let m = mode;
   if (o.from && o.w != null && (o.w < 1 || (o.wLo != null && o.wLo < 1))) {
-    const A = rigState(o.from, ph / TAU, t, opt), k = EASE.inOut(clamp(o.w)), kl = o.wLo != null ? clamp(o.wLo) : k;   // v3.38 wLo: legs and hips by their own weight (walk(): by distance)
+    const A = rigState(o.from, ph / TAU, t, opt), k = EASE.inOut(clamp(o.w)), kl = o.wLo != null ? clamp(o.wLo) : k;   // v3.39 wLo: legs and hips by their own weight (walk(): by distance)
     for (const key in S) S[key] = lerp(A[key], S[key], _LOK.has(key) ? kl : k);
     if (k < 0.5) m = o.from;
   }
@@ -3414,14 +3414,14 @@ const PATHS = [];   // every walk() path — biome() keeps them free of trees an
 // o: t0, t1, speed, mode, loop, endMode, startMode, ramp (s to reach full speed; 0 = instant), face (fixed heading), y, stride (animals), graze
 function walk(obj, pts, o = {}) {
   const t00 = o.t0 ?? 0, pvt = !(obj.beast || obj.chk || obj.bird) && (obj.legL || obj.isModel) && !o.loop && o.face == null, SX = pvt ? (obj._sitX ?? []).find(X => t00 >= X.t0 && t00 < X.ex()) : null, SP = SX?.stand?.();
-  if (SP && Math.hypot(SP[0] - pts[0][0], SP[1] - pts[0][1]) > 0.05) pts = [[SP[0], SP[1]], ...pts];   // v3.38 after sit(): sets off from where it stood up
+  if (SP && Math.hypot(SP[0] - pts[0][0], SP[1] - pts[0][1]) > 0.05) pts = [[SP[0], SP[1]], ...pts];   // v3.39 after sit(): sets off from where it stood up
   const path = new Path(pts, o.loop), node = dyn(obj.root ?? obj), t0 = o.t0 ?? 0, t1 = o.t1 ?? 1e9, v = o.speed ?? 1.4, m0 = o.mode ?? 'walk', mode = obj.legL && o.gait !== false && ((m0 === 'walk' && v > 2.4) || (m0 === 'shamble' && v > 1.7)) ? 'run' : m0;   // v2.31 gait by speed: too fast for a walk / shamble (legs would flicker) → runs (zombies: arms out); gait: false keeps the mode
   PATHS.push(path); WALKS.push({ obj, path });
   const rig = !!(obj.legL || obj.quad || obj.isModel), ra = o.ramp ?? (rig ? clamp(0.16 + 0.07 * v, 0.2, 0.55) : 0), wrap = a => Math.atan2(Math.sin(a), Math.cos(a));
   const tw = clamp(0.3 * v, 0.35, 2.2), yawAt = s => { const a = path.at(s - tw), b = path.at(s + tw), x = b.x - a.x, z = b.z - a.z; return Math.hypot(x, z) > 1e-3 ? Math.atan2(x, z) : null; };   // v2.31: heading = chord over ±tw m (grows with speed) → turns through a corner evenly (was: two 45° steps, one frame each for anything fast)
   const rt = obj.root ?? obj, WK = rt._walks ??= [], iW = WK.length, ani = !!(obj.beast || obj.chk || obj.bird);
   let y0 = yawAt(0) ?? 0;
-  // v3.38 turn on the spot: a figure (or model) whose walk sets off more than 40° away from the way it faces — the end of the walk before it, or for the first walk its built
+  // v3.39 turn on the spot: a figure (or model) whose walk sets off more than 40° away from the way it faces — the end of the walk before it, or for the first walk its built
   // facing (root.rotation.y set before walk(); 0 = not set: faces the path as before) — first turns on the spot, stepping (TH s: 0.8 s for 90°, 1.3 s for 180°), then walks off.
   // Smaller turns blend over 0.45 s while it sets off. Before t0 the first walk keeps the built facing (was: faced the path the whole time before it started).
   // A walk that would take over while the walk before is still under way hands over once that one has stopped (tA), and one that starts while the figure is getting up
@@ -3440,7 +3440,7 @@ function walk(obj, pts, o = {}) {
   };
   const sE = o.loop ? 1e9 : dist(Te);
   const sc = (obj.root ?? obj).scale.x, Cl = obj.legL ? cycleLen(mode, v) * sc : 0, stride = o.stride ?? (obj.kind === 'chicken' ? 16 : 4), bl = Math.max(ra, 0.22);
-  // v3.38 feet planted while starting and stopping (procedural legs): the step phase starts with the left foot under the body (mid-stance, the right one in the air) and the
+  // v3.39 feet planted while starting and stopping (procedural legs): the step phase starts with the left foot under the body (mid-stance, the right one in the air) and the
   // cycle length is fitted (± 15 %) so the walk ends that way too — blending in / out of the idle pose no longer drags a foot that is still or about to be planted
   const u0 = (GAIT[mode] ?? GAIT.walk).b / 2, nC = Cl && sE < 1e8 ? sE / Cl : 0, nH = Math.max(0.5, Math.round(2 * nC) / 2), Clw = nC && Math.abs(nH / nC - 1) < 0.15 ? sE / nH : Cl;
   const gW = (s, P) => { if (!rig || !(STAIRS.length || WALKSURF.length)) return groundH(P.x, P.z); let h = 0; for (let k = -2; k <= 2; k++) { const Q = path.at(s + k * 0.075); h += groundH(Q.x, Q.z); } return h / 5; };   // v2.29 (v3.22: also walk surfaces of models): on stairs the body rises smoothly (was: 18 cm jump per step); the feet still find the steps (foot IK)
@@ -3456,19 +3456,19 @@ function walk(obj, pts, o = {}) {
     Object.assign(me, { Te, bl, sE, dist, tauS, wAt: tt => wAt(tt - t0), wS: q => (q <= 0 || q >= sE ? 0 : wAt(tauS(q))) }); }
   const pick = t => { let w = WK[0]; for (const x of WK) if (x.t0 <= t) w = x; return w; };
   obj._posAt = t => pick(t).pos(t); obj._yawAt = t => pick(t).yaw(t); me.sAt = t => dist(t - tS); obj._sAt = t => pick(t).sAt(t);   // distance walked on the current walk (stepping legs of spiders etc.)
-  if (o.face != null || o.side) (obj._sideW ??= []).push([tA, tS + Te]);   // v3.38 QA CRAB: walking sideways on purpose (fixed heading)
+  if (o.face != null || o.side) (obj._sideW ??= []).push([tA, tS + Te]);   // v3.39 QA CRAB: walking sideways on purpose (fixed heading)
   if (TH && obj.legL && obj.fx) {   // stepping round on the spot: the feet lift in turn (inner foot first), the body yaws over them
     const n = Math.max(2, Math.round(dY / (Math.PI / 4))), first = wrap(y0 - yS) > 0 ? 0 : 1;
     obj.fx.push(fxw((t, S) => { const u = t - tA; if (u <= 0 || u >= TH || _mcOnF(obj)) return;   // mocap figures: the step is lifted by IK in _turnPlant (a layer on the legs would hand both legs over to the own pose)
       const q = u / TH * n, k = Math.floor(q), f = q - k, lift = 0.075 * Math.sin(Math.PI * f), L = (k + first) % 2 === 0;
-   // v3.38: the foot on the ground stays on its spot while the body turns over it (_turnPlant)
+   // v3.39: the foot on the ground stays on its spot while the body turns over it (_turnPlant)
       const [z, y] = legFK(L ? S.lt : S.rt, L ? S.lk : S.rk), [a, b] = legIK(z + 0.03 * Math.sin(Math.PI * f), y + lift); if (L) { S.lt = a; S.lk = b; S.lf += 0.35 * Math.sin(Math.PI * f); } else { S.rt = a; S.rk = b; S.rf += 0.35 * Math.sin(Math.PI * f); }
       S.hx += (L ? 0.018 : -0.018) * Math.sin(Math.PI * f); }, tA, tS));
     (obj._tpF ??= []).push(t => { const u = t - tA; if (u <= 0 || u >= TH + 0.8) return null; const h = TH / n, Y = tt => me.yaw(Math.min(tt, tS)), lifts = k => (k + first) % 2 === 0 ? 0 : 1;   // foot index that lifts in step k
       if (u >= TH) { const kp = 1 - lifts(n - 1), tl = tA + (n - 1) * h; return [{ k: kp, d: wrap(Y(t) - Y(tl)), w: 1, tl, ds: me.sAt(t) / sc }]; }   // after the turn: the foot that stood through the last step, until it lifts
       const k = Math.floor(u / h), f = u / h - k, kl = lifts(k), tp = tA + k * h, tq = tA + Math.max(0, k - 1) * h;
       const tn = tA + (k + 1) * h;   // the lifted foot goes from where it stood (landed at tq) to its spot at the end of the step (in the air)
-      return [{ k: 1 - kl, d: wrap(Y(t) - Y(tp)), w: 1, tl: tp }, { k: kl, d: wrap(Y(t) - Y(tq)), w: 1, tl: tq, air: true, f, d2: wrap(Y(t) - Y(tn)), t2: tn }]; }); }   // v3.38 the foot on the ground while turning (_turnPlant)
+      return [{ k: 1 - kl, d: wrap(Y(t) - Y(tp)), w: 1, tl: tp }, { k: kl, d: wrap(Y(t) - Y(tq)), w: 1, tl: tq, air: true, f, d2: wrap(Y(t) - Y(tn)), t2: tn }]; }); }   // v3.39 the foot on the ground while turning (_turnPlant)
   if (o.prints && obj.legL) {   // footprints (snow, sand, mud): o.prints = true | hex colour; o.printLife (s)
     const g0 = GAIT[mode] ?? GAIT.walk, Sd = g0.b * Clw, items = [], fwd = s => yawAt(s) ?? y0;
     for (let k = 0; k < 600; k++) { const sk = (k / 2 - u0) * Clw, s = sk + Sd / 2; if (s > path.len && !o.loop) break; if (sk > dist(Te)) break;
@@ -3483,7 +3483,7 @@ function walk(obj, pts, o = {}) {
     if (WK.length > 1 && pick(t) !== me) return;   // v2.31: several walks on one figure hand over at their t0 (was: the walk written last held the figure at its start the whole time)
     const tau = t - tS, s = dist(tau), moving = tau > 0 && tau < Te;
     const P = path.at(s); node.position.set(P.x, gW(s, P) + (o.y ?? 0), P.z);
-    const yw = yawAt(s) ?? y0; if (pv || !hasB || t > tA) { const R = node.rotation; if (Math.abs(R.x) > 3 && Math.abs(R.z) > 3) R.set(0, Math.PI - R.y, 0); R.y = me.yaw(t); }   // before it starts, the first walk leaves the built facing alone · v3.38: a built yaw beyond ±90° comes back from the reset as (π, π − yaw, π): unfold it first (setting y alone flipped the figure)
+    const yw = yawAt(s) ?? y0; if (pv || !hasB || t > tA) { const R = node.rotation; if (Math.abs(R.x) > 3 && Math.abs(R.z) > 3) R.set(0, Math.PI - R.y, 0); R.y = me.yaw(t); }   // before it starts, the first walk leaves the built facing alone · v3.39: a built yaw beyond ±90° comes back from the reset as (π, π − yaw, π): unfold it first (setting y alone flipped the figure)
     const w = moving ? clamp(Math.min(tau, Te - tau) / bl) : 0, vn = moving ? (dist(tau + 0.02) - dist(tau - 0.02)) / 0.04 : 0;
     const from = tau < Te / 2 ? (o.startMode ?? 'idle') : (o.endMode ?? 'idle');
     let turn = (yawAt(s + 0.5) ?? yw) - (yawAt(s - 0.5) ?? yw); turn = Math.atan2(Math.sin(turn), Math.cos(turn));
@@ -3576,7 +3576,7 @@ const MC_STRIDE = { Walk_Loop: 1.3, Jog_Fwd_Loop: 5, Sprint_Loop: 5.5, Crouch_Fw
 const MC_GAIT = { Walk_Loop: [0.5, 0.6, 1.35], Jog_Fwd_Loop: [1, 0.5, 1.4], Sprint_Loop: [0.8, 0.6, 1.4], Crouch_Fwd_Loop: [0.5, 0.6, 1.3], Zombie_Walk_Fwd_Loop: [0.5, 0.6, 1.3] };   // exponent e, min, max
 const MC_PH = { Jog_Fwd_Loop: -0.134 };   // cycle offset against Walk_Loop: the left leg forward at the same phase (blends without scissoring)
 function mcAmp(g, v) { const D = mcClip(g, true), G = MC_GAIT[g]; if (!D || !G || !(v > 0)) return 1; return clamp((v / (mcStride(g) / D.d)) ** G[0], G[1], G[2]); }
-// v3.38 gait of a locomotion clip, measured from its foot contacts on the figure's own legs (was: a fixed stride per clip — Sprint_Loop's feet covered 2.9 m per cycle
+// v3.39 gait of a locomotion clip, measured from its foot contacts on the figure's own legs (was: a fixed stride per clip — Sprint_Loop's feet covered 2.9 m per cycle
 // where 4.8 m were assumed, so the planted foot slid 2 m/s at a sprint): win = the frames each foot is down (the longest run within 2.5 cm of its lowest point; a
 // swing-scaled copy keeps the windows of its clip), stride = the backward sweep over the window → m per cycle (the walk's clip time follows it), yC = ankle height
 // in contact (the hips go down by yC − ANK where it floats; feet that dip in are lifted by footFloor as before: the sprint no longer floats 3 cm), ph = the clip phase with the left foot under the body (walks start and stop there).
@@ -3586,14 +3586,14 @@ function mcGait(D) {
   for (let i = 0; i < n; i++) { mcSample(D, i / MOCAP.fps, false, T); [['legL', 'shinL', -1], ['legR', 'shinR', 1]].forEach(([L, S, sx], k) => {
     a.set(0, -LEG2, 0).applyQuaternion(T.q[S]).add(b.set(0, -LEG1, 0)).applyQuaternion(T.q[L]).add(b.set(sx * 0.12, 0, 0)).applyQuaternion(T.q.hips).add(b.set(T.p.x, HIP + T.p.y, T.p.z)); F[k].push([a.y, a.z]); }); }
   const B = D.base ? mcGait(D.base) : null, Y = F.map(R => Math.min(...R.map(r => r[0])));
-  const win = B ? B.win : F.map((R, k) => { const on = R.map(r => r[0] < Y[k] + 0.025); let best = [0, 0]; for (let i = 0; i < n; i++) { if (!on[i] || on[(i - 1 + n) % n]) continue; let l = 0; while (l < n - 1 && on[(i + l + 1) % n]) l++; if (l > best[1]) best = [i, l]; } if (best[1] < n * 0.25) while (best[1] < n * 0.4 && R[(best[0] + best[1] + 1) % n][0] < Y[k] + 0.065) best[1]++; return best; });   // v3.38 runs (short contact): the window runs on through the push-off (until the foot is 6.5 cm up), so the foot stays put there too
+  const win = B ? B.win : F.map((R, k) => { const on = R.map(r => r[0] < Y[k] + 0.025); let best = [0, 0]; for (let i = 0; i < n; i++) { if (!on[i] || on[(i - 1 + n) % n]) continue; let l = 0; while (l < n - 1 && on[(i + l + 1) % n]) l++; if (l > best[1]) best = [i, l]; } if (best[1] < n * 0.25) while (best[1] < n * 0.4 && R[(best[0] + best[1] + 1) % n][0] < Y[k] + 0.065) best[1]++; return best; });   // v3.39 runs (short contact): the window runs on through the push-off (until the foot is 6.5 cm up), so the foot stays put there too
   const V = win.map(([w0, l], k) => l >= 1 ? (F[k][w0][1] - F[k][(w0 + l) % n][1]) / (l * dt) : 0).filter(x => x > 0.2), v = V.length ? V.reduce((x, y) => x + y) / V.length : 0;
   let ph = 0, bz = 1e9; { const [w0, l] = win[0]; for (let o = 0; o <= l; o++) { const i = (w0 + o) % n; if (Math.abs(F[0][i][1]) < bz) { bz = Math.abs(F[0][i][1]); ph = i / n; } } }
   const phz = (k, z, all) => { const [w0, l] = win[k]; let best = w0, bd = 1e9; for (let o = all ? 0 : Math.round(0.25 * l); o <= (all ? l : Math.round(0.75 * l)); o++) { const i = (w0 + o) % n, dd = Math.abs(F[k][i][1] - z); if (dd < bd) { bd = dd; best = i; } } return best / n; };   // phase in the middle half of foot k's window where it is closest to z ahead of the hips (never at touch-down / lift-off)
   return (D.gait = { stride: v > 0.2 ? v * D.d : null, yC: (Y[0] + Y[1]) / 2, ph, win, F, phz }); }
-// v3.38 where the idle clip keeps the feet (mean ankle z ahead of the hips, left / right): walks start and stop with the planted foot on that spot (no slide when the legs blend)
+// v3.39 where the idle clip keeps the feet (mean ankle z ahead of the hips, left / right): walks start and stop with the planted foot on that spot (no slide when the legs blend)
 const mcIdleZ = () => { if (_mcD.has('@idz')) return _mcD.get('@idz'); const D = mcClip('Idle_Loop', true), G = D && mcGait(D), Z = G ? G.F.map(R => R.reduce((a, r) => a + r[1], 0) / R.length) : null; _mcD.set('@idz', Z); return Z; };
-// v3.38 planted feet in walk / run clips: inside a foot's contact window the ankle moves back evenly (the window's sweep spread over its frames; the ends stay where the clip
+// v3.39 planted feet in walk / run clips: inside a foot's contact window the ankle moves back evenly (the window's sweep spread over its frames; the ends stay where the clip
 // has them, so nothing pops) and sits at ANK — two-bone IK on the thigh and the knee, weighted by the clip's share of the legs
 const _lkA = new THREE.Vector3(), _lkB = new THREE.Vector3(), _lkC = new THREE.Vector3(), _lkQ = new THREE.Quaternion(), _lkR = new THREE.Quaternion(), _lkX = new THREE.Vector3(1, 0, 0);
 function _mcLock(f, e, w) {
@@ -3607,16 +3607,16 @@ function _mcLock(f, e, w) {
     _legTo(f, th, sh, ft, dz, dh); });
 }
 const _fzT = { p: new THREE.Vector3(), q: {} }, _fzA = new THREE.Vector3(), _fzB = new THREE.Vector3();
-function _mcFootZ(D, time, k) {   // v3.38 ankle z ahead of the hips (body frame) of foot k in clip D at time
+function _mcFootZ(D, time, k) {   // v3.39 ankle z ahead of the hips (body frame) of foot k in clip D at time
   if (!D) return null; mcSample(D, time, true, _fzT); const T = _fzT, [L, S, sx] = k ? ['legR', 'shinR', 1] : ['legL', 'shinL', -1];
   return _fzA.set(0, -LEG2, 0).applyQuaternion(T.q[S]).add(_fzB.set(0, -LEG1, 0)).applyQuaternion(T.q[L]).add(_fzB.set(sx * 0.12, 0, 0)).applyQuaternion(T.q.hips).add(_fzB.set(T.p.x, HIP + T.p.y, T.p.z)).z; }   // (_fzA keeps x, y, z)
-function _mcPlant(f, P, w) {   // v3.38 first / last stance of a walk: the foot stays where it stood (body-frame z = idle spot − distance walked since)
+function _mcPlant(f, P, w) {   // v3.39 first / last stance of a walk: the foot stays where it stood (body-frame z = idle spot − distance walked since)
   const LG = [[f.legL, f.shinL, f.footL], [f.legR, f.shinR, f.footR]], one = (k, zt, ww) => { if (ww < 0.01) return; const [th, sh, ft] = LG[k];
     _lkA.copy(ft.position).applyQuaternion(sh.quaternion).add(sh.position).applyQuaternion(th.quaternion).add(th.position).applyQuaternion(f.hips.quaternion).add(f.hips.position);   // ankle in the body frame
     ww *= 1 - sm01((_lkA.y - ANK - 0.02) / 0.05); if (ww < 0.01) return; _legTo(f, th, sh, ft, (zt - _lkA.z) * ww, 0); };   // lets go as the foot lifts (the rest of the way is made in the air)
   const d = P.dist; if (d > 0 && d < P.sLo + 0.6) one(0, P.IZ[0] - d, w * (1 - sm01((d - P.sLo - 0.45) / 0.15)));
 }
-function _turnPlant(f, t) {   // v3.38 turning on the spot (walk): the planted foot keeps its place in the world while the root yaws by d since it landed
+function _turnPlant(f, t) {   // v3.39 turning on the spot (walk): the planted foot keeps its place in the world while the root yaws by d since it landed
   let PL = null; for (const F of f._tpF ?? []) PL = F(t) ?? PL; if (!PL || !f.legL) return;
   for (const P of PL) { if ((!P.air && Math.abs(P.d) < 1e-3) || P.w < 0.01) continue; const [th, sh, ft] = P.k ? [f.legR, f.shinR, f.footR] : [f.legL, f.shinL, f.footL];
     _lkA.copy(ft.position).applyQuaternion(sh.quaternion).add(sh.position).applyQuaternion(th.quaternion).add(th.position).applyQuaternion(f.hips.quaternion).add(f.hips.position);
@@ -3624,7 +3624,7 @@ function _turnPlant(f, t) {   // v3.38 turning on the spot (walk): the planted f
     const ax = _lkA.x, ay = _lkA.y, az = _lkA.z, mc = _mcOnF(f);
     const spot = (tl, d) => { const c = Math.cos(-d), s = Math.sin(-d); return [ax * c + az * s, -ax * s + az * c]; };   // the stance it had (the idle pose stands still while it turns)   // mocap: where the idle clip has the foot when it lands
     let [x, z] = spot(P.tl, P.d); z -= P.ds ?? 0; if (P.air) { const [x2, z2] = spot(P.t2, P.d2), e = sm01(P.f); x = lerp(x, x2, e); z = lerp(z, z2, e); } _lkA.set(ax, ay, az); _legTo(f, th, sh, ft, (z - _lkA.z) * w, P.air && mc ? 0.075 * Math.sin(Math.PI * P.f) : 0, (x - _lkA.x) * w); } }
-function _legTo(f, th, sh, ft, dz, dh, dx = 0) {   // v3.38 two-bone leg IK: move the ankle by (dx, dh, dz) of the body frame (thigh and knee turn, the foot keeps its angle to the shin)
+function _legTo(f, th, sh, ft, dz, dh, dx = 0) {   // v3.39 two-bone leg IK: move the ankle by (dx, dh, dz) of the body frame (thigh and knee turn, the foot keeps its angle to the shin)
   _lkA.copy(ft.position).applyQuaternion(sh.quaternion).add(sh.position).applyQuaternion(th.quaternion);   // ankle relative to the hip joint, in the hips frame
   _lkB.set(dx, dh, dz).applyQuaternion(_lkQ.copy(f.hips.quaternion).invert()).add(_lkA);
   const L1 = sh.position.length(), L2 = ft.position.length(), d0 = _lkA.length(), d1 = clamp(_lkB.length(), 0.2, (L1 + L2) * 0.999), ang = d => Math.acos(clamp((L1 * L1 + L2 * L2 - d * d) / (2 * L1 * L2), -1, 1));
@@ -3671,13 +3671,13 @@ function _mcLayer(f, mode, ph, t, v, dist, distE, tS) {   // the clips a figure 
     const sl = mcStride(g), vv = run ? 4.5 : mode === 'shamble' ? 0.8 : 1.4, mask = mode === 'panic' || (zb && run) ? 'lower' : null;   // panic / zombies running: arms stay their own
     if (dist == null) { const u = ph / TAU * cycleLen(mode, vv) / sl; return [{ D, time: u * D.d, loop: true, w: 1, mask }]; }   // the figure's own cycle (phase) at the mode's usual speed → metres → clip cycles (independent of v: a tick switching modes never jumps a clip)
     // walk(): by distance (feet stay planted) — v is the walk's cruise speed (one value per walk(): the stride never changes under way)
-    // v3.38: stride measured from the clip (mcGait); the walk starts with the left foot under the body and the stride is fitted (± 15 %) so it ends with a foot under it (distE)
+    // v3.39: stride measured from the clip (mcGait); the walk starts with the left foot under the body and the stride is fitted (± 15 %) so it ends with a foot under it (distE)
     const vs = (v ?? vv) / (f.root?.scale.x || 1), a = mcAmp(g, vs), wj = !zb && (mode === 'walk' || g === 'Jog_Fwd_Loop') && mcClip('Walk_Loop', true) && mcClip('Jog_Fwd_Loop', true) ? (mode === 'run' && vs < 2.4 ? 1 : sm01((vs - 1.8) / 1.2)) : g === 'Jog_Fwd_Loop' ? 1 : 0;
     const GA = (D0, am) => mcGait(Math.abs(am - 1) > 1e-3 ? mcClipAmp(D0, am) : D0), IZ = mcIdleZ();
     const p0 = I => IZ && I ? I.phz(0, IZ[0]) : I?.ph ?? 0, pR = I => IZ && I ? I.phz(1, IZ[1]) : (I?.ph ?? 0) + 0.5;   // start: the left foot planted where idle has it · stop: either foot on its idle spot
     const fit = (st, I) => { if (!(distE > 0)) return 1; const n = distE / st, dR = ((pR(I) - p0(I)) % 1 + 1) % 1; let best = 1, be = 1e9;
       for (const c of [Math.round(n), Math.floor(n - dR) + dR, Math.ceil(n - dR) + dR]) { if (c < 0.3) continue; const e = Math.abs(c / n - 1); if (e < be) { be = e; best = c / n; } } return be < 0.15 ? best : 1; };
-    // v3.38 plant: the first stance (left foot, from the start until it lifts) and the last one (from touch-down to the stop) stay on their spot in the world (leg IK in _mcApply)
+    // v3.39 plant: the first stance (left foot, from the start until it lifts) and the last one (from touch-down to the stop) stay on their spot in the world (leg IK in _mcApply)
     const plant = (I, st, k) => { if (!IZ || !I || !(distE > 0)) return null; const n = I.F[0].length, S = st / k, q0 = p0(I), fr = x => (x % 1 + 1) % 1, we = (I.win[0][0] + I.win[0][1]) / n, pe = fr(distE / S + q0);
       const inW = (j, ph) => fr(ph - I.win[j][0] / n) <= I.win[j][1] / n + 1e-6, kE = inW(0, pe) && (!inW(1, pe) || Math.abs(fr(pe - q0)) < 0.02) ? 0 : 1;
       const iT = tS != null && !zb && !f.idle ? tS + f.sd * 7.3 : null, DI = mcClip('Idle_Loop', true);   // where this figure's idle feet were when it set off
@@ -3696,7 +3696,7 @@ const _mcHp = new THREE.Vector3(), _mcPos = new THREE.Vector3(), _mcI = new THRE
 function _mcApply(f, L, S, S0, q) {   // L: clips with weights. On the joints now: the pose S (own pose of the mode(s) + layers: body language, react, gestures, IK …)
   // automatic clips (e.mode) swap their mode's own pose for the clip inside that pose: joint · (own pose of the mode → clip)^w — cross-fades with modes without a clip stay even,
   // every layer stays on top. Clips from anim() replace the pose: slerp to clip · (S0 → S, the layers). Big layers (wave, grab, point, IK) take their limb back (R).
-  for (const e of L) e.wLo ??= e.w;   // v3.38 wLo: the clip's weight on the legs and hips (walk(): the legs follow the gait from the first centimetre)
+  for (const e of L) e.wLo ??= e.w;   // v3.39 wLo: the clip's weight on the legs and hips (walk(): the legs follow the gait from the first centimetre)
   if (!L.some(e => e.w > 1e-3 || e.wLo > 1e-3)) return;
   const J = _mcJ(f), P = f._mcP ??= [], Q = f._mcQ ??= {}, Q0 = f._mcQ0 ??= {}, PM = f._mcPM ??= {}, hp = _mcHp.copy(f.hips.position);
   L.forEach((e, i) => { const Pi = mcSample(e.amp ? mcClipAmp(e.D, e.amp) : e.D, e.time, e.loop, P[i] ??= { p: new THREE.Vector3(), q: {} });   // v3.26: stride-scaled swing, walk ↔ jog blend
@@ -3724,14 +3724,14 @@ function _mcApply(f, L, S, S0, q) {   // L: clips with weights. On the joints no
   f.hips.position.copy(pos); f._mcOn = on;
   for (const e of L) if (e.mode && e.wLo > 0.02 && _mcIn(e.mask, 'legL')) _mcLock(f, e, e.wLo * kl);
   for (const e of L) if (e.plant && !(e.k2 > 0.05) && e.wLo > 0.02 && _mcIn(e.mask, 'legL') && CFG.footLock !== false) _mcPlant(f, e.plant, kl);
-  if (f._wu > 1e-4) { f.hips.position.y -= f._wu; for (const [th, sh, ft] of [[f.legL, f.shinL, f.footL], [f.legR, f.shinR, f.footR]]) _legTo(f, th, sh, ft, 0, f._wu); }   // v3.38 wind-up: hips down, ankles where they were
-  for (const e of L) if (e.legDy && e.w > 0.02) for (const [th, sh, ft] of [[f.legL, f.shinL, f.footL], [f.legR, f.shinR, f.footR]]) _legTo(f, th, sh, ft, 0, -e.legDy * e.w); }   // v3.38 sitting clips on a seat higher / lower than theirs (0.42 m): the feet stay on the floor
+  if (f._wu > 1e-4) { f.hips.position.y -= f._wu; for (const [th, sh, ft] of [[f.legL, f.shinL, f.footL], [f.legR, f.shinR, f.footR]]) _legTo(f, th, sh, ft, 0, f._wu); }   // v3.39 wind-up: hips down, ankles where they were
+  for (const e of L) if (e.legDy && e.w > 0.02) for (const [th, sh, ft] of [[f.legL, f.shinL, f.footL], [f.legR, f.shinR, f.footR]]) _legTo(f, th, sh, ft, 0, -e.legDy * e.w); }   // v3.39 sitting clips on a seat higher / lower than theirs (0.42 m): the feet stay on the floor
 function _mcPass(f, m, t, o, S) {   // after applyRig: the clip of the pose mode (automatic) + anim() schedule on the figure (pure function of t)
   f._mcOn = 0; if (!MOCAP) return;
   const q = f._mcq; f._mcq = null; let L = []; f._mcT = t;
   if (q) { const lay = (md, k, kl = k) => _mcLayer(f, md, q.ph, t, q.v, q.o?.dist, q.o?.distE, q.o?.tS).map(e => ({ ...e, mode: md, w: e.w * k, wLo: e.w * kl }));
     let kA = 1, kB = 0; if (q.from != null && q.w != null && q.w < 1) { kA = EASE.inOut(clamp(q.w)); kB = 1 - kA; }
-    let kAL = kA; if (q.from != null && q.o?.wLo != null) kAL = clamp(q.o.wLo);   // v3.38 walk(): legs by distance, upper body by time
+    let kAL = kA; if (q.from != null && q.o?.wLo != null) kAL = clamp(q.o.wLo);   // v3.39 walk(): legs by distance, upper body by time
     const kX = q.X && q.X.w < 1 ? EASE.inOut(q.X.w) : 1;
     L = [...lay(q.mode, kA * kX, kAL * kX), ...(kB || kAL < 1 ? lay(q.from, kB * kX, (1 - kAL) * kX) : [])];
     if (kX < 1 && typeof q.X.from === 'string' && q.X.from !== PREVPOSE) L.push(...lay(q.X.from, 1 - kX)); }
@@ -3891,10 +3891,10 @@ function asset(p, name, x = 0, z = 0, o = {}) {
     if (o.y == null && _SNAPUP.test(name)) { const b = new THREE.Box3().setFromObject(s); if (b.min.y < -0.05) s.position.y -= b.min.y; }   // v3.24: city/car_* (wheels 0.28 m below the origin), space/spacetruck* stood in the ground
     root.add(s);
   };
-  if (_ASRC.has(name)) attach(_ASRC.get(name)); else PENDING.push(ASSETS.get(name).then(attach));   // v3.38: a model that has already loaded (dress() at bake time) is attached at once
+  if (_ASRC.has(name)) attach(_ASRC.get(name)); else PENDING.push(ASSETS.get(name).then(attach));   // v3.39: a model that has already loaded (dress() at bake time) is attached at once
   return root;
 }
-const _ASRC = new Map();   // v3.38: parsed models by name (filled when a load finishes)
+const _ASRC = new Map();   // v3.39: parsed models by name (filled when a load finishes)
 function _assetLoad(name) {   // parse an embedded model once (the promise joins PENDING, so bake() waits for it)
   if (ASSETS.has(name) || !MODELS[name]) return ASSETS.get(name); const u8 = Uint8Array.from(atob(MODELS[name]), c => c.charCodeAt(0));
   const pr = new Promise(res => new GLTFLoader().parse(u8.buffer, '', g => { _ASRC.set(name, g.scene); res(g.scene); }, e => { console.error('asset ' + name + ': ' + (e?.message ?? e)); res(null); }));
@@ -4066,7 +4066,7 @@ function gate(p, x, z, o = {}) {   // farm gate on two posts; returns { g, door 
 }
 // sit(rig, t0, { t1, seat: bench | [x, y, z], ry, h }) — sits down (seat height h, default 0.45) and gets up again at t1
 function sit(f, t0, o = {}) {
-  // v3.38 seat: [x, y, z] is the floor point under the seat (R.seat / P.seat / F.seat give that, R.seat with .h = seat height); a point on the cushion itself
+  // v3.39 seat: [x, y, z] is the floor point under the seat (R.seat / P.seat / F.seat give that, R.seat with .h = seat height); a point on the cushion itself
   // (0.15–1 m above the ground there, no h) counts as the seat top: the figure stands on the floor below it and h = its height (was: stood on the sofa cushion)
   let fy = null, h0 = o.h ?? (Array.isArray(o.seat) ? o.seat.h : null);
   if (Array.isArray(o.seat)) { const gy = groundH(o.seat[0], o.seat[2]), dh = o.seat[1] - gy; if (h0 == null && dh > 0.15 && dh < 1) { h0 = dh; fy = gy; } else fy = o.seat[1]; }
@@ -4086,7 +4086,7 @@ function sit(f, t0, o = {}) {
   const sp = new THREE.Vector3(), fw = new THREE.Vector3();
   const seatAt = () => { let sy = o.ry ?? 0; if (Array.isArray(o.seat)) sp.set(o.seat[0], fy, o.seat[2]); else { const g = o.seat.g ?? o.seat; g.updateWorldMatrix(true, false); sp.set(0, 0, 0.12).applyMatrix4(g.matrixWorld); sy = new THREE.Euler().setFromQuaternion(g.getWorldQuaternion(_iq), 'YXZ').y; } return sy; };
   (f._sitX ??= []).push({ t0, t1, ex: () => mc() ? ex : t1 + 0.4, stand: () => { if (!o.seat || t1 > 1e8) return null; const sy = seatAt(), ft = mc() ? 0.25 : 0.44; return [sp.x + Math.sin(sy) * ft, sp.z + Math.cos(sy) * ft, sy]; }, w: t => mc() ? (t < t0 || t > ex ? 0 : t < t0 + dE ? sm01((t - t0) / Math.max(dE, 0.01)) : t < t1 ? 1 : 1 - sm01((t - t1) / dX)) : env3(t, t0, t1, 0.5, 0.5),
-    floor: () => o.seat ? (Array.isArray(o.seat) ? fy : null) : null });   // v3.38: walk() sets off once the figure stood up · QA SIT (seated share, floor height)
+    floor: () => o.seat ? (Array.isArray(o.seat) ? fy : null) : null });   // v3.39: walk() sets off once the figure stood up · QA SIT (seated share, floor height)
   if (o.seat) late(t => { const m = mc(), e = m ? env3(t, dE ? t0 : -1e9, ex, 0.35, 0.4) : env3(t, t0, t1 + 0.4, 0.3, 0.4); if (!e) return;
     const sy = seatAt();   // the seat at t (pure: a moving seat is read in every frame — was: whatever the first frame a render block drew saw)
     const ft = m ? 0.25 : 0.44 * (1 - env3(t, t0, t1, 0.5, 0.5)); fw.set(Math.sin(sy) * ft, 0, Math.cos(sy) * ft);   // the feet stay in front of the seat (clip: its hips go back 0.25 m; own pose: the hips go back as the pose blends in)
@@ -4113,7 +4113,7 @@ function enter(f, v, t0, o = {}) {
   if (v.doors?.length) { openDoor(v, t0, { i: di, close: t0 + dur + 0.15 }); if (out < 1e8) openDoor(v, out - 0.15, { i: di, close: out + dur + 0.1 }); }   // v3.26: the door opens for getting out too
   if (!standing) sit(f, t0 + 0.25, { t1: out, h, clip: false });
   f.fx.push((t, S) => { S.crx -= 0.12 * env3(t, t0 + 0.4, out + 0.6, 0.3, 0.3); });   // leaning back in the seat
-  // v3.38 in through the door: a curve from the outside mark past the door opening (level with the seat, 55 % of the way out) onto the seat, lifting the feet over the sill
+  // v3.39 in through the door: a curve from the outside mark past the door opening (level with the seat, 55 % of the way out) onto the seat, lifting the feet over the sill
   // (was: a straight line from the mark to the seat — through the door pillar when the mark is not level with the seat)
   const door = new THREE.Vector3(lerp(seat.x, outside.x, 0.55), lerp(outside.y, seat.y, 0.25), seat.z);
   late(t => { if (t < t0 || t > out + dur) return;
@@ -4232,7 +4232,7 @@ const _drvG = v => v._drvG ??= (() => { const D = v._drv, wrap = a => Math.atan2
   const at = s => { if (s < 0) { const A = D[0].pos(0), y = D[0].yaw(0); return { x: A.x + Math.sin(y) * s, z: A.z + Math.cos(y) * s, y }; }   // before the start: straight back along the first heading (convoy members wait behind the leader)
     let b = 0; for (let i = 0; i < D.length; i++) { const me = D[i], L = Math.min(me.L(), 1e7); if (s <= b + L || i === D.length - 1) { const q = Math.min(s - b, L), P = me.pos(q); return { x: P.x, z: P.z, y: me.yaw(q) }; } b += L; } };
   return { pick, base, yawT, S, at }; })();
-// v3.38 a chained drive() segment that sets off in another direction starts on an arc (radius R, default 0.7 × speed within 5–9 m; smaller where the first leg is short,
+// v3.39 a chained drive() segment that sets off in another direction starts on an arc (radius R, default 0.7 × speed within 5–9 m; smaller where the first leg is short,
 // arc: false = off) tangent to the way the car stands, then straight on to its next point — was: the car turned up to 90° in 0.8 s while it rolled off sideways
 function _drvArc(pts, yp, R0) {
   if (pts.length < 2) return pts; const [ex, ez] = pts[0], [px, pz] = pts[1], fx = Math.sin(yp), fz = Math.cos(yp), nx = Math.cos(yp), nz = -Math.sin(yp), dx = px - ex, dz = pz - ez;
@@ -4250,7 +4250,7 @@ function drive(v, pts, o = {}) {   // o.jumps: [[t, h, airtime]] · o.bumpy: 0..
   const g = dyn(v.g ?? v), D = v._drv ??= [], F = o.follow;
   const last = D.length ? D.reduce((a, b) => b.t0 >= a.t0 ? b : a) : null;
   const t0 = (o.t0 ?? (last ? Math.min(last.tE, 1e8) : F ? -1e9 : 0)) + (o.delay ?? 0), prev = o.t0 == null ? last : null, t1 = o.t1 ?? 1e9;   // chained (no t0): sets off from the end of the segment before; with t0 it is planned on its own and hands over at t0
-  if (!D.length) MOVERS.push({ node: g, kind: 'drive', ok: o.passThrough, drift: o.drift, v });   // v3.38 v: camSamples() finds where a tracked v.g will be
+  if (!D.length) MOVERS.push({ node: g, kind: 'drive', ok: o.passThrough, drift: o.drift, v });   // v3.39 v: camSamples() finds where a tracked v.g will be
   const setPos = () => { v._posAt = t => { const m = _drvG(v).pick(t), P = m.pos(m.sAt(t)); return new THREE.Vector3(P.x, groundH(P.x, P.z), P.z); }; v._yawAt = t => { const A = _drvG(v); return A.yawT(A.pick(t), t); }; };
   if (F) {   // convoy: the leader's track, gap m behind, lag s later — speed, braking, corners and stops as the leader
     if (!F._drv?.length) { console.error('drive: follow needs a vehicle that drives (call drive() on the leader first)'); return null; }
@@ -4263,7 +4263,7 @@ function drive(v, pts, o = {}) {   // o.jumps: [[t, h, airtime]] · o.bumpy: 0..
   if (prev && !prev.follow && !o.teleport && !o.loop && prev.L() < 1e8) { const E = prev.pos(prev.L()); if (Math.hypot(pts[0][0] - E.x, pts[0][1] - E.z) > 0.05) pts = [[E.x, E.z], ...pts];   // the next segment sets off where the last one stopped (teleport: true = jump to its first point)
     if (o.arc !== false && !v.bike) pts = _drvArc(pts, prev.yaw(prev.L()), typeof o.arc === 'number' ? o.arc : clamp(0.7 * (o.speed ?? 8), 5, 9)); }
   const path = new Path(pts, o.loop), sp = o.speed ?? 8, ra = o.ramp ?? clamp(sp / 5, 0.6, 2.5);
-  PATHS.push(path); path.kind = 'drive';   // v3.38: dress() keeps 2.5 m either side free
+  PATHS.push(path); path.kind = 'drive';   // v3.39: dress() keeps 2.5 m either side free
   const Tp = o.loop ? 1e9 : path.len < sp * ra ? 2 * Math.sqrt(path.len * ra / sp) : path.len / sp + ra, Te = Math.min(Tp, t1 - t0), a = sp / ra, tr = Math.min(ra, Te / 2), vp = a * tr;
   const dist = u => u <= 0 ? 0 : u >= Te ? vp * (Te - tr) : u < tr ? 0.5 * a * u * u : u > Te - tr ? vp * (Te - tr) - 0.5 * a * (Te - u) ** 2 : 0.5 * a * tr * tr + vp * (u - tr);
   const cr = path.p.length > 2 && !v.bike ? o.corner ?? clamp(sp * 0.3, 1.2, 3) : 0;   // corners are driven as an arc (was: the position turned on the spot of the corner point); exact again at both ends of the path
@@ -4420,7 +4420,7 @@ function horde(o = {}) {
   const tfOf = q => { if (!o.flee) return 1e9; if (q.tf != null) return q.tf; let w = q.dl * 0.45;
     if (o.flee.wave !== false && o.flee.at) { const S = q.fixed ? [q.x0, q.z0] : state0(q, o.flee.t); w = Math.hypot(S[0] - o.flee.at[0], S[1] - o.flee.at[1]) / (typeof o.flee.wave === 'number' ? o.flee.wave : 9) + q.dl * 0.18; }
     return (q.tf = o.flee.t + w); };
-  // v3.38 jostle: where a member wants to be drifts (the old figure-eight, ±0.12 m × jostle); it stands on that spot and takes a short step (0.45 s, a foot lifts) to the next
+  // v3.39 jostle: where a member wants to be drifts (the old figure-eight, ±0.12 m × jostle); it stands on that spot and takes a short step (0.45 s, a foot lifts) to the next
   // one every 3.5–6.5 s, turning a little with it — in between only the hips lean toward the drift (was: the whole body slid and turned with planted feet)
   const JO = o.jostle ? o.jostle * 0.12 : 0, josD = (q, t, k = 1) => [k * JO * Math.sin(t * 0.9 + q.ph), k * JO * Math.cos(t * 0.7 + q.ph * 1.3), 0.15 * Math.sin(t * 0.5 + q.ph)], josP = q => q.jP ??= 3.5 + 3 * hash(q.ph * 5.1 + 0.3);
   const jos = (q, t) => { const P = josP(q), u = t / P + q.ph, k = Math.floor(u), T0 = (k - q.ph) * P, A = josD(q, T0, 0.5), B = josD(q, T0 + P, 0.5), f = (t - T0 - (P - 0.45)) / 0.45, w = sm01(f);
@@ -4669,7 +4669,7 @@ function horde(o = {}) {
           else { fa = 0; y = groundH(x, z) - Math.min(3.2, 4.9 * (t - dn.t) ** 2); } } if (dn?.squash) fa = 0;
         base.compose(V.set(x, y, z), Q.setFromEuler(E.set(-fa * (dn?.dir ?? 1) + ft, yaw, 0, 'YXZ')), dn?.squash ? SC.set(q.sc * 1.35, q.sc * Math.max(0.12, 1 - 14 * (t - dn.t)), q.sc * 1.35) : SC.setScalar(q.sc));
         const S = rigState(moving ? mode : 'idle', u, t, q.o), S0 = MCON ? Object.assign(S0b, S) : null, JS = JO && !moving && !dn && ta < 0 ? jos(q, t) : null;
-        if (JS) { const D = josD(q, t), dx = D[0] - JS[0], dz = D[1] - JS[1], c = Math.cos(yaw0), sn = Math.sin(yaw0); S.hx += clamp(0.6 * (dx * c - dz * sn), -0.05, 0.05); S.crx += clamp(0.5 * (dx * sn + dz * c), -0.04, 0.04);   // v3.38 jostle: lean toward the drift
+        if (JS) { const D = josD(q, t), dx = D[0] - JS[0], dz = D[1] - JS[1], c = Math.cos(yaw0), sn = Math.sin(yaw0); S.hx += clamp(0.6 * (dx * c - dz * sn), -0.05, 0.05); S.crx += clamp(0.5 * (dx * sn + dz * c), -0.04, 0.04);   // v3.39 jostle: lean toward the drift
           if (JS[3] >= 0) { const L = JS[4] % 2 === 0, e = Math.sin(Math.PI * JS[3]), [zz, yy] = legFK(L ? S.lt : S.rt, L ? S.lk : S.rk), [a, b] = legIK(zz, yy + 0.06 * e); if (L) { S.lt = a; S.lk = b; S.lf += 0.3 * e; } else { S.rt = a; S.rk = b; S.rf += 0.3 * e; } } }   // the step: one foot lifts
         const gk = GZ && !dn ? sm01((t - gT(q)) / (GZ.turn ?? 0.7)) : 0, up = !dn && ((o.armsUp ? o.armsUp(t, i) : false) || (GZ?.arms === 'up' && gk > 0.5));
         if (dn) { const a = t - dn.t, k = clamp(a / 0.45), tw = human ? 0 : 0.12 * Math.sin(t * 9 + q.ph) * Math.exp(-a * 0.8);
@@ -4784,7 +4784,7 @@ function horde(o = {}) {
       hat: HEAD[i] === 2 ? hx(capIM, i) : undefined, hatStyle: HEAD[i] === 2 ? 'cap' : undefined, build: human ? ['man', 'woman', 'slim', 'heavy', 'teen'][Math.floor(hash(i * 3.3 + hid) * 5)] : undefined, fidget: false });
     world.add(f.root); f.root.scale.multiplyScalar(q.sc); f._crowdHero = true; q.hero = f;
     f._posAt = t => { const r = state(q, t); return new THREE.Vector3(r[0], groundH(r[0], r[1]), r[1]); }; f._yawAt = t => yawS(t);
-    if (JO && q.fixed) f.fx.push((t, S) => { if (t > tfOf(q)) return; const J = jos(q, t); if (J[3] < 0) return; const L = J[4] % 2 === 0, e = Math.sin(Math.PI * J[3]), [zz, yy] = legFK(L ? S.lt : S.rt, L ? S.lk : S.rk), [a, b] = legIK(zz, yy + 0.06 * e); if (L) { S.lt = a; S.lk = b; S.lf += 0.3 * e; } else { S.rt = a; S.rk = b; S.rf += 0.3 * e; } });   // v3.38 jostle step (a foot lifts)
+    if (JO && q.fixed) f.fx.push((t, S) => { if (t > tfOf(q)) return; const J = jos(q, t); if (J[3] < 0) return; const L = J[4] % 2 === 0, e = Math.sin(Math.PI * J[3]), [zz, yy] = legFK(L ? S.lt : S.rt, L ? S.lk : S.rk), [a, b] = legIK(zz, yy + 0.06 * e); if (L) { S.lt = a; S.lk = b; S.lf += 0.3 * e; } else { S.rt = a; S.rk = b; S.rf += 0.3 * e; } });   // v3.39 jostle step (a foot lifts)
     // v3.22: in a pressing crowd the sim's moving flag flips every frame (creeping at ~0.4 m/s) and the yaw wobbles: the hero blends idle → gait by its speed (mean of
     // the last 0.4 s) and faces the mean heading of the last 0.24 s (was: the flag picked the mode, every flip snapped the limbs, MOTION snaps).
     const spd = t => { const a = Math.max(q.b, t - 0.1); return t - a < 0.02 ? 1 : clamp(((state(q, t)[4] - state(q, a)[4]) / (t - a) - 0.3) / 0.7); };
@@ -5384,7 +5384,7 @@ function tower(p, x, z, o = {}) {   // city building with depth: style glass | b
     if (fi === 0 || hv(fi + 20) < 0.5) { const ac = pick2(['#C0392B', '#2E86AB', '#3DA56A', '#E3B23C', '#8E5BD9', '#E07A3A'], hv(fi + 10)); box(q, W * 0.74, 0.08, 1.0, ac, 0, 1.95, 0.6, { rx: 0.25, ...NC }); box(q, W * 0.74, 0.22, 0.04, ac, 0, 1.78, 1.08, NC); }
     if (fi === 0) { box(q, 1.3, 1.8, 0.06, '#1E2024', W * 0.3, 0.14, 0.12, NC); box(q, 1.6, 0.14, 0.4, trim, W * 0.3, 2.0, 0.2, NC);
       for (const s of [-1, 1]) { box(q, 0.54, 1.5, 0.03, '#3E5670', W * 0.3 + s * 0.3, 0.3, 0.155, { rough: 0.25, kind: 'glass', ...NC }); box(q, 0.035, 0.4, 0.05, '#C9CED6', W * 0.3 + s * 0.07, 0.85, 0.185, NC); box(q, 0.1, 1.86, 0.1, trim, W * 0.3 + s * 0.7, 0.14, 0.14, NC); }   // v2.40: glass double door with handles, frame, step, lamps that glow at night
-      box(q, 1.5, 0.1, 0.3, shade(c, -0.25), W * 0.3, 0.06, 0.26, NC);   // door step (v3.38: 2 cm above the sidewalk paving, was level with it → z-fighting)
+      box(q, 1.5, 0.1, 0.3, shade(c, -0.25), W * 0.3, 0.06, 0.26, NC);   // door step (v3.39: 2 cm above the sidewalk paving, was level with it → z-fighting)
       if (!NIGHTGLOW.length) NIGHTGLOW.push(mat('#FFF1C8', { em: '#FFE2A0', ei: 0, own: true })); { const lx = W * 0.3 - 0.86; box(q, 0.12, 0.24, 0.1, '#2A2D33', lx, 1.62, 0.15, NC); box(q, 0.08, 0.15, 0.06, '', lx, 1.66, 0.2, { mat: NIGHTGLOW[0], ...NC }); } }
   });
   for (const [sx, sz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) box(g, 0.5, h, 0.5, style === 'brick' ? deep : c, sx * w / 2, 0, sz * d / 2, { cast: false });
@@ -5406,7 +5406,7 @@ function tower(p, x, z, o = {}) {   // city building with depth: style glass | b
 }
 // road(p, pts, { w: 6, color, dash, edges, curb, shoulder, shoulderColor, manholes, gaps, xing }) — flat road along [[x,z],…] with centre dashes and edge lines (edges: false = none). v2.35: asphalt with grain,
 //   cracks and patches (wet: puddles), gravel shoulders (shoulder: false) or curb: true (raised curbs with drain grates), manholes: true.
-//   v3.38: the asphalt pattern, puddles and snow run in world space (overlapping boxes at joints and junctions look the same → no flicker); each road colour gets its own depth
+//   v3.39: the asphalt pattern, puddles and snow run in world space (overlapping boxes at joints and junctions look the same → no flicker); each road colour gets its own depth
 //   order (polygonOffset, first colour = none). Markings are built at bake time (roadMarks) when all roads are known: edge lines and dashes stop where another road crosses
 //   or joins (and xing m beyond its edge, default 0.6 — city() keeps the zebras free with 2.7), gaps: [[s0, s1], …] = extra stretches without markings (metres along the
 //   polyline). Paint is thin (edge 3 mm, dash 4 mm, zebra 5 mm above the asphalt: never one height; thick boxes showed dotted AO edges) and drawn in front by polygonOffset. Snow lies on markings like on the asphalt; tyre tracks follow the lanes (one per ~3.3 m).
@@ -5436,14 +5436,14 @@ function road(p, pts, o = {}) {
   for (let i = 0; i < pts.length - 1; i++) {
     const [ax, az] = pts[i], [bx, bz] = pts[i + 1], L = Math.hypot(bx - ax, bz - az), ang = Math.atan2(-(bz - az), bx - ax), nx = -(bz - az) / L, nz = (bx - ax) / L, mx = (ax + bx) / 2, mz = (az + bz) / 2;
     R.segs.push({ ax, az, bx, bz, L, ang, nx, nz, dx: (bx - ax) / L, dz: (bz - az) / L, s0, first: i === 0, last: i === pts.length - 2 }); s0 += L; ROADSEG.push(ax, az, bx, bz, w / 2);
-    const e0 = i === 0 ? w / 2 : 0, e1 = i === pts.length - 2 ? w / 2 : 0, ex = mx + (bx - ax) / L * (e1 - e0) / 2, ez = mz + (bz - az) / L * (e1 - e0) / 2;   // v3.38: no overhang at inner joints (a disc fills the bend)
+    const e0 = i === 0 ? w / 2 : 0, e1 = i === pts.length - 2 ? w / 2 : 0, ex = mx + (bx - ax) / L * (e1 - e0) / 2, ez = mz + (bz - az) / L * (e1 - e0) / 2;   // v3.39: no overhang at inner joints (a disc fills the bend)
     const rg = new THREE.BoxGeometry(L + e0 + e1, 0.04, w), rp = rg.attributes.position, rl = new Float32Array(rp.count * 3); for (let k = 0; k < rp.count; k++) { rl[3 * k] = rp.getZ(k); rl[3 * k + 1] = w / 2; }
     rg.setAttribute('rl', new THREE.BufferAttribute(rl, 3)); mesh(g, rg, roadSurfMat(sc), ex, 0.03, ez, { ry: ang, cast: false });
     if (o.curb) for (const s of [-1, 1]) { box(g, L, 0.16, 0.22, '#8A8C90', mx + nx * s * (w / 2 + 0.11), 0, mz + nz * s * (w / 2 + 0.11), { ry: ang, surf: 'concrete', ...NC });
       for (let k = 6; k < L - 3; k += 14) { const u = (k + (s > 0 ? 5 : 0)) / L; if (u < 1) drain(g, lerp(ax, bx, u) + nx * s * (w / 2 - 0.2), lerp(az, bz, u) + nz * s * (w / 2 - 0.2), ang); } }
     else if (o.shoulder !== false && CFG.surfaces !== false) for (const s of [-1, 1]) box(g, L + e0 + e1, 0.03, 0.55, o.shoulderColor ?? '#8E877A', ex + nx * s * (w / 2 + 0.2), 0.005, ez + nz * s * (w / 2 + 0.2), { ry: ang, cast: false, surf: 'plaster' });
   }
-  for (let i = 1; i < pts.length - 1; i++) {   // v3.38: round joints — a disc fills the wedge the two boxes leave open on the outside of a bend (asphalt and shoulder)
+  for (let i = 1; i < pts.length - 1; i++) {   // v3.39: round joints — a disc fills the wedge the two boxes leave open on the outside of a bend (asphalt and shoulder)
     const [x, z] = pts[i], dg = new THREE.CylinderGeometry(w / 2, w / 2, 0.04, 28), dp = dg.attributes.position, rl = new Float32Array(dp.count * 3);
     for (let k = 0; k < dp.count; k++) { rl[3 * k] = roadAt(R, x + dp.getX(k), z + dp.getZ(k)).c; rl[3 * k + 1] = w / 2; } dg.setAttribute('rl', new THREE.BufferAttribute(rl, 3)); mesh(g, dg, roadSurfMat(sc), x, 0.03, z, { cast: false });
     if (!o.curb && o.shoulder !== false && CFG.surfaces !== false) cyl(g, w / 2 + 0.47, w / 2 + 0.47, 0.03, o.shoulderColor ?? '#8E877A', x, 0.005, z, { seg: 28, cast: false, surf: 'plaster' }); }
@@ -5466,7 +5466,7 @@ function _cutGaps(G, a, b, min = 0.6) {   // [a, b] minus the gaps → pieces at
   let P = [[a, b]]; for (const [g0, g1] of G) P = P.flatMap(([p0, p1]) => g1 <= p0 || g0 >= p1 ? [[p0, p1]] : [[p0, Math.min(p1, g0)], [Math.max(p0, g1), p1]]);
   return P.filter(([p0, p1]) => p1 - p0 >= min);
 }
-const COPLANAR = [], MARKS = [];   // v3.38 QA: COPLANAR pairs found at bake (coplanarSnap) · flat road decals (dash, edge, zebra, manhole) → QA DECALOFF: [kind, x, z, length, width, ry]
+const COPLANAR = [], MARKS = [];   // v3.39 QA: COPLANAR pairs found at bake (coplanarSnap) · flat road decals (dash, edge, zebra, manhole) → QA DECALOFF: [kind, x, z, length, width, ry]
 function roadMarks() {   // bake: the markings of every road, now that all roads (and their crossings) are known — one merged mesh per road and paint colour
   for (const R of ROADS) { if (R.built) continue; R.built = true; const o = R.o, w = R.w, G = { edge: [], dash: [], zebra: [] };
     R.segs.forEach((S, si) => { const at = (t, c) => [S.ax + S.dx * t + S.nx * c, S.az + S.dz * t + S.nz * c];
@@ -6034,9 +6034,9 @@ PROPS.debris = debris;
 //   'puddle' (glossy, mirrors the sky) · 'oilStain' (dark blot with a rainbow sheen) · 'crack' (branching cracks) · 'snowbank' (heaped snow, len m along local x) ·
 //   'tyreTracks' (two tread strips along pts [[x, z], …]) · 'footprints' (left / right shoe prints along pts, or behind a walker: of: f (a figure with walk()), t0..t1 —
 //   each print appears when the foot passes, a pure function of t)
-const _roadTop = (x, z) => { for (const R of ROADS) if (roadAt(R, x, z).d <= R.w / 2) return 0.05 + (R.g.parent ? R.g.getWorldPosition(_sfV).y : 0); return null; };   // v3.38 top of the asphalt under (x, z) or null
+const _roadTop = (x, z) => { for (const R of ROADS) if (roadAt(R, x, z).d <= R.w / 2) return 0.05 + (R.g.parent ? R.g.getWorldPosition(_sfV).y : 0); return null; };   // v3.39 top of the asphalt under (x, z) or null
 function groundDecal(p, x, z, o = {}) {
-  const k = o.kind ?? 'puddle', sd = o.seed ?? 0, h = i => hash(x * 5.17 + z * 9.33 + sd * 3.7 + i * 1.618), PO = { polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -3 }, gy = (px, pz) => (o.y ?? _roadTop(px, pz) ?? groundH(px, pz));   // v3.38: on a road, on its asphalt
+  const k = o.kind ?? 'puddle', sd = o.seed ?? 0, h = i => hash(x * 5.17 + z * 9.33 + sd * 3.7 + i * 1.618), PO = { polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -3 }, gy = (px, pz) => (o.y ?? _roadTop(px, pz) ?? groundH(px, pz));   // v3.39: on a road, on its asphalt
   const blob = (r, n, seed, sq = 1) => { const s = new THREE.Shape(); for (let i = 0; i <= n; i++) { const a = i / n * TAU, rr = r * (0.75 + 0.25 * Math.sin(a * 3 + seed) * Math.cos(a * 2 + seed * 1.7) + 0.12 * Math.sin(a * 7 + seed * 3)); const px = Math.cos(a) * rr * sq, pz = Math.sin(a) * rr; if (i) s.lineTo(px, pz); else s.moveTo(px, pz); } return new THREE.ShapeGeometry(s, 2).rotateX(Math.PI / 2); };
   if (k === 'puddle' || k === 'oilStain') { const r = o.r ?? (k === 'puddle' ? 0.8 : 0.45), g = grp(p ?? world, x, gy(x, z) + 0.012, z, o.ry ?? h(1) * TAU); g.name = 'groundDecal'; g.userData.cover = true;
     const pm = k === 'puddle' ? new THREE.MeshStandardMaterial({ color: o.color ?? '#3A4048', roughness: 0.04, metalness: 0.6, transparent: true, opacity: 0.85, depthWrite: false, ...PO }) : new THREE.MeshStandardMaterial({ color: '#141416', roughness: 0.25, metalness: 0.35, transparent: true, opacity: 0.8, depthWrite: false, ...PO });
@@ -6720,13 +6720,13 @@ function busstop(p, x, z, ry = 0) {   // shelter (glass back and sides, roof, be
 function city(o = {}) {   // nx × nz blocks of towers (taller in the centre), roads between, street furniture on the sidewalks; returns { loops } for traffic()
   const nx = o.nx ?? 3, nz = o.nz ?? 3, B = o.block ?? 14, S = o.street ?? 6, P = B + S, [cx, cz] = o.at ?? [0, 0];
   const x0 = cx - (nx * P) / 2, z0 = cz - (nz * P) / 2, loops = [], towers = []; _dressed = true;   // v3.5: a city is dressed → ground() adds no autoDress
-  const RV = [], RH = [];   // v3.38: markings stop at the junctions and before the zebras (xing)
+  const RV = [], RH = [];   // v3.39: markings stop at the junctions and before the zebras (xing)
   for (let i = 0; i <= nx; i++) RV.push(road(world, [[x0 + i * P, z0], [x0 + i * P, z0 + nz * P]], { w: S, xing: 2.7 }).userData.road);
   for (let j = 0; j <= nz; j++) RH.push(road(world, [[x0, z0 + j * P], [x0 + nx * P, z0 + j * P]], { w: S, xing: 2.7 }).userData.road);
   const streetTree = (x, z, s = 1) => { const g = stat(grp(world, x, 0.14, z)), h = hash(x * 3.1 + z * 7.9); box(g, 1.0 * s, 0.3, 1.0 * s, '#8A8C8F'); box(g, 0.86 * s, 0.04, 0.86 * s, '#4A3A2A', 0, 0.3, 0, { cast: false });
     cyl(g, 0.08, 0.12, 1.7, '#5A4030', 0, 0.3, 0, { seg: 6 }); const c = ['#4C7A3A', '#5A8A40', '#3F6E35'][Math.floor(h * 3)]; ball(g, 0.95 * s, c, 0, 2.5, 0, { detail: 1 }); ball(g, 0.6 * s, shade(c, 0.06), 0.3 * s, 2.5 + 0.5 * s, 0.1, { detail: 1 }); };
   const xs = [...Array(nx + 1).keys()].map(i => x0 + i * P), zs = [...Array(nz + 1).keys()].map(j => z0 + j * P);
-  if (o.props !== false) xs.forEach((xi, i) => zs.forEach((zj, j) => { for (let k = 0; k < 6; k++) {   // zebra crossings on every arm of a junction (v3.38: only where the road goes on — not out onto the grass at the city's edge) + manholes
+  if (o.props !== false) xs.forEach((xi, i) => zs.forEach((zj, j) => { for (let k = 0; k < 6; k++) {   // zebra crossings on every arm of a junction (v3.39: only where the road goes on — not out onto the grass at the city's edge) + manholes
     const off = -S / 2 + 0.55 + k * (S - 1.1) / 5;
     for (const s2 of [-1, 1]) { if (j + s2 >= 0 && j + s2 <= nz) RV[i].marks.push({ x: xi + off, z: zj + s2 * (S / 2 + 1.3), len: 0.45, wid: 2.0, ry: 0 });
       if (i + s2 >= 0 && i + s2 <= nx) RH[j].marks.push({ x: xi + s2 * (S / 2 + 1.3), z: zj + off, len: 2.0, wid: 0.45, ry: 0 }); }
@@ -6734,7 +6734,7 @@ function city(o = {}) {   // nx × nz blocks of towers (taller in the centre), r
   } }));
   for (let i = 0; i < nx; i++) for (let j = 0; j < nz; j++) {
     const bx = x0 + i * P + P / 2, bz = z0 + j * P + P / 2, n = pick([1, 2, 4, 4]), c = 1 - 0.45 * Math.hypot(i - (nx - 1) / 2, j - (nz - 1) / 2) / Math.max(nx, nz);
-    box(world, B, 0.14, B, o.walk ?? '#9A9C9F', bx, 0, bz, { cast: false, stat: true, surf: 'paving' });   // sidewalk paving inside a kerb ring (v3.38: the kerb was a solid slab over the whole block)
+    box(world, B, 0.14, B, o.walk ?? '#9A9C9F', bx, 0, bz, { cast: false, stat: true, surf: 'paving' });   // sidewalk paving inside a kerb ring (v3.39: the kerb was a solid slab over the whole block)
     for (const s of [-1, 1]) { box(world, B + 0.3, 0.16, 0.15, '#7E8084', bx, 0, bz + s * (B / 2 + 0.075), { cast: false, stat: true, surf: 'concrete' }); box(world, 0.15, 0.16, B, '#7E8084', bx + s * (B / 2 + 0.075), 0, bz, { cast: false, stat: true, surf: 'concrete' }); }
     const spots = n === 1 ? [[0, 0]] : n === 2 ? [[-1, 0], [1, 0]] : [[-1, -1], [1, -1], [-1, 1], [1, 1]];
     for (const [sx, sz] of spots) { const w = n === 1 ? B * 0.62 : B * 0.38; towers.push(tower(world, bx + sx * B * 0.23, bz + sz * B * 0.23, { w, d: n === 2 ? B * 0.72 : w, h: rr(o.hmin ?? 10, o.hmax ?? 42) * c, lit: o.lit })); }
@@ -6761,7 +6761,7 @@ function city(o = {}) {   // nx × nz blocks of towers (taller in the centre), r
 function traffic(loops, o = {}) {   // cars driving around closed loops; until: time they stop
   const cars = [];
   loops.forEach(lp => {
-    const path = new Path(lp, true); DRESS.lanes.push(lp);   // v3.38: dress() keeps the loop free
+    const path = new Path(lp, true); DRESS.lanes.push(lp);   // v3.39: dress() keeps the loop free
     for (let k = 0; k < (o.per ?? 2); k++) {
       const kr = rnd(), col = pick(o.colors ?? ['#D94F3D', '#3D7BD9', '#F2F2F2', '#E3B23C', '#3DA56A', '#2A2D33']), kind = kr < 0.15 ? 'truck' : (o.kinds ?? ['car', 'car', 'taxi', 'van', 'sports', 'pickup', 'car', 'police'])[Math.floor(hash(k * 7.3 + lp[0][0] * 1.7 + lp[0][1]) * (o.kinds?.length ?? 8))];
       const v = vehicle(world, 0, 0, { kind, color: kind === 'taxi' || kind === 'police' ? undefined : col, siren: false }); dyn(v.g);
@@ -10094,7 +10094,7 @@ function interior(p, x, z, o = {}) {
   if (ROOMRIG && p === world) { const ksd = wn && walls.back ? 'back' : walls[ds0 === 'left' ? 'right' : 'left'] ? (ds0 === 'left' ? 'right' : 'left') : null;
     INROOMS.push({ g, w, d, h, side: ksd, wx: o.windowX ?? (w / 2 - 1.3), night: !!o.night, I: o.windowKey ?? 1 }); _roomRigInit(); }
   R.at = name => { const a = R.anchors[name] ?? [0, 0, 0]; g.updateWorldMatrix(true, false); return g.localToWorld(v3(...a)).toArray(); };
-  R.seat = (name, i = 0) => { const s = (R.seats[name] ?? [])[i]; if (!s) return R.at(name); g.updateWorldMatrix(true, false); const a = g.localToWorld(v3(s[0], 0, s[2])).toArray(); a.h = s[1]; return a; };   // v3.38: the floor point under the seat, .h = seat height (sit() takes both)
+  R.seat = (name, i = 0) => { const s = (R.seats[name] ?? [])[i]; if (!s) return R.at(name); g.updateWorldMatrix(true, false); const a = g.localToWorld(v3(s[0], 0, s[2])).toArray(); a.h = s[1]; return a; };   // v3.39: the floor point under the seat, .h = seat height (sit() takes both)
   R.toWorld = (lx, lz, ly = 0) => { g.updateWorldMatrix(true, false); return g.localToWorld(v3(lx, ly, lz)).toArray(); };
   return R;
 }
@@ -15636,7 +15636,7 @@ function bodyStyle(f, S, m, t) {
   // wind-up before walking off (knees give, a lean back) and an extra lean into the first steps — read from the walk path, so it is there in every frame
   if (f._walks && f._posAt && CFG.windup !== false) for (const [t0, v] of f._walks) { const d = t0 - t; if (d < -0.1 || d > 0.3) continue;
     const a = f._posAt(t0 - 0.12), b = f._posAt(t0 - 0.04); if (Math.hypot(b.x - a.x, b.z - a.z) / 0.08 > 0.3) continue;   // only from standing (not between chained walks)
-    // v3.38 mocap legs: the knees give by leg IK after the clip (_mcApply) — the feet stay on their spots
+    // v3.39 mocap legs: the knees give by leg IK after the clip (_mcApply) — the feet stay on their spots
     const e = Math.sin(Math.PI * (0.3 - d) / 0.4) * clamp(0.45 + v / 4); if (_mcOnF(f)) f._wu = Math.max(f._wu ?? 0, 0.045 * e); else _crouch(S, 0.045 * e); S.crx -= 0.06 * e; S.nrx += 0.03 * e; S.las += 0.2 * e; S.ras += 0.2 * e; }
 }
 { const _w = walk; walk = function (obj, pts, o = {}) { const r = _w(obj, pts, o); if (obj?.legL && !obj.isModel) (obj._walks ??= []).push([r?._tS ?? o.t0 ?? 0, o.speed ?? 1.4]); return r; }; }   // wind-up: when each walk starts
@@ -16436,7 +16436,7 @@ function hitFree(f, t) {
   let w = f.hips ? sm01((f.hips.position.y - HIP * 0.62) / (HIP * 0.16)) : 1;   // sitting, crouching, kneeling
   w *= sm01((_hbUp.set(0, 1, 0).applyQuaternion(r.quaternion).y - 0.8) / 0.14);   // lying, tumbling, hanging upside down
   w *= 1 - sm01((r.position.y - groundH(r.position.x, r.position.z) - 0.3) / 0.3);   // up in the air (jumps, ladders)
-  if (w > 0 && f._sitX) for (const X of f._sitX) w *= _hbRamp(t, X.t0 - 0.1, X.clr ?? X.ex());   // v3.38 seated, getting up and walking clear of the seat: not pushed out of the furniture (it slid them sideways while they stood up)
+  if (w > 0 && f._sitX) for (const X of f._sitX) w *= _hbRamp(t, X.t0 - 0.1, X.clr ?? X.ex());   // v3.39 seated, getting up and walking clear of the seat: not pushed out of the furniture (it slid them sideways while they stood up)
   if (w > 0 && f._falls) for (const F of f._falls) w *= _hbRamp(t, F.t - 0.15, F.up == null ? 1e9 : F.up + F.upDur + 0.1);
   if (w > 0) for (const h of HOLDS) if (h.f === f) w *= _hbRamp(t, h.t0 - 0.1, h.t1 + 0.4);
   return w;
@@ -16472,7 +16472,7 @@ function hitSample(f, j, r) {
   S = [dx, dz, deep, what, sp]; C.set(j, S); return S;
 }
 function hitWalker(f, t, r, out) {   // eased sidestep at time t: per axis the largest step along the path, weighted by how far along the path it is
-  // v3.38: weighted by distance along the path (D = HB_WIN × speed, at least 1.2 m/s), not by time — a figure standing before its walk (or turning on the spot) no longer
+  // v3.39: weighted by distance along the path (D = HB_WIN × speed, at least 1.2 m/s), not by time — a figure standing before its walk (or turning on the spot) no longer
   // slides toward a sidestep its path will need later (was: the look-ahead ±0.7 s pushed it sideways while its feet stood still)
   const P0 = f._posAt(t), pa = f._posAt(t - 0.1), pb = f._posAt(t + 0.1), D = HB_WIN * Math.max(1.2, Math.hypot(pb.x - pa.x, pb.z - pa.z) / 0.2), jc = Math.round(t / HB_DT);
   let xp = 0, xn = 0, zp = 0, zn = 0; out.deep = -1;
@@ -16500,7 +16500,7 @@ function hitResolve(t) {
   // 1) props: walkers ease round what their path runs into; everybody else is pushed out of what they were placed in
   F.forEach((f, i) => { const p = f.root.position, wk = !!(f._posAt && f._yawAt), [dx, dz] = wk ? hitWalker(f, t, R[i], info) : hitPush(p.x, p.z, R[i], p.y, info); p.x += dx * W[i]; p.z += dz * W[i]; note(f, info.deep, info.what);
     if (wk && (dx || dz) && !f._crowdHero) { const h = 0.06, I = {}, a = f._posAt(t - h), b = f._posAt(t + h), A = hitWalker(f, t - h, R[i], I), B = hitWalker(f, t + h, R[i], I), vx = b.x - a.x, vz = b.z - a.z, ux = vx + (B[0] - A[0]) * W[i], uz = vz + (B[1] - A[1]) * W[i], sp = Math.hypot(ux, uz) / (2 * h);
-      if (sp > 0.2 && Math.hypot(vx, vz) > 1e-4) { const d = Math.atan2(ux, uz) - Math.atan2(vx, vz), R0 = f.root.rotation; if (Math.abs(R0.x) > 3 && Math.abs(R0.z) > 3) R0.set(0, Math.PI - R0.y, 0); R0.y += Math.atan2(Math.sin(d), Math.cos(d)) * sm01((sp - 0.2) / 0.3); } } });   // v3.38: a walker eased round something faces the way it actually goes (was: slid sideways, QA CRAB)
+      if (sp > 0.2 && Math.hypot(vx, vz) > 1e-4) { const d = Math.atan2(ux, uz) - Math.atan2(vx, vz), R0 = f.root.rotation; if (Math.abs(R0.x) > 3 && Math.abs(R0.z) > 3) R0.set(0, Math.PI - R0.y, 0); R0.y += Math.atan2(Math.sin(d), Math.cos(d)) * sm01((sp - 0.2) / 0.3); } } });   // v3.39: a walker eased round something faces the way it actually goes (was: slid sideways, QA CRAB)
   // 2) people apart: each gives way by how free it is; seated or busy people and animals stay put and the others move
   const A = RIGS.map(f => { const i = F.indexOf(f), th = i >= 0 ? 1 : hitThere(f); return th > 0 ? { f, i, th, w: i >= 0 ? W[i] : 0, r: 0.21 * f.root.scale.x, x: f.root.position.x, z: f.root.position.z, y: f.root.position.y, dx: 0, dz: 0 } : null; }).filter(Boolean);
   for (let a = 0; a < A.length; a++) for (let b = a + 1; b < A.length; b++) { const P = A[a], Q = A[b]; if (!P.w && !Q.w) continue; const dx = Q.x - P.x, dz = Q.z - P.z, d = Math.hypot(dx, dz), m = P.r + Q.r;
@@ -16535,11 +16535,11 @@ function propSnap() {
 }
 const _qpClear = o => { const M = Array.isArray(o.material) ? o.material : [o.material]; return M.every(m => !m || m.visible === false || (m.transparent && (m.opacity ?? 1) < 0.5) || m.depthWrite === false || m.blending === THREE.AdditiveBlending || m.colorWrite === false); };   // glows, halos, light cones, decals: no solid object
 function bake() {
-  for (let k = 0; k < 8 && DEFER.length; k++) for (const f of DEFER.splice(0)) f();   // v3.38: DEFERs queued by DEFERs (snow caps, light pools, footprints of props that dress() / biome() put down) run too
-  roadMarks(); groundRoadFix();   // v3.38: markings of all roads (gaps where roads cross) · ground mesh finer where roads leave the flat area
+  for (let k = 0; k < 8 && DEFER.length; k++) for (const f of DEFER.splice(0)) f();   // v3.39: DEFERs queued by DEFERs (snow caps, light pools, footprints of props that dress() / biome() put down) run too
+  roadMarks(); groundRoadFix();   // v3.39: markings of all roads (gaps where roads cross) · ground mesh finer where roads leave the flat area
   world.updateMatrixWorld(true);
-  snowDriftMap();   // v3.38 snow drifts against what stands on the ground (ground shader)
-  coplanarSnap();   // v3.38 QA: COPLANAR (static boxes whose top faces fight)
+  snowDriftMap();   // v3.39 snow drifts against what stands on the ground (ground shader)
+  coplanarSnap();   // v3.39 QA: COPLANAR (static boxes whose top faces fight)
   hitBuild(); LATE.unshift(hitResolve); LATE.push(footFloor);   // v2.29 hitboxes (needs the props before they are merged)
   propSnap();   // v3.24 prop QA (FLOAT): boxes of the static props before they are merged
   const inv = world.matrixWorld.clone().invert(), M4 = new THREE.Matrix4(), buckets = new Map(), done = [];
@@ -16551,7 +16551,7 @@ function bake() {
     const g = o.geometry.index ? o.geometry.toNonIndexed() : o.geometry.clone();
     for (const k of Object.keys(g.attributes)) if (k !== 'position' && k !== 'normal' && !(k === 'color' && o.material.vertexColors) && !(k === 'rl' && o.material.userData.surfRl)) g.deleteAttribute(k);
     if (!g.attributes.normal) g.computeVertexNormals();
-    g.setAttribute('qobj', new THREE.BufferAttribute(new Float32Array(g.attributes.position.count).fill(_surfMesh(o) ? 0 : 1), 1));   // v3.38 QA SPARSE: bare surface (0) or object (1), per source mesh
+    g.setAttribute('qobj', new THREE.BufferAttribute(new Float32Array(g.attributes.position.count).fill(_surfMesh(o) ? 0 : 1), 1));   // v3.39 QA SPARSE: bare surface (0) or object (1), per source mesh
     g.applyMatrix4(M4.multiplyMatrices(inv, o.matrixWorld));
     if (o.material.userData.wind === 'attr') {   // sway weight: 0 at the foot of the plant, 1 at the top
       let wb = null; for (let q = o; q && q !== world; q = q.parent) if (q.userData.wb) { wb = q.userData.wb; break; }
@@ -18370,15 +18370,15 @@ function qaAudit() {
   finally { const sk = SKINQA; SKINQA = null; for (const f of sk) out.push(`${name(f)}: arm or leg drawn as old boxes for a moment (a joint was pulled apart or a part came off) – fine for gore and ragdolls, otherwise check the pose`); }
   for (const [f, S] of sink) out.push(`${name(f)}: foot ${(S.d * 100).toFixed(0)} cm in the floor around ${S.t.toFixed(2)} s while standing – raise the figure or its floor (y) or check the pose`);
   try { out.push(...qaMovers()); } catch (e) { out.push('mover QA failed: ' + e.message); }   // v3.19: VEHICLE · BACKWARD
-  try { out.push(...qaGait()); } catch (e) { out.push('gait QA failed: ' + e.message); }   // v3.38: CRAB · FOOTSLIDE · SIT · SLIP
+  try { out.push(...qaGait()); } catch (e) { out.push('gait QA failed: ' + e.message); }   // v3.39: CRAB · FOOTSLIDE · SIT · SLIP
   try { out.push(...qaGhost()); } catch (e) { out.push('ghost QA failed: ' + e.message); }   // v3.24: GHOST (motion blur too coarse even at CFG.mbMax)
   try { out.push(...qaProps()); } catch (e) { out.push('prop QA failed: ' + e.message); }   // v3.24: FLOAT · BURIED
   try { out.push(...qaLook()); } catch (e) { out.push('look QA failed: ' + e.message); }   // v3.5: DARK · EMPTY · CAMCLIP · HEADCUT
   try { out.push(...qaLensFx()); } catch (e) { out.push('lens FX QA failed: ' + e.message); }   // v3.26: LENSFX
-  try { out.push(...qaRoads()); } catch (e) { out.push('road QA failed: ' + e.message); }   // v3.38: ROADBURIED · DECALOFF · COPLANAR
+  try { out.push(...qaRoads()); } catch (e) { out.push('road QA failed: ' + e.message); }   // v3.39: ROADBURIED · DECALOFF · COPLANAR
   return out;
 }
-// --- v3.38 road QA (part of qaAudit): ROADBURIED – the terrain (groundH and the ground mesh between its vertices) comes up over a road's top (0.05) somewhere along its centre
+// --- v3.39 road QA (part of qaAudit): ROADBURIED – the terrain (groundH and the ground mesh between its vertices) comes up over a road's top (0.05) somewhere along its centre
 //   line or edges (sampled every metre) · DECALOFF – a flat road decal (dash, edge line, zebra stripe, manhole; MARKS) whose footprint is not on the asphalt of any road (lies
 //   on the grass) · COPLANAR – from bake (coplanarSnap): static boxes / discs near the ground (top < 0.6 m above it, ≥ 0.05 m² each) with different colour, pattern or depth
 //   order whose top faces lie within 2 mm of each other and overlap by more than 0.01 m² — they z-fight (flicker). One line per kind and road / pair, the worst first.
@@ -18400,7 +18400,7 @@ function coplanarSnap() {   // bake, before merging: flat static boxes / discs n
   COPLANAR.length = 0; if (CFG.qaCoplanar === false) return; const L = [], WS = new Set(['asphalt', 'plaster', 'marking']), _c = new THREE.Vector3(), cells = new Map(), CS = 4;
   world.traverse(o => { if (!o.isMesh || o.isInstancedMesh || !o.visible || o.userData.pool) return; let st = false; for (let q = o; q && q !== world; q = q.parent) { if (q.userData.dyn || !q.visible) return; if (q.userData.stat) st = true; } if (!st) return;
     const gm = o.geometry, ty = gm.type, pr = gm.parameters, mt = o.material; if (!mt || Array.isArray(mt) || mt.transparent || !(ty === 'BoxGeometry' || (ty === 'CylinderGeometry' && pr.radiusTop === pr.radiusBottom))) return;
-    gm.boundingBox ?? gm.computeBoundingBox(); const bb = gm.boundingBox; if (ty === 'BoxGeometry' && (Math.abs(bb.max.y - bb.min.y - pr.height) > 1e-4 || Math.abs(bb.max.x - bb.min.x - pr.width) > 1e-4 || Math.abs(bb.max.z - bb.min.z - pr.depth) > 1e-4)) return;   // v3.38: a reshaped box (tbox: tapered, bottom at 0) is no plain box — its parameters lie
+    gm.boundingBox ?? gm.computeBoundingBox(); const bb = gm.boundingBox; if (ty === 'BoxGeometry' && (Math.abs(bb.max.y - bb.min.y - pr.height) > 1e-4 || Math.abs(bb.max.x - bb.min.x - pr.width) > 1e-4 || Math.abs(bb.max.z - bb.min.z - pr.depth) > 1e-4)) return;   // v3.39: a reshaped box (tbox: tapered, bottom at 0) is no plain box — its parameters lie
     const e = o.matrixWorld.elements; if (Math.abs(e[4]) > 1e-3 || Math.abs(e[6]) > 1e-3 || e[5] <= 0) return;   // only upright parts (rotated about y)
     const hx = ty === 'BoxGeometry' ? pr.width / 2 : pr.radiusTop, hz = ty === 'BoxGeometry' ? pr.depth / 2 : pr.radiusTop, hh = (ty === 'BoxGeometry' ? pr.height : pr.height) / 2;
     const ax = [e[0], e[2]], az = [e[8], e[10]], sx = Math.hypot(...ax), sz = Math.hypot(...az); if (4 * hx * sx * hz * sz < 0.05) return;
@@ -18490,7 +18490,7 @@ function qaMovers() {
     stepScene(teaseV(t)); world.updateMatrixWorld(true);
     for (const Mv of MOVERS) { if (Mv.ok) continue; const nd = Mv.node; if (!nd.visible || !nd.parent) continue; let vis = true; for (let p = nd; p; p = p.parent) if (!p.visible) vis = false; if (!vis) continue;
       const P = nd.getWorldPosition(new THREE.Vector3()), last = prev.get(nd); prev.set(nd, P); if (!last || P.distanceTo(last) < 0.15) continue;   // only while it moves
-      bx.makeEmpty(); nd.traverse(o => { if ((o.isMesh || o.isSkinnedMesh) && o.visible && !_qpClear(o) && !o.userData.noHit) bx.expandByObject(o, false); }); if (bx.isEmpty()) bx.setFromObject(nd);   // v3.38: solid parts only — headlight beams, glows, halos are not the car
+      bx.makeEmpty(); nd.traverse(o => { if ((o.isMesh || o.isSkinnedMesh) && o.visible && !_qpClear(o) && !o.userData.noHit) bx.expandByObject(o, false); }); if (bx.isEmpty()) bx.setFromObject(nd);   // v3.39: solid parts only — headlight beams, glows, halos are not the car
       const who = Mv.kind === 'fly' ? 'flying object' : 'car on drive()', key = (k, x) => `${Mv.kind}${MOVERS.indexOf(Mv)}:${k}:${x}`;
       for (const B of HITBOX.boxes) if (ov(bx, B, 0.25)) put(key('s', B.nm ?? B.x.toFixed(0) + ',' + B.z.toFixed(0)), `VEHICLE – ${who} #${MOVERS.indexOf(Mv)} drives / flies through ${nm(B)} at ${t.toFixed(1)} s (${P.x.toFixed(1)}, ${P.y.toFixed(1)}, ${P.z.toFixed(1)}) – route it round or over (fly: higher points), or { passThrough: true } if it is meant`);
       if (bx.min.y < groundH(P.x, P.z) + 2.2) {   // low enough to hit people
@@ -18657,10 +18657,10 @@ function qalHeads(macro, edge = 1) {   // edge: the top edge in NDC (v3.23: 1 �
     R.push({ i, f, cut: Math.min(1, cut), big }); });
   return R;
 }
-// --- v3.38 SPARSE (part of qaLook, lines "QA: SPARSE – …"): an ID pass of the same tiny frame — every pixel is sky, bare surface (ground, road, floor, wall, a plain building
+// --- v3.39 SPARSE (part of qaLook, lines "QA: SPARSE – …"): an ID pass of the same tiny frame — every pixel is sky, bare surface (ground, road, floor, wall, a plain building
 //   block: see _isSurf) or object (props, plants, figures, vehicles, windows, doors …). An 8 × 8 px cell is bare when it shows ≤ 2 object pixels and at most half sky; SPARSE =
 //   bare cells / cells that are not sky (warn > 45 %, covers > 35 %, or the largest 4-connected bare patch > 20 % of the frame with > 75 % of that). Baked meshes carry their class
-//   per vertex (qobj, set in bake()), the rest is classed live; userData.qsurf = true / false on a mesh overrides. One extra 72 × 128 render per sample. CFG.qaSparse: false = off · 'info' (default since v3.38) = QA-INFO lines, not counted · true = counted by --gate.
+//   per vertex (qobj, set in bake()), the rest is classed live; userData.qsurf = true / false on a mesh overrides. One extra 72 × 128 render per sample. CFG.qaSparse: false = off · 'info' (default since v3.39) = QA-INFO lines, not counted · true = counted by --gate.
 const _qiObj = new THREE.MeshBasicMaterial({ color: '#ff0000', side: THREE.DoubleSide, fog: false, toneMapped: false }), _qiSurf = new THREE.MeshBasicMaterial({ color: '#000000', side: THREE.DoubleSide, fog: false, toneMapped: false });
 const _qiBaked = new THREE.ShaderMaterial({ side: THREE.DoubleSide, fog: false, toneMapped: false, vertexShader: 'attribute float qobj; varying float vQ; void main(){ vQ = qobj; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
   fragmentShader: 'varying float vQ; void main(){ gl_FragColor = vec4(step(0.5, vQ), 0.0, 0.0, 1.0); }' });
@@ -18734,7 +18734,7 @@ function qaLook(o = {}) {
   const L = [...res.values()].sort((a, b) => b.sev - a.sev).map(x => x.msg), by = k => L.filter(m => m.startsWith(k + ' '));
   let cf = []; if (o.capface !== false) try { cf = qaCapFace(o); } catch (e) { cf = ['CAPFACE – check failed: ' + e.message]; }   // v3.24
   const out = [...['DARK', 'EMPTY', 'SPARSE', 'CAMCLIP', 'HEADCUT'].flatMap(k => { const A = by(k); return A.length > 6 ? [...A.slice(0, 6), `${k} – … and ${A.length - 6} more`] : A; }), ...cf];
-  return (CFG.qaSparse ?? 'info') === 'info' ? out.map(l => l.startsWith('SPARSE ') ? 'QA-INFO: ' + l + ' (not counted: CFG.qaSparse info)' : l) : out;   // v3.38 · v3.38: 'info' is the default (CFG.qaSparse: true = counted by the gate)
+  return (CFG.qaSparse ?? 'info') === 'info' ? out.map(l => l.startsWith('SPARSE ') ? 'QA-INFO: ' + l + ' (not counted: CFG.qaSparse info)' : l) : out;   // v3.39 · v3.39: 'info' is the default (CFG.qaSparse: true = counted by the gate)
 }
 // --- v3.24 CAPFACE (part of qaLook, lines "QA: CAPFACE – …"): a caption page lies over the face of a figure that is big in the frame ---
 //   For every caption page (the pages synced to the voice, see capPaginate) the HUD is set to that moment (updateHud) and the real on-screen boxes of its words / kick / who
@@ -18822,7 +18822,7 @@ function qaCapFace(o = {}) {
     return `CAPFACE – caption "${cap}" covers the face of ${who(F)}${n.size > 1 ? ` (+${n.size - 1} more in the crowd)` : ''} at ${t.toFixed(1)} s (${c.eye >= 0.5 ? `eyes ${(c.eye * 100).toFixed(0)} %` : `face ${(c.face * 100).toFixed(0)} %`} under the words, beat ${i}) – set pos: '${low ? 'mid' : 'low'}' on the beat${CFG.capDodge ? '' : ' (or CFG.capDodge: true)'}, move the camera (fy / az) or the figure`; });
   return A.length > 6 ? [...A.slice(0, 6), `CAPFACE – … and ${A.length - 6} more`] : A;
 }
-// --- v3.38 gait QA (part of qaAudit, lines "QA: CRAB / FOOTSLIDE / SIT / SLIP – …"): how things move while the viewer sees them, sampled at 30 Hz of video time —
+// --- v3.39 gait QA (part of qaAudit, lines "QA: CRAB / FOOTSLIDE / SIT / SLIP – …"): how things move while the viewer sees them, sampled at 30 Hz of video time —
 //   fed by the motion audit's straight run (motionAudit), or its own pass when qaAudit runs alone. Only what is in the frame (≥ 3 % of the frame height), never across a cut.
 //   CRAB: a figure, model, animal or crowd member moving faster than 0.3 m/s more than 60° off the way it faces for longer than 0.15 s (sliding sideways / turning while it walks
 //         on). Sideways on purpose: walk(…, { face }) or { side: true }, f.back / f.side = true on the figure.
@@ -18895,7 +18895,7 @@ function motionAudit(o = {}) {
   let prev = null, prev2 = null, tvP = 0, cam1 = null, cam2 = null; const flips = L.map(() => []), _cd = new THREE.Vector3(), physN = new Map(PHYS.bodies.map(B => [B.node, B]));
   const hitNow = (n, ts) => { const B = physN.get(n); return !!B && (Math.abs(ts - B.t0) < 0.25 || PHYS.blasts.some(b => Math.abs(ts - b.t) < 0.25)); };   // simulated things may be kicked off violently (impact, blast)
   const cutAt = (a, b) => Math.abs(b - a - dt) > 0.05 || CUTS.some(c => c > a + 1e-6 && c <= b + 1e-6);   // a camera cut or the jump into / out of a TEASE flash-forward lies between two frames
-  _gqBegin();   // v3.38 gait QA rides along the straight run
+  _gqBegin();   // v3.39 gait QA rides along the straight run
   for (let i = 0; i <= N; i++) {
     const t = i * dt, tv = teaseV(t); stepScene(tv); const cut = i > 0 && cutAt(tvP, tv); tvP = tv; if (cut) { prev = prev2 = cam1 = cam2 = null; flips.forEach(F => { F.length = 0; }); }   // v2.31: as the viewer sees it — nothing is compared across a cut
     const S = audSnap(L); _gqFrame(tv, t, cut); const mbw = MBAUTO.some(([x, y]) => t >= x - 0.02 && t <= y + 0.02); if (keyS.has(i)) ref.set(i, { S, U: audPure(Q) });   // mbw: fast action with motion blur — only big flips count

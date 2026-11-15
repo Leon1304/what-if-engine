@@ -2,7 +2,7 @@ const CFG = { dur: 15, seed: 5, locale: 'en-US', kind: 'story', badge: 'What if'
   shadows: true, area: 40, renderScale: 0.75, msaa: 2, sunAz: -35, handheld: 0, coverT: 1.0, capPos: 'mid', karaoke: true, wordRate: 0.085, voice: false, series: null, cast: {}, transition: 'cut' };
 const LIVE = {};
 const BEATS = [{ t: 0, dur: 0.2, text: ' ', instant: true }];
-// v3.38 dress() with the prop library: city street (kerb cars, facades, road decals) · apron · tunnel · suburb in half-melted snow (soft snow edges, drifts at the wall, footprints)
+// v3.39 dress() with the prop library: city street (kerb cars, facades, road decals) · apron · tunnel · suburb in half-melted snow (soft snow edges, drifts at the wall, footprints)
 const CAM = [
   ...shot('close', 0, 3, 'cw', { az: 40, dist: 3.6 }),
   ...shot('mid', 3, 3, [0, 1.2, -4], { az: 80, dist: 11, h: 2.5, move: 'static' }),
