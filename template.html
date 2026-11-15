@@ -5265,8 +5265,8 @@ function beachLife(o = {}) {
     if ((o.keep ?? []).some(([kx, kz, kr]) => Math.hypot(x - kx, z - kz) < kr)) continue;
     cyl(g, 0.04, 0.04, 2.2, '#EDEDED', x, y, z, { seg: 5 });
     const tl = (h(i, 3) - 0.5) * 0.3; cone(g, 1.35, 0.55, c, x, y + 1.95, z, { seg: 8, rz: tl }); cone(g, 0.7, 0.3, c2, x, y + 2.2, z, { seg: 8, rz: tl });   // two-tone canopy
-    for (const s of [-1, 1]) if (h(i, 4 + s) < 0.75) box(g, 0.9, 0.03, 1.9, C[(i + 2 + s) % C.length], x + s * 1.1, y + 0.02, z + 0.4, { cast: false, ry: (h(i, 6) - 0.5) * 0.4 });   // towels
-    if (h(i, 7) < 0.4) box(g, 0.55, 0.38, 0.38, h(i, 8) < 0.5 ? '#2F7FD8' : '#E84A3A', x + 0.6, y, z - 0.9);   // cooler
+    for (const s of [-1, 1]) if (h(i, 4 + s) < 0.75) box(g, 0.9, 0.03, 1.9, C[(i + 2 + s) % C.length], x + s * 1.1, y + 0.02 + ((i * 2 + (s > 0 ? 1 : 0)) % 8) * 0.005, z + 0.4, { cast: false, ry: (h(i, 6) - 0.5) * 0.4 });   // towels (v3.40: 8 heights 5 mm apart, overlapping towels never share a plane)
+    if (h(i, 7) < 0.4) box(g, 0.55, 0.34 + (i % 11) * 0.006, 0.38, h(i, 8) < 0.5 ? '#2F7FD8' : '#E84A3A', x + 0.6, y, z - 0.9);   // cooler (v3.40: 11 heights 6 mm apart, touching coolers never share a lid plane)
     if (h(i, 9) < 0.22) box(g, 0.55, 2.1, 0.09, C[(i + 5) % C.length], x - 1.6, y, z - 0.6, { rx: -0.18, ry: h(i, 10) }); }   // surfboard in the sand
   for (const [x, z] of o.towers ?? []) { const t = grp(g, x, groundH(x, z), z);   // lifeguard tower: stilts, platform, blue hut, ramp, flag
     for (const [sx, sz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) box(t, 0.2, 2.2, 0.2, '#F2F2F2', sx * 1.1, 0, sz * 1.1);
