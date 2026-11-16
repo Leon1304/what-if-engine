@@ -997,7 +997,7 @@ function rimFit() {
 const _mats = new Map(), _geo = new Map(), MROUGH = LOOKV2 && CFG.materials !== false ? 0.8 : 0.88;   // look v2: default roughness 0.8 (was 0.88 everywhere: no sheen at all)
 // v2.34 surfaces: mat(hex, { surf }) / box(…, { surf }) draws a pattern on walls and roofs per pixel — no extra geometry, fades with distance:
 //   brick · stone (big blocks) · plank (upright boards) · siding (lapped boards) · tile (roof tiles, shingles) · plaster · concrete (panels) · metal (corrugated sheet)
-const SURF = { brick: 1, stone: 2, plank: 3, siding: 4, tile: 5, plaster: 6, concrete: 7, metal: 8, asphalt: 9, paving: 10, boards: 11, tiles: 12, carpet: 13, wallpaper: 14, marking: 15 };   // v3.39 marking: road paint (outdoor, snow like the asphalt under it)
+const SURF = { brick: 1, stone: 2, plank: 3, siding: 4, tile: 5, plaster: 6, concrete: 7, metal: 8, asphalt: 9, paving: 10, boards: 11, tiles: 12, carpet: 13, wallpaper: 14, marking: 15, cobble: 16 };   // v3.39 marking: road paint (outdoor, snow like the asphalt under it)
 // v2.35 weather on the ground: rain makes surfaces dark and glossy and leaves puddles that mirror the sky, snow settles on everything that faces up.
 //   emit('rain') / emit('snow') drive it on their own (wet in ~5 s, dry in ~25 s; snow builds in ~16 s). By hand: wetGround(t0, t1, k) · snowCover(t0, t1, k),
 //   whole video: CFG.wet / CFG.snowCover 0..1. CFG.weather: false = off. Pure function of t.
@@ -1018,7 +1018,7 @@ function surfFx(m, kind, o = {}) {   // o.indoor: no weather (rooms) · o.sp: pa
   m.defines = { ...(m.defines ?? {}) }; if (o.sp) m.defines.SURF_SP = ''; if (o.rl) m.defines.SURF_RL = ''; if (o.indoor || (K > 10.5 && K < 14.5)) m.defines.SURF_IN = '';
   m.onBeforeCompile = sh => {
     Object.assign(sh.uniforms, { uWet: WX.wet, uSnow: WX.snow, uSkyT: skyU.top, uSkyB: skyU.bot });
-    sh.vertexShader = '#ifdef SURF_SP\nattribute vec3 sp;\n#endif\n#ifdef SURF_RL\nattribute vec3 rl; varying vec3 vRL; uniform float uSnow;\n#endif\nvarying vec3 vSW, vSL;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n#ifdef SURF_RL\n  vRL = rl;' + (K > 14.5 ? '\n  if (rl.z > 0.0) transformed.y = rl.z + (transformed.y - rl.z) * (1.0 - smoothstep(0.1, 0.45, uSnow));   // paint sinks into the snow (polygonOffset keeps it above the asphalt)' : '') + '\n#endif\n  vSW = (modelMatrix * vec4(transformed, 1.0)).xyz;\n#ifdef SURF_SP\n  vSL = sp;\n#else\n  vSL = transformed;\n#endif');   // pattern in the part's own space: it travels with a building that is moved or flung
+    sh.vertexShader = '#ifdef SURF_SP\nattribute vec3 sp;\n#endif\n#ifdef SURF_RL\nattribute vec3 rl; varying vec3 vRL; uniform float uSnow;\n#endif\nvarying vec3 vSW, vSL;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n#ifdef SURF_RL\n  vRL = rl;' + (K > 14.5 && K < 15.5 ? '\n  if (rl.z > 0.0) transformed.y = rl.z + (transformed.y - rl.z) * (1.0 - smoothstep(0.1, 0.45, uSnow));   // paint sinks into the snow (polygonOffset keeps it above the asphalt)' : '') + '\n#endif\n  vSW = (modelMatrix * vec4(transformed, 1.0)).xyz;\n#ifdef SURF_SP\n  vSL = sp;\n#else\n  vSL = transformed;\n#endif');   // pattern in the part's own space: it travels with a building that is moved or flung
     sh.fragmentShader = WX_GLSL.head + `varying vec3 vSW, vSL;
       #ifdef SURF_RL
         varying vec3 vRL;
@@ -1054,7 +1054,10 @@ function surfFx(m, kind, o = {}) {   // o.indoor: no weather (rooms) · o.sp: pa
           k = mix(-0.22, (fl > 0.5 ? -0.1 * mod(tc.x + tc.y, 2.0) : 0.0) + (sfh(tc) - 0.5) * 0.05, smoothstep(0.004, 0.012, e)); }
         else if (K < 13.5) k = (sfh(floor(uv * 90.0)) - 0.5) * 0.14 * nf + mo * 1.5 + (sfn(uv * 1.3) - 0.5) * 0.06;   // carpet
         else if (K < 14.5) { vec2 q = fract(uv / 0.26) - 0.5; k = (step(0.5, fract(uv.x / 0.26)) - 0.5) * 0.045 + (1.0 - smoothstep(0.07, 0.09, abs(q.x) + abs(q.y))) * 0.06 * (0.3 + 0.7 * nf) + mo * 0.4; }   // wallpaper: stripes with a small diamond
-        else k = (sfh(floor(uv * 40.0)) - 0.5) * 0.06 * nf + mo * 0.5 - smoothstep(0.62, 0.8, sfn(uv * 2.2 + 6.0)) * 0.22;   // road paint: grain and worn spots
+        else if (K < 15.5) k = (sfh(floor(uv * 40.0)) - 0.5) * 0.06 * nf + mo * 0.5 - smoothstep(0.62, 0.8, sfn(uv * 2.2 + 6.0)) * 0.22;   // road paint: grain and worn spots
+        else { float rw = floor(uv.y / 0.14), uu = uv.x / 0.17 + sfh(vec2(rw, 3.0)) * 0.9 + (sfn(uv * 1.7) - 0.5) * 0.25; vec2 cf = vec2(fract(uu), fract(uv.y / 0.14)), cc = vec2(floor(uu), rw);   // v3.47 cobble: rounded setts in staggered, slightly wavy rows
+          vec2 cd = (cf - 0.5) * vec2(0.17, 0.14); float cr = length(cd / vec2(0.078, 0.064)) + (sfn(uv * 31.0 + cc) - 0.5) * 0.22 * nf, ce = 1.0 - smoothstep(0.8, 1.02, cr);
+          k = mix(-0.48 * (0.45 + 0.55 * nf), (sfh(cc) - 0.5) * 0.3 + (1.0 - cr * cr) * 0.14 - 0.05, ce) + mo * 0.9 + (sfh(floor(uv * 70.0)) - 0.5) * 0.06 * nf; }   // dark mud joints, a tone per stone, domed tops
         diffuseColor.rgb *= 1.0 + k * sf;
       #ifndef SURF_IN
         float road = max(step(8.5, K) * step(K, 10.5), step(14.5, K)), up = max(smoothstep(0.35, 0.8, fn.y), road * step(0.001, uSnow)), sn = 0.0;   // v3.39: the thin sides of asphalt, paving and paint take the snow too (no dark outlines)
@@ -1071,7 +1074,7 @@ function surfFx(m, kind, o = {}) {   // o.indoor: no weather (rooms) · o.sp: pa
           float am = uSnow, cov = smoothstep(0.12, 0.55, am * 1.2 - 0.22 + (nn - 0.5) * 0.7 + edge * 0.35), tr = tk * smoothstep(0.15, 0.6, am) * 0.8;
           vec3 sc = vec3(0.90, 0.94, 1.0) * (1.0 + mo * 0.6 + (nn - 0.5) * 0.06), pk = mix(diffuseColor.rgb, vec3(0.46, 0.48, 0.52) * (0.85 + 0.3 * nn), 0.55 + 0.25 * nn);
           sn = up * cov * (1.0 - 0.4 * tr); diffuseColor.rgb = mix(diffuseColor.rgb, mix(sc, pk, tr), up * cov);
-          if (K > 14.5 && up * cov > 0.995 && tr < 0.01) discard; }   // paint fully under snow: the asphalt beneath shows the same snow (no edge pixels)
+          if (K > 14.5 && K < 15.5 && up * cov > 0.995 && tr < 0.01) discard; }   // paint fully under snow: the asphalt beneath shows the same snow (no edge pixels)
         if (uWet > 0.001) { float w = uWet * (1.0 - sn); diffuseColor.rgb *= 1.0 - w * (0.2 + 0.16 * up); wxGloss = w * (0.3 + 0.5 * up);
           if (road * fl > 0.5) { float pd = smoothstep(0.5, 0.58, sfn(wq * 0.3 + 5.0) * 0.7 + sfn(wq * 1.1) * 0.3) * smoothstep(0.25, 0.7, uWet) * (1.0 - sn); diffuseColor.rgb *= 1.0 - pd * 0.45; wxPud = pd; wxGloss = max(wxGloss, pd); } }
       #endif
@@ -1946,6 +1949,14 @@ dressKind('suburb', { indoor: false }); dressKind('suburb-winter', { indoor: fal
 dressKind('farm', { indoor: false }); dressKind('beach', { indoor: false }); dressKind('desert', { indoor: false, rock: '#B98A5A' }); dressKind('apron', { indoor: false }); dressKind('deck', { indoor: false });
 dressKind('military', { indoor: false }); dressKind('tunnel', { indoor: true, rock: '#6A5A48', budget: { wall: 5, ground: 4, edge: 2, bg: 1, fg: 0 } }); dressKind('cell', { indoor: true, budget: { wall: 3, ground: 1, edge: 1, bg: 0, fg: 0 } });
 dressKind('room', { indoor: true, budget: { wall: 4, ground: 1, edge: 1, bg: 0, fg: 0 } });
+// v3.47 medieval / Tudor street: buckets, wooden barrels and crates, sacks, a handcart, woodpiles and straw — nothing modern (no cars, bins, lamps, signs)
+dressKind('medieval', { indoor: false, rock: '#8A8276' });
+dressProp('medBucket', { where: ['wall', 'edge', 'ground'], r: 0.25, h: 0.42, y0: true, fn: (p, x, z, ry, R) => bucket(p, x, 0, z, { ry, dyn: false, kind: R() < 0.2 ? 'leather' : 'wood' }).g, kinds: { medieval: 1.3 } });
+dressProp('medBarrel', { where: ['wall', 'edge', 'bg'], r: 0.38, h: 0.95, fn: (p, x, z, ry) => barrel(p, x, z, { kind: 'wood', ry }), kinds: { medieval: 1.3 } });
+dressProp('medCrate', { where: ['wall', 'edge', 'bg'], r: 0.5, h: 0.8, face: 'wall', fn: (p, x, z, ry) => crate(p, x, z, { kind: 'wood', ry }), kinds: { medieval: 0.9 } });
+dressProp('sack', { where: ['wall', 'edge', 'ground'], r: 0.5, h: 0.75, fn: (p, x, z, ry, R) => sack(p, x, z, { ry, n: R() < 0.5 ? 1 : 3 }), kinds: { medieval: 1.1, farm: 0.3 } });
+dressProp('handcart', { where: ['bg', 'edge'], r: 1.5, h: 1.2, tall: true, face: 'wall', y0: true, fn: (p, x, z, ry) => { const C = cart(p, x, z, { kind: 'hand', ry, load: 'empty' }); C.g.userData.dyn = false; stat(C.g); return C.g; }, kinds: { medieval: 0.45, farm: 0.15 } });
+for (const [n, w] of [['woodpile', 0.8], ['haybale', 0.35], ['stump', 0.3]]) if (DRESS.props[n]) dressProp(n, { ...DRESS.props[n], kinds: { medieval: w } });   // v3.47
 const BIOME_DRESS = { farm: 'farm', forest: 'alpine', beach: 'beach', desert: 'desert', snow: 'alpine', swamp: 'farm', city: 'city', plain: 'suburb', 'plain-snow': 'suburb-winter', 'plain-sand': 'desert' };
 
 // dress(kind, { area, density, keep, wall, ground, fg, bg, edge, seed, assets }): runs after the scene is built (DEFER, like biome()), own random numbers.
@@ -8661,11 +8672,11 @@ for (const nm of ['house', 'barn', 'silo', 'tower', 'vehicle', 'lander', 'windmi
 } catch (e) {}
 // buildings for QA OVERLAP (and the names in INSIDE / HEADCLIP): whatever these builders add to their parent becomes obj.userData.bld = '<name>' (asset() marks building models
 // itself; scene code: obj.userData.bld = 'shed' marks own buildings, = false takes one out). bldSnap() keeps their solid parts before bake() merges them.
-const BLD_FNS = ['house', 'barn', 'silo', 'windmill', 'tower', 'decoHotel', 'tollBooth', 'lighthouse', 'pyramid', 'trainStation', 'castle', 'hospital', 'supermarket', 'gasstation', 'bank', 'prison', 'airport', 'bunker'];
+const BLD_FNS = ['house', 'barn', 'silo', 'windmill', 'tower', 'decoHotel', 'tollBooth', 'lighthouse', 'pyramid', 'trainStation', 'castle', 'hospital', 'supermarket', 'gasstation', 'bank', 'prison', 'airport', 'bunker', 'tudorHouse'];
 const _bldWrap = (F, nm) => function (p, ...a) { const par = p?.isObject3D ? p : world, before = new Set(par.children), r = F.call(this, p, ...a); for (const c of par.children) if (!before.has(c) && c.userData.bld == null) c.userData.bld = nm; return r; };
 house = _bldWrap(house, 'house'); barn = _bldWrap(barn, 'barn'); silo = _bldWrap(silo, 'silo'); windmill = _bldWrap(windmill, 'windmill'); tower = _bldWrap(tower, 'tower'); decoHotel = _bldWrap(decoHotel, 'decoHotel');
 tollBooth = _bldWrap(tollBooth, 'tollBooth'); lighthouse = _bldWrap(lighthouse, 'lighthouse'); pyramid = _bldWrap(pyramid, 'pyramid'); trainStation = _bldWrap(trainStation, 'trainStation'); castle = _bldWrap(castle, 'castle');
-hospital = _bldWrap(hospital, 'hospital'); supermarket = _bldWrap(supermarket, 'supermarket'); gasstation = _bldWrap(gasstation, 'gasstation'); bank = _bldWrap(bank, 'bank'); prison = _bldWrap(prison, 'prison'); airport = _bldWrap(airport, 'airport'); bunker = _bldWrap(bunker, 'bunker');
+hospital = _bldWrap(hospital, 'hospital'); supermarket = _bldWrap(supermarket, 'supermarket'); gasstation = _bldWrap(gasstation, 'gasstation'); bank = _bldWrap(bank, 'bank'); prison = _bldWrap(prison, 'prison'); airport = _bldWrap(airport, 'airport'); bunker = _bldWrap(bunker, 'bunker'); tudorHouse = _bldWrap(tudorHouse, 'tudorHouse');
 { const E0 = explode; explode = (x, y, z, t0, o = {}) => { const r = E0(x, y, z, t0, o); blast(x, y, z, t0, { power: 9 * (o.size ?? 1), r: 9 * (o.size ?? 1) });
   for (const b of o.breaks ?? []) { const nd = b.g ?? b.root ?? b; nd.updateWorldMatrix(true, true); const bb = new THREE.Box3().setFromObject(nd), c = bb.getCenter(new THREE.Vector3()), s = bb.getSize(new THREE.Vector3()), d = Math.hypot(c.x - x, c.z - z) || 1, td = t0 + Math.min(0.5, d / 60), k = clamp(1.4 - d / (14 * (o.size ?? 1)), 0.4, 1.2);   // v2.36: the blast wrecks what is listed
     if (b.wheels) crash(b, td, { impulse: [(c.x - x) / d * 7 * k, 5 * k, (c.z - z) / d * 7 * k], spin: [1.5 * k, 0.8, 2.2 * k], fire: 1.2 }); else if (s.y > 7 && s.y > Math.max(s.x, s.z) * 1.25) collapse(b, td, { style: 'topple', dir: [c.x - x, c.z - z] }); else breakApart(b, td, { from: [x, y, z], power: 7 * k, up: 2.5 }); }
@@ -14016,6 +14027,322 @@ function torch(p, x = 0, y = 0, z = 0, o = {}) {
 }
 
 /* ====================================================================== */
+/* v3.47 — Tudor town: tudorHouse (half-timbered, jettied, leaded windows), cobbleLane (setts + kennel), lantern (wall · hang · hand),
+   bucket, sack, cesspit (brick-lined pit, lifting boards, ladder, sludge, fumes), cart (hand / horse), stink lines, shovel (digging move)   */
+/* ====================================================================== */
+let _leadT = null, _leadM = null;
+function _leadMat() {   // lead cames of a leaded window: diamond lattice (canvas, alpha-tested), one shared material
+  if (_leadM) return _leadM;
+  if (!_leadT) { const c = document.createElement('canvas'); c.width = c.height = 128; const x = c.getContext('2d'); x.clearRect(0, 0, 128, 128); x.strokeStyle = '#26221E'; x.lineWidth = 6;
+    for (let i = -128; i <= 256; i += 64) { x.beginPath(); x.moveTo(i, 0); x.lineTo(i + 128, 128); x.stroke(); x.beginPath(); x.moveTo(i, 128); x.lineTo(i + 128, 0); x.stroke(); }
+    _leadT = new THREE.CanvasTexture(c); _leadT.wrapS = _leadT.wrapT = THREE.RepeatWrapping; _leadT.colorSpace = THREE.SRGBColorSpace; _leadT.anisotropy = 4; }
+  _leadM = new THREE.MeshStandardMaterial({ map: _leadT, alphaTest: 0.5, roughness: 0.5, metalness: 0.4, color: '#5A544C' }); _leadM.userData.own = true; return _leadM;
+}
+const TUDOR = { walls: ['#E9E1CD', '#DCC594', '#E2C7AE', '#EFEADF', '#D6CDB4', '#E4D2A6'], timber: ['#3A2A1E', '#4A3424', '#2C231C', '#5E4C3A'], roof: ['#8E4A34', '#7A4030', '#9A5A40', '#6E5444'] };
+function _tudorWin(par, w, h, o) {   // leaded casement: bottom centre at (x, y, z) of par, +z out of the wall; o.glass, o.tim materials
+  const q = grp(par, o.x ?? 0, o.y ?? 0, o.z ?? 0, o.ry ?? 0), NC = { cast: false }, tm = o.tim;
+  box(q, w + 0.2, 0.09, 0.14, '', 0, -0.09, 0.03, { mat: tm, ...NC }); box(q, w + 0.2, 0.11, 0.1, '', 0, h, 0.012, { mat: tm, ...NC });   // sill + head
+  for (const s of [-1, 1]) box(q, 0.09, h, 0.1, '', s * (w / 2 + 0.045), 0, 0.012, { mat: tm, ...NC });
+  box(q, w, h, 0.02, '', 0, 0, -0.012, { mat: o.glass, ...NC });
+  const n = o.lights ?? Math.max(1, Math.round(w / 0.42)); for (let i = 1; i < n; i++) box(q, 0.055, h, 0.07, '', -w / 2 + i * w / n, 0, 0.006, { mat: tm, ...NC });   // mullions
+  if (h > 0.9 && o.transom !== false) box(q, w, 0.05, 0.06, '', 0, h * 0.68, 0.006, { mat: tm, ...NC });
+  mesh(q, G(`lead${w.toFixed(2)}|${h.toFixed(2)}`, () => { const gg = new THREE.PlaneGeometry(w, h), uv = gg.attributes.uv; for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * w / 0.36, uv.getY(i) * h / 0.36); gg.translate(0, h / 2, 0.001); return gg; }), _leadMat(), 0, 0, 0, NC);
+  return q;
+}
+// tudorHouse(p, x, z, { w: 5, d: 6.5, floors: 3, jetty: 0.42, ry, wall, timber, roof, lit: 0 | t => 0..1, style: 'close' | 'square', door: 'left' | 'right' | 'mid',
+//   chimney, smoke, sign, lantern, shop, seed, back: true }) → { g, winMat, door, doors, windows, lantern, sign, w, d, h, front }
+// Half-timbered town house (16th c.): stone plinth, oak frame (sill, posts, close studs or square panels with braces, rails, top plates), lime-washed infill,
+// jettied upper floors (each juts out by `jetty` at the front: bressumer beam, joist ends, corner brackets), leaded windows with mullions (glass glows with lit),
+// gable to the street with bargeboards, collar and king post, tiled roof, brick chimney stack with pots, plank door with strap hinges and ring, step stone.
+function tudorHouse(p, x, z, o = {}) {
+  const sd = o.seed ?? hash(x * 3.71 + z * 1.93), R = k => hash(sd * 97.3 + k * 13.1), NC = { cast: false };
+  const w = o.w ?? 5, d = o.d ?? 6.5, F = o.floors ?? (R(1) < 0.6 ? 3 : 2), J = o.jetty ?? 0.42, h0 = o.h0 ?? 2.7, h1 = o.h1 ?? 2.45;
+  const wall = o.wall ?? pick2(TUDOR.walls, R(2)), tim = o.timber ?? pick2(TUDOR.timber, R(3)), roofC = o.roof ?? pick2(TUDOR.roof, R(4)), style = o.style ?? (R(5) < 0.55 ? 'close' : 'square');
+  const g = stat(grp(p, x, 0, z, o.ry ?? 0)), TM = mat(tim, { rough: 0.85 }), dt = grp(g); dt.userData.noHit = true;   // dt: frame + details (baked with the house, not an obstacle)
+  const litF = typeof o.lit === 'function' ? o.lit : null, lit0 = litF ? 0 : (o.lit ?? 0);
+  const glass = mat('#3E4844', { em: '#FFB65A', ei: lit0 * 1.3, own: true, rough: 0.3, metal: 0.2 }), dark = mat('#2E3634', { rough: 0.3, metal: 0.2 });
+  if (litF) tick(t => { glass.emissiveIntensity = clamp(litF(t)) * 1.3; });
+  const windows = [];
+  const beam = (par, bw, bh, bd, bx, by, bz, ro = {}) => box(par, bw, bh, bd, '', bx, by, bz, { mat: TM, ...NC, ...ro });
+  // timber frame on one face: par local frame, face spans x ∈ [-W/2, W/2], y ∈ [y0, y0 + H], plane z = fz (+z out), holes = [[x0, x1, ya, yb]] (relative to y0)
+  const frame = (par, W, H, y0, fz, holes, st, rail = 0.92, brace = F > 1) => {
+    const T = 0.075, inH = (xx, yy) => holes.some(([a, b, ya, yb]) => xx > a - 0.06 && xx < b + 0.06 && yy > ya - 0.06 && yy < yb + 0.06);
+    beam(par, W + 0.02, 0.17, T, 0, y0, fz); beam(par, W + 0.02, 0.15, T, 0, y0 + H - 0.15, fz);   // sill + top plate
+    for (const s of [-1, 1]) beam(par, 0.2, H, T + 0.01, s * (W / 2 - 0.1), y0, fz + 0.002);   // corner posts
+    const sp = st === 'close' ? 0.42 : 1.15, n = Math.max(1, Math.round((W - 0.4) / sp));
+    for (let i = 1; i < n; i++) { const sx = -W / 2 + 0.2 + i * (W - 0.4) / n; let ya = 0.17, run = false;
+      for (let yy = 0.17; yy <= H - 0.15 + 1e-6; yy += 0.05) { const blocked = inH(sx, yy) || yy >= H - 0.15 - 1e-6; if (!blocked && !run) { ya = yy; run = true; } if (blocked && run) { if (yy - ya > 0.12) beam(par, st === 'close' ? 0.13 : 0.16, yy - ya, T, sx, y0 + ya, fz); run = false; } } }
+    if (rail) { let xa = -W / 2 + 0.2, run = false; for (let xx = -W / 2 + 0.2; xx <= W / 2 - 0.2 + 1e-6; xx += 0.05) { const bl = inH(xx, rail) || xx >= W / 2 - 0.2 - 1e-6; if (!bl && !run) { xa = xx; run = true; } if (bl && run) { if (xx - xa > 0.15) beam(par, xx - xa, 0.12, T + 0.004, (xa + xx) / 2, y0 + rail - 0.06, fz + 0.003); run = false; } } }
+    for (const [a, b, ya, yb] of holes) { beam(par, b - a + 0.3, 0.12, T + 0.006, (a + b) / 2, y0 + yb, fz + 0.004); if (ya > 0.2) beam(par, b - a + 0.3, 0.1, T + 0.006, (a + b) / 2, y0 + ya - 0.1, fz + 0.004); }   // head + sill rails round openings
+    if (st === 'square' || brace) for (const s of [-1, 1]) { const bw = Math.min(0.95, W * 0.2), bh = Math.min(1.15, H * 0.5), px = s * (W / 2 - 0.2), L2 = Math.hypot(bw, bh);   // braces: post → sill, a triangle in the corner panel
+      if ([0.25, 0.5, 0.75].some(u => inH(px - s * bw * u, 0.17 + bh * (1 - u)))) continue; beam(par, 0.12, L2, T - 0.005, px - s * bw / 2, y0 + 0.17 + bh / 2 - L2 / 2, fz + 0.001, { rz: -Math.atan2(s * bw, bh) }); }
+  };
+  // --- ground floor
+  const PL = 0.3; box(g, w + 0.12, PL, d + 0.12, '#8A8276', 0, 0, 0, { surf: 'stone' });
+  const doorSide = o.door ?? (R(6) < 0.5 ? 'left' : 'right'), dX = doorSide === 'mid' ? 0 : (doorSide === 'left' ? -1 : 1) * (w / 2 - 0.95), dW = 0.95, dH = 1.95;
+  box(g, w, h0 - PL, d, wall, 0, PL, 0, { surf: 'plaster' });
+  const gfWin = [], wW0 = Math.min(1.7, w - 2.6);
+  if (wW0 > 0.6) gfWin.push([-dX * 0.55 - wW0 / 2 + (doorSide === 'mid' ? -w * 0.28 : 0), wW0]); if (doorSide === 'mid' && wW0 > 0.6) gfWin.push([w * 0.28 - wW0 / 2, wW0]);
+  const holes0 = [[dX - dW / 2, dX + dW / 2, -1, PL + dH], ...gfWin.map(([a, ww]) => [a, a + ww, 0.95, 2.15])];
+  frame(dt, w, h0 - PL, PL, d / 2 + 0.03, holes0.map(([a, b, ya, yb]) => [a, b, ya - PL, yb - PL]), style, 0.66);
+  for (const [a, ww] of gfWin) { const q = _tudorWin(dt, ww, 1.1, { x: a + ww / 2, y: 0.98, z: d / 2 + 0.02, glass: R(10 + a) < (o.litShare ?? 0.75) ? glass : dark, tim: TM }); windows.push(q);
+    box(dt, ww, 0.5, 0.05, shade(tim, 0.14), a + ww / 2, 0.38, d / 2 + 0.04, { surf: 'plank', ...NC }); for (const s of [-1, 1]) box(dt, 0.04, 0.06, 0.06, '#26221E', a + ww / 2 + s * ww * 0.35, 0.86, d / 2 + 0.06, NC); }   // stall board (shop counter, folded up at night) + hinges
+  // door: plank leaf (openDoor), strap hinges, ring handle, dark passage behind, step stone
+  box(dt, dW + 0.04, dH, 0.02, '#16110D', dX, PL, d / 2 + 0.012, NC);
+  const door = dyn(grp(g, dX - dW / 2, PL, d / 2 + 0.05)); door.userData.sign = 1; door.userData.angle = 1.6;
+  box(door, dW, dH, 0.06, o.doorColor ?? shade(tim, 0.18), dW / 2, 0, 0, { surf: 'plank' });
+  for (const yy of [0.25, dH - 0.35]) box(door, dW * 0.85, 0.05, 0.02, '#26221E', dW * 0.42, yy, 0.04, { metal: 0.5, ...NC });
+  { const rg = mesh(door, G('tdRing', () => new THREE.TorusGeometry(0.05, 0.009, 6, 12)), mat('#2A2622', { metal: 0.6, rough: 0.4 }), dW * 0.82, 0.62, 0.05, NC); rg.rotation.x = 0.2; }
+  box(g, dW + 0.5, 0.16, 0.45, '#9A9286', dX, 0, d / 2 + 0.3, { surf: 'stone' });
+  doorReg(door);
+  // --- upper floors (jettied at the front)
+  let y = h0, zF = d / 2;
+  for (let f = 1; f < F; f++) {
+    const jz = J, D2 = (zF + jz) + d / 2, cz = (zF + jz - d / 2) / 2;
+    box(g, w, h1, D2, wall, 0, y, cz, { surf: 'plaster' });
+    beam(dt, w + 0.06, 0.24, 0.26, 0, y - 0.12, zF + jz - 0.1);   // bressumer
+    for (let k = 0; k <= Math.floor((w - 0.3) / 0.42); k++) beam(dt, 0.12, 0.12, jz + 0.02, -w / 2 + 0.18 + k * 0.42, y - 0.12, zF + jz / 2 - 0.01);   // joist ends under the overhang
+    for (const s of [-1, 1]) beam(dt, 0.12, 0.62, 0.12, s * (w / 2 - 0.08), y - 0.62, zF + 0.12, { rx: 0.62 });   // corner brackets
+    const n = Math.max(1, Math.round((w - 1.2) / 1.55)), ww = Math.min(1.35, (w - 1.0) / n - 0.35), hw = f === F - 1 ? 1.15 : 1.25, holes = [];
+    for (let i = 0; i < n; i++) { const cx = -w / 2 + 0.5 + (i + 0.5) * (w - 1.0) / n; holes.push([cx - ww / 2, cx + ww / 2, 0.75, 0.75 + hw]); const q = _tudorWin(dt, ww, hw, { x: cx, y: y + 0.75, z: zF + jz + 0.02, glass: R(20 + f * 5 + i) < (o.litShare ?? 0.75) ? glass : dark, tim: TM }); windows.push(q); }
+    frame(dt, w, h1, y, zF + jz + 0.03, holes, style, 0.62);
+    zF += jz; y += h1;
+  }
+  // side walls: frame on both sides (+ one small window per floor), back face frame unless back: false
+  const hT = y, zB = -d / 2;
+  for (const s of [-1, 1]) { const q = grp(dt, s * w / 2, 0, 0, s * Math.PI / 2);
+    frame(q, d, h0 - PL, PL, 0.03, [], style, 0.66);
+    let yy = h0, zf2 = d / 2; for (let f = 1; f < F; f++) { const D2 = zf2 + J + d / 2;   // side faces of the jettied floors
+      const q2 = grp(dt, s * w / 2, 0, (zf2 + J - d / 2) / 2, s * Math.PI / 2); frame(q2, D2, h1, yy, 0.03, R(40 + f + s) < 0.6 ? [[-0.45, 0.45, 0.8, 1.75]] : [], style, 0.62);
+      if (R(40 + f + s) < 0.6) windows.push(_tudorWin(q2, 0.9, 0.95, { x: 0, y: yy + 0.8, z: 0.02, glass: R(50 + f + s) < 0.6 ? glass : dark, tim: TM }));
+      zf2 += J; yy += h1; } }
+  if (o.back !== false) { const q = grp(dt, 0, 0, zB, Math.PI); frame(q, w, hT - PL, PL, 0.03, [], 'square', 0); }
+  // --- gable roof (ridge along z, gable to the street): two tiled slabs, gable triangles with frame, bargeboards, ridge
+  const rh = o.roofH ?? w * 0.62, zF2 = zF + 0.35, zB2 = zB - 0.3, L = zF2 - zB2, Lc = (zF2 + zB2) / 2, half = w / 2 + (o.eaves ?? 0.14), a = Math.atan2(rh, w / 2), sl = Math.hypot(half, half * Math.tan(a));
+  for (const s of [-1, 1]) { const mx = -s * (half / 2 - 0.06 * Math.sin(a)), my = hT + rh - (half / 2) * Math.tan(a) - 0.06 * Math.cos(a);
+    const sb = box(g, sl, 0.12, L, roofC, mx, my - 0.06, Lc, { rz: s * a, surf: 'tile' }); sb.userData.roof = true; }
+  box(dt, 0.26, 0.16, L + 0.04, shade(roofC, -0.12), 0, hT + rh - 0.04, Lc, NC);   // ridge tiles
+  for (const zg of [zF, zB]) { const fr = zg === zF ? 1 : -1;
+    prism(g, 0.12, rh, w, wall, 0, hT, zg - fr * 0.06, { ry: Math.PI / 2, surf: 'plaster' });
+    const q = grp(dt, 0, hT, zg + fr * 0.035, zg === zF ? 0 : Math.PI), gwin = zg === zF && o.gableWin !== false, yc = Math.max(rh * 0.5, 1.35), wc = w * (1 - yc / rh) * 0.86;
+    beam(q, w + 0.04, 0.16, 0.08, 0, 0, 0); beam(q, wc, 0.13, 0.08, 0, yc, 0.002); beam(q, 0.16, rh * 0.93 - yc - 0.1, 0.08, 0, yc + 0.1, 0);   // tie beam, collar, king post above it
+    if (!gwin) beam(q, 0.16, yc, 0.08, 0, 0.1, 0);
+    for (const s of [-1, 1]) { const sx = s * w * 0.3, top = rh * (1 - Math.abs(sx) / (w / 2)) - 0.12; beam(q, 0.12, top - 0.14, 0.075, sx, 0.14, 0.001); }   // studs under the slopes
+    for (const s of [-1, 1]) { const yb = rh - (half / 2) * Math.tan(a) - 0.12 / Math.cos(a) - 0.11; beam(q, sl * 0.98, 0.22, 0.06, -s * half / 2, yb - 0.11, 0.27, { rz: s * a }); }   // bargeboards
+    if (gwin) { const gw = Math.min(0.95, w * 0.2); windows.push(_tudorWin(q, gw, 0.72, { x: 0, y: 0.42, z: 0.0, glass: R(60) < 0.55 ? glass : dark, tim: TM, transom: false })); } }
+  // chimney stack (side wall, towards the back) with pots
+  if (o.chimney !== false) { const cs = R(7) < 0.5 ? -1 : 1, cxx = cs * (w / 2 - 0.45), czz = -d * 0.22, ch = hT + rh * 0.55 + 1.2;
+    box(g, 0.78, ch, 0.66, '#8A5A44', cxx, 0, czz, { surf: 'brick' }); box(dt, 0.9, 0.12, 0.78, '#6E4636', cxx, ch - 0.25, czz, NC); box(dt, 0.9, 0.12, 0.78, '#6E4636', cxx, ch, czz, NC);
+    for (const s of [-1, 1]) { cyl(dt, 0.12, 0.15, 0.42, '#A0624A', cxx + s * 0.18, ch + 0.12, czz, { seg: 8, ...NC }); cyl(dt, 0.14, 0.12, 0.05, '#7A4A38', cxx + s * 0.18, ch + 0.52, czz, { seg: 8, ...NC }); }
+    if (o.smoke) { g.updateWorldMatrix(true, false); const cp = g.localToWorld(new THREE.Vector3(cxx, ch + 0.7, czz)); emit('smoke', { at: [cp.x, cp.y, cp.z], t0: o.smoke === true ? 0 : o.smoke, t1: DUR, rate: 2.5, size: 0.5, opacity: 0.32 }); } }
+  // shop sign on a wrought-iron bracket (blank painted board) and a wall lantern by the door
+  let sign = null, lan = null;
+  if (o.sign ?? R(8) < 0.35) { const sx = doorSide === 'left' ? -w / 2 + 0.25 : w / 2 - 0.25, q = grp(dt, sx, h0 + 0.35, d / 2 + J * (F > 1 ? 1 : 0) + 0.05);
+    box(q, 0.05, 0.05, 1.1, '#26221E', 0, 0, 0.55, { metal: 0.5, ...NC }); _seg(q, [0, -0.35, 0.02], [0, 0, 0.7], 0.018, 0.018, '#26221E', NC);
+    sign = dyn(grp(q, 0, -0.04, 0.85)); box(sign, 0.05, 0.62, 0.55, pick2(['#2E4A6E', '#7A2A22', '#2E5A3A', '#8A6A2A'], R(9)), 0, -0.66, 0, NC); box(sign, 0.03, 0.68, 0.61, shade(tim, 0.1), 0, -0.69, 0, NC);
+    for (const s of [-1, 1]) ball(sign, 0.12, '#D8B04A', s * 0.03, -0.35, 0, { detail: 1, ...NC }).scale.set(0.3, 1, 1);   // gilt emblem
+    const ph = R(11) * 6; tick(t => { sign.rotation.z = 0.06 * Math.sin(t * 1.3 + ph) + 0.03 * noise1(t * 0.7 + ph); }); }
+  if (o.lantern) { const lx = dX + (doorSide === 'right' ? -0.85 : 0.85); lan = lantern(g, lx, 2.05, d / 2 + 0.06, { kind: 'wall', lit: o.lantern === true ? 0 : o.lantern, light: o.lanternLight ?? false, seed: sd }); }
+  const HR = { g, winMat: glass, w, d, h: hT + rh, front: zF, door, doors: [door], windows, lantern: lan, sign, floors: F };
+  return HR;
+}
+// cobbleLane(p, x, z, { len: 30, w: 4, ry, gutter: 'center' | 'sides' | false, color, straw: true, edge: true }) → { g, w, len, top }: cobbled lane (setts, v3.47 surf 'cobble')
+// with a shallow central kennel (gutter) of darker stones, kerb stones along both edges, loose straw and dung-dark patches (flat decals)
+function cobbleLane(p, x, z, o = {}) {
+  const L = o.len ?? 30, w = o.w ?? 4, g = stat(grp(p ?? world, x, 0, z, o.ry ?? 0)), c = o.color ?? '#867E72', NC = { cast: false }, T = 0.03, gt = o.gutter ?? 'center', sd = o.seed ?? hash(x + z * 3.3);
+  if (gt === 'center') { for (const s of [-1, 1]) box(g, w / 2 - 0.22, T, L, c, s * (w / 4 + 0.11), 0, 0, { surf: 'cobble', recv: true, ...NC }); box(g, 0.44, T - 0.012, L, shade(c, -0.12), 0, 0, 0, { surf: 'cobble', recv: true, ...NC }); }
+  else if (gt === 'sides') { box(g, w - 0.8, T, L, c, 0, 0, 0, { surf: 'cobble', recv: true, ...NC }); for (const s of [-1, 1]) box(g, 0.4, T - 0.012, L, shade(c, -0.22), s * (w / 2 - 0.2), 0, 0, { surf: 'cobble', recv: true, ...NC }); }
+  else box(g, w, T, L, c, 0, 0, 0, { surf: 'cobble', recv: true, ...NC });
+  if (o.edge !== false) for (const s of [-1, 1]) box(g, 0.24, T + 0.025, L, shade(c, 0.06), s * (w / 2 + 0.12), 0, 0, { surf: 'stone', recv: true, ...NC });
+  if (o.straw !== false) { const n = Math.round(L / 3); for (let i = 0; i < n; i++) { const u = hash(sd * 31 + i * 7.1), v = hash(sd * 17 + i * 3.9), px = (v - 0.5) * (w - 0.8), pz = (u - 0.5) * (L - 1);
+      if (i % 3 === 0) cyl(g, 0.3 + 0.3 * u, 0.3 + 0.3 * u, 0.004, shade(c, -0.3), px, T + 0.001, pz, { seg: 9, ...NC, recv: true });   // dark wet patch
+      else for (let k = 0; k < 7; k++) box(g, 0.012, 0.008, 0.16 + 0.1 * hash(i * 9 + k), '#C8A85A', px + (hash(i * 5 + k) - 0.5) * 0.35, T, pz + (hash(i * 3 + k) - 0.5) * 0.35, { ry: hash(i + k * 1.7) * 3, ...NC }); } }   // straw
+  return { g, w, len: L, top: T };
+}
+// lantern(p, x, y, z, { kind: 'wall' | 'hang' | 'hand', lit: t0 | false, out, dim: t => 0..1, light: false | { intensity, dist, color }, ry, seed, color })
+//   → { g, flame, panes, at: tt => [x, y, z] (flame), lamp (the swinging body) }: iron lantern with horn panes and a candle; 'wall' = scroll bracket from the wall (+z out),
+//   'hang' = hangs on a ring and sways, 'hand' = carry ring at the origin (holdItem / carry: hand at the ring). The candle flickers (pure in t); dim shrinks it (bad air).
+function lantern(p, x = 0, y = 0, z = 0, o = {}) {
+  const k = o.kind ?? 'wall', g = dyn(grp(p ?? world, x, y, z, o.ry ?? 0)), NC = { cast: false }, ir = mat(o.color ?? '#26221E', { metal: 0.55, rough: 0.45 }), sd = o.seed ?? ++_torchN;
+  let piv = g;
+  if (k === 'wall') { box(g, 0.08, 0.16, 0.04, '', 0, -0.08, 0.02, { mat: ir, ...NC }); box(g, 0.035, 0.035, 0.5, '', 0, 0.02, 0.26, { mat: ir, ...NC }); _seg(g, [0, -0.07, 0.04], [0, 0.03, 0.34], 0.012, 0.012, '#26221E', NC);
+    const sc = mesh(g, G('lnScroll', () => new THREE.TorusGeometry(0.07, 0.008, 5, 10, Math.PI * 1.5)), ir, 0, -0.04, 0.2, NC); sc.rotation.y = Math.PI / 2; piv = dyn(grp(g, 0, 0.02, 0.46)); }
+  else if (k === 'hang') piv = dyn(grp(g));
+  const L = dyn(grp(piv)), H = 0.3, Wd = 0.17;   // the ring is at the origin (hook, hand), the body hangs below it
+  mesh(L, G('lnRing', () => new THREE.TorusGeometry(0.035, 0.007, 5, 10)), ir, 0, -0.035, 0, NC);
+  const b = grp(L, 0, -0.07 - (H + 0.18), 0);
+  const pane = mat('#E8C890', { em: '#FFB050', ei: 0, own: true, opacity: 0.82, rough: 0.6 });
+  for (let i = 0; i < 4; i++) { const q = grp(b, 0, 0.04, 0, i * Math.PI / 2); box(q, Wd - 0.024, H - 0.03, 0.006, '', 0, 0, Wd / 2 - 0.004, { mat: pane, ...NC }); box(q, 0.012, H - 0.03, 0.012, '', 0, 0, Wd / 2 + 0.002, { mat: ir, ...NC }); }
+  cyl(b, 0.028, 0.03, 0.12, '#F2E8D0', 0, 0.05, 0, { seg: 8, ...NC });
+  const fl = dyn(grp(b, 0, 0.18, 0)), fm = [['#FFF4C8', 0.016, 0.06, 3.2], ['#FFB040', 0.026, 0.1, 2.2]].map(([c, r, h, gl], i) => { const m = cone(fl, r, h, '', 0, 0, 0, { mat: mat(c, { basic: true, glow: gl, opacity: i ? 0.75 : 0.95 }), seg: 7, ...NC }); m.userData.h = h; return m; });
+  const t0 = o.lit === false ? 1e9 : (o.lit ?? -1e9), t1 = o.out ?? 1e9, dim = o.dim ?? (() => 1), ph = hash(sd * 7.7) * 20;
+  const kOn = t => t < t0 || t >= t1 ? 0 : Math.min(1, (t - t0) / 0.4) * clamp(dim(t));
+  tick(t => { const kk = kOn(t); fl.visible = kk > 0.02; pane.emissiveIntensity = 1.6 * kk * (0.9 + 0.1 * noise1(t * 9 + ph));
+    fm.forEach((m, i) => { const n = noise1(t * (8 + i * 3) + ph + i); m.scale.set(kk * (0.9 + 0.15 * n), kk * (0.8 + 0.35 * n), kk * (0.9 + 0.15 * n)); m.position.y = m.userData.h * 0.5 * m.scale.y; });
+    if (k !== 'hand') { const sw = k === 'hang' ? 0.09 : 0.035; piv.rotation.x = sw * Math.sin(t * 1.7 + ph) + sw * 0.4 * noise1(t * 0.9 + ph); piv.rotation.z = sw * 0.5 * Math.sin(t * 1.3 + ph * 0.7); } });
+  const at = tt => { const P = worldAt(fl, [0, 0.04, 0], tt); return [P.x, P.y, P.z]; };
+  if (o.light) glow(0, 0, 0, { at, env: t => kOn(t), intensity: o.light.intensity ?? 1.4, dist: o.light.dist ?? 6, color: o.light.color ?? '#FFB060', flicker: o.light.flicker ?? 0.15 });
+  return { g, lamp: L, flame: fl, panes: pane, at, on: kOn };
+}
+// bucket(p, x, y, z, { kind: 'wood' | 'leather', size: 1, fill: 0..1 | t => 0..1, fillColor, rope: true, ry }) → { g, handle, fill }: coopered wooden bucket (tapered staves,
+//   two iron hoops, two long ears with a rope handle) or a black leather fire bucket; fill shows a dark surface inside (pure in t). Works with carry / holdItem / toss.
+function bucket(p, x = 0, y = 0, z = 0, o = {}) {
+  const s = o.size ?? 1, g = (o.dyn === false ? stat : dyn)(grp(p ?? world, x, y, z, o.ry ?? 0)), NC = { cast: false }, lea = o.kind === 'leather', c = o.color ?? (lea ? '#2A2220' : '#8A6A44'), r0 = 0.15 * s, r1 = 0.18 * s, h = 0.32 * s;
+  g.name = 'bucket'; Object.assign(g.userData, { prop: 'bucket', foot: [r1 * 2, r1 * 2] });
+  if (lea) { cyl(g, r1, r0, h, c, 0, 0, 0, { seg: 12, rough: 0.5 }); for (const yy of [0.02, h - 0.03]) cyl(g, r1 * (yy > 0.1 ? 1.03 : 0.86), r1 * (yy > 0.1 ? 1.03 : 0.86), 0.035 * s, '#1A1614', 0, yy, 0, { seg: 12, ...NC }); }
+  else { const n = 14; for (let i = 0; i < n; i++) { const a = (i + 0.5) / n * TAU, rr = (r0 + r1) / 2, ear = i === 3 || i === 10;
+      const st = box(g, 2 * Math.PI * rr / n * 1.04, h + (ear ? 0.07 * s : 0), 0.022 * s, shade(c, (hash(i * 3.7 + x) - 0.5) * 0.14), Math.sin(a) * rr, 0, Math.cos(a) * rr, { ...NC, cast: i % 2 === 0 });
+      st.rotation.order = 'YXZ'; st.rotation.set(Math.atan2(r1 - r0, h), a, 0); }
+    cyl(g, r0 * 0.98, r0 * 0.98, 0.03 * s, shade(c, -0.2), 0, 0.005, 0, { seg: 14, ...NC });
+    for (const yy of [0.05 * s, h - 0.07 * s]) cyl(g, lerp(r0, r1, (yy + 0.015 * s) / h) + 0.016 * s, lerp(r0, r1, (yy + 0.015 * s) / h) + 0.016 * s, 0.03 * s, '#3A3632', 0, yy, 0, { seg: 14, metal: 0.5, ...NC }); }
+  const fc = o.fillColor ?? '#3A2C1A', ff = typeof o.fill === 'function' ? o.fill : null, fv = ff ? 0 : (o.fill ?? 0);
+  const fd = cyl(g, r1 * 0.9, r1 * 0.9, 0.012, fc, 0, 0.03 * s + (h - 0.07 * s) * fv, 0, { seg: 12, rough: 0.35, ...NC }); fd.visible = fv > 0.02 || !!ff;
+  if (ff) { dyn(fd); tick(t => { const v = clamp(ff(t)); fd.visible = v > 0.02; fd.position.y = 0.03 * s + (h - 0.07 * s) * v + 0.006; const rr = lerp(r0, r1, v) * 0.92 / (r1 * 0.9); fd.scale.set(rr, 1, rr); }); }
+  const hd = grp(g, 0, h + 0.04 * s, 0);
+  if (o.rope !== false) { const rp = mesh(g, G(`bkRope${s}`, () => new THREE.TorusGeometry(r1 * 0.95, 0.011 * s, 5, 16, Math.PI)), mat(lea ? '#1A1614' : '#B8A070'), 0, h + 0.03 * s, 0, NC); }
+  return { g, handle: hd, fill: fd, h };
+}
+// sack(p, x, z, { n: 1, color, ry, open }) → group: tied hessian sacks (lumpy, cord at the neck; n > 1 = a small pile)
+function sack(p, x, z, o = {}) {
+  const g = stat(grp(p ?? world, x, groundH(x, z), z, o.ry ?? 0)), NC = { cast: false }, n = o.n ?? 1, c0 = o.color ?? '#B09A70';
+  g.name = 'sack'; Object.assign(g.userData, { prop: 'sack', foot: [0.6 + 0.3 * (n - 1), 0.5] });
+  for (let i = 0; i < n; i++) { const c = shade(c0, (hash(x + i * 3.1) - 0.5) * 0.12), px = (i % 3 - (Math.min(n, 3) - 1) / 2) * 0.48, py = i >= 3 ? 0.42 : 0, lie = i >= 3 || hash(x * 2 + i) < 0.3, q = grp(g, px + (i >= 3 ? 0.24 : 0), py, (hash(i * 7 + z) - 0.5) * 0.12, hash(i * 5.3) * 0.6);
+    const b = ball(q, 0.26, c, 0, lie ? 0.17 : 0.3, 0, { detail: 1 }); b.scale.set(1, lie ? 0.62 : 1.15, lie ? 1.35 : 0.9); if (lie) b.rotation.x = 0.1;
+    if (!lie) { cyl(q, 0.07, 0.11, 0.12, c, 0, 0.6, 0, { seg: 7, ...NC }); cyl(q, 0.075, 0.075, 0.03, '#6A5A3A', 0, 0.6, 0, { seg: 7, ...NC }); cone(q, 0.1, 0.1, c, 0, 0.72, 0, { seg: 6, rx: Math.PI, ...NC }); } }
+  return g;
+}
+// stink(at, { t0, t1, n: 3, color: '#A8C850', h: 0.7, w: 0.35, period: 1.8, size: 1 }) → group: cartoon stink lines (wavy ribbons) rising and fading over
+//   a spot / rig (head) / t => [x, y, z]; each line loops with its own phase — a pure function of t
+function stink(at, o = {}) {
+  const g = dyn(grp(world)), n = o.n ?? 3, t0 = o.t0 ?? 0, t1 = o.t1 ?? DUR, H = o.h ?? 0.7, W = o.w ?? 0.35, per = o.period ?? 1.8, sz = o.size ?? 1, NC = { cast: false };
+  const geo = G('stinkLine', () => { const pts = []; for (let i = 0; i <= 24; i++) { const u = i / 24; pts.push(new THREE.Vector3(Math.sin(u * TAU * 1.5) * 0.06, u * 0.5, 0)); } return new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 32, 0.011, 5, false); });
+  const L = []; for (let i = 0; i < n; i++) { const m = mat(o.color ?? '#A8C850', { basic: true, glow: 0.4, opacity: 0.8, own: true }); m.depthWrite = false; const me = mesh(g, geo, m, 0, 0, 0, NC); me.userData.fxPart = true; L.push([me, m]); }
+  const pos = t => typeof at === 'function' ? at(t) : at?.isObject3D || at?.root ? (() => { const P = (at.head ?? at.root ?? at).getWorldPosition(v3()); return [P.x, P.y + (at.head ? 0.25 : 0), P.z]; })() : at;
+  tick(t => { const on = t >= t0 && t < t1; g.visible = on; if (!on) return; const P = pos(t), e = Math.min(1, (t - t0) / 0.5, (t1 - t) / 0.5); g.position.set(P[0], P[1], P[2]);
+    L.forEach(([me, m], i) => { const u = ((t - t0) / per + i / n) % 1, xo = (i - (n - 1) / 2) * W / Math.max(1, n - 1) * 2 * 0.5; me.position.set(xo + 0.03 * Math.sin(t * 3 + i), u * H, 0); me.scale.setScalar(sz * (0.7 + 0.5 * u)); me.rotation.y = i * 1.1;
+      m.opacity = 0.85 * e * Math.sin(Math.PI * u); }); });
+  POSTCAM.push(() => { if (!g.visible) return; const q = camera.position; g.rotation.y = Math.atan2(q.x - g.position.x, q.z - g.position.z); });
+  return g;
+}
+// cesspit(p, x, z, { w: 2.4, d: 2.4, depth: 3, ry, fill: 0.45, boards, open: t, close: t, fumes: [t0, t1] | t0 | false, flies: true | n, privy: false, rim: 0.22, sludge })
+//   → P = { g, floorY, sludgeY, top, ladder: { x, z, ry }, boards, mouth, openK(t), at(name), down(rig, t0), up(rig, t0), stand(rig, t0, t1, { at, ry }) }
+// Brick-lined cesspit / privy pit (a "gong"): stone kerb with coping, brick shaft down to a dark sludge surface with slow bubbles, slime line on the walls, a cover of
+// planks on battens, a wooden ladder against the inner wall. From above the open mouth reads as a deep dark hole (top-facing plane); from inside, the ground over the pit
+// is not drawn (back faces), so shots from the pit floor looking up work. open: the planks come off one by one and stack beside the kerb (creak + thunk), close: back on.
+// Fumes (pale green haze + stink lines) and flies while open. down / up = climb() on the ladder, stand keeps a rig on the pit floor between t0 and t1.
+const PITHOLES = [];   // v3.47 cesspit shafts: a lens inside one does not count the ground over it as a solid (QA CAMCLIP)
+function cesspit(p, x, z, o = {}) {
+  const w = o.w ?? 2.4, d = o.d ?? 2.4, D = o.depth ?? 3, ry = o.ry ?? 0, th = 0.26, RIM = o.rim ?? 0.22, NC = { cast: false }, g = stat(grp(p ?? world, x, 0, z, ry));
+  const brick = '#7A5444', floorY = -D, sY = -D + (o.fill ?? 0.45);
+  for (const [bx, bz, bw, bd] of [[0, -(d / 2 + th / 2), w + 2 * th, th], [0, d / 2 + th / 2, w + 2 * th, th], [-(w / 2 + th / 2), 0, th, d], [w / 2 + th / 2, 0, th, d]]) {   // shaft walls + kerb, coping on top
+    box(g, bw, D + RIM - 0.08, bd, brick, bx, -D, bz, { surf: 'brick' });
+    box(g, bw + (bw > bd ? 0.1 : 0.12), 0.1, bd + (bd > bw ? 0.1 : 0.12), '#8E877C', bx, RIM - 0.08, bz, { surf: 'stone' }); }
+  box(g, w, 0.2, d, '#2A2218', 0, -D - 0.2, 0, NC);
+  { const ip = grp(g); ip.userData.noHit = true; for (const [bx, bz, bw, bd] of [[0, -d / 2 + 0.006, w, 0.012], [0, d / 2 - 0.006, w, 0.012], [-w / 2 + 0.006, 0, 0.012, d], [w / 2 - 0.006, 0, 0.012, d]])
+      box(ip, bw, 0.4, bd, '#3E3424', bx, sY - 0.06, bz, NC); }   // dark slime line just above the sludge
+  const sm = mat(o.sludge ?? '#3A2E1C', { rough: 0.3 }), sl = box(g, w - 0.03, 0.04, d - 0.03, '', 0, sY - 0.04, 0, { mat: sm, ...NC }); sl.userData.noHit = true;
+  const BB = dyn(grp(g)); BB.userData.noHit = true; const bm = mat(shade(o.sludge ?? '#3A2E1C', 0.06), { rough: 0.18 }), bub = [];
+  for (let i = 0; i < 7; i++) { const b = ball(BB, 0.06, '', (hash(i * 3.1 + x) - 0.5) * (w - 0.6), sY, (hash(i * 5.7 + z) - 0.5) * (d - 0.6), { mat: bm, detail: 1, ...NC }); bub.push([b, 2.2 + hash(i * 1.3) * 2.4, hash(i * 9.1) * 5]); }
+  tick(t => { for (const [b, per, ph] of bub) { const u = ((t + ph) % per) / per, k = u < 0.85 ? sm01(u / 0.85) : 0; b.visible = k > 0.03; b.scale.set(k, k * 0.6, k); b.position.y = sY; } });
+  // the open mouth from above: a top-facing dark plane (radial falloff to the brick) just over the ground — culled from below like the ground itself
+  const MT = G('pitMouthT', () => { const c = document.createElement('canvas'); c.width = c.height = 64; const q = c.getContext('2d'), gr = q.createRadialGradient(32, 32, 3, 32, 32, 46); gr.addColorStop(0, '#000000'); gr.addColorStop(0.6, '#0A0806'); gr.addColorStop(1, '#2E2016'); q.fillStyle = gr; q.fillRect(0, 0, 64, 64); const T = new THREE.CanvasTexture(c); T.colorSpace = THREE.SRGBColorSpace; return T; });
+  const mm = new THREE.MeshBasicMaterial({ map: MT, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -4 }); mm.userData.own = true;
+  const mouth = mesh(g, G(`pitMouthG${w}|${d}`, () => new THREE.PlaneGeometry(w, d).rotateX(-Math.PI / 2)), mm, 0, 0.025, 0, { cast: false, recv: false }); mouth.userData.noHit = true; mouth.userData.cover = true; dyn(mouth);   // own mesh (QA CAMCLIP hides it for a lens inside the pit)
+  // ladder against the −x inner wall (nearly upright), 0.9 m above the kerb
+  const la = 0.05, lTop = RIM + 0.9, lL = (lTop - floorY) / Math.cos(la), lx0 = -w / 2 + 0.14 + Math.sin(la) * lL, LG = grp(g, lx0, floorY, 0); LG.rotation.z = la; LG.userData.noHit = true; LG.userData.headOk = true;
+  for (const s of [-1, 1]) box(LG, 0.07, lL, 0.07, '#7A5A3A', 0, 0, s * 0.24, { surf: 'plank' }); for (let yy = 0.3; yy < lL - 0.1; yy += 0.3) box(LG, 0.05, 0.05, 0.5, '#8A6A44', 0, yy, 0, NC);
+  // cover planks on two battens: open → lifted one by one, swung over and stacked beside the kerb (+x), close → back on in reverse
+  const nb = o.boards ?? Math.max(3, Math.round(d / 0.36)), bw = d / nb, boards = [], WIN = Array.isArray(o.open) ? o.open.map(q => [].concat(q)) : o.open != null ? [[o.open, o.close ?? 1e9]] : [], open0 = WIN.length ? Math.min(...WIN.map(q => q[0])) : 1e9;
+  for (let i = 0; i < nb; i++) { const b = dyn(grp(g, 0, RIM + 0.02, -d / 2 + (i + 0.5) * bw)); b.userData.noHit = true;
+    box(b, w + 0.5, 0.06, bw - 0.02, shade('#7A6448', (hash(i * 4.3 + x) - 0.5) * 0.16), 0, 0, 0, { surf: 'plank' }); for (const sx of [-1, 1]) box(b, 0.12, 0.06, bw - 0.02, '#5A4834', sx * (w / 2 - 0.1), -0.06, 0, NC); boards.push(b); }
+  const sX = w / 2 + th + 0.62, bAt = (i, t) => { let m = 0; for (const [a, b = 1e9] of WIN) { let k = t >= a + i * 0.55 ? sm01((t - a - i * 0.55) / 0.7) : 0; if (t >= b) k *= 1 - sm01((t - b - (nb - 1 - i) * 0.4) / 0.6); m = Math.max(m, k); } return m; };
+  tick(t => boards.forEach((b, i) => { const k = bAt(i, t), bz = -d / 2 + (i + 0.5) * bw; b.position.set(lerp(0, sX, k), RIM + 0.02 + Math.sin(Math.PI * k) * 0.55 + k * (-RIM + 0.03 + i * 0.065), lerp(bz, (i - (nb - 1) / 2) * 0.04, k)); b.rotation.z = -Math.sin(Math.PI * k) * 0.5; b.rotation.y = k * 0.06 * (i % 2 ? 1 : -1); }));
+  for (const [a, b = 1e9, quiet] of WIN) { for (let i = 0; i < nb; i++) { sfx(a + i * 0.55, 'creak', 0.45); sfx(a + i * 0.55 + 0.68, 'thunk', 0.35); } if (b < 1e8 && !quiet) for (let i = 0; i < nb; i++) sfx(b + (nb - 1 - i) * 0.4 + 0.55, 'thunk', 0.35); }
+  const openK = t => WIN.reduce((m, [a, b = 1e9]) => Math.max(m, t < a ? 0 : t < b ? sm01((t - a) / (nb * 0.55 + 0.4)) : 1 - sm01((t - b) / (nb * 0.4 + 0.6))), 0);
+  g.updateWorldMatrix(true, false); const W = (lx2, ly, lz2) => { const P = g.localToWorld(v3(lx2, ly, lz2)); return [P.x, P.y, P.z]; };
+  if (o.fumes !== false) for (const [a, b = 1e9, quiet] of (Array.isArray(o.fumes) ? [o.fumes] : WIN)) { const f0 = Array.isArray(o.fumes) ? a : a + 0.6, lf = quiet ? 2 : 5, f1 = Math.min(DUR, quiet ? b - lf : b + 1);   // quiet window (hook, closed at a cut): the haze is gone by the close
+    emit('smoke', { at: W(0, sY + 0.4, 0), t0: f0, t1: f1, rate: quiet ? 7 : 4, size: 0.5, speed: quiet ? 1.2 : 0.6, cone: 0.3, grow: 2.2, life: lf, opacity: 0.14, g: 0.12, colors: ['#9AA86A', '#B4BC84', '#8C9A5E'], wind: [0.15, 0], lensOk: true });
+    if (o.stink !== false) stink(W(0, RIM + 0.1, 0), { t0: f0, t1: quiet ? b : f1, n: 3, h: 0.9, w: 0.7, size: 1.3 }); }
+  if (o.flies !== false) { const I = insects('fly', { at: W(0, RIM + 0.75, 0), n: typeof o.flies === 'number' ? o.flies : 7, r: 0.9, t0: Math.min(open0, DUR), t1: DUR }); I.g.userData.noHit = true; I.g.userData.headOk = true; }
+  { const inv = new THREE.Matrix4().copy(g.matrixWorld).invert(), q = v3(); PITHOLES.push({ mouth, inside: c => { q.copy(c).applyMatrix4(inv); return q.y < RIM && q.y > floorY - 0.3 && Math.abs(q.x) < w / 2 + 0.05 && Math.abs(q.z) < d / 2 + 0.05; } }); }
+  if (o.privy) { const pg = grp(g, 0, 0, -(d / 2 + th + 0.8)), pw = 1.25, pd = 1.25, ph = 2.25;   // privy (jakes) on the −z side: plank shed, lean-to roof, door
+    for (const [bx, bz, bw2, bd2] of [[0, -pd / 2, pw, 0.06], [-pw / 2, 0, 0.06, pd], [pw / 2, 0, 0.06, pd]]) box(pg, bw2, ph, bd2, '#7A6246', bx, 0, bz, { surf: 'plank' });
+    box(pg, pw, ph - 1.95, 0.06, '#7A6246', 0, 1.95, pd / 2 - 0.03, { surf: 'plank' }); const pdoor = dyn(grp(pg, -0.42, 0.05, pd / 2)); box(pdoor, 0.84, 1.88, 0.05, '#6A5238', 0.42, 0, 0, { surf: 'plank' }); box(pdoor, 0.05, 0.05, 0.03, '#26221E', 0.74, 1.0, 0.04, NC);
+    pdoor.userData.sign = 1; pdoor.userData.angle = 1.5; doorReg(pdoor); box(pg, pw + 0.3, 0.07, pd + 0.4, '#5A4A38', 0, ph + 0.02, 0.05, { rx: 0.12, surf: 'plank' }); }
+  const lxM = lx0 - Math.sin(la) * lL * 0.45, LA = W(lxM, 0, 0), lad = { x: LA[0], z: LA[2], ry: ry - Math.PI / 2 };   // climb(): the rig stands 0.34 m out from the ladder, facing it
+  const P = { g, floorY, sludgeY: sY, top: RIM, w, d, depth: D, boards, mouth, ladder: lad, openK,
+    at: n => n === 'floor' ? W(0, floorY, 0) : n === 'sludge' ? W(0, sY, 0) : n === 'ladderTop' ? W(lxM, lTop, 0) : n === 'ladderBase' ? W(lxM + 0.36, floorY, 0) : n === 'kerb' ? W(w / 2 + th + 0.45, 0, 0) : W(0, RIM, 0),
+    down: (f, t0, oo = {}) => climb(f, { at: [lad.x, lad.z], ry: lad.ry, y0: RIM, y1: floorY + 0.02, t0, speed: oo.speed ?? 0.9, ladder: false, release: oo.release }),
+    up: (f, t0, oo = {}) => climb(f, { at: [lad.x, lad.z], ry: lad.ry, y0: floorY + 0.02, y1: RIM, t0, speed: oo.speed ?? 0.9, ladder: false, release: oo.release }),
+    stand: (f, t0, t1, oo = {}) => { const r = dyn(f.root), A = oo.at ?? [lad.x - Math.sin(lad.ry) * 0.34, lad.z - Math.cos(lad.ry) * 0.34], ya = oo.ry ?? lad.ry;
+      late(t => { if (t < t0 || t > t1) return; r.position.set(A[0], floorY + 0.02, A[1]); r.rotation.y = typeof ya === 'function' ? ya(t) : ya; }); } };
+  return P;
+}
+// cart(p, x, z, { kind: 'horse' | 'hand', ry, load: 'barrels' | 'sacks' | 'empty', n, color, wheelR, horse: true }) → C = { g, bed, wheels, horse, len, go(pts, { t0, speed }), load }
+// Two-wheeled wooden cart: plank bed with side boards and stakes, tailboard with chains, spoked wheels with iron tyres and hubs on an axle; 'horse' = shafts with a
+// harnessed horse (beast) in front (collar, traces), 'hand' = handcart with two handles and a prop leg. load: wooden barrels (lids, hoops) or sacks.
+// go(pts): the horse walks the route (walk()), the cart follows behind on the horse's track with turning wheels (pure in t); handcart: go(pts, { by: rig }) — the rig walks
+// behind, hands on the handles. Static carts need no go().
+function cart(p, x, z, o = {}) {
+  const k = o.kind ?? 'horse', ry = o.ry ?? 0, g = dyn(grp(p ?? world, x, 0, z, ry)), NC = { cast: false }, c = o.color ?? '#7A5A3A', R = o.wheelR ?? (k === 'hand' ? 0.48 : 0.72);
+  const BW = k === 'hand' ? 1.1 : 1.6, BL = k === 'hand' ? 1.5 : 2.3, by = R + 0.12, bed = grp(g, 0, by, 0);
+  g.name = 'cart'; g.userData.bld = false;
+  box(bed, BW, 0.08, BL, c, 0, 0, 0, { surf: 'plank' }); for (const s of [-1, 1]) box(bed, 0.12, 0.12, BL + 0.2, shade(c, -0.12), s * (BW / 2 - 0.06), -0.12, 0.05);   // floor + two side beams
+  for (const s of [-1, 1]) { box(bed, 0.05, 0.4, BL, c, s * (BW / 2 - 0.025), 0.08, 0, { surf: 'plank' }); for (let i = 0; i < 4; i++) box(bed, 0.07, 0.48, 0.07, shade(c, -0.15), s * (BW / 2 + 0.01), 0.04, -BL / 2 + 0.1 + i * (BL - 0.2) / 3, NC); }
+  box(bed, BW - 0.1, 0.4, 0.05, c, 0, 0.08, BL / 2 - 0.025, { surf: 'plank' }); box(bed, BW - 0.1, 0.3, 0.05, c, 0, 0.08, -BL / 2 + 0.025, { surf: 'plank' });   // front board, tailboard
+  for (const s of [-1, 1]) _seg(bed, [s * (BW / 2 - 0.05), 0.46, -BL / 2 + 0.02], [s * (BW / 2 - 0.12), 0.3, -BL / 2 - 0.02], 0.008, 0.008, '#3A3632', NC);
+  cyl(g, 0.05, 0.05, BW + 0.3, '#4A3A2A', 0, R - (BW + 0.3) / 2, 0, { rz: Math.PI / 2, seg: 8 });   // axle
+  const wheels = [];
+  for (const s of [-1, 1]) { const wg = dyn(grp(g, s * (BW / 2 + 0.12), R, 0)); wg.rotation.order = 'YXZ'; wg.userData.r = R; const sp = grp(wg, 0, 0, 0); sp.rotation.z = Math.PI / 2;
+    mesh(sp, G(`cwRim${R}`, () => new THREE.TorusGeometry(R - 0.04, 0.05, 6, 22)), mat('#6A4A2E'), 0, 0, 0, { cast: true }).rotation.x = Math.PI / 2;
+    mesh(sp, G(`cwTyre${R}`, () => new THREE.TorusGeometry(R - 0.005, 0.022, 4, 22)), mat('#3A3632', { metal: 0.5, rough: 0.5 }), 0, 0, 0, NC).rotation.x = Math.PI / 2;
+    cyl(sp, 0.1, 0.12, 0.2, '#5A4030', 0, -0.1, 0, { seg: 10 }); cyl(sp, 0.115, 0.115, 0.03, '#3A3632', 0, 0.06, 0, { seg: 10, ...NC });
+    for (let i = 0; i < 10; i++) { const a = i / 10 * TAU, q = grp(sp, 0, 0, 0); q.rotation.y = a; box(q, 0.05, 0.04, R - 0.12, '#7A5A3A', 0, -0.02, (R - 0.12) / 2 + 0.06, NC); }
+    wheels.push(wg); }
+  const C = { g, bed, wheels, kind: k, len: BL, horse: null, bedY: by };
+  // load
+  const ld = o.load ?? (k === 'hand' ? 'empty' : 'barrels'); C.load = [];
+  if (ld === 'barrels') { const n = o.n ?? (k === 'hand' ? 2 : 4), cols = n > 2 ? 2 : 1, rows = Math.ceil(n / cols);
+    for (let i = 0; i < n; i++) { const cx = cols > 1 ? (i % 2 - 0.5) * BW * 0.48 : 0, cz = (Math.floor(i / cols) - (rows - 1) / 2) * BL / rows * 0.95, bq = grp(bed, cx, 0.04, cz);
+      cyl(bq, 0.3, 0.27, 0.86, '#8A6440', 0, 0, 0, { seg: 12, surf: 'plank' }); cyl(bq, 0.33, 0.33, 0.1, '#7A5434', 0, 0.38, 0, { seg: 12 }); cyl(bq, 0.275, 0.275, 0.03, '#6A4A2E', 0, 0.86, 0, { seg: 12, ...NC });
+      for (const yy of [0.08, 0.7]) cyl(bq, 0.305, 0.305, 0.04, '#3A3632', 0, yy, 0, { seg: 12, metal: 0.4, ...NC }); C.load.push(bq); } }
+  else if (ld === 'sacks') for (let i = 0; i < (o.n ?? 4); i++) { const q = grp(bed, (i % 2 - 0.5) * BW * 0.45, 0.04, (Math.floor(i / 2) - 0.5) * BL * 0.42); const b = ball(q, 0.3, shade('#B09A70', (hash(i) - 0.5) * 0.1), 0, 0.2, 0, { detail: 1 }); b.scale.set(1, 0.6, 1.3); C.load.push(q); }
+  if (k === 'hand') { for (const s of [-1, 1]) { box(bed, 0.06, 0.06, 1.25, '#5A4030', s * (BW / 2 - 0.08), -0.08, -BL / 2 - 0.6, { rx: -0.32 }); cyl(bed, 0.035, 0.035, 0.18, '#4A3424', s * (BW / 2 - 0.08), 0.15 - 0.09 * 0, -BL / 2 - 1.2, { rz: Math.PI / 2 * 0, seg: 6, ...NC }); }
+    box(bed, 0.06, by - 0.05, 0.06, '#5A4030', 0, -by + 0.05, -BL / 2 + 0.1); }   // handles (rear, −z) + prop leg
+  if (k === 'horse' && o.horse !== false) { for (const s of [-1, 1]) { box(bed, 0.08, 0.08, 2.4, '#6A4A2E', s * 0.42, -0.16, BL / 2 + 1.1, { rx: 0.1 }); }   // shafts forward (+z)
+    const hs = beast({ kind: 'horse', x: x + Math.sin(ry) * (BL / 2 + 1.6), z: z + Math.cos(ry) * (BL / 2 + 1.6), ry, seed: o.seed ?? 3, color: o.horseColor });
+    C.horse = hs; C.gap = BL / 2 + 1.6; }
+  // follow a walker (horse or rig): position on its track gap m behind, wheels turn by the distance it has walked (sampled, pure in t)
+  C.go = (pts, oo = {}) => { const lead = oo.by ?? C.horse; if (!lead) return null; const t0 = oo.t0 ?? 0, gap = oo.by ? -(BL / 2 + 0.75) : C.gap;
+    const tE = walk(lead, pts, { t0, speed: oo.speed ?? 1.3, ...(oo.walk ?? {}) });
+    if (oo.by) { const f = oo.by; (f.fx ??= []).push((t, S) => { const e = env3(t, t0 - 0.3, 1e9, 0.3, 0.3); if (!e) return; for (const [kk, v] of [['las', -0.75], ['ras', -0.75], ['lae', -0.35], ['rae', -0.35], ['laz', -0.25], ['raz', 0.25], ['crx', 0.12]]) if (S[kk] != null) S[kk] = lerp(S[kk], v + (kk === 'crx' ? S[kk] : 0), e); }); }
+    const dAt = t => { if (t <= t0 || !lead._posAt) return 0; let s = 0, P0 = lead._posAt(t0), n = Math.min(400, Math.ceil((t - t0) / 0.1)); for (let i = 1; i <= n; i++) { const P1 = lead._posAt(t0 + (t - t0) * i / n); s += Math.hypot(P1.x - P0.x, P1.z - P0.z); P0 = P1; } return s; };
+    const off = oo.by ? BL / 2 + 0.75 : -C.gap;
+    tick(t => { if (!lead._posAt) return; const P = lead._posAt(t), yw = lead._yawAt ? lead._yawAt(t) : ry; g.position.set(P.x + Math.sin(yw) * off, 0, P.z + Math.cos(yw) * off); g.rotation.y = yw;
+      const a = dAt(t) / R; for (const wg of wheels) wg.rotation.x = a; });
+    if (oo.sound !== false) (AUDIO.hits ??= []).push({ t: VT(t0), k: 'cart', v: oo.sound ?? 0.5, dur: Math.max(1, (tE ?? t0 + 6) - t0) });
+    return tE; };
+  return C;
+}
+// shovel(rig, t0, t1, { tool: true | obj, rate: 0.7 (scoops/s), side, into: [x, y, z] }) → tool: digging / shovelling — bent over, both hands on the shaft, scoop low, lift and
+//   tip (towards `into`, e.g. a bucket); a wooden spade (tool: true builds one) rides in the right hand. Pure in t, blends in and out over 0.3 s.
+function spade(p, x = 0, y = 0, z = 0, o = {}) {   // wooden spade with an iron-shod blade (Tudor) or all iron (o.kind: 'iron'): grip at the origin, blade down (−y)
+  const g = dyn(grp(p ?? world, x, y, z, o.ry ?? 0)), NC = { cast: false }, L = o.len ?? 1.2;
+  cyl(g, 0.02, 0.022, L - 0.32, '#8A6A44', 0, -(L - 0.32), 0, { seg: 7 }); box(g, 0.16, 0.035, 0.035, '#7A5A3A', 0, -0.02, 0, NC);
+  const bl = grp(g, 0, -(L - 0.32), 0); box(bl, 0.24, 0.3, 0.03, o.kind === 'iron' ? '#5A5E62' : '#9A7A50', 0, -0.3, 0, { metal: o.kind === 'iron' ? 0.6 : 0 }); box(bl, 0.25, 0.05, 0.035, '#4A4A4C', 0, -0.33, 0, { metal: 0.6, ...NC });
+  return { g, blade: bl };
+}
+function shovel(f, t0, t1, o = {}) {
+  const rate = o.rate ?? 0.7, tool = o.tool === false ? null : o.tool && o.tool !== true ? o.tool : spade(world, 0, 0, 0);
+  (f.fx ??= []).push((t, S) => { const e = env3(t, t0, t1, 0.3, 0.3); if (!e) return; const u = ((t - t0) * rate) % 1, sc = u < 0.45 ? sm01(u / 0.45) : u < 0.75 ? 1 - sm01((u - 0.45) / 0.3) * 0.2 : 0.8 * (1 - sm01((u - 0.75) / 0.25));   // 0 low, 1 lifted
+    const A = { crx: 0.55 - 0.3 * sc, hrx: 0.3 - 0.15 * sc, nrx: -0.35 + 0.15 * sc, ras: -0.45 - 0.75 * sc, las: -0.85 - 0.55 * sc, rae: -0.55 + 0.25 * sc, lae: -0.25, raz: 0.18, laz: -0.12, lk: 0.35 - 0.15 * sc, rk: 0.45 - 0.2 * sc, lt: -0.25, rt: -0.05 };
+    for (const k in A) if (S[k] != null) S[k] = lerp(S[k], A[k], e); });
+  if (tool) holdItem(f, tool.g ?? tool, t0, t1, { side: 'R', off: [0, -0.42, 0.06], rot: [1.2, 0, 0], after: o.after ?? 'hide', reach: o.reach ?? false });
+  for (let tt = t0 + 0.3 / rate; tt < t1 - 0.2; tt += 1 / rate) sfx(tt, 'shovel', 0.4);
+  return tool;
+}
+
+/* ====================================================================== */
 /* v2.16 — riding (ride), sinking ships (sink), runway flights (takeoff, land, crashLand), detailed helicopters (heli kinds),
    kraken tentacles (tentacles), heliSound, level of detail for herds / fleets                                             */
 /* ====================================================================== */
@@ -16908,7 +17235,8 @@ const COSTUME_BASE = {
   worker: { shirt: '#3A4A5A', pants: '#3A4C6E', shoes: '#4A3424', belt: '#2A2420' },
   smock1911: { shirt: '#ECE8DE', pants: '#3A3530', shoes: '#2A2420', coat: true, coatLen: 0.4, beard: 'mustache' },
   krampus: { shirt: '#33251B', pants: '#33251B', shoes: '#2A1E16', hair: '#33251B', soles: false, build: 'muscular', height: 1.06 },
-  nicholas: { shirt: '#F4F2EC', pants: '#F4F2EC', dress: '#F4F2EC', skirtLen: 0.66, shoes: '#7A1A1E', beard: 'full', beardColor: '#F2F2EE', hair: '#ECECE6', cape: '#A81E28' }
+  nicholas: { shirt: '#F4F2EC', pants: '#F4F2EC', dress: '#F4F2EC', skirtLen: 0.66, shoes: '#7A1A1E', beard: 'full', beardColor: '#F2F2EE', hair: '#ECECE6', cape: '#A81E28' },
+  tudor: { shirt: '#E6DCC4', pants: '#6E4A30', shoes: '#3A2618', belt: '#3A2618', hair: '#4A3222', beard: 'stubble' }
 };
 for (const k in COSTUME_BASE) { const { skin, ...rest } = COSTUME_BASE[k]; OUTFITS[k] ??= { costume: k, ...rest }; }   // char('you', { outfit: 'santa' }) keeps the character's skin
 
@@ -17162,6 +17490,25 @@ const COSTUMES = (() => {
       hide(f); const h = hat(f, 0.3); ball(h, 0.23, '#F2C230', 0, 0.02, 0, { detail: 2 }).scale.set(1, 0.75, 1.1); box(h, 0.4, 0.02, 0.14, '#F2C230', 0, -0.02, 0.2, { rx: 0.1 });
       box(h, 0.05, 0.03, 0.4, shade('#F2C230', -0.08), 0, 0.17, 0, NC); cyl(h, 0.235, 0.235, 0.02, shade('#F2C230', -0.1), 0, -0.02, 0.01, { seg: 16, ...NC });
       hivis(f, { color: '#E3E030' }); gloves(f, '#C8A060'); box(f.hips, 0.12, 0.14, 0.08, '#6A4A2A', -0.22, -0.12, 0.08, NC);
+    },
+    tudor(f, K) {   // Tudor labourer (16th c.): linen shirt with a laced neck, sleeveless leather jerkin (front panels, laces, skirt tabs), belt with purse and knife,
+      // knee breeches with ties, grey woollen hose, leather shoes with a strap, flat woollen cap (statute cap) — K.cap: 'flat' (default) | 'coif' (linen coif) | false
+      const z = fz(f), Le = K.jerkin ?? '#6A4A2E', sk = f.FC?.skull ? _hexOf(f.FC.skull) : '#E8B892', Ln = '#E6DCC4';
+      box(f.chest, 0.11, 0.13, 0.01, sk, 0, 0.46, z + 0.004, NC); for (const sx of [-1, 1]) box(f.chest, 0.05, 0.12, 0.014, Ln, sx * 0.065, 0.47, z + 0.006, { rz: sx * 0.3, ...NC });   // open shirt neck
+      for (let i = 0; i < 3; i++) box(f.chest, 0.07, 0.008, 0.016, '#5A4A34', 0, 0.5 - i * 0.035, z + 0.009, { rz: i % 2 ? 0.5 : -0.5, ...NC });   // neck laces
+      for (const sx of [-1, 1]) box(f.chest, 0.19, 0.5, 0.022, Le, sx * 0.135, 0.02, z + 0.006, NC); box(f.chest, 0.5, 0.5, 0.02, Le, 0, 0.02, -z - 0.006, NC);   // jerkin: two front panels, back
+      for (const sx of [-1, 1]) box(f.chest, 0.02, 0.5, 0.31, Le, sx * 0.245, 0.02, 0, NC);
+      for (let i = 0; i < 5; i++) box(f.chest, 0.06, 0.012, 0.014, '#2A2018', 0, 0.42 - i * 0.09, z + 0.02, { rz: i % 2 ? 0.45 : -0.45, ...NC });   // jerkin lacing
+      rbox(f.hips, 0.49, 0.06, 0.32, '#3A2618', 0, 0.02, 0, { rf: 0.3 }); box(f.hips, 0.05, 0.05, 0.02, '#8A8070', 0.03, 0.025, 0.165, { metal: 0.5, ...NC });   // belt + buckle
+      box(f.hips, 0.11, 0.13, 0.05, '#5A3E26', -0.17, -0.12, 0.13, NC); box(f.hips, 0.035, 0.2, 0.03, '#2A2018', 0.2, -0.17, 0.1, { rz: 0.15, ...NC });   // purse, knife sheath
+      for (const sx of [-1, 1]) for (const fzz of [1, -1]) box(f.hips, 0.22, 0.09, 0.02, shade(Le, -0.06), sx * 0.12, -0.08, fzz * 0.165, NC);   // jerkin skirt tabs
+      const hose = K.hose ?? '#8A8474'; for (const sh of [f.shinL, f.shinR]) recol(sh, hose);
+      for (const lg of [f.legL, f.legR]) { box(lg, 0.205, 0.06, 0.215, shade(K.pants ?? '#6E4A30', -0.12), 0, -0.44, 0, NC); box(lg, 0.04, 0.08, 0.02, '#3A2A1A', 0.08, -0.47, 0.105, NC); }   // breeches cuff + tie
+      for (const ft of [f.footL, f.footR]) box(ft, 0.13, 0.025, 0.06, '#2A1C12', 0, -ANK + 0.075, 0.06, NC);   // shoe strap
+      const cap = K.cap ?? 'flat';
+      if (cap === 'flat') { hide(f); const h = hat(f, 0.31); cyl(h, 0.27, 0.27, 0.035, K.capColor ?? '#3A3630', 0.02, 0.0, 0.03, { seg: 16, rz: -0.12 }); rbox(h, 0.36, 0.09, 0.36, K.capColor ?? '#3A3630', 0.01, 0.02, 0.0, { rf: 0.5 });
+        cyl(h, 0.205, 0.205, 0.03, shade(K.capColor ?? '#3A3630', -0.1), 0, -0.02, 0, { seg: 14, ...NC }); }
+      else if (cap === 'coif') { hide(f); const h = hat(f, 0.2); ball(h, 0.235, '#ECE6D6', 0, 0.06, -0.02, { detail: 2 }).scale.set(1, 0.85, 1.05); for (const sx of [-1, 1]) box(f.head, 0.025, 0.2, 0.025, '#ECE6D6', sx * 0.15, -0.12, 0.05, { rz: sx * 0.3, ...NC }); }
     },
     smock1911(f, K) {   // museum workman 1911: white work smock (coat key) over a dark shirt, flat cap, moustache
       const z = fz(f); box(f.chest, 0.14, 0.12, 0.01, '#3A3530', 0, 0.48, z + 0.004, NC);
@@ -17801,7 +18148,7 @@ function bake() {
     for (let p = o; p && p !== world; p = p.parent) { if (p.userData.dyn || !p.visible) return; if (p.userData.stat) inStat = true; if (p.userData.noAO) noAO = true; }
     if (!inStat) return;
     const g = o.geometry.index ? o.geometry.toNonIndexed() : o.geometry.clone();
-    for (const k of Object.keys(g.attributes)) if (k !== 'position' && k !== 'normal' && !(k === 'color' && o.material.vertexColors) && !(k === 'rl' && o.material.userData.surfRl)) g.deleteAttribute(k);
+    for (const k of Object.keys(g.attributes)) if (k !== 'position' && k !== 'normal' && !(k === 'color' && o.material.vertexColors) && !(k === 'rl' && o.material.userData.surfRl) && !(k === 'uv' && o.material.map)) g.deleteAttribute(k);   // v3.47: textured parts keep their uv (leaded windows, pit mouth)
     if (!g.attributes.normal) g.computeVertexNormals();
     g.setAttribute('qobj', new THREE.BufferAttribute(new Float32Array(g.attributes.position.count).fill(_surfMesh(o) ? 0 : 1), 1));   // v3.39 QA SPARSE: bare surface (0) or object (1), per source mesh
     g.applyMatrix4(M4.multiplyMatrices(inv, o.matrixWorld));
@@ -18193,9 +18540,10 @@ const ICONS = { heart: 'M12 21s-7.5-4.6-9.6-9.2C.9 8.4 3 4.5 6.7 4.5c2 0 3.6 1.1
   star: 'M12 2l3 6.6 7.2.8-5.4 4.9 1.5 7.1L12 17.8 5.7 21.4l1.5-7.1L1.8 9.4 9 8.6z', bolt: 'M13 2L4 14h6l-1 8 9-12h-6l1-8z', drop: 'M12 2s7 7.6 7 12.5A7 7 0 015 14.5C5 9.6 12 2 12 2z',
   temp: 'M10 3a2 2 0 014 0v10.3a4.5 4.5 0 11-4 0V3z', signal: 'M2 20h3v-4H2v4zm5 0h3v-8H7v8zm5 0h3V8h-3v12zm5 0h3V3h-3v17z', eye: 'M12 5C6.5 5 2.7 9 1.5 12c1.2 3 5 7 10.5 7s9.3-4 10.5-7C21.3 9 17.5 5 12 5zm0 11a4 4 0 110-8 4 4 0 010 8z',
   house: 'M12 3l9 8h-3v9h-5v-6h-2v6H6v-9H3l9-8z', egg: 'M12 2c3.9 0 7 6 7 11a7 7 0 01-14 0c0-5 3.1-11 7-11z', speed: 'M12 4a10 10 0 00-10 10h3a7 7 0 0114 0h3A10 10 0 0012 4zm1.4 6.6L18 7l-3.6 4.6A2 2 0 1113.4 10.6z',
+  stink: 'M5 21c-2-3 2-5 0-8s2-5 0-8h2.2c2 3-2 5 0 8s-2 5 0 8H5zm5.9 0c-2-3 2-5 0-8s2-5 0-8h2.2c2 3-2 5 0 8s-2 5 0 8h-2.2zm5.9 0c-2-3 2-5 0-8s2-5 0-8H19c2 3-2 5 0 8s-2 5 0 8h-2.2z',
   food: 'M7 2v8a3 3 0 002 2.8V22h2v-9.2A3 3 0 0013 10V2h-1.5v6h-1V2H9v6H8V2H7zm9 0c-1.7 0-3 2.2-3 5v6h2v9h2V2h-1z', calendar: 'M7 2v2H4v18h16V4h-3V2h-2v2H9V2H7zm-1 8h12v10H6V10z' };
 const iconFor = s => s.icon === false ? null : s.icon ?? [[/zombie|enem|horde|monster|undead/i, 'skull'], [/fence|wall|door|armou?r|shield|barric/i, 'shield'], [/surviv|health|life|hp|lives/i, 'heart'],
-  [/time|clock|sunrise|left|until|countdown|hours|minutes/i, 'clock'], [/fuel|gas|petrol/i, 'fuel'], [/battery|power|charge/i, 'battery'], [/money|cash|\$|cost|price|bank|debt/i, 'money'],
+  [/stench|smell|stink|odou?r/i, 'stink'], [/time|clock|sunrise|left|until|countdown|hours|minutes|shift|dawn/i, 'clock'], [/fuel|gas|petrol/i, 'fuel'], [/battery|power|charge/i, 'battery'], [/money|cash|\$|cost|price|bank|debt/i, 'money'],
   [/fire|heat|burn/i, 'fire'], [/temp/i, 'temp'], [/water|oxygen|flood|thirst/i, 'drop'], [/speed|km|mph/i, 'speed'], [/views|followers|likes|subs/i, 'eye'], [/gerald/i, 'egg'],
   [/signal|wifi|internet/i, 'signal'], [/people|crowd|players|survivors|population/i, 'people'], [/food|corn|snack|hunger/i, 'food'], [/day|week|year/i, 'calendar'], [/wanted|star|rating/i, 'star']].find(([re]) => re.test(s.label ?? ''))?.[1];
 const svgI = (k, cls = '') => ICONS[k] ? `<svg viewBox="0 0 24 24" class="${cls}"><path d="${ICONS[k]}"/></svg>` : '';
@@ -19688,6 +20036,11 @@ const SND = (() => {
       click: (t, v) => { for (let k = 0; k < 16; k++) nz(t + k * 0.028, 0.001, 0.002, 0.01, 0.3 * v, fx, 'highpass', 3200); tone('sine', 6200, t + 0.5, 0.05, 0.3, 0.1, 0.04 * v, fx, { to: 9200, glide: 0.4 }); },
       song: (t, v, d = 4) => { tone('sine', 180, t, 0.6, Math.max(0.2, d - 1.2), 0.6, 0.13 * v, fx, { to: 330, glide: d * 0.6 }); tone('triangle', 92, t + 0.3, 0.8, Math.max(0.2, d - 1.6), 0.8, 0.08 * v, fx, { to: 70, glide: d * 0.7, lp: 600 }); },
       blow: (t, v) => { nz(t, 0.05, 0.45, 0.7, 0.42 * v, fx, 'bandpass', 900, 380, 0.8); nz(t, 0.02, 0.2, 0.4, 0.2 * v, fx, 'highpass', 2500); },
+      creak: (t, v, d = 0.6) => { for (let k = 0; k < 3; k++) { const tk = t + k * d / 3 + ar() * 0.03; tone('sawtooth', 140 + ar() * 60, tk, 0.02, d / 4, 0.08, 0.05 * v, fx, { to: 220 + ar() * 90, glide: d / 3, lp: 900 }); } nz(t, 0.02, d * 0.6, 0.1, 0.06 * v, fx, 'bandpass', 700, 1100, 6); },   // v3.47 wooden board / door creak
+      shovel: (t, v) => { nz(t, 0.01, 0.12, 0.12, 0.22 * v, fx, 'bandpass', 2400, 900, 1.4); nz(t + 0.25, 0.005, 0.03, 0.18, 0.3 * v, fx, 'lowpass', 700, 200); tone('sine', 180, t + 0.26, 0.002, 0.02, 0.12, 0.2 * v, fx, { to: 70, glide: 0.1 }); },   // v3.47 spade scrape + wet slop
+      slosh: (t, v, d = 0.8) => { for (let k = 0; k < 3; k++) nz(t + k * d / 3, 0.05, d / 5, d / 4, 0.16 * v, fx, 'lowpass', 900 - k * 150, 300 + ar() * 100, 2); },   // v3.47 liquid sloshing in a bucket / barrel
+      cart: (t, v, d = 4) => { nz(t, 0.4, Math.max(0, d - 0.8), 0.4, 0.08 * v, fx, 'lowpass', 220, 0, 0.8); const ts = []; for (let tt = t + 0.1; tt < t + d - 0.2; tt += 0.07 + ar() * 0.09) ts.push(tt); pulses(ts, 0.03, 0.12 * v, fx, 'bandpass', 1300, 2); },   // v3.47 iron-shod wheels on cobbles
+      bell: (t, v, d = 4) => { for (const [r, a] of [[0.5, 0.5], [1, 1], [1.19, 0.45], [1.5, 0.3], [2, 0.35], [2.66, 0.18], [3.0, 0.1]]) tone('sine', 220 * r, t, 0.004, 0.05, d * (1.2 - r * 0.25), 0.16 * v * a, fx); },   // v3.47 church bell toll
       hooves: (t, v, d = 2, p = 1) => { const r = p === 2 ? 7.5 : 5.2; for (let k = 0; k < d * r; k++) { const tk = t + k / r + (k % 2) * 0.04 + ar() * 0.012; tone('sine', 210 + ar() * 50, tk, 0.001, 0.01, 0.05, 0.12 * v, fx, { to: 110, glide: 0.04 }); nz(tk, 0.001, 0.005, 0.03, 0.12 * v, fx, 'bandpass', 1800, 0, 1.5); } }
     });
     Object.assign(SFX, {   // v2.17 food, hands and acting
@@ -19732,6 +20085,9 @@ const SND = (() => {
     const bed = (t0, t1, peak, type, f0, q = 0.7, f1) => nz(t0, 0.35, Math.max(0, t1 - t0 - 0.7), 0.35, peak, amb, type, f0, f1, q);
     const every = (t0, t1, gap, jit, fn) => { for (let t = t0 + ar() * gap; t < t1 - 0.2; t += gap + ar() * jit) fn(t); };
     const AMB = {
+      town: (a, b, v) => { bed(a, b, 0.035 * v, 'lowpass', 380); bed(a, b, 0.012 * v, 'bandpass', 1200, 0.5);   // v3.47 old town at night: low wind in the lanes, a distant dog, an owl
+        every(a, b, 6, 7, t => { for (let k = 0; k < 2; k++) { const tk = t + k * 0.32; nz(tk, 0.005, 0.05, 0.12, 0.05 * v, amb, 'bandpass', 900 + ar() * 300, 0, 3); tone('sawtooth', 420 + ar() * 80, tk, 0.005, 0.05, 0.1, 0.012 * v, amb, { to: 300, glide: 0.12, lp: 1400 }); } });
+        every(a, b, 9, 8, t => { tone('sine', 390, t, 0.04, 0.25, 0.2, 0.018 * v, amb, { to: 360, glide: 0.4 }); tone('sine', 360, t + 0.7, 0.04, 0.5, 0.3, 0.016 * v, amb, { to: 330, glide: 0.6 }); }); },
       night: (a, b, v) => { bed(a, b, 0.05 * v, 'lowpass', 450); every(a, b, 0.22, 0.5, t => { const f = 4100 + ar() * 700; for (let k = 0; k < 3; k++) tone('sine', f, t + k * 0.05, 0.004, 0.012, 0.02, 0.022 * v, amb); }); },   // crickets
       farm: (a, b, v) => { bed(a, b, 0.04 * v, 'lowpass', 600); every(a, b, 0.9, 1.6, t => { const f = 2600 + ar() * 1800, n = 2 + Math.floor(ar() * 3); for (let k = 0; k < n; k++) tone('sine', f, t + k * 0.11, 0.005, 0.03, 0.05, 0.03 * v, amb, { to: f * (1.15 + ar() * 0.3), glide: 0.07 }); });
         every(a, b, 7, 6, t => tone('sawtooth', 150, t, 0.25, 0.7, 0.4, 0.035 * v, amb, { to: 112, glide: 1.3, lp: 600 })); },   // birds + distant cow
@@ -20804,6 +21160,7 @@ function qalInside(skip) {
     scene.traverseVisible(o => { const m = o.material; if (o.isPoints || o.isLine || o.isSprite || (o.isMesh && m && (Array.isArray(m) ? m.some(x => x.transparent || x.depthWrite === false) : m.transparent || m.blending === THREE.AdditiveBlending || m.depthWrite === false))) { hid.push(o); return; }
       if (o.isMesh && m) { sw.push([o, m]); o.material = (Array.isArray(m) ? m.every(x => x.side === THREE.FrontSide) : m.side === THREE.FrontSide) ? _qiBack : _qiObj; } });
     if (skip) skip.traverse(o => { if (o.visible) hid.push(o); });
+    for (const H of PITHOLES) if (H.inside(camera.position)) { const gM = GROUND._fix?.m?.material; for (const [o, m] of sw) if (gM && m === gM) hid.push(o); if (H.mouth.visible) hid.push(H.mouth); break; }   // v3.47: in an open pit the ground above is not drawn (back faces) — not a wall round the lens
     for (const o of hid) o.visible = false;
     scene.background = null; r.autoClear = true; r.shadowMap.autoUpdate = false; r.setClearColor(0x000000, 1); r.setRenderTarget(Q.bt); r.clear(); r.render(scene, camera); r.readRenderTargetPixels(Q.bt, 0, 0, w, h, Q.bpx);
   } finally { for (const [o, m] of sw) o.material = m; for (const o of hid) o.visible = true; scene.background = bg; r.setClearColor(_cc, ca); r.shadowMap.autoUpdate = su; r.autoClear = ac; r.setRenderTarget(prevT); }
