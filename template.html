@@ -19048,9 +19048,10 @@ const SND = (() => {
       inflate: (t, v, d = 2.4) => { nz(t, 0.2, Math.max(0, d - 0.5), 0.3, 0.15 * v, fx, 'bandpass', 900, 2400, 1.5); for (let k = 0; k < d * 2.2; k++) nz(t + k / 2.2, 0.03, 0.12, 0.15, 0.09 * v, fx, 'lowpass', 500); },   // blower filling a rubber decoy
       typewriter: (t, v, d = 1.5) => { for (let tt = t; tt < t + d; tt += 0.08 + ar() * 0.1) nz(tt, 0.001, 0.003, 0.03, 0.22 * v, fx, 'bandpass', 2600 + ar() * 800, 0, 2); tone('sine', 1800, t + d, 0.002, 0.05, 0.4, 0.05 * v, fx); },   // keys + bell
     });
-    const SMAP2 = { roar: [1.2, 0.3], growl: [1.1, 0], howl: [1.0, 0], trumpet: [1.1, 0], neigh: [1.0, 0], song: [1.0, 0], caw: [0.9, 0], squawk: [0.9, 0], meow: [0.9, 0], bleat: [0.9, 0], bray: [1.0, 0], trex: [1.3, 0], raptor: [1.0, 0], monster: [1.3, 0.2], wingflap: [1.0, 0, 0, 1], heli: [0.9, 0, 0, 1], sinking: [1.0, 0] };   // v2.16: real recordings (CC0 / public domain, sfx/README.md)
-    for (const [k, [g, syn, atEnd, loop]] of Object.entries(SMAP2)) { const buf = SB[k]; if (!buf) continue; const synth = SFX[k] ?? (() => {});
-      SFX[k] = (t, v = 1, d, p) => { const s = ctx.createBufferSource(), gg = ctx.createGain(); s.buffer = buf; s.playbackRate.value = (typeof p === 'number' ? p : 1) * (0.95 + 0.1 * ar()); gg.gain.value = g * v; s.connect(gg); gg.connect(fx);
+    const SMAP2 = { roar: [1.2, 0.3], growl: [1.1, 0], howl: [1.0, 0], trumpet: [1.1, 0], neigh: [1.0, 0], song: [1.0, 0], caw: [0.9, 0], squawk: [0.9, 0], meow: [0.9, 0], bleat: [0.9, 0], bray: [1.0, 0], trex: [1.3, 0], raptor: [1.0, 0], monster: [1.3, 0.2], wingflap: [1.0, 0, 0, 1], heli: [0.9, 0, 0, 1], sinking: [1.0, 0],   // v2.16: real recordings (CC0 / public domain, sfx/README.md)
+      ...(A.real === false ? {} : { shot: [1.3, 0.35], rifle: [1.5, 0.35], punch: [1.0, 0.45], heartbeat: [1.6, 0], fire: [0.3, 0.25, 0, 1, 4] }) };   // v3.45 guns, punch, heartbeat, fire crackle (loops for dur, default 4 s); AUDIO.real: false = synthesized only
+    for (const [k, [g, syn, atEnd, loop, dd]] of Object.entries(SMAP2)) { const buf = SB[k]; if (!buf) continue; const synth = SFX[k] ?? (() => {});
+      SFX[k] = (t, v = 1, d = dd, p) => { const s = ctx.createBufferSource(), gg = ctx.createGain(); s.buffer = buf; s.playbackRate.value = (typeof p === 'number' ? p : 1) * (0.95 + 0.1 * ar()); gg.gain.value = g * v; s.connect(gg); gg.connect(fx);
         if (loop && d) { s.loop = true; s.start(t); s.stop(t + d); } else s.start(t); if (syn) synth(t, v * syn, d); if (g * v > 1) ducks.push(t); }; }
     SFX.bray ??= SFX.neigh; SFX.wingflap ??= SFX.flap; SFX.trex ??= SFX.roar; SFX.raptor ??= SFX.squawk; SFX.monster ??= SFX.roar; SFX.heli ??= SFX.engine; SFX.sinking ??= SFX.rumble;
     // ambience beds: AUDIO.amb = [[t0, t1, kind, vol], …] — background sound of the place, fades in/out 0.35 s (cuts between places)
@@ -19099,8 +19100,16 @@ const SND = (() => {
         every(a, b, 1.6, 2.2, t => { const f = 1500 + ar() * 600; for (let e = 0; e < 3; e++) tone('sine', f, t + e * 0.19, 0.002, 0, 0.14, 0.035 * v * 0.45 ** e, amb, { to: f * 0.6, glide: 0.07 }); });
         every(a, b, 8, 8, t => nz(t, 0.8, 0.6, 1.8, 0.06 * v, amb, 'lowpass', 140, 70)); }
     };
-    const elBed = (buf, a, b, v) => { if (b - a < 0.1) return; const s = ctx.createBufferSource(), g = ctx.createGain(), f = Math.min(0.35, (b - a) / 3); s.buffer = buf; s.loop = true; s.connect(g); g.connect(amb);   // v3.25 ElevenLabs bed, looped over its span
-      env(g, a, f, Math.max(0, b - a - 2 * f), f, (A.elAmb ?? 1) * v); s.start(a, ar() * buf.duration); s.stop(b + 0.05); };
+    const loopBed = (buf, a, b, v) => { if (b - a < 0.1) return; const s = ctx.createBufferSource(), g = ctx.createGain(), f = Math.min(0.35, (b - a) / 3); s.buffer = buf; s.loop = true; s.connect(g); g.connect(amb);   // a recorded bed, looped over its span
+      env(g, a, f, Math.max(0, b - a - 2 * f), f, v); s.start(a, ar() * buf.duration); s.stop(b + 0.05); };
+    const elBed = (buf, a, b, v) => loopBed(buf, a, b, (A.elAmb ?? 1) * v);   // v3.25 ElevenLabs bed
+    // v3.45 real ambience: sfx/amb-<kind>.mp3 (CC0 field recordings, seamless 12–16 s loops, sfx/README.md) plays as the bed of that kind; the synthesized version stays as a
+    //   quieter layer where it adds events (horns, woodpecker, artillery). RAMB: kind → [gain, synth layer]. storm / surf / stadium build on rain, wind, ocean, people → real too.
+    //   'mob' (angry shouting crowd) exists only as a recording. AUDIO.real: false = the old synthesized beds
+    const RAMB = { rain: [0.29, 0.2], wind: [0.28, 0.25], ocean: [0.38, 0], city: [0.27, 0.4], people: [0.25, 0], battle: [0.27, 0.45], forest: [0.75, 0.35], mob: [0.3, 0] };
+    if (A.real !== false) for (const [k, [g, syn]] of Object.entries(RAMB)) { const buf = SB['amb-' + k]; if (!buf) continue; const synth = AMB[k] ?? (() => {});
+      AMB[k] = (a, b, v = 1) => { loopBed(buf, a, b, g * v); if (syn) synth(a, b, v * syn); }; }
+    AMB.mob ??= AMB.people;
     for (const B of A.amb ?? []) { const [t0, t1, k, v] = B, p = ambPrompt(B), eb = p && SB['@el:' + elKey(p, EL_BED, true)], a = Math.max(0, t0), b = Math.min(DUR, t1);
       if (eb) elBed(eb, a, b, v ?? 1); else (AMB[k] ?? (() => console.warn('amb: unknown kind ' + k)))(a, b, v ?? 1); }
     function bellFx(t, f, v) { tone('sine', f, t, 0.002, 0, 1.8, 0.12 * v, fx); tone('sine', f * 2.76, t, 0.002, 0, 0.7, 0.05 * v, fx); }

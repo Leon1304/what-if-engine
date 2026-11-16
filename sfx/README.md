@@ -47,3 +47,22 @@ Add more: put `<kind>.mp3` here (CC0 only) and add the kind to `SMAP` in the eng
 | wingflap | OpenGameArt: dragon-flap | CC0 |
 | heli | OpenGameArt: helicopter-sfx (loops for `dur`) | CC0 |
 | sinking | OpenGameArt: ship-sinking (ship_destroyed) | CC0 |
+
+**Guns, punch, heartbeat, fire and ambience loops (v3.45)** — CC0 from OpenGameArt.org and Wikimedia Commons; one-shots trimmed and peak-normalised (mono MP3 64 kbps),
+beds cut to seamless 12–16 s loops (end crossfaded into the start, RMS-normalised, mono MP3 48 kbps). `amb-<kind>.mp3` plays for `AUDIO.amb` of that kind (`RAMB` in the engine).
+
+| kind | source | licence |
+|---|---|---|
+| shot | OpenGameArt: gunshots (22 Pistol.wav, first shot) | CC0 |
+| rifle | OpenGameArt: gunshots (22 Magnum.wav, first shot) | CC0 |
+| punch | OpenGameArt: 37-hitspunches (hit.mp3, first hit) | CC0 |
+| heartbeat | OpenGameArt: heartbeat-sounds (heartbeat_slow_0.wav) | CC0 |
+| fire | OpenGameArt: fire-crackling (fire-1.wav) | CC0 |
+| amb-rain | OpenGameArt: amb-rain-loop-1 | CC0 |
+| amb-wind | Commons: Howling wind.ogg | CC0 |
+| amb-ocean | Commons: Ocean Waves on a Tropical Beach.ogg | CC0 |
+| amb-city | Commons: Sagetyrtle - citystreet3 (cc0) (freesound).mp3 | CC0 |
+| amb-people | Commons: 360703 eguobyte large-crowd-medium-distance-stereo.wav | CC0 |
+| amb-battle | Commons: Dragout - War sounds (cc0) (freesound).ogg | CC0 |
+| amb-forest | OpenGameArt: forest-bird-sounds (fb.mp3) | CC0 |
+| amb-mob | OpenGameArt: crowd-shoutingspeaking-ambience | CC0 |

@@ -124,6 +124,22 @@ print('%.1f %.1f' % (20 * np.log10(r(3.6, 4.4) / r(5.73, 5.98)), lo(6.0, 7.0) / 
   if [ "$sp" = '"[[6],[2,3.2],true]"' ] && ! grep -q 'PAGE ERRORS' sd.log && python3 -c "import sys; sys.exit(0 if float(sys.argv[1]) >= 10 and float(sys.argv[2]) >= 3 else 1)" $sl 2>/dev/null; then echo "ok   sound dynamics  impact $sp · hush ${1} dB under the bed · sub ×${2}"
   else echo "FAIL sound dynamics: probe $sp · levels '$sl'"; tail -3 sd.log; fail=1; fi;;
 esac
+# v3.45 real recordings (tests/real-sounds): the CC0 ambience loops (sfx/amb-*.mp3) and one-shots (shot, rifle, punch, heartbeat, fire) are embedded and each part is audible;
+#   beds sit between −36 and −20 dB (under the voice, never blasting), one-shots peak above −12 dB
+case " $names " in *" real-sounds "*)
+  timeout 600 node render.mjs real-sounds.html --audio rs.wav > rs.log 2>&1
+  rl=$(python3 -c "
+import subprocess, numpy as np
+a = np.frombuffer(subprocess.run(['ffmpeg', '-v', 'error', '-i', 'rs.wav', '-ac', '1', '-ar', '48000', '-f', 's16le', '-'], capture_output=True).stdout, dtype='<i2').astype(float) / 32768
+db = lambda t0, t1: 20 * np.log10(np.sqrt((a[int(t0 * 48000):int(t1 * 48000)] ** 2).mean()) + 1e-9)
+pk = lambda t0, t1: 20 * np.log10(np.abs(a[int(t0 * 48000):int(t1 * 48000)]).max() + 1e-9)
+beds = [db(i * 2 + 0.4, i * 2 + 1.6) for i in range(8)]; hits = [pk(t, t + 0.6) for t in (16.2, 17.2, 18.2, 19.2, 21)]
+bad = [i for i, v in enumerate(beds) if not -36 <= v <= -20] + [8 + i for i, v in enumerate(hits) if v < -12]
+print(('ok' if not bad else 'bad ' + ','.join(map(str, bad))) + ' beds ' + '/'.join('%.0f' % v for v in beds))" 2>&1)
+  ne=$(grep -o '"amb-[a-z]*"' real-sounds.html | sort -u | wc -l | tr -d ' ')
+  if [ "${rl%% *}" = ok ] && [ "$ne" -ge 8 ] && grep -q '"heartbeat":' real-sounds.html && ! grep -q 'PAGE ERRORS' rs.log; then echo "ok   real sounds  $ne ambience loops · $rl"
+  else echo "FAIL real sounds: '$rl' · embedded loops $ne"; tail -3 rs.log; fail=1; fi;;
+esac
 # v3.44 directing (tests/direction): CFG.autoCut splits the long shot and cuts to 'you' on "you notice", reactCut() lets 'you' react, the directing QA reports exactly
 #   HOOK · PACING (the cuts: false shot 5.4–9.4 s) · YOU · MISMATCH · ENDCARD
 case " $names " in *" direction "*)
