@@ -55,10 +55,10 @@ Survival-Erkundungsspiel (POV, Low-Poly, Three.js), unabhängig von der Video-En
 Vor dem Push `node game/tools/playthrough.mjs` → `PLAYTHROUGH OK`, `node game/tools/routes.mjs` → `ROUTES OK` (Laufwege mit echter Kollision; Möbel nie vor Türen/in Gänge), `node game/tools/pickups.mjs` → `PICKUPS OK` (Gegenstände nie in Füllware/Wänden verstecken) und `node game/tools/features.mjs` → `FEATURES OK`. Zweisprachig (Englisch/Deutsch, Leons Vorgabe ab 16.11.2026): jeder sichtbare Text als deutscher Quelltext in `T()` (`game/js/i18n.js`), Englisch in `game/js/lang/en/`; neue Texte immer gleich mit übersetzen, `node game/tools/i18n.mjs` → `I18N OK`. Spielstände müssen nach Updates weiter laden (alles über Namen/Ids speichern, `SAVE_VERSION` in `game.js`). GitHub Pages (Workflow `game-pages`): https://leon1304.github.io/what-if-engine/game/ — Details `game/README.md`.
 Blender nur live öffnen, wenn Leon zuschauen will (Mac wird warm); Viewport dann Solid + Vertex-Farben statt Materialvorschau.
 
-## Spiel „Schwebeinsel“ (insel/)
-Gemütliches Sechseck-Aufbauspiel (Three.js, Low Poly, alles prozedural in `insel/js/models/`, keine GLB), unabhängig von Engine und Northwood. Konzept `insel/DESIGN.md`, Aufbau `insel/README.md`.
-Vor dem Push: `node insel/tools/rules.mjs` → `RULES OK` und `node insel/tools/play.mjs <ordner>` → `PLAY OK` (bei UI-/Kamera-/Leben-Änderungen auch `ui-demo.mjs`, `stage-shots.mjs`, `life-logic.mjs`).
-Spielstände müssen nach Updates laden (`SAVE_VERSION` in `insel/js/game.js`). GitHub Pages (Workflow `game-pages`): https://leon1304.github.io/what-if-engine/insel/
+## Spiel „Cloudhaven“ (cloudhaven/, früher „Schwebeinsel“ in insel/)
+Gemütliches Sechseck-Aufbauspiel (Three.js, Low Poly, alles prozedural in `cloudhaven/js/models/`, keine GLB), unabhängig von Engine und Northwood; Deutsch/Englisch (`js/i18n.js`: neue Texte, Kachelarten und Bewohner-Sätze immer in beiden Sprachen). Konzept `cloudhaven/DESIGN.md`, Aufbau `cloudhaven/README.md`. Neue Kachelarten: Definition in `js/tiles.js` (+ `CATS`), Modell als `tile_<art>` in `js/models/extra_*.js`, englischer Text in `i18n.js`.
+Vor dem Push: `node cloudhaven/tools/rules.mjs` → `RULES OK`, `node cloudhaven/tools/play.mjs <ordner>` → `PLAY OK`, `node cloudhaven/tools/camfeel.mjs <ordner>` → `CAM OK` (Ziehen/Zoomen ohne Sprünge); bei UI-/Kamera-/Leben-Änderungen auch `ui-demo.mjs`, `stage-shots.mjs`, `life-logic.mjs`.
+Spielstände müssen nach Updates laden (`SAVE_VERSION` in `js/game.js`; localStorage-Präfix `insel.` und Dateiendung `.insel.json` bleiben aus Kompatibilität). Online: https://leon1304.github.io/what-if-engine/cloudhaven/ (alte Adresse `/insel/` leitet über `aliases` in `game.json` weiter).
 
 ## Spielhalle (Übersicht aller Spiele, Netlify)
 `hub/` + `tools/site/build.mjs` bauen `_site/` mit der Übersicht und jedem Spiel, das eine `game.json` im eigenen Ordner hat (Netlify über `netlify.toml`, zusätzlich GitHub Pages-Wurzel).

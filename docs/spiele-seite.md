@@ -29,6 +29,7 @@ Eine Seite, über die man alle Browser-Spiele des Repos erreicht. Sie läuft auf
   "cover": "cover.jpg",
   "files": ["index.html", "js"],         // was online geht (ohne Angabe: alles außer tools/, blender/, *.md, package.json)
   "save": "meinspiel.",                  // localStorage-Präfix der Spielstände → Knopf „Weiterspielen“
+  "aliases": ["altername"],               // optional: alte Ordnernamen leiten auf das Spiel weiter (z. B. nach Umbenennen)
   "entry": "index.html",                 // Startdatei, falls nicht index.html
   "coverShot": { "wait": 8000, "click": ["Neues Spiel"], "eval": "JS vor dem Foto", "after": 2500 }
 }

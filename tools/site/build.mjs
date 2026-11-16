@@ -47,7 +47,7 @@ function findGames() {
       title: g.title, tagline: g.tagline, description: g.description || '', genre: g.genre || '',
       tags: g.tags || [], controls: g.controls || [], status: g.status || 'spielbar',
       color: g.color || '#6b7cff', emoji: g.emoji || '🎮', cover: g.cover ? `${d.name}/${g.cover}` : null,
-      save: g.save || null, order: g.order ?? 100, added, updated, files: g.files || null,
+      save: g.save || null, order: g.order ?? 100, added, updated, files: g.files || null, aliases: g.aliases || [],
     });
   }
   games.sort((a, b) => a.order - b.order || a.title.localeCompare(b.title, 'de'));
@@ -72,7 +72,9 @@ function build() {
   fs.rmSync(OUT, { recursive: true, force: true });
   fs.mkdirSync(OUT, { recursive: true });
   for (const g of games) if (g.status !== 'bald') copyGame(g);
-  const pub = games.map(({ files, order, ...g }) => g);
+  // alte Adressen (game.json "aliases": ["insel"]) leiten auf das Spiel weiter
+  for (const g of games) for (const a of g.aliases || []) { fs.mkdirSync(path.join(OUT, a), { recursive: true }); fs.writeFileSync(path.join(OUT, a, 'index.html'), `<!doctype html><meta charset="utf-8"><title>${g.title}</title><meta http-equiv="refresh" content="0; url=../${g.id}/"><link rel="canonical" href="../${g.id}/"><a href="../${g.id}/">${g.title}</a>`); }
+  const pub = games.map(({ files, order, aliases, ...g }) => g);
   const built = new Date().toISOString();
   fs.cpSync(HUB, OUT, { recursive: true });
   // Spieleliste direkt in die Seite (kein Nachladen nötig) und zusätzlich als games.json

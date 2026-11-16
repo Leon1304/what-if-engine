@@ -1,7 +1,7 @@
 {
-  "title": "Schwebeinsel",
+  "title": "Cloudhaven",
   "tagline": "Ein kleines Dorf über den Wolken, Kachel für Kachel",
-  "description": "Gemütliches Sechseck-Aufbauspiel: Wiesen, Wälder, Bäche, Mühlen und Häuser auf eine schwebende Insel legen. Passende Nachbarn bringen Punkte, das Dorf wächst mit Bewohnern, Wetter und Jahreszeiten. Kein Verlieren.",
+  "description": "Gemütliches Sechseck-Aufbauspiel auf einer schwebenden Insel: 37 Bauteile in 7 Kategorien – Wälder, Bäche, Felder, Fachwerkhäuser, Mühlen, Gasthaus, Burgturm. Passende Nachbarn bringen Punkte, Wege verbinden sich von selbst, das Dorf wächst mit Bewohnern, Wetter, Jahreszeiten und Laternenlicht bei Nacht. Deutsch und Englisch. Kein Verlieren.",
   "genre": "Aufbau · Puzzle",
   "tags": [
     "3D",
@@ -17,7 +17,7 @@
   "added": "2026-11-16",
   "order": 20,
   "color": "#4b95c9",
-  "emoji": "🏝️",
+  "emoji": "☁️",
   "cover": "cover.jpg",
   "files": [
     "index.html",
@@ -27,10 +27,13 @@
   "coverShot": {
     "wait": 8000,
     "click": [
-      "Neue Insel",
-      "Insel erschaffen"
+      "[data-act=\"new\"]",
+      "[data-act=\"create\"]"
     ],
-    "eval": "(async()=>{const W=ms=>new Promise(r=>setTimeout(r,ms));const {game,ui}=__insel;game.S.tut=99;for(let i=0;i<70&&game.S.stack.length;i++){const c=game.current();let best=null;for(const [q,r] of game.slots())for(let o=0;o<6;o++){const e=game.evaluate(c.k,q,r,o);if(e.ok&&(!best||e.pts+Math.random()*3>best.e.pts))best={q,r,o,e};}if(!best){game.S.stack.splice(game.S.pick,1);continue;}game.place(best.q,best.r,best.o);if(i%10==9)await W(200);}const {stage,rig,app,THREE}=__insel;stage.setWeather('klar');stage.setWeather=()=>{};let x=0,z=0,n=0;for(const k of game.board.keys()){const [q,r]=k.split(',').map(Number);const p=app.tilePos(q,r);x+=p[0];z+=p[2];n++;}rig.jumpTo(new THREE.Vector3(x/n,0,z/n),30,.75,0);await W(7000);for (const e of document.body.querySelectorAll('*')) if (e.tagName !== 'CANVAS' && !e.querySelector('canvas')) e.style.visibility = 'hidden';})()",
+    "eval": "(async()=>{const W=ms=>new Promise(r=>setTimeout(r,ms));const {game,ui,app}=__insel;game.S.tut=99;game.S.unlocked=['wald','nadelwald','haus','weg','bach','bachk','feld','muehle','gasthaus','baecker','platz','kapelle','see','teich','obst','wein','imker','schafe','huette','reihe','markt','turm','burg','steine','pavillon','hof','kreuzung','schmiede','wiese'];game.S.stack=[];game._refill(80);for(let i=0;i<60&&game.S.stack.length;i++){const c=game.current();let best=null;for(const [q,r] of game.slots())for(let o=0;o<6;o++){const e=game.evaluate(c.k,q,r,o);if(e.ok&&(!best||e.pts+Math.random()*3>best.e.pts))best={q,r,o,e};}if(!best){game.S.stack.splice(game.S.pick,1);continue;}game.place(best.q,best.r,best.o);if(i%10==9)await W(200);}ui._closeAll&&ui._closeAll();app.applySettings({dayCycle:false,time:17.4,season:1,weather:'klar'});const {stage,rig,THREE}=__insel;stage.setWeather('klar',true);let x=0,z=0,n=0;for(const k of game.board.keys()){const [q,r]=k.split(',').map(Number);const p=app.tilePos(q,r);x+=p[0];z+=p[2];n++;}rig.jumpTo(new THREE.Vector3(x/n,0,z/n),34,.75,0);await W(7000);for (const e of document.body.querySelectorAll('*')) if (e.tagName !== 'CANVAS' && !e.querySelector('canvas')) e.style.visibility = 'hidden';})()",
     "after": 9000
-  }
+  },
+  "aliases": [
+    "insel"
+  ]
 }
