@@ -1,11 +1,11 @@
-# Publishes the game (game/) on GitHub Pages: https://leon1304.github.io/what-if-engine/game/
-# Only the playable files go online (index.html, js/, map.glb); the Blender scripts stay in the repo.
+# Publishes the games on GitHub Pages: https://leon1304.github.io/what-if-engine/game/ (Waldtank) and …/insel/ (Schwebeinsel)
+# Only the playable files go online (index.html, js/, map.glb); Blender scripts and tools stay in the repo.
 name: game-pages
 
 on:
   push:
     branches: [main]
-    paths: ['game/**', '.github/workflows/game-pages.yml']
+    paths: ['game/**', 'insel/**', '.github/workflows/game-pages.yml']
   workflow_dispatch:
 
 permissions:
@@ -27,8 +27,9 @@ jobs:
       - uses: actions/checkout@v7
       - name: Collect the playable files
         run: |
-          mkdir -p _site/game
+          mkdir -p _site/game _site/insel
           cp -r game/index.html game/js game/map.glb _site/game/
+          cp -r insel/index.html insel/js _site/insel/
           printf '<!doctype html><meta http-equiv="refresh" content="0; url=game/">' > _site/index.html
       - uses: actions/configure-pages@v6
       - uses: actions/upload-pages-artifact@v5

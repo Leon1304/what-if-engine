@@ -1,0 +1,148 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Bühne – Test</title>
+<style>html,body{margin:0;height:100%;background:#000;overflow:hidden}canvas{display:block;width:100%;height:100%}
+#hud{position:fixed;left:8px;top:8px;font:12px/1.4 system-ui;color:#fff;text-shadow:0 1px 2px #000;pointer-events:none;white-space:pre}</style>
+<script type="importmap">{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/" } }</script>
+</head><body><canvas id="c"></canvas><div id="hud"></div>
+<script type="module">
+// Testszene für Stage + CameraRig.
+//   ?q=hoch|mittel|niedrig &t=Uhrzeit &s=Jahreszeit(0–4) &w=Wetter &w2=Wetter nach adv/2 &f=Filter &tilt=0…1|auto
+//   &cam=x,z,abstand,yawGrad,pitchVersatzGrad &n=Ringe (3 → 37 Kacheln, 10 → 331) &adv=Sekunden vorlaufen &tt=Startzeit
+//   &bow=1 (Regenbogen) &freeze=1 (Zeit steht) &hud=1
+import * as THREE from 'three';
+import { Stage } from '../js/stage.js';
+import { CameraRig } from '../js/camera.js';
+import { Kit } from '../js/kit.js';
+import { MATS } from '../js/materials.js';
+import { center, pixelToHex, key, neighbor, rng, hash } from '../js/hex.js';
+import { makeField, buildTerrain } from '../js/terrain.js';
+import { edgesOf } from '../js/tiles.js';
+import { pine, leafTree, birch, bush, rock } from '../js/models/nature.js';
+
+const Q = new URLSearchParams(location.search), num = (k, d) => Q.has(k) ? +Q.get(k) : d;
+const stage = new Stage(document.getElementById('c'), { quality: Q.get('q') || 'hoch' });
+const { scene } = stage;
+
+// ---------- Insel aus echten Gelände-Kacheln ----------
+const RINGS = num('n', 3), R0 = rng(5), tiles = new Map();
+for (let q = -RINGS; q <= RINGS; q++) for (let r = Math.max(-RINGS, -q - RINGS); r <= Math.min(RINGS, -q + RINGS); r++) {
+  const d = (Math.abs(q) + Math.abs(r) + Math.abs(q + r)) / 2, h = hash(q, r) % 100;
+  let k = h < 42 ? 'wald' : 'wiese';
+  if (d === 0) k = 'see'; else if (d === 1 && h % 3 === 0) k = 'haus'; else if (d <= 2 && h % 5 === 0) k = 'haus';
+  if (RINGS > 4 && h % 9 === 0) k = 'haus';
+  tiles.set(key(q, r), { k, q, r, o: 0, E: edgesOf(k, 0) });
+}
+const terrain = new Kit(1), trees = new Kit(2), houses = new Kit(3), fields = new Map();
+for (const t of tiles.values()) {
+  const { x: cx, z: cz } = center(t.q, t.r), nb = [0, 1, 2, 3, 4, 5].map(i => tiles.get(key(...neighbor(t.q, t.r, i))) || null);
+  const F = makeField(t, t.E, nb, cx, cz); fields.set(key(t.q, t.r), F);
+  terrain.push([cx, 0, cz]); buildTerrain(terrain, F, nb, hash(t.q, t.r)); terrain.pop();
+  const rr = rng(hash('d', t.q, t.r));
+  if (t.k === 'wald' || t.k === 'wiese') {
+    const n = t.k === 'wald' ? 13 : 3;
+    for (let i = 0; i < n * 2 && i < 40; i++) {
+      const x = (rr() - .5) * 10, z = (rr() - .5) * 10; if (!F.free(x, z, .7)) continue;
+      const p = [cx + x, F.h(x, z), cz + z], c = rr();
+      if (t.k === 'wiese') { c < .5 ? bush(trees, p, .8 + rr() * .5) : rock(trees, p, .6 + rr() * .6); continue; }
+      c < .5 ? pine(trees, p, .8 + rr() * .5) : c < .8 ? leafTree(trees, p, .8 + rr() * .4) : birch(trees, p, .9);
+    }
+  }
+  if (t.k === 'haus') house(houses, cx, F.h(0, 0) + .05, cz, rr);
+}
+// Einfache Häuser: Kasten + Satteldach, Fenster (glow), Tür, Schornstein, Laterne
+function house(k, x, y, z, rr) {
+  const w = 4 + rr() * 1.5, d = 3.4 + rr() * 1, h = 2.6 + rr() * .8, a = rr() * Math.PI, wall = [0xefe2c8, 0xe8d6b8, 0xdfe6ea][Math.floor(rr() * 3)];
+  k.push([x, y, z], a);
+  k.box(0x8a8378, [0, -.3, 0], [w + .3, .35, d + .3]);
+  k.box(wall, [0, 0, 0], [w, h, d]);
+  k.prism([0xb4513a, 0x9a4632, 0x6f5a4c][Math.floor(rr() * 3)], [0, h, 0], w + .5, 1.7, d + .5, { tag: 6 });
+  k.box(0x6b4a32, [w * .3, h + .4, d * .15], [.45, 1.6, .45]);
+  for (const sx of [-1, 1]) for (const fl of [0]) {
+    k.box(0x2f4558, [sx * w * .27, h * .38 + fl, d / 2 + .01], [.8, .9, .06], { layer: 'glow', ao: false, jit: 0 });
+    k.box(0xf4efe6, [sx * w * .27, h * .38 - .08, d / 2 + .05], [1, .1, .14], { ao: false });
+    k.box(0x2f4558, [sx * w * .27, h * .38, -d / 2 - .01], [.8, .9, .06], { layer: 'glow', ao: false, jit: 0 });
+  }
+  k.box(0x5a3a26, [0, 0, d / 2 + .02], [.9, 1.9, .08]);
+  k.box(0x3a3a3a, [w / 2 + .9, 0, d / 2 + .6], [.12, 2.4, .12]);
+  k.box(0xffd9a0, [w / 2 + .9, 2.4, d / 2 + .6], [.32, .32, .32], { layer: 'glow', ao: false, jit: 0 });   // Laterne
+  k.pop();
+}
+const meshes = {};
+function addKit(name, kit, cast = true) {
+  const geo = kit.build(), out = [];
+  for (const [layer, g] of Object.entries(geo)) { const m = new THREE.Mesh(g, MATS[layer] || MATS.base); m.castShadow = cast && layer === 'base'; m.receiveShadow = true; scene.add(m); out.push(m); }
+  meshes[name] = out; return out;
+}
+addKit('terrain', terrain); addKit('trees', trees); addKit('houses', houses);
+// Laternen leuchten stärker (tag 1)
+for (const m of meshes.houses) if (m.material === MATS.glow) { const g = m.geometry, c = g.attributes.color, tg = g.attributes.tag; for (let i = 0; i < c.count; i++) if (c.getX(i) > .6) tg.setX(i, 1); tg.needsUpdate = true; }
+
+const ground = (x, z) => { const [q, r] = pixelToHex(x, z), F = fields.get(key(q, r)); if (!F) return NaN; const c = center(q, r); return Math.max(F.h(x - c.x, z - c.z), -.32); };
+const rig = new CameraRig(stage.camera, stage.renderer.domElement, { ground, blockers: () => meshes.houses });
+const islandR = (RINGS + .5) * 6 * Math.sqrt(3);
+rig.setBounds(new THREE.Vector3(), islandR);
+const cam = (Q.get('cam') || '0,0,60,35,0').split(',').map(Number);
+rig.jumpTo(new THREE.Vector3(cam[0], 0, cam[1]), cam[2], cam[3] * Math.PI / 180, (cam[4] || 0) * Math.PI / 180);
+
+stage.setTime(num('t', 11)); stage.setSeason(num('s', 1), true); stage.setWeather(Q.get('w') || 'klar', true); stage.setFilter(Q.get('f') || 'normal');
+if (Q.has('tilt') && Q.get('tilt') !== 'auto') stage.tilt = +Q.get('tilt');
+let T = num('tt', 20); const adv = num('adv', 0);
+stage.setFocus(rig.target, rig.distance); stage.update(0, T);
+for (let s = 0; s < adv; s += 1 / 30) { if (Q.has('w2') && s >= adv / 2 && stage.weather !== Q.get('w2')) stage.setWeather(Q.get('w2')); T += 1 / 30; stage.update(1 / 30, T); }
+if (Q.get('bow') === '1') stage.showRainbow(1);
+
+const events = { taps: [], hovers: 0, changes: {} };
+rig.onTap = (x, y, e) => events.taps.push([+x.toFixed(3), +y.toFixed(3), e.button]);
+rig.onHover = () => events.hovers++;
+rig.onChange = k => events.changes[k] = (events.changes[k] || 0) + 1;
+
+let tris = 0; scene.traverse(o => { if (o.isMesh && !o.isInstancedMesh) tris += o.geometry.attributes.position.count / 3; });
+const hud = document.getElementById('hud'), showHud = Q.get('hud') === '1', freeze = Q.get('freeze') === '1';
+let last = performance.now(), frames = 0, acc = 0, fps = 0, cpu = 0;
+function step(dt) {
+  const a = performance.now();
+  rig.update(dt); stage.setFocus(rig.target, rig.distance);
+  if (!freeze) T += dt; stage.update(dt, T); stage.render();
+  cpu = cpu * .95 + (performance.now() - a) * .05;
+}
+function frame(now) {
+  const dt = Math.min(.1, (now - last) / 1000); last = now; step(dt);
+  frames++; acc += dt; if (acc > .5) { fps = frames / acc; frames = 0; acc = 0; }
+  if (showHud) hud.textContent = `${fps.toFixed(0)} fps · cpu ${cpu.toFixed(2)} ms · ${(tris / 1000).toFixed(0)}k tris · ${tiles.size} Kacheln · d ${rig.distance.toFixed(1)} · calls ${stage.renderer.info.render.calls}`;
+  requestAnimationFrame(frame);
+}
+// Hilfen für Playwright
+window.__stage = stage; window.__rig = rig; window.__events = events; window.__THREE = THREE; window.__ground = ground;
+window.__info = () => ({ tris: Math.round(tris), tiles: tiles.size, calls: stage.renderer.info.render.calls, d: rig.distance, cam: stage.camera.position.toArray().map(v => +v.toFixed(2)), target: rig.target.toArray().map(v => +v.toFixed(2)) });
+window.__project = (x, y, z) => { const v = new THREE.Vector3(x, y, z).project(stage.camera); return [(v.x + 1) / 2 * innerWidth, (1 - v.y) / 2 * innerHeight]; };
+window.__step = (n = 1, dt = 1 / 60) => { for (let i = 0; i < n; i++) step(dt); };
+window.__houses = () => meshes.houses;
+window.__setT = v => { T = v; };
+// nächster kräftiger Blitz ab t (Gewitter)
+window.__nextFlash = (t0 = T) => { for (let t = t0; t < t0 + 120; t += 1 / 60) { stage.update(0, t); if (stage.flash > .7) return t; } return t0; };
+// Durchsatz: n Bilder hintereinander, am Ende einmal auf die GPU warten → ms/Bild (GPU-gebunden)
+window.__bench = (n = 120) => {
+  const gl = stage.renderer.getContext(), px = new Uint8Array(4); step(1 / 60); gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, px);
+  const a = performance.now(); for (let i = 0; i < n; i++) { step(1 / 60); if (i % 8 === 7) gl.flush(); } gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, px);
+  return (performance.now() - a) / n;
+};
+// GPU-Zeit je Bild per Timer-Query (EXT_disjoint_timer_query_webgl2), gemessen im normalen rAF-Takt
+window.__gpu = (n = 120) => new Promise(res => {
+  const gl = stage.renderer.getContext(), ext = gl.getExtension('EXT_disjoint_timer_query_webgl2');
+  if (!ext) return res(null);
+  const pending = [], times = [], fts = []; let k = 0, lt = performance.now();
+  const orig = stage.render.bind(stage);
+  stage.render = () => { if (k >= n) return orig(); const q = gl.createQuery(); gl.beginQuery(ext.TIME_ELAPSED_EXT, q); orig(); gl.endQuery(ext.TIME_ELAPSED_EXT); pending.push(q); };
+  const poll = () => {
+    while (pending.length && gl.getQueryParameter(pending[0], gl.QUERY_RESULT_AVAILABLE)) { const q = pending.shift(); if (!gl.getParameter(ext.GPU_DISJOINT_EXT)) times.push(gl.getQueryParameter(q, gl.QUERY_RESULT) / 1e6); gl.deleteQuery(q); }
+    const now = performance.now(); fts.push(now - lt); lt = now;
+    if (++k < n || pending.length) requestAnimationFrame(poll);
+    else { stage.render = orig; times.sort((a, b) => a - b); fts.sort((a, b) => a - b); res({ gpu: times[times.length >> 1], gpu90: times[Math.floor(times.length * .9)], frame: fts[fts.length >> 1], n: times.length }); }
+  };
+  requestAnimationFrame(poll);
+});
+step(0); requestAnimationFrame(t => { last = t; requestAnimationFrame(frame); });
+setTimeout(() => window.__ready = true, 600);
+</script></body></html>

@@ -1,0 +1,168 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Leben – Testinsel</title>
+<style>html,body{margin:0;height:100%;background:#9cc8e8;overflow:hidden;font:13px system-ui}canvas{display:block}#hud{position:fixed;left:8px;top:8px;color:#fff;text-shadow:0 1px 2px #000;white-space:pre}</style>
+<script type="importmap">{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/" } }</script>
+</head><body><div id="hud"></div>
+<script type="module">
+// Testinsel für life.js und audio.js.
+//   ?night=0..1 &season=0..4 &rain=0..1 &t=Sekunden &cam=x,y,z &look=x,y,z &fx=place|perfect|wald|dorf|wasser|feld|berg|unlock|quest &fxAt=0.8 &fxPos=x,z
+//   &follow=i (Kamera 2 m vor Bewohner i) &live=1 (läuft weiter) &perf=1 (Messung) &audio=1 (Ton offline prüfen) &pick=1 (Raycast-Test)
+import * as THREE from 'three';
+import { Life } from '../js/life.js';
+import { Sound } from '../js/audio.js';
+import { R, INR, center, edgeMid, cornerAt } from '../js/hex.js';
+
+const Q = new URLSearchParams(location.search), num = (k, d) => Q.has(k) ? +Q.get(k) : d;
+const night = num('night', 0), season = num('season', 1), rain = num('rain', 0), T = num('t', 120);
+const r = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true }); r.setSize(innerWidth, innerHeight); r.setPixelRatio(1);
+r.shadowMap.enabled = true; r.shadowMap.type = THREE.PCFSoftShadowMap; r.toneMapping = THREE.ACESFilmicToneMapping; document.body.appendChild(r.domElement);
+const scene = new THREE.Scene();
+const sky = new THREE.Color(0x9cc8e8).lerp(new THREE.Color(0x0b1430), night).lerp(new THREE.Color(0x8a96a4), rain * .6);
+scene.background = sky; scene.fog = new THREE.Fog(sky, 90, 320);
+const cam = new THREE.PerspectiveCamera(40, innerWidth / innerHeight, .05, 900);
+scene.add(new THREE.HemisphereLight(new THREE.Color(0xdfefff).lerp(new THREE.Color(0x4060a0), night), 0x6a5a40, lerp(1.1, .3, night)));
+const sun = new THREE.DirectionalLight(new THREE.Color(0xfff2dd).lerp(new THREE.Color(0x8090c0), night), lerp(2.6, .25, night) * (1 - rain * .5));
+sun.position.set(30, 45, 20); sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048);
+Object.assign(sun.shadow.camera, { left: -35, right: 35, top: 35, bottom: -35, near: 1, far: 140 }); sun.shadow.bias = -.0005; sun.shadow.normalBias = .03; scene.add(sun);
+function lerp(a, b, t) { return a + (b - a) * t; }
+
+// ---------- Testinsel (19 Kacheln)
+const LAY = {
+  '0,0': { kind: 'markt', roads: [0, 2, 4] }, '1,0': { kind: 'weg', roads: [3, 0] }, '-1,1': { kind: 'wegk', roads: [5, 1] }, '0,-1': { kind: 'weg', roads: [1, 4, 0] },
+  '2,0': { kind: 'haus', roads: [3] }, '-1,2': { kind: 'haus', roads: [4] }, '0,-2': { kind: 'haus', roads: [1] }, '1,-1': { kind: 'haus', roads: [3] },
+  '0,1': { kind: 'bach' }, '0,2': { kind: 'bach', fall: 1 }, '1,1': { kind: 'see' }, '-1,0': { kind: 'wald' }, '-2,0': { kind: 'wald' }, '-2,1': { kind: 'wald' },
+  '-2,2': { kind: 'berg' }, '-1,-1': { kind: 'wiese' }, '1,-2': { kind: 'wiese' }, '2,-2': { kind: 'turm' }, '2,-1': { kind: 'hof' },
+};
+const GROUP = { markt: 'dorf', weg: 'dorf', wegk: 'dorf', haus: 'dorf', wald: 'wald', bach: 'wasser', see: 'wasser', berg: 'berg', hof: 'feld', wiese: null, turm: null };
+const GY = .2, mtn = (x, z, cx, cz) => GY + Math.max(0, 7 * (1 - Math.hypot(x - cx, z - cz) / 5.6)) ** 1.2;
+const tiles = [];
+const plateGeo = (() => { const s = new THREE.Shape(); for (let i = 0; i < 6; i++) { const [x, z] = cornerAt(i); i ? s.lineTo(x, -z) : s.moveTo(x, -z); } const g = new THREE.ExtrudeGeometry(s, { depth: 2, bevelEnabled: false }); g.rotateX(-Math.PI / 2); g.translate(0, -2 + GY, 0); return g; })();
+const M = c => new THREE.MeshStandardMaterial({ color: c, flatShading: true, roughness: .9 });
+const KC = { markt: 0xb8ab98, weg: 0x7aa85a, wegk: 0x7aa85a, haus: 0x76a856, wald: 0x4f7a3a, bach: 0x6aa84f, see: 0x6aa84f, berg: 0x8a8780, wiese: 0x8fbf55, turm: 0x8fbf55, hof: 0x9a8a5a };
+const add = (geo, mat, p = [0, 0, 0], ry = 0, cast = true) => { const m = new THREE.Mesh(geo, mat); m.position.set(...p); m.rotation.y = ry; m.castShadow = cast; m.receiveShadow = true; scene.add(m); return m; };
+for (const [key, L] of Object.entries(LAY)) {
+  const [q, rr] = key.split(',').map(Number), c = center(q, rr), t = { key, kind: L.kind, q, r: rr, cx: c.x, cz: c.z, group: GROUP[L.kind], groupId: GROUP[L.kind] ? GROUP[L.kind] + '1' : null, spots: [], roads: [] };
+  add(plateGeo, M(KC[L.kind]), [c.x, L.kind === 'see' ? -1.1 : L.kind === 'bach' ? -.75 : 0, c.z], 0, false);
+  const sp = (type, x, y, z, extra = {}) => t.spots.push({ type, p: [c.x + x, y, c.z + z], ...extra });
+  if (L.roads) {
+    t.roads.push([c.x, c.z]); for (const i of L.roads) { const [x, z] = edgeMid(i); t.roads.push([c.x + x, c.z + z]); }
+    const ends = L.roads.map(i => edgeMid(i)), P = [];
+    if (L.kind === 'markt' || ends.length >= 3) for (const e of ends) P.push([e, [0, 0]]);
+    else if (ends.length === 2) { const pts = []; for (let i = 0; i <= 12; i++) { const u = i / 12, w = 1 - u; pts.push([w * w * ends[0][0] + u * u * ends[1][0], w * w * ends[0][1] + u * u * ends[1][1]]); } P.push(pts); }
+    else { const e = ends[0], L2 = Math.hypot(...e); P.push([e, [e[0] / L2 * 2.3, e[1] / L2 * 2.3]]); }
+    for (const pl of P) for (let i = 0; i < pl.length - 1; i++) { const a = pl[i], b = pl[i + 1], dx = b[0] - a[0], dz = b[1] - a[1], Ls = Math.hypot(dx, dz); add(new THREE.BoxGeometry(1.7, .03, Ls + .9), M(0xb09468), [c.x + (a[0] + b[0]) / 2, GY + .01, c.z + (a[1] + b[1]) / 2], Math.atan2(dx, dz), false); }
+  }
+  if (L.kind === 'markt') {
+    add(new THREE.CylinderGeometry(3.6, 3.6, .04, 24), M(0xa49a8c), [c.x, GY + .02, c.z], 0, false);
+    add(new THREE.CylinderGeometry(1.1, 1.2, .5, 12), M(0x9a958c), [c.x, GY + .25, c.z]); add(new THREE.CylinderGeometry(.15, .2, 1.3, 8), M(0x9a958c), [c.x, GY + .65, c.z]);
+    sp('fountain', 0, GY + 1.3, 0);
+    for (const [a, i] of [[Math.PI * .33, 0], [Math.PI * 1.0, 1]]) { const x = Math.cos(a) * 3.4, z = Math.sin(a) * 3.4, ry = Math.atan2(-x, -z);
+      add(new THREE.BoxGeometry(1.8, 1, .8), M(0xa86a3a), [c.x + x, GY + .5, c.z + z], ry); add(new THREE.BoxGeometry(2, .08, 1.1), M(i ? 0xd84a3a : 0x3a7ad8), [c.x + x, GY + 2.2, c.z + z], ry);
+      sp('stall', x, GY, z, { ry }); }
+    const by = Math.PI * 1.65, bx = Math.cos(by) * 3.7, bz = Math.sin(by) * 3.7, bry = Math.atan2(-bx, -bz);
+    const bench = add(new THREE.BoxGeometry(1.4, .08, .42), M(0x8a5a3a), [c.x + bx, GY + .41, c.z + bz], bry); add(new THREE.BoxGeometry(1.4, .45, .06), M(0x8a5a3a), [c.x + bx - Math.sin(bry) * .2, GY + .45 + .22, c.z + bz - Math.cos(bry) * .2], bry);
+    sp('sit', bx, GY, bz, { ry: bry });
+    sp('light', 2.6, GY + 2.6, -2.6); sp('light', -2.6, GY + 2.6, 2.4);
+  }
+  if (L.kind === 'weg' || L.kind === 'wegk') { const [x, z] = edgeMid(L.roads[0], 2.5); const o = [z / 2.5 * 1.3, -x / 2.5 * 1.3]; sp('light', x + o[0], GY + 2.6, z + o[1]); }
+  if (L.kind === 'weg' && key === '1,0') { const bry = Math.PI; add(new THREE.BoxGeometry(1.4, .08, .42), M(0x8a5a3a), [c.x + .5, GY + .41, c.z + 1.6], bry); add(new THREE.BoxGeometry(1.4, .45, .06), M(0x8a5a3a), [c.x + .5, GY + .67, c.z + 1.8], bry); sp('sit', .5, GY, 1.6, { ry: bry }); }
+  for (const s of t.spots) if (s.type === 'light') add(new THREE.CylinderGeometry(.05, .07, 2.6, 6), M(0x2a2a2a), [s.p[0], GY + 1.3, s.p[2]]);
+  if (L.kind === 'haus') {
+    const i = L.roads[0], a = i * Math.PI / 3, fx = Math.cos(a), fz = Math.sin(a), ry = Math.atan2(fx, fz);
+    add(new THREE.BoxGeometry(4.4, 3.4, 4.4), M(0xf0e2c8), [c.x, GY + 1.7, c.z], ry);
+    const roof = add(new THREE.ConeGeometry(3.6, 2.4, 4), M(0xb04a32), [c.x, GY + 4.6, c.z], ry + Math.PI / 4);
+    add(new THREE.BoxGeometry(.9, 1.7, .1), M(0x6a4028), [c.x + fx * 2.22, GY + .85, c.z + fz * 2.22], ry);
+    add(new THREE.BoxGeometry(.5, 1.6, .5), M(0x9a5a3a), [c.x - fz * 1.1, GY + 5, c.z + fx * 1.1], ry);
+    sp('door', fx * 2.3, GY, fz * 2.3, { ry }); sp('smoke', -fz * 1.1, GY + 5.8, fx * 1.1);
+    sp('light', fx * 2.4 + fz * .9, GY + 2.1, fz * 2.4 - fx * .9);
+  }
+  if (L.kind === 'wald') { for (let k = 0; k < 9; k++) { const a = k * 2.4 + q, d = 1 + (k % 4) * 1.1, x = Math.cos(a) * d, z = Math.sin(a) * d; add(new THREE.ConeGeometry(1.2, 4, 7), M(0x2f6a3e), [c.x + x, GY + 2.6, c.z + z]); add(new THREE.CylinderGeometry(.15, .2, 1, 6), M(0x6b4a32), [c.x + x, GY + .5, c.z + z]); } sp('forest', 0, GY, 0); }
+  if (L.kind === 'wiese' || L.kind === 'turm') sp('meadow', 0, GY, 0);
+  if (L.kind === 'see') { add(new THREE.CylinderGeometry(3.6, 3.6, .02, 24), new THREE.MeshStandardMaterial({ color: 0x2f8fb0, roughness: .15, transparent: true, opacity: .9 }), [c.x, -.32, c.z], 0, false); sp('lake', 0, -.32, 0); }
+  if (L.kind === 'bach') { add(new THREE.CylinderGeometry(R, R, .02, 6), new THREE.MeshStandardMaterial({ color: 0x2f8fb0, roughness: .15 }), [c.x, -.32, c.z], Math.PI / 6, false); sp('water', 0, -.32, 0);
+    if (L.fall != null) { const [x, z] = edgeMid(L.fall, INR); sp('fall', x, -.32, z);
+      const fg = new THREE.PlaneGeometry(2.3, 28, 1, 8); fg.translate(0, -14, 0); const fm = add(fg, new THREE.MeshBasicMaterial({ color: 0xcfeefa, transparent: true, opacity: .75, side: THREE.DoubleSide }), [c.x + x * 1.12, -.32, c.z + z * 1.12], Math.atan2(x, z) + Math.PI / 2, false); fm.rotation.x = .12; } }
+  if (L.kind === 'berg') add(new THREE.ConeGeometry(5.6, 7, 9), M(0x8a8780), [c.x, GY + 3.5, c.z]);
+  if (L.kind === 'turm') { add(new THREE.CylinderGeometry(.8, 1.2, 8, 10), M(0xf2f0ea), [c.x, GY + 4, c.z]); add(new THREE.CylinderGeometry(.7, .7, .9, 10), M(0xd84a3a), [c.x, GY + 8.5, c.z]); sp('beam', 0, GY + 8.5, 0); }
+  if (L.kind === 'hof') { add(new THREE.BoxGeometry(4, 3, 3), M(0xa83a2a), [c.x + 1.5, GY + 1.5, c.z + 1.5]); sp('cow', -2, GY, -1); sp('cow', -1, GY, 2); sp('chicken', 1.5, GY, -2.5); }
+  tiles.push(t);
+}
+// Wolkenmeer
+add(new THREE.CircleGeometry(400, 32).rotateX(-Math.PI / 2), new THREE.MeshStandardMaterial({ color: new THREE.Color(0xf4f6fa).multiplyScalar(lerp(1, .25, night)) }), [0, -28, 0], 0, false).receiveShadow = false;
+if (Q.get('stress')) for (const t of tiles) {                                  // Last: viele Türen, Schornsteine, Laternen
+  if (!t.roads.length) { for (let i = 0; i < 2; i++) t.spots.push({ type: 'smoke', p: [t.cx + i * 2 - 1, GY + 5, t.cz + 1] }); continue; }
+  for (let i = 0; i < 6; i++) { const a = i / 6 * Math.PI * 2 + .3; t.spots.push({ type: 'door', p: [t.cx + Math.cos(a) * 3.2, GY, t.cz + Math.sin(a) * 3.2] }, { type: 'smoke', p: [t.cx + Math.cos(a) * 4, GY + 5, t.cz + Math.sin(a) * 4] }, { type: 'light', p: [t.cx + Math.cos(a + .4) * 3, GY + 2.5, t.cz + Math.sin(a + .4) * 3] }); }
+}
+const byKey = new Map(tiles.map(t => [t.key, t]));
+function groundAt(x, z) {
+  for (const t of tiles) { const d = Math.hypot(x - t.cx, z - t.cz); if (d > R) continue;
+    if (t.kind === 'see') return d < 3.4 ? -.9 : -.9; if (t.kind === 'bach') return -.55; if (t.kind === 'berg') return mtn(x, z, t.cx, t.cz); }
+  return GY;
+}
+
+// ---------- Leben + Ton
+const life = new Life(scene, { groundAt });
+life.setTiles(tiles);
+const sound = new Sound();
+const heard = [];
+life.onSound = (n, p) => { heard.push(n); sound.play(n, { vol: .6 }); };
+addEventListener('pointerdown', () => sound.unlock(), { once: true });
+addEventListener('keydown', () => sound.unlock(), { once: true });
+
+const fx = Q.get('fx'), fxAt = num('fxAt', .8), fxPos = (Q.get('fxPos') || '').split(',').map(Number);
+const FXP = { place: '-1,-1', perfect: '1,0', wald: '-2,0', dorf: '0,0', wasser: '1,1', feld: '1,-2', berg: '-2,2', unlock: '2,0', quest: '-1,1' };
+const env = t => ({ night, season, rain, camTarget: look, camDist: cam.position.distanceTo(look) });
+const [cx, cy, cz] = (Q.get('cam') || '42,34,42').split(',').map(Number), look = new THREE.Vector3(...(Q.get('look') || '0,2,0').split(',').map(Number));
+cam.position.set(cx, cy, cz); cam.lookAt(look);
+// Vorlauf: 40 s simulieren, damit alle unterwegs sind
+let t = T - num("warm", 40), fired = false; const info0 = { retiles: 0 };
+for (; t < T; t += 1 / 30) {
+  if (fx && !fired && t >= T - fxAt) { const tk = byKey.get(FXP[fx] || '0,0'); const p = fxPos.length === 2 && !isNaN(fxPos[0]) ? [fxPos[0], GY, fxPos[1]] : [tk.cx, fx === 'wasser' ? -.32 : GY, tk.cz]; life.celebrate(fx, p, R); fired = true; }
+  life.update(1 / 30, t, env(t));
+  if (Q.get('retile') && Math.floor(t * 30) % 60 === 0) {                     // alle 2 s neu setzen, zwischendurch ein Haus weg (wie Rückgängig)
+    const drop = Math.floor(t / 6) % 2 ? '1,-1' : null; life.setTiles(tiles.filter(x => x.key !== drop)); info0.retiles++;
+    info0.walkAfter = life.vill.filter(v => v.st === 'walk').length;
+  }
+}
+const follow = Q.has('follow') ? +Q.get('follow') : -1;
+function place() {
+  if (follow >= 0) { const fs = Q.get('fs'), cand = life.vill.filter(v => v.st !== 'in' && (!fs || v.st === fs) && (!Q.get('fl') || v.lantern)); const V = cand[follow % Math.max(1, cand.length)]; if (V) { const d = num('fd', 2); look.set(V.x, V.y + 1.2 * V.scale, V.z); cam.position.set(V.x + Math.sin(V.yaw) * d, V.y + 1.35, V.z + Math.cos(V.yaw) * d); cam.lookAt(look); } }
+}
+place();
+const focus = Q.get('focus'), fd = num('fd', 12);
+if (focus) {
+  let p = null;
+  if (focus === 'balloon') p = life.balloon.g.position.clone().add(new THREE.Vector3(0, -1, 0));
+  if (focus === 'zeppelin') p = life.zep.g.position.clone();
+  if (focus === 'fall') { const s = life.spots.fall[0]; const dx = s.x - s.tile.cx, dz = s.z - s.tile.cz, L = Math.hypot(dx, dz); p = new THREE.Vector3(s.x + dx / L * 2, s.y - num('fy', 6), s.z + dz / L * 2); }
+  if (focus === 'animal') { const i = num('ai', 0), m = new THREE.Matrix4(); life.qMesh.getMatrixAt(i, m); p = new THREE.Vector3().setFromMatrixPosition(m).add(new THREE.Vector3(0, .6, 0)); }
+  if (focus === 'critter') { const i = num('ai', 0), m = new THREE.Matrix4(); life.cMesh.getMatrixAt(i, m); p = new THREE.Vector3().setFromMatrixPosition(m); }
+  if (p) { look.copy(p); const a = num('fa', .8), e = num('fe', .25); cam.position.set(p.x + Math.cos(a) * fd * Math.cos(e), p.y + Math.sin(e) * fd, p.z + Math.sin(a) * fd * Math.cos(e)); if (Q.get('from') === 'center') { cam.position.set(0, 25, 0); cam.fov = num('fov', 40); cam.updateProjectionMatrix(); } cam.lookAt(look); }
+}
+const info = { calls: 0, tris: 0, lifeMs: 0, vill: 0, errors: [], ...info0 };
+function render() { U(); r.render(scene, cam); }
+function U() { cam.updateMatrixWorld(); }
+render(); info.calls = r.info.render.calls; info.tris = r.info.render.triangles;
+life.root.visible = false; render(); info.callsNoLife = r.info.render.calls; info.trisNoLife = r.info.render.triangles; life.root.visible = true; render();
+info.stats = { ...life.stats }; info.quad = life.animals.map(a => a.sp).join(''); info.crit = [...Array(life.cMesh.count)].map((_, i) => life.cA.a.array[i * 4]).join(''); info.vill = life.vill.length; info.out = life.vill.filter(v => v.st !== 'in').length;
+info.goals = life.vill.map(v => (v.goal?.kind || '-') + ':' + v.st + (v.keeper ? ':H' : '') + (v.node ? '' : ':noNode')).join(' '); info.spots = Object.fromEntries(Object.entries(life.spots).map(([k, v]) => [k, v.length + '/' + v.filter(s => s.node).length]));
+info.states = life.vill.reduce((o, v) => (o[v.st] = (o[v.st] || 0) + 1, o), {});
+if (Q.get('pick')) { const rc = new THREE.Raycaster(); const P = life.pickables(); info.pick = P.slice(0, 6).map(p => ({ name: p.userData.name, text: p.userData.text })); rc.setFromCamera(new THREE.Vector2(0, 0), cam); const hit = rc.intersectObjects(P, false)[0]; info.hit = hit ? hit.object.userData.name : null; }
+if (Q.get('perf')) {
+  const gl = r.getContext(), px = new Uint8Array(4), sync = () => gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, px);
+  const run = (on, n) => { life.root.visible = on; let u = 0; sync(); const a = performance.now(); for (let i = 0; i < n; i++) { const b = performance.now(); if (on) life.update(1 / 60, t + i / 60, env()); u += performance.now() - b; r.render(scene, cam); } sync(); return { frame: (performance.now() - a) / n, update: u / n }; };
+  run(true, 30); const A = run(true, 240), B = run(false, 240), A2 = run(true, 240), B2 = run(false, 240);
+  info.perf = { withLife: ((A.frame + A2.frame) / 2).toFixed(3), without: ((B.frame + B2.frame) / 2).toFixed(3), update: ((A.update + A2.update) / 2).toFixed(3) };
+  life.root.visible = true; render();
+}
+if (Q.get('audio')) info.audio = await Sound.selfTest();
+info.near = life.near(look);
+if (Q.get('dispose')) { const n0 = scene.children.length; life.dispose(); info.disposed = n0 - scene.children.length; }
+info.heard = heard; info.zep = life.zep.g.visible;
+document.getElementById('hud').textContent = Q.get('hud') ? JSON.stringify(info, null, 1) : '';
+window.__info = info; window.__ready = true;
+if (Q.get('sound')) { sound.unlock(); sound.setVolumes(.6, .8); let i = 0; const L = ['click', 'place', 'perfect', 'rotate', 'milestone', 'unlock', 'quest', 'undo', 'photo', 'invalid']; setInterval(() => { sound.play(L[i++ % L.length], { pts: 6 }); window.__sound = { state: sound.ctx.state, t: sound.ctx.currentTime.toFixed(2), ks: sound.ks.size, played: i }; }, 400); }
+if (Q.get('live')) { let last = performance.now(); const loop = () => { const now = performance.now(), dt = (now - last) / 1000; last = now; t += dt; life.update(dt, t, env()); sound.update({ night, season, rain, camDist: cam.position.distanceTo(look), near: life.near(look) }); place(); render(); requestAnimationFrame(loop); }; loop(); }
+</script></body></html>

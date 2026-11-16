@@ -54,3 +54,8 @@ Survival-Erkundungsspiel (POV, Low-Poly, Three.js), unabhängig von der Video-En
 (headless: `Blender -b --factory-startup --python game/blender/build_all.py`, dann `node game/blender/shrink.mjs game/map.glb`), Spiel in `game/js/`.
 Vor dem Push `node game/tools/playthrough.mjs` → `PLAYTHROUGH OK`, `node game/tools/routes.mjs` → `ROUTES OK` (Laufwege mit echter Kollision; Möbel nie vor Türen/in Gänge), `node game/tools/pickups.mjs` → `PICKUPS OK` (Gegenstände nie in Füllware/Wänden verstecken) und `node game/tools/features.mjs` → `FEATURES OK`. Spielstände müssen nach Updates weiter laden (alles über Namen/Ids speichern, `SAVE_VERSION` in `game.js`). GitHub Pages (Workflow `game-pages`): https://leon1304.github.io/what-if-engine/game/ — Details `game/README.md`.
 Blender nur live öffnen, wenn Leon zuschauen will (Mac wird warm); Viewport dann Solid + Vertex-Farben statt Materialvorschau.
+
+## Spiel „Schwebeinsel“ (insel/)
+Gemütliches Sechseck-Aufbauspiel (Three.js, Low Poly, alles prozedural in `insel/js/models/`, keine GLB), unabhängig von Engine und Waldtank. Konzept `insel/DESIGN.md`, Aufbau `insel/README.md`.
+Vor dem Push: `node insel/tools/rules.mjs` → `RULES OK` und `node insel/tools/play.mjs <ordner>` → `PLAY OK` (bei UI-/Kamera-/Leben-Änderungen auch `ui-demo.mjs`, `stage-shots.mjs`, `life-logic.mjs`).
+Spielstände müssen nach Updates laden (`SAVE_VERSION` in `insel/js/game.js`). GitHub Pages (Workflow `game-pages`): https://leon1304.github.io/what-if-engine/insel/

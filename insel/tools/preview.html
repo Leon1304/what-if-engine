@@ -1,0 +1,42 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Modell-Vorschau</title>
+<style>html,body{margin:0;height:100%;background:#9cc8e8;overflow:hidden}canvas{display:block}</style>
+<script type="importmap">{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/" } }</script>
+</head><body>
+<script type="module">
+// Vorschau eines Modells: ?m=../js/models/house.js&fn=house&a={"stage":2}&cam=12,8,12&look=0,2,0&night=0&snow=0&autumn=0
+//   fn(kit, args) zeichnet ab Ursprung. Bewegliche Teile (kit.parts) werden mitgezeigt. window.__ready = true, wenn fertig.
+import * as THREE from 'three';
+import { Kit } from '../js/kit.js';
+import { MATS, U } from '../js/materials.js';
+const Q = new URLSearchParams(location.search);
+const mod = await import(Q.get('m') || '../js/models/nature.js');
+const fn = mod[Q.get('fn') || 'pine'], args = JSON.parse(Q.get('a') || '{}');
+const r = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true }); r.setSize(innerWidth, innerHeight); r.shadowMap.enabled = true; r.shadowMap.type = THREE.PCFSoftShadowMap;
+r.toneMapping = THREE.ACESFilmicToneMapping; document.body.appendChild(r.domElement);
+const scene = new THREE.Scene(), night = +(Q.get('night') || 0);
+scene.background = new THREE.Color(night ? 0x0b1430 : 0x9cc8e8);
+const cam = new THREE.PerspectiveCamera(40, innerWidth / innerHeight, .05, 500);
+const [cx, cy, cz] = (Q.get('cam') || '12,8,12').split(',').map(Number), [lx, ly, lz] = (Q.get('look') || '0,1.5,0').split(',').map(Number);
+cam.position.set(cx, cy, cz); cam.lookAt(lx, ly, lz);
+scene.add(new THREE.HemisphereLight(night ? 0x4060a0 : 0xdfefff, 0x6a5a40, night ? .35 : 1.1));
+const sun = new THREE.DirectionalLight(night ? 0x8090c0 : 0xfff2dd, night ? .35 : 2.6); sun.position.set(10, 16, 7); sun.castShadow = true;
+sun.shadow.mapSize.set(2048, 2048); Object.assign(sun.shadow.camera, { left: -12, right: 12, top: 12, bottom: -12, near: 1, far: 60 }); sun.shadow.bias = -.0004; sun.shadow.normalBias = .03; scene.add(sun);
+const ground = new THREE.Mesh(new THREE.CircleGeometry(30, 40).rotateX(-Math.PI / 2), new THREE.MeshStandardMaterial({ color: 0x6aa84f })); ground.position.y = -.01; ground.receiveShadow = true; scene.add(ground);
+U.uNight.value = night; U.uSnow.value = +(Q.get('snow') || 0); U.uAutumn.value = +(Q.get('autumn') || 0); U.uSpring.value = +(Q.get('spring') || 0);
+const k = new Kit(+(Q.get('seed') || 7)); const ret = fn(k, args) || {};
+const add = (geo, matrix) => { for (const [layer, g] of Object.entries(geo)) { const m = new THREE.Mesh(g, MATS[layer] || MATS.base); m.castShadow = layer === 'base'; m.receiveShadow = true; if (matrix) m.applyMatrix4(matrix); scene.add(m); } };
+add(k.build());
+const parts = (k.parts || []).map(p => { const o = new THREE.Group(); o.applyMatrix4(p.matrix); scene.add(o); const inner = new THREE.Group(); o.add(inner); for (const [layer, g] of Object.entries(p.geo)) { const m = new THREE.Mesh(g, MATS[layer] || MATS.base); m.castShadow = true; inner.add(m); } return { p, inner }; });
+let tris = 0; scene.traverse(o => { if (o.isMesh) tris += o.geometry.attributes.position.count / 3; });
+window.__info = { tris: Math.round(tris), spots: k.spots || [], parts: (k.parts || []).map(p => p.name), ret };
+const t0 = performance.now();
+function frame() {
+  const t = (performance.now() - t0) / 1000 + +(Q.get('t') || 0); U.uTime.value = t; U.uUpView.value.set(0, 1, 0).transformDirection(cam.matrixWorldInverse);
+  for (const { p, inner } of parts) if (p.spin) inner.setRotationFromAxisAngle(new THREE.Vector3(...p.spin).normalize(), t * (p.speed || 1));
+  r.render(scene, cam); requestAnimationFrame(frame);
+}
+frame(); setTimeout(() => window.__ready = true, 400);
+</script></body></html>

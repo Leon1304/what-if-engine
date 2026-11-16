@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="de"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Schwebeinsel – UI-Demo</title>
+</head><body>
+<canvas id="c"></canvas>
+<script type="module">
+// UI-Test ohne 3D: echte Game-Logik + Attrappen-app (2D-Draufsicht). Übernimmt CSS und Markup aus ../index.html.
+//   Maus: ziehen = verschieben (camRotate), Rad = zoomen, Klick = setzen, Rechtsklick/R = drehen.
+//   window.__ui, __game, __app, __demo (Hilfen für tools/ui-demo.mjs). window.__ready, sobald alles steht.
+const src = await (await fetch('../index.html')).text(), doc = new DOMParser().parseFromString(src, 'text/html');
+for (const n of doc.head.querySelectorAll('link[rel=stylesheet], link[rel=preconnect], style')) document.head.append(n.cloneNode(true));
+for (const id of ['boot', 'ui']) document.body.append(doc.getElementById(id).cloneNode(true));
+
+const { Game } = await import('../js/game.js');
+const { TILES, edgesOf } = await import('../js/tiles.js');
+const { center, pixelToHex, cornerAt, R } = await import('../js/hex.js');
+const { UI } = await import('../js/ui.js');
+
+const BIOME = { wiese: '#a9d26f', wald: '#4f8a3c', wasser: '#86c3e8', feld: '#e6c55e', dorf: '#dcbf92', berg: '#a3a3a3' };
+const EDGE = { g: null, w: '#2f7fc0', r: '#9a6535', l: '#bfe3f5' };
+const FILTER = { normal: '', gold: 'sepia(.35) saturate(1.3) brightness(1.05)', film: 'contrast(1.1) saturate(.8) sepia(.15)', sw: 'grayscale(1) contrast(1.1)', miniatur: 'saturate(1.5) contrast(1.05)', nacht: 'brightness(.45) hue-rotate(200deg) saturate(.7)' };
+const cv = document.getElementById('c'), cx = cv.getContext('2d');
+const cam = { x: 0, z: 0, s: 9 }, TILT = .78;
+let W = 0, H = 0, rot = 0, hover = null, thumbsReady = false, photo = false;
+function resize() { const d = devicePixelRatio || 1; W = innerWidth; H = innerHeight; cv.width = W * d; cv.height = H * d; cx.setTransform(d, 0, 0, d, 0, 0); }
+resize(); addEventListener('resize', resize);
+const toScreen = (x, y, z) => ({ x: W / 2 + (x - cam.x) * cam.s, y: H / 2 + (z - cam.z) * cam.s * TILT - y * cam.s * .7 });
+
+function drawHex(ctx, sx, sy, s, kind, o, alpha = 1, tilt = TILT) {
+  const T = TILES[kind], E = edgesOf(kind, o);
+  ctx.save(); ctx.globalAlpha = alpha; ctx.beginPath();
+  for (let i = 0; i < 6; i++) { const [a, b] = cornerAt(i); ctx.lineTo(sx + a * s, sy + b * s * tilt); }
+  ctx.closePath(); ctx.fillStyle = BIOME[T.biome]; ctx.fill(); ctx.strokeStyle = 'rgba(60,40,20,.35)'; ctx.lineWidth = 1.5; ctx.stroke();
+  for (let i = 0; i < 6; i++) { const c = EDGE[E[i]]; if (!c) continue; const [a, b] = cornerAt(i), [c2, d2] = cornerAt(i + 1);
+    ctx.beginPath(); ctx.moveTo(sx + a * s * .8, sy + b * s * tilt * .8); ctx.lineTo(sx + c2 * s * .8, sy + d2 * s * tilt * .8); ctx.strokeStyle = c; ctx.lineWidth = Math.max(2, s * .7); ctx.stroke(); }
+  ctx.font = `${Math.max(10, s * 3.4)}px serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(T.icon, sx, sy); ctx.restore();
+}
+function draw() {
+  const g = cx.createLinearGradient(0, 0, 0, H); g.addColorStop(0, '#8fc1e6'); g.addColorStop(.7, '#d4e9f5'); g.addColorStop(1, '#f6ead6');
+  cx.fillStyle = g; cx.fillRect(0, 0, W, H);
+  if (!game.S) return;
+  const tiles = [...game.board.values()].sort((a, b) => center(a.q, a.r).z - center(b.q, b.r).z);
+  for (const t of tiles) { const c = center(t.q, t.r), p = toScreen(c.x, -2.2, c.z); drawHex(cx, p.x, p.y, cam.s, t.k, t.o, .45); }   // Inselsockel
+  for (const t of tiles) { const c = center(t.q, t.r), p = toScreen(c.x, 0, c.z); drawHex(cx, p.x, p.y, cam.s, t.k, t.o); }
+  const cur = game.current();
+  if (!photo && cur) for (const [q, r] of game.slots()) { const c = center(q, r), p = toScreen(c.x, 0, c.z); cx.beginPath(); for (let i = 0; i < 6; i++) { const [a, b] = cornerAt(i); cx.lineTo(p.x + a * cam.s * .92, p.y + b * cam.s * TILT * .92); } cx.closePath(); cx.strokeStyle = 'rgba(255,255,255,.65)'; cx.setLineDash([4, 4]); cx.lineWidth = 1.5; cx.stroke(); cx.setLineDash([]); }
+  if (!photo && hover && cur) { const c = center(hover.q, hover.r), p = toScreen(c.x, 0, c.z); drawHex(cx, p.x, p.y, cam.s, cur.k, rot, hover.ev.ok ? .85 : .4); }
+}
+// ---------- Attrappen-app ----------
+const game = new Game();
+const thumbCache = {};
+const app = {
+  game, settings: { quality: 'mittel', music: .6, sfx: .8, dayCycle: true, time: 12, season: 'auto', weather: 'auto' },
+  log: [],
+  thumb(k) {
+    if (!thumbsReady) return null; if (thumbCache[k]) return thumbCache[k];
+    const c = document.createElement('canvas'); c.width = c.height = 128; const x = c.getContext('2d');
+    const gr = x.createRadialGradient(64, 50, 10, 64, 64, 90); gr.addColorStop(0, '#d9ecf8'); gr.addColorStop(1, '#9cc8e8'); x.fillStyle = gr; x.fillRect(0, 0, 128, 128);
+    drawHex(x, 64, 70, 8.2, k, 0, 1, .72); return thumbCache[k] = c.toDataURL();
+  },
+  screenPos([x, y, z]) { const p = toScreen(x, y, z); return { x: p.x, y: p.y, visible: p.x > -50 && p.x < W + 50 && p.y > -50 && p.y < H + 50 }; },
+  tilePos(q, r) { const c = center(q, r); return [c.x, 0, c.z]; },
+  rotate(dir = 1) { rot = (rot + dir + 6) % 6; app.audio.play('rotate'); if (hover) evalHover(); ui.notify('tileRotate', { o: rot }); },
+  photo(on) { photo = on; app.log.push('photo:' + on); },
+  capture(scale = 1) { draw(); const c = document.createElement('canvas'); c.width = Math.round(W * scale); c.height = Math.round(H * scale); c.getContext('2d').drawImage(cv, 0, 0, c.width, c.height); return c.toDataURL('image/png'); },
+  setFilter(n) { cv.style.filter = FILTER[n] || ''; app.log.push('filter:' + n); },
+  timelapse({ record } = {}) { app.log.push('timelapse:' + !!record); return new Promise(r => setTimeout(r, 1200)); },
+  applySettings(s) { app.log.push('settings:' + JSON.stringify(s)); },
+  audio: { play(n) { app.log.push('audio:' + n); } },
+  newGame(o) { rot = 0; game.newGame(o); app.log.push('newGame:' + o.mode); },
+  loadGame(S) { rot = 0; game.load(S); app.log.push('loadGame'); },
+  focusTile(q, r) { const c = center(q, r); cam.x = c.x; cam.z = c.z; },
+};
+const ui = new UI(app);
+// ---------- Eingaben ----------
+function hexAt(px, py) { const x = (px - W / 2) / cam.s + cam.x, z = (py - H / 2) / (cam.s * TILT) + cam.z; return pixelToHex(x, z); }
+function evalHover() { const cur = game.current(); if (!cur || !hover) return; hover.ev = game.evaluate(cur.k, hover.q, hover.r, rot); ui.notify('hover', { q: hover.q, r: hover.r, ev: hover.ev }); }
+let drag = null;
+cv.addEventListener('pointerdown', e => { drag = { x: e.clientX, y: e.clientY, moved: 0, b: e.button }; });
+addEventListener('pointerup', e => {
+  if (!drag) return; const d = drag; drag = null; if (d.moved > 6 || ui.blocking || photo) return;
+  if (d.b === 2) { app.rotate(1); return; }
+  if (!hover) return; const res = game.place(hover.q, hover.r, rot); app.audio.play(res.ok ? 'place' : 'invalid'); if (!res.ok) ui.toast?.(res.why, 'err');
+  hover = null; ui.notify('hover', null);
+});
+cv.addEventListener('pointermove', e => {
+  if (drag) { const dx = e.clientX - drag.x, dy = e.clientY - drag.y; drag.moved += Math.abs(dx) + Math.abs(dy); drag.x = e.clientX; drag.y = e.clientY;
+    if (drag.moved > 6) { cam.x -= dx / cam.s; cam.z -= dy / (cam.s * TILT); ui.notify('camRotate'); } return; }
+  if (ui.blocking || photo || !game.S) return;
+  const [q, r] = hexAt(e.clientX, e.clientY);
+  if (game.at(q, r) || !game.slots().some(([a, b]) => a === q && b === r)) { if (hover) { hover = null; ui.notify('hover', null); } return; }
+  if (!hover || hover.q !== q || hover.r !== r) { hover = { q, r }; evalHover(); }
+});
+cv.addEventListener('wheel', e => { e.preventDefault(); cam.s = Math.max(3, Math.min(40, cam.s * (e.deltaY > 0 ? .9 : 1.1))); ui.notify('zoom', { distance: 300 / cam.s }); }, { passive: false });
+cv.addEventListener('contextmenu', e => e.preventDefault());
+cv.addEventListener('dblclick', () => { const h = [...game.board.values()].find(t => t.k === 'haus') || game.at(0, 0); ui.notify('buildingClick', { name: TILES[h.k].name, text: 'Hier wohnt Familie Krume. Im Fenster brennt eine kleine Lampe.' }); });
+addEventListener('keydown', e => { if (e.key === 'r' || e.key === 'R') { if (!ui.blocking && !e.ctrlKey && !e.metaKey) app.rotate(1); } });
+
+// ---------- Hilfen für Tests ----------
+const demo = {
+  best() { // beste Stelle/Drehung für die aktuelle Kachel
+    const cur = game.current(); if (!cur) return null; let best = null;
+    for (const [q, r] of game.slots()) for (let o = 0; o < 6; o++) { const ev = game.evaluate(cur.k, q, r, o); if (ev.ok && (!best || ev.pts > best.ev.pts)) best = { q, r, o, ev }; }
+    return best;
+  },
+  autoPlace(n = 1) { let last; for (let i = 0; i < n; i++) { const b = demo.best(); if (!b) break; last = game.place(b.q, b.r, b.o); } return last; },
+  force(k, quest) { game.S.stack.splice(game.S.pick, 0, quest ? { k, quest } : { k }); game.emit('stack'); },
+  hoverBest() { const b = demo.best(); if (!b) return; hover = { q: b.q, r: b.r }; rot = b.o; evalHover(); return b; },
+  focus(q, r, s) { app.focusTile(q, r); if (s) cam.s = s; },
+};
+Object.assign(window, { __ui: ui, __game: game, __app: app, __demo: demo });
+let last = performance.now();
+function loop(t) { const dt = (t - last) / 1000; last = t; draw(); ui.frame(dt); requestAnimationFrame(loop); }
+requestAnimationFrame(loop);
+setTimeout(() => { ui.notify('ready'); window.__ready = true; }, 300);
+setTimeout(() => { thumbsReady = true; ui.notify('thumbs'); }, +(new URLSearchParams(location.search).get('thumbs') ?? 700));
+</script></body></html>

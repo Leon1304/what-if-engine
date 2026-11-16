@@ -1,0 +1,35 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Welt-Test</title>
+<style>html,body{margin:0;height:100%;background:#9cc8e8;overflow:hidden}canvas{display:block}</style>
+<script type="importmap">{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/" } }</script>
+</head><body>
+<script type="module">
+// Testinsel ohne UI: ?n=40&seed=3&cam=60,50,60&look=0,0,0&night=0&snow=0
+import * as THREE from 'three';
+import { Game } from '../js/game.js';
+import { World } from '../js/world.js';
+import { U } from '../js/materials.js';
+const Q = new URLSearchParams(location.search), n = +(Q.get('n') || 30);
+const g = new Game().newGame({ seed: +(Q.get('seed') || 3), mode: Q.get('mode') || 'klassisch' });
+if (Q.get('all')) { g.S.unlocked = Object.keys((await import('../js/tiles.js')).TILES).filter(k => k !== 'start'); g.S.stack = []; g._refill(n + 5); }
+for (let i = 0; i < n && g.S.stack.length; i++) {
+  let best = null; const c = g.current();
+  for (const [q, r] of g.slots()) for (let o = 0; o < 6; o++) { const e = g.evaluate(c.k, q, r, o); if (e.ok && (!best || e.pts + Math.random() * 2 > best.e.pts)) best = { q, r, o, e }; }
+  if (best) g.place(best.q, best.r, best.o); else g.S.stack.shift();
+}
+const r = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true }); r.setSize(innerWidth, innerHeight); r.shadowMap.enabled = true; r.shadowMap.type = THREE.PCFSoftShadowMap; r.toneMapping = THREE.ACESFilmicToneMapping; document.body.appendChild(r.domElement);
+const scene = new THREE.Scene(), night = +(Q.get('night') || 0); scene.background = new THREE.Color(night ? 0x0b1430 : 0x9cc8e8);
+const cam = new THREE.PerspectiveCamera(40, innerWidth / innerHeight, .05, 2000);
+const [cx, cy, cz] = (Q.get('cam') || '60,50,60').split(',').map(Number), [lx, ly, lz] = (Q.get('look') || '0,0,0').split(',').map(Number); cam.position.set(cx, cy, cz); cam.lookAt(lx, ly, lz);
+scene.add(new THREE.HemisphereLight(night ? 0x4060a0 : 0xdfefff, 0x6a5a40, night ? .35 : 1.1));
+const sun = new THREE.DirectionalLight(night ? 0x8090c0 : 0xfff2dd, night ? .35 : 2.6); sun.position.set(40, 60, 25); sun.castShadow = true; sun.shadow.mapSize.set(4096, 4096);
+Object.assign(sun.shadow.camera, { left: -60, right: 60, top: 60, bottom: -60, near: 1, far: 200 }); sun.shadow.bias = -.0004; sun.shadow.normalBias = .04; scene.add(sun);
+U.uNight.value = night; U.uSnow.value = +(Q.get('snow') || 0); U.uAutumn.value = +(Q.get('autumn') || 0);
+const w = new World(scene, g); const t0 = performance.now(); w.sync(); const tb = performance.now() - t0;
+let tris = 0; scene.traverse(o => { if (o.isMesh) tris += o.geometry.attributes.position.count / 3; });
+window.__info = { tiles: g.board.size, build_ms: Math.round(tb), tris: Math.round(tris), score: g.S.score };
+let last = performance.now(); function frame() { const now = performance.now(); w.update(Math.min(.05, (now - last) / 1000) + 2); last = now; U.uTime.value = now / 1000; U.uUpView.value.set(0, 1, 0).transformDirection(cam.matrixWorldInverse); r.render(scene, cam); requestAnimationFrame(frame); }
+frame(); setTimeout(() => window.__ready = true, 500);
+</script></body></html>
