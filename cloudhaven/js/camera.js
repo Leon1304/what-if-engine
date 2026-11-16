@@ -28,7 +28,7 @@ export class CameraRig {
     this._v = new THREE.Vector3(); this._w = new THREE.Vector3(); this._o = new THREE.Vector3();
     this._bind();
     this.c.t.y = this.g.t.y = this._gy(0, 0, 0);
-    this._place();
+    this._place(0, true);
   }
 
   // ---------------- öffentliche Werte ----------------
@@ -52,7 +52,7 @@ export class CameraRig {
   jumpTo(p, distance = this.g.d, yaw = this.g.yaw, po = this.g.po) {
     this.fly = null; this.vel.set(0, 0, 0);
     for (const s of [this.c, this.g]) { s.t.copy(p); s.d = clamp(distance, this.minDist, this.maxDist); s.yaw = yaw; s.po = po; }
-    this.c.t.y = this.g.t.y = this._gy(p.x, p.z, p.y); this.colDist = 1e9; this._colKey = ''; this._place();
+    this.c.t.y = this.g.t.y = this._gy(p.x, p.z, p.y); this.colDist = 1e9; this._colKey = ''; this._place(0, true);
   }
   // Sanfter Flug (gibt ein Promise zurück, das am Ziel erfüllt wird)
   flyTo(p, distance = this.g.d, yaw) {
@@ -100,7 +100,7 @@ export class CameraRig {
   }
 
   // Kamera aus dem aktuellen Zustand setzen, mit Kollision
-  _place(dt = 0) {
+  _place(dt = 0, instant = false) {
     const c = this.c, cam = this.camera, pitch = this._pitch(c.d, c.po), off = this._offset(c.yaw, pitch);
     // Strahl vom Ziel zur Kamera gegen Hindernisse (nur neu, wenn sich etwas bewegt hat)
     const lift = this.lift(c.d), o = this._v.copy(c.t); o.y += lift;
@@ -113,17 +113,22 @@ export class CameraRig {
         const hits = this.ray.intersectObjects(bl, true);
         if (hits.length) h = Math.min(h, hits[0].distance - .22);
       }
-      // Boden zwischen Ziel und Kamera
-      for (let i = 1; i <= 12; i++) {
-        const s = h * i / 12, x = o.x + off.x * s, y = o.y + off.y * s, z = o.z + off.z * s;
-        if (y < this._gy(x, z, -1e9) + this.clearance * .6) { h = Math.max(.15, h * (i - 1) / 12); break; }
+      // Boden zwischen Ziel und Kamera: nicht kürzen, sondern messen, wie weit die Kamera angehoben werden muss
+      // (Kürzen in groben Stufen ließ die Kamera über Bodenwellen springen)
+      let lift2 = 0;
+      for (let i = 1; i <= 16; i++) {
+        const s = h * i / 16, x = o.x + off.x * s, y = o.y + off.y * s, z = o.z + off.z * s;
+        const need = this._gy(x, z, -1e9) + this.clearance * .6 - y; if (need > 0) lift2 = Math.max(lift2, need * 16 / i);
       }
-      this._hit = Math.max(.12, h);
+      this._hit = Math.max(.12, h); this._lift = Math.min(lift2, h * .9);
     }
-    // nach innen sofort, nach außen weich
-    if (this._hit < this.colDist || !dt) this.colDist = this._hit; else this.colDist = lerp(this.colDist, this._hit, 1 - Math.exp(-5 * dt));
+    // weich in beide Richtungen (nach innen schnell, nach außen langsamer) – kein Springen
+    const kin = 1 - Math.exp(-14 * dt), kout = 1 - Math.exp(-4 * dt);
+    if (instant || this.colDist > 1e8) this.colDist = this._hit;
+    else this.colDist = lerp(this.colDist, this._hit, this._hit < this.colDist ? kin : kout);
+    this.liftS = instant ? (this._lift || 0) : lerp(this.liftS || 0, this._lift || 0, 1 - Math.exp(-8 * dt));
     const dist = Math.min(this.colDist, c.d);
-    cam.position.copy(o).addScaledVector(off, dist);
+    cam.position.copy(o).addScaledVector(off, dist); cam.position.y += this.liftS || 0;
     const gy = this._gy(cam.position.x, cam.position.z, -1e9) + this.clearance;
     if (cam.position.y < gy) cam.position.y = gy;
     this.camDistance = dist;
@@ -170,7 +175,11 @@ export class CameraRig {
     this._cancelFly(); const g = this.g, nd = clamp(g.d * factor, this.minDist, this.maxDist);
     if (Math.abs(nd - g.d) < 1e-6) return;
     const P = this.pick(ndcX, ndcY, g);
-    if (P) { const t = this._solveTarget(P, ndcX, ndcY, nd, g.yaw, g.po, g.t.y); if (t) { g.t.x = t.x; g.t.z = t.z; this._clampBounds(g.t); } }
+    if (P) { const t = this._solveTarget(P, ndcX, ndcY, nd, g.yaw, g.po, g.t.y);
+      if (t) { // Versatz pro Schritt begrenzen: Zeiger am Horizont/über der Leere darf die Kamera nicht wegschießen
+        let mx = t.x - g.t.x, mz = t.z - g.t.z; const L = Math.hypot(mx, mz), cap = Math.abs(g.d - nd) * 1.6 + .02;
+        if (L > cap) { mx *= cap / L; mz *= cap / L; }
+        g.t.x += mx; g.t.z += mz; this._clampBounds(g.t); } }
     g.d = nd; this._emit('zoom');
   }
 
@@ -230,8 +239,14 @@ export class CameraRig {
     if (this.mode === 'pan' && this.ptr.size === 1) {
       this._panning = true;
       if (!this._grab) { this._startPan(p); return; }
-      const Q = this._pickCur(...this.ndc(e), this._grab.y); if (!Q) return;
-      const lim = c.d * 2, mx = clamp(this._grab.x - Q.x, -lim, lim), mz = clamp(this._grab.z - Q.z, -lim, lim);
+      let mx, mz;
+      const far = Math.hypot(this._grab.x - c.t.x, this._grab.z - c.t.z) > c.d * 4 + 3;
+      const Q = far ? null : this._pickCur(...this.ndc(e), this._grab.y);
+      if (Q) { const lim = c.d * .6 + .3; mx = clamp(this._grab.x - Q.x, -lim, lim); mz = clamp(this._grab.z - Q.z, -lim, lim); }
+      else {   // gepackter Punkt nahe am Horizont: gleichmäßig nach Pixeln schieben statt den Punkt zu verfolgen
+        const k = (c.d + 2) * 2 / Math.max(300, this.dom.clientHeight), sy = Math.sin(c.yaw), cy = Math.cos(c.yaw);
+        mx = (-dx * cy - dy * sy) * k; mz = (dx * sy - dy * cy) * k;
+      }
       c.t.x += mx; c.t.z += mz; g.t.x += mx; g.t.z += mz; this._clampBounds(c.t); this._clampBounds(g.t);
       const now = performance.now(), tdt = Math.max(1, now - this._lastT) / 1000; this._lastT = now;
       this.vel.lerp(this._v.set(mx / tdt, 0, mz / tdt), .5); this.vel.clampLength(0, c.d * 6);

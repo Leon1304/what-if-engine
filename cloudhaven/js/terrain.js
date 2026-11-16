@@ -2,7 +2,7 @@
 // Felswände an den Seiten, schroffe Unterseite mit Wurzeln und Leuchtkristallen, Wasserfläche und Wasserfälle an offenen Bachkanten.
 import * as THREE from 'three';
 import { R, INR, cornerAt, edgeMid, edgeAngle, fbm, noise, hash, rng } from './hex.js';
-import { TILES } from './tiles.js';
+import { TILES, ROAD_OK } from './tiles.js';
 import { TAG } from './kit.js';
 
 export const WATER_Y = -.32;
@@ -34,20 +34,37 @@ export function makeField(t, E, nb, cx, cz) {
     if (E[i] === 'r') rEdges.push(i);
     if (E[i] === 'l' && nb[i]) { const ne = nb[i].E[(i + 3) % 6]; if (ne === 'w') wEdges.push(i); else if (ne === 'l') lakeEdges.push(i); }
   }
-  const isLake = kind === 'see';
+  const isLake = kind === 'see', isPond = kind === 'teich';
+  // Wege verbinden sich automatisch: zeigt ein Nachbar-Weg auf diese Kachel, läuft der Weg hier weiter
+  const HUB = { start: 1.9, markt: 2.4, platz: 2.7, kreuzung: 1.1 };
+  const STOP = { haus: 2.3, kapelle: 2.3, hof: 2.3, huette: 2.3, baecker: 2.3, schmiede: 2.3, gasthaus: 2.3, saege: 2.3, muehle: 3.1, turm: 2.4, pavillon: 2.9 };
+  const own = rEdges.slice(), auto = [];
+  if (ROAD_OK.has(kind)) for (let i = 0; i < 6; i++) if (E[i] === 'g' && nb[i] && nb[i].E[(i + 3) % 6] === 'r') {
+    if (STOP[kind] && own.length && Math.min((i - own[0] + 6) % 6, (own[0] - i + 6) % 6) > 1) continue;   // bei Gebäuden nur neben der Front
+    auto.push(i);
+  }
+  rEdges.push(...auto);
   const riverP = isLake ? wEdges.map(i => [edgeMid(i), [0, 0]]) : wEdges.length ? paths(wEdges, 0) : [];
-  const roadStop = kind === 'haus' || kind === 'kapelle' || kind === 'hof' ? 2.3 : 0;
-  const roadP = !rEdges.length ? [] : kind === 'start' || kind === 'markt' ? rEdges.map(i => [edgeMid(i), [0, 0]]) : paths(rEdges, roadStop);
+  let roadP = [];
+  if (STOP[kind]) {
+    const st = STOP[kind];
+    if (own.length) { roadP = paths(own, st); const door = edgeMid(own[0], st + .6); for (const i of auto) roadP.push([edgeMid(i), door]); }
+    else roadP = auto.map(i => [edgeMid(i), edgeMid(i, st)]);
+  } else if (HUB[kind] && rEdges.length) {     // Platz mit Mitte (Brunnen, Linde, Wegweiser): Wege enden an einem Ring um die Mitte
+    const h = HUB[kind]; roadP = rEdges.map(i => [edgeMid(i), edgeMid(i, h)]);
+    const ring = []; for (let j = 0; j <= 18; j++) { const a = j / 18 * Math.PI * 2; ring.push([Math.cos(a) * h, Math.sin(a) * h]); } roadP.push(ring);
+  } else if (rEdges.length) roadP = rEdges.length > 2 ? rEdges.map(i => [edgeMid(i), [0, 0]]) : paths(rEdges, 0);
   const lakeP = lakeEdges.map(i => [edgeMid(i), [0, 0]]);
   const mountain = kind === 'berg', rnd = rng(hash('m', cx, cz));
   const peak = mountain ? [rnd() * 1.6 - .8, rnd() * 1.6 - .8] : null, peakH = mountain ? 5.5 + rnd() * 2.5 : 0;
   const F = {
-    kind, E, wEdges, rEdges, cx, cz, riverP, roadP, hasWater: !!(wEdges.length || isLake),
+    kind, E, wEdges, rEdges, cx, cz, riverP, roadP, hasWater: !!(wEdges.length || isLake || isPond), autoRoads: auto,
     riverD(x, z) { return riverP.length ? polyDist(riverP, x, z) : 1e9; },
     roadD(x, z) { return roadP.length ? polyDist(roadP, x, z) : 1e9; },
     carve(x, z) {
       let d = 0;
       if (riverP.length) { const rd = polyDist(riverP, x, z) / RIVER_HW; d = Math.max(d, RIVER_D * (1 - sstep(.45, 1.25, rd))); }
+      if (isPond) { const r = Math.hypot(x, z) / INR, a = Math.atan2(z, x); d = Math.max(d, 1.05 * sstep(.52, .26, r + .07 * Math.sin(a * 3 + cx) + .05 * Math.sin(a * 5 + cz) + (noise((x + cx) * .5, (z + cz) * .5) - .5) * .1)); }
       if (isLake) {
         let m = sstep(.8, .42, hexd(x, z));
         for (const L of lakeP) m = Math.max(m, sstep(1, .45, segDist(x, z, L[0][0], L[0][1], 0, 0) / (.45 * R)));
@@ -67,7 +84,7 @@ export function makeField(t, E, nb, cx, cz) {
       if (hexd(x, z) > (INR - r - .15) / INR) return false;
       if (this.riverD(x, z) < RIVER_HW + r + .2) return false;
       if (this.roadD(x, z) < ROAD_HW + r) return false;
-      if (isLake && this.carve(x, z) > .05) return false;
+      if ((isLake || isPond) && this.carve(x, z) > .05) return false;
       return true;
     },
   };
@@ -84,7 +101,7 @@ function groundColor(F, x, z, y, out) {
   const wx = x + F.cx, wz = z + F.cz, n = fbm(wx * .3, wz * .3), n2 = noise(wx * 1.7, wz * 1.7);
   out.copy(C.grass).lerp(C.grass2, sstep(.35, .75, n)).lerp(C.grass3, sstep(.6, .9, n2) * .5);
   let tag = TAG.grass;
-  if (F.kind === 'wald') out.lerp(C.forest, .6).lerp(C.dirt, sstep(.55, .8, n2) * .35);
+  if (F.kind === 'wald' || F.kind === 'nadelwald') out.lerp(C.forest, F.kind === 'nadelwald' ? .8 : .6).lerp(C.dirt, sstep(.55, .8, n2) * .35);
   if (F.kind === 'feld' && hexd(x, z) < .84) { out.copy(C.soil).lerp(C.dirt, n2 * .4); tag = TAG.none; }
   if (F.kind === 'berg') { const k = sstep(.9, 2.6, y) + sstep(.5, .8, n2) * sstep(.6, 1.4, y); out.lerp(n2 > .5 ? C.rock : C.rock2, clamp01(k)); if (k > .5) tag = TAG.none; }
   if (F.kind === 'markt' || F.kind === 'start') { const r = Math.hypot(x, z); if (r < 3.6) { out.copy(C.cobble).multiplyScalar(.85 + .3 * noise(wx * 3, wz * 3)); tag = TAG.none; } }

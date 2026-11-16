@@ -1,7 +1,7 @@
 // Speicherplätze im Browser (localStorage). Alles in try/catch: privater Modus oder voller Speicher
-// führen zu einer Meldung über onError(text), nie zu einem Absturz.
+// führen zu einer Meldung über onError(schlüssel), nie zu einem Absturz. Meldungen sind i18n-Schlüssel (store.*), die UI übersetzt.
 //   insel.slot.<n> = { v, meta: { name, score, tiles, mode, updated, thumb }, S }   (n = 1 … SLOTS)
-//   insel.current  = aktiver Platz,  insel.settings = Einstellungen
+//   insel.current  = aktiver Platz,  insel.settings = Einstellungen,  insel.lang = Sprache
 import { SAVE_VERSION } from './game.js';
 
 export const SLOTS = 5;
@@ -15,8 +15,7 @@ function put(k, v) {
   try { localStorage.setItem(P + k, v); return true; }
   catch (e) {
     const full = e && (e.name === 'QuotaExceededError' || e.code === 22 || e.code === 1014);
-    notify(full ? 'Der Speicher des Browsers ist voll. Lösche eine Insel oder sichere sie als Datei.'
-      : 'Speichern ist hier nicht möglich (privater Modus?). Sichere deine Insel als Datei.');
+    notify(full ? 'store.full' : 'store.blocked');
     return false;
   }
 }
@@ -45,13 +44,13 @@ export function save(n, game, thumb) {
   return put('slot.' + n, JSON.stringify(d));
 }
 export function remove(n) { const ok = del('slot.' + n); if (current() === n) setCurrent(0); return ok; }
-// Kopie in den ersten freien Platz → neue Platznummer (0 = kein Platz frei)
-export function duplicate(n) {
+// Kopie in den ersten freien Platz → neue Platznummer (0 = kein Platz frei). word: „Kopie“ in der Sprache der Oberfläche
+export function duplicate(n, word = 'Kopie') {
   const d = load(n), to = firstFree(); if (!d || !to) return 0;
-  const S = { ...d.S, name: copyName(d.S.name), created: Date.now() };
+  const S = { ...d.S, name: copyName(d.S.name, word), created: Date.now() };
   return put('slot.' + to, JSON.stringify({ v: SAVE_VERSION, meta: { ...metaOf(S, d.meta.thumb) }, S })) ? to : 0;
 }
-const copyName = s => /\(Kopie( \d+)?\)$/.test(s) ? s.replace(/\(Kopie(?: (\d+))?\)$/, (_, k) => `(Kopie ${(+k || 1) + 1})`) : `${s} (Kopie)`;
+const copyName = (s, w) => { const re = new RegExp(`\\(${w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?: (\\d+))?\\)$`); return re.test(s) ? s.replace(re, (_, k) => `(${w} ${(+k || 1) + 1})`) : `${s} (${w})`; };
 export function rename(n, name) {
   const d = load(n); name = String(name || '').trim().slice(0, 40); if (!d || !name) return false;
   d.S.name = name; d.meta.name = name;
@@ -69,14 +68,14 @@ export function exportFile(n) {
   document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 4000);
   return true;
 }
-// Datei → Spielstand S (wirft Error mit deutscher Meldung). S.__newer = true, wenn aus neuerer Version.
+// Datei → Spielstand S (wirft Error, message = i18n-Schlüssel store.*). S.__newer = true, wenn aus neuerer Version.
 export async function importFile(file) {
-  if (!file) throw new Error('Keine Datei gewählt.');
-  if (file.size > 8e6) throw new Error('Die Datei ist zu groß für eine Insel.');
-  let d; try { d = JSON.parse(await file.text()); } catch { throw new Error('Die Datei ist keine gültige Insel-Datei.'); }
+  if (!file) throw new Error('store.noFile');
+  if (file.size > 8e6) throw new Error('store.big');
+  let d; try { d = JSON.parse(await file.text()); } catch { throw new Error('store.bad'); }
   const S = d && d.S ? d.S : d;
-  if (!S || typeof S !== 'object' || !Array.isArray(S.tiles)) throw new Error('In der Datei steckt keine Insel.');
-  if (S.v != null && typeof S.v !== 'number') throw new Error('Unbekanntes Dateiformat.');
+  if (!S || typeof S !== 'object' || !Array.isArray(S.tiles)) throw new Error('store.noIsland');
+  if (S.v != null && typeof S.v !== 'number') throw new Error('store.format');
   const out = { ...S }; if ((S.v || 1) > SAVE_VERSION) out.__newer = true;
   if (!out.name) out.name = (file.name || 'Insel').replace(/\.insel\.json$|\.json$/i, '');
   return out;
@@ -85,6 +84,8 @@ export async function importFile(file) {
 // ---------- Einstellungen ----------
 export function loadSettings() { return parse(get('settings')); }
 export function saveSettings(s) { return put('settings', JSON.stringify(s)); }
+export function loadLang() { return get('lang'); }
+export function saveLang(l) { return put('lang', l); }
 export function getFlag(k) { return parse(get('flag.' + k)); }
 export function setFlag(k, v) { return put('flag.' + k, JSON.stringify(v)); }
 

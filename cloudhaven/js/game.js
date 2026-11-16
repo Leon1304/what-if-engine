@@ -1,7 +1,7 @@
 // Spiellogik ohne Grafik: Brett, Stapel, Punkte, Gruppen, Aufgaben, Freischaltungen, Rückgängig, Spielstand.
 // Läuft auch in Node (tools/rules.mjs). Der Zufall steckt im Spielstand (S.rs), deshalb ist jede Insel reproduzierbar.
 import { DIRS, key, unkey, opp, neighbor } from './hex.js';
-import { TILES, KINDS, UNLOCKS, GROUP, GROUP_NAMES, affinity, edgesOf } from './tiles.js';
+import { TILES, KINDS, UNLOCKS, GROUP, GROUP_NAMES, ROAD_OK, affinity, edgesOf } from './tiles.js';
 
 export const SAVE_VERSION = 1;
 export const START_TILES = 30;
@@ -80,6 +80,7 @@ export class Game {
       if (a === 'w' && b === 'w') { p += 3; label = 'Bach verbunden'; }
       else if ((a === 'w' && b === 'l') || (a === 'l' && b === 'w')) { p += 3; label = 'Bach mündet in den See'; }
       else if (a === 'r' && b === 'r') { p += 2; label = 'Weg verbunden'; }
+      else if ((a === 'r' && b === 'g' && ROAD_OK.has(n.k)) || (b === 'r' && a === 'g' && ROAD_OK.has(kind))) { p += 2; label = 'Weg verbindet sich'; }
       if (p > 0) good++;
       parts.push({ i, pts: p, label }); pts += p;
     }
@@ -101,7 +102,10 @@ export class Game {
   stageOf(t) { if (t.k !== 'haus') return 1; const n = this.group(t.q, t.r).keys.filter(k => this.board.get(k).k === 'haus').length; return n >= 6 ? 3 : n >= 3 ? 2 : 1; }
 
   // ---------- Setzen ----------
-  pick(i) { if (i >= 0 && i < Math.min(3, this.S.stack.length)) { this.S.pick = i; this.emit('stack'); } }
+  pick(i) { if (i >= 0 && i < this.S.stack.length) { this.S.pick = i; this.emit('stack'); } }
+  // erste Kachel dieser Art im Vorrat wählen (Aufgaben-Kacheln zuletzt, außer quest = true)
+  pickKind(k, quest = false) { const S = this.S; let i = S.stack.findIndex(e => e.k === k && !!e.quest === quest); if (i < 0) i = S.stack.findIndex(e => e.k === k); if (i >= 0) this.pick(i); return i; }
+  supply() { const m = {}; for (const e of this.S.stack) { const c = (m[e.k] ||= { n: 0, quest: 0 }); c.n++; if (e.quest) c.quest++; } return m; }
   setKind(k) { if (this.S.mode === 'kreativ' && TILES[k]) { this.S.stack[0] = { k }; this.S.pick = 0; this.emit('stack'); } }
   place(q, r, o) {
     const S = this.S, e = this.current(); if (!e) return { ok: false, why: 'Der Stapel ist leer.' };

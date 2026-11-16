@@ -1,4 +1,4 @@
-// Schwebeinsel – verdrahtet Spiellogik, Welt, Bühne, Kamera, Leben, Ton, Oberfläche und Speichern.
+// Cloudhaven – verdrahtet Spiellogik, Welt, Bühne, Kamera, Leben, Ton, Oberfläche und Speichern.
 import * as THREE from 'three';
 import { Game } from './game.js';
 import { TILES, KINDS, GROUP } from './tiles.js';
@@ -11,7 +11,9 @@ import { Sound } from './audio.js';
 import { UI } from './ui.js';
 import * as Store from './storage.js';
 import { makeThumbs, Recorder } from './media.js';
+import { t as tr, phrase, tileName, tileDesc } from './i18n.js';
 import { U } from './materials.js';
+import { Lamps } from './lamps.js';
 
 const Q = new URLSearchParams(location.search);
 const canvas = document.getElementById('c');
@@ -24,8 +26,12 @@ const stage = new Stage(canvas, { quality: settings.quality });
 const world = new World(stage.scene, game);
 const life = new Life(stage.scene, { groundAt: (x, z) => world.groundAt(x, z) });
 const sound = new Sound();
+const lamps = new Lamps(stage.scene);
+const lampSpots = () => lamps.setSpots([...world.T.values()].flatMap(o => o.spots));
 let rigD = 0;   // Kollision nur nah dran (weit weg würde das Ziel im Gebäude die Kamera hineinziehen)
-const rig = new CameraRig(stage.camera, canvas, { ground: (x, z) => world.groundAt(x, z), blockers: () => rigD < 14 ? world.blockers() : [] });
+// Boden für die Kamera: über freien Feldern/der Leere zählt Inselhöhe (sonst sackt das Ziel auf −60 ab)
+const camGround = (x, z) => { const h = world.groundAt(x, z); return h < -5 ? .2 : h; };
+const rig = new CameraRig(stage.camera, canvas, { ground: camGround, blockers: () => rigD < 14 ? world.blockers() : [] });
 let thumbs = {}, rotO = 0, hover = null, photo = false, timelapse = null, clock = 0;
 const recorder = new Recorder(canvas);
 
@@ -52,7 +58,7 @@ window.__insel = { app, game, world, stage, rig, life, sound, ui, THREE };
 
 // ---------- Spielstand ----------
 function afterLoad() {
-  rotO = 0; world.clear(); world.sync(); life.setTiles(world.lifeList());
+  rotO = 0; world.clear(); world.sync(); life.setTiles(world.lifeList()); lampSpots();
   const r = world.bounds(); rig.setBounds(new THREE.Vector3(0, 0, 0), r + 8);
   if (!Q.has('cam')) rig.flyTo(new THREE.Vector3(0, 0, 0), Math.max(38, r * 2.1));
 }
@@ -60,7 +66,7 @@ function afterLoad() {
 game.on((type, d) => {
   if (type === 'place') {
     const { tile: t } = d, k = key(t.q, t.r), c = center(t.q, t.r);
-    world.sync(k); life.setTiles(world.lifeList()); world.clearGhost(); hover = null;
+    world.sync(k); life.setTiles(world.lifeList()); lampSpots(); world.clearGhost(); hover = null;
     rig.setBounds(new THREE.Vector3(0, 0, 0), world.bounds() + 8);
     const p = new THREE.Vector3(c.x, .3, c.z);
     setTimeout(() => { life.celebrate('place', p, 1); sound.play('place', { pts: d.total }); if (d.perfect) { sound.play('perfect'); life.celebrate('perfect', p, 1); } }, 520);
@@ -69,7 +75,7 @@ game.on((type, d) => {
     if (d.unlocked?.length) setTimeout(() => { life.celebrate('unlock', p, 1); sound.play('unlock'); }, 1400);
     for (const n of world.grown || []) { setTimeout(() => life.celebrate('dorf', new THREE.Vector3(n.cx, 1, n.cz), 1), 700); }
     world.grown = [];
-  } else if (type === 'undo') { world.sync(); life.setTiles(world.lifeList()); }
+  } else if (type === 'undo') { world.sync(); life.setTiles(world.lifeList()); lampSpots(); }
   else if (type === 'reset') { /* afterLoad übernimmt */ }
   else if (type === 'stack') refreshHover();
 });
@@ -96,21 +102,21 @@ rig.onTap = (nx, ny, e) => {
   const onSlot = h && !game.at(...h) && game.slots().some(([a, b]) => a === h[0] && b === h[1]);
   if (onSlot) {
     hover = h; const res = game.place(h[0], h[1], rotO);
-    if (!res.ok) { sound.play('invalid'); ui.toast(res.why, 'err'); }
+    if (!res.ok) { sound.play('invalid'); ui.toast(phrase(res.why), 'err'); }
     return;
   }
   if (pick) {
     const ud = pick.object.userData;
     if (rig.distance > 12) rig.flyTo(pick.point.clone(), 9);
     if (ud.name) ui.notify('buildingClick', { name: ud.name, text: ud.text, person: true });
-    else if (ud.tile && (ud.layer === 'bldg' || ud.layer === 'part' || ud.layer === 'glass' || ud.layer === 'glow')) { const t = ud.tile, info = TILES[t.k]; ui.notify('buildingClick', { name: info.name, text: describe(t), q: t.q, r: t.r }); }
+    else if (ud.tile && (ud.layer === 'bldg' || ud.layer === 'part' || ud.layer === 'glass' || ud.layer === 'glow')) { const t = ud.tile; ui.notify('buildingClick', { name: tileName(t.k), text: describe(t), q: t.q, r: t.r }); }
   }
 };
 function describe(t) {
   const g = game.group(t.q, t.r), n = g.keys.length, st = game.stageOf(t);
-  const parts = [TILES[t.k].desc];
-  if (g.g) parts.push(`Gehört zu einer Gruppe aus ${n} Kachel${n === 1 ? '' : 'n'}.`);
-  if (t.k === 'haus') parts.push(st === 3 ? 'Ausbaustufe 3: mit Anbau und Garten.' : st === 2 ? 'Ausbaustufe 2 – ab 6 Häusern im Dorf kommt ein Anbau dazu.' : 'Ausbaustufe 1 – ab 3 Häusern im Dorf wird es zweistöckig.');
+  const parts = [tileDesc(t.k)];
+  if (g.g) parts.push(tr('desc.group', { n }));
+  if (t.k === 'haus') parts.push(tr('desc.st' + st));
   return parts.join(' ');
 }
 canvas.addEventListener('dblclick', e => { const r = canvas.getBoundingClientRect(); ray.setFromCamera({ x: (e.clientX - r.left) / r.width * 2 - 1, y: -(e.clientY - r.top) / r.height * 2 + 1 }, stage.camera); const p = ray.intersectObjects(world.blockers(), false)[0]; if (p) rig.flyTo(p.point.clone(), 7); });
@@ -146,7 +152,7 @@ async function runTimelapse({ record = false } = {}) {
   world.startReveal(interval); rig.flyTo(new THREE.Vector3(0, 0, 0), Math.max(40, world.bounds() * 2.2)); rig.autoOrbit(.12);
   if (record) recorder.start(60);
   await new Promise(res => { timelapse.done = res; });
-  if (record) await recorder.stop((game.S.name || 'insel').replace(/[^\wäöüÄÖÜß-]+/g, '_') + '-zeitraffer');
+  if (record) await recorder.stop((game.S.name || 'insel').replace(/[^\wäöüÄÖÜß-]+/g, '_') + '-' + tr('file.timelapse'));
   rig.autoOrbit(0); world.stopReveal(); rig.restore(camKeep); timelapse = null;
 }
 
@@ -182,7 +188,7 @@ function frame(now) {
     stage.setFocus(rig.target, d);
     world.update(dt); rig.update(dt);
     life.update(dt, clock, { night: U.uNight.value, season, rain: U.uRain.value, camTarget: rig.target, camDist: d });
-    stage.update(dt, clock);
+    stage.update(dt, clock); lamps.update(dt, U.uNight.value, rig.target, d);
     // Nähe für die Atmo
     const near = life.near(rig.target);
     sound.update({ night: U.uNight.value, season, rain: U.uRain.value, camDist: d, near });
@@ -197,5 +203,11 @@ addEventListener('resize', () => stage.resize());
 sound.setVolumes(settings.music, settings.sfx);
 if (Q.has('cam')) { const [d, yaw, pitch] = Q.get('cam').split(',').map(Number); rig.restore({ target: [0, 0, 0], distance: d, yaw: yaw * Math.PI / 180, pitch: pitch * Math.PI / 180 }); }
 requestAnimationFrame(frame);
-setTimeout(() => { thumbs = makeThumbs(stage.renderer, ['start', ...KINDS]); ui.notify('thumbs'); }, 50);
+setTimeout(() => { thumbs = makeThumbs(stage.renderer, ['start', ...KINDS]); ui.notify('thumbs'); warmup(); }, 50);
+// alle Shader einmal vorab übersetzen (sonst hakt das erste Heranzoomen/Nacht/Regen)
+function warmup() {
+  try { const keep = { t: rig.serialize() }; stage.renderer.compileAsync?.(stage.scene, stage.camera).catch(() => {});
+    for (const d of [3, 60]) { rig.jumpTo(rig.target.clone(), d); stage.setFocus(rig.target, d); stage.update(.016, clock); stage.render(); }
+    rig.restore(keep.t); } catch (e) { console.warn('warmup', e); }
+}
 ui.notify('ready');

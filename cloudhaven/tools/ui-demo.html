@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="de"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-<title>Schwebeinsel – UI-Demo</title>
+<title>Cloudhaven – UI-Demo</title>
 </head><body>
 <canvas id="c"></canvas>
 <script type="module">
@@ -16,6 +16,7 @@ const { Game } = await import('../js/game.js');
 const { TILES, edgesOf } = await import('../js/tiles.js');
 const { center, pixelToHex, cornerAt, R } = await import('../js/hex.js');
 const { UI } = await import('../js/ui.js');
+const { phrase, tileName } = await import('../js/i18n.js');
 
 const BIOME = { wiese: '#a9d26f', wald: '#4f8a3c', wasser: '#86c3e8', feld: '#e6c55e', dorf: '#dcbf92', berg: '#a3a3a3' };
 const EDGE = { g: null, w: '#2f7fc0', r: '#9a6535', l: '#bfe3f5' };
@@ -81,7 +82,7 @@ cv.addEventListener('pointerdown', e => { drag = { x: e.clientX, y: e.clientY, m
 addEventListener('pointerup', e => {
   if (!drag) return; const d = drag; drag = null; if (d.moved > 6 || ui.blocking || photo) return;
   if (d.b === 2) { app.rotate(1); return; }
-  if (!hover) return; const res = game.place(hover.q, hover.r, rot); app.audio.play(res.ok ? 'place' : 'invalid'); if (!res.ok) ui.toast?.(res.why, 'err');
+  if (!hover) return; const res = game.place(hover.q, hover.r, rot); app.audio.play(res.ok ? 'place' : 'invalid'); if (!res.ok) ui.toast?.(phrase(res.why), 'err');
   hover = null; ui.notify('hover', null);
 });
 cv.addEventListener('pointermove', e => {
@@ -94,7 +95,7 @@ cv.addEventListener('pointermove', e => {
 });
 cv.addEventListener('wheel', e => { e.preventDefault(); cam.s = Math.max(3, Math.min(40, cam.s * (e.deltaY > 0 ? .9 : 1.1))); ui.notify('zoom', { distance: 300 / cam.s }); }, { passive: false });
 cv.addEventListener('contextmenu', e => e.preventDefault());
-cv.addEventListener('dblclick', () => { const h = [...game.board.values()].find(t => t.k === 'haus') || game.at(0, 0); ui.notify('buildingClick', { name: TILES[h.k].name, text: 'Hier wohnt Familie Krume. Im Fenster brennt eine kleine Lampe.' }); });
+cv.addEventListener('dblclick', () => { const h = [...game.board.values()].find(t => t.k === 'haus') || game.at(0, 0); ui.notify('buildingClick', { name: tileName(h.k), text: 'Hier wohnt Familie Krume. Im Fenster brennt eine kleine Lampe.' }); });
 addEventListener('keydown', e => { if (e.key === 'r' || e.key === 'R') { if (!ui.blocking && !e.ctrlKey && !e.metaKey) app.rotate(1); } });
 
 // ---------- Hilfen für Tests ----------
@@ -108,6 +109,7 @@ const demo = {
   force(k, quest) { game.S.stack.splice(game.S.pick, 0, quest ? { k, quest } : { k }); game.emit('stack'); },
   hoverBest() { const b = demo.best(); if (!b) return; hover = { q: b.q, r: b.r }; rot = b.o; evalHover(); return b; },
   focus(q, r, s) { app.focusTile(q, r); if (s) cam.s = s; },
+  cam,   // Zoom der Attrappen-Kamera (für den Test: Mausrad über der Bauleiste darf ihn nicht ändern)
 };
 Object.assign(window, { __ui: ui, __game: game, __app: app, __demo: demo });
 let last = performance.now();

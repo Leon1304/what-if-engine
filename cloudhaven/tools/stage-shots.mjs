@@ -1,5 +1,5 @@
 // Screenshots, Leistungsmessung und Kamera-Tests für Stage + CameraRig (tools/stage-demo.html, headless Chromium).
-//   node insel/tools/stage-shots.mjs <ausgabeordner> [nur=name1,name2] [--no-tests] [--no-bench]
+//   node cloudhaven/tools/stage-shots.mjs <ausgabeordner> [nur=name1,name2] [--no-tests] [--no-bench]
 import http from 'http'; import fs from 'fs'; import path from 'path'; import { chromium } from 'playwright';
 const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..');
 const args = process.argv.slice(2), out = path.resolve(args.find(a => !a.startsWith('--') && !a.startsWith('nur=')) || 'work/stage-shots');

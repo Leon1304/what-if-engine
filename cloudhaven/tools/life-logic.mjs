@@ -1,5 +1,5 @@
 // Logik-Test ohne Browser: Geometriegrößen, 100 s Simulation mit Tag/Nacht/Jahreszeiten, wiederholtes setTiles, alle Feiern, dispose.
-//   node insel/tools/life-logic.mjs   → endet mit LIFE LOGIC OK
+//   node cloudhaven/tools/life-logic.mjs   → endet mit LIFE LOGIC OK
 import * as THREE from 'three';
 const { Life } = await import('../js/life.js');
 const scene = new THREE.Scene(); const L = new Life(scene, { groundAt: () => 0 });

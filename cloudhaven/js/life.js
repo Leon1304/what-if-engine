@@ -1,10 +1,11 @@
-// Leben auf der Schwebeinsel: Bewohner, Tiere, Rauch, Gischt, Lichter, Leuchtturm, Ballon, Luftschiff und Feier-Effekte.
+// Leben auf Cloudhaven: Bewohner, Tiere, Rauch, Gischt, Lichter, Leuchtturm, Ballon, Luftschiff und Feier-Effekte.
 // Alles gebündelt: je Art ein InstancedMesh (Knochen-Animation im Vertex-Shader) bzw. ein GPU-Partikel-Pool.
 // Bewegungen sind Funktionen der Zeit t (Pfade, Kreisbahnen, Partikel-Alter) – kein Ruckeln nach Tab-Wechsel.
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { Kit } from './kit.js';
 import { hash, rng, INR } from './hex.js';
+import { t as tr, phrase } from './i18n.js';   // Texte hier deutsch; phrase() übersetzt beim Anzeigen
 
 const WATER_Y = -.32, TAU = Math.PI * 2, PI = Math.PI;
 const clamp = (x, a = 0, b = 1) => x < a ? a : x > b ? b : x;
@@ -887,7 +888,7 @@ void main(){ float a = uA * pow(1. - vY, 1.3) * (.55 + .45 * sin(vY * 40. - uT *
     const flame = new THREE.Mesh(bp.flame, new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, opacity: .9, blending: THREE.AdditiveBlending, depthWrite: false }));
     flame.position.y = bp.burnerY; flame.renderOrder = 4; b.add(flame);
     const proxy = new THREE.Mesh(new THREE.CylinderGeometry(3.8, 1.2, 14, 8).translate(0, 1.5, 0), this._proxyMat);
-    proxy.userData = { name: 'Heißluftballon „Wolkenhüpfer“', type: 'ballon', get text() { return '„Familie Sommer dreht ihre tägliche Runde um die Insel. Von hier oben sieht alles aus wie ein Spielzeugdorf!“'; } };
+    proxy.userData = { type: 'ballon', get name() { return phrase('Heißluftballon „Wolkenhüpfer“'); }, get text() { return phrase('„Familie Sommer dreht ihre tägliche Runde um die Insel. Von hier oben sieht alles aus wie ein Spielzeugdorf!“'); } };
     b.add(proxy); this.balloon = { g: b, flame, env, proxy, burnerY: bp.burnerY }; this.root.add(b);
     const zg = zeppelinGeo(), z = new THREE.Group();
     const zb = new THREE.Mesh(zg.base, solid); z.add(zb);
@@ -930,6 +931,7 @@ void main(){ float a = uA * pow(1. - vY, 1.3) * (.55 + .45 * sin(vY * 40. - uT *
     const poly = P => { let prev = null; for (let i = 0; i < P.length; i++) { if (i > 0) { const a = P[i - 1], b = P[i], L = Math.hypot(b[0] - a[0], b[1] - a[1]), m = Math.max(1, Math.ceil(L / 1.3)); for (let j = 1; j <= m; j++) { const n = node(lerp(a[0], b[0], j / m), lerp(a[1], b[1], j / m)); link(prev, n); prev = n; } } else prev = node(P[0][0], P[0][1]); } };
     const STOP = new Set(['haus', 'kapelle', 'hof']);
     for (const t of this.tiles) {
+      if (t.paths?.length) { for (const P of t.paths) poly(P); continue; }   // echte Weg-Linien aus dem Gelände
       const ends = (t.roads || []).filter(p => Math.hypot(p[0] - t.cx, p[1] - t.cz) > .5), c = [t.cx, t.cz];
       if (!ends.length) continue;
       if (t.kind === 'start' || t.kind === 'markt' || ends.length >= 3) for (const e of ends) poly([e, c]);
@@ -1205,8 +1207,8 @@ void main(){ float a = uA * pow(1. - vY, 1.3) * (.55 + .45 * sin(vY * 40. - uT *
   }
   _villagerInfo(V, proxy) {
     const self = this;
-    const role = V.kid ? `${6 + Math.floor(V.r1 * 6)} Jahre` : (V.female ? V.job.f : V.job.m);
-    proxy.userData = { type: 'bewohner', id: V.id, vorname: V.name, beruf: role, name: `${V.name} · ${role}`, get text() { return self._say(V); } };
+    const role = () => V.kid ? tr('life.age', { n: 6 + Math.floor(V.r1 * 6) }) : phrase(V.female ? V.job.f : V.job.m);
+    proxy.userData = { type: 'bewohner', id: V.id, vorname: V.name, get beruf() { return role(); }, get name() { return `${V.name} · ${role()}`; }, get text() { return self._say(V); } };
   }
   _say(V) {
     const e = this.env, w = this.sw, pool = [];
@@ -1216,16 +1218,18 @@ void main(){ float a = uA * pow(1. - vY, 1.3) * (.55 + .45 * sin(vY * 40. - uT *
     if (e.rain > .3) add(SAY.rain, 3);
     if (e.night > .6) add(SAY.night, 3); else if (e.night > .2) add(SAY.dusk, 2); else add(SAY.day);
     const s = pool[Math.floor(h01('say', V.id, Math.floor(this.t / 25)) * pool.length)];
-    return '„' + s + '“';
+    return tr('q', { s: phrase(s) });
   }
 
   // ---------------------------------------------------------------- Tiere am Boden
   _buildAnimals() {
     const A = this.animals = [], S = this.spots;
     const add = (sp, cx, cz, rad, L, seed, extra = {}) => { if (A.length < this.qN) A.push({ sp, cx, cz, r: rad, L, seed, off: h01('off', seed) * 60, ...extra }); };
-    for (const s of S.cow || []) { add(SPECIES.kuh, s.x, s.z, 1.3, 22, s.key + 'c', { name: 'Kuh ' + pickR(rngH(s.key), ['Berta', 'Elsa', 'Lotte', 'Rosi', 'Liesl', 'Milka']) }); if (h01('kalb', s.key) < .3) add(SPECIES.kuh, s.x + 1.8, s.z + .6, .7, 18, s.key + 'k', { scale: .6, name: 'Kälbchen' }); }
-    for (const s of S.chicken || []) for (let i = 0; i < 3; i++) add(i === 0 ? SPECIES.huhn : SPECIES.henne, s.x + Math.cos(i * 2.1) * .7, s.z + Math.sin(i * 2.1) * .7, .55, 7 + i, s.key + 'h' + i, { m0: .6, m1: .8, name: 'Huhn' });
-    for (const s of S.meadow || []) if (h01('schaf', s.key) < .55) { const n = 2 + Math.floor(h01('sn', s.key) * 2); for (let i = 0; i < n; i++) add(SPECIES.schaf, s.x + Math.cos(i * 2.1 + 1) * 2, s.z + Math.sin(i * 2.1 + 1) * 2, 1.1, 24 + i * 3, s.key + 's' + i, { name: 'Schaf ' + pickR(rngH(s.key, i), ['Wolke', 'Flocke', 'Watte', 'Bommel', 'Krümel']) }); }
+    for (const s of S.cow || []) { add(SPECIES.kuh, s.x, s.z, 1.3, 22, s.key + 'c', { label: 'kuh', pet: pickR(rngH(s.key), ['Berta', 'Elsa', 'Lotte', 'Rosi', 'Liesl', 'Milka']) }); if (h01('kalb', s.key) < .3) add(SPECIES.kuh, s.x + 1.8, s.z + .6, .7, 18, s.key + 'k', { scale: .6, label: 'kalb' }); }
+    for (const s of S.chicken || []) for (let i = 0; i < 3; i++) add(i === 0 ? SPECIES.huhn : SPECIES.henne, s.x + Math.cos(i * 2.1) * .7, s.z + Math.sin(i * 2.1) * .7, .55, 7 + i, s.key + 'h' + i, { m0: .6, m1: .8, label: 'huhn' });
+    for (const s of S.meadow || []) if (h01('schaf', s.key) < .55) { const n = 2 + Math.floor(h01('sn', s.key) * 2); for (let i = 0; i < n; i++) add(SPECIES.schaf, s.x + Math.cos(i * 2.1 + 1) * 2, s.z + Math.sin(i * 2.1 + 1) * 2, 1.1, 24 + i * 3, s.key + 's' + i, { label: 'schaf', pet: pickR(rngH(s.key, i), [0, 1, 2, 3, 4]) }); }
+    // Schafweide: feste Plätze (immer 2 Schafe je Platz, kleiner Bewegungsradius im Zaun)
+    for (const s of S.sheep || []) for (let i = 0; i < 2; i++) add(SPECIES.schaf, s.x + Math.cos(i * 3) * .8, s.z + Math.sin(i * 3) * .8, .9, 20 + i * 4, s.key + 'w' + i, { label: 'schaf', pet: pickR(rngH(s.key, i + 7), [0, 1, 2, 3, 4, 5]) });
     // Rehe am Waldrand: Nachbarkachel Wiese/Feld
     const DIRS = [[1, 0], [0, 1], [-1, 1], [-1, 0], [0, -1], [1, -1]]; let deer = 0;
     for (const t of this.tiles) {
@@ -1235,8 +1239,8 @@ void main(){ float a = uA * pow(1. - vY, 1.3) * (.55 + .45 * sin(vY * 40. - uT *
         if (!nb || !['wiese', 'feld'].includes(nb.kind) || h01('reh', t.key, i) > .5) continue;
         const dx = nb.cx - t.cx, dz = nb.cz - t.cz, L = Math.hypot(dx, dz), ex = t.cx + dx / L * (INR + 1.6), ez = t.cz + dz / L * (INR + 1.6);
         const stag = h01('bock', t.key, i) < .4;
-        add(stag ? SPECIES.hirsch : SPECIES.reh, ex, ez, 1.6, 26, t.key + 'r' + i, { name: stag ? 'Rehbock' : 'Reh' }); deer++;
-        if (!stag && h01('kitz', t.key, i) < .6) add(SPECIES.kitz, ex + .9, ez + .4, 1.6, 26, t.key + 'r' + i, { scale: .62, follow: true, name: 'Rehkitz' });
+        add(stag ? SPECIES.hirsch : SPECIES.reh, ex, ez, 1.6, 26, t.key + 'r' + i, { label: stag ? 'bock' : 'reh' }); deer++;
+        if (!stag && h01('kitz', t.key, i) < .6) add(SPECIES.kitz, ex + .9, ez + .4, 1.6, 26, t.key + 'r' + i, { scale: .62, follow: true, label: 'kitz' });
       }
     }
     for (const a of A) { a.m0 ??= .7; a.m1 ??= .9; a.scale ??= 1; }
@@ -1277,16 +1281,21 @@ void main(){ float a = uA * pow(1. - vY, 1.3) * (.55 + .45 * sin(vY * 40. - uT *
       A.s.array.set([sp, sp === SPECIES.kuh ? 1 : .5, hen ? 0 : .3 * Math.sin(wv.tt * .3 + i) * (head > -.3 ? 1 : 0), 0], n * 4);
       this._e.set(0, wv.yaw, 0); this._q.setFromEuler(this._e); M.compose(this._v.set(x, y, z), this._q, this._s.setScalar(a.scale)); m.setMatrixAt(n, M);
       const pr = this.qProxy[n]; pr.matrix.copy(M); if (hen) pr.matrix.scale(this._s.set(.45, .45, .4)); pr.matrixWorld.copy(pr.matrix); pr.visible = true;
-      pr.userData = { type: 'tier', name: a.name || 'Tier', text: this._animalSay(a) };
+      const self = this; pr.userData = { type: 'tier', get name() { return self._animalName(a); }, get text() { return self._animalSay(a); } };
       n++;
     }
     for (let i = n; i < this.qN; i++) this.qProxy[i].visible = false;
     m.count = n; m.instanceMatrix.needsUpdate = true; A.p.needsUpdate = A.s.needsUpdate = true; this.stats.animals = n;
   }
+  // Name in der aktuellen Sprache: „Kuh Berta“, „Schaf Wolke“ (Schafnamen je Sprache über den Index)
+  _animalName(a) {
+    const base = tr('animal.' + (a.label || 'tier')); if (a.pet == null) return base;
+    return base + ' ' + (typeof a.pet === 'number' ? tr('life.sheepNames')[a.pet] : a.pet);
+  }
   _animalSay(a) {
     const sp = a.sp, k = Math.floor(this.t / 20);
     const L = sp === SPECIES.kuh ? ['„Muuuh.“ (Sie mag frischen Klee.)', '„Muh!“ (Sie schaut dich neugierig an.)'] : sp === SPECIES.schaf ? ['„Mäh!“ (Sehr flauschig.)', '„Määäh.“ (Es kaut zufrieden.)'] : sp >= 5 ? ['„Gack gack!“', '„Pock pock pock …“'] : ['(Es spitzt die Ohren und grast weiter.)', '(Ganz leise, sonst springt es davon.)'];
-    return L[k % L.length];
+    return phrase(L[k % L.length]);
   }
 
   // ---------------------------------------------------------------- Vögel, Falter, Fische, Enten

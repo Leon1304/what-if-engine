@@ -1,9 +1,9 @@
 // Screenshots aus tools/preview.html (headless Chromium, Playwright aus dem Repo).
-//   node insel/tools/preview.mjs <ausgabeordner> name='m=../js/models/house.js&fn=house&a={"stage":2}&cam=10,6,10&look=0,2,0' …
+//   node cloudhaven/tools/preview.mjs <ausgabeordner> name='m=../js/models/house.js&fn=house&a={"stage":2}&cam=10,6,10&look=0,2,0' …
 // Gibt je Bild Dreiecke, Markierungen (spots), Teile und Konsolenfehler aus.
 import http from 'http'; import fs from 'fs'; import path from 'path'; import { chromium } from 'playwright';
 const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..');
-const out = path.resolve(process.argv[2] || 'work/insel-preview'); fs.mkdirSync(out, { recursive: true });
+const out = path.resolve(process.argv[2] || 'work/cloudhaven-preview'); fs.mkdirSync(out, { recursive: true });
 const views = process.argv.slice(3).map(a => { const i = a.indexOf('='); return [a.slice(0, i), a.slice(i + 1)]; });
 const types = { '.html': 'text/html', '.js': 'text/javascript', '.json': 'application/json', '.png': 'image/png', '.css': 'text/css' };
 const srv = http.createServer((q, r) => { const f = path.join(ROOT, decodeURIComponent(q.url.split('?')[0])); const p = fs.existsSync(f) && fs.statSync(f).isDirectory() ? path.join(f, 'index.html') : f;

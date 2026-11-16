@@ -1,4 +1,4 @@
-// Ton für die Schwebeinsel: Atmo (Wind, Vögel, Grillen, Wasser, Wasserfall, Dorf, Regen), ruhige generative Musik
+// Ton für Cloudhaven: Atmo (Wind, Vögel, Grillen, Wasser, Wasserfall, Dorf, Regen), ruhige generative Musik
 // (pentatonische Zupfklänge, Glocken, weiche Flächen; je Jahreszeit eigene Tonart) und befriedigende Effekte.
 // Alles prozedural mit WebAudio, keine Dateien. Lautstärken werden weich angefahren.
 const clamp = (x, a = 0, b = 1) => x < a ? a : x > b ? b : x;

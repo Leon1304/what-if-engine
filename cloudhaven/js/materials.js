@@ -70,8 +70,8 @@ glowMat.onBeforeCompile = shader => {
 varying float vTag; varying vec3 vWP; uniform float uNight, uTime;
 ${HASH}`)
     .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
-{ float on = step(.18, hh(floor(vWP.xz * 1.7) + floor(vWP.y * 2.))); float fl = .92 + .08 * sin(uTime * 7. + vWP.x * 3.);
-  vec3 warm = vec3(1., .66, .3) * uNight * 2.4 * mix(.25, 1., on) * fl * (vTag > 0.5 ? 1.6 : 1.);
+{ float on = vTag > .5 ? 1. : step(.18, hh(floor(vWP.xz * .9) + floor(vWP.y * .8)));   /* Lampen immer an, Fenster meist */ float fl = .92 + .08 * sin(uTime * 7. + vWP.x * 3.);
+  vec3 warm = vec3(1., .66, .3) * uNight * 2.4 * mix(.25, 1., on) * fl * (vTag > 0.5 ? 2.6 : 1.);
   totalEmissiveRadiance = vTag > 1.5 ? vColor * (.35 + uNight * 2.2) * fl : warm; }`);
 };
 glowMat.customProgramCacheKey = () => 'glow1';

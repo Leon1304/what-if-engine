@@ -1,4 +1,4 @@
-# Schwebeinsel – Spielkonzept (Arbeitstitel)
+# Cloudhaven – Spielkonzept (früher Arbeitstitel „Schwebeinsel“)
 
 Gemütliches Aufbauspiel im Low-Poly-Diorama-Stil. Eine kleine Insel schwebt über den Wolken. Man legt Feld für Feld
 Landschaft an: Wiese, Wald, Wasser, Felder, Häuser. Daraus wächst ein lebendiges Miniaturdorf. Es gibt keine Gegner,
@@ -81,14 +81,14 @@ Gebäude sind der Star. Man soll von der ganzen Insel bis auf Türklinken-Nähe 
 - **Fotomodus mit Filtern** und **Zeitraffer** des Inselaufbaus, auch als Video zum Teilen (Short-Material für den Kanal).
 
 ## Technik
-- **Ordner:** `insel/` mit `index.html` und `js/`. Three.js 0.170 per Import-Map wie in `game/`.
+- **Ordner:** `cloudhaven/` mit `index.html` und `js/`. Three.js 0.170 per Import-Map wie in `game/`.
 - **Modelle als Code statt Blender:** Alle Kacheln, Gebäude und Figuren entstehen prozedural in `js/models/` mit dem Baukasten `js/kit.js`.
   Das passt am besten zu Hunderten Varianten (Seed je Kachel), Hausstufen und nahtlosem Gelände über Kachelgrenzen und braucht keine 20-MB-GLB.
   Volle Detailstufe gilt trotzdem: Fasen, Kleinteile, Gebrauchsspuren, Innenräume hinter den Fenstern.
 - **Bewegung über Shader-Uniforms und bewegliche Teile** (`kit.part`): Wind, Wasser, Schnee, Laub, Nacht und Mühlenflügel. Die Geometrie bleibt fest.
 - **Gelände** (`js/terrain.js`): Höhenrauschen in Weltkoordinaten, dadurch nahtlos. Bach- und Seebetten sind eingegraben, Wasserfälle sitzen an offenen Bachkanten.
 - **Speichern:** siehe Abschnitt „Speichern“.
-- **Veröffentlichen:** Der Workflow `game-pages` veröffentlicht die Insel zusätzlich unter `…/what-if-engine/insel/`.
+- **Veröffentlichen:** Der Workflow `game-pages` veröffentlicht die Insel zusätzlich unter `…/what-if-engine/cloudhaven/`.
 
 ## Prüfungen (vor jedem Push)
 - `tools/rules.mjs`: Kantenregeln, Punkte, Probepartie, Speichern/Laden/Rückgängig, alte Spielstände (ohne Browser) → `RULES OK`.

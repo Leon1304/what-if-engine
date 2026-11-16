@@ -2,7 +2,7 @@
 // Wassernachbarn), lässt neue Kacheln einfallen, dreht bewegliche Teile, zeigt freie Plätze und die Vorschau.
 import * as THREE from 'three';
 import { key, center, neighbor, pixelToHex, cornerAt, edgeMid, R, INR } from './hex.js';
-import { edgesOf, GROUP } from './tiles.js';
+import { edgesOf, GROUP, ROAD_OK } from './tiles.js';
 import { MATS, ghostMat } from './materials.js';
 import { buildTile } from './models/tilemodel.js';
 import { WATER_Y } from './terrain.js';
@@ -18,11 +18,12 @@ export class World {
   nb(q, r) { const out = []; for (let i = 0; i < 6; i++) { const n = this.game.at(...neighbor(q, r, i)); out.push(n ? { k: n.k, E: edgesOf(n.k, n.o) } : null); } return out; }
   sig(t) {
     const E = edgesOf(t.k, t.o); let s = t.k + t.o + ':' + this.game.stageOf(t);
-    if (E.includes('w') || E.includes('l')) s += ':' + this.nb(t.q, t.r).map(n => n ? n.k + n.E.join('') : '-').join('|');
+    if (E.includes('w') || E.includes('l') || ROAD_OK.has(t.k)) s += ':' + this.nb(t.q, t.r).map(n => n ? n.k + n.E.join('') : '-').join('|');
     return s;
   }
   // Abgleich mit dem Spielstand. animKey: diese Kachel fällt ein.
   sync(animKey) {
+    this.dropGhosts();
     const want = this.game.board;
     for (const [k, o] of this.T) if (!want.has(k)) { this._remove(o); this.T.delete(k); }
     let i = 0;
@@ -83,7 +84,8 @@ export class World {
       const t = o.t, g = GROUP[t.k] || null; let id = 0;
       if (g) { const grp = this.game.group(t.q, t.r); const lead = grp.keys.slice().sort()[0]; if (!gid.has(lead)) gid.set(lead, next++); id = gid.get(lead); }
       const roads = o.F.rEdges.length ? [[o.cx, o.cz], ...o.F.rEdges.map(i => { const [a, b] = edgeMid(i); return [a + o.cx, b + o.cz]; })] : [];
-      out.push({ key: k, kind: t.k, q: t.q, r: t.r, cx: o.cx, cz: o.cz, group: g, groupId: id, spots: o.spots, roads, rEdges: o.F.rEdges });
+      const paths = o.F.roadP.map(P => P.map(p => [p[0] + o.cx, p[1] + o.cz]));
+      out.push({ key: k, kind: t.k, q: t.q, r: t.r, cx: o.cx, cz: o.cz, group: g, groupId: id, spots: o.spots, roads, rEdges: o.F.rEdges, paths });
     }
     return out;
   }
@@ -106,6 +108,10 @@ export class World {
   setGhost(kind, q, r, o, ok) {
     const k = kind + q + ',' + r + ':' + o + ok;
     if (k === this.ghostKey) return; this.clearGhost(); this.ghostKey = k;
+    const ck = k + '|' + this.nb(q, r).map(n => n ? n.k + n.E.join('') : '-').join('');
+    this.ghostCache ||= new Map();
+    const hit = this.ghostCache.get(ck);
+    if (hit) { this.ghost = hit; this.scene.add(hit); return; }
     const { x, z } = center(q, r), t = { k: kind, q, r, o }, m = buildTile(t, edgesOf(kind, o), this.nb(q, r), x, z, { stage: 1 });
     const g = new THREE.Group(); g.position.set(x, .6, z);
     const mat = ok ? this.ghostOk : this.ghostBad;
@@ -113,8 +119,12 @@ export class World {
     const gp = (p, par) => { const outer = new THREE.Group(); outer.applyMatrix4(p.matrix); for (const geo of Object.values(p.geo)) outer.add(new THREE.Mesh(geo, mat)); par.add(outer); for (const c of p.children || []) gp(c, outer); };
     for (const p of m.parts) gp(p, g);
     this.ghost = g; this.scene.add(g);
+    this.ghostCache.set(ck, g);
+    if (this.ghostCache.size > 48) { const [k0, g0] = this.ghostCache.entries().next().value; if (g0 !== g) { g0.traverse(m => m.isMesh && m.geometry.dispose()); this.ghostCache.delete(k0); } }
   }
-  clearGhost() { if (this.ghost) { this.scene.remove(this.ghost); this.ghost.traverse(m => m.isMesh && m.geometry.dispose()); this.ghost = null; } this.ghostKey = ''; }
+  clearGhost() { if (this.ghost) { this.scene.remove(this.ghost); this.ghost = null; } this.ghostKey = ''; }
+  // nach dem Setzen ändern sich Nachbarn – alte Vorschauen verwerfen
+  dropGhosts() { for (const g of this.ghostCache?.values() || []) { this.scene.remove(g); g.traverse(m => m.isMesh && m.geometry.dispose()); } this.ghostCache?.clear(); this.ghost = null; this.ghostKey = ''; }
 
   // Zeitraffer: alle Kacheln ausblenden, dann in Spielreihenfolge einfallen lassen
   startReveal(interval) {

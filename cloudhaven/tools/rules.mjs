@@ -1,4 +1,4 @@
-// Regeln der Spiellogik ohne Browser: node insel/tools/rules.mjs → endet mit RULES OK
+// Regeln der Spiellogik ohne Browser: node cloudhaven/tools/rules.mjs → endet mit RULES OK
 import { Game, MILESTONES } from '../js/game.js';
 import { TILES, KINDS, UNLOCKS, edgesOf, affinity } from '../js/tiles.js';
 import { DIRS, neighbor, opp, center, pixelToHex, key } from '../js/hex.js';

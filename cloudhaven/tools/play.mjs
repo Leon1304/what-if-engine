@@ -1,10 +1,10 @@
 // Gesamttest des Spiels im headless Chromium: Start → neue Insel → viele Kacheln setzen (echte Klicks auf freie Felder
 // für die ersten, dann über die Logik) → Meilensteine/Aufgaben → Bildrate → Speichern → Neuladen → gleiche Insel → Rückgängig
-// → Nahaufnahmen ohne Kamera in Geometrie → Zeitraffer. Endet mit PLAY OK.
-//   node insel/tools/play.mjs [ausgabeordner] [--shots]
+// → Nahaufnahmen ohne Kamera in Geometrie → Zeitraffer. Endet mit PLAY OK. Knöpfe über data-act (sprachunabhängig).
+//   node cloudhaven/tools/play.mjs [ausgabeordner] [--shots]
 import http from 'http'; import fs from 'fs'; import path from 'path'; import { chromium } from 'playwright';
 const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..');
-const out = path.resolve(process.argv[2] || 'work/insel-play'); fs.mkdirSync(out, { recursive: true });
+const out = path.resolve(process.argv[2] || 'work/cloudhaven-play'); fs.mkdirSync(out, { recursive: true });
 const SHOTS = process.argv.includes('--shots');
 const types = { '.html': 'text/html', '.js': 'text/javascript', '.json': 'application/json', '.png': 'image/png', '.css': 'text/css', '.mp3': 'audio/mpeg', '.ogg': 'audio/ogg', '.wav': 'audio/wav' };
 const srv = http.createServer((q, r) => { const f = path.join(ROOT, decodeURIComponent(q.url.split('?')[0])); const p = fs.existsSync(f) && fs.statSync(f).isDirectory() ? path.join(f, 'index.html') : f;
@@ -24,9 +24,9 @@ const t0 = Date.now();
 await page.goto(URL0);
 await page.waitForFunction(() => window.__insel && window.__insel.ui.mode === 'menu', null, { timeout: 90000 });
 ok(true, `Start bis Menü: ${Date.now() - t0} ms`); await W(1500); if (SHOTS) await shot('01-menu');
-await page.locator('.mmenu .btn', { hasText: 'Neue Insel' }).first().click(); await W(300);
+await page.locator('.mmenu .btn[data-act=new]').first().click(); await W(300);
 await page.locator('.modal input[type=text]').fill('Testinsel');
-await page.locator('.modal .btn', { hasText: 'Insel erschaffen' }).first().click(); await W(1500);
+await page.locator('.modal .btn[data-act=create]').first().click(); await W(1500);
 ok(await page.evaluate(() => __insel.game.S.name === 'Testinsel' && __insel.ui.mode === 'play'), 'neue Insel läuft');
 await page.evaluate(() => { __insel.game.S.tut = 99; __insel.ui.notify('tileRotate', { o: 0 }); });
 
@@ -67,8 +67,8 @@ ok(res.n > 40, `${res.n} weitere Kacheln, Insel ${res.tiles} Kacheln, ${res.scor
 ok(res.ms < 400, `langsamstes Setzen ${res.ms} ms`);
 await W(1200);
 await page.evaluate(() => { const { ui, game } = __insel; ui._closeAll(); if (!game.S.stack.length) game.endless(); });
-{ const b = page.locator('button, .btn', { hasText: 'Anleitung überspringen' }).first(); if (await b.count() && await b.isVisible()) { await b.click({ force: true }); await W(400); } }
-for (let i = 0; i < 8; i++) { const b = page.locator('button, .btn', { hasText: 'Prima!' }).first(); if (await b.count() && await b.isVisible()) { await b.click({ force: true }); await W(250); } else break; }
+{ const b = page.locator('.btn[data-act=tutSkip]').first(); if (await b.count() && await b.isVisible()) { await b.click({ force: true }); await W(400); } }
+for (let i = 0; i < 8; i++) { const b = page.locator('.ucard .btn[data-act=ok]').first(); if (await b.count() && await b.isVisible()) { await b.click({ force: true }); await W(250); } else break; }
 await W(1000);
 // Bildrate über 3 s
 const fps = await page.evaluate(() => new Promise(r => { let n = 0; const t = performance.now(); const f = () => { n++; if (performance.now() - t < 3000) requestAnimationFrame(f); else r(n / 3); }; requestAnimationFrame(f); }));
@@ -107,7 +107,7 @@ const close = await page.evaluate(async () => {
 });
 ok(close.bad.length === 0, `Nahaufnahmen an Häusern: ${close.n} Blickwinkel, Probleme: ${close.bad.length ? close.bad.join(', ') : 'keine'}`);
 if (SHOTS) {
-  await page.evaluate(() => { const { world, rig, THREE } = __insel; const o = [...world.T.values()].find(o => o.t.k === 'haus'); const a = -o.t.o * Math.PI / 3; rig.jumpTo(new THREE.Vector3(o.cx + Math.cos(-a) * 6, 0, o.cz + Math.sin(-a) * 6), 7, Math.PI / 2 - a); });
+  await page.evaluate(() => { const { world, rig, THREE } = __insel; const all = [...world.T.values()], o = all.find(o => o.t.k === 'haus') || all.find(o => ['reihe', 'huette', 'kapelle', 'hof', 'muehle'].includes(o.t.k)) || all[0]; const a = -o.t.o * Math.PI / 3; rig.jumpTo(new THREE.Vector3(o.cx + Math.cos(-a) * 6, 0, o.cz + Math.sin(-a) * 6), 7, Math.PI / 2 - a); });
   await page.keyboard.press('p'); await W(1500); await shot('08-haus-nah'); await page.keyboard.press('Escape'); await W(300);
 }
 
@@ -117,7 +117,7 @@ await page.reload();
 await page.waitForFunction(() => window.__insel && window.__insel.ui.mode === 'menu', null, { timeout: 90000 }); await W(1200);
 const after = await page.evaluate(() => JSON.stringify(__insel.game.S.tiles));
 ok(before === after, 'Speichern → Neuladen ergibt dieselbe Insel');
-await page.locator('.mmenu .btn', { hasText: 'Weiterspielen' }).first().click(); await W(800);
+await page.locator('.mmenu .btn[data-act=continue]').first().click(); await W(800);
 const u = await page.evaluate(() => { const g = __insel.game; if (!g.S.stack.length) g.endless(); const n = g.board.size, c = g.current(); for (const [q, r] of g.slots()) for (let o = 0; o < 6; o++) if (g.evaluate(c.k, q, r, o).ok) { g.place(q, r, o); const m = g.board.size; g.undo(); return [n, m, g.board.size, __insel.world.T.size]; } return null; });
 ok(u && u[1] === u[0] + 1 && u[2] === u[0] && u[3] === u[0], 'Rückgängig entfernt die Kachel auch aus der Welt');
 

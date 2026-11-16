@@ -1,5 +1,5 @@
 // Screenshots und Messungen der Testinsel (tools/life-demo.html) mit headless Chromium.
-//   node insel/tools/life-shots.mjs <ausgabeordner> name='night=1&cam=…' …
+//   node cloudhaven/tools/life-shots.mjs <ausgabeordner> name='night=1&cam=…' …
 // Gibt je Bild Draw Calls, Bewohner-Zustände, Messwerte und Konsolenfehler aus.
 import http from 'http'; import fs from 'fs'; import path from 'path'; import { chromium } from 'playwright';
 const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..');
