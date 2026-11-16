@@ -3442,7 +3442,7 @@ function react(f, t0, kind = 'startle', o = {}) {
   if (kind === 'duck') kind = 'cover';
   if (kind === 'stumble') return stumble(f, t0, o);   // v3.44: same name as the other reactions
   if (kind === 'flee') return _reactFlee(f, t0, o);
-  const d = o.dur ?? { startle: 0.7, hit: 0.6, shrug: 1.1, nod: 0.9, shake: 1.0, facepalm: 1.6, wave: 1.6, sigh: 1.5, flinch: 0.45, lookUp: 2.6, point: 2.2, gasp: 1.6, cover: 2.6, cower: 3, cheer: 2.4 }[kind] ?? 0.8, amp = o.amp ?? 1;
+  const d = o.dur ?? { startle: 0.7, hit: 0.6, shrug: 1.1, nod: 0.9, shake: 1.0, facepalm: 1.6, wave: 1.6, sigh: 1.5, flinch: 0.45, lookUp: 2.6, point: 2.2, gasp: 1.6, cover: 2.6, cower: 3, cheer: 2.4, bow: 1.8 }[kind] ?? 0.8, amp = o.amp ?? 1;
   if (o.at && (kind === 'lookUp' || kind === 'point' || kind === 'gasp' || o.look)) (f._lkw ??= []).push({ t0: t0 + (kind === 'point' ? 0 : 0.05), t1: t0 + d, at: o.at, fi: 0.22, fo: 0.5 });   // v3.44: head and eyes to the target
   (f._rx ??= []).push([t0, kind, d, amp]);   // the face acts along (facePass)
   const hc = kind === 'hit' && o.clip !== false ? (o.head ? 'Hit_Head' : 'Hit_Chest') : null; let mcv; const mc = () => mcv ??= !!hc && _mcOnF(f) && !!mcClip(hc, true);   // v3.26 mocap figures: Hit_Chest / Hit_Head clip
@@ -3483,6 +3483,7 @@ function _headPt(S, x, y, z) {   // v3.46: a point in the head's frame (skull: x
   return new THREE.Vector3(x, y + 0.01, z).applyEuler(_hpE.set(S.nrx, S.nry, S.nrz)).add(_hpV.set(0, 0.62, 0)); }
 function _react2(f, kind, k, u, e, S, o, L, t) {
   const tr = Math.sin(u * 27 + f.sd * 9);
+  if (kind === 'bow') { S.crx += 0.62 * e; S.nrx += 0.22 * e; S.H -= 0.035 * e; S.ras = L(S.ras, -0.75); S.rae = L(S.rae, -1.85); S.raz = L(S.raz, -0.4); S.las = L(S.las, 0.55); S.laz = L(S.laz, -0.3); S.lae = L(S.lae, -0.15); return; }   // v3.48 courtly bow: from the waist, right hand on the heart, left arm swept back
   if (kind === 'lookUp') { const up = o.at ? 0.35 : 1; S.nrx = L(S.nrx, -0.55 * up); S.crx -= 0.1 * e; S.las = L(S.las, -0.18); S.ras = L(S.ras, -0.22); S.lae = L(S.lae, -0.4); S.rae = L(S.rae, -0.45); S.laz = L(S.laz, -0.16); S.raz = L(S.raz, 0.16); S.H -= 0.012 * e; }
   else if (kind === 'point') { const at = o.at ? _atP(o.at, t) : null; let side = o.hand ?? 'R';
     if (at && !o.hand) { f.root.updateWorldMatrix(true, false); _atW.fromArray(at).applyMatrix4(_lm.copy(f.root.matrixWorld).invert()); side = _atW.x < -0.3 ? 'L' : 'R'; }
@@ -10719,7 +10720,7 @@ function pictureLight(p, x, y, z, ry = 0, o = {}) {
 //   toward −z, floor at y (local 0). The lining glows a little (no real light). shell: false = only the lining (the cavity is cut into a solid body, as in house()).
 function hallStub(p, x, y, z, ry = 0, o = {}) {
   const g = stat(grp(p, x, y, z, ry)), x0 = o.x0 ?? -1.2, x1 = o.x1 ?? 1.2, D = o.d ?? 1.5, H = o.h ?? 2.5, W = x1 - x0, cx = (x0 + x1) / 2, NC = { cast: false }, st = o.style ?? 'home';
-  const S = { home: ['#E8DCC4', 'boards', 'wallpaper', '#A8784A'], museum: ['#E4DED2', 'boards', 'plaster', '#8C5E36'], cellar: ['#8A8580', 'concrete', 'brick', '#8E8A84'], bunker: ['#6E7A6A', 'metal', 'concrete', '#5A605A'], plain: ['#E6E2D8', 'tiles', 'plaster', '#C8C2B4'] }[st] ?? ['#E6E2D8', 'tiles', 'plaster', '#C8C2B4'];
+  const S = { home: ['#E8DCC4', 'boards', 'wallpaper', '#A8784A'], museum: ['#E4DED2', 'boards', 'plaster', '#8C5E36'], cellar: ['#8A8580', 'concrete', 'brick', '#8E8A84'], bunker: ['#6E7A6A', 'metal', 'concrete', '#5A605A'], plain: ['#E6E2D8', 'tiles', 'plaster', '#C8C2B4'], tudor: ['#CDBB94', 'boards', 'plaster', '#5E4028'] }[st] ?? ['#E6E2D8', 'tiles', 'plaster', '#C8C2B4'];
   const wc = o.wall ?? S[0], lit = o.lit ?? (st === 'cellar' || st === 'bunker' ? 0.12 : 0.24), IN = { indoor: true, cast: false }, fy = o.floorY ?? 0.006, lw = 0.02;
   const lm = mat(wc, { em: wc, ei: lit, surf: o.wallSurf ?? S[2], indoor: true }), cm = mat('#F2F0EA', { em: '#F2F0EA', ei: lit * 1.2 });
   box(g, W, 0.05, D, o.floorColor ?? S[3], cx, fy - 0.05, -D / 2, { surf: S[1], recv: true, ...IN });
@@ -10729,11 +10730,12 @@ function hallStub(p, x, y, z, ry = 0, o = {}) {
   const bb = st === 'cellar' || st === 'bunker' ? shade(wc, -0.2) : '#F2F0EA'; box(g, W - 2 * lw, 0.1, 0.015, bb, cx, fy, -D + lw + 0.0075, NC); for (const xx of [x0 + lw + 0.0075, x1 - lw - 0.0075]) box(g, 0.015, 0.1, D - lw - 0.015, bb, xx, fy, (-D + lw + 0.015) / 2, NC);
   const lz = -D / 2, gm = mat('#FFF2D0', { basic: true, glow: 1.0 });
   if (st === 'cellar' || st === 'bunker') { cyl(g, 0.006, 0.006, 0.4, '#1A1A1A', 0, H - lw - 0.4, lz, { seg: 4, ...NC }); ball(g, 0.055, '', 0, H - lw - 0.46, lz, { mat: gm, detail: 1, ...NC }); }
+  else if (st === 'tudor') { const sx0 = x0 + lw + 0.012; box(g, 0.02, 0.22, 0.12, '#26221E', sx0, 1.75, lz, NC); cyl(g, 0.025, 0.028, 0.16, '#EFE6CC', sx0 + 0.07, 1.86, lz, { seg: 8, ...NC }); cone(g, 0.014, 0.06, '', sx0 + 0.07, 2.03, lz, { mat: gm, seg: 6, ...NC }); glowDecal(g, sx0 + 0.006, 1.95, lz, Math.PI / 2, { kind: 'round', w: 0.9, h: 0.9, i: 0.25 }); }   // v3.48 candle sconce
   else { cyl(g, 0.15, 0.17, 0.04, '#E8E6E0', 0, H - lw - 0.04, lz, { seg: 16, ...NC }); cyl(g, 0.12, 0.12, 0.01, '', 0, H - lw - 0.05, lz, { mat: gm, seg: 16, ...NC }); }
   if (o.art !== false && st !== 'cellar' && st !== 'bunker') { const mus = st === 'museum', pw = mus ? Math.min(1.8, W * 0.42) : 0.62, ph = mus ? pw * 0.72 : 0.46, py = mus ? 1.3 : 1.2;
-    painting(g, o.artX ?? 0, py, -D + lw + 0.015, 0, { w: pw, h: ph, lit: mus ? 0.28 : 0.08 }); if (o.pool !== false) glowDecal(g, o.artX ?? 0, py + ph * 0.5, -D + lw + 0.006, 0, { kind: 'cone', w: pw * 1.9, h: Math.min(H - 0.1, ph + 1.2), i: mus ? 0.3 : 0.18 });
+    painting(g, o.artX ?? 0, py, -D + lw + 0.015, 0, { w: pw, h: ph, lit: mus ? 0.28 : 0.08, ...(st === 'tudor' ? { art: 'portrait', frame: '#3A2414' } : {}) }); if (o.pool !== false) glowDecal(g, o.artX ?? 0, py + ph * 0.5, -D + lw + 0.006, 0, { kind: 'cone', w: pw * 1.9, h: Math.min(H - 0.1, ph + 1.2), i: mus ? 0.3 : 0.18 });
     if (mus) { if (W > 3.4) { const bx = x0 + 0.7; box(g, 0.5, 1.0, 0.5, '#F0EEE8', bx, 0, -D / 2); ball(g, 0.16, '#EEE9DE', bx, 1.32, -D / 2, { detail: 1 }); box(g, 0.36, 0.2, 0.2, '#EEE9DE', bx, 1.0, -D / 2); } }
-    else { const rw = Math.min(W - 0.5, 2.4), rd = Math.min(0.7, D - 0.45); if (rw > 0.4 && rd > 0.2) { box(g, rw, 0.012, rd, '#8A3A3A', cx, fy, -D / 2, NC); box(g, rw - 0.12, 0.014, rd - 0.12, '#A85A4A', cx, fy, -D / 2, NC); }
+    else if (st !== 'tudor') { const rw = Math.min(W - 0.5, 2.4), rd = Math.min(0.7, D - 0.45); if (rw > 0.4 && rd > 0.2) { box(g, rw, 0.012, rd, '#8A3A3A', cx, fy, -D / 2, NC); box(g, rw - 0.12, 0.014, rd - 0.12, '#A85A4A', cx, fy, -D / 2, NC); }
       if (D > 0.9) { const tz = -D + lw + 0.17, TW = '#6A4428'; box(g, 0.8, 0.035, 0.28, TW, o.artX ?? 0, 0.8, tz); for (const sx of [-1, 1]) box(g, 0.035, 0.8, 0.035, shade(TW, -0.1), (o.artX ?? 0) + sx * 0.36, fy, tz); cyl(g, 0.05, 0.04, 0.16, '#3E6A8A', (o.artX ?? 0) + 0.25, 0.835, tz, { seg: 8, ...NC }); ball(g, 0.07, '#E85A6A', (o.artX ?? 0) + 0.25, 1.05, tz, { detail: 0, ...NC }); }
       if (W > 2.2) { const hx = x1 - lw - 0.02, hz = -D / 2; box(g, 0.025, 0.06, Math.min(0.9, D - 0.4), '#6A4428', hx - 0.012, 1.62, hz, NC); for (let i = 0; i < 3; i++) box(g, 0.08, 0.025, 0.025, '#C9A64A', hx - 0.06, 1.6, hz - 0.25 + i * 0.25, NC); rbox(g, 0.12, 0.8, 0.36, '#3A4A6A', hx - 0.1, 0.78, hz - 0.25); } } }
   if (st === 'cellar') for (const [py, pc] of [[H - 0.2, '#8A8F96'], [H - 0.32, '#B87333']]) cyl(g, 0.04, 0.04, W - 0.1, pc, cx, py - (W - 0.1) / 2, -D + 0.12, { rz: Math.PI / 2, seg: 8, metal: 0.4, ...NC });
@@ -10972,6 +10974,267 @@ function _museumItems(R) {
   R.put('museumBench', 0, Math.min(d / 2 - 1.6, d * 0.24), 0); R.put('sculpture', -sd * (w / 2 - 0.85), d / 2 - 1.1, 0, { kind: mod ? 'bronze' : 'bust' });
   if (!mod) R.put('sculpture', -sd * (w / 2 - 0.85), -d / 2 + 0.9, 0, { kind: 'vase' });
 }
+/* ====================================================================== */
+/* v3.48 TUDOR PALACE (1500–1550) — interior({ kind: 'tudor' }) with linenfold panelling, tapestries, a stone fireplace, leaded windows, a four-poster,
+   rush matting, a beamed ceiling; pieces: FURN.panelling · tapestry · fireplace · leadedWindow · fourPoster · coffer · stateChair · clothOfEstate · candleStand · rushMat · joinedTable;
+   animated: closeStool() (velvet close stool, lid opens), coffer() (lid opens on gold coins), foldScreen() (carved folding screen); courtProp() (ewer, basin, towel, ledger …) */
+/* ====================================================================== */
+const _TUD = { tex: new Map() }, _tNC = { cast: false };
+function _tudTex(key, w, h, draw) { let t = _TUD.tex.get(key); if (!t) { t = canvasTex(w, h, draw); _TUD.tex.set(key, t); } return t; }
+// tapestry: woven verdure / hunting scene (seeded): border of flowers on red, millefleur ground, trees, a stag and a rider, a strip of sky; faint warp
+function tapestryTex(seed = 1, kind = 'hunt') {
+  return _tudTex(`tap|${kind}|${seed}`, 256, 320, (x, W, H) => { const r = _artRng(hash(seed * 7.3 + 1.1)), B = 18;
+    x.fillStyle = '#7A2A22'; x.fillRect(0, 0, W, H); x.fillStyle = '#2E4A3A'; x.fillRect(B, B, W - 2 * B, H - 2 * B);
+    const sky = x.createLinearGradient(0, B, 0, H * 0.35); sky.addColorStop(0, '#8AA2A8'); sky.addColorStop(1, '#4E6A5A'); x.fillStyle = sky; x.fillRect(B, B, W - 2 * B, H * 0.3);
+    for (let i = 0; i < 5; i++) { const hx = B + r() * (W - 2 * B), hy = H * (0.22 + r() * 0.08); x.fillStyle = i % 2 ? '#3E5A44' : '#4A6648'; x.beginPath(); x.ellipse(hx, hy, 40 + r() * 30, 18, 0, 0, TAU); x.fill(); }   // distant hills
+    for (let i = 0; i < 260; i++) { const fx = B + r() * (W - 2 * B), fy = H * 0.3 + r() * (H * 0.7 - B); x.fillStyle = ['#E8D8A0', '#C84A3A', '#E8E4D4', '#D8A040', '#8AA0C8', '#5A8A4A'][Math.floor(r() * 6)]; x.fillRect(fx, fy, 2 + r() * 2, 2 + r() * 2); }   // millefleur
+    for (let i = 0; i < 3; i++) { const tx = B + 20 + i * (W - 2 * B - 40) / 2 + (r() - 0.5) * 20, ty = H * 0.62; x.fillStyle = '#5A3A22'; x.fillRect(tx - 3, ty - 40, 6, 60);
+      for (let k = 0; k < 6; k++) { x.fillStyle = k % 2 ? '#2A5A34' : '#3A6A3E'; x.beginPath(); x.arc(tx + (r() - 0.5) * 34, ty - 50 - r() * 30, 14 + r() * 8, 0, TAU); x.fill(); }
+      for (let k = 0; k < 4; k++) { x.fillStyle = '#C8402A'; x.beginPath(); x.arc(tx + (r() - 0.5) * 30, ty - 55 - r() * 25, 2.5, 0, TAU); x.fill(); } }   // trees with fruit
+    const sx = W * (0.3 + r() * 0.15), sy = H * 0.72; x.fillStyle = '#9A6A3E';   // stag
+    x.beginPath(); x.ellipse(sx, sy, 22, 10, 0, 0, TAU); x.fill(); x.fillRect(sx - 18, sy, 4, 18); x.fillRect(sx - 10, sy, 4, 18); x.fillRect(sx + 8, sy, 4, 18); x.fillRect(sx + 16, sy, 4, 18);
+    x.beginPath(); x.ellipse(sx + 24, sy - 12, 6, 9, 0.5, 0, TAU); x.fill(); x.strokeStyle = '#E8D8B0'; x.lineWidth = 2; x.beginPath(); x.moveTo(sx + 25, sy - 20); x.lineTo(sx + 20, sy - 34); x.moveTo(sx + 22, sy - 27); x.lineTo(sx + 14, sy - 30); x.moveTo(sx + 27, sy - 20); x.lineTo(sx + 34, sy - 32); x.stroke();
+    if (kind === 'hunt') { const hx = W * 0.7, hy = H * 0.66; x.fillStyle = '#E8E0CC'; x.beginPath(); x.ellipse(hx, hy, 24, 11, 0, 0, TAU); x.fill(); x.fillRect(hx - 18, hy, 4, 22); x.fillRect(hx + 14, hy, 4, 22); x.fillRect(hx - 6, hy, 4, 22); x.fillRect(hx + 6, hy, 4, 22);
+      x.beginPath(); x.ellipse(hx - 26, hy - 10, 6, 11, -0.5, 0, TAU); x.fill(); x.fillStyle = '#2A4A8A'; x.fillRect(hx - 6, hy - 30, 12, 20); x.fillStyle = '#E8C8A0'; x.beginPath(); x.arc(hx, hy - 36, 6, 0, TAU); x.fill(); x.fillStyle = '#C8302A'; x.fillRect(hx - 7, hy - 44, 14, 5); }   // rider on a white horse
+    for (let i = 0; i < 2 * (W + H) / 16; i++) { const u = i * 16, [px, py] = u < W ? [u, B / 2] : u < W + H ? [W - B / 2, u - W] : u < 2 * W + H ? [2 * W + H - u, H - B / 2] : [B / 2, 2 * (W + H) - u];
+      x.fillStyle = '#C9A04A'; x.beginPath(); x.arc(px, py, 4, 0, TAU); x.fill(); x.fillStyle = '#2E5A3A'; x.beginPath(); x.arc(px + 5, py + 4, 2.5, 0, TAU); x.fill(); }   // flower border
+    x.strokeStyle = '#E0C070'; x.lineWidth = 2; x.strokeRect(B - 2, B - 2, W - 2 * B + 4, H - 2 * B + 4);
+    x.globalAlpha = 0.07; x.fillStyle = '#000'; for (let i = 0; i < W; i += 3) x.fillRect(i, 0, 1, H); x.globalAlpha = 1; });   // faint warp (vertical only: no grid)
+}
+function damaskTex(c = '#6A1E2A', gold = '#C9A04A') {   // pomegranate damask (bed hangings, screen panels, cloth of estate)
+  return _tudTex(`dam|${c}|${gold}`, 128, 128, (x, W, H) => { x.fillStyle = c; x.fillRect(0, 0, W, H); x.strokeStyle = gold; x.lineWidth = 2;
+    for (const [cx, cy] of [[32, 32], [96, 96], [96, -32], [32, 160], [-32, 96], [160, 32]]) { x.fillStyle = shade(c, 0.12); x.beginPath(); x.ellipse(cx, cy, 16, 21, 0, 0, TAU); x.fill(); x.globalAlpha = 0.55; x.stroke(); x.globalAlpha = 1;
+      x.fillStyle = shade(c, -0.12); x.beginPath(); x.ellipse(cx, cy + 2, 7, 9, 0, 0, TAU); x.fill();
+      x.beginPath(); x.moveTo(cx - 20, cy + 26); x.quadraticCurveTo(cx, cy + 34, cx + 20, cy + 26); x.globalAlpha = 0.45; x.stroke(); x.globalAlpha = 1; } });
+}
+function leadTex(tint = '#CFE0E2') {   // diamond quarries in lead cames, each pane slightly different (old glass)
+  return _tudTex(`lead|${tint}`, 128, 256, (x, W, H) => { const r = _artRng(0.37), s = 32;
+    for (let j = -1; j < H / s * 2 + 1; j++) for (let i = -1; i < W / s + 1; i++) { const cx = i * s + (j % 2 ? s / 2 : 0), cy = j * s / 2; x.fillStyle = shade(tint, (r() - 0.5) * 0.14);
+      x.beginPath(); x.moveTo(cx, cy - s / 2); x.lineTo(cx + s / 2, cy); x.lineTo(cx, cy + s / 2); x.lineTo(cx - s / 2, cy); x.closePath(); x.fill(); }
+    x.strokeStyle = '#3A3C3E'; x.lineWidth = 3; for (let k = -H; k < W + H; k += s) { x.beginPath(); x.moveTo(k, 0); x.lineTo(k + H / 2, H); x.stroke(); x.beginPath(); x.moveTo(k, 0); x.lineTo(k - H / 2, H); x.stroke(); }
+    x.lineWidth = 6; x.strokeRect(0, 0, W, H); });
+}
+function rushTex() {   // plaited rush matting: rows of braids, straw colours
+  return _tudTex('rush', 128, 128, (x, W, H) => { const r = _artRng(0.71); x.fillStyle = '#A88E58'; x.fillRect(0, 0, W, H);
+    for (let j = 0; j < H; j += 8) for (let i = 0; i < W; i += 8) { x.fillStyle = shade('#B89E62', (r() - 0.5) * 0.18 + ((i + j) % 16 ? 0.04 : -0.06)); x.beginPath(); x.ellipse(i + 4, j + 4, 4.6, 3, ((i / 8 + j / 8) % 2 ? 0.7 : -0.7), 0, TAU); x.fill(); }
+    x.fillStyle = 'rgba(60,40,20,0.25)'; for (let j = 0; j < H; j += 32) x.fillRect(0, j, W, 2); });
+}
+const _texMat = (tex, o = {}) => { const m = new THREE.MeshStandardMaterial({ map: tex, color: o.color ?? '#FFFFFF', roughness: o.rough ?? 0.95, metalness: 0, side: o.side ?? THREE.FrontSide }); m.userData.own = true; return m; };
+const _tGapRuns = (w, gaps, H) => { const cut = gaps.filter(q => (q[2] ?? 0) < H).map(q => [q[0], q[1]]).sort((a, b) => a[0] - b[0]), out = []; let a = -w / 2; for (const [u0, u1] of cut) { if (u0 > a) out.push([a, u0]); a = Math.max(a, u1); } if (a < w / 2) out.push([a, w / 2]); return out; };
+// panelling: linenfold oak wainscot against a wall (local +z = room side), o: w, h (2.4), color, gaps: [[u0, u1, yTop]] (columns in u0…u1 only up to yTop: windows, tapestries; 0 = none: doors, fireplaces)
+FURN.panelling = (p, x, z, ry = 0, o = {}) => { const g = fg(p, x, z, ry), w = o.w ?? 4, H = o.h ?? 2.4, c = o.color ?? '#6A4428', dk = shade(c, -0.14), lt = shade(c, 0.07), n = Math.max(1, Math.round(w / 0.56)), pw = w / n;
+  for (let i = 0; i < n; i++) { const u = -w / 2 + (i + 0.5) * pw, gp = (o.gaps ?? []).find(q => u > q[0] && u < q[1]), top = gp ? Math.min(H, gp[2] ?? 0) : H; if (top < 0.3) continue;
+    box(g, pw, top, 0.02, shade(c, -0.06), u, 0, 0.01); box(g, 0.07, top, 0.035, c, u - pw / 2 + 0.035, 0, 0.0175);   // back board + stile
+    const rows = top > 1.6 ? 3 : top > 0.9 ? 2 : 1, rh = (top - 0.26) / rows;
+    for (let k = 0; k <= rows; k++) box(g, pw - 0.07, k === 0 ? 0.18 : 0.07, 0.035, k === 0 ? dk : c, u + 0.035, k === 0 ? 0 : 0.18 + k * rh - 0.035, 0.0175);   // skirting + rails
+    for (let k = 0; k < rows; k++) { const y0 = 0.18 + k * rh + 0.05, fh = rh - 0.12; if (fh < 0.15) continue;
+      for (let f = 0; f < 4; f++) { const fx = u + 0.035 - pw * 0.255 + f * pw * 0.17; rbox(g, pw * 0.17, fh, 0.022, f % 2 ? lt : c, fx, y0, 0.031, { rf: 0.5 }); box(g, pw * 0.16, 0.035, 0.026, dk, fx, y0 + fh - 0.02, 0.029, _tNC); box(g, pw * 0.16, 0.035, 0.026, dk, fx, y0 - 0.015, 0.029, _tNC); } } }   // the folds, with turned-over ends
+  box(g, 0.07, H, 0.035, c, w / 2 - 0.035, 0, 0.0175);
+  for (const [u0, u1] of (o.gaps ?? []).length ? _tGapRuns(w, o.gaps, H) : [[-w / 2, w / 2]]) { box(g, u1 - u0, 0.08, 0.075, c, (u0 + u1) / 2, H - 0.08, 0.0375); box(g, u1 - u0 + 0.01, 0.03, 0.095, lt, (u0 + u1) / 2, H - 0.025, 0.0475); }   // cornice
+  fuse(g); return g; };
+// tapestry on a wall (like picture: y = bottom edge, z = wall face): woven scene, soft vertical folds, rod with finials, gold fringe; o: w, h, seed, kind ('hunt' | 'verdure')
+FURN.tapestry = (p, x, y, z, ry = 0, o = {}) => { const g = stat(grp(p, x, y, z, ry)), w = o.w ?? 2.4, h = o.h ?? 2.0, sd = o.seed ?? Math.floor(_fh(x, y, 4) * 9), fz = u => 0.045 + 0.022 * Math.sin(u / w * TAU * 4.5);
+  const geo = G(`tapG${w}|${h}`, () => { const gg = new THREE.PlaneGeometry(w, h, 24, 2), P = gg.attributes.position; for (let i = 0; i < P.count; i++) P.setZ(i, fz(P.getX(i))); gg.computeVertexNormals(); gg.translate(0, h / 2, 0); return gg; });
+  mesh(g, geo, _texMat(tapestryTex(sd, o.kind ?? (sd % 2 ? 'hunt' : 'verdure'))), 0, 0, 0, { cast: false });
+  cyl(g, 0.025, 0.025, w + 0.24, '#3A2A1A', 0, h + 0.04 - (w + 0.24) / 2, 0.06, { rz: Math.PI / 2, seg: 8, ..._tNC }); for (const s of [-1, 1]) ball(g, 0.045, '#C9A04A', s * (w / 2 + 0.14), h + 0.065, 0.06, { detail: 1, metal: 0.7, rough: 0.35, ..._tNC });
+  for (const s of [-1, 1]) box(g, 0.04, 0.06, 0.06, '#2A2018', s * (w / 2 - 0.2), h + 0.04, 0.0, _tNC);   // brackets
+  for (let i = 0; i < w / 0.05; i++) { const u = -w / 2 + 0.025 + i * 0.05; box(g, 0.014, 0.08, 0.008, i % 2 ? '#A8823A' : '#C9A04A', u, -0.07, fz(u) + 0.002, _tNC); }   // fringe
+  return g; };
+// fireplace (back at z = 0 against the wall): stone chimney breast with a four-centred Tudor arch, carved spandrels and lozenges, overmantel with a generic shield between pilasters,
+//   hearth slab, sooty firebox, iron firedogs with logs, embers, a fire (lit: true | t0, out) with sparks, a glow light (light: false = none) and crackle (sound: false = silent)
+FURN.fireplace = (p, x, z, ry = 0, o = {}) => { const g = fg(p, x, z, ry), W = o.w ?? 2.3, H = o.h ?? 1.75, D = o.d ?? 0.55, top = o.top ?? 3.6, st = o.stone ?? '#BDB09A', ow = W - 0.7, sh = H - 0.42, NC = _tNC;
+  const geo = G(`fpA${W}|${H}|${D}`, () => { const s = new THREE.Shape(); s.moveTo(-W / 2, 0); s.lineTo(W / 2, 0); s.lineTo(W / 2, H + 0.3); s.lineTo(-W / 2, H + 0.3); s.closePath();
+    const hp = new THREE.Path(); hp.moveTo(-ow / 2, 0); hp.lineTo(-ow / 2, sh); hp.quadraticCurveTo(-ow / 2 + 0.08, sh + 0.3, -ow * 0.18, sh + 0.38); hp.quadraticCurveTo(0, sh + 0.42, ow * 0.18, sh + 0.38); hp.quadraticCurveTo(ow / 2 - 0.08, sh + 0.3, ow / 2, sh); hp.lineTo(ow / 2, 0); hp.closePath(); s.holes.push(hp);
+    return new THREE.ExtrudeGeometry(s, { depth: D, bevelEnabled: false, curveSegments: 6 }); });
+  mesh(g, geo, mat(st, { surf: 'stone', indoor: true }), 0, 0, 0, {});
+  box(g, W + 0.2, top - H - 0.3, D - 0.08, shade(st, 0.04), 0, H + 0.3, 0, { surf: 'stone', indoor: true });   // overmantel / chimney breast up to the ceiling
+  box(g, W + 0.3, 0.12, D + 0.06, shade(st, -0.06), 0, H + 0.22, 0); box(g, W + 0.36, 0.05, D + 0.1, shade(st, -0.1), 0, H + 0.34, 0);   // mantel shelf
+  for (const s of [-1, 1]) { box(g, 0.24, sh + 0.2, 0.04, shade(st, -0.05), s * (ow / 2 + 0.17), 0, D + 0.02); for (let k = 0; k < 3; k++) box(g, 0.13, 0.13, 0.025, shade(st, -0.1), s * (ow / 2 + 0.17), 0.3 + k * 0.42, D + 0.05, { rz: Math.PI / 4, ...NC }); }   // jamb mouldings + carved lozenges
+  for (const s of [-1, 1]) { const q = grp(g, s * ow * 0.3, sh + 0.25, D + 0.01); for (let k = 0; k < 4; k++) { const a = k / 4 * TAU + Math.PI / 4; ball(q, 0.045, shade(st, -0.12), Math.cos(a) * 0.045, Math.sin(a) * 0.045, 0, { detail: 0, ...NC }).scale.z = 0.4; } }   // quatrefoils in the spandrels
+  { const q = grp(g, 0, H + 0.95, D - 0.08), sp = new THREE.Shape(); sp.moveTo(-0.32, 0.4); sp.lineTo(0.32, 0.4); sp.lineTo(0.32, 0.0); sp.quadraticCurveTo(0.3, -0.32, 0, -0.42); sp.quadraticCurveTo(-0.3, -0.32, -0.32, 0); sp.closePath();
+    mesh(q, G('tShield', () => new THREE.ExtrudeGeometry(sp, { depth: 0.05, bevelEnabled: true, bevelSize: 0.015, bevelThickness: 0.015, bevelSegments: 1 })), mat(o.field ?? '#2A4A8A'), 0, 0, 0, {});
+    for (const [qx, qy] of [[-0.16, 0.2], [0.16, -0.1]]) box(q, 0.28, 0.28, 0.01, o.charge ?? '#B8302A', qx, qy - 0.14, 0.07, NC); for (const [qx, qy] of [[0.15, 0.24], [-0.15, -0.04]]) ball(q, 0.05, '#E0B84A', qx, qy, 0.08, { detail: 0, ...NC });
+    box(q, 1.0, 0.06, 0.05, '#C9A04A', 0, 0.44, 0.02, NC); for (const s of [-1, 1]) { rbox(q, 0.14, 0.9, 0.06, shade(st, -0.08), s * 0.66, -0.5, 0.0, { rf: 0.3 }); ball(q, 0.06, shade(st, -0.08), s * 0.66, 0.46, 0.03, { detail: 0, ...NC }); } }   // shield between two pilasters
+  const sb = '#14100E'; box(g, ow, sh + 0.38, 0.02, sb, 0, 0, 0.012, NC); for (const s of [-1, 1]) box(g, 0.02, sh + 0.3, D - 0.04, '#1E1814', s * (ow / 2 - 0.012), 0, D / 2, NC); box(g, ow, 0.02, D - 0.05, '#1A1512', 0, sh + 0.37, D / 2 - 0.01, NC);   // sooty firebox
+  box(g, W + 0.5, 0.05, 0.8, shade(st, -0.12), 0, 0, D + 0.35, { surf: 'stone' }); box(g, ow - 0.04, 0.03, D - 0.05, '#2A2420', 0, 0.02, D / 2, NC);   // hearth slab + ash floor
+  for (const s of [-1, 1]) { const q = grp(g, s * ow * 0.26, 0.05, D * 0.62); box(q, 0.035, 0.42, 0.035, '#26221E', 0, 0, 0, { metal: 0.6, rough: 0.6 }); ball(q, 0.05, '#2E2A26', 0, 0.46, 0, { detail: 1, metal: 0.6, rough: 0.5 }); box(q, 0.03, 0.03, 0.42, '#26221E', 0, 0.14, -0.2, NC); box(q, 0.03, 0.03, 0.24, '#26221E', 0, 0, 0, NC); }   // firedogs
+  for (let k = 0; k < 3; k++) { const L = cyl(g, 0.07, 0.08, ow * 0.68, k === 1 ? '#4A3220' : '#5A3E26', 0, 0.2 + (k === 1 ? 0.1 : 0), D * (0.42 + k * 0.1), { seg: 8 }); L.rotation.set(0, (k - 1) * 0.12, Math.PI / 2); L.position.x = -ow * 0.0; L.position.y = 0.27 + (k === 1 ? 0.1 : 0); }   // logs across the dogs
+  const lit = o.lit ?? true, t0 = typeof lit === 'number' ? lit : -1, t1 = o.out ?? DUR + 1;
+  if (lit !== false) { for (let k = 0; k < 9; k++) box(g, 0.08 + hash(k) * 0.08, 0.03, 0.06, '', (hash(k * 3.3) - 0.5) * ow * 0.7, 0.05, D * (0.3 + hash(k * 5.1) * 0.4), { mat: mat('#FF7A2A', { basic: true, glow: 0.8 }), ...NC });   // embers
+    g.updateWorldMatrix(true, false); const fp = g.localToWorld(v3(0, 0.3, D * 0.55));
+    emit('fire', { at: [fp.x, fp.y, fp.z], t0, t1, rate: o.rate ?? 30, size: o.size ?? 0.3, lensOk: true }); emit('spark', { at: [fp.x, fp.y + 0.2, fp.z], t0, t1, rate: 2, size: 0.02, speed: 1.2, g: 0.6, lensOk: true });
+    if (o.light !== false) { const lp = g.localToWorld(v3(0, 0.7, D + 0.6)); glow(lp.x, lp.y, lp.z, { t0, t1, intensity: o.light?.intensity ?? 3.2, dist: o.light?.dist ?? 9, color: '#FF9A48', flicker: 0.3 }); }
+    if (o.sound !== false) { sfx(Math.max(0, t0), 'fire', o.vol ?? 0.35); const hh = AUDIO.hits[AUDIO.hits.length - 1]; if (hh) hh.dur = Math.min(t1, DUR) - Math.max(0, t0); } }
+  g.userData.fire = true; return g; };
+// leaded window in a stone surround (y = sill, z = wall face): mullions + transom, diamond quarries glowing with daylight, window ledge, drip moulding, saddle bars; o: w, h, lights, night
+FURN.leadedWindow = (p, x, y, z, ry = 0, o = {}) => { const g = stat(grp(p, x, y, z, ry)), w = o.w ?? 1.5, h = o.h ?? 2.2, n = o.lights ?? 3, st = o.stone ?? '#C8BCA4', NC = _tNC, tr = h * 0.68;
+  const lt = leadTex(o.tint), gm = new THREE.MeshStandardMaterial({ map: lt, emissiveMap: lt, color: '#FFFFFF', emissive: o.night ? '#1A2440' : '#E4EEF2', emissiveIntensity: o.night ? 0.5 : 0.95, roughness: 0.12 }); gm.userData.own = true;
+  box(g, w, h, 0.02, '#1E2228', 0, 0, -0.02, NC);
+  for (let i = 0; i < n; i++) for (const [y0, y1] of [[0, tr], [tr, h]]) { const lw = w / n, cx = -w / 2 + (i + 0.5) * lw; mesh(g, G(`lwP${(lw - 0.06).toFixed(3)}|${(y1 - y0 - 0.06).toFixed(3)}`, () => new THREE.PlaneGeometry(lw - 0.06, y1 - y0 - 0.06)), gm, cx, (y0 + y1) / 2, 0.005, { cast: false, recv: false }); }
+  for (let i = 0; i <= n; i++) box(g, i % n ? 0.08 : 0.16, h, 0.16, st, -w / 2 + i * w / n, 0, 0.06, { surf: 'stone' });   // mullions + jambs
+  for (const yy of [-0.09, tr - 0.045, h]) box(g, w + 0.16, 0.09, 0.16, st, 0, yy, 0.06, { surf: 'stone' });   // sill, transom, head
+  box(g, w + 0.4, 0.06, 0.3, shade(st, -0.06), 0, -0.15, 0.13); box(g, w + 0.5, 0.1, 0.12, shade(st, -0.1), 0, h + 0.09, 0.08);   // window ledge + drip moulding
+  for (const s of [-1, 1]) box(g, 0.12, 0.25, 0.1, shade(st, -0.1), s * (w / 2 + 0.2), h - 0.05, 0.09, NC);   // label stops
+  for (let i = 0; i < n; i++) for (const yy of [tr * 0.33, tr * 0.66, tr + (h - tr) * 0.5]) box(g, w / n - 0.07, 0.014, 0.014, '#2A2C2E', -w / 2 + (i + 0.5) * w / n, yy, 0.02, NC);   // iron saddle bars
+  return g; };
+// four-poster: turned posts, linenfold headboard, tester with valance and fringe, damask hangings tied back at the posts, coverlet with gold border, pillows, bolster
+FURN.fourPoster = (p, x, z, ry = 0, o = {}) => { const g = fg(p, x, z, ry), W = o.w ?? 1.9, L = o.l ?? 2.2, H = o.h ?? 2.5, wd = o.wood ?? '#4E3220', cl = o.color ?? '#6A1E2A', Au = '#C9A04A', NC = _tNC;
+  const dm = _texMat(damaskTex(cl, Au)), post = (px, pz) => { cyl(g, 0.07, 0.08, 0.5, wd, px, 0, pz, { seg: 8 }); ball(g, 0.11, wd, px, 0.62, pz, { detail: 1 }); cyl(g, 0.05, 0.06, H - 0.75, shade(wd, 0.05), px, 0.7, pz, { seg: 8 }); for (let k = 0; k < 4; k++) ball(g, 0.07, wd, px, 1.0 + k * 0.32, pz, { detail: 0 }); };
+  for (const sx of [-1, 1]) for (const sz of [-1, 1]) post(sx * W / 2, sz * L / 2);
+  box(g, W - 0.1, 1.3, 0.06, wd, 0, 0.45, -L / 2 + 0.03); FURN.panelling(g, 0, -L / 2 + 0.06, 0, { w: W - 0.24, h: 1.1, color: shade(wd, 0.06) }).position.y = 0.6;   // headboard with linenfold
+  box(g, W + 0.08, 0.3, L + 0.08, wd, 0, 0.18, 0); box(g, W - 0.1, 0.22, L - 0.12, '#E8E0CC', 0, 0.48, 0.02);   // frame + mattress
+  mesh(g, boxG(W - 0.04, 0.08, L - 0.5), dm, 0, 0.74, 0.22, {}); box(g, W + 0.02, 0.36, 0.02, '', 0, 0.42, L / 2 - 0.04, { mat: dm }); for (const s of [-1, 1]) box(g, 0.02, 0.36, L - 0.5, '', s * (W / 2 - 0.01), 0.42, 0.22, { mat: dm });   // coverlet over the edges
+  box(g, W - 0.02, 0.03, 0.03, Au, 0, 0.43, L / 2 - 0.02, NC); rbox(g, W - 0.2, 0.16, 0.22, '#F2EEE4', 0, 0.7, -L / 2 + 0.2, { rf: 0.5 }); for (const s of [-1, 1]) rbox(g, 0.62, 0.16, 0.34, '#F6F2E8', s * 0.38, 0.8, -L / 2 + 0.42, { rf: 0.5 });   // trim, bolster, pillows
+  box(g, W + 0.14, 0.08, L + 0.14, wd, 0, H - 0.08, 0); box(g, W + 0.06, 0.02, L + 0.06, '', 0, H - 0.1, 0, { mat: dm });   // tester + its underside
+  for (const [vx, vz, vw, vr] of [[0, L / 2 + 0.085, W + 0.17, 0], [0, -L / 2 - 0.085, W + 0.17, 0], [W / 2 + 0.085, 0, L + 0.14, Math.PI / 2], [-W / 2 - 0.085, 0, L + 0.14, Math.PI / 2]]) {
+    const q = grp(g, vx, H - 0.38, vz, vr); box(q, vw, 0.32, 0.025, '', 0, 0, 0, { mat: dm }); box(q, vw, 0.035, 0.034, Au, 0, 0.28, 0, NC); for (let i = 0; i < vw / 0.06; i++) box(q, 0.02, 0.09, 0.012, i % 2 ? '#A8823A' : Au, -vw / 2 + 0.03 + i * 0.06, -0.08, 0.008, NC); }   // valance with fringe
+  for (const sx of [-1, 1]) for (const sz of [-1, 1]) { if (sz < 0 && o.backCurtains === false) continue; const q = grp(g, sx * (W / 2 - 0.02), 0, sz * (L / 2 - 0.12));
+    for (let k = 0; k < 3; k++) { const fx = -sx * k * 0.065, rr = 0.055 - k * 0.008; cyl(q, rr, rr * 1.7, 1.16, '', fx, 0.0, 0, { mat: dm, seg: 7 }); cyl(q, rr * 1.5, rr, H - 0.38 - 1.16, '', fx, 1.16, 0, { mat: dm, seg: 7 }); }   // gathered hangings, tied back
+    cyl(q, 0.08, 0.08, 0.05, Au, -sx * 0.065, 1.14, 0, { seg: 8, ...NC }); }
+  g.userData.seats = [[0.45, 0.62, L / 2 - 0.15], [-0.45, 0.62, L / 2 - 0.15]]; fuse(g); return g; };
+// iron-bound coffer (static: FURN.coffer, animated: coffer()); joined table; chair of state + cloth of estate; pricket candle stand; rush mat
+function _cofferBody(g, w, d, h, c, NC) { const ir = '#2A2622', IM = { metal: 0.6, rough: 0.55 };
+  box(g, w, h, d, c, 0, 0.06, 0); for (const sx of [-1, 1]) box(g, 0.06, 0.08, d - 0.02, shade(c, -0.15), sx * (w / 2 - 0.05), 0, 0);   // body on feet
+  for (const u of [-0.32, 0, 0.32]) { box(g, 0.04, h + 0.006, d + 0.012, ir, u * w, 0.057, 0, IM); for (let k = 0; k < 3; k++) ball(g, 0.012, '#4A4440', u * w, 0.12 + k * h * 0.4, d / 2 + 0.008, { detail: 0, ...NC }); }   // iron bands with rivets
+  box(g, 0.1, 0.12, 0.02, ir, 0.08, h - 0.1, d / 2 + 0.005, IM); box(g, 0.025, 0.05, 0.022, '#0A0A0A', 0.08, h - 0.07, d / 2 + 0.008, NC);   // lock plate + keyhole
+  for (const sx of [-1, 1]) cyl(g, 0.045, 0.045, 0.012, ir, sx * (w / 2 + 0.01), h * 0.55, 0, { rz: Math.PI / 2, seg: 10, ...IM }); }   // side rings
+FURN.coffer = (p, x, z, ry = 0, o = {}) => { const g = fg(p, x, z, ry), w = o.w ?? 1.1, d = o.d ?? 0.55, h = o.h ?? 0.5, c = o.color ?? '#5A3A22'; _cofferBody(g, w, d, h, c, _tNC);
+  box(g, w + 0.02, 0.1, d + 0.02, shade(c, 0.05), 0, h + 0.06, 0); for (const u of [-0.32, 0, 0.32]) box(g, 0.045, 0.106, d + 0.032, '#2A2622', u * w, h + 0.057, 0, { metal: 0.6, rough: 0.55 }); fuse(g); return g; };
+function coffer(p, x, z, o = {}) {   // → C { g, lid, coins, at(), top } · open: [t0, t1] or t0 (stays open); the lid swings up on its hinge with a creak, gold coins inside
+  const P0 = p ?? world, g = dyn(grp(P0, x, P0 === world ? groundH(x, z) + (o.y ?? 0) : o.y ?? 0, z, o.ry ?? 0)), w = o.w ?? 0.9, d = o.d ?? 0.5, h = o.h ?? 0.45, c = o.color ?? '#5A3A22', NC = _tNC, b = grp(g);
+  _cofferBody(b, w, d, h, c, NC); box(b, w - 0.08, 0.02, d - 0.08, '#2A1A10', 0, h + 0.04, 0, NC); fuse(b);
+  const coins = grp(g, 0, h + 0.06, 0); if (o.coins !== false) { for (let i = 0; i < 70; i++) { const cx = (hash(i * 1.3) - 0.5) * (w - 0.16), cz = (hash(i * 2.7) - 0.5) * (d - 0.14); cyl(coins, 0.022, 0.022, 0.006, '#E8C04A', cx, 0.04 * hash(i * 5.1) * (1 - Math.abs(cx) / w), cz, { seg: 10, metal: 0.85, rough: 0.28, rx: (hash(i * 7) - 0.5) * 0.8, ...NC }); } fuse(coins); }
+  const lid = dyn(grp(g, 0, h + 0.06, -d / 2 - 0.01)); box(lid, w + 0.02, 0.1, d + 0.02, shade(c, 0.05), 0, 0, d / 2 + 0.01); for (const u of [-0.32, 0, 0.32]) box(lid, 0.045, 0.106, d + 0.032, '#2A2622', u * w, -0.003, d / 2 + 0.01, { metal: 0.6, rough: 0.55 });
+  box(lid, 0.06, 0.08, 0.02, '#2A2622', 0.08, -0.06, d + 0.03, NC);
+  const op = o.open, T0 = Array.isArray(op) ? op[0] : op ?? 1e9, T1 = Array.isArray(op) ? op[1] : 1e9;
+  if (T0 < 1e8) { sfx(T0, 'lid', 0.5); if (T1 < 1e8) sfx(T1 + 0.4, 'lid', 0.45); }
+  tick(t => { const k = sm01((t - T0) / 0.55) * (1 - sm01((t - T1) / 0.45)); lid.rotation.x = -1.85 * k; });
+  if (o.solid !== false) collider(g); return { g, root: g, lid, coins, at: () => worldAt(g, [0, h + 0.1, 0]).toArray(), top: h };
+}
+FURN.joinedTable = (p, x, z, ry = 0, o = {}) => { const g = fg(p, x, z, ry), w = o.w ?? 1.4, d = o.d ?? 0.7, c = o.color ?? '#5E3E24', H = o.h ?? 0.78;
+  box(g, w, 0.05, d, c, 0, H - 0.05, 0); box(g, w - 0.12, 0.1, d - 0.12, shade(c, -0.08), 0, H - 0.15, 0);
+  for (const sx of [-1, 1]) for (const sz of [-1, 1]) { const q = grp(g, sx * (w / 2 - 0.08), 0, sz * (d / 2 - 0.08)); cyl(q, 0.04, 0.045, H - 0.15, c, 0, 0, 0, { seg: 8 }); ball(q, 0.065, shade(c, 0.05), 0, H * 0.45, 0, { detail: 0 }); }   // turned legs
+  for (const sz of [-1, 1]) box(g, w - 0.16, 0.06, 0.05, shade(c, -0.08), 0, 0.08, sz * (d / 2 - 0.08));   // stretchers
+  if (o.cloth !== false) { const cc = o.cloth ?? '#2A4A3A'; box(g, w - 0.08, 0.004, d - 0.06, cc, 0, H, 0, _tNC); for (const sz of [-1, 1]) box(g, w - 0.08, 0.2, 0.01, cc, 0, H - 0.196, sz * (d / 2 - 0.025), _tNC); }   // table carpet
+  fuse(g); return g; };
+FURN.stateChair = (p, x, z, ry = 0, o = {}) => { const g = fg(p, x, z, ry), c = o.wood ?? '#4E3220', v = o.color ?? '#6A1E2A', Au = '#C9A04A', NC = _tNC;
+  for (const sx of [-1, 1]) for (const sz of [-1, 1]) cyl(g, 0.035, 0.04, sz < 0 ? 1.35 : 0.66, c, sx * 0.3, 0, sz * 0.24, { seg: 8 });
+  for (const sx of [-1, 1]) { box(g, 0.08, 0.06, 0.56, c, sx * 0.3, 0.66, 0); ball(g, 0.06, Au, sx * 0.3, 1.38, -0.24, { detail: 1, metal: 0.7, rough: 0.35, ...NC }); ball(g, 0.045, Au, sx * 0.3, 0.74, 0.24, { detail: 1, metal: 0.7, rough: 0.35, ...NC }); }
+  box(g, 0.62, 0.06, 0.5, c, 0, 0.42, 0); rbox(g, 0.56, 0.1, 0.46, v, 0, 0.47, 0.01, { rf: 0.4 }); box(g, 0.54, 0.72, 0.05, v, 0, 0.6, -0.24); box(g, 0.6, 0.06, 0.07, Au, 0, 1.3, -0.24, NC);
+  for (let i = 0; i < 9; i++) ball(g, 0.012, Au, -0.27 + i * 0.0675, 0.45, 0.253, { detail: 0, ...NC });   // gilt nails on the seat rail
+  for (const sz of [-1, 1]) box(g, 0.56, 0.05, 0.04, c, 0, 0.1, sz * 0.24);
+  g.userData.seats = [[0, 0.52, 0.04]]; fuse(g); return g; };
+FURN.clothOfEstate = (p, x, y, z, ry = 0, o = {}) => { const g = stat(grp(p, x, y, z, ry)), w = o.w ?? 1.8, h = o.h ?? 2.4, dm = _texMat(damaskTex(o.color ?? '#7A1A26', '#D8B04A')), Au = '#D8B04A';   // canopy over a chair of state (y = bottom of the back cloth)
+  box(g, w, h, 0.02, '', 0, 0, 0.03, { mat: dm, cast: false }); box(g, w + 0.1, 0.06, 0.8, '#3A2414', 0, h, 0.4); box(g, w + 0.06, 0.02, 0.76, '', 0, h - 0.02, 0.4, { mat: dm });
+  for (const [vx, vz, vw, vr] of [[0, 0.8, w + 0.1, 0], [w / 2 + 0.05, 0.4, 0.8, Math.PI / 2], [-w / 2 - 0.05, 0.4, 0.8, Math.PI / 2]]) { const q = grp(g, vx, h - 0.3, vz, vr); box(q, vw, 0.3, 0.02, '', 0, 0, 0, { mat: dm }); box(q, vw, 0.03, 0.03, Au, 0, 0.27, 0, _tNC); for (let i = 0; i < vw / 0.07; i++) box(q, 0.022, 0.08, 0.01, Au, -vw / 2 + 0.035 + i * 0.07, -0.07, 0.006, _tNC); }
+  box(g, w, 0.035, 0.03, Au, 0, 0.0, 0.045, _tNC); return g; };
+FURN.candleStand = (p, x, z, ry = 0, o = {}) => { const g = fg(p, x, z, ry), H = o.h ?? 1.5, ir = '#26221E', IM = { metal: 0.6, rough: 0.5 }, n = o.n ?? 1;
+  for (let i = 0; i < 3; i++) { const a = i / 3 * TAU; box(g, 0.03, 0.03, 0.28, ir, Math.sin(a) * 0.12, 0, Math.cos(a) * 0.12, { ry: a, ...IM }); }   // tripod feet
+  cyl(g, 0.018, 0.024, H, ir, 0, 0, 0, { seg: 6, ...IM }); for (const y of [0.3, H * 0.6]) ball(g, 0.04, ir, 0, y, 0, { detail: 0, ...IM });
+  const fl = mat('#FFE6A0', { basic: true, glow: 1.4 });
+  for (let i = 0; i < n; i++) { const a = n > 1 ? i / n * TAU : 0, r = n > 1 ? 0.18 : 0, cx = Math.sin(a) * r, cz = Math.cos(a) * r; if (n > 1) box(g, 0.02, 0.02, r, ir, cx / 2, H - 0.02, cz / 2, { ry: a, ...IM });
+    cyl(g, 0.08, 0.06, 0.03, ir, cx, H, cz, { seg: 10, ...IM }); cyl(g, 0.032, 0.035, 0.3, '#EFE6CC', cx, H + 0.03, cz, { seg: 8 }); cyl(g, 0.038, 0.034, 0.02, '#E8DEC0', cx, H + 0.25, cz, { seg: 8, ..._tNC });   // pricket, candle, wax drip
+    cone(g, 0.016, 0.07, '', cx, H + 0.34, cz, { mat: fl, seg: 6, ..._tNC }); box(g, 0.004, 0.025, 0.004, '#2A2018', cx, H + 0.325, cz, _tNC); }
+  return g; };
+FURN.rushMat = (p, x, z, ry = 0, o = {}) => { const g = fg(p, x, z, ry), w = o.w ?? 4, d = o.d ?? 3, tx = rushTex(); tx.wrapS = tx.wrapT = THREE.RepeatWrapping;
+  const geo = G(`rushG${w}|${d}`, () => { const gg = new THREE.BoxGeometry(w, 0.012, d), uv = gg.attributes.uv; for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * w / 0.9, uv.getY(i) * d / 0.9); return gg; });
+  mesh(g, geo, _texMat(tx, { rough: 1, color: o.tint ?? '#BCAE8C' }), 0, 0.006, 0, { cast: false }); for (const sz of [-1, 1]) box(g, w, 0.016, 0.05, '#8A7040', 0, 0, sz * (d / 2 - 0.025), _tNC); for (const sx of [-1, 1]) box(g, 0.05, 0.015, d - 0.1, '#8A7040', sx * (w / 2 - 0.025), 0, 0, _tNC); return g; };
+// closeStool(p, x, z, { ry, color, open, nails, ribbon, solid }) → S { g, lid, pot, open(t), at(), seat() }: Tudor close stool — a padded box on bun feet covered in velvet (black by default),
+//   rows of gilt nails along every edge, silk ribbons nailed down the front with bows, a silk fringe, iron carrying rings; the padded lid swings up on its hinge (creak) and shows the
+//   seat board with its hole and the pewter pan inside. open: [[t0, t1], …] (each opens at t0, closes at t1) · [t0, t1] · t => 0..1 · a number (opens and stays). carry() / holdItem() take S.
+function closeStool(p, x, z, o = {}) {
+  const P0 = p ?? world, g = dyn(grp(P0, x, P0 === world ? groundH(x, z) + (o.y ?? 0) : o.y ?? 0, z, o.ry ?? 0)), W = o.w ?? 0.58, D = o.d ?? 0.48, H = o.h ?? 0.46, vc = o.color ?? '#1E1820', Au = o.nails ?? '#D8B04A', rb = o.ribbon ?? '#B8302A', NC = _tNC;
+  const V = { rough: 0.98 }, GM = { metal: 0.8, rough: 0.3, ...NC }, b = grp(g), nail = (q, x0, y0, z0, x1, y1, z1, n) => { for (let i = 0; i <= n; i++) { const u = i / n; ball(q, 0.009, Au, lerp(x0, x1, u), lerp(y0, y1, u), lerp(z0, z1, u), { detail: 0, ...GM }); } };
+  for (const sx of [-1, 1]) for (const sz of [-1, 1]) cyl(b, 0.03, 0.035, 0.062, '#3A2A1E', sx * (W / 2 - 0.05), 0, sz * (D / 2 - 0.05), { seg: 8 });   // bun feet
+  const HB = H - 0.095, T = 0.035; box(b, W - 0.02, 0.03, D - 0.02, '#3A2A1E', 0, 0.06, 0); for (const sz of [-1, 1]) rbox(b, W, HB, T, vc, 0, 0.06, sz * (D / 2 - T / 2), { rf: 0.3, ...V }); for (const sx of [-1, 1]) rbox(b, T, HB, D - 2 * T + 0.004, vc, sx * (W / 2 - T / 2), 0.06, 0, { rf: 0.3, ...V });   // velvet box, open at the top (the pan shows through the seat)
+  for (const sy of [0.075, H - 0.05]) { nail(b, -W / 2 + 0.02, sy, D / 2 + 0.004, W / 2 - 0.02, sy, D / 2 + 0.004, 18); nail(b, -W / 2 + 0.02, sy, -D / 2 - 0.004, W / 2 - 0.02, sy, -D / 2 - 0.004, 18);
+    for (const sx of [-1, 1]) nail(b, sx * (W / 2 + 0.004), sy, -D / 2 + 0.02, sx * (W / 2 + 0.004), sy, D / 2 - 0.02, 14); }   // nails along the bottom and top edges
+  for (const sx of [-1, 1]) for (const sz of [-1, 1]) nail(b, sx * (W / 2 - 0.006), 0.1, sz * (D / 2 + 0.002), sx * (W / 2 - 0.006), H - 0.075, sz * (D / 2 + 0.002), 10);   // and up the corners
+  for (const u of [-0.22, 0.22]) { box(b, 0.035, H - 0.12, 0.006, rb, u * W, 0.07, D / 2 + 0.003, NC); nail(b, u * W - 0.03, 0.12, D / 2 + 0.007, u * W - 0.03, H - 0.08, D / 2 + 0.007, 6); nail(b, u * W + 0.03, 0.12, D / 2 + 0.007, u * W + 0.03, H - 0.08, D / 2 + 0.007, 6); }   // ribbons down the front, nailed both sides
+  for (const sx of [-1, 1]) { const q = grp(b, sx * (W / 2 + 0.012), H * 0.62, 0); box(q, 0.012, 0.06, 0.08, '#2A2622', 0, -0.03, 0, { metal: 0.6, rough: 0.5 }); cyl(q, 0.045, 0.045, 0.012, '#2A2622', 0.008 * sx, -0.07, 0, { rz: Math.PI / 2, seg: 10, metal: 0.6, rough: 0.5 }); }   // carrying rings
+  { const sb = grp(b, 0, H - 0.035, 0), s = new THREE.Shape(); s.moveTo(-W / 2 + 0.005, -D / 2 + 0.005); s.lineTo(W / 2 - 0.005, -D / 2 + 0.005); s.lineTo(W / 2 - 0.005, D / 2 - 0.005); s.lineTo(-W / 2 + 0.005, D / 2 - 0.005); s.closePath();
+    const hp = new THREE.Path(); hp.absellipse(0, -0.02, 0.13, 0.15, 0, TAU, true); s.holes.push(hp);
+    mesh(sb, G(`csSeat${W}|${D}`, () => { const e = new THREE.ExtrudeGeometry(s, { depth: 0.025, bevelEnabled: false, curveSegments: 14 }); e.rotateX(-Math.PI / 2); return e; }), mat('#7A5634'), 0, 0, 0, { cast: false }); }   // seat board with the hole
+  const pot = grp(g, 0, H - 0.2, 0.02); cyl(pot, 0.16, 0.12, 0.15, '#9AA0A4', 0, 0, 0, { seg: 16, metal: 0.75, rough: 0.35 }); cyl(pot, 0.175, 0.175, 0.014, '#8A9094', 0, 0.15, 0, { seg: 16, metal: 0.35, rough: 0.5, ...NC }); cyl(pot, 0.13, 0.13, 0.004, '#1E1C1A', 0, 0.164, 0, { seg: 16, rough: 1, ...NC });   // pewter pan, rim, dark inside
+  fuse(b); fuse(pot);
+  const lid = dyn(grp(g, 0, H - 0.008, -D / 2)), L = grp(lid, 0, 0, D / 2);
+  box(L, W + 0.01, 0.035, D + 0.01, '#4A3420', 0, 0, 0); rbox(L, W - 0.02, 0.07, D - 0.03, vc, 0, 0.03, 0, { rf: 0.5, ...V });   // board + padded velvet cushion
+  for (let i = 0; i < 4; i++) for (let k = 0; k < 3; k++) ball(L, 0.012, Au, -W * 0.3 + i * W * 0.2, 0.1, -D * 0.28 + k * D * 0.28, { detail: 0, ...GM });   // quilting nails
+  nail(L, -W / 2 + 0.01, 0.018, D / 2 + 0.008, W / 2 - 0.01, 0.018, D / 2 + 0.008, 18); for (const sx of [-1, 1]) nail(L, sx * (W / 2 + 0.008), 0.018, -D / 2 + 0.02, sx * (W / 2 + 0.008), 0.018, D / 2 - 0.02, 14);
+  for (let i = 0; i < W / 0.025; i++) box(L, 0.008, 0.07, 0.006, i % 2 ? shade(rb, -0.15) : rb, -W / 2 + 0.0125 + i * 0.025, -0.07, D / 2 + 0.014, NC);   // silk fringe at the front edge
+  for (const u of [-0.22, 0.22]) { const q = grp(L, u * W, 0.06, D / 2 + 0.02); for (const s of [-1, 1]) box(q, 0.06, 0.035, 0.008, rb, s * 0.03, 0, 0, { rz: s * 0.45, ...NC }); box(q, 0.02, 0.07, 0.008, rb, 0.01, -0.07, 0, { rz: 0.15, ...NC }); }   // bows
+  fuse(L);
+  const op = o.open, segs = typeof op === 'number' ? [[op, 1e9]] : Array.isArray(op) ? (typeof op[0] === 'number' ? [op] : op) : [], ofn = typeof op === 'function' ? op : null;
+  const open = t => ofn ? clamp(ofn(t)) : segs.reduce((m, [a, c]) => Math.max(m, sm01((t - a) / 0.5) * (1 - sm01((t - c) / 0.45))), 0);
+  if (o.sound !== false) for (const [a, c] of segs) { sfx(a, 'lid', 0.5); if (c < 1e8) sfx(c + 0.38, 'lid', 0.42); }
+  tick(t => { lid.rotation.x = -1.95 * open(t); });
+  if (o.solid !== false) collider(g); return { g, root: g, lid, pot, open, top: H, at: () => worldAt(g, [0, H + 0.05, 0]).toArray(), seat: () => { const q = worldAt(g, [0, 0, 0]).toArray(); q.h = H + 0.06; return q; } };
+}
+// foldScreen(p, x, z, { ry, panels: 4, pw: 0.62, h: 1.85, fold: 0.45, cloth, wood }) → S { g, panels, at(i), width }: carved oak folding screen, panels in a zigzag (centred on x),
+//   linenfold lower panel, damask cloth upper panel with gilt rails, arched crest with a gilt knob, finials and feet; hides what is behind it (close stool, dressing)
+function foldScreen(p, x, z, o = {}) {
+  const P0 = p ?? world, g = stat(grp(P0, x, P0 === world ? groundH(x, z) : 0, z, o.ry ?? 0)), n = o.panels ?? 4, pw = o.pw ?? 0.62, H = o.h ?? 1.85, fa = o.fold ?? 0.45, wd = o.wood ?? '#5A3A22', Au = '#C9A04A', NC = _tNC;
+  const dm = _texMat(damaskTex(o.cloth ?? '#2A4A3A', Au)), pts = [[0, 0]];
+  for (let i = 0; i < n; i++) { const a = (i % 2 ? -fa : fa), [px, pz] = pts[i]; pts.push([px + Math.cos(a) * pw, pz - Math.sin(a) * pw]); }
+  const cx = pts[n][0] / 2, S = { g, panels: [] };
+  for (let i = 0; i < n; i++) { const [ax, az] = pts[i], [bx, bz] = pts[i + 1], q = grp(g, (ax + bx) / 2 - cx, 0, (az + bz) / 2, -Math.atan2(bz - az, bx - ax)); S.panels.push(q);
+    for (const s of [-1, 1]) { box(q, 0.05, H, 0.05, wd, s * (pw / 2 - 0.025), 0.04, 0); ball(q, 0.035, wd, s * (pw / 2 - 0.025), H + 0.1, 0, { detail: 0 }); box(q, 0.07, 0.04, 0.12, shade(wd, -0.1), s * (pw / 2 - 0.025), 0, 0); }   // stiles, finials, feet
+    for (const y of [0.1, 0.62, H - 0.02]) box(q, pw - 0.1, 0.06, 0.045, wd, 0, y, 0);
+    box(q, pw - 0.1, 0.46, 0.02, shade(wd, -0.1), 0, 0.16, 0); for (const sz of [-1, 1]) for (let f = 0; f < 4; f++) rbox(q, (pw - 0.1) * 0.16, 0.38, 0.012, f % 2 ? shade(wd, 0.1) : shade(wd, 0.03), -(pw - 0.1) * 0.3 + f * (pw - 0.1) * 0.2, 0.2, sz * 0.014, { rf: 0.5 });   // linenfold lower panel, both faces
+    box(q, pw - 0.1, H - 0.74, 0.012, '', 0, 0.68, 0, { mat: dm });   // damask cloth
+    for (const y of [0.66, H - 0.06]) box(q, pw - 0.1, 0.02, 0.05, Au, 0, y, 0, NC);
+    const cr = new THREE.Shape(); cr.moveTo(-pw / 2 + 0.05, 0); cr.lineTo(pw / 2 - 0.05, 0); cr.quadraticCurveTo(pw / 4, 0.02, 0, 0.13); cr.quadraticCurveTo(-pw / 4, 0.02, -pw / 2 + 0.05, 0);
+    mesh(q, G(`fsCrest${pw}`, () => new THREE.ExtrudeGeometry(cr, { depth: 0.035, bevelEnabled: false, curveSegments: 6 }).translate(0, 0, -0.0175)), mat(wd), 0, H + 0.04, 0, {}); ball(q, 0.03, Au, 0, H + 0.2, 0, { detail: 1, metal: 0.7, rough: 0.35, ...NC }); }
+  fuse(g); if (o.solid !== false) collider(g);
+  S.at = (i = 0) => { const k = clamp(i, 0, n - 1), q = S.panels[k]; return worldAt(q, [0, 1.2, 0]).toArray(); }; S.width = Math.abs(pts[n][0]); return S;
+}
+// courtProp(p, kind, x, y, z, { ry, color, scale }) → g (dyn: holdItem / carry / toss): ewer (silver jug) · basin (wide bowl, water) · towel (folded linen) · drape (towel over the forearm)
+//   · ledger (leather book, gilt clasps) · quill (in an inkpot) · purse (drawstring coin bag) · goblet · scroll (sealed letter)
+function courtProp(p, kind = 'ewer', x = 0, y = 0, z = 0, o = {}) {
+  const g = dyn(grp(p ?? world, x, y, z, o.ry ?? 0)), s = o.scale ?? 1, NC = _tNC, SV = { metal: 0.8, rough: 0.28 }, Au = '#D8B04A', c0 = o.color ?? '#C8C8C4';
+  const lathe = (key, pts, c, mo) => mesh(g, G(`cpL${key}|${s}`, () => new THREE.LatheGeometry(pts.map(([a, b]) => new THREE.Vector2(a * s, b * s)), 16)), mat(c, { ...mo, flat: false, side: THREE.DoubleSide }), 0, 0, 0, { cast: true });
+  if (kind === 'ewer') { lathe('ewer', [[0, 0], [0.05, 0], [0.055, 0.02], [0.04, 0.05], [0.07, 0.11], [0.075, 0.16], [0.05, 0.22], [0.035, 0.25], [0.045, 0.28], [0.04, 0.29]], c0, SV);
+    box(g, 0.02 * s, 0.14 * s, 0.02 * s, c0, -0.085 * s, 0.1 * s, 0, { ...SV, rz: 0.2 }); box(g, 0.05 * s, 0.015 * s, 0.02 * s, c0, -0.06 * s, 0.24 * s, 0, SV); cone(g, 0.02 * s, 0.08 * s, c0, 0.06 * s, 0.24 * s, 0, { rz: -1.0, seg: 6, ...SV }); cyl(g, 0.073 * s, 0.073 * s, 0.01 * s, Au, 0, 0.15 * s, 0, { seg: 16, ...SV, ...NC }); }
+  else if (kind === 'basin') { lathe('basin', [[0, 0], [0.06, 0], [0.07, 0.015], [0.16, 0.05], [0.2, 0.07], [0.205, 0.075], [0.195, 0.075], [0.15, 0.052], [0.0, 0.032]], c0, SV); cyl(g, 0.198 * s, 0.198 * s, 0.006 * s, Au, 0, 0.072 * s, 0, { seg: 18, ...SV, ...NC }); if (o.water !== false) cyl(g, 0.14 * s, 0.14 * s, 0.004, '', 0, 0.046 * s, 0, { seg: 16, mat: mat('#9FC8D8', { rough: 0.05, metal: 0.2, opacity: 0.8 }), ...NC }); }
+  else if (kind === 'towel') { for (let i = 0; i < 4; i++) rbox(g, 0.32 * s, 0.022 * s, 0.22 * s, i % 2 ? '#F2EEE4' : '#EAE4D6', 0, i * 0.022 * s, 0, { rf: 0.4 }); box(g, 0.32 * s, 0.012 * s, 0.03 * s, '#C8B88A', 0, 0.05 * s, 0.09 * s, NC); }
+  else if (kind === 'drape') { rbox(g, 0.1 * s, 0.03 * s, 0.24 * s, '#F2EEE4', 0, 0, 0, { rf: 0.4 }); for (const sx of [-1, 1]) rbox(g, 0.03 * s, 0.34 * s, 0.22 * s, '#EEE8DA', sx * 0.06 * s, -0.32 * s, 0, { rf: 0.4 }); box(g, 0.012 * s, 0.03 * s, 0.22 * s, '#C8B88A', 0.08 * s, -0.33 * s, 0, NC); }
+  else if (kind === 'ledger') { box(g, 0.26 * s, 0.06 * s, 0.34 * s, '#6A3A22', 0, 0, 0); box(g, 0.245 * s, 0.05 * s, 0.33 * s, '#EFE6CC', 0.01 * s, 0.005 * s, 0, NC); for (const sz of [-1, 1]) box(g, 0.04 * s, 0.066 * s, 0.03 * s, Au, 0.12 * s, -0.003 * s, sz * 0.09 * s, { ...SV, ...NC }); for (const sx of [-1, 1]) for (const sz of [-1, 1]) ball(g, 0.012 * s, Au, sx * 0.1 * s, 0.062 * s, sz * 0.14 * s, { detail: 0, ...SV, ...NC }); }
+  else if (kind === 'quill') { cyl(g, 0.035 * s, 0.04 * s, 0.05 * s, '#2A2622', 0, 0, 0, { seg: 10, metal: 0.4, rough: 0.5 }); const q = grp(g, 0, 0.03 * s, 0); q.rotation.z = 0.35; _ell(q, '#F2EEE4', 0, 0.16 * s, 0, 0.012 * s, 0.11 * s, 0.03 * s, { detail: 1 }); box(q, 0.004, 0.24 * s, 0.004, '#D8D0BC', 0, 0.02 * s, 0, NC); }
+  else if (kind === 'purse') { _ell(g, o.color ?? '#7A3A2A', 0, 0.06 * s, 0, 0.06 * s, 0.06 * s, 0.05 * s, { detail: 1 }); cyl(g, 0.02 * s, 0.035 * s, 0.04 * s, o.color ?? '#7A3A2A', 0, 0.1 * s, 0, { seg: 8 }); cyl(g, 0.025 * s, 0.025 * s, 0.01 * s, Au, 0, 0.11 * s, 0, { seg: 8, ...NC }); }
+  else if (kind === 'goblet') lathe('goblet', [[0, 0], [0.045, 0], [0.04, 0.01], [0.01, 0.03], [0.008, 0.09], [0.02, 0.1], [0.045, 0.13], [0.05, 0.17], [0.046, 0.17]], o.color ?? '#D8B04A', SV);
+  else if (kind === 'scroll') { cyl(g, 0.025 * s, 0.025 * s, 0.24 * s, '#EFE6CC', -0.12 * s, 0.025 * s, 0, { rz: -Math.PI / 2, seg: 10 }); cyl(g, 0.03 * s, 0.03 * s, 0.01 * s, '#A81E28', 0, 0.025 * s, 0.022 * s, { rx: Math.PI / 2, seg: 10, ...NC }); }
+  g.userData.kind = kind; return g;
+}
+ROOMS.tudor = { wall: '#D6C6A0', floor: 'wood', floorColor: '#5E4028', wallSurf: 'plaster', w: 11, d: 8, h: 4.2, window: false, pics: false, ceil: '#4E3422', clutter: false, fittings: false,
+  door: { side: 'right', w: 1.15, h: 2.45, frame: '#4A3020', leaf: '#5E3E24', straps: true, hall: { style: 'tudor', d: 1.8 } }, items: R => _tudorItems(R) };
+// the Tudor chamber: panelled walls (windows, tapestries, door and fireplace cut in), tapestries, a fireplace on the wall opposite the door, two leaded windows in the back wall,
+//   a four-poster with a coffer at its foot (bed: false → chair of state under a cloth of estate: presence chamber), rush matting, a joined table under a window, candle stands, beamed ceiling.
+//   o.fire: false = cold hearth | t0 = lit from then · o.fireAt (u along that wall) · o.panelH (2.6) · o.tapestries: false · o.candles: [[x, z], …] · o.bedColor
+//   Anchors: R.at('fireplace' | 'bed' | 'coffer' | 'chair' | 'table' | 'window0' | 'window1' | 'corner'), R.seat('stateChair' | 'fourPoster')
+function _tudorItems(R) {
+  const { w, d, h, o } = R, PH = o.panelH ?? 2.6, wd = o.panel ?? '#6A4428', bed = o.bed !== false, dw = R.DW ?? 1.15, sd = R.ds === 'left' ? -1 : 1, TY = 1.2;
+  const win = [[-w / 2 + 1.0, 1.5], [w * 0.06, 1.6]], wy = 1.05, wh = Math.min(h - 1.6, 2.5), tap = o.tapestries !== false, th = Math.min(2.5, h - 1.65);
+  const fWall = sd > 0 ? R.leftW : R.rightW, dWall = sd > 0 ? R.rightW : R.leftW, fw = 2.4, fu = o.fireAt ?? 0, fL = -sd * fu, du = sd * R.dz;   // wall-local u (left wall: u = −z, right wall: u = z)
+  const T = (q, u, tw, s) => { FURN.tapestry(q, u, TY, 0.105, 0, { w: tw, h: th, seed: s }); return [u - tw / 2 - 0.05, u + tw / 2 + 0.05, TY - 0.05]; };
+  win.forEach(([wx, ww], i) => { FURN.leadedWindow(R.backW, wx, wy, 0.07, 0, { w: ww, h: wh, night: o.night }); R.anchors['window' + i] = [wx, wy, -d / 2 + 0.2]; });
+  const gB = win.map(([wx, ww]) => [wx - ww / 2 - 0.15, wx + ww / 2 + 0.15, wy - 0.2]); if (tap) gB.push(T(R.backW, w * 0.33, 2.3, 3));
+  FURN.panelling(R.backW, 0, 0.07, 0, { w, h: PH, color: wd, gaps: gB });
+  const gF = [[fL - fw / 2 - 0.15, fL + fw / 2 + 0.15, 0]]; if (tap) for (const s of [-1, 1]) gF.push(T(fWall, fL + s * (fw / 2 + 1.2), 1.6, s > 0 ? 4 : 5));
+  FURN.panelling(fWall, 0, 0.07, 0, { w: d, h: PH, color: wd, gaps: gF });
+  if (o.fire !== false) { FURN.fireplace(fWall, fL, 0.07, 0, { w: fw, top: h, lit: o.fire ?? true, light: o.fireLight, sound: o.fireSound }); R.anchors.fireplace = [-sd * (w / 2 - 1.3), 0, fu]; }
+  const gD = [[du - dw / 2 - 0.12, du + dw / 2 + 0.12, 0]]; if (tap) gD.push(T(dWall, du - 2.6 * Math.sign(du || 1), 2.2, 6));
+  FURN.panelling(dWall, 0, 0.07, 0, { w: d, h: PH, color: wd, gaps: gD });
+  if (R.frontW) FURN.panelling(R.frontW, 0, 0.07, 0, { w, h: PH, color: wd });
+  const bx = -w / 2 + 3.0, bz = -d / 2 + 1.2;
+  if (bed) { R.put('fourPoster', bx, bz, 0, { color: o.bedColor ?? '#6A1E2A' }); R.anchors.bed = [bx, 0, bz]; R.put('coffer', bx, bz + 1.65, 0, { w: 1.1 }); R.anchors.coffer = [bx, 0, bz + 1.65]; }
+  else { R.put('stateChair', bx, -d / 2 + 0.75, 0); FURN.clothOfEstate(R.backW, bx, 0.35, 0.09, 0, { w: 1.9, h: Math.min(2.6, h - 1.3) }); R.anchors.chair = [bx, 0, -d / 2 + 0.75]; }
+  R.put('joinedTable', win[1][0], -d / 2 + 0.55, 0, { w: 1.3, d: 0.6 }); R.anchors.table = [win[1][0], 0.78, -d / 2 + 0.55];
+  R.put('rushMat', o.matX ?? 0.4, 0.3, 0, { w: Math.min(6, w - 3), d: Math.min(4.2, d - 2.6) });
+  for (const [cx, cz] of o.candles ?? [[win[1][0] - 1.35, -d / 2 + 0.5], [w / 2 - 0.6, -d / 2 + 0.6]]) R.put('candleStand', cx, cz, 0, { n: 3 });
+  R.anchors.corner = [w / 2 - 1.6, 0, -d / 2 + 1.3];
+  for (let i = 0; i < 4; i++) box(R.g, w + 0.1, 0.26, 0.22, '#3E2A1A', 0, h - 0.26, -d / 2 + (i + 0.5) * d / 4, { cast: false });   // beams across the room
+  for (const zz of [-d / 2 + 0.1, d / 2 - 0.1]) box(R.g, w, 0.18, 0.12, '#3E2A1A', 0, h - 0.18, zz, { cast: false });   // wall plates
+}
 // interior(p, x, z, { kind, w, d, h, ry, y, wall, floor, ceiling, front, closed, hall, door: 'left'|'right'|false, window: 'back'|'high'|false, night, lamps, items }) → R
 //   v3.5: closed: 'auto' (default) → a front wall and a ceiling that only show while the camera is inside the room (cut-away look from outside, no sky or grass from inside);
 //   true = always closed, false = old open dollhouse. hall: false = no lit hall behind the door (the old dark door slab).
@@ -11045,7 +11308,7 @@ function interior(p, x, z, o = {}) {
   const walls = { back: o.back !== false, left: o.left !== false, right: o.right !== false, front: !!o.front }, ds0 = o.door ?? K.door?.side ?? (kind === 'cellar' || kind === 'bunker' ? 'right' : 'left');
   const KD = K.door ?? {}, DW = o.doorW ?? KD.w ?? 0.92, DH = Math.min(h - 0.25, o.doorH ?? KD.h ?? 2.12), dz = o.doorZ ?? (KD.w ? d / 2 - 0.6 - DW / 2 : d / 2 - 1.1), sxd = ds0 === 'left' ? -1 : 1;
   const hasDoor = !!ds0 && (ds0 === 'left' ? walls.left : walls.right), hallOn = hasDoor && o.hall !== false && CFG.halls !== false, hole = hallOn ? { c: sxd * dz, w: DW, h: DH } : null;
-  R.ds = ds0; R.dz = dz;
+  R.ds = ds0; R.dz = dz; R.DW = DW;
   const wall = (W, cx, cz, rot, side, hl) => { const q = grp(g, cx, 0, cz, rot), segs = hl ? [[-W / 2, hl.c - hl.w / 2], [hl.c + hl.w / 2, W / 2]] : [[-W / 2, W / 2]], SW = { surf: ws || undefined, indoor: true };
     const run = (y, hh, zz, dd, c, oo) => { for (const [a, b] of segs) if (b - a > 0.005) box(q, b - a, hh, dd, c, (a + b) / 2, y, zz, oo); }, inHole = (u, m = 0) => !!hl && Math.abs(u - hl.c) < hl.w / 2 + m;
     if (!hl) box(q, W, h, 0.14, wc, 0, 0, 0, SW);
@@ -11054,7 +11317,7 @@ function interior(p, x, z, o = {}) {
         const geo = new THREE.ExtrudeGeometry(s, { depth: 0.14, bevelEnabled: false }); geo.translate(0, 0, -0.07); return geo; }), mat(wc, SW), 0, 0, 0, {}); box(q, hl.w + 0.02, 0.058, 0.18, shade(fc, -0.12), hl.c, -0.05, 0, { recv: true, cast: false }); }   // threshold across the wall: no ground showing under the opening
     run(0, 0.12, 0.085, 0.03, shade(wc, -0.25), NC); run(0.12, 0.015, 0.085, 0.04, shade(wc, -0.32), NC);
     const full = (y, hh, zz, dd, c, oo) => hl && y < hl.h + 0.1 ? run(y, hh, zz, dd, c, oo) : box(q, W, hh, dd, c, 0, y, zz, oo);
-    if (SF && o.fittings !== false && fl !== 'concrete' && fl !== 'metal') { const hw = k => _fh(cx * 3.1 + cz * 1.7 + W, k);   // v2.35: sockets near the floor, a vent grille up high, a picture rail in rooms with wallpaper
+    if (SF && (o.fittings ?? K.fittings) !== false && fl !== 'concrete' && fl !== 'metal') { const hw = k => _fh(cx * 3.1 + cz * 1.7 + W, k);   // v2.35: sockets near the floor, a vent grille up high, a picture rail in rooms with wallpaper
       for (const sx of [-0.31, 0.27]) { if (inHole(sx * W, 0.15)) continue; const s = grp(q, sx * W, 0.3, 0.075); box(s, 0.08, 0.12, 0.012, '#F4F2EC', 0, 0, 0, NC); box(s, 0.012, 0.02, 0.014, '#3A3A3E', -0.014, 0.06, 0, NC); box(s, 0.012, 0.02, 0.014, '#3A3A3E', 0.014, 0.06, 0, NC); }
       if (side === 'back' && hw(1) < 0.7) { const v = grp(q, (hw(2) < 0.5 ? -1 : 1) * (W / 2 - 0.5), h - 0.42, 0.075); box(v, 0.4, 0.22, 0.012, '#E4E2DC', 0, 0, 0, NC); for (let i = 0; i < 5; i++) box(v, 0.34, 0.012, 0.016, '#B8B6B0', 0, 0.03 + i * 0.038, 0, NC); }
       if (ws === 'wallpaper') full(h - 0.5, 0.03, 0.082, 0.025, '#F2F2F0', NC);
@@ -11070,9 +11333,10 @@ function interior(p, x, z, o = {}) {
   if (hasDoor) { const sx = sxd, fr = grp(g, sx * (w / 2 + 0.02), 0, dz, -sx * Math.PI / 2), open = !!(o.doorway ?? KD.open), jc = KD.frame ?? '#F2F2F0', jm = KD.frame ? { mat: mat(jc, { rough: 0.3, metal: 0.8 }) } : {}; doorReg(fr);
     if (!hallOn) box(fr, 1.0, 2.15, 0.16, kind === 'bunker' ? '#3A3D44' : '#2A2018', 0, 0, 0, NC);   // no hall: the old dark door slab
     const fdp = hallOn ? 0.26 : 0.2, fzc = hallOn ? -0.005 : 0.02; for (const s2 of [-1, 1]) box(fr, 0.08, DH + 0.08, fdp, jc, s2 * (DW / 2 + 0.04), 0, fzc, jm); box(fr, DW + 0.16, 0.08, fdp, jc, 0, DH, fzc, jm);   // v3.5: the casing wraps the whole reveal
-    if (!open) { const pv = dyn(grp(fr, -DW / 2, 0, 0.06)); pv.userData.angle = 1.4; box(pv, DW, DH - 0.02, 0.05, kind === 'bunker' ? '#5A605A' : '#9A6A44', DW / 2, 0.02, 0); box(pv, DW - 0.12, 0.85, 0.01, kind === 'bunker' ? '#4A504A' : '#8A5A38', DW / 2, 1.1, 0.03, NC);
-      ball(pv, 0.035, '#C9A64A', DW - 0.1, 1.0, 0.07, { detail: 0, ...NC }); R.door = pv; R.doors = [pv]; } else R.doors = [];
-    box(fr, 0.08, 0.12, 0.014, '#F4F2EC', DW / 2 + 0.26, 1.1, 0.075, NC); box(fr, 0.03, 0.05, 0.02, '#D8D6D0', DW / 2 + 0.26, 1.135, 0.075, NC); if (!open && SF && fl !== 'concrete' && fl !== 'metal') box(g, 0.75, 0.012, 0.45, '#6A5A48', sx * (w / 2 - 0.5), 0, dz, { surf: 'carpet', indoor: true, ...NC });   // v2.35: light switch, doormat
+    if (!open) { const pv = dyn(grp(fr, -DW / 2, 0, 0.06)); pv.userData.angle = 1.4; box(pv, DW, DH - 0.02, 0.05, kind === 'bunker' ? '#5A605A' : KD.leaf ?? '#9A6A44', DW / 2, 0.02, 0); if (KD.straps) { for (let i = 1; i < 6; i++) box(pv, 0.012, DH - 0.06, 0.008, shade(KD.leaf ?? '#9A6A44', -0.2), i * DW / 6, 0.04, 0.03, NC); for (const yy of [0.35, DH - 0.5]) { box(pv, DW * 0.75, 0.06, 0.015, '#26221E', DW * 0.375, yy, 0.032, { metal: 0.6, rough: 0.5, ...NC }); for (let k = 0; k < 4; k++) ball(pv, 0.014, '#3A3632', 0.08 + k * DW * 0.2, yy + 0.03, 0.04, { detail: 0, ...NC }); } cyl(pv, 0.06, 0.06, 0.012, '#26221E', DW - 0.14, 1.0, 0.04, { rx: Math.PI / 2, seg: 12, metal: 0.6, rough: 0.5, ...NC }); }   // v3.48 plank door: boards, iron strap hinges, ring handle
+      else box(pv, DW - 0.12, 0.85, 0.01, kind === 'bunker' ? '#4A504A' : '#8A5A38', DW / 2, 1.1, 0.03, NC);
+      if (!KD.straps) ball(pv, 0.035, '#C9A64A', DW - 0.1, 1.0, 0.07, { detail: 0, ...NC }); R.door = pv; R.doors = [pv]; } else R.doors = [];
+    if ((o.fittings ?? K.fittings) !== false) { box(fr, 0.08, 0.12, 0.014, '#F4F2EC', DW / 2 + 0.26, 1.1, 0.075, NC); box(fr, 0.03, 0.05, 0.02, '#D8D6D0', DW / 2 + 0.26, 1.135, 0.075, NC); } if (!open && (o.fittings ?? K.fittings) !== false && SF && fl !== 'concrete' && fl !== 'metal') box(g, 0.75, 0.012, 0.45, '#6A5A48', sx * (w / 2 - 0.5), 0, dz, { surf: 'carpet', indoor: true, ...NC });   // v2.35: light switch, doormat
     R.anchors.door = [sx * (w / 2 - 0.5), 0, dz];
     if (hallOn) { const KH = KD.hall ?? {}, Lh = o.hallLen ?? KH.len ?? 3.4, a = d / 2 - dz - 0.08, b = Math.max(DW / 2 + 0.3, Math.min(d / 2 + dz - 0.08, Lh - a)), x0 = sx < 0 ? -a : -b, x1 = sx < 0 ? b : a;   // hall along the wall, inside the room's depth
       const hs = o.hallStyle ?? KH.style ?? (kind === 'cellar' ? 'cellar' : kind === 'bunker' ? 'bunker' : kind === 'garage' || kind === 'shop' || kind === 'bathroom' || kind === 'classroom' ? 'plain' : 'home');
@@ -11101,7 +11365,7 @@ function interior(p, x, z, o = {}) {
     if (fwn === 'high') FURN.window(q, -1.6, h - 0.55, 0.08, 0, { w: 0.9, h: 0.35, curtains: false, night: o.night }); else if (fwn && w >= 3.6) FURN.window(q, 0, 1.0, 0.08, 0, { w: 1.3, h: 1.2, night: o.night, curtain: o.curtain });
     q.userData.noHit = true; q.visible = fix; R.frontW = q; V.front = q; }
   if (o.items !== false) K.items(R);
-  if (o.clutter !== false && o.items !== false && CFG.clutter !== false) _roomClutter(R);   // env-props: clock, frames, posters, wall shelf — only where the wall is free
+  if ((o.clutter ?? K.clutter) !== false && o.items !== false && CFG.clutter !== false) _roomClutter(R);   // env-props: clock, frames, posters, wall shelf — only where the wall is free
   if (cl !== false) {
     if (!o.ceiling) { const cg = dyn(grp(g, 0, h, 0)), ccol = o.ceilColor ?? K.ceil ?? '#EEECE6', cm = new THREE.MeshStandardMaterial({ color: ccol, roughness: 0.92, flatShading: true, emissive: ccol, emissiveIntensity: o.ceilGlow ?? (LOOKV2 ? 0.3 : 0.45) });   // lit by the room, not by the green hemisphere below
       cm.userData.own = true; V.mats.push(cm); box(cg, w + 0.28, 0.1, d + 0.28, '', 0, 0, 0, { mat: cm, cast: false, recv: false });
@@ -17005,6 +17269,7 @@ const BUILDS = {   // h height · sw shoulder/chest width · wa waist · cd ches
   slim:     { h: 1.03, sw: 0.92, wa: 0.88, cd: 0.86, hp: 0.94, aw: 0.84, lw: 0.86, shx: -0.018 },
   tall:     { h: 1.1, lw: 0.96, aw: 0.96 },
   short:    { h: 0.9 },
+  tudorKing: { sw: 1.14, wa: 1.08, cd: 1.16, hp: 1.1, aw: 1.12, lw: 1.08, shx: 0.03, sway: 1.3, swing: 0.8, stance: 0.03, armOut: 0.1, post: { c: -0.05, n: -0.04 } },   // v3.48 broad, upright royal bulk (no belly: the doublet front stays visible)
   muscular: { sw: 1.16, wa: 0.92, cd: 1.12, aw: 1.3, lw: 1.12, shx: 0.04, post: { c: -0.03 }, stance: 0.025, armOut: 0.12, swing: 0.9 }
 };
 // body language per expression (also gaits): c chest forward · n head down · nz head tilt · sh shoulders up (− dropped) · ai arms in · ae elbows bent · fist · hang (arms hang) · sw arm swing
@@ -17236,7 +17501,9 @@ const COSTUME_BASE = {
   smock1911: { shirt: '#ECE8DE', pants: '#3A3530', shoes: '#2A2420', coat: true, coatLen: 0.4, beard: 'mustache' },
   krampus: { shirt: '#33251B', pants: '#33251B', shoes: '#2A1E16', hair: '#33251B', soles: false, build: 'muscular', height: 1.06 },
   nicholas: { shirt: '#F4F2EC', pants: '#F4F2EC', dress: '#F4F2EC', skirtLen: 0.66, shoes: '#7A1A1E', beard: 'full', beardColor: '#F2F2EE', hair: '#ECECE6', cape: '#A81E28' },
-  tudor: { shirt: '#E6DCC4', pants: '#6E4A30', shoes: '#3A2618', belt: '#3A2618', hair: '#4A3222', beard: 'stubble' }
+  tudor: { shirt: '#E6DCC4', pants: '#6E4A30', shoes: '#3A2618', belt: '#3A2618', hair: '#4A3222', beard: 'stubble' },
+  courtier: { shirt: '#3E2A52', pants: '#2A2230', shoes: '#1A1410', coat: true, coatLen: 0.22, beard: 'goatee', hair: '#4A3020', hairStyle: 'short', sleeves: 'long' },
+  tudorKing: { shirt: '#7A1A26', pants: '#EEE8DA', shoes: '#D8CBA8', coat: true, coatLen: 0.42, build: 'tudorKing', beard: 'full', hair: '#B5622A', beardColor: '#A8562A', hairStyle: 'short', sleeves: 'long' }
 };
 for (const k in COSTUME_BASE) { const { skin, ...rest } = COSTUME_BASE[k]; OUTFITS[k] ??= { costume: k, ...rest }; }   // char('you', { outfit: 'santa' }) keeps the character's skin
 
@@ -17610,9 +17877,69 @@ const COSTUMES = (() => {
       box(mi, 0.04, 0.5, 0.012, Au, 0, 0.03, 0.105, { ...gm, ...NC }); box(mi, 0.03, 0.12, 0.014, Au, 0, 0.3, 0.115, { ...gm, ...NC }); box(mi, 0.1, 0.03, 0.014, Au, 0, 0.37, 0.115, { ...gm, ...NC });   // vertical band + cross
       for (const sx of [-1, 1]) { box(mi, 0.07, 0.42, 0.015, Rd, sx * 0.07, -0.42, -0.2, NC); box(mi, 0.072, 0.03, 0.017, Au, sx * 0.07, -0.42, -0.2, { ...gm, ...NC }); }   // lappets at the back
       fuse(mi);
+    },
+    // ---- v3.48 Tudor court (1500–1550): courtier and king. Shared: puffed, slashed upper sleeves, frilled shirt collar and wrist ruffles, flat velvet cap, square-toed shoes ----
+    courtier(f, K) {   // Tudor gentleman of the Privy Chamber: doublet with slashed chest panels and gold buttons, puffed slashed upper sleeves, short skirted jerkin (coat key),
+      // frilled white shirt collar and cuffs, gold chain across the shoulders, belt with purse and dagger, hose with garters, broad square-toed shoes, black flat cap with a white feather
+      const z = fz(f), c = K.shirt ?? '#3E2A52', Ln = K.lining ?? '#C9A64A', W = '#F2EEE4', Au = '#D8B44A', gm = { metal: 0.75, rough: 0.35 };
+      _tudorTop(f, c, Ln, W, Au, 0.2);
+      for (let i = 0; i < 4; i++) { const x = -0.105 + i * 0.07; box(f.chest, 0.022, 0.3, 0.012, Ln, x, 0.1, z + 0.004, NC); box(f.chest, 0.05, 0.3, 0.014, shade(c, 0.06), x + 0.035, 0.1, z + 0.006, NC); }   // slashed panels: lining shows between the strips
+      buttons(f, Au, 6, 0.48, 0.075, 0, 0.013);
+      { const ch = grp(f.chest); for (let i = 0; i <= 16; i++) { const u = i / 16 - 0.5, y = 0.57 - 0.24 * (1 - (2 * u) ** 2) * 0.9; ball(ch, 0.014, Au, u * 0.34, y, z + 0.022 + 0.02 * (1 - Math.abs(2 * u)), { detail: 0, ...gm, ...NC }); }
+        ball(ch, 0.03, Au, 0, 0.34, z + 0.045, { detail: 1, ...gm, ...NC }); fuse(ch); }   // chain + pendant
+      box(f.hips, 0.47, 0.05, 0.31, '#2A1E16', 0, 0.06, 0, NC); box(f.hips, 0.06, 0.05, 0.014, Au, 0, 0.062, 0.157, { ...gm, ...NC });   // belt + buckle
+      rbox(f.hips, 0.09, 0.11, 0.05, '#4A3020', -0.15, -0.06, 0.15, { rf: 0.35 }); box(f.hips, 0.03, 0.2, 0.025, '#2A1E16', 0.2, -0.16, 0.06, { rz: 0.15, ...NC }); box(f.hips, 0.06, 0.02, 0.03, Au, 0.2, -0.05, 0.06, NC);   // purse, dagger + crossguard
+      _tudorLegs(f, K.pants ?? '#2A2230', K.garter ?? Ln, K.shoes ?? '#1A1410');
+      _tudorCap(f, K.cap ?? '#141218', K.feather ?? W, Au, 0.26);
+    },
+    tudorKing(f, K) {   // generic Tudor king (no portrait): heavy build, crimson gown (coat key) with a wide fur shawl collar and fur-lined front, huge puffed slashed sleeves,
+      // cloth-of-gold doublet with jewelled slashes, heavy gold collar chain with a pendant, rings, white hose with a garter, slashed square-toed shoes, jewelled flat cap edged with white feathers
+      const z = fz(f), Gw = K.shirt ?? '#7A1A26', Dg = K.doublet ?? '#C9A24A', Fu = K.fur ?? '#5A3E2A', W = '#F2EEE4', Au = '#E0B84A', gm = { metal: 0.8, rough: 0.3 }, Jw = ['#C8202E', '#2A6AB8', '#2E9A5A'];
+      box(f.chest, 0.24, 0.5, 0.02, Dg, 0, 0.02, z + 0.004, { metal: 0.35, rough: 0.5 });   // doublet front between the fur
+      for (let r = 0; r < 4; r++) for (let i = 0; i < 2; i++) { const x = -0.05 + i * 0.1, y = 0.08 + r * 0.11; box(f.chest, 0.03, 0.07, 0.01, W, x, y, z + 0.016, NC); ball(f.chest, 0.013, Jw[(r + i) % 3], x, y + 0.035, z + 0.022, { detail: 0, rough: 0.2, ...NC }); }   // slashes with puffs of white shirt, jewels at the ends
+      _tudorTop(f, Gw, Dg, W, Au, 0.3, Fu);
+      const fu = grp(f.chest); rbox(fu, 0.7, 0.15, 0.38, Fu, 0, 0.47, -0.01, { rf: 0.5 }); rbox(fu, 0.6, 0.1, 0.34, shade(Fu, 0.08), 0, 0.56, -0.01, { rf: 0.5 });   // fur shawl over the shoulders
+      for (const sx of [-1, 1]) rbox(fu, 0.1, 0.56, 0.05, Fu, sx * 0.17, -0.06, z + 0.01, { rf: 0.45 });   // fur lining down the front edges
+      for (let i = 0; i < 26; i++) { const a = i / 26 * TAU; ball(fu, 0.03, shade(Fu, (hash(i * 3.1) - 0.5) * 0.12), Math.sin(a) * 0.33, 0.5 + hash(i) * 0.05, Math.cos(a) * 0.18 - 0.01, { detail: 0, ...NC }); }   // shaggy edge
+      fuse(fu);
+      for (const sx of [-1, 1]) box(f.hips, 0.1, 0.3, 0.05, Fu, sx * 0.15, -0.36, 0.15, NC);   // fur down the gown's front panels (into the hem)
+      { const ch = grp(f.chest); for (let i = 0; i <= 20; i++) { const u = i / 20 - 0.5, y = 0.56 - 0.3 * (1 - (2 * u) ** 2) * 0.85; box(ch, 0.05, 0.035, 0.02, Au, u * 0.42, y, z + 0.05 + 0.02 * (1 - Math.abs(2 * u)), { rz: u * 1.6, ...gm, ...NC }); if (i % 4 === 2) ball(ch, 0.016, Jw[(i >> 2) % 3], u * 0.42, y, z + 0.072, { detail: 0, rough: 0.2, ...NC }); }
+        cyl(ch, 0.045, 0.045, 0.02, Au, 0, 0.27, z + 0.06, { rx: Math.PI / 2, seg: 10, ...gm, ...NC }); ball(ch, 0.022, Jw[0], 0, 0.27, z + 0.075, { detail: 1, rough: 0.15, ...NC }); fuse(ch); }   // collar of links + jewelled pendant
+      box(f.hips, 0.5, 0.05, 0.32, Au, 0, 0.06, 0, { ...gm, ...NC });   // gold girdle
+      for (const H of f.hands ?? []) for (const k of [0, 1]) ball(H.hd, 0.016, k ? Jw[1] : Au, H.sx * 0.02 + (k ? 0.03 : -0.01), -0.1, 0.05, { detail: 1, ...gm, ...NC });   // rings
+      _tudorLegs(f, K.pants ?? '#EEE8DA', K.garter ?? '#2A4A8A', K.shoes ?? '#D8CBA8', true);
+      _tudorCap(f, K.cap ?? '#141218', W, Au, 0.3, true);
     }
   };
 })();
+// v3.48 shared Tudor pieces (courtier, tudorKing)
+const _TNC = { cast: false };
+function _tudorTop(f, c, ln, W, Au, puff, fur) {   // frilled shirt collar + wrist ruffles, puffed slashed upper sleeves (puff = size), shoulder rolls
+  const z = 0.152 * (f.B?.cd ?? 1);
+  for (let i = 0; i < 14; i++) { const a = i / 14 * TAU; ball(f.chest, 0.026, W, Math.sin(a) * 0.1, 0.6, Math.cos(a) * 0.075 + 0.01, { detail: 0, ..._TNC }); }   // frilled collar at the neck
+  for (const ua of [f.armL, f.armR]) { const p = grp(ua, 0, -0.12, 0); _ell(p, c, 0, 0, 0, puff * 0.55, puff * 0.62, puff * 0.55, { detail: 1 });
+    for (let i = 0; i < 6; i++) { const a = i / 6 * TAU; box(p, 0.022, puff * 0.9, 0.012, i % 2 ? ln : W, Math.sin(a) * puff * 0.53, -puff * 0.45, Math.cos(a) * puff * 0.53, { ry: a, ..._TNC }); }   // slashes
+    if (fur) _ell(p, fur, 0, -puff * 0.52, 0, puff * 0.42, puff * 0.14, puff * 0.42, { detail: 0 }); else cyl(p, puff * 0.36, puff * 0.36, 0.035, shade(c, -0.2), 0, -puff * 0.62, 0, { seg: 10, ..._TNC });
+    fuse(p); }
+  for (const fa of [f.foreL, f.foreR]) { box(fa, 0.17, 0.035, 0.17, shade(c, -0.12), 0, -0.24, 0, _TNC); for (let i = 0; i < 8; i++) { const a = i / 8 * TAU; ball(fa, 0.02, W, Math.sin(a) * 0.075, -0.275, Math.cos(a) * 0.075, { detail: 0, ..._TNC }); } }   // cuff + ruffle
+}
+function _tudorLegs(f, hose, garter, shoe, slash) {   // hose (tight, both leg parts), a garter under the knee, broad square-toed shoes ("duck bills")
+  for (const p of [f.legL, f.legR, f.shinL, f.shinR]) { const m = p.children.find(n => n.isMesh && !n.userData.hand); if (m) m.material = mat(hose, { flat: false }); }
+  for (const sh of [f.shinL, f.shinR]) box(sh, 0.19, 0.035, 0.2, garter, 0, -0.07, 0, _TNC);
+  for (const ft of [f.footL, f.footR]) { const q = grp(ft); box(q, 0.2, 0.08, 0.22, shoe, 0, -ANK + 0.005, 0.04); box(q, 0.24, 0.07, 0.1, shoe, 0, -ANK + 0.005, 0.15); box(q, 0.22, 0.012, 0.32, shade(shoe, -0.3), 0, -ANK, 0.08, _TNC);
+    if (slash) for (let i = 0; i < 3; i++) box(q, 0.035, 0.012, 0.06, '#C8202E', -0.07 + i * 0.07, -ANK + 0.075, 0.16, _TNC); fuse(q); }
+}
+function _tudorCap(f, c, feather, Au, r, king) {   // flat velvet cap worn tilted: wide brim, pleated crown, brooch, feather (king: white plume edge + jewels)
+  const hs = f.hair?.children ?? []; hs.slice(0, 1).forEach(n => { n.visible = false; });
+  const h = grp(f.head, 0, 0.33, 0); f.hat = h; h.rotation.z = -0.12; h.rotation.x = -0.05;
+  cyl(h, r, r, 0.035, c, 0, -0.01, 0, { seg: 18 }); cyl(h, r * 0.78, r * 0.86, 0.075, shade(c, 0.05), 0, 0.02, 0, { seg: 18 });
+  for (let i = 0; i < 16; i++) { const a = i / 16 * TAU; box(h, 0.01, 0.07, 0.03, shade(c, -0.25), Math.sin(a) * r * 0.81, 0.025, Math.cos(a) * r * 0.81, { ry: a, ..._TNC }); }   // pleats
+  ball(h, 0.03, Au, r * 0.55, 0.06, r * 0.55, { detail: 1, metal: 0.8, rough: 0.3, ..._TNC });   // brooch
+  if (king) { for (let i = 0; i < 22; i++) { const a = i / 22 * TAU; _ell(h, feather, Math.sin(a) * r * 0.98, 0.01, Math.cos(a) * r * 0.98, 0.045, 0.03, 0.03, { detail: 0 }); }
+    for (let i = 0; i < 8; i++) { const a = i / 8 * TAU; ball(h, 0.016, i % 2 ? '#F2EEE4' : '#C8202E', Math.sin(a) * r * 0.82, 0.065, Math.cos(a) * r * 0.82, { detail: 0, rough: 0.2, ..._TNC }); } }
+  const fe = grp(h, r * 0.5, 0.06, r * 0.45); fe.rotation.set(-0.5, 0.6, -0.9); _ell(fe, feather, 0, 0.16, 0, 0.03, 0.17, 0.012, { detail: 1 }); box(fe, 0.006, 0.3, 0.006, shade(feather, -0.2), 0, 0.02, 0.012, _TNC);
+  fuse(h);
+}
 function costume(f, o) {   // called by figure() after wear(): adds the pieces of o.costume (see COSTUMES); K = the figure options (scrubs: mask)
   const fn = COSTUMES[o.costume]; if (!fn) { console.warn('costume: unknown ' + o.costume); return f; }
   fn(f, o); f.costume = o.costume; return f;
@@ -19746,6 +20073,7 @@ const SND = (() => {
     jazz:       { lead: 'keys',    lead2: 'horn',    drums: 'brush',  bass: 'walking', bpmX: 1.0, sevenths: true, pad: 0.5 },
     middleeast: { lead: 'oud',     lead2: 'flute',   drums: 'hand',   bass: 'upright', bpmX: 1.0, min: [0, 1, 4, 5, 7, 8, 10], maj: [0, 1, 4, 5, 7, 8, 11], pad: 0.4, drone: true },
     asian:      { lead: 'koto',    lead2: 'flute',   drums: 'hand',   bass: 'upright', bpmX: 0.92, min: [0, 2, 3, 7, 8], maj: [0, 2, 4, 7, 9], pad: 0.45 },
+    tudor:      { lead: 'lute',    lead2: 'flute',   drums: 'tabor',  bass: 'upright', bpmX: 0.92, min: [0, 2, 3, 5, 7, 9, 10], maj: [0, 2, 4, 5, 7, 9, 11], pad: 0.45, drone: true },   // v3.48 Tudor / Renaissance court: lute, recorder, tabor, drone
     celtic:     { lead: 'guitar',  lead2: 'fiddle',  drums: 'hand',   bass: 'upright', bpmX: 1.1, min: [0, 2, 3, 5, 7, 9, 10], maj: [0, 2, 4, 5, 7, 9, 10], pad: 0.4, drone: true },
     latin:      { lead: 'guitar',  lead2: 'horn',    drums: 'conga',  bass: 'upright', bpmX: 1.05, pad: 0.4 },
     tribal:     { lead: 'flute',   drums: 'hand',    bass: 'synth',   bpmX: 1.0, min: [0, 3, 5, 7, 10], maj: [0, 2, 4, 7, 9], pad: 0.5, drone: true },
@@ -19757,7 +20085,7 @@ const SND = (() => {
     [/military|war film|march|snare|army|battlefield|wartime/i, 'military'], [/synthwave|retro ?wave|80s|neon|outrun/i, 'synthwave'],
     [/techno|edm|electro|club|house music|dubstep|trap/i, 'electronic'], [/lo-?fi|chillhop/i, 'lofi'], [/jazz|swing|noir|saxophone|big band/i, 'jazz'],
     [/arab|middle east|oud|egypt|persian|desert|bazaar/i, 'middleeast'], [/japan|chinese|asia|koto|shamisen|erhu|guzheng|samurai|kung fu/i, 'asian'],
-    [/celtic|irish|scottish|pirate|sea shanty|viking|medieval|folk/i, 'celtic'], [/latin|mexic|salsa|cuba|brazil|samba|mariachi|flamenco|spanish guitar/i, 'latin'],
+    [/tudor|renaissance|elizabethan|lute|royal court|galliard|pavane/i, 'tudor'], [/celtic|irish|scottish|pirate|sea shanty|viking|medieval|folk/i, 'celtic'], [/latin|mexic|salsa|cuba|brazil|samba|mariachi|flamenco|spanish guitar/i, 'latin'],
     [/tribal|jungle|african|aborigin|caveman|stone age/i, 'tribal'], [/industrial|cyberpunk|factory|metal clang/i, 'industrial'], [/circus|carnival|clown/i, 'circus'],
     [/ambient|space|cosmic|drone|ethereal/i, 'ambient'], [/orchestra|cinematic|film score|epic|strings|symphon/i, 'orchestral']];
   const styleOf = () => { const A = AUDIO, s = A.style; if (s === false || s === 'none') return null;
@@ -19817,7 +20145,7 @@ const SND = (() => {
     const bell = (t, f, v = 1) => { tone('sine', f, t, 0.002, 0, 2.6, 0.08 * v, music); tone('sine', f * 2.76, t, 0.002, 0, 1.2, 0.035 * v, music); tone('sine', f * 5.4, t, 0.002, 0, 0.5, 0.02 * v, music); };
     const brass = (t, fs_, d, v = 1) => fs_.forEach(f => tone('sawtooth', f, t, 0.05, d * 0.6, 0.3, 0.05 * v, music, { lp: 700, lpTo: 2200, q: 1.2 }));
     // v3.36 style instruments (AUDIO.style): plucked strings by Karplus-Strong (one cached buffer per pitch + kind), bowed / blown voices with delayed vibrato, more drums
-    const KSB = new Map(), KSK = { banjo: [0.993, 0.92, 0.9, 1.4], guitar: [0.997, 0.62, 1.6, 1.3], oud: [0.996, 0.45, 1.4, 1.2], koto: [0.997, 0.7, 2.0, 1.1], upright: [0.994, 0.3, 1.0, 1.8] };
+    const KSB = new Map(), KSK = { banjo: [0.993, 0.92, 0.9, 1.4], guitar: [0.997, 0.62, 1.6, 1.3], oud: [0.996, 0.45, 1.4, 1.2], lute: [0.995, 0.38, 1.3, 1.15], koto: [0.997, 0.7, 2.0, 1.1], upright: [0.994, 0.3, 1.0, 1.8] };
     const ks = (t, f, v = 1, kind = 'guitar') => { const [damp, br, len, g] = KSK[kind] ?? KSK.guitar, key = kind + '|' + f.toFixed(1); let b = KSB.get(key);
       if (!b) { const n = Math.floor(sr * len), P = Math.max(2, Math.round(sr / f)); b = ctx.createBuffer(1, n, sr); const d = b.getChannelData(0); let rs = 7919 + P * 31;
         const rr = () => (rs = (rs * 16807) % 2147483647) / 2147483647; for (let i = 0; i < P && i < n; i++) d[i] = rr() * 2 - 1;
@@ -19888,6 +20216,7 @@ const SND = (() => {
           else if (DK === 'timpani') { if (q === 0) timp(t, r1, 1); if (q === 2 && lq >= 3) timp(t, r1 * 1.5, 0.8); if (q === 3 && n % 2) for (let e = 0; e < 4; e++) timp(t + e * beat / 4, r1, 0.3 + e * 0.12); }
           else if (DK === 'gated') { if (q % 2 === 0) kick(t); else gsnare(t); hat(t, 0.6); hat(t + beat / 2, 0.45); }
           else if (DK === 'four') { kick(t); hat(t + beat / 2, 0.8, true); if (q % 2) clap(t, 0.8); }
+          else if (DK === 'tabor') { if (q === 0) doum(t, 0.75); if (q === 2) doum(t, 0.5); tek(t + beat / 2, 0.4); if (q === 3) { tek(t + beat * 0.75, 0.3); tek(t + beat * 0.875, 0.25); } }   // v3.48 tabor: pipe-and-tabor dance beat
           else if (DK === 'hand') { if (q === 0 || q === 2 && n % 2) doum(t); if (q !== 0) tek(t, 0.7); tek(t + beat / 2, 0.45); if (lq >= 3) tek(t + 3 * beat / 4, 0.35); }
           else if (DK === 'conga') { conga(t, q % 2 ? 330 : 220, 0.8); conga(t + beat / 2, 260, 0.55); shaker(t, 0.7); shaker(t + beat / 2, 0.5); if (q === 1 || q === 3) tek(t + beat * 0.75, 0.4); }
           if (lq >= 3 && DK !== 'march' && DK !== 'timpani') { shaker(t + beat / 4, 0.4); shaker(t + 3 * beat / 4, 0.4); }
@@ -19905,6 +20234,7 @@ const SND = (() => {
         if (L === 'brass' && lq >= 2 && q === 0) brass(t, ch, beat * 1.5, 1);
         if (L === 'banjo' && lq >= 1) { const pat = [0, 2, 1, 2]; for (let e = 0; e < (lq >= 2 ? 4 : 2); e++) ks(t + e * beat / (lq >= 2 ? 4 : 2), ch[pat[(q + e) % 4] % ch.length] * 2, e ? 0.75 : 1, 'banjo'); }   // forward rolls
         if (L === 'guitar' && lq >= 1) { if (q % 2 === 0) ch.forEach((f, k) => ks(t + k * 0.014, f, 0.7, 'guitar')); else if (lq >= 2) { ks(t, ch[0] * 2, 0.6, 'guitar'); ks(t + beat / 2, ch[2 % ch.length] * 2, 0.5, 'guitar'); } }   // strum + picking
+        if (L === 'lute' && lq >= 1) { const pat = [0, 2, 1, 2, 0, 1, 2, 1]; for (let e = 0; e < (lq >= 2 ? 4 : 2); e++) ks(t + e * beat / (lq >= 2 ? 4 : 2), ch[pat[(q * 2 + e) % 8] % ch.length] * (e % 2 ? 2 : 1), e ? 0.65 : 0.95, 'lute'); if (q === 0 && lq >= 2) ch.forEach((f, k) => ks(t + k * 0.02, f, 0.45, 'lute')); }   // v3.48 lute: arpeggiated broken chords, a strum on the bar
         if ((L === 'oud' || L === 'koto') && lq >= 1) for (let e = 0; e < (lq >= 2 ? 2 : 1); e++) { const dg = d + [0, 2, 4, 3, 1, 5, 4, 2][(n * 4 + q * 2 + e) % 8]; ks(t + e * beat / 2, mtof(deg(dg, 1)), e ? 0.7 : 1, L); }
         if (L === 'strings' && lq >= 1) { if (lq >= 2) for (let e = 0; e < 2; e++) voice2(t + e * beat / 2, ch[(q + e) % 2 ? 2 % ch.length : 0], beat * 0.4, 0.7, 'strings'); else if (q === 0) ch.forEach(f => voice2(t, f, bar * 0.95, 0.6, 'strings')); }
         if (L === 'saw' && lq >= 2) for (let e = 0; e < 4; e++) voice2(t + e * beat / 4, ch[(q * 4 + e) % ch.length] * 2, beat / 4 * 0.8, 0.5, 'saw');
@@ -19937,6 +20267,8 @@ const SND = (() => {
       tick: (t, v) => tone('square', 1900, t, 0.001, 0, 0.03, 0.1 * v, fx),
       chime: (t, v) => { bellFx(t, 659, v * 0.8); bellFx(t + 0.34, 523, v * 0.8); },
       bell: (t, v) => { bellFx(t, 1245, v * 0.95); bellFx(t + 0.004, 1870, v * 0.55); bellFx(t + 0.008, 2960, v * 0.3); nz(t, 0.001, 0.002, 0.03, 0.45 * v, fx, 'highpass', 4200); ducks.push(t); },   // v2.40.27 fight-cage bell (ringBell: three quick strikes)   // v2.33.3 shop door chime (ding-dong)
+      lid: (t, v) => { const os = tone('sawtooth', 150, t, 0.04, 0.16, 0.12, 0.05 * v, fx, { lp: 900 }); for (let k = 0; k < 6; k++) os.frequency.setValueAtTime(140 + 60 * Math.sin(k * 1.7) + k * 12, t + k * 0.05);
+        nz(t, 0.02, 0.15, 0.1, 0.06 * v, fx, 'bandpass', 1300, 0, 3); nz(t + 0.34, 0.002, 0.02, 0.12, 0.4 * v, fx, 'lowpass', 520); tone('sine', 120, t + 0.34, 0.002, 0.02, 0.16, 0.35 * v, fx, { to: 70, glide: 0.12 }); },   // v3.48 wooden lid: hinge creak, then a soft padded thump
       knock: (t, v, d = 0.6) => { const n = Math.max(1, Math.round(d / 0.2)); for (let k = 0; k < n; k++) { const tt = t + k * 0.2 + ar() * 0.02; nz(tt, 0.001, 0.01, 0.08, 0.55 * v, fx, 'bandpass', 210, 0, 1.4); tone('sine', 92, tt, 0.001, 0.02, 0.13, 0.4 * v, fx, { to: 70, glide: 0.1 }); } },   // knuckles on a wooden door, d = length (one knock per 0.2 s)
       static: (t, v, d = 0.6) => { tone('square', 2300, t, 0.001, 0.012, 0.01, 0.05 * v, fx, { lp: 5000 }); nz(t + 0.02, 0.02, Math.max(0, d - 0.12), 0.08, 0.1 * v, fx, 'bandpass', 2100, 0, 0.7); for (let k = 0; k < d * 22; k++) nz(t + ar() * d, 0.001, 0.003, 0.01, 0.1 * v, fx, 'highpass', 3600); tone('square', 2300, t + d, 0.001, 0.012, 0.01, 0.04 * v, fx, { lp: 5000 }); },   // walkie-talkie: click, hiss, click
       caralarm: (t, v, d = 2) => { const os = tone('square', 720, t, 0.01, Math.max(0, d - 0.03), 0.02, 0.032 * v, fx, { lp: 2600 }); for (let x = 0; x < d * 6; x++) { os.frequency.setValueAtTime(x % 2 ? 1180 : 720, t + x / 6); } },
