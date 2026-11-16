@@ -5,7 +5,8 @@
   house(world, -10, -8, { w: 5, d: 4 }); house(world, -6.5, -8, { w: 5, d: 4 });
   house(world, 3, -9, { w: 5, d: 4 }); house(world, 8.6, -9, { w: 5, d: 4 });
   // wrong: a figure standing 0.25 m deep in the side of a van that drove there (moving things are no hitbox: nothing pushes it out) → INSIDE
-  const VN = vehicle(world, -9, 4, { kind: 'van' }); dyn(VN.g); const A = char('Inside', { shirt: '#D94F3D' }); world.add(A.root); A.root.position.set(-8.25, 0, 4.5);
+  const VN = vehicle(world, -9, 4, { kind: 'van' }); dyn(VN.g); const A = char('Inside', { shirt: '#D94F3D' }); A.duck = false; world.add(A.root);   // p3: headDuck would crouch it under the van roof (the INSIDE probe wants it standing in the side)
+  A.root.position.set(-8.25, 0, 4.5);
   // wrong: a figure under a beam at head height that may not duck → HEADCLIP · right: the same beam over one that ducks (headDuck) → no line
   const gal = stat(grp(world, -3, 0, 4)); for (const s of [-1, 1]) box(gal, 0.15, 1.58, 0.15, '#5A4A3A', s * 1.2, 0, 0); box(gal, 2.6, 0.18, 0.4, '#6A5440', 0, 1.58, 0);
   const B = char('Beam', { shirt: '#3D7BD9' }); world.add(B.root); B.root.position.set(-3.6, 0, 4.05); noHit(B); B.duck = false;
@@ -18,8 +19,8 @@
   awning(world, 5, -3, { w: 2.4, d: 1.2 }); const G = char('Shade', { shirt: '#C8C4B8' }); world.add(G.root); G.root.position.set(5, 0, -2.4); stat(box(world, 2.6, 2.6, 0.3, '#B8A68A', 5, 0, -3.2));
   // right: crawling through a low tunnel (0.95 m, frames at 0.87 m) and riding a motorbike through a 1.7-m tunnel — both duck under the frames / beams (headDuck) → no line
   smuggleTunnel(world, 30, 0, { len: 8, w: 0.8, h: 0.95, y: 0, lining: 'wood', cut: 'right', bulbs: 0, pipe: false });
-  const CR = char('Crawl', { shirt: '#5A4A3A' }); world.add(CR.root); CR.root.position.set(30, 0, -1); walk(CR, [[30, -1], [30, -7]], { t0: 8, speed: 0.55, mode: 'crawl' });
-  smuggleTunnel(world, 40, 10, { len: 40, w: 0.85, h: 1.7, y: 0, lining: 'earth', rails: true, bulbs: 0, pipe: false });
+  const CR = char('Crawl', { shirt: '#5A4A3A' }); world.add(CR.root); CR.root.position.set(30, 0, -1); walk(CR, [[30, -1], [30, -7]], { t0: 0, speed: 0.55, mode: 'crawl' });   // crawls from the start (it stood up in the 0.95-m tunnel before)
+  smuggleTunnel(world, 40, 10, { len: 40, w: 1.2, h: 1.7, y: 0, lining: 'earth', rails: true, bulbs: 0, pipe: false });
   const BK = bike(world, { kind: 'motorcycle', rail: true, x: 40, z: 8, ry: Math.PI }); drive(BK, [[40, 8], [40, -2]], { t0: 9, speed: 4 });
   const RD = char('Rider', { shirt: '#3A6A8A' }); world.add(RD.root); RD.root.position.set(40, 0, 7.7); rideBike(RD, BK, { t0: 8.5, t1: 99 });
   // right: a driver in every procedural vehicle kind — the seat (SEATS) keeps the head under the roof → no line

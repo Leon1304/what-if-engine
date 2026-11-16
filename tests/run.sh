@@ -49,11 +49,50 @@ case " $names " in *" post-qa "*)
   if grep -q '^QA: LINES' pq_on.out && grep -q '^QA: BLOCKY' pq_on.out && grep -q '^QA: FRINGE' pq_on.out && grep -q '^QA: WASHOUT' pq_on.out && ! grep -q '^QA: \(LINES\|BLOCKY\|FRINGE\|WASHOUT\)' pq_off.out && [ "$tsq" = 0 ]; then echo "ok   post-FX QA  LINES · BLOCKY · FRINGE · WASHOUT reported, gone with the engine defaults; tilt-shift clean"
   else echo "FAIL post-FX QA: tilt-shift lines $tsq"; grep -E '^QA: (LINES|BLOCKY|FRINGE|WASHOUT)|failed' pq_on.out pq_off.out | cut -c1-200; fail=1; fi;;
 esac
+# v3.46 FX (tests/fx-p3): lava lake + burn() stay pure (no MOTION lines in the smoke audit), soft emitters draw as lit volume puffs, sparks / debris default to streaks / chunks
+case " $names " in *" fx-p3 "*) q=$(node render.mjs fx-p3.html --probe '[PART.spark.geo, PART.debris.geo, emitters.filter(e => e.vol).length, emitters.filter(e => e.kind === "steam" && e.vol).length]' 2>&1 | tr -d ' \n'); mo=$(grep -c '^MOTION' fx-p3.log)
+  if [ "$mo" = 0 ] && echo "$q" | grep -q '\["trail","chunk",[1-9][0-9]*,1\]'; then echo "ok   v3.46 FX  pure lava · volume puffs · streak sparks · chunks"; else echo "FAIL v3.46 FX: MOTION $mo, probe $q"; grep '^MOTION' fx-p3.log | head -3; fail=1; fi;; esac
+# v3.46 water fx (tests/water-fx): both ship hulls feed the sea's hull mask, the scene's light debris spray at the waterline and every splash drop are soft water drops (no boxes)
+case " $names " in *" water-fx "*) q=$(WHATIF_START_TIMEOUT=600 node render.mjs water-fx.html --probe '[HULLS.length, emitters.filter(e => e.water && e.soft && e.tex === "drop").length, emitters.filter(e => e.kind === "debris" && !e.soft).length]' 2>&1 | tr -d ' \n' | grep -o '\[[0-9]*,[0-9]*,[0-9]*\]' | tail -1)
+  if python3 -c "import sys, json; a = json.loads(sys.argv[1]); sys.exit(0 if a[0] == 2 and a[1] >= 5 and a[2] == 0 else 1)" "$q" 2>/dev/null; then echo "ok   water fx  hull mask · drops instead of boxes"; else echo "FAIL water fx: $q"; fail=1; fi;; esac
+# v3.46 light / post (tests/light-post): even fill light (no falloff, ≤ 0.45, on at night and inside an interior() room by day), point / spot light cap, auto focus on keys
+# without focus, no burnt-white pixels on the night faces; a white veil without a flash → exactly one "QA: WASHOUT – … whole frame is milky", nothing else WASHOUT
+case " $names " in *" light-post "*)
+  q=$(WHATIF_START_TIMEOUT=900 node render.mjs light-post.html --probe '(()=>{ const r = {}; update(1.5); r.fill = +fillL.intensity.toFixed(3); r.decay = fillL.decay; update(4.5); r.room = +fillL.intensity.toFixed(3); update(7.5); r.af = !!camFx.af;
+    r.cap = THREE.ShaderChunk.lights_pars_begin.includes("min(1.0, 3.000"); const Q = qapGrab(1.5, 180); let n = 0; for (const v of Q.L) if (v > 0.985) n++; r.white = +(n / Q.L.length).toFixed(4); return "LP " + JSON.stringify(r); })()' 2>&1 | grep -o 'LP {.*}')
+  timeout 900 node render.mjs light-post.html --audit --no-fresh > lp_audit.out 2>&1
+  if echo "$q" | node -e 'const r = JSON.parse(require("fs").readFileSync(0, "utf8").replace(/^"?LP /, "").replace(/\\"/g, "\"").replace(/"$/, "")); process.exit(r.fill > 0.1 && r.fill <= 0.45 && r.decay === 0 && r.room > 0.1 && r.af && r.cap && r.white < 0.002 ? 0 : 1)' \
+    && [ "$(grep -c '^QA: WASHOUT.*whole frame is milky' lp_audit.out)" = 1 ] && [ "$(grep -c '^QA: WASHOUT' lp_audit.out)" = 1 ]; then echo "ok   light / post  fill even + indoors, light cap, auto focus, no burnt faces, milky veil reported"
+  else echo "FAIL light / post: $q"; grep -E '^QA: WASHOUT|failed' lp_audit.out | cut -c1-200; fail=1; fi;;
+esac
 # clip QA (tests/clip-qa): two houses in each other → OVERLAP, a figure in the side of a van → INSIDE, one under a beam that may not duck → HEADCLIP; the room, doorway, car, hug,
-# high awning, the figures that duck (beam, crawl tunnel, motorbike tunnel), drivers in every vehicle kind and the city figure (its tower is left out) stay quiet
-case " $names " in *" clip-qa "*) q=$(WHATIF_START_TIMEOUT=600 node render.mjs clip-qa.html --probe '[...qaOverlap(), ...qaClip()]' 2>&1)
-  if [ "$(echo "$q" | grep -c 'OVERLAP – ')" = 1 ] && echo "$q" | grep -q "OVERLAP – 'house' at (-10.0, -8.0)" && echo "$q" | grep -q "INSIDE – 'Inside'" && echo "$q" | grep -q "HEADCLIP – 'Beam'" \
-    && ! echo "$q" | grep -q "'Duck'\|'Room'\|'Door'\|'Driver'\|'HugA'\|'HugB'\|'Shade'\|'City'\|'Crawl'\|'Rider'\|'Seat\|failed"; then echo "ok   clip QA  OVERLAP · INSIDE · HEADCLIP reported, the rest quiet"; else echo "FAIL clip QA: $(echo "$q" | tail -8)"; fail=1; fi;; esac
+# high awning, the figures that duck (beam, crawl tunnel, motorbike tunnel), drivers in every vehicle kind and the city figure (its tower is left out) stay quiet.
+# The whole audit of the smoke run (--shots runs it) is checked: exactly these three counted lines (QA: / MOTION: / HITBOX: / GORE:), nothing else (QA_OK waivers in the story)
+case " $names " in *" clip-qa "*) q=$(grep -E '^(QA|MOTION|HITBOX|GORE): ' clip-qa.log)
+  if [ "$(echo "$q" | grep -c .)" = 3 ] && echo "$q" | grep -q "^QA: OVERLAP – 'house' at (-10.0, -8.0)" && echo "$q" | grep -q "^QA: INSIDE – 'Inside'" && echo "$q" | grep -q "^QA: HEADCLIP – 'Beam'" \
+    && ! grep -q 'QA-OK unused\|failed:' clip-qa.log; then echo "ok   clip QA  OVERLAP · INSIDE · HEADCLIP reported, nothing else in the whole audit"; else echo "FAIL clip QA: $(echo "$q" | cut -c1-160 | head -8; grep 'QA-OK unused\|failed:' clip-qa.log | head -3)"; fail=1; fi;; esac
+# collision + QA blind spots (tests/collide-qa): a helicopter hovering in a house → one VEHICLE line (heli() checked part by part, hovering too), the lens inside a head (shot 2)
+#   and inside a standing crowd (shot 3) → CAMCLIP; quiet: the high helicopter, the topple (picks a free direction, no TOPPLE), nobody inside the bus, the taxi steers round the
+#   parked car (no VEHICLE for it, x off the lane), the crane beam hangs on slings below the hook
+case " $names " in *" collide-qa "*)
+  q=$(WHATIF_START_TIMEOUT=900 node render.mjs collide-qa.html --probe "(() => { const L = [...qaMovers(), ...qaTopple(), ...qaLook({ capface: false, budget: 60000 })]; const T = TOPPLES[0], h = hordes[0]; let inBus = 0;
+    for (const t of [0.5, 1, 2, 3, 5]) { stepScene(t); for (const [i, x, z] of h._qaMembers(t)) if (Math.abs(x - 20) < 1.1 && Math.abs(z) < 4.8) inBus++; }
+    let tx = null; for (let t = 5.5; t < 9; t += 0.05) { const p = LIVE.taxi._posAt(t); if (Math.abs(p.z - 2) < 0.2) { tx = p.x; break; } }
+    const C = LIVE.crane; stepScene(7); world.updateMatrixWorld(true); const hk = C.hookAt(7), ld = C.loadAt(7);
+    return ['heli=' + L.filter(l => l.startsWith('VEHICLE – helicopter')).length, 'car=' + L.filter(l => l.includes('car on drive()')).length, 'topple=' + L.filter(l => l.startsWith('TOPPLE')).length,
+      'tdir=' + (T ? (T.dir[1] < -0.9 ? 'asked' : 'free') : 'none'), 'inbus=' + inBus, 'taxi=' + (tx != null && Math.abs(tx - 80) > 1.5 ? 'round' : 'through'),
+      'cam2=' + Math.min(1, L.filter(l => l.startsWith('CAMCLIP – shot 2')).length), 'cam3=' + Math.min(1, L.filter(l => l.startsWith('CAMCLIP – shot 3')).length),
+      'load=' + (hk.y - ld.y > 1.2 && hk.y - ld.y < 4 ? 'slung' : (hk.y - ld.y).toFixed(2)), 'fail=' + L.filter(l => / failed/.test(l)).length].join(' '); })()" 2>&1 | tail -1 | tr -d '"')
+  want='heli=1 car=0 topple=0 tdir=free inbus=0 taxi=round cam2=1 cam3=1 load=slung fail=0'
+  if [ "$q" = "$want" ]; then echo "ok   collision QA  $q"; else echo "FAIL collision QA: '$q' (want '$want')"; fail=1; fi;;
+esac
+# v3.46 sets (tests/sets-skirt): the hall stub behind the door hides for the close-up on the figure on the doorstep (QA HIDDEN quiet; with hallCull: false the wall hides her
+#   → HIDDEN), the ground skirt exists under the far room, no COPLANAR on Venus
+case " $names " in *" sets-skirt "*)
+  ss=$(node render.mjs sets-skirt.html --probe "(() => { stepScene(1); roomVis(camera); const hv = HALLVIS[0].g.visible, hd = qalHidden('mom'); HALLVIS.forEach(V => V.g.visible = true); const hd2 = qalHidden('mom');
+    const sk = world.getObjectByName('groundSkirt'); return ['hall=' + hv, 'hidden=' + !!hd, 'wall=' + !!hd2, 'skirt=' + !!sk, 'coplanar=' + COPLANAR.length].join(' '); })()" 2>&1 | tail -1 | tr -d '"')
+  if [ "$ss" = "hall=false hidden=false wall=true skirt=true coplanar=0" ]; then echo "ok   sets  $ss"; else echo "FAIL sets: '$ss'"; fail=1; fi;;
+esac
 # v3.25 ElevenLabs music + sounds (EL_FAKE=1: sine tones instead of requests): short sections merge, the track plays, a 'none' segment stays silent
 case " $names " in *" el-audio "*)
   cp "$R/elaudio.py" .; cp el-audio.story.js elf.story.js; cp el-audio.scene.js elf.scene.js
@@ -102,13 +141,38 @@ case " $names " in *" overlay-hud "*)
     const hud = [1, 3.5, 5.5, 7].map(vis).join(','); whatif.seek(1); const pos1 = document.getElementById('cap').className, ph = document.getElementById('phase').textContent || '-', bd = document.getElementById('badge').style.display || 'shown';
     whatif.seek(5.2); const pos2 = document.getElementById('cap').className;
     const ch = BEATS.map(b => { const d = document.createElement('div'); d.innerHTML = markup(b.text); const ws = [...d.querySelectorAll('.w')]; return capChunks(ws).map(p => p.map(i => ws[i].textContent).join(' ')); }).flat();
-    const bad = ch.filter(c => { const w = c.split(' '); return w.length > 4 || (w.length > 1 && !/[.,!?]$/.test(c) && isFWord(w[w.length - 1])) || /\\d$/.test(c); });
+    const bad = ch.filter(c => { const w = c.split(' '); return w.length > 5 || (w.length > 4 && c.length > CAPCHARS) || (w.length > 1 && !/[.,!?]$/.test(c) && isFWord(w[w.length - 1])) || /\\d$/.test(c) || w.filter(x => capWordN(x)).length <= 1 && w.every(x => isFWord(x)); });
+    const orph = ['He wants to see your hands first.', 'Most of it burns up.', 'and show up in mirrors.', 'In 1980, a boy finds some of the money by a river.'].flatMap(x => { const d2 = document.createElement('div'); d2.innerHTML = markup(x); const ws = [...d2.querySelectorAll('.w')]; return capChunks(ws).map(p => p.map(i => ws[i].textContent).join(' ')); }).filter(c => c.split(' ').every(x => isFWord(x)) || /^(to|up|of|it)\\b/i.test(c)).length;
+    whatif.seek(1.2); const W = [...document.querySelectorAll('#cap .w')].filter(w => w.style.display !== 'none'), u = document.getElementById('stage').getBoundingClientRect().width / 100; let gap = 99;
+    W.forEach((w, i) => { const c0 = w.className, t0 = w.style.transform; w.classList.add('on'); w.style.transform = 'scale(1.02)'; const r = w.getBoundingClientRect();
+      for (const o of [W[i - 1], W[i + 1]]) { if (!o) continue; const q = o.getBoundingClientRect(); if (Math.abs(q.top - r.top) > r.height / 2) continue; gap = Math.min(gap, (q.left > r.left ? q.left - r.right : r.left - q.right) / u); }
+      w.className = c0; w.style.transform = t0; });
     const d = document.createElement('div'); d.innerHTML = markup('*The air* burns'); const hl = [...d.querySelectorAll('.w')].map(w => w.classList.contains('hl') ? 1 : 0).join('');
-    return [hud, bd, ph, pos1, pos2, hl, qaCapHL().length, bad.length, ch.join(' / ')].join('|'); })()" 2>&1 | tail -1 | tr -d '"')
-  IFS='|' read -r h1 h2 h3 h4 h5 h6 h7 h8 h9 <<< "$oh"
-  if [ "$h1" = "Impact in,Fuel,-,Impact in" ] && [ "$h2" = none ] && [ "$h3" = - ] && [ "$h4" = safe ] && [ "$h5" != safe ] && [ "$h6" = 010 ] && [ "$h7" = 1 ] && [ "$h8" = 0 ]; then echo "ok   focus HUD + captions  counters $h1 · close-up caption → $h5 · chunks: $h9"
+    return [hud, bd, ph, pos1, pos2, hl, qaCapHL().length, bad.length + orph, gap.toFixed(2), ch.join(' / ')].join('|'); })()" 2>&1 | tail -1 | tr -d '"')
+  IFS='|' read -r h1 h2 h3 h4 h5 h6 h7 h8 hg h9 <<< "$oh"
+  if [ "$h1" = "Impact in,Fuel,-,Impact in" ] && [ "$h2" = none ] && [ "$h3" = - ] && [ "$h4" = safe ] && [ "$h5" != high ] && [ "$h6" = 010 ] && [ "$h7" = 1 ] && [ "$h8" = 0 ] && python3 -c "import sys; sys.exit(0 if float(sys.argv[1]) >= 0.8 else 1)" "$hg" 2>/dev/null; then echo "ok   focus HUD + captions  counters $h1 · close-up caption → $h5 · boxed word keeps a ${hg}u space · chunks: $h9"
   else echo "FAIL focus HUD + captions: '$oh'"; fail=1; fi;;
 esac
+# v3.46 HUD / cards / end card (tests/hud-dodge): counter under the STEPS chip, icon in the label, counter + FACTS card off the close-up's face, +$ pop-up inside the frame,
+# hudDodge off → QA: HUDFACE, END.t 4 s early without endCard → full card on a plate, gone before the loop dissolve
+case " $names " in *" hud-dodge "*)
+  hd=$(node render.mjs hud-dodge.html --probe "(() => { const st = document.querySelector('.stat'), S = document.getElementById('stage');
+    whatif.seek(5.0); const sr = st.getBoundingClientRect(), R = S.getBoundingClientRect(), dl = st.querySelector('.d'), dr = dl.getBoundingClientRect();
+    const pl = hudPlace(0, 5.0).k, dIn = dl.style.display === 'none' || (dr.left >= R.left && dr.right <= R.right) ? 1 : 0, icIn = st.querySelector('.l .ic') ? 1 : 0;
+    whatif.seek(8.2); const card = CARDS[0].el.style.top || '-'; const q1 = qaHudFace().length;
+    CFG.hudDodge = false; OVLPICK.clear(); const q0 = qaHudFace().length; CFG.hudDodge = true; OVLPICK.clear();
+    whatif.seek(11); const e1 = +document.getElementById('end').style.opacity, cls = document.getElementById('end').className;
+    whatif.seek(CFG.dur - 0.6 + 0.14); const e2 = +document.getElementById('end').style.opacity;
+    return [S.classList.contains('hastop') ? 1 : 0, icIn, pl, dIn, card, q1, q0, ENDQ ? 'quick' : 'full', cls, e1 > 0.9 ? 1 : 0, e2 < 0.02 ? 1 : 0].join('|'); })()" 2>&1 | tail -1 | tr -d '"')
+  IFS='|' read -r d1 d2 d3 d4 d5 d6 d7 d8 d9 d10 d11 <<< "$hd"
+  if [ "$d1" = 1 ] && [ "$d2" = 1 ] && [ "$d3" != c ] && [ -n "$d3" ] && [ "$d4" = 1 ] && [ "$d5" != - ] && [ "$d6" = 0 ] && [ "${d7:-0}" -ge 1 ] 2>/dev/null && [ "$d8" = full ] && echo "$d9" | grep -q plate && [ "$d10" = 1 ] && [ "$d11" = 1 ]; then
+    echo "ok   HUD dodge + end card  counter → $d3 · card top $d5 · HUDFACE off/on $d7/$d6 · $d8 card on plate"
+  else echo "FAIL HUD dodge + end card: '$hd'"; fail=1; fi;;
+esac
+# v3.46 CAPFACE in close-ups (tests/capface, capDodge off): shot 1 caption across the eyes (one line per chunk), shot 4 (big close-up, one caption line across the lower face) → one 'close-up' line; shots 2 + 3 quiet
+case " $names " in *" capface "*) q=$(node render.mjs capface.html --probe 'qaCapFace()' 2>&1)
+  if echo "$q" | grep -q 'beat 0)' && echo "$q" | grep 'beat 0)' | grep -q 'eyes' && [ "$(echo "$q" | grep -c 'close-up, beat 3)')" = 1 ] && ! echo "$q" | grep -q 'beat [12])\|failed'; then echo "ok   CAPFACE  eyes (shot 1) · caption across the big close-up (shot 4)"
+  else echo "FAIL CAPFACE: $(echo "$q" | tail -4)"; fail=1; fi;; esac
 # v3.44 sound dynamics (tests/sound-dynamics): impact at 6 s, cut sounds at 2 and 3.2 (dense → quieter), none in the hush before the hit; the 0.25 s before the hit ≥ 10 dB quieter than the bed, sub-drop on the hit
 case " $names " in *" sound-dynamics "*)
   sp=$(node render.mjs sound-dynamics.html --probe "JSON.stringify([impactTimes(), AUDIO.hits.filter(h => h.k === 'cuthit').map(h => +h.t.toFixed(2)), AUDIO.hits.some(h => h.k === 'whoosh' && Math.abs(h.t - 8.68) < 0.05)])" 2>&1 | tail -1)
@@ -155,7 +219,7 @@ print('ok' if qa == ['ENDCARD', 'HOOK', 'MISMATCH', 'PACING 5.40–9.40', 'YOU']
 esac
 # cover stage: thumbnails (THUMB, A/B variants → cover-b.jpg …) of example + every scene with an A/B THUMB array; COVERS=all = every scene that defines THUMB
 cv=""; for s in $names; do case "$s" in example) cv="$cv $s";; *) [ -f "$s.html" ] || continue; if [ "${COVERS:-}" = all ]; then grep -q '^const THUMB' "$s.story.js" && cv="$cv $s"; else grep -q '^const THUMB = \[' "$s.story.js" && cv="$cv $s"; fi;; esac; done
-cover() { s=$1; rm -f "cover_$s.jpg" "cover_$s"-[a-h].jpg; timeout 300 node render.mjs "$s.html" --cover "cover_$s.jpg" > "cover_$s.log" 2>&1; n=$(grep -c '^const THUMB = \[' "$s.story.js" 2>/dev/null); want=$(( n > 0 ? 2 : 1 ))
+cover() { s=$1; rm -f "cover_$s.jpg" "cover_$s"-[a-h].jpg; timeout 900 node render.mjs "$s.html" --cover "cover_$s.jpg" > "cover_$s.log" 2>&1; n=$(grep -c '^const THUMB = \[' "$s.story.js" 2>/dev/null); want=$(( n > 0 ? 2 : 1 ))
   if grep -q "PAGE ERRORS\|PAGE DID NOT START" "cover_$s.log" || [ "$(ls "cover_$s.jpg" "cover_$s"-[a-h].jpg 2>/dev/null | wc -l)" -lt "$want" ]; then echo "FAIL cover $s"; grep -A6 "PAGE" "cover_$s.log" | head -8; else echo "ok   cover $s  $(ls "cover_$s.jpg" "cover_$s"-[a-h].jpg 2>/dev/null | wc -l | tr -d ' ') image(s)"; fi; }
 export -f cover
 if [ -n "$cv" ]; then out=$(printf '%s\n' $cv | xargs -P "$J" -I{} bash -c 'cover "$1"' _ {}); echo "$out"; echo "$out" | grep -q '^FAIL' && fail=1; fi

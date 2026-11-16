@@ -186,6 +186,9 @@ def outro():
     return f"{q} {ab} — drop your pick in the comments." if ab else f"{q} Tell me in the comments."
 # v3.44 quick end card (CFG.endCard 'quick', default in shorts): the card stands ≤ 1.5 s, the question is only on screen — no closing line, END.loop alone carries the voice
 QUICK_END = bool(END) and CFG.get('endCard', 'full' if CFG.get('aspect') in ('16:9', 'landscape') else 'quick') == 'quick'
+# v3.45: no CFG.endCard and END.t more than CFG.endAuto (2) s before the end → the engine shows the full card (planned for it) → END.say is spoken as before
+_ea = CFG.get('endAuto', 2)
+if QUICK_END and 'endCard' not in CFG and _ea is not False and isinstance(END.get('t'), (int, float)) and DUR - END['t'] > float(_ea): QUICK_END = False
 if END and not QUICK_END and END.get('say') is not False and (isinstance(END.get('say'), str) or END.get('q')):
     say = clean(END['say']) if isinstance(END.get('say'), str) else (outro() if EXPL and END.get('q') else clean(END['q']))
     if EXPL and WWYD.search(say): say = WWYD.sub(' ', say).strip() or outro()

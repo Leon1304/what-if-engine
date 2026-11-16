@@ -1,7 +1,8 @@
 // v3.44 directing (docs/API.md "Regie"): CFG.autoCut coverage on the narration, reactCut() look → reaction → reverse shot, and the directing QA —
 //   expected (tests/run.sh direction): HOOK (frozen first 0.5 s) · PACING for the one cuts: false shot (5.4–9.4 s) · YOU (a "you" line over a close-up of the neighbour)
 //   · MISMATCH ("ninety seconds" vs a timer at 01:11) · ENDCARD (END.t 16 with dur 20) — and nothing else; the 1.4–5.4 s shot is split with a cut to 'you' on "you notice"
-const CFG = { pacing: true, autoCut: true, dur: 20, seed: 4, locale: 'en-US', kind: 'story', badge: 'What if', accent: 'cyan', filter: 'none', grain: 0, vignette: 0.2, saturation: 1.0, contrast: 1.0,
+const CFG = { pacing: true, endCard: 'quick',   // v3.45: explicit, else endAuto picks the full card for END.t 16 of 20
+  autoCut: true, dur: 20, seed: 4, locale: 'en-US', kind: 'story', badge: 'What if', accent: 'cyan', filter: 'none', grain: 0, vignette: 0.2, saturation: 1.0, contrast: 1.0,
   shadows: true, area: 40, renderScale: 0.75, msaa: 2, sunAz: -30, handheld: 0, coverT: 3, capPos: 'low', karaoke: true, wordRate: 0.085, voice: false, series: null, cast: {}, transition: 'cut', qaSparse: false };
 const LIVE = {};
 const BEATS = [

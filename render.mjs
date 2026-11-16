@@ -60,8 +60,13 @@ async function openPage(W0 = W) {   // W0: render width of this page (the audit 
   const errors = [];
   page.on('pageerror', e => errors.push(e.message));
   page.on('console', m => { if (m.type() === 'error' && !/favicon|fonts\.g/.test(m.text())) errors.push(m.text()); });
-  await page.goto('http://whatif.local/');
-  try { await page.waitForFunction(() => window.whatif, null, { timeout: 1000 * (+process.env.WHATIF_START_TIMEOUT || 120) }); }   // v3.37: WHATIF_START_TIMEOUT=s for big scenes on a busy machine
+  // The page's module builds the whole scene (assets, crowd simulation) before 'load' fires — on a busy machine that took longer than page.goto's 600 s.
+  //   goto now only waits for the document to arrive ('commit'); the build is covered by WHATIF_START_TIMEOUT (s, default 900) alone (was: page.goto waited for load, 600 s, and failed under load).
+  const startT = 1000 * (+process.env.WHATIF_START_TIMEOUT || 900);
+  //   An uncaught error while building (pageerror) ends the wait after 60 s instead of the full budget.
+  let crashT = 0; page.on('pageerror', () => { crashT ||= Date.now(); });
+  try { await page.goto('http://whatif.local/', { waitUntil: 'commit', timeout: 120000 }); const T0 = Date.now();   // v3.37: WHATIF_START_TIMEOUT=s for big scenes on a busy machine
+    for (;;) { if (await page.evaluate(() => !!window.whatif).catch(() => false)) break; if (Date.now() - T0 > startT || (crashT && Date.now() - crashT > 60000)) throw new Error('start'); await new Promise(r => setTimeout(r, 500)); } }
   catch { console.log('PAGE DID NOT START\n' + errors.join('\n')); await browser.close(); process.exit(1); }
   await page.evaluate(async ([w, F]) => { await document.fonts.ready; window.whatif.setRenderWidth(w); window.whatif.fps?.(F); window.whatif.seek(0); }, [LAND ? Math.round(W0 * 16 / 9) : W0, fps]);
   return { browser, page, errors };

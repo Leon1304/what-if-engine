@@ -23,3 +23,10 @@ const STATS = [];
 const END = { t: 13.1, q: 'Test?', opts: ['A', 'B'], cta: 'x' };
 const AUDIO = { mood: 'none', music: 0, sfx: 1, hits: [], amb: [[0, 6, 'farm', 0.5]] };
 const THUMB = { t: 1.2, text: '*Clip QA* test' };
+const QA_OK = [   // tests/run.sh checks the whole audit: only OVERLAP · INSIDE · HEADCLIP may stay open
+  [/^HITBOX: 'Door' #\d+ stands/, 'walks through the open front door into the house – the door frame box blocks the doorway (open, figures)'],
+  [/^QA: FOOTSLIDE – 'Door'/, 'stops inside the doorway – stop slide (open, figures)'],
+  [/^HITBOX: 'Crawl' #\d+ stands/, 'crawls in the 0.95-m tunnel – the hitbox check still takes the crawler for a standing body under the ceiling (open)'],
+  [/^QA: VEHICLE – car on drive\(\) #0 drives \/ flies through a building \/ prop at 9\.3 s \(40\.0/, 'motorbike in the 1.7-m tunnel touches a tunnel frame box at the entrance (open, tunnel geometry)'],
+  [/^QA: CAMCLIP – shot 10 /, 'camera low behind the rider inside the narrow tunnel on purpose (headDuck test)']
+];

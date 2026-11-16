@@ -1,7 +1,7 @@
 // v3.44 focus HUD + caption chunks + highlight rule (checked in tests/run.sh with --probe):
 //   - no badge, no clock; at most ONE counter on screen, only while it counts (+ statHold) — the countdown at its start and its last seconds, 'Fuel' only while it drops
 //   - captions in 2–4-word chunks (never ending on a function word, '17 km' stays together), in the safe zone (lower middle);
-//     the close-up of 'hero' (shot 2) moves its caption off the torso (capSubjects → 'low')
+//     the close-up of 'hero' (shot 2): its caption never dodges onto the forehead ('high'), v3.45 (a face hit always weighs more than the torso)
 //   - '*The air*' → THE stays white, AIR in colour; beat 2's '*isn't*' is a highlight on a function word only → exactly one QA: CAPHL (waived below)
 const CFG = { dur: 12, seed: 5, locale: 'en-US', kind: 'story', badge: 'What if', accent: 'orange', filter: 'film', grain: 0.02, vignette: 0.3, saturation: 1.08, contrast: 1.05,
   shadows: true, area: 36, renderScale: 0.75, msaa: 2, sunAz: -35, handheld: 0, coverT: 1.0, karaoke: true, wordRate: 0.085, voice: false, series: null, cast: {}, transition: 'cut' };
