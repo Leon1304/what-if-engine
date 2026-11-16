@@ -9,7 +9,7 @@ const srv = http.createServer((q, r) => { const p = path.join(GAME, decodeURICom
 const browser = await chromium.launch({ args: ['--use-angle=metal'] });
 const page = await browser.newPage({ viewport: { width: 640, height: 360 } });
 let errors = 0; page.on('pageerror', e => { console.log('PAGE ERROR', e.message); errors++; });
-await page.goto(`http://localhost:${srv.address().port}/index.html?autostart=1&power=1&t=12`);
+await page.goto(`http://localhost:${srv.address().port}/index.html?lang=de&autostart=1&power=1&t=12`);
 await page.waitForFunction(() => window.__game, null, { timeout: 120000 });
 // Blender (x, y) waypoints; optional z = start on that floor height
 export const ROUTES = [

@@ -15,6 +15,7 @@ import { MeshBVH } from 'three-mesh-bvh';
 import { BLUEPRINTS, BP_CATS, CROPS, ITEMS } from './items.js';
 import { roadX } from './life.js';
 import { regionOf, bergRoadDist } from './regions.js';
+import { T } from './i18n.js';
 
 const up = new THREE.Vector3(0, 1, 0), v1 = new THREE.Vector3();
 const box = new THREE.Box3(), mat4 = new THREE.Matrix4(), mat5 = new THREE.Matrix4();
@@ -52,16 +53,16 @@ export class Build {
   // ---------------------------------------------------------------- menu + ghost
   menuHtml() {
     const L = this.lvl();
-    let h = `<h2>Bauen <small>G · R / Mausrad drehen · Linksklick oder E setzen · X abbrechen · dein Level: ${L}</small></h2><div class="tabs">`;
+    let h = `<h2>${T('Bauen <small>G · R / Mausrad drehen · Linksklick oder E setzen · X abbrechen · dein Level: {lvl}</small>', { lvl: L })}</h2><div class="tabs">`;
     for (const [id, name] of BP_CATS) h += `<button class="sec ${id === this.cat ? 'on' : ''}" data-cat="${id}">${name}</button>`;
     h += `</div><div class="bps">`;
     for (const bp of BLUEPRINTS.filter(b => b.cat === this.cat)) {
       const cost = this.costOf(bp), toolOk = this.can(bp), lvlOk = L >= bp.lvl, ok = toolOk && lvlOk && this.hasCost(cost);
-      h += `<div class="bpc ${ok ? 'ok' : ''}"><i>${bp.icon}</i><div><b>${bp.name}</b>${lvlOk ? '' : ` <span class="lock">🔒 ab Level ${bp.lvl}</span>`}<small>${bp.desc}</small>
-        <small>${bp.stages ? '1. Abschnitt: ' : ''}${this.costText(cost)}${bp.tools?.length ? ` · Werkzeug: ${bp.tools.map(t => ITEMS[t].name).join(', ')}${toolOk ? ' ✔' : ' ✘'}` : ''}</small></div>
-        <button data-bp="${bp.id}" ${ok ? '' : 'disabled'}>Bauen</button></div>`;
+      h += `<div class="bpc ${ok ? 'ok' : ''}"><i>${bp.icon}</i><div><b>${bp.name}</b>${lvlOk ? '' : ` <span class="lock">${T('🔒 ab Level {lvl}', { lvl: bp.lvl })}</span>`}<small>${bp.desc}</small>
+        <small>${bp.stages ? T('1. Abschnitt: {cost}', { cost: this.costText(cost) }) : this.costText(cost)}${bp.tools?.length ? ` · ${T('Werkzeug: {tools}', { tools: bp.tools.map(t => ITEMS[t].name).join(', ') })}${toolOk ? ' ✔' : ' ✘'}` : ''}</small></div>
+        <button data-bp="${bp.id}" ${ok ? '' : 'disabled'}>${T('Bauen')}</button></div>`;
     }
-    return h + `</div><p class="hint">Baumstämme: Bäume mit der Axt fällen. Bretter: Stamm + Axt/Säge im Rucksack (C). Steine: Steinbruch, Burgruine. Metall: Schrottkiste in der Werkstatt, Steinbruch. Möbel und Lichter kannst du auch in deine Hütte stellen.</p>`;
+    return h + `</div><p class="hint">${T('Baumstämme: Bäume mit der Axt fällen. Bretter: Stamm + Axt/Säge im Rucksack (C). Steine: Steinbruch, Burgruine. Metall: Schrottkiste in der Werkstatt, Steinbruch. Möbel und Lichter kannst du auch in deine Hütte stellen.')}</p>`;
   }
   start(id) {
     const bp = bpOf(id); if (!bp) return;
@@ -72,7 +73,7 @@ export class Build {
     if (bp.id === 'gartentor') { const t = clone(this.W.bp.gartentor_tuer); const h = this.W.bp.gartentor_tuer.userData.hinge; t.position.set(h[0], h[2], -h[1]); grp.add(t); }
     grp.traverse(m => { if (m.isMesh) { m.castShadow = false; m.material = ghostOk; } });
     this.ghost = grp; this.scene.add(grp);
-    this.g.ui.toast(`${bp.icon} ${bp.name}: Platz suchen – Linksklick oder E setzt, R dreht, X bricht ab.`);
+    this.g.ui.toast(T('{icon} {name}: Platz suchen – Linksklick oder E setzt, R dreht, X bricht ab.', { icon: bp.icon, name: bp.name }));
   }
   cancel() { if (this.ghost) { this.scene.remove(this.ghost); this.ghost = null; } this.bp = null; }
   turn(d) { this.rot += d; }
@@ -96,35 +97,35 @@ export class Build {
   }
   check(p, r, bp, ignore, outside) {
     const g = this.g, W = this.W, [w, d] = bp.size || [1, 1], cs = this.corners(p, r, w, d);
-    if (g.insideShop(p) || (p.x > 20 && p.x < 38 && p.z > -11 && p.z < 11)) return 'Nicht in der Tankstelle.';
+    if (g.insideShop(p) || (p.x > 20 && p.x < 38 && p.z > -11 && p.z < 11)) return T('Nicht in der Tankstelle.');
     const inRoom = !outside && bp.id !== 'huette' && this.room(new THREE.Vector3(p.x, g.P.pos.y, p.z));
     let lo = 1e9, hi = -1e9;
-    if (inRoom) { lo = hi = inRoom.floor; if (['feld', 'falle', 'zaun', 'palisade', 'steinmauer', 'gartentor', 'unterstand', 'feuerstelle'].includes(bp.id)) return 'Das gehört nach draußen.'; }
+    if (inRoom) { lo = hi = inRoom.floor; if (['feld', 'falle', 'zaun', 'palisade', 'steinmauer', 'gartentor', 'unterstand', 'feuerstelle'].includes(bp.id)) return T('Das gehört nach draußen.'); }
     else for (const q of cs) {
-      const by = -q.z; if (regionOf(by) === 'berg' ? bergRoadDist(q.x, by) < 3.6 : Math.abs(q.x - roadX(by)) < 4.4) return 'Nicht auf der Straße.';
+      const by = -q.z; if (regionOf(by) === 'berg' ? bergRoadDist(q.x, by) < 3.6 : Math.abs(q.x - roadX(by)) < 4.4) return T('Nicht auf der Straße.');
       const y = W.groundY(q.x, q.z, g.P.pos.y + 4); lo = Math.min(lo, y); hi = Math.max(hi, y);
     }
-    if (hi - lo > (bp.id === 'huette' || bp.ext ? 1.1 : bp.id === 'feld' ? .45 : .6)) return 'Der Boden ist hier zu uneben.';
+    if (hi - lo > (bp.id === 'huette' || bp.ext ? 1.1 : bp.id === 'feld' ? .45 : .6)) return T('Der Boden ist hier zu uneben.');
     const R = Math.hypot(w, d) / 2;
     for (const t of W.treesNear(p.x, p.z)) {
       if (t.kind === 'stumpf') continue;                  // stumps disappear under whatever you build
       v1.set(t.x - p.x, 0, t.z - p.z).applyAxisAngle(up, -r);
-      if (Math.abs(v1.x) < w / 2 + t.r && Math.abs(v1.z) < d / 2 + t.r) return 'Ein Baum steht im Weg – fäll ihn erst (Axt).';
+      if (Math.abs(v1.x) < w / 2 + t.r && Math.abs(v1.z) < d / 2 + t.r) return T('Ein Baum steht im Weg – fäll ihn erst (Axt).');
     }
     for (const s of this.list) {
       if (s === ignore || (inRoom && s === inRoom.s)) continue;
       const sb = bpOf(s.type); let sr = Math.hypot(...sb.size) / 2; if (s.type === 'huette') sr = 2.8;
       const k = (sb.fence && bp.fence) || (s.type === 'feld' && bp.id === 'feld') || inRoom ? .5 : .8;
-      if (Math.hypot(s.x - p.x, s.z - p.z) < (sr + R) * k) return 'Hier steht schon etwas.';
+      if (Math.hypot(s.x - p.x, s.z - p.z) < (sr + R) * k) return T('Hier steht schon etwas.');
     }
     const base = inRoom ? lo + .12 : hi + .35, top = base + (R < .6 ? 1.0 : 1.9);
     box.min.set(-w / 2 + .05, base, -d / 2 + .05); box.max.set(w / 2 - .05, top, d / 2 - .05);
     mat4.makeRotationY(r).setPosition(p.x, 0, p.z);
-    if (W.collider.geometry.boundsTree.intersectsBox(box, mat4)) return 'Da ist etwas im Weg.';
+    if (W.collider.geometry.boundsTree.intersectsBox(box, mat4)) return T('Da ist etwas im Weg.');
     for (const c of W.dyn) {             // built things (cabin walls, furniture, logs)
       const o = c.obj.userData.build; if ((o && o === ignore) || c.pos.distanceTo(p) > c.r + R + 2) continue;
       mat5.copy(c.obj.matrixWorld).invert().multiply(mat4);
-      if (c.geo.boundsTree.intersectsBox(box, mat5)) return inRoom ? 'Zu nah an der Wand oder an anderen Möbeln.' : 'Da ist etwas im Weg.';
+      if (c.geo.boundsTree.intersectsBox(box, mat5)) return inRoom ? T('Zu nah an der Wand oder an anderen Möbeln.') : T('Da ist etwas im Weg.');
     }
     p.y = bp.id === 'huette' || bp.ext ? hi : lo + (bp.id === 'feld' ? .05 : 0);
     return '';
@@ -142,16 +143,16 @@ export class Build {
   }
   place() {
     const g = this.g, bp = this.bp; if (!bp) return;
-    if (this.lvl() < bp.lvl) { g.audio.sfx('error'); return g.ui.toast(`Dafür brauchst du Level ${bp.lvl}.`, 'warn'); }
-    if (!this.valid) { g.audio.sfx('error'); return g.ui.toast(this.why || 'Hier nicht.', 'warn'); }
-    if (!this.can(bp)) { g.audio.sfx('error'); return g.ui.toast(`Du brauchst: ${bp.tools.map(t => ITEMS[t].name).join(', ')}.`, 'warn'); }
-    const cost = this.costOf(bp); if (!this.hasCost(cost)) { g.audio.sfx('error'); return g.ui.toast(`Es fehlt Material: ${this.costText(cost)}`, 'warn'); }
+    if (this.lvl() < bp.lvl) { g.audio.sfx('error'); return g.ui.toast(T('Dafür brauchst du Level {lvl}.', { lvl: bp.lvl }), 'warn'); }
+    if (!this.valid) { g.audio.sfx('error'); return g.ui.toast(this.why || T('Hier nicht.'), 'warn'); }
+    if (!this.can(bp)) { g.audio.sfx('error'); return g.ui.toast(T('Du brauchst: {tools}.', { tools: bp.tools.map(t => ITEMS[t].name).join(', ') }), 'warn'); }
+    const cost = this.costOf(bp); if (!this.hasCost(cost)) { g.audio.sfx('error'); return g.ui.toast(T('Es fehlt Material: {cost}', { cost: this.costText(cost) }), 'warn'); }
     this.pay(cost);
     const full = g.creative && bp.stages;          // creative: the cabin stands complete at once
     const s = this.make({ type: bp.id, x: this.ghostPos.x, y: this.ghostPos.y, z: this.ghostPos.z, rot: this.rot, stage: full ? 4 : 1 });
-    if (full) { g.S.flags.cabin = 1; g.audio.sfx('build'); g.ui.toast('🛖 Blockhütte steht (Kreativ-Modus). E an der Hütte: ausbauen.', 'good'); this.cancel(); this.regrow(0, 0); g.save(); return s; }
+    if (full) { g.S.flags.cabin = 1; g.audio.sfx('build'); g.ui.toast(T('🛖 Blockhütte steht (Kreativ-Modus). E an der Hütte: ausbauen.'), 'good'); this.cancel(); this.regrow(0, 0); g.save(); return s; }
     g.audio.sfx('build'); g.progress.add(bp.stages ? 30 : 15, bp.name); g.progress.stat('built');
-    g.ui.toast(bp.stages ? `🔨 ${bp.stages[0].name} steht. Nächster Abschnitt: ${bp.stages[1].name} (E an der Baustelle).` : `🔨 ${bp.name} gebaut.`, 'good');
+    g.ui.toast(bp.stages ? T('🔨 {stage} steht. Nächster Abschnitt: {next} (E an der Baustelle).', { stage: bp.stages[0].name, next: bp.stages[1].name }) : T('🔨 {name} gebaut.', { name: bp.name }), 'good');
     g.S.flags.built = 1; this.cancel(); this.regrow(0, 0); g.save(); return s;
   }
 
@@ -182,8 +183,8 @@ export class Build {
     s.grp.updateMatrixWorld(true);
     if (s.col) W.removeCollider(s.col);
     s.col = ['feld', 'teppich'].includes(s.type) ? null : W.addCollider(s.grp);
-    if (s.type === 'huette' && s.stage >= 2 && !s.door) this.addDoor(s, d.doorOpen, 'huette_tuer', 'Hüttentür');
-    if (s.type === 'gartentor' && !s.door) this.addDoor(s, d.doorOpen, 'gartentor_tuer', 'Gartentor');
+    if (s.type === 'huette' && s.stage >= 2 && !s.door) this.addDoor(s, d.doorOpen, 'huette_tuer', T('Hüttentür'));
+    if (s.type === 'gartentor' && !s.door) this.addDoor(s, d.doorOpen, 'gartentor_tuer', T('Gartentor'));
     const fireAt = s.type === 'feuerstelle' ? W.bp.feuerstelle.userData.fire : s.type === 'herd' ? W.bp.herd.userData.fire : s.type === 'huette' && s.stage >= 4 ? W.bp.huette_4.userData.fire : null;
     if (fireAt && !s.fire) {
       const p = new THREE.Vector3(fireAt[0], fireAt[2], -fireAt[1]).applyMatrix4(s.grp.matrixWorld);
@@ -232,13 +233,13 @@ export class Build {
   }
   dismantle(s) {          // X while looking at it: half the materials back (gadgets come back whole)
     const bp = bpOf(s.type), g = this.g;
-    if (s.inv?.length) return g.ui.toast('Erst ausräumen – da liegt noch etwas drin.', 'warn');
-    if (s.type === 'huette' && this.list.some(o => o !== s && this.room(new THREE.Vector3(o.x, o.y + .3, o.z))?.s === s)) return g.ui.toast('Räum erst die Möbel aus der Hütte (X an jedem Möbelstück).', 'warn');
+    if (s.inv?.length) return g.ui.toast(T('Erst ausräumen – da liegt noch etwas drin.'), 'warn');
+    if (s.type === 'huette' && this.list.some(o => o !== s && this.room(new THREE.Vector3(o.x, o.y + .3, o.z))?.s === s)) return g.ui.toast(T('Räum erst die Möbel aus der Hütte (X an jedem Möbelstück).'), 'warn');
     const back = {};
     const add = c => { for (const [k, n] of Object.entries(c)) back[k] = (back[k] || 0) + (GADGETS.includes(k) ? n : Math.floor(n / 2)); };
     if (bp.stages) { bp.stages.slice(0, s.stage).forEach(st => add(st.cost)); bp.ext.slice(0, s.ext).forEach(e => add(e.cost)); } else add(bp.cost);
     for (const [k, n] of Object.entries(back)) if (n) g.add(k, n, true);
-    this.remove(s); this.regrow(0, 0); g.audio.sfx('chop'); g.ui.toast(`🔨 ${bp.name} abgebaut. ${bp.cat === 'licht' || bp.cat === 'nutz' ? 'Du hast es wieder eingepackt.' : 'Ein Teil des Materials ist zurück.'}`); g.save();
+    this.remove(s); this.regrow(0, 0); g.audio.sfx('chop'); g.ui.toast(bp.cat === 'licht' || bp.cat === 'nutz' ? T('🔨 {name} abgebaut. Du hast es wieder eingepackt.', { name: bp.name }) : T('🔨 {name} abgebaut. Ein Teil des Materials ist zurück.', { name: bp.name })); g.save();
   }
   shelter(p) { const r = this.room(p); if (r) return r.s; return this.list.find(s => s.type === 'unterstand' && this.inLeanTo(s, p)) || null; }
   indoor(p) { return this.room(p, ['in']); }
@@ -267,27 +268,27 @@ export class Build {
   nextExt(s) { const bp = bpOf('huette'); return s.stage >= 4 && s.ext < bp.ext.length ? bp.ext[s.ext] : null; }
   verb(t) {
     const g = this.g;
-    if (t.log) return g.hasAxe() ? `[E] Stamm zerlegen (Axt) – noch ${t.log.left}` : 'Ein gefällter Stamm – mit einer Axt zerlegen';
+    if (t.log) return g.hasAxe() ? T('[E] Stamm zerlegen (Axt) – noch {n}', { n: t.log.left }) : T('Ein gefällter Stamm – mit einer Axt zerlegen');
     const s = t.build, bp = bpOf(s.type);
-    if (s.type === 'huette' && s.stage < 4) { const st = bp.stages[s.stage]; return `[E] ${st.name} bauen: ${this.costText(st.cost)}${this.hasCost(st.cost) ? '' : ' (fehlt)'}`; }
-    if (s.type === 'huette') { const e = this.nextExt(s); if (!e) return 'Deine Blockhütte – voll ausgebaut'; return this.lvl() < e.lvl ? `Ausbau „${e.name}“ ab Level ${e.lvl}` : `[E] Ausbauen: ${e.name} – ${this.costText(e.cost)}${this.hasCost(e.cost) ? '' : ' (fehlt)'}`; }
+    if (s.type === 'huette' && s.stage < 4) { const st = bp.stages[s.stage]; return T('[E] {stage} bauen: {cost}', { stage: st.name, cost: this.costText(st.cost) }) + (this.hasCost(st.cost) ? '' : T(' (fehlt)')); }
+    if (s.type === 'huette') { const e = this.nextExt(s); if (!e) return T('Deine Blockhütte – voll ausgebaut'); return this.lvl() < e.lvl ? T('Ausbau „{name}“ ab Level {lvl}', { name: e.name, lvl: e.lvl }) : T('[E] Ausbauen: {name} – {cost}', { name: e.name, cost: this.costText(e.cost) }) + (this.hasCost(e.cost) ? '' : T(' (fehlt)')); }
     if (s.type === 'feld') {
       const f = s.field;
-      if (!f.crop) { const seed = this.seedFor(); return seed ? `[E] ${ITEMS[seed].name} pflanzen` : 'Leeres Feld – du brauchst Saatgut'; }
-      if (f.p >= 1) return `[E] ${CROPS[f.crop].name} ernten`;
-      return `${CROPS[f.crop].name}: ${Math.floor(f.p * 100)} %${g.seasons?.season === 'Winter' ? ' · im Winter wächst nichts' : ''}${f.wet > 0 ? ' · gegossen' : this.waterItem() ? ' · [E] gießen' : ''}`;
+      if (!f.crop) { const seed = this.seedFor(); return seed ? T('[E] {seed} pflanzen', { seed: ITEMS[seed].name }) : T('Leeres Feld – du brauchst Saatgut'); }
+      if (f.p >= 1) return T('[E] {crop} ernten', { crop: CROPS[f.crop].name });
+      return `${CROPS[f.crop].name}: ${Math.floor(f.p * 100)} %${g.seasons?.season === 'Winter' ? T(' · im Winter wächst nichts') : ''}${f.wet > 0 ? T(' · gegossen') : this.waterItem() ? T(' · [E] gießen') : ''}`;
     }
-    if (STORE[s.type]) return `[E] ${bp.name} öffnen (${s.inv.length}/${STORE[s.type]})`;
-    if (s.type === 'regentonne') return s.water >= 1 ? (g.has('topf') ? '[E] Topf mit Regenwasser füllen' : '[E] Regenwasser trinken') : 'Regentonne – leer, wartet auf Regen';
-    if (s.type === 'bett') return '[E] Schlafen';
-    if (s.type === 'falle') return s.catch ? '[E] Kaninchen herausnehmen' : 'Kaninchenfalle – gespannt';
-    if (s.type === 'trockengestell') { const ready = s.dry.filter(x => x >= 6).length; return ready ? `[E] ${ready} × Trockenfleisch abnehmen` : g.has('fleisch') && s.dry.length < 5 ? '[E] Fleisch aufhängen' : `Trockengestell (${s.dry.length}/5)`; }
-    if (s.type === 'fackelhalter') return s.fuel > 0 ? `Fackel brennt (${Math.ceil(s.fuel)} h)` : g.has('feuerzeug') ? `[E] Anzünden${s.lit ? ' (1 Ast)' : ''}` : 'Fackelhalter – Feuerzeug nötig';
-    if (s.type === 'baustrahler') return s.charge > 0 ? `Baustrahler: Akku für ${Math.ceil(s.charge)} h${g.has('batterien') ? ' · [E] Batterien einsetzen' : ''}` : g.has('batterien') ? '[E] Batterien einsetzen' : 'Baustrahler – Batterien leer';
-    if (s.type === 'solarlader') return s.charge >= 1 ? '[E] Taschenlampe aufladen' : `Solar-Ladegerät lädt … ${Math.floor(s.charge * 100)} %`;
-    if (s.type === 'werkbank') return 'Werkbank – in der Nähe zeigt der Rucksack (C) mehr Rezepte';
-    if (s.type === 'unterstand') return 'Unterstand – darunter Z halten zum Warten';
-    return bp.name + ' · X = abbauen';
+    if (STORE[s.type]) return T('[E] {name} öffnen ({n}/{max})', { name: bp.name, n: s.inv.length, max: STORE[s.type] });
+    if (s.type === 'regentonne') return s.water >= 1 ? (g.has('topf') ? T('[E] Topf mit Regenwasser füllen') : T('[E] Regenwasser trinken')) : T('Regentonne – leer, wartet auf Regen');
+    if (s.type === 'bett') return T('[E] Schlafen');
+    if (s.type === 'falle') return s.catch ? T('[E] Kaninchen herausnehmen') : T('Kaninchenfalle – gespannt');
+    if (s.type === 'trockengestell') { const ready = s.dry.filter(x => x >= 6).length; return ready ? T('[E] {n} × Trockenfleisch abnehmen', { n: ready }) : g.has('fleisch') && s.dry.length < 5 ? T('[E] Fleisch aufhängen') : T('Trockengestell ({n}/5)', { n: s.dry.length }); }
+    if (s.type === 'fackelhalter') return s.fuel > 0 ? T('Fackel brennt ({h} h)', { h: Math.ceil(s.fuel) }) : g.has('feuerzeug') ? (s.lit ? T('[E] Anzünden (1 Ast)') : T('[E] Anzünden')) : T('Fackelhalter – Feuerzeug nötig');
+    if (s.type === 'baustrahler') return s.charge > 0 ? T('Baustrahler: Akku für {h} h', { h: Math.ceil(s.charge) }) + (g.has('batterien') ? ' · ' + T('[E] Batterien einsetzen') : '') : g.has('batterien') ? T('[E] Batterien einsetzen') : T('Baustrahler – Batterien leer');
+    if (s.type === 'solarlader') return s.charge >= 1 ? T('[E] Taschenlampe aufladen') : T('Solar-Ladegerät lädt … {p} %', { p: Math.floor(s.charge * 100) });
+    if (s.type === 'werkbank') return T('Werkbank – in der Nähe zeigt der Rucksack (C) mehr Rezepte');
+    if (s.type === 'unterstand') return T('Unterstand – darunter Z halten zum Warten');
+    return T('{name} · X = abbauen', { name: bp.name });
   }
   seedFor() { const sel = this.g.S.inv[this.g.S.sel]; if (sel && ITEMS[sel.id]?.seed) return sel.id; return ['saat_kartoffel', 'saat_karotte', 'saat_kuerbis'].find(k => this.g.has(k)); }
   waterItem() { return ['wasser', 'topf_klar', 'topf_abgekocht', 'topf_wasser'].find(k => this.g.has(k)); }
@@ -301,62 +302,62 @@ export class Build {
     const s = t.build, bp = bpOf(s.type);
     if (s.type === 'huette' && s.stage < 4) {
       const st = bp.stages[s.stage];
-      if (!g.has('hammer') && !g.creative) { A.sfx('error'); return g.ui.toast('Du brauchst einen Hammer.', 'warn'); }
-      if (!this.hasCost(st.cost)) { A.sfx('error'); return g.ui.toast(`Für „${st.name}“ fehlt: ${this.costText(st.cost)}`, 'warn'); }
+      if (!g.has('hammer') && !g.creative) { A.sfx('error'); return g.ui.toast(T('Du brauchst einen Hammer.'), 'warn'); }
+      if (!this.hasCost(st.cost)) { A.sfx('error'); return g.ui.toast(T('Für „{name}“ fehlt: {cost}', { name: st.name, cost: this.costText(st.cost) }), 'warn'); }
       this.pay(st.cost); s.stage++; this.refresh(s); A.sfx('build'); g.progress.add(40, st.name);
-      g.ui.toast(s.stage < 4 ? `🔨 ${st.name} fertig! Weiter: ${bp.stages[s.stage].name}.` : '🛖 Deine Blockhütte ist fertig! Im Kamin (E) Feuer machen – drinnen bist du sicher. Ab Level 3 kannst du anbauen.', 'good');
+      g.ui.toast(s.stage < 4 ? T('🔨 {name} fertig! Weiter: {next}.', { name: st.name, next: bp.stages[s.stage].name }) : T('🛖 Deine Blockhütte ist fertig! Im Kamin (E) Feuer machen – drinnen bist du sicher. Ab Level 3 kannst du anbauen.'), 'good');
       if (s.stage >= 4) g.S.flags.cabin = 1; g.save(); return;
     }
     if (s.type === 'huette') {
-      const e = this.nextExt(s); if (!e) return g.ui.toast('Die Hütte ist voll ausgebaut.');
-      if (this.lvl() < e.lvl) { A.sfx('error'); return g.ui.toast(`„${e.name}“ geht ab Level ${e.lvl} (du bist Level ${this.lvl()}).`, 'warn'); }
-      if (!g.has('hammer') && !g.creative) { A.sfx('error'); return g.ui.toast('Du brauchst einen Hammer.', 'warn'); }
-      if (!this.hasCost(e.cost)) { A.sfx('error'); return g.ui.toast(`Für „${e.name}“ fehlt: ${this.costText(e.cost)}`, 'warn'); }
+      const e = this.nextExt(s); if (!e) return g.ui.toast(T('Die Hütte ist voll ausgebaut.'));
+      if (this.lvl() < e.lvl) { A.sfx('error'); return g.ui.toast(T('„{name}“ geht ab Level {lvl} (du bist Level {cur}).', { name: e.name, lvl: e.lvl, cur: this.lvl() }), 'warn'); }
+      if (!g.has('hammer') && !g.creative) { A.sfx('error'); return g.ui.toast(T('Du brauchst einen Hammer.'), 'warn'); }
+      if (!this.hasCost(e.cost)) { A.sfx('error'); return g.ui.toast(T('Für „{name}“ fehlt: {cost}', { name: e.name, cost: this.costText(e.cost) }), 'warn'); }
       const why = this.check(this.extPos(s, e), s.rot, { id: 'ext', size: e.size, ext: 1 }, s, true); if (why) { A.sfx('error'); return g.ui.toast(`${e.name}: ${why}`, 'warn'); }
       this.pay(e.cost); s.ext++; this.regrow(0, 0); const open = s.door?.target; this.removeDoor(s);
-      this.refresh(s, { doorOpen: open }); A.sfx('build'); g.progress.add(80, e.name); g.ui.toast(`🏡 ${e.name} fertig!`, 'good'); g.save(); return;
+      this.refresh(s, { doorOpen: open }); A.sfx('build'); g.progress.add(80, e.name); g.ui.toast(T('🏡 {name} fertig!', { name: e.name }), 'good'); g.save(); return;
     }
     if (s.type === 'feld') {
       const f = s.field;
-      if (!f.crop) { const seed = this.seedFor(); if (!seed) return g.ui.toast('Du hast kein Saatgut. Such im Dorfladen, in der Scheune oder in Säcken.');
-        g.take(seed); f.crop = ITEMS[seed].seed; f.p = 0; f.wet = 0; A.sfx('dig'); this.refresh(s); g.S.flags.planted = 1; g.progress.add(3, 'gepflanzt'); return g.ui.toast(`🌱 ${CROPS[f.crop].name} gepflanzt. Gieß das Feld oder warte auf Regen.`); }
+      if (!f.crop) { const seed = this.seedFor(); if (!seed) return g.ui.toast(T('Du hast kein Saatgut. Such im Dorfladen, in der Scheune oder in Säcken.'));
+        g.take(seed); f.crop = ITEMS[seed].seed; f.p = 0; f.wet = 0; A.sfx('dig'); this.refresh(s); g.S.flags.planted = 1; g.progress.add(3, T('gepflanzt')); return g.ui.toast(T('🌱 {crop} gepflanzt. Gieß das Feld oder warte auf Regen.', { crop: CROPS[f.crop].name })); }
       if (f.p >= 1) { const gives = CROPS[f.crop].gives; if (!g.addAll(gives)) return;
-        g.ui.toast(`🧺 Ernte: ${Object.entries(gives).map(([k, n]) => `${n}× ${ITEMS[k].name}`).join(', ')}`, 'good'); A.sfx('pickup'); g.progress.stat('harvest', Object.values(gives)[0]); g.progress.add(12, 'Ernte');
+        g.ui.toast(T('🧺 Ernte: {list}', { list: Object.entries(gives).map(([k, n]) => `${n}× ${ITEMS[k].name}`).join(', ') }), 'good'); A.sfx('pickup'); g.progress.stat('harvest', Object.values(gives)[0]); g.progress.add(12, T('Ernte'));
         f.crop = ''; f.p = 0; this.refresh(s); return; }
-      const w = this.waterItem(); if (f.wet <= 0 && w) { g.take(w); if (ITEMS[w].after) g.add(ITEMS[w].after, 1, true); f.wet = 6; A.sfx('water'); return g.ui.toast('💧 Gegossen – wächst jetzt schneller.'); }
-      return g.ui.toast(`${CROPS[f.crop].name} wachsen … ${Math.floor(f.p * 100)} %`);
+      const w = this.waterItem(); if (f.wet <= 0 && w) { g.take(w); if (ITEMS[w].after) g.add(ITEMS[w].after, 1, true); f.wet = 6; A.sfx('water'); return g.ui.toast(T('💧 Gegossen – wächst jetzt schneller.')); }
+      return g.ui.toast(T('{crop} wachsen … {p} %', { crop: CROPS[f.crop].name, p: Math.floor(f.p * 100) }));
     }
     if (STORE[s.type]) { this.chest = s; return g.openPanel?.('inv'); }
     if (s.type === 'regentonne') {
-      if (s.water < 1) return g.ui.toast('Die Tonne ist leer. Beim nächsten Regen füllt sie sich.');
+      if (s.water < 1) return g.ui.toast(T('Die Tonne ist leer. Beim nächsten Regen füllt sie sich.'));
       s.water--; A.sfx('water');
-      if (g.has('topf')) { g.swap('topf', 'topf_klar'); return g.ui.toast('🫕 Topf mit sauberem Regenwasser gefüllt.'); }
-      g.S.stats.thirst = Math.min(100, g.S.stats.thirst + 30); g.S.flags.drank = 1; return g.ui.toast('Kühles Regenwasser.');
+      if (g.has('topf')) { g.swap('topf', 'topf_klar'); return g.ui.toast(T('🫕 Topf mit sauberem Regenwasser gefüllt.')); }
+      g.S.stats.thirst = Math.min(100, g.S.stats.thirst + 30); g.S.flags.drank = 1; return g.ui.toast(T('Kühles Regenwasser.'));
     }
     if (s.type === 'bett') return g.sleep(s);
-    if (s.type === 'falle') { if (!s.catch) return g.ui.toast('Die Falle ist gespannt. Kaninchen kommen, wenn niemand in der Nähe ist (nicht neben der Hütte).');
-      if (!g.add('kaninchen', 1)) return; s.catch = 0; this.refresh(s); g.progress.stat('rabbits'); g.progress.add(10, 'Kaninchen'); return; }
+    if (s.type === 'falle') { if (!s.catch) return g.ui.toast(T('Die Falle ist gespannt. Kaninchen kommen, wenn niemand in der Nähe ist (nicht neben der Hütte).'));
+      if (!g.add('kaninchen', 1)) return; s.catch = 0; this.refresh(s); g.progress.stat('rabbits'); g.progress.add(10, T('Kaninchen')); return; }
     if (s.type === 'trockengestell') {
       const ready = s.dry.filter(x => x >= 6).length;
-      if (ready) { if (!g.add('trockenfleisch', ready)) return; s.dry = s.dry.filter(x => x < 6); this.refresh(s); g.progress.add(4 * ready, 'Trockenfleisch'); return; }
-      if (g.has('fleisch') && s.dry.length < 5) { g.take('fleisch'); s.dry.push(0); this.refresh(s); return g.ui.toast('🥓 Fleisch aufgehängt – in 6 Stunden ist es trocken.'); }
-      return g.ui.toast('Häng rohes Fleisch auf (E mit Fleisch im Rucksack).');
+      if (ready) { if (!g.add('trockenfleisch', ready)) return; s.dry = s.dry.filter(x => x < 6); this.refresh(s); g.progress.add(4 * ready, T('Trockenfleisch')); return; }
+      if (g.has('fleisch') && s.dry.length < 5) { g.take('fleisch'); s.dry.push(0); this.refresh(s); return g.ui.toast(T('🥓 Fleisch aufgehängt – in 6 Stunden ist es trocken.')); }
+      return g.ui.toast(T('Häng rohes Fleisch auf (E mit Fleisch im Rucksack).'));
     }
     if (s.type === 'fackelhalter') {
-      if (s.fuel > 0) return g.ui.toast('Die Fackel brennt schon.');
-      if (!g.has('feuerzeug')) return g.ui.toast('Du brauchst ein Feuerzeug.');
-      if (s.lit && !g.has('ast')) return g.ui.toast('Zum Neu-Anzünden brauchst du einen Ast.');
-      if (s.lit) g.take('ast'); s.lit = 1; s.fuel = 8; A.sfx('fire'); return g.ui.toast('🔥 Die Fackel brennt (8 Stunden).');
+      if (s.fuel > 0) return g.ui.toast(T('Die Fackel brennt schon.'));
+      if (!g.has('feuerzeug')) return g.ui.toast(T('Du brauchst ein Feuerzeug.'));
+      if (s.lit && !g.has('ast')) return g.ui.toast(T('Zum Neu-Anzünden brauchst du einen Ast.'));
+      if (s.lit) g.take('ast'); s.lit = 1; s.fuel = 8; A.sfx('fire'); return g.ui.toast(T('🔥 Die Fackel brennt (8 Stunden).'));
     }
-    if (s.type === 'baustrahler') { if (!g.has('batterien')) return g.ui.toast('Der Baustrahler braucht Batterien (AA).'); g.take('batterien'); s.charge = Math.min(40, s.charge + 30); A.sfx('switch'); return g.ui.toast('🔋 Batterien drin – der Strahler leuchtet die nächsten Nächte.'); }
-    if (s.type === 'solarlader') { if (s.charge < 1) return g.ui.toast('Noch nicht voll – es braucht Tageslicht.'); if (!g.has('taschenlampe')) return g.ui.toast('Du hast keine Taschenlampe.');
-      s.charge = 0; g.S.battery = 100; A.sfx('switch'); return g.ui.toast('🔦 Taschenlampe voll aufgeladen.', 'good'); }
+    if (s.type === 'baustrahler') { if (!g.has('batterien')) return g.ui.toast(T('Der Baustrahler braucht Batterien (AA).')); g.take('batterien'); s.charge = Math.min(40, s.charge + 30); A.sfx('switch'); return g.ui.toast(T('🔋 Batterien drin – der Strahler leuchtet die nächsten Nächte.')); }
+    if (s.type === 'solarlader') { if (s.charge < 1) return g.ui.toast(T('Noch nicht voll – es braucht Tageslicht.')); if (!g.has('taschenlampe')) return g.ui.toast(T('Du hast keine Taschenlampe.'));
+      s.charge = 0; g.S.battery = 100; A.sfx('switch'); return g.ui.toast(T('🔦 Taschenlampe voll aufgeladen.'), 'good'); }
     g.ui.toast(this.verb(t));
   }
   chestMove(dir, i) {       // dir 1: backpack → storage, −1: storage → backpack
     const g = this.g, s = this.chest; if (!s) return; const cap = STORE[s.type];
     if (dir > 0) { const it = g.S.inv[i]; if (!it) return; let slot = s.inv.find(x => x.id === it.id && x.n < 30);
-      if (!slot) { if (s.inv.length >= cap) return g.ui.toast('Hier ist kein Platz mehr.', 'warn'); slot = { id: it.id, n: 0 }; if (it.f !== undefined) slot.f = it.f; s.inv.push(slot); }
+      if (!slot) { if (s.inv.length >= cap) return g.ui.toast(T('Hier ist kein Platz mehr.'), 'warn'); slot = { id: it.id, n: 0 }; if (it.f !== undefined) slot.f = it.f; s.inv.push(slot); }
       else if (it.f !== undefined) slot.f = Math.min(slot.f ?? it.f, it.f);
       const k = Math.min(it.n, 30 - slot.n); slot.n += k; g.take(it.id, k); }
     else { const it = s.inv[i]; if (!it) return; if (g.add(it.id, it.n, true, it.f)) s.inv.splice(i, 1); }
@@ -366,13 +367,13 @@ export class Build {
   // ---------------------------------------------------------------- trees
   chopTree(t) {
     const g = this.g;
-    if (t.fixed || t.kind === 'Linde') return g.ui.toast('Diesen mächtigen Baum lässt du lieber stehen.');
+    if (t.fixed || t.kind === 'Linde') return g.ui.toast(T('Diesen mächtigen Baum lässt du lieber stehen.'));
     if (t.kind === 'stumpf') return;
     t.hits = (t.hits || 0) + 1; g.audio.sfx('chop'); g.S.stats.stamina = Math.max(0, g.S.stats.stamina - 3);
     const need = this.chopsNeeded();
     if (t.hits < need) return g.ui.toast(`🪓 ${t.hits}/${need}`);
     const P = g.P, dir = new THREE.Vector3(t.x - P.pos.x, 0, t.z - P.pos.z).normalize();
-    g.progress.add(15, 'Baum gefällt'); g.progress.stat('trees'); this.fell(t, dir, true);
+    g.progress.add(15, T('Baum gefällt')); g.progress.stat('trees'); this.fell(t, dir, true);
   }
   chopsNeeded() { return this.g.has('saege') || this.g.has('profiaxt') ? 3 : 6; }
   fell(t, dir, animate) {
@@ -390,7 +391,7 @@ export class Build {
       const inv = piv.matrixWorld.clone().invert();
       for (const p of t.parts) { const m = new THREE.Mesh(p.im.geometry, p.im.material); m.matrixAutoUpdate = false; m.matrix.copy(inv).multiply(p.m); m.castShadow = true; piv.add(m); }
       this.falling.push({ piv, axis: new THREE.Vector3(dir.z, 0, -dir.x), a: 0, w: .05, t, rec });
-      g.audio.sfx('creak'); g.ui.toast('🌲 Baum fällt!');
+      g.audio.sfx('creak'); g.ui.toast(T('🌲 Baum fällt!'));
     } else if (rec.left > 0) this.addLog(t, rec);
   }
   addLog(t, rec) {
@@ -400,11 +401,11 @@ export class Build {
     const log = { obj: o, t, rec, left: rec.left, hits: 0 }; log.col = this.W.addCollider(o); this.logs.push(log);
   }
   chopLog(L) {
-    const g = this.g; if (!g.hasAxe()) return g.ui.toast('Dafür brauchst du eine Axt.');
+    const g = this.g; if (!g.hasAxe()) return g.ui.toast(T('Dafür brauchst du eine Axt.'));
     L.hits++; g.audio.sfx('chop'); g.S.stats.stamina = Math.max(0, g.S.stats.stamina - 2);
     if (L.hits < (this.chopsNeeded() < 6 ? 2 : 3)) return;
-    L.hits = 0; if (!g.add('stamm', 1, true)) return; g.add('ast', 1, true); L.left--; L.rec.left = L.left; g.progress.add(3, 'Holz');
-    g.ui.toast(`+ 🪵 Baumstamm, + Ast${L.left ? ` (noch ${L.left})` : ''}`);
+    L.hits = 0; if (!g.add('stamm', 1, true)) return; g.add('ast', 1, true); L.left--; L.rec.left = L.left; g.progress.add(3, T('Holz'));
+    g.ui.toast(L.left ? T('+ 🪵 Baumstamm, + Ast (noch {n})', { n: L.left }) : T('+ 🪵 Baumstamm, + Ast'));
     if (L.left <= 0) { this.scene.remove(L.obj); this.W.removeCollider(L.col); this.logs.splice(this.logs.indexOf(L), 1); }
   }
 
@@ -470,7 +471,7 @@ export class Build {
       else if (s.type === 'solarlader') s.charge = Math.min(1, s.charge + hours * (1 - dark) * .12);
       else if (s.type === 'bewegungsmelder' && this.alarmT < 0) {
         const a = g.life.animals.find(a => a.state !== 'dead' && ['wolf', 'boar', 'bear'].includes(a.kind) && a.pos.distanceTo(s.grp.position) < 20);
-        if (a) { this.alarmT = 40; g.audio.sfx('alarm'); g.ui.toast(`📡 Bewegungsmelder: ${{ wolf: 'Wolf', boar: 'Wildschwein', bear: 'Bär' }[a.kind]} in der Nähe!`, 'warn'); }
+        if (a) { this.alarmT = 40; g.audio.sfx('alarm'); g.ui.toast(T('📡 Bewegungsmelder: {animal} in der Nähe!', { animal: { wolf: T('Wolf'), boar: T('Wildschwein'), bear: T('Bär') }[a.kind] }), 'warn'); }
       }
       if (s.light) {               // lights: when they burn / shine
         const mode = LIGHTS[s.type][2]; let on = false;

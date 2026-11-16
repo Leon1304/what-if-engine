@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Waldtank – Überleben im Nordwald</title>
+<title data-t="">Northwood – Überleben im Nordwald</title>
 <style>
   :root { --fg: #f3efe4; --mut: #b9b3a3; --bg: rgba(18, 20, 18, .72); --acc: #e2a83c; --good: #7fcf7a; --bad: #e0553f; }
   * { box-sizing: border-box; }
@@ -69,7 +69,7 @@
   .book { display: grid; grid-template-columns: 215px 1fr; height: min(660px, 84vh); }
   #book.panel { overflow: hidden; max-height: none; }
   .book nav { background: linear-gradient(90deg, #4a3423, #5b402b); padding: 18px 10px; display: flex; flex-direction: column; gap: 4px; border-right: 3px solid #2b1d12; }
-  .book nav::before { content: "📖 Survival-Handbuch"; color: #f1dfb9; font-weight: 800; font-size: 15px; padding: 0 8px 12px; }
+  .book nav::before { content: var(--t-book, "📖 Survival-Handbuch"); color: #f1dfb9; font-weight: 800; font-size: 15px; padding: 0 8px 12px; }
   .book nav button { text-align: left; background: transparent; color: #e8d3aa; padding: 8px 10px; font-size: 14px; border-radius: 7px; margin: 0; }
   .book nav button.on { background: #f3e7c9; color: #3b2a1c; }
   .book article { background: #f3e7c9 linear-gradient(90deg, rgba(0,0,0,.08), transparent 4%); color: #2e2416; padding: 24px 30px 14px; overflow: hidden; min-height: 0;
@@ -130,7 +130,7 @@
   @media (max-width: 700px) { #bars { width: 160px; } #quest { max-width: 60vw; font-size: 13px; } .slot { width: 44px; height: 44px; } }
   /* creative mode, boss, album, diary, Kurt's order, rare items */
   body.creative #bars, body.creative #lvl, body.creative #xpbox { display: none; }
-  body.creative #bookhint::before { content: "🎨 Kreativ · K Menü · V fliegen · "; color: #ffd77a; }
+  body.creative #bookhint::before { content: var(--t-creative, "🎨 Kreativ · K Menü · V fliegen · "); color: #ffd77a; }
   #bossbar { position: absolute; left: 50%; top: 46px; transform: translateX(-50%); width: min(420px, 70vw); display: none; text-align: center; font-weight: 800; color: #ffd9b0; text-shadow: 0 1px 3px #000; font-size: 14px; }
   #bossbar div { height: 10px; margin-top: 3px; border-radius: 5px; background: rgba(0,0,0,.55); border: 1px solid rgba(255,200,150,.5); overflow: hidden; } #bossbar i { display: block; height: 100%; background: linear-gradient(90deg, #a3241a, #e0553f); transition: width .2s; }
   .cell.rare { box-shadow: inset 0 0 0 2px #e2b84a, 0 0 12px rgba(226,184,74,.35); background: linear-gradient(160deg, rgba(226,184,74,.18), rgba(255,255,255,.05)); } .cell .rr { position: absolute; right: 8px; bottom: 6px; font-size: 10px; color: #ffd77a; }
@@ -160,57 +160,63 @@
   <div id="toasts"></div>
   <div id="marker"><div></div><span></span></div>
   <div id="bars">
-    <div class="bar" title="Gesundheit">❤️<div class="tr"><div class="fl" id="bar-health"></div></div></div>
-    <div class="bar" title="Hunger">🍗<div class="tr"><div class="fl" id="bar-hunger"></div></div></div>
-    <div class="bar" title="Durst">💧<div class="tr"><div class="fl" id="bar-thirst"></div></div></div>
-    <div class="bar" title="Wärme">🌡️<div class="tr"><div class="fl" id="bar-warmth"></div></div></div>
-    <div class="bar" title="Ausdauer">⚡<div class="tr"><div class="fl" id="bar-stamina"></div></div></div>
+    <div class="bar" title="Gesundheit" data-t-title>❤️<div class="tr"><div class="fl" id="bar-health"></div></div></div>
+    <div class="bar" title="Hunger" data-t-title>🍗<div class="tr"><div class="fl" id="bar-hunger"></div></div></div>
+    <div class="bar" title="Durst" data-t-title>💧<div class="tr"><div class="fl" id="bar-thirst"></div></div></div>
+    <div class="bar" title="Wärme" data-t-title>🌡️<div class="tr"><div class="fl" id="bar-warmth"></div></div></div>
+    <div class="bar" title="Ausdauer" data-t-title>⚡<div class="tr"><div class="fl" id="bar-stamina"></div></div></div>
   </div>
   <div id="pins"></div><div id="scope"></div><div id="compass"></div><div id="sidequest"></div><div id="lvl"></div><div id="xpbox"></div>
-  <div id="selname"></div><div id="hotbar"></div><div id="bookhint"><kbd>B</kbd> Handbuch · <kbd>G</kbd> Bauen</div><div id="weaponhud"></div><div id="buildhint"></div>
-  <div id="frost"></div><div id="vignette"></div><div id="fade"></div><div id="bossbar">🐻 Der alte Grimm<div><i></i></div></div>
+  <div id="selname"></div><div id="hotbar"></div><div id="bookhint" data-t=""><kbd>B</kbd> Handbuch · <kbd>G</kbd> Bauen</div><div id="weaponhud"></div><div id="buildhint"></div>
+  <div id="frost"></div><div id="vignette"></div><div id="fade"></div><div id="bossbar"><span data-t="">🐻 Der alte Grimm</span><div><i></i></div></div>
 </div>
 
-<div class="ov show" id="loading"><div class="card"><h1>WALDTANK<small>Überleben im Nordwald</small></h1><p id="loadtext">Lade …</p><div class="bar"><div id="loadbar"></div></div></div></div>
+<div class="ov show" id="loading"><div class="card"><h1>NORTHWOOD<small>Überleben im Nordwald</small></h1><p id="loadtext">Lade …</p><div class="bar"><div id="loadbar"></div></div></div></div>
+<script>/* loading screen in the chosen language before the modules load (same order as js/i18n.js: ?lang › saved › browser › English) */
+(function () { var l; try { l = new URLSearchParams(location.search).getAll('lang').pop() || localStorage.getItem('northwood_lang'); } catch (e) { }
+  if (l !== 'de' && l !== 'en') { l = 'en'; var n = navigator.languages || [navigator.language]; for (var i = 0; i < n.length; i++) { var c = String(n[i]).slice(0, 2).toLowerCase(); if (c === 'de' || c === 'en') { l = c; break; } } }
+  if (l === 'en') (function () { var c = document.querySelector('#loading .card'); if (!c) return; c.querySelector('small').textContent = 'Survive the North Woods'; document.getElementById('loadtext').textContent = 'Loading …'; })(); })();</script>
 
 <div class="ov" id="start"><div class="card">
-  <h1>WALDTANK<small>Überleben im Nordwald</small></h1>
-  <p class="story">Herbst, später Nachmittag. Mitten im Nordwald bleibt dein Auto liegen. Kein Netz. Ein Stück die Straße hinauf steht eine Tankstelle – dunkel und verlassen. Bald wird es Nacht, kalt … und du bist nicht allein im Wald.</p>
-  <button id="btn-new">Neues Spiel</button><button id="btn-continue" class="sec">Weiterspielen</button><button id="btn-creative" class="sec" title="Kein Hunger, kein Schaden, bauen und herstellen ohne Material – zum Ausprobieren">🎨 Kreativ-Modus</button><button id="btn-book-start" class="sec">📖 Handbuch</button>
-  <div class="diff"><b>Schwierigkeit:</b> <button class="sec" data-diff="aus">Keine Feinde</button><button class="sec" data-diff="leicht">Leicht</button><button class="sec" data-diff="mittel">Mittel</button><button class="sec" data-diff="schwer">Schwer</button></div>
+  <h1>NORTHWOOD<small data-t="">Überleben im Nordwald</small></h1>
+  <p class="story" data-t="">Herbst, später Nachmittag. Mitten im Nordwald bleibt dein Auto liegen. Kein Netz. Ein Stück die Straße hinauf steht eine Tankstelle – dunkel und verlassen. Bald wird es Nacht, kalt … und du bist nicht allein im Wald.</p>
+  <button id="btn-new" data-t="">Neues Spiel</button><button id="btn-continue" class="sec" data-t="">Weiterspielen</button><button id="btn-creative" class="sec" title="Kein Hunger, kein Schaden, bauen und herstellen ohne Material – zum Ausprobieren" data-t data-t-title>🎨 Kreativ-Modus</button><button id="btn-book-start" class="sec" data-t="">📖 Handbuch</button>
+  <div class="diff"><b data-t="">Schwierigkeit:</b> <button class="sec" data-diff="aus" data-t="">Keine Feinde</button><button class="sec" data-diff="leicht" data-t="">Leicht</button><button class="sec" data-diff="mittel" data-t="">Mittel</button><button class="sec" data-diff="schwer" data-t="">Schwer</button></div>
+  <div class="diff lang"><b>Sprache / Language:</b> <span id="lang-start"></span></div>
   <div class="keys">
-    <b>WASD · Maus</b><span>laufen · umschauen</span><b>Shift · Leertaste · Strg</b><span>sprinten · springen · ducken</span>
-    <b>E</b><span>benutzen, öffnen, aufheben</span><b>F</b><span>Taschenlampe</span><b>Tab / C</b><span>Rucksack &amp; Herstellen</span>
-    <b>1–5 · Mausrad · Q</b><span>Schnellleiste wählen · essen/trinken/benutzen</span><b>M</b><span>Karte (wenn du eine hast)</span>
-    <b>Z (halten)</b><span>Zeit vergehen lassen – drinnen mit Strom, am Feuer, im Unterstand, am Bett oder mit Schlafsack</span>
-    <b>Linksklick · R · rechte Maustaste</b><span>Waffe: schießen · nachladen · zielen — ohne Waffe: Taschenlampe an · aus (Fernglas)</span><b>G · X</b><span>Baumenü · Gebautes abbauen</span><b>N · H</b><span>Wegmarker setzen · Bello: „Such!“</span>
-    <b>B · J</b><span>Handbuch: alle Tasten, Rezepte, Tipps · Tagebuch &amp; Funk</span><b>Esc</b><span>Pause, Speichern, Schwierigkeit</span>
-    <b>🎨 Kreativ</b><span>K Kreativ-Menü (Gegenstände, Zeit, Wetter, Ereignisse, Hinreisen) · V fliegen</span>
+    <b data-t="">WASD · Maus</b><span data-t="">laufen · umschauen</span><b data-t="">Shift · Leertaste · Strg</b><span data-t="">sprinten · springen · ducken</span>
+    <b>E</b><span data-t="">benutzen, öffnen, aufheben</span><b>F</b><span data-t="">Taschenlampe</span><b>Tab / C</b><span data-t="">Rucksack &amp; Herstellen</span>
+    <b data-t="">1–5 · Mausrad · Q</b><span data-t="">Schnellleiste wählen · essen/trinken/benutzen</span><b>M</b><span data-t="">Karte (wenn du eine hast)</span>
+    <b data-t="">Z (halten)</b><span data-t="">Zeit vergehen lassen – drinnen mit Strom, am Feuer, im Unterstand, am Bett oder mit Schlafsack</span>
+    <b data-t="">Linksklick · R · rechte Maustaste</b><span data-t="">Waffe: schießen · nachladen · zielen — ohne Waffe: Taschenlampe an · aus (Fernglas)</span><b>G · X</b><span data-t="">Baumenü · Gebautes abbauen</span><b>N · H</b><span data-t="">Wegmarker setzen · Bello: „Such!“</span>
+    <b>B · J</b><span data-t="">Handbuch: alle Tasten, Rezepte, Tipps · Tagebuch &amp; Funk</span><b>Esc</b><span data-t="">Pause, Speichern, Schwierigkeit, Sprache</span>
+    <b data-t="">🎨 Kreativ</b><span data-t="">K Kreativ-Menü (Gegenstände, Zeit, Wetter, Ereignisse, Hinreisen) · V fliegen</span>
   </div>
 </div></div>
 
 <div class="ov" id="pause"><div class="card">
-  <h2>Pause</h2>
-  <button id="btn-resume">Weiter</button><button id="btn-book" class="sec">📖 Handbuch (B)</button><button id="btn-badges" class="sec">🏅 Erfolge &amp; Statistik</button><button id="btn-restart" class="sec">Neu beginnen</button>
-  <h2>Spielstand</h2><div id="slots"></div>
-  <button class="sec" id="btn-export">⬇️ Spielstand als Datei sichern</button><button class="sec" id="btn-import">⬆️ Datei laden</button><input type="file" id="importfile" accept=".json,application/json" hidden>
-  <h2>Schwierigkeit</h2><div class="diff"><button class="sec" data-diff="aus">Keine Feinde</button><button class="sec" data-diff="leicht">Leicht</button><button class="sec" data-diff="mittel">Mittel</button><button class="sec" data-diff="schwer">Schwer</button></div>
-  <h2>Orte <small id="found-n"></small></h2><ul id="found"></ul>
-  <h2>Grafik</h2><button class="sec" data-q="hoch">Hoch</button><button class="sec" data-q="mittel">Mittel</button><button class="sec" data-q="niedrig">Niedrig</button>
-  <h2>Bildrate</h2><button class="sec" data-fps="30">30 FPS (Akku)</button><button class="sec" data-fps="60">60 FPS</button><button class="sec" data-fps="0">Unbegrenzt</button>
-  <h2>Hilfen</h2><button class="sec" id="btn-hl">✨ Gegenstände hervorheben: an</button>
-  <p class="hint">Automatisch gespeichert wird alle 20 Sekunden in diesem Browser. Spielstände bleiben bei Updates erhalten – neue Orte und Gegenstände kommen einfach dazu. Mit „Als Datei sichern“ hast du eine Kopie auf deinem Rechner.</p>
+  <h2 data-t="">Pause</h2>
+  <button id="btn-resume" data-t="">Weiter</button><button id="btn-book" class="sec" data-t="">📖 Handbuch (B)</button><button id="btn-badges" class="sec" data-t="">🏅 Erfolge &amp; Statistik</button><button id="btn-restart" class="sec" data-t="">Neu beginnen</button>
+  <h2 data-t="">Spielstand</h2><div id="slots"></div>
+  <button class="sec" id="btn-export" data-t="">⬇️ Spielstand als Datei sichern</button><button class="sec" id="btn-import" data-t="">⬆️ Datei laden</button><input type="file" id="importfile" accept=".json,application/json" hidden>
+  <h2 data-t="">Schwierigkeit</h2><div class="diff"><button class="sec" data-diff="aus" data-t="">Keine Feinde</button><button class="sec" data-diff="leicht" data-t="">Leicht</button><button class="sec" data-diff="mittel" data-t="">Mittel</button><button class="sec" data-diff="schwer" data-t="">Schwer</button></div>
+  <h2><span data-t="">Orte</span> <small id="found-n"></small></h2><ul id="found"></ul>
+  <h2 data-t="">Grafik</h2><button class="sec" data-q="hoch" data-t="">Hoch</button><button class="sec" data-q="mittel" data-t="">Mittel</button><button class="sec" data-q="niedrig" data-t="">Niedrig</button>
+  <h2 data-t="">Bildrate</h2><button class="sec" data-fps="30" data-t="">30 FPS (Akku)</button><button class="sec" data-fps="60">60 FPS</button><button class="sec" data-fps="0" data-t="">Unbegrenzt</button>
+  <h2 data-t="">Hilfen</h2><button class="sec" id="btn-hl">✨ Gegenstände hervorheben: an</button>
+  <h2>Sprache / Language</h2><div class="diff lang" id="lang-pause"></div>
+  <p class="hint" data-t="">Automatisch gespeichert wird alle 20 Sekunden in diesem Browser. Spielstände bleiben bei Updates erhalten – neue Orte und Gegenstände kommen einfach dazu. Mit „Als Datei sichern“ hast du eine Kopie auf deinem Rechner.</p>
 </div></div>
 
-<div class="ov" id="dead"><div class="card"><h1 style="color:var(--bad)">Du bist gestorben<small id="deadcause"></small></h1>
-  <button id="btn-dead-load">Letzten Spielstand laden</button><button id="btn-dead-new" class="sec">Neues Spiel</button></div></div>
-<div class="ov" id="win"><div class="card"><h1 style="color:var(--good)">Gerettet!<small>Im Morgengrauen rumpelt der Geländewagen der Bergwacht auf den Hof.</small></h1>
-  <p id="winstats"></p><button id="btn-win-free">Weiterspielen (freies Spiel)</button><button id="btn-win-new" class="sec">Noch einmal</button></div></div>
+<div class="ov" id="dead"><div class="card"><h1 style="color:var(--bad)"><span data-t="">Du bist gestorben</span><small id="deadcause"></small></h1>
+  <button id="btn-dead-load" data-t="">Letzten Spielstand laden</button><button id="btn-dead-new" class="sec" data-t="">Neues Spiel</button></div></div>
+<div class="ov" id="win"><div class="card"><h1 style="color:var(--good)"><span data-t="">Gerettet!</span><small data-t="">Im Morgengrauen rumpelt der Geländewagen der Bergwacht auf den Hof.</small></h1>
+  <p id="winstats"></p><button id="btn-win-free" data-t="">Weiterspielen (freies Spiel)</button><button id="btn-win-new" class="sec" data-t="">Noch einmal</button></div></div>
 
 <div class="panel" id="invpanel"></div>
 <div class="panel" id="reader"></div>
 <div class="panel" id="book"></div>
-<div class="panel" id="mappanel"><canvas id="mapcanvas" width="440" height="680"></canvas><p class="hint">Klick = Wegmarker setzen / löschen · M / Esc schließen</p></div>
+<div class="panel" id="mappanel"><canvas id="mapcanvas" width="440" height="680"></canvas><p class="hint" data-t="">Klick = Wegmarker setzen / löschen · M / Esc schließen</p></div>
 <div class="panel" id="buildpanel"></div>
 <div class="panel" id="tradepanel"></div>
 <div class="panel" id="codepanel"></div>

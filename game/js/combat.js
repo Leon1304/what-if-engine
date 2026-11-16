@@ -7,6 +7,7 @@
 import * as THREE from 'three';
 import { ITEMS, WEAPONS } from './items.js';
 import { KIND } from './life.js';
+import { T } from './i18n.js';
 
 const ray = new THREE.Ray(), tmp = new THREE.Vector3(), dir = new THREE.Vector3(), c1 = new THREE.Vector3();
 const HOLD = { messer: [.22, -.24, -.42], pistole: [.2, -.2, -.42], schrotflinte: [.25, -.27, -.2], gewehr: [.24, -.26, -.18], bogen: [.12, -.12, -.5], taschenlampe: [.2, -.2, -.38], angel: [.22, -.3, -.3] };
@@ -32,7 +33,7 @@ export class Combat {
     if (s === 'angel') return this.fish();
     if (s === 'fernglas') return;
     if (!g.has('taschenlampe')) return;
-    if (g.S.battery <= 0) return g.ui.toast('Batterie leer.');
+    if (g.S.battery <= 0) return g.ui.toast(T('Batterie leer.'));
     if (!g.S.flags.flashOn) { g.S.flags.flashOn = true; g.audio.sfx('switch'); }
   }
   secondary() {                       // true = handled (else: aim with a weapon / binoculars, see main.js)
@@ -47,23 +48,23 @@ export class Combat {
     const g = this.g, W = g.W;
     if (this.cast) {
       if (this.cast.state === 'bite') { const k = this.species(this.cast);
-        if (g.add(k, 1, true)) { g.progress.stat('fish'); g.progress.stat('fish_' + k); if (this.cast.ice) g.S.flags.iceFish = 1; g.progress.add(k === 'goldforelle' ? 40 : k === 'hecht' ? 16 : 10, 'Fisch'); g.audio.sfx(k === 'goldforelle' ? 'badge' : 'pickup');
-          g.ui.toast({ fisch: '🐟 Gefangen: eine Forelle!', saibling: '🐟 Gefangen: ein Saibling!', hecht: '🐟 Ein Hecht – was für ein Brocken!', goldforelle: '🐠 Eine GOLDFORELLE! So eine sieht man selten. ★' }[k], 'good'); } }
-      else g.ui.toast('Eingeholt – nichts dran.');
+        if (g.add(k, 1, true)) { g.progress.stat('fish'); g.progress.stat('fish_' + k); if (this.cast.ice) g.S.flags.iceFish = 1; g.progress.add(k === 'goldforelle' ? 40 : k === 'hecht' ? 16 : 10, T('Fisch')); g.audio.sfx(k === 'goldforelle' ? 'badge' : 'pickup');
+          g.ui.toast({ fisch: T('🐟 Gefangen: eine Forelle!'), saibling: T('🐟 Gefangen: ein Saibling!'), hecht: T('🐟 Ein Hecht – was für ein Brocken!'), goldforelle: T('🐠 Eine GOLDFORELLE! So eine sieht man selten. ★') }[k], 'good'); } }
+      else g.ui.toast(T('Eingeholt – nichts dran.'));
       return this.reel();
     }
     const fwd = g.P.forward(new THREE.Vector3()), ice = g.ice?.castPoint(this.cam.position, fwd);
-    if (ice === false) return g.ui.toast('🧊 Das Eis ist zu dick – hack erst ein Eisloch (E auf dem Eis, mit Axt oder Spaten) und ziel dann hinein.');
+    if (ice === false) return g.ui.toast(T('🧊 Das Eis ist zu dick – hack erst ein Eisloch (E auf dem Eis, mit Axt oder Spaten) und ziel dann hinein.'));
     const rc = new THREE.Raycaster(this.cam.position, fwd, 0, 16), h = ice ? { point: ice.p, object: { name: ice.lake } } : rc.intersectObjects(W.waterMeshes, true)[0];
-    if (!h) return g.ui.toast('Ziel aufs Wasser – Bach oder Waldsee.');
-    const wall = ice ? null : W.rayHit(this.cam.position, rc.ray.direction, h.distance); if (wall) return g.ui.toast('Da ist etwas im Weg.');
+    if (!h) return g.ui.toast(T('Ziel aufs Wasser – Bach oder Waldsee.'));
+    const wall = ice ? null : W.rayHit(this.cam.position, rc.ray.direction, h.distance); if (wall) return g.ui.toast(T('Da ist etwas im Weg.'));
     const pose = this.g.W.bp.pose ? this.g.W.bp.pose.clone(true) : new THREE.Mesh(new THREE.SphereGeometry(.05), new THREE.MeshBasicMaterial({ color: '#d23a2a' }));
     const grp = new THREE.Group(); grp.add(pose); grp.position.copy(h.point); g.scene.add(grp);
     const lake = ['See', 'Bergsee'].includes(h.object.name) || ['See', 'Bergsee'].includes(h.object.parent?.name);
     // which water: the mountain lake (char), the forest lake (trout or pike) or the creek (trout) – decided by where the float lands
     const bx = h.point.x, by = -h.point.z, water = g.region() === 'berg' ? 'berg' : Math.hypot(bx + 86, by - 18) < 30 ? 'see' : 'bach';
     this.cast = { grp, state: 'wait', t: (3 + Math.random() * 8 * (g.sky.rainAmount > .3 ? .6 : 1) * (lake || water !== 'bach' ? .8 : 1)) * (ice ? .75 : 1), from: g.P.pos.clone(), y: h.point.y, water, ice: !!ice };
-    g.audio.sfx('cast'); g.ui.toast('🎣 Ausgeworfen … warte, bis die Pose zuckt.');
+    g.audio.sfx('cast'); g.ui.toast(T('🎣 Ausgeworfen … warte, bis die Pose zuckt.'));
   }
   species(c) {
     const r = Math.random(); if (r < (c.ice ? .06 : .03)) return 'goldforelle';
@@ -76,8 +77,8 @@ export class Combat {
     const c = this.cast; if (!c) return; const g = this.g;
     if (this.selected() !== 'angel' || g.P.pos.distanceTo(c.from) > 3) { this.reel(); return; }
     c.t -= dt; const now = performance.now() / 1000;
-    if (c.state === 'wait') { c.grp.position.y = c.y + .01 * Math.sin(now * 2); if (c.t <= 0) { c.state = 'bite'; c.t = 1.3; g.audio.sfx('splash'); g.ui.toast('❗ Biss! Jetzt klicken!', 'warn'); } }
-    else if (c.state === 'bite') { c.grp.position.y = c.y - .06 - .04 * Math.abs(Math.sin(now * 18)); if (c.t <= 0) { c.state = 'wait'; c.t = 4 + Math.random() * 8; g.ui.toast('Zu langsam – der Fisch ist weg.'); } }
+    if (c.state === 'wait') { c.grp.position.y = c.y + .01 * Math.sin(now * 2); if (c.t <= 0) { c.state = 'bite'; c.t = 1.3; g.audio.sfx('splash'); g.ui.toast(T('❗ Biss! Jetzt klicken!'), 'warn'); } }
+    else if (c.state === 'bite') { c.grp.position.y = c.y - .06 - .04 * Math.abs(Math.sin(now * 18)); if (c.t <= 0) { c.state = 'wait'; c.t = 4 + Math.random() * 8; g.ui.toast(T('Zu langsam – der Fisch ist weg.')); } }
   }
   model(id) {
     if (this.models[id]) return this.models[id];
@@ -90,13 +91,13 @@ export class Combat {
   hud() {
     const id = this.weapon(); if (!id) return '';
     const w = WEAPONS[id]; if (w.melee) return `${w.name}`;
-    return `${w.name} · ${this.g.S.mag[id] || 0} / ${this.ammoLeft(id)}${this.reloadT > 0 ? ' · lädt …' : ''}`;
+    return `${w.name} · ${this.g.S.mag[id] || 0} / ${this.ammoLeft(id)}${this.reloadT > 0 ? ' · ' + T('lädt …') : ''}`;
   }
   // ammo boxes: picked up → spare rounds (no backpack slot)
-  addAmmo(item) { const [w, n] = ITEMS[item].ammo; this.g.S.ammo[w] = (this.g.S.ammo[w] || 0) + n; this.g.ui.toast(`+ ${n} Schuss für ${WEAPONS[w].name}`); return true; }
+  addAmmo(item) { const [w, n] = ITEMS[item].ammo; this.g.S.ammo[w] = (this.g.S.ammo[w] || 0) + n; this.g.ui.toast(T('+ {n} Schuss für {weapon}', { n, weapon: WEAPONS[w].name })); return true; }
   reload() {
     const id = this.weapon(), g = this.g; if (!id) return; const w = WEAPONS[id]; if (w.melee || this.reloadT > 0) return;
-    const have = this.ammoLeft(id), need = w.mag - (g.S.mag[id] || 0); if (need <= 0) return; if (!have) return g.ui.toast('Keine Munition mehr.', 'warn');
+    const have = this.ammoLeft(id), need = w.mag - (g.S.mag[id] || 0); if (need <= 0) return; if (!have) return g.ui.toast(T('Keine Munition mehr.'), 'warn');
     this.reloadT = w.reload; this.reloadId = id; g.audio.sfx('reload');
   }
   finishReload() {
@@ -108,7 +109,7 @@ export class Combat {
     const w = WEAPONS[id], cam = this.cam;
     if (w.melee) { this.cd = w.cd; this.swing = 1; g.audio.sfx('swing');
       const a = this.pick(cam.position, g.P.forward(dir), w.range, 0); if (a) { this.wound(a, w.dmg, a.hitP); } return true; }
-    if (!(g.S.mag[id] > 0)) { g.audio.sfx('click'); if (this.ammoLeft(id)) this.reload(); else g.ui.toast('Leer – keine Munition.', 'warn'); this.cd = .3; return false; }
+    if (!(g.S.mag[id] > 0)) { g.audio.sfx('click'); if (this.ammoLeft(id)) this.reload(); else g.ui.toast(T('Leer – keine Munition.'), 'warn'); this.cd = .3; return false; }
     g.S.mag[id]--; this.cd = w.cd; this.kick = 1; g.audio.sfx(w.sound);
     if (!w.ammoItem) { this.flash.intensity = 30; this.muzzleT = .06; }
     const f = g.P.forward(new THREE.Vector3()), n = w.pellets || 1, hits = new Map();
@@ -142,8 +143,8 @@ export class Combat {
   wound(a, dmg, p) {
     const g = this.g; this.puff(p || a.pos, '#9a1a12', 8); g.ui.hitmark?.();
     const dead = g.life.hit(a, dmg);
-    if (dead) { g.ui.toast(({ wolf: '🐺 Wolf erlegt.', boar: '🐗 Wildschwein erlegt.', bear: '🐻 Bär erlegt!', deer: a.white ? '🤍 Der weiße Hirsch …' : '🦌 Reh erlegt.', rabbit: '🐇 Kaninchen erlegt.', gams: '🐐 Gämse erlegt.', grimm: '🐻 Der alte Grimm fällt!' }[a.kind] || 'Erlegt.') + (a.kind === 'rabbit' ? ' Aufheben mit E.' : ' Mit Messer zerlegen (E).'), 'good');
-      g.progress.stat('kills'); g.progress.stat('kill_' + a.kind); g.progress.add({ wolf: 25, boar: 20, bear: 60, deer: 15, rabbit: 6, gams: 20, grimm: 400 }[a.kind] || 10, 'Jagd'); }
+    if (dead) { g.ui.toast(({ wolf: T('🐺 Wolf erlegt.'), boar: T('🐗 Wildschwein erlegt.'), bear: T('🐻 Bär erlegt!'), deer: a.white ? T('🤍 Der weiße Hirsch …') : T('🦌 Reh erlegt.'), rabbit: T('🐇 Kaninchen erlegt.'), gams: T('🐐 Gämse erlegt.'), grimm: T('🐻 Der alte Grimm fällt!') }[a.kind] || T('Erlegt.')) + ' ' + (a.kind === 'rabbit' ? T('Aufheben mit E.') : T('Mit Messer zerlegen (E).')), 'good');
+      g.progress.stat('kills'); g.progress.stat('kill_' + a.kind); g.progress.add({ wolf: 25, boar: 20, bear: 60, deer: 15, rabbit: 6, gams: 20, grimm: 400 }[a.kind] || 10, T('Jagd')); }
     return dead;
   }
   puff(p, col, n = 5) {

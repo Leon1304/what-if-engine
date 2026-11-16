@@ -1,5 +1,5 @@
 # Publishes the Spielhalle on GitHub Pages: https://leon1304.github.io/what-if-engine/ (overview) with every game that has a game.json
-# (…/game/ Waldtank, …/insel/ Schwebeinsel, …/fabrik/ Cogtopia, new games appear automatically). Same build as Netlify: tools/site/build.mjs.
+# (…/game/ Northwood, …/insel/ Schwebeinsel, …/fabrik/ Cogtopia, new games appear automatically). Same build as Netlify: tools/site/build.mjs.
 # Only the playable files go online (game.json "files"); Blender scripts, tools and docs stay in the repo.
 name: game-pages
 

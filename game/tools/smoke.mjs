@@ -8,7 +8,7 @@ const browser = await chromium.launch({ args: ['--use-angle=metal', '--enable-gp
 const page = await browser.newPage({ viewport: { width: 960, height: 540 } });
 let errors = 0; page.on('pageerror', e => { console.log('PAGE ERROR', e.message, e.stack?.split('\n')[1]); errors++; });
 page.on('console', m => { if (m.type() === 'error' || m.type() === 'warning') { console.log('console', m.type(), m.text().slice(0, 300)); if (m.type() === 'error') errors++; } });
-await page.goto(`http://localhost:${srv.address().port}/index.html?autostart=1&${process.argv[2] || ''}`);
+await page.goto(`http://localhost:${srv.address().port}/index.html?lang=de&autostart=1&${process.argv[2] || ''}`);
 await page.waitForFunction(() => window.__game, null, { timeout: 120000 });
 await page.waitForTimeout(1500);
 console.log(await page.evaluate(() => { const { game, W } = window.__game; return JSON.stringify({ bp: Object.keys(W.bp).length, trees: W.trees.length, spin: W.spinners.length, inter: W.interactives.length, places: game.places.length }); }));

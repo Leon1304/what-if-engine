@@ -11,7 +11,7 @@ const browser = await chromium.launch({ args: ['--use-angle=metal', '--enable-gp
 const page = await browser.newPage({ viewport: { width: 960, height: 540 } });
 let errors = 0; page.on('pageerror', e => { console.log('PAGE ERROR', e.message, (e.stack || '').split('\n').slice(1, 3).join(' | ')); errors++; });
 page.on('console', m => { if (m.type() === 'error') { console.log('console error', m.text()); errors++; } });
-const URL_ = `http://localhost:${srv.address().port}/index.html?autostart=1&t=12`;
+const URL_ = `http://localhost:${srv.address().port}/index.html?lang=de&autostart=1&t=12`;
 await page.goto(URL_); await page.waitForFunction(() => window.__game, null, { timeout: 120000 });
 await page.evaluate(() => { localStorage.clear(); });
 const helpers = () => {

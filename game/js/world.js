@@ -3,6 +3,7 @@
 // collects interactives, light markers, quest points, trees (trunk circles), ladders and glow groups.
 // Blender axes (x east, y north, z up) → three.js (x, y up, z = −north): B(x, y, z) = (x, z, −y).
 import * as THREE from 'three';
+import { T } from './i18n.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { MeshBVH } from 'three-mesh-bvh';
@@ -73,7 +74,8 @@ export async function loadWorld(scene, onProgress) {
       const pivot = new THREE.Group(); pivot.name = n.name + '_pivot';
       pivot.position.copy(u.pivot_w ? Bv(u.pivot_w) : n.getWorldPosition(new THREE.Vector3()));
       root.add(pivot); pivot.updateMatrixWorld(true); pivot.attach(n);
-      const it = { node: n, pivot, u, name: n.name, open: 0, target: 0, state: {}, label: u.label || n.name };
+      const it = { node: n, pivot, u, name: n.name, open: 0, target: 0, state: {}, label: T(u.label || n.name) };
+      for (const k of ['text', 'found', 'locked_msg', 'item_label']) if (typeof u[k] === 'string') u[k] = T(u[k]);   // notes, signs, messages: translated once on load (i18n.js)
       n.traverse(m => { if (m.isMesh) m.userData._it = it; });
       W.interactives.push(it); if (u.vehicle) W.vehicle.push({ pivot, node: n, name: n.name, it });
       if (MOVING.has(u.interact) || u.blocker) W.movers.push(it);          // blockers (rubble): own collider, vanish when blasted

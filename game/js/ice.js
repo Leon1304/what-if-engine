@@ -2,6 +2,7 @@
 // to the island, the rowing boat is frozen in, the ice is slippery. With an axe or spade (E on the ice) you cut a hole and fish there
 // (pike bite best at the ice hole). The holes are saved (S.iceHoles) and close again when the ice melts in spring.
 import * as THREE from 'three';
+import { T } from './i18n.js';
 import { LAKES } from './regions.js';
 
 const R = { See: 27.6, Bergsee: 11.5 };          // ice disc radius = the water disc (its rim lies under the shore)
@@ -49,7 +50,7 @@ export class Ice {
           if (y > s.y - .1) { P.setPose(new THREE.Vector3(x, y + .05, z), P.yaw); g.safePos = null; break; } }
       }
     }
-    if (announce) g.ui.toast(on ? '🧊 Der Waldsee ist zugefroren – das Eis trägt! Du kannst zur Insel laufen. Mit Axt oder Spaten (E auf dem Eis) ein Loch hacken und eisangeln.' : '💧 Das Eis auf den Seen taut. Das Ruderboot ist wieder frei.', 'good');
+    if (announce) g.ui.toast(on ? T('🧊 Der Waldsee ist zugefroren – das Eis trägt! Du kannst zur Insel laufen. Mit Axt oder Spaten (E auf dem Eis) ein Loch hacken und eisangeln.') : T('💧 Das Eis auf den Seen taut. Das Ruderboot ist wieder frei.'), 'good');
   }
   sheetAt(p, margin = 1) { if (!this.frozen) return null; return this.sheets.find(s => Math.hypot(p.x - s.L.x, -p.z - s.L.y) < s.r - margin) || null; }
   // standing on the ice?
@@ -64,16 +65,16 @@ export class Ice {
   }
   verb(t) {
     const g = this.g, h = t.ice.hole;
-    if (h) return g.combat.selected() === 'angel' ? 'Eisloch – Linksklick: Angel hineinlassen' : 'Eisloch – nimm die Angel in die Hand (1–5) und angle hier';
-    return g.hasAxe() || g.has('spaten') ? '[E] Eisloch hacken (Axt oder Spaten)' : 'Dickes Eis – für ein Eisloch brauchst du eine Axt oder einen Spaten';
+    if (h) return g.combat.selected() === 'angel' ? T('Eisloch – Linksklick: Angel hineinlassen') : T('Eisloch – nimm die Angel in die Hand (1–5) und angle hier');
+    return g.hasAxe() || g.has('spaten') ? T('[E] Eisloch hacken (Axt oder Spaten)') : T('Dickes Eis – für ein Eisloch brauchst du eine Axt oder einen Spaten');
   }
   interact(t) {
-    const g = this.g; if (t.ice.hole) return g.ui.toast('🎣 Angel auswählen und Linksklick: ins Eisloch angeln.');
-    if (!g.hasAxe() && !g.has('spaten')) { g.audio.sfx('error'); return g.ui.toast('Das Eis ist dick. Mit einer Axt oder einem Spaten könntest du ein Loch hacken.'); }
+    const g = this.g; if (t.ice.hole) return g.ui.toast(T('🎣 Angel auswählen und Linksklick: ins Eisloch angeln.'));
+    if (!g.hasAxe() && !g.has('spaten')) { g.audio.sfx('error'); return g.ui.toast(T('Das Eis ist dick. Mit einer Axt oder einem Spaten könntest du ein Loch hacken.')); }
     const p = t.ice.p; g.audio.sfx('chop'); setTimeout(() => g.audio.sfx('chop'), 300); setTimeout(() => g.audio.sfx('splash'), 650);
     this.addHole([+p.x.toFixed(2), +p.z.toFixed(2)]); g.combat.puff(p, '#e8f2f6', 10);
-    if (!g.S.flags.icehole) { g.S.flags.icehole = 1; g.progress.add(15, 'Eisloch'); }
-    g.ui.toast('🕳️ Eisloch gehackt. Angel in die Hand, aufs Loch zielen, Linksklick!', 'good');
+    if (!g.S.flags.icehole) { g.S.flags.icehole = 1; g.progress.add(15, T('Eisloch')); }
+    g.ui.toast(T('🕳️ Eisloch gehackt. Angel in die Hand, aufs Loch zielen, Linksklick!'), 'good');
   }
   addHole([x, z], quiet) {
     const s = this.sheetAt(new THREE.Vector3(x, 0, z), 0); if (!s) return;

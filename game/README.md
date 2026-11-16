@@ -1,4 +1,6 @@
-# Waldtank – Überleben im Nordwald
+# Northwood – Überleben im Nordwald
+
+*Früher „Waldtank“ (so heißt weiter die Tankstelle im Spiel). Sprachen: Englisch und Deutsch, Auswahl im Start- und Pausemenü, siehe [js/lang/README.md](js/lang/README.md).*
 
 Survival-Erkundungsspiel aus der Ich-Perspektive im Low-Poly-Stil: ein Stück Herbstwald (220 × 340 m) mit Landstraße, einer verlassenen
 Tankstelle (mit kompletter Inneneinrichtung), Bach, Hochsitz, Feuerstelle, verlassenem Wohnwagen, Waldsee mit Insel, Forsthaus und Funkstation –

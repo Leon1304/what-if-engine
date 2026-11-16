@@ -1,7 +1,7 @@
 {
-  "title": "Waldtank",
+  "title": "Northwood",
   "tagline": "Überleben im Nordwald – mit verlassener Tankstelle, Dorf und Gebirge",
-  "description": "Survival-Erkundung aus der Ich-Perspektive: Bäume fällen, Hütte bauen, jagen, angeln, Auto reparieren und über den Pass ins Gebirge fahren. Mit Hund Bello, Jahreszeiten und mehreren Gegnerarten.",
+  "description": "Survival-Erkundung aus der Ich-Perspektive: Bäume fällen, Hütte bauen, jagen, angeln, Auto reparieren und über den Pass ins Gebirge fahren. Mit Hund Bello, Jahreszeiten und mehreren Gegnerarten. Auf Englisch oder Deutsch spielbar.",
   "genre": "Survival · Erkundung",
   "tags": [
     "3D",
@@ -28,7 +28,7 @@
   "coverShot": {
     "wait": 9000,
     "click": [
-      "Neues Spiel"
+      "#btn-new"
     ],
     "eval": "(async()=>{await new Promise(r=>setTimeout(r,6000));for (const e of document.body.querySelectorAll('*')) if (e.tagName !== 'CANVAS' && !e.querySelector('canvas')) e.style.visibility = 'hidden';})()",
     "after": 8000

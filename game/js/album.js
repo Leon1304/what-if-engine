@@ -3,17 +3,18 @@
 // Rare items have their own Blender models (bp_r_<id>): the album shows a small picture of each, rendered once into an image.
 import * as THREE from 'three';
 import { ITEMS, RARE } from './items.js';
+import { T } from './i18n.js';
 
 const I = id => [`i_${id}`, ITEMS[id]?.icon || '', ITEMS[id]?.name || id];
 export const ALBUM = [
-  { id: 'tiere', t: '🐾 Tiere', list: [['t_wolf', '🐺', 'Wolf', 'nachts im Wald'], ['t_boar', '🐗', 'Wildschwein', 'tagsüber im Unterholz'], ['t_bear', '🐻', 'Braunbär', 'selten, im Norden'],
-    ['t_deer', '🦌', 'Reh', 'am Waldrand'], ['t_rabbit', '🐇', 'Kaninchen', 'auf Lichtungen'], ['t_gams', '🐐', 'Gämse', 'nur im Gebirge'], ['t_dog', '🐕', 'Bello', 'Kurts Hund'],
-    ['t_weiss', '🤍', 'Weißer Hirsch', 'sehr selten, am Morgen oder Abend'], ['t_grimm', '🐻', 'Der alte Grimm', 'der Riesenbär vom Steinberg']] },
-  { id: 'fische', t: '🐟 Fische', list: [[...I('fisch'), 'Bach und Waldsee'], [...I('saibling'), 'Bergsee'], [...I('hecht'), 'Waldsee, am liebsten am Eisloch'], [...I('goldforelle'), 'selten, überall']] },
-  { id: 'pflanzen', t: '🍄 Pilze & Pflanzen', list: [[...I('steinpilz'), 'im Wald'], [...I('pfifferling'), 'im Wald an den Wegen'], [...I('fliegenpilz'), 'giftig!'], [...I('kraeuter'), 'Wiesen und Wegränder'], [...I('edelweiss'), 'hoch oben im Fels']] },
-  { id: 'funde', t: '💎 Fundstücke', list: [[...I('goldmuenze'), 'Opa Willis Schatz'], [...I('bergkristall'), 'Stollen „Glück auf“'], ...RARE.filter(k => k !== 'goldforelle').map(k => [...I(k), { meteorit: 'nach einem Feuerball', kralle: 'vom alten Grimm' }[k] || 'in einem Versteck'])] },
-  { id: 'natur', t: '🌠 Naturschauspiele', list: [['n_nebel', '🌫️', 'Morgennebel', 'früh am Morgen in den Senken'], ['n_gluehwuermchen', '✨', 'Glühwürmchen', 'warme Nächte, am Wasser'], ['n_sternschnuppe', '🌠', 'Sternschnuppe', 'klare Nächte – nach oben schauen'],
-    ['n_feuerball', '☄️', 'Feuerball', 'ganz selten'], ['n_gewitter', '⛈️', 'Gewitter', ''], ['n_unwetter', '🌪️', 'Unwetter überstanden', 'rechtzeitig Schutz suchen'], ['n_schneesturm', '🌨️', 'Schneesturm überstanden', 'im Winter'], ['n_eis', '🧊', 'Auf dem Eis', 'Winter: der See friert zu']] },
+  { id: 'tiere', t: T('🐾 Tiere'), list: [['t_wolf', '🐺', T('Wolf'), T('nachts im Wald')], ['t_boar', '🐗', T('Wildschwein'), T('tagsüber im Unterholz')], ['t_bear', '🐻', T('Braunbär'), T('selten, im Norden')],
+    ['t_deer', '🦌', T('Reh'), T('am Waldrand')], ['t_rabbit', '🐇', T('Kaninchen'), T('auf Lichtungen')], ['t_gams', '🐐', T('Gämse'), T('nur im Gebirge')], ['t_dog', '🐕', T('Bello'), T('Kurts Hund')],
+    ['t_weiss', '🤍', T('Weißer Hirsch'), T('sehr selten, am Morgen oder Abend')], ['t_grimm', '🐻', T('Der alte Grimm'), T('der Riesenbär vom Steinberg')]] },
+  { id: 'fische', t: T('🐟 Fische'), list: [[...I('fisch'), T('Bach und Waldsee')], [...I('saibling'), T('Bergsee')], [...I('hecht'), T('Waldsee, am liebsten am Eisloch')], [...I('goldforelle'), T('selten, überall')]] },
+  { id: 'pflanzen', t: T('🍄 Pilze & Pflanzen'), list: [[...I('steinpilz'), T('im Wald')], [...I('pfifferling'), T('im Wald an den Wegen')], [...I('fliegenpilz'), T('giftig!')], [...I('kraeuter'), T('Wiesen und Wegränder')], [...I('edelweiss'), T('hoch oben im Fels')]] },
+  { id: 'funde', t: T('💎 Fundstücke'), list: [[...I('goldmuenze'), T('Opa Willis Schatz')], [...I('bergkristall'), T('Stollen „Glück auf“')], ...RARE.filter(k => k !== 'goldforelle').map(k => [...I(k), { meteorit: T('nach einem Feuerball'), kralle: T('vom alten Grimm') }[k] || T('in einem Versteck')])] },
+  { id: 'natur', t: T('🌠 Naturschauspiele'), list: [['n_nebel', '🌫️', T('Morgennebel'), T('früh am Morgen in den Senken')], ['n_gluehwuermchen', '✨', T('Glühwürmchen'), T('warme Nächte, am Wasser')], ['n_sternschnuppe', '🌠', T('Sternschnuppe'), T('klare Nächte – nach oben schauen')],
+    ['n_feuerball', '☄️', T('Feuerball'), T('ganz selten')], ['n_gewitter', '⛈️', T('Gewitter'), ''], ['n_unwetter', '🌪️', T('Unwetter überstanden'), T('rechtzeitig Schutz suchen')], ['n_schneesturm', '🌨️', T('Schneesturm überstanden'), T('im Winter')], ['n_eis', '🧊', T('Auf dem Eis'), T('Winter: der See friert zu')]] },
 ];
 export const ALBUM_IDS = new Set(ALBUM.flatMap(c => c.list.map(e => e[0])));
 
@@ -24,7 +25,7 @@ export class Album {
     if (!ALBUM_IDS.has(id)) return false; const A = this.S.album ||= {};
     if (A[id]) return false; A[id] = this.S.day;
     const e = ALBUM.flatMap(c => c.list).find(x => x[0] === id);
-    if (!quiet && !this.g.S.creative) { this.g.progress.add(8, ''); this.g.ui.toast(`📔 Neu im Sammelalbum: ${e[1]} ${e[2]} (${this.count()}/${ALBUM_IDS.size})`, 'good'); }
+    if (!quiet && !this.g.S.creative) { this.g.progress.add(8, ''); this.g.ui.toast(T('📔 Neu im Sammelalbum: {icon} {name} ({n}/{all})', { icon: e[1], name: e[2], n: this.count(), all: ALBUM_IDS.size }), 'good'); }
     return true;
   }
   has(id) { return !!this.S.album?.[id]; }
@@ -54,12 +55,12 @@ export class Album {
   }
   html() {
     const A = this.S.album || {}, n = this.count(), stash = this.g.W.interactives.filter(it => it.u.stash), open = stash.filter(it => it.state.searched).length;
-    let h = `<p>Was du siehst, fängst und findest, kommt hier hinein: <b>${n}/${ALBUM_IDS.size}</b> Einträge · 🗝️ Geheimverstecke: <b>${open}/${stash.length}</b>. Seltene Fundstücke haben im Rucksack einen goldenen Rahmen.</p>`;
+    let h = `<p>${T('Was du siehst, fängst und findest, kommt hier hinein: <b>{n}/{all}</b> Einträge · 🗝️ Geheimverstecke: <b>{open}/{stash}</b>. Seltene Fundstücke haben im Rucksack einen goldenen Rahmen.', { n, all: ALBUM_IDS.size, open, stash: stash.length })}</p>`;
     for (const c of ALBUM) {
       h += `<h4>${c.t} <small>${this.count(c.id)}/${c.list.length}</small></h4><div class="album">`;
       for (const [id, icon, name, hint] of c.list) {
         const got = A[id], img = got && id.startsWith('i_') && ITEMS[id.slice(2)]?.rare ? this.thumb(id.slice(2)) : null;
-        h += `<div class="alb ${got ? 'on' : ''} ${id.startsWith('i_') && ITEMS[id.slice(2)]?.rare ? 'rare' : ''}">${img ? `<img src="${img}" alt="">` : `<i>${got ? icon : '❔'}</i>`}<b>${got ? name : '???'}</b><small>${got ? `Tag ${got}` : hint}</small></div>`;
+        h += `<div class="alb ${got ? 'on' : ''} ${id.startsWith('i_') && ITEMS[id.slice(2)]?.rare ? 'rare' : ''}">${img ? `<img src="${img}" alt="">` : `<i>${got ? icon : '❔'}</i>`}<b>${got ? name : '???'}</b><small>${got ? T('Tag {d}', { d: got }) : hint}</small></div>`;
       }
       h += `</div>`;
     }

@@ -49,14 +49,14 @@ Länge: jedes Short höchstens 45 s (Story 38–45 s, Erklär/Conspiracy 35–43
 Die Posting-Texte liegen zusätzlich als Textdatei `<slug>-captions.txt` im Release neben MP4 und Cover (Leons Vorgabe ab 15.11.2026): kommt automatisch, sobald `gallery/captions/<slug>.json` gepusht ist (Workflow `captions`, Skript `tools/captions_txt.py`); im Chat den Direktlink mit ausgeben.
 Immer den GitHub-Download-Link mit ausgeben: Release-Seite `https://github.com/Leon1304/what-if-engine/releases/tag/render-<slug>` und direkt `https://github.com/Leon1304/what-if-engine/releases/download/render-<slug>/<slug>.mp4`. Danach `docs/projekt/running-gags.md` und ggf. Themenliste/Trend-Log aktualisieren und committen.
 
-## Spiel „Waldtank“ (game/)
+## Spiel „Northwood“ (game/, früher „Waldtank“)
 Survival-Erkundungsspiel (POV, Low-Poly, Three.js), unabhängig von der Video-Engine. Map entsteht aus Blender-Skripten `game/blender/s*.py`
 (headless: `Blender -b --factory-startup --python game/blender/build_all.py`, dann `node game/blender/shrink.mjs game/map.glb`), Spiel in `game/js/`.
-Vor dem Push `node game/tools/playthrough.mjs` → `PLAYTHROUGH OK`, `node game/tools/routes.mjs` → `ROUTES OK` (Laufwege mit echter Kollision; Möbel nie vor Türen/in Gänge), `node game/tools/pickups.mjs` → `PICKUPS OK` (Gegenstände nie in Füllware/Wänden verstecken) und `node game/tools/features.mjs` → `FEATURES OK`. Spielstände müssen nach Updates weiter laden (alles über Namen/Ids speichern, `SAVE_VERSION` in `game.js`). GitHub Pages (Workflow `game-pages`): https://leon1304.github.io/what-if-engine/game/ — Details `game/README.md`.
+Vor dem Push `node game/tools/playthrough.mjs` → `PLAYTHROUGH OK`, `node game/tools/routes.mjs` → `ROUTES OK` (Laufwege mit echter Kollision; Möbel nie vor Türen/in Gänge), `node game/tools/pickups.mjs` → `PICKUPS OK` (Gegenstände nie in Füllware/Wänden verstecken) und `node game/tools/features.mjs` → `FEATURES OK`. Zweisprachig (Englisch/Deutsch, Leons Vorgabe ab 16.11.2026): jeder sichtbare Text als deutscher Quelltext in `T()` (`game/js/i18n.js`), Englisch in `game/js/lang/en/`; neue Texte immer gleich mit übersetzen, `node game/tools/i18n.mjs` → `I18N OK`. Spielstände müssen nach Updates weiter laden (alles über Namen/Ids speichern, `SAVE_VERSION` in `game.js`). GitHub Pages (Workflow `game-pages`): https://leon1304.github.io/what-if-engine/game/ — Details `game/README.md`.
 Blender nur live öffnen, wenn Leon zuschauen will (Mac wird warm); Viewport dann Solid + Vertex-Farben statt Materialvorschau.
 
 ## Spiel „Schwebeinsel“ (insel/)
-Gemütliches Sechseck-Aufbauspiel (Three.js, Low Poly, alles prozedural in `insel/js/models/`, keine GLB), unabhängig von Engine und Waldtank. Konzept `insel/DESIGN.md`, Aufbau `insel/README.md`.
+Gemütliches Sechseck-Aufbauspiel (Three.js, Low Poly, alles prozedural in `insel/js/models/`, keine GLB), unabhängig von Engine und Northwood. Konzept `insel/DESIGN.md`, Aufbau `insel/README.md`.
 Vor dem Push: `node insel/tools/rules.mjs` → `RULES OK` und `node insel/tools/play.mjs <ordner>` → `PLAY OK` (bei UI-/Kamera-/Leben-Änderungen auch `ui-demo.mjs`, `stage-shots.mjs`, `life-logic.mjs`).
 Spielstände müssen nach Updates laden (`SAVE_VERSION` in `insel/js/game.js`). GitHub Pages (Workflow `game-pages`): https://leon1304.github.io/what-if-engine/insel/
 

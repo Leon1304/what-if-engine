@@ -9,7 +9,7 @@ const srv = http.createServer((q, r) => { const p = path.join(GAME, decodeURICom
 const [out, x0, x1, y0, y1, fz = .25, ppm = 40] = process.argv.slice(2);
 const browser = await chromium.launch({ args: ['--use-angle=metal'] });
 const page = await browser.newPage({ viewport: { width: 640, height: 360 } });
-await page.goto(`http://localhost:${srv.address().port}/index.html?autostart=1&power=1&t=12`);
+await page.goto(`http://localhost:${srv.address().port}/index.html?lang=de&autostart=1&power=1&t=12`);
 await page.waitForFunction(() => window.__game, null, { timeout: 120000 });
 const url = await page.evaluate(([x0, x1, y0, y1, fz, ppm]) => {
   const { game, W, THREE } = window.__game;

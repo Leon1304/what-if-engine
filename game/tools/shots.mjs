@@ -17,7 +17,7 @@ for (const [name, query] of views) {
   page.on('console', m => { if (m.type() === 'error' || m.type() === 'warning') { console.log(`[${name}] ${m.type()}: ${m.text()}`); if (m.type() === 'error') errors++; } });
   page.on('pageerror', e => { console.log(`[${name}] PAGE ERROR: ${e.message}`); errors++; });
   const t0 = Date.now();
-  await page.goto(`http://localhost:${port}/index.html?autostart=1&${query}`);
+  await page.goto(`http://localhost:${port}/index.html?lang=de&autostart=1&${query}`);
   await page.waitForFunction(() => window.__game, null, { timeout: 120000 }).catch(() => console.log(`[${name}] timeout`));
   await page.waitForTimeout(2500);
   const info = await page.evaluate(() => { const g = window.__game; if (!g) return null; const r = g.renderer.info.render;

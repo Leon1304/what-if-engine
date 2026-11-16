@@ -2,6 +2,7 @@
 // the mouse looks around, E = get out onto the jetty, the island or any shore within reach. It is the only way to the island
 // (deep water cannot be waded). The boat stops in shallow water and at the jetty posts. Position and heading are saved (S.boat).
 import * as THREE from 'three';
+import { T } from './i18n.js';
 
 const up = new THREE.Vector3(0, 1, 0), q = new THREE.Quaternion();
 
@@ -12,12 +13,12 @@ export class Boat {
     this.pos = it.pivot.position.clone(); this.yaw = this.a0; this.v = 0; this.turn = 0; this.on = false; this.strokeT = 0; this.t = Math.random() * 6;
   }
   dir(out = new THREE.Vector3()) { return out.set(-Math.sin(this.yaw), 0, -Math.cos(this.yaw)); }
-  verb() { return this.on ? '[E] Aussteigen' : '[E] Ins Ruderboot steigen'; }
+  verb() { return this.on ? T('[E] Aussteigen') : T('[E] Ins Ruderboot steigen'); }
   enter() {
     const g = this.g; if (g.vehicle?.driving) return;
     this.on = true; this.v = 0; g.P.vel.set(0, 0, 0); g.P.yaw = this.yaw; g.P.pitch = -.08; g.audio.sfx('row');
-    g.ui.toast('🚣 W / S rudern, A / D drehen, Maus: umsehen, E: aussteigen (am Steg, an der Insel oder am Ufer).');
-    if (!g.S.flags.rowed) { g.S.flags.rowed = 1; g.progress.add(15, 'Ruderboot'); }
+    g.ui.toast(T('🚣 W / S rudern, A / D drehen, Maus: umsehen, E: aussteigen (am Steg, an der Insel oder am Ufer).'));
+    if (!g.S.flags.rowed) { g.S.flags.rowed = 1; g.progress.add(15, T('Ruderboot')); }
   }
   // a free spot on land (or the jetty) next to the boat – the one you look at first
   landing() {
@@ -33,7 +34,7 @@ export class Boat {
   }
   exit() {
     const g = this.g, p = this.landing();
-    if (!p) { g.audio.sfx('error'); return g.ui.toast('Hier kommst du nicht an Land – ruder näher ans Ufer, an den Steg oder an die Insel.'); }
+    if (!p) { g.audio.sfx('error'); return g.ui.toast(T('Hier kommst du nicht an Land – ruder näher ans Ufer, an den Steg oder an die Insel.')); }
     this.on = false; this.v = 0; g.P.setPose(p, g.P.yaw); g.audio.sfx('row');
   }
   // something in the way at water level? shallow ground or the jetty / posts (static collider)

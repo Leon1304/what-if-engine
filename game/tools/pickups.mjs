@@ -10,7 +10,7 @@ const srv = http.createServer((q, r) => { const p = path.join(GAME, decodeURICom
 const browser = await chromium.launch({ args: ['--use-angle=metal', '--enable-gpu', '--ignore-gpu-blocklist'] });
 const page = await browser.newPage({ viewport: { width: 640, height: 400 } });
 page.on('pageerror', e => console.log('PAGE ERROR', e.message));
-await page.goto(`http://localhost:${srv.address().port}/index.html?autostart=1&t=12&power=1`);
+await page.goto(`http://localhost:${srv.address().port}/index.html?lang=de&autostart=1&t=12&power=1`);
 await page.waitForFunction(() => window.__game, null, { timeout: 120000 });
 const res = await page.evaluate(async () => {
   const { game, player, W, scene, THREE } = window.__game;

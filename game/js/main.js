@@ -1,6 +1,7 @@
-// Waldtank – survival exploration game. Entry point: renderer, loop, input, menus, map.
+// Northwood (formerly „Waldtank“) – survival exploration game. Entry point: renderer, loop, input, menus, map, language picker.
+// Languages: German is the source, every visible text goes through T() (i18n.js); localStorage keys keep the old waldtank_* names so saves survive.
 // URL parameters (for testing): ?autostart=1 (no pointer lock needed), ?t=21.5 (hour), ?at=x,y,z,yaw (Blender coordinates), ?q=n (quest step), ?power=1,
-// ?give=id,id (items), ?diff=aus|leicht|mittel|schwer, ?book=n (handbook chapter)
+// ?give=id,id (items), ?diff=aus|leicht|mittel|schwer, ?book=n (handbook chapter), ?lang=en|de (language)
 import * as THREE from 'three';
 import { loadWorld, B } from './world.js';
 import { Sky } from './sky.js';
@@ -14,10 +15,17 @@ import { Handbook } from './handbook.js';
 import { roadX, creekX } from './life.js';
 import { ITEMS, WEAPONS } from './items.js';
 import { REGIONS, BERG_ROAD_S, BERG_TRAILS, LAKES } from './regions.js';
+import { T, TN, LANG, LANGS, LOCALE, applyDom, setLang } from './i18n.js';
 
 const $ = id => document.getElementById(id);
 const Q = new URLSearchParams(location.search);
 const AUTO = Q.has('autostart');
+// static texts in index.html (data-t) and the two CSS labels, before any menu shows
+applyDom();
+document.documentElement.style.setProperty('--t-book', JSON.stringify(T('📖 Survival-Handbuch')));
+document.documentElement.style.setProperty('--t-creative', JSON.stringify(T('🎨 Kreativ · K Menü · V fliegen · ')));
+const eur = v => v.toLocaleString(LOCALE, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €';
+const hhmm = h => `${String(Math.floor(h)).padStart(2, '0')}:${String(Math.floor(h % 1 * 60)).padStart(2, '0')}`;
 
 const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance', preserveDrawingBuffer: AUTO });
 renderer.setSize(innerWidth, innerHeight);
@@ -43,7 +51,7 @@ function applyQuality(q) {
   document.querySelectorAll('[data-q]').forEach(b => b.classList.toggle('on', b.dataset.q === q));
 }
 
-$('loadtext').textContent = 'Lade Wald …';
+$('loadtext').textContent = T('Lade Wald …');
 const W = await loadWorld(scene, p => $('loadbar').style.width = (p * 100).toFixed(0) + '%');
 const player = new Player(camera, W, audio);
 const game = new Game(scene, camera, W, player, audio, sky, ui);
@@ -76,24 +84,34 @@ function applyDiff(d) { if (!DIFF[d]) return; game.S.diff = d; try { localStorag
   if (d === 'aus') game.life.animals.filter(a => a.kind !== 'deer').forEach(a => game.life.remove(a)); }
 document.querySelectorAll('[data-diff]').forEach(b => b.onclick = () => applyDiff(b.dataset.diff)); applyDiff(game.S.diff);
 try { game.hlOn = localStorage.getItem('waldtank_hl') !== '0'; } catch { }
-function applyHl() { $('btn-hl').textContent = `✨ Gegenstände hervorheben: ${game.hlOn ? 'an' : 'aus'}`; try { localStorage.setItem('waldtank_hl', game.hlOn ? '1' : '0'); } catch { } }
+function applyHl() { $('btn-hl').textContent = game.hlOn ? T('✨ Gegenstände hervorheben: an') : T('✨ Gegenstände hervorheben: aus'); try { localStorage.setItem('waldtank_hl', game.hlOn ? '1' : '0'); } catch { } }
 $('btn-hl').onclick = () => { game.hlOn = !game.hlOn; applyHl(); }; applyHl();
+// language picker (start menu + pause): one button per language, named in its own language. setLang() saves the choice and reloads;
+// from the pause menu the running game is saved first (auto slot – game.save() puts a creative game into its own slot), so after the reload
+// the start menu offers „Weiterspielen“ with exactly this state
+function langButtons(el, inGame) {
+  el.innerHTML = Object.entries(LANGS).map(([c, n]) => `<button class="sec ${c === LANG ? 'on' : ''}" data-lang="${c}" lang="${c}">${n}</button>`).join('');
+  el.onclick = e => { const b = e.target.closest('[data-lang]'); if (!b || b.dataset.lang === LANG) return;
+    if (inGame && playing && !game.S.flags.dead && !game.save('auto')) { ui.toast(T('Speichern fehlgeschlagen (Browser-Speicher voll oder gesperrt).'), 'warn'); return; }
+    setLang(b.dataset.lang); };
+}
+langButtons($('lang-start'), false); langButtons($('lang-pause'), true);
 // save slots (pause menu): save / load (load = reload the page and start from that slot, so no state leaks from the current run)
 function renderSlots() {
-  const fmt = i => i ? `Tag ${i.day}, ${String(Math.floor(i.time)).padStart(2, '0')}:${String(Math.floor(i.time % 1 * 60)).padStart(2, '0')} · ${DIFF[i.diff]?.name || ''} · ${new Date(i.at).toLocaleString('de-DE', { dateStyle: 'short', timeStyle: 'short' })}` : 'leer';
+  const fmt = i => i ? `${T('Tag {day}, {time}', { day: i.day, time: hhmm(i.time) })} · ${DIFF[i.diff]?.name || ''} · ${new Date(i.at).toLocaleString(LOCALE, { dateStyle: 'short', timeStyle: 'short' })}` : T('leer');
   $('slots').innerHTML = SLOTS.filter(sl => sl !== 'kreativ' || game.slotInfo(sl)).map(sl => { const i = game.slotInfo(sl), auto = sl === 'auto' || sl === 'kreativ';
-    return `<div class="slotrow"><b>${sl === 'auto' ? 'Automatisch' : sl === 'kreativ' ? '🎨 Kreativ (auto)' : 'Platz ' + sl}</b><span>${fmt(i)}${i?.creative && sl !== 'kreativ' ? ' · 🎨 Kreativ' : ''}</span>${auto ? '' : `<button class="sec" data-save="${sl}">Speichern</button>`}<button class="sec" data-load="${sl}" ${i ? '' : 'disabled'}>Laden</button></div>`; }).join('');
+    return `<div class="slotrow"><b>${sl === 'auto' ? T('Automatisch') : sl === 'kreativ' ? T('🎨 Kreativ (auto)') : T('Platz {n}', { n: sl })}</b><span>${fmt(i)}${i?.creative && sl !== 'kreativ' ? ' · ' + T('🎨 Kreativ') : ''}</span>${auto ? '' : `<button class="sec" data-save="${sl}">${T('Speichern')}</button>`}<button class="sec" data-load="${sl}" ${i ? '' : 'disabled'}>${T('Laden')}</button></div>`; }).join('');
 }
 $('slots').addEventListener('click', e => {
   const b = e.target.closest('button'); if (!b) return;
-  if (b.dataset.save) { game.save(b.dataset.save) ? ui.toast(`💾 Gespeichert in Platz ${b.dataset.save}.`, 'good') : ui.toast('Speichern fehlgeschlagen (Browser-Speicher voll oder gesperrt).', 'warn'); renderSlots(); }
+  if (b.dataset.save) { game.save(b.dataset.save) ? ui.toast(T('💾 Gespeichert in Platz {n}.', { n: b.dataset.save }), 'good') : ui.toast(T('Speichern fehlgeschlagen (Browser-Speicher voll oder gesperrt).'), 'warn'); renderSlots(); }
   if (b.dataset.load) { try { sessionStorage.setItem('waldtank_load', b.dataset.load); } catch { } location.reload(); }
 });
 $('btn-export').onclick = () => { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([game.exportSave()], { type: 'application/json' }));
-  a.download = `waldtank-tag${game.S.day}.json`; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000); };
+  a.download = `northwood-day${game.S.day}.json`; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000); };
 $('btn-import').onclick = () => $('importfile').click();
 $('importfile').onchange = async e => { const f = e.target.files[0]; if (!f) return; try { const d = JSON.parse(await f.text()); if (!d.S) throw 0;
-  sessionStorage.setItem('waldtank_import', JSON.stringify(d)); location.reload(); } catch { ui.toast('Diese Datei ist kein Waldtank-Spielstand.', 'warn'); } };
+  sessionStorage.setItem('waldtank_import', JSON.stringify(d)); location.reload(); } catch { ui.toast(T('Diese Datei ist kein Northwood-Spielstand.'), 'warn'); } };
 function lock() { if (!AUTO) renderer.domElement.requestPointerLock?.(); }
 function begin(load) {
   audio.start(); book.show(false); ui.show('start', false); ui.show('pause', false);
@@ -102,10 +120,13 @@ function begin(load) {
   else if (load === 'load') game.load(slotToLoad);
   else if (load === 'import') game.load(importData);
   playing = true; applyDiff(game.S.diff); ui.renderHotbar(game.S.inv, game.S.sel); lock();
-  if (load === 'new') ui.toast('Verdammt. Der Motor ist aus. Kein Netz. Und es wird bald dunkel …');
+  if (load === 'new') ui.toast(T('Verdammt. Der Motor ist aus. Kein Netz. Und es wird bald dunkel …'));
   if (game.creative) applyDiff(game.S.diff);
 }
 const book = new Handbook(game);
+// test hook for tools/i18n.mjs: chapters (the nav buttons) and show(on, n)
+window.__book = { get chapters() { if (!book.el.querySelector('[data-ch]')) book.render(); return [...book.el.querySelectorAll('[data-ch]')]; }, show: (on, n) => book.show(on, n), book };
+window.__ui = { ui, openPanel: n => openPanel(n), closePanel: () => closePanel(true), pause: () => { ui.show('pause', true); updatePause(); renderSlots(); } };   // test hook (tools/i18n-extra.mjs)
 $('btn-book').onclick = () => { ui.show('pause', false); openPanel('book'); };
 $('btn-badges').onclick = () => { ui.show('pause', false); openPanel('book'); book.show(true, book.index('erfolge')); };
 $('btn-book-start').onclick = () => book.show(true, 0);
@@ -125,8 +146,8 @@ $('btn-win-free').onclick = () => { game.freePlay(); lock(); };
 // a slot chosen in the pause menu / an imported file: start directly from it
 let slotToLoad = null, importData = null;
 try { slotToLoad = sessionStorage.getItem('waldtank_load'); sessionStorage.removeItem('waldtank_load'); importData = JSON.parse(sessionStorage.getItem('waldtank_import') || 'null'); sessionStorage.removeItem('waldtank_import'); } catch { }
-if (importData) setTimeout(() => { begin('import'); ui.toast('📂 Spielstand importiert.', 'good'); }, 50);
-else if (slotToLoad) setTimeout(() => { begin('load'); ui.toast('📂 Spielstand geladen.', 'good'); }, 50);
+if (importData) setTimeout(() => { begin('import'); ui.toast(T('📂 Spielstand importiert.'), 'good'); }, 50);
+else if (slotToLoad) setTimeout(() => { begin('load'); ui.toast(T('📂 Spielstand geladen.'), 'good'); }, 50);
 document.addEventListener('pointerlockchange', () => {
   const locked = document.pointerLockElement === renderer.domElement;
   if (!locked && playing && !panel && !game.S.flags.dead && !game.S.flags.won) { ui.show('pause', true); updatePause(); renderSlots(); }
@@ -135,8 +156,8 @@ renderer.domElement.addEventListener('click', () => { if (playing && !panel && !
 function updatePause() {
   // only the places you found (a full list of „???“ made the pause menu taller than the screen)
   const got = game.places.filter(p => game.S.found[p.id]), rest = game.places.length - got.length;
-  $('found-n').textContent = `${got.length}/${game.places.length} entdeckt`;
-  $('found').innerHTML = got.map(p => `<li class="on">📍 ${p.name}</li>`).join('') + (rest ? `<li class="rest">❔ ${rest} ${rest > 1 ? 'Orte' : 'Ort'} noch unentdeckt</li>` : '');
+  $('found-n').textContent = T('{n}/{total} entdeckt', { n: got.length, total: game.places.length });
+  $('found').innerHTML = got.map(p => `<li class="on">📍 ${p.name}</li>`).join('') + (rest ? `<li class="rest">${TN(rest, '❔ {n} Ort noch unentdeckt', '❔ {n} Orte noch unentdeckt')}</li>` : '');
 }
 function openPanel(name) {
   if (panel === name) return closePanel();
@@ -188,29 +209,29 @@ $('reader').addEventListener('click', e => { const b = e.target.closest('[data-c
 // ---------------------------------------------------------------- creative menu (K): items, time, weather, season, events, teleport
 function creativeHtml() {
   const S = game.S, row = (t, h) => `<h3>${t}</h3><div class="cbtns">${h}</div>`;
-  let h = `<h2>🎨 Kreativ-Menü <small>Klick = 1 Stück · Shift+Klick = 10 · V = fliegen (${player.fly ? 'an' : 'aus'}) · K / Esc schließen</small></h2>`;
-  h += row('⏰ Uhrzeit', [5.5, 7, 12, 17.5, 20, 23].map(t => `<button class="sec" data-time="${t}">${String(Math.floor(t)).padStart(2, '0')}:${t % 1 ? '30' : '00'}</button>`).join(''));
-  h += row('🌦️ Wetter', [['klar', '☀️ klar'], ['regen', '🌧️ Regen'], ['nebel', '🌫️ Nebel'], ['gewitter', '⛈️ Gewitter'], ['schnee', '🌨️ Schnee'], ['warn', '⚠️ Unwetter-Warnung'], ['unwetter', '🌪️ Unwetter'], ['schneesturm', '❄️ Schneesturm']].map(([k, n]) => `<button class="sec ${S.weather === k ? 'on' : ''}" data-weather="${k}">${n}</button>`).join(''));
-  h += row('🍂 Jahreszeit', ['🍂 Herbst', '❄️ Winter (See friert zu)', '🌱 Frühling', '☀️ Sommer'].map((n, i) => `<button class="sec ${game.seasons.index === i ? 'on' : ''}" data-season="${i}">${n}</button>`).join(''));
-  h += row('✨ Ereignisse', [['star', '🌠 Sternschnuppe'], ['fireball', '☄️ Feuerball'], ['wolf', '🐺 Wölfe'], ['white', '🤍 Weißer Hirsch'], ['grimm', '🐻 Zur Bärenhöhle (Grimm)'], ['xp', '⭐ +1000 EP'], ['money', '💶 +100 €'], ['fly', `✈️ Fliegen: ${player.fly ? 'an' : 'aus'}`]].map(([k, n]) => `<button class="sec" data-ev="${k}">${n}</button>`).join(''));
-  h += row('🧭 Hinreisen', game.places.filter(p => p.pos).map(p => `<button class="sec" data-tp="${p.id}">${p.icon || '📍'} ${p.name.replace(/ „.*“/, '')}</button>`).join(''));
-  h += `<h3>🎒 Gegenstände</h3><div class="cgrid">${Object.entries(ITEMS).map(([id, it]) => `<button class="sec ${it.rare ? 'rare' : ''}" data-give="${id}" title="${it.desc || ''}"><i>${it.icon}</i>${it.name}</button>`).join('')}</div>`;
+  let h = `<h2>${T('🎨 Kreativ-Menü')} <small>${player.fly ? T('Klick = 1 Stück · Shift+Klick = 10 · V = fliegen (an) · K / Esc schließen') : T('Klick = 1 Stück · Shift+Klick = 10 · V = fliegen (aus) · K / Esc schließen')}</small></h2>`;
+  h += row(T('⏰ Uhrzeit'), [5.5, 7, 12, 17.5, 20, 23].map(t => `<button class="sec" data-time="${t}">${String(Math.floor(t)).padStart(2, '0')}:${t % 1 ? '30' : '00'}</button>`).join(''));
+  h += row(T('🌦️ Wetter'), [['klar', T('☀️ klar')], ['regen', T('🌧️ Regen')], ['nebel', T('🌫️ Nebel')], ['gewitter', T('⛈️ Gewitter')], ['schnee', T('🌨️ Schnee')], ['warn', T('⚠️ Unwetter-Warnung')], ['unwetter', T('🌪️ Unwetter')], ['schneesturm', T('❄️ Schneesturm')]].map(([k, n]) => `<button class="sec ${S.weather === k ? 'on' : ''}" data-weather="${k}">${n}</button>`).join(''));
+  h += row(T('🍂 Jahreszeit'), [T('🍂 Herbst'), T('❄️ Winter (See friert zu)'), T('🌱 Frühling'), T('☀️ Sommer')].map((n, i) => `<button class="sec ${game.seasons.index === i ? 'on' : ''}" data-season="${i}">${n}</button>`).join(''));
+  h += row(T('✨ Ereignisse'), [['star', T('🌠 Sternschnuppe')], ['fireball', T('☄️ Feuerball')], ['wolf', T('🐺 Wölfe')], ['white', T('🤍 Weißer Hirsch')], ['grimm', T('🐻 Zur Bärenhöhle (Grimm)')], ['xp', T('⭐ +1000 EP')], ['money', '💶 +100 €'], ['fly', player.fly ? T('✈️ Fliegen: an') : T('✈️ Fliegen: aus')]].map(([k, n]) => `<button class="sec" data-ev="${k}">${n}</button>`).join(''));
+  h += row(T('🧭 Hinreisen'), game.places.filter(p => p.pos).map(p => `<button class="sec" data-tp="${p.id}">${p.icon || '📍'} ${p.name.replace(/ [„“].*[“”]/, '')}</button>`).join(''));
+  h += `<h3>${T('🎒 Gegenstände')}</h3><div class="cgrid">${Object.entries(ITEMS).map(([id, it]) => `<button class="sec ${it.rare ? 'rare' : ''}" data-give="${id}" title="${it.desc || ''}"><i>${it.icon}</i>${it.name}</button>`).join('')}</div>`;
   return h;
 }
 $('creativepanel').addEventListener('click', e => {
   const b = e.target.closest('button'); if (!b) return; const S = game.S, d = b.dataset;
   const abs = () => { S.abs = (S.day - 1) * 24 + S.time; };
   if (d.give) { game.add(d.give, e.shiftKey ? (ITEMS[d.give].mat ? 30 : 10) : 1); return; }
-  if (d.time) { S.time = +d.time; abs(); ui.toast(`⏰ ${d.time.replace('.5', ':30')} Uhr`); }
+  if (d.time) { S.time = +d.time; abs(); ui.toast(T('⏰ {time} Uhr', { time: hhmm(+d.time) })); }
   if (d.weather) { if (d.weather === 'warn') game.seasons.warn('unwetter'); else { delete S.stormAt; S.weather = d.weather; S.weatherUntil = S.abs + 2; S.stormHurt = 0; S.lastStorm = S.abs; } }
   if (d.season) { const year = Math.floor((S.day - 1) / 16); S.day = year * 16 + +d.season * 4 + 1; abs(); }
   if (d.tp) { const p = game.places.find(x => x.id === d.tp).pos.clone(); p.x += 2; p.y = W.groundY(p.x, p.z, p.y + 40) + .05; player.setPose(p, player.yaw); closePanel(); return; }
-  if (d.ev === 'star') { game.mood.launch(false); ui.toast('🌠 Nach oben schauen (nachts)!'); }
-  if (d.ev === 'fireball') { game.mood.launch(true); ui.toast('☄️ Nach oben schauen!'); }
+  if (d.ev === 'star') { game.mood.launch(false); ui.toast(T('🌠 Nach oben schauen (nachts)!')); }
+  if (d.ev === 'fireball') { game.mood.launch(true); ui.toast(T('☄️ Nach oben schauen!')); }
   if (d.ev === 'wolf') for (let i = 0; i < 2; i++) game.life.spawn('wolf', player.pos);
   if (d.ev === 'white') { const a = game.life.spawn('deer', player.pos); if (a && !a.white) { a.white = 1; a.mesh.traverse(m => { if (m.isMesh && m.material.color) { m.material = m.material.clone(); m.material.color.lerp(new THREE.Color('#f4f1ea'), .82); } }); } }
-  if (d.ev === 'grimm') { const sp = W.spots.ziel_grimm; if (!sp) ui.toast('Keine Bärenhöhle auf dieser Karte.'); else { delete S.flags.grimm; const p = sp.pos.clone(); p.z += 26; p.y = W.groundY(p.x, p.z, p.y + 40) + .05; player.setPose(p, 0); closePanel(); return; } }
-  if (d.ev === 'xp') game.progress.add(1000, 'Kreativ');
+  if (d.ev === 'grimm') { const sp = W.spots.ziel_grimm; if (!sp) ui.toast(T('Keine Bärenhöhle auf dieser Karte.')); else { delete S.flags.grimm; const p = sp.pos.clone(); p.z += 26; p.y = W.groundY(p.x, p.z, p.y + 40) + .05; player.setPose(p, 0); closePanel(); return; } }
+  if (d.ev === 'xp') game.progress.add(1000, T('Kreativ'));
   if (d.ev === 'money') S.money += 100;
   if (d.ev === 'fly') { player.fly = !player.fly; }
   $('creativepanel').innerHTML = creativeHtml();
@@ -242,24 +263,24 @@ addEventListener('keydown', e => {
     if (['Tab', 'Escape', 'KeyC', 'KeyM', 'KeyE', 'KeyG', 'KeyK'].includes(e.code)) { if (e.code === 'KeyC' && panel === 'inv') return; closePanel(); }
     return;
   }
-  if (game.build.ghost && ['KeyX', 'Escape', 'KeyG'].includes(e.code)) { game.build.cancel(); ui.toast('Bauen abgebrochen.'); return; }
+  if (game.build.ghost && ['KeyX', 'Escape', 'KeyG'].includes(e.code)) { game.build.cancel(); ui.toast(T('Bauen abgebrochen.')); return; }
   player.keys[e.code] = true;
   if (e.repeat) return;
   switch (e.code) {
     case 'KeyE': if (game.build.ghost) game.build.place(); else game.interact(game.findTarget()); break;
-    case 'KeyG': if (!game.has('hammer') && !game.has('spaten') && !game.has('axt')) ui.toast('Zum Bauen brauchst du Werkzeug: Hammer (Schuppen), Spaten oder Axt. Unterstand, Feuerstelle und Zaun gehen ohne Hammer.'); openPanel('build'); break;
+    case 'KeyG': if (!game.has('hammer') && !game.has('spaten') && !game.has('axt')) ui.toast(T('Zum Bauen brauchst du Werkzeug: Hammer (Schuppen), Spaten oder Axt. Unterstand, Feuerstelle und Zaun gehen ohne Hammer.')); openPanel('build'); break;
     case 'KeyR': if (game.build.ghost) game.build.turn(Math.PI / 2); else game.combat.reload(); break;
     case 'KeyX': { const t = game.findTarget(); if (t?.build) game.build.dismantle(t.build); break; }
     case 'KeyN': addMark(player.pos.x, -player.pos.z); break;
     case 'KeyH': game.life.dogSeek(); break;
-    case 'KeyF': if (game.has('taschenlampe')) { if (game.S.battery <= 0) ui.toast('Batterie leer.'); else { game.S.flags.flashOn = !game.S.flags.flashOn; audio.sfx('switch'); } } else ui.toast('Du hast keine Taschenlampe.'); break;
+    case 'KeyF': if (game.has('taschenlampe')) { if (game.S.battery <= 0) ui.toast(T('Batterie leer.')); else { game.S.flags.flashOn = !game.S.flags.flashOn; audio.sfx('switch'); } } else ui.toast(T('Du hast keine Taschenlampe.')); break;
     case 'Tab': case 'KeyC': if (game.vehicle.driving && e.code === 'KeyC') { game.vehicle.inside = !game.vehicle.inside; break; } openPanel('inv'); break;
-    case 'KeyM': if (game.has('karte')) openPanel('map'); else ui.toast('Du hast keine Karte. Vielleicht gibt es im Laden eine?'); break;
+    case 'KeyM': if (game.has('karte')) openPanel('map'); else ui.toast(T('Du hast keine Karte. Vielleicht gibt es im Laden eine?')); break;
     case 'KeyQ': game.useSlot(game.S.sel); break;
     case 'KeyB': openPanel('book'); break;
     case 'KeyJ': openPanel('book'); book.show(true, book.index('tagebuch')); break;
-    case 'KeyK': if (game.creative) openPanel('creative'); else ui.toast('Das Kreativ-Menü gibt es nur im Kreativ-Modus (Startmenü → 🎨 Kreativ-Modus).'); break;
-    case 'KeyV': if (game.creative) { player.fly = !player.fly; ui.toast(player.fly ? '✈️ Fliegen an: Leertaste hoch, Strg runter, Shift schnell.' : '🚶 Fliegen aus.'); } break;
+    case 'KeyK': if (game.creative) openPanel('creative'); else ui.toast(T('Das Kreativ-Menü gibt es nur im Kreativ-Modus (Startmenü → 🎨 Kreativ-Modus).')); break;
+    case 'KeyV': if (game.creative) { player.fly = !player.fly; ui.toast(player.fly ? T('✈️ Fliegen an: Leertaste hoch, Strg runter, Shift schnell.') : T('🚶 Fliegen aus.')); } break;
     case 'Digit1': case 'Digit2': case 'Digit3': case 'Digit4': case 'Digit5': game.S.sel = +e.code.slice(5) - 1; ui.renderHotbar(game.S.inv, game.S.sel); break;
   }
 });
@@ -293,17 +314,24 @@ function trails() {
 }
 function addMark(bx, by) {
   const M = game.S.marks;
-  if (M.length >= 8) { ui.toast('Höchstens 8 Wegmarker – klick auf der Karte einen alten an, um ihn zu löschen.', 'warn'); return; }
+  if (M.length >= 8) { ui.toast(T('Höchstens 8 Wegmarker – klick auf der Karte einen alten an, um ihn zu löschen.'), 'warn'); return; }
   const near = game.places.filter(p => p.pos && (game.S.found[p.id] || game.S.known[p.id])).sort((a, b) => Math.hypot(a.pos.x - bx, -a.pos.z - by) - Math.hypot(b.pos.x - bx, -b.pos.z - by))[0];
-  const label = near && Math.hypot(near.pos.x - bx, -near.pos.z - by) < 25 ? near.name : `Wegmarke ${M.length + 1}`;
+  // saved: the place id or the German default label (Wegmarke n), shown in the current language by markLabel()
+  const place = near && Math.hypot(near.pos.x - bx, -near.pos.z - by) < 25 ? near.id : undefined, label = place ? near.name : `Wegmarke ${M.length + 1}`;
   const used = new Set(M.map(m => m.c)); const c = MARK_COLS.find(c => !used.has(c)) || MARK_COLS[0];
-  M.push({ x: +bx.toFixed(1), y: +by.toFixed(1), label, c }); audio.sfx('pickup'); ui.toast(`📍 Wegmarker gesetzt: ${label}`);
+  const m = { x: +bx.toFixed(1), y: +by.toFixed(1), label, c }; if (place) m.place = place;
+  M.push(m); audio.sfx('pickup'); ui.toast(T('📍 Wegmarker gesetzt: {label}', { label: markLabel(m) }));
+}
+function markLabel(m) {
+  if (m.place) { const p = game.places.find(x => x.id === m.place); if (p) return p.name; }
+  const n = /^Wegmarke (\d+)$/.exec(m.label || ''); if (n) return T('Wegmarke {n}', { n: n[1] });
+  return m.label === 'Einschlag' ? T('Einschlag') : m.label;
 }
 $('mapcanvas').addEventListener('click', e => {
   const c = $('mapcanvas'), r = c.getBoundingClientRect(), px = (e.clientX - r.left) * c.width / r.width, py = (e.clientY - r.top) * c.height / r.height;
   const bx = px / MG.K + MG.x0, by = MG.y1 - py / MG.K, M = game.S.marks;
   const hit = M.findIndex(m => Math.hypot(m.x - bx, m.y - by) < 6);
-  if (hit >= 0) { const [m] = M.splice(hit, 1); ui.toast(`Wegmarker entfernt: ${m.label}`); } else addMark(bx, by);
+  if (hit >= 0) { const [m] = M.splice(hit, 1); ui.toast(T('Wegmarker entfernt: {label}', { label: markLabel(m) })); } else addMark(bx, by);
   drawMap();
 });
 let relief = null;
@@ -350,16 +378,16 @@ function drawMap() {
     if (!seen(p.id) || p.id === 'bach' || p.region !== reg) continue;
     const [bx, by, ic] = POS[p.id] || (p.pos ? [p.pos.x, -p.pos.z, p.icon || '📍'] : []); if (bx === undefined) continue;
     x.globalAlpha = S.found[p.id] ? 1 : .6;
-    x.font = '18px system-ui'; x.fillStyle = '#fff'; x.fillText(ic, X(bx), Y(by) + 6); x.font = 'bold 11px system-ui'; x.fillText(p.name.replace(/ „.*“/, ''), X(bx), Y(by) + 22); x.globalAlpha = 1;
+    x.font = '18px system-ui'; x.fillStyle = '#fff'; x.fillText(ic, X(bx), Y(by) + 6); x.font = 'bold 11px system-ui'; x.fillText(p.name.replace(/ [„“].*[“”]/, ''), X(bx), Y(by) + 22); x.globalAlpha = 1;
   }
   for (const m of S.marks) { if ((m.y > 600 ? 'berg' : 'tal') !== reg) continue; x.fillStyle = m.c; x.strokeStyle = '#000'; x.lineWidth = 1.5; x.beginPath(); x.arc(X(m.x), Y(m.y) - 9, 6, 0, 7); x.moveTo(X(m.x) - 5, Y(m.y) - 6); x.lineTo(X(m.x), Y(m.y)); x.lineTo(X(m.x) + 5, Y(m.y) - 6); x.fill(); x.stroke();
-    x.font = 'bold 10px system-ui'; x.fillStyle = '#fff'; x.fillText(m.label, X(m.x), Y(m.y) - 18); }
+    x.font = 'bold 10px system-ui'; x.fillStyle = '#fff'; x.fillText(markLabel(m), X(m.x), Y(m.y) - 18); }
   const p = player.pos, px = X(p.x), py = Y(-p.z);
   x.save(); x.translate(px, py); x.rotate(-player.yaw); x.fillStyle = '#ff4a3a'; x.strokeStyle = '#fff'; x.lineWidth = 1.5; x.beginPath(); x.moveTo(0, -10); x.lineTo(7, 8); x.lineTo(0, 4); x.lineTo(-7, 8); x.closePath(); x.fill(); x.stroke(); x.restore();
   const q = game.quests[game.S.quest], t = q?.target?.(); if (t && game.region(t) === reg) { x.font = '20px system-ui'; x.fillStyle = '#ffd23a'; x.fillText('★', X(t.x), Y(-t.z) + 7); }
   x.strokeStyle = '#d9c38a'; x.lineWidth = 6; x.strokeRect(3, 3, Wd - 6, Ht - 6);
-  x.fillStyle = reg === 'berg' ? '#3a2a1c' : '#d9c38a'; x.font = 'bold 15px system-ui'; x.textAlign = 'left'; x.fillText(reg === 'berg' ? 'N ↑   Wanderkarte Steinberg' : 'N ↑   Wanderkarte Nordwald', 14, 24);
-  const here = game.places.filter(p => p.region === reg), nf = here.filter(p => S.found[p.id]).length; x.font = '12px system-ui'; x.fillText(`Entdeckt: ${nf}/${here.length} · Klick = Wegmarker setzen/löschen · N = Marker hier`, 14, Ht - 14);
+  x.fillStyle = reg === 'berg' ? '#3a2a1c' : '#d9c38a'; x.font = 'bold 15px system-ui'; x.textAlign = 'left'; x.fillText(reg === 'berg' ? T('N ↑   Wanderkarte Steinberg') : T('N ↑   Wanderkarte Nordwald'), 14, 24);
+  const here = game.places.filter(p => p.region === reg), nf = here.filter(p => S.found[p.id]).length; x.font = '12px system-ui'; x.fillText(T('Entdeckt: {n}/{total} · Klick = Wegmarker setzen/löschen · N = Marker hier', { n: nf, total: here.length }), 14, Ht - 14);
 }
 
 // ---------------------------------------------------------------- compass (top centre): directions, quest star, waypoints
@@ -368,7 +396,7 @@ function drawCompass() {
   if (!playing) return; const yaw = game.vehicle.driving ? game.vehicle.yaw + (player.yaw - game.vehicle.enterYaw) : player.yaw;
   const head = ((-yaw * 180 / Math.PI) % 360 + 360) % 360, items = [];
   const add = (deg, html, cls = '') => { let d = ((deg - head + 540) % 360) - 180; if (Math.abs(d) < 70) items.push(`<span class="${cls}" style="left:${50 + d / 70 * 50}%">${html}</span>`); };
-  [['N', 0], ['NO', 45], ['O', 90], ['SO', 135], ['S', 180], ['SW', 225], ['W', 270], ['NW', 315]].forEach(([n, d]) => add(d, n, n.length === 1 ? 'big' : ''));
+  [[T('N'), 0], [T('NO'), 45], [T('O'), 90], [T('SO'), 135], [T('S'), 180], [T('SW'), 225], [T('W'), 270], [T('NW'), 315]].forEach(([n, d]) => add(d, n, d % 90 ? '' : 'big'));
   const bearing = (x, by) => (Math.atan2(x - player.pos.x, by + player.pos.z) * 180 / Math.PI + 360) % 360;
   const q = game.quests[game.S.quest], tp = q?.target?.(); if (tp) add(bearing(tp.x, -tp.z), '★', 'star');
   for (const m of game.S.marks) add(bearing(m.x, m.y), `<i style="background:${m.c}"></i>`, 'mk');
@@ -403,16 +431,16 @@ function step() {
     hudT = .1;
     ui.stats(game.S.stats);
     const ill = game.health.label();
-    const extra = ` · ${game.seasons.label()}` + (ill ? ` · ${ill}` : '') + (game.S.money ? ` · ${game.S.money.toFixed(2).replace('.', ',')} €` : '') + (game.strom() ? ' · ⚡' : '') + (game.S.flags.flashOn ? ` · 🔦${Math.round(game.S.battery)}%` : '') + (game.torchOn ? ' · 🔥' : '') + (game.waiting ? ' · ⏩' : '') + (game.roof ? ' · 🏠' : '');
-    $('weaponhud').textContent = game.vehicle.hud() || (game.boat.on ? '🚣 W/S rudern · A/D drehen · E aussteigen' : '') || game.combat.hud();
+    const extra = ` · ${game.seasons.label()}` + (ill ? ` · ${ill}` : '') + (game.S.money ? ` · ${eur(game.S.money)}` : '') + (game.strom() ? ' · ⚡' : '') + (game.S.flags.flashOn ? ` · 🔦${Math.round(game.S.battery)}%` : '') + (game.torchOn ? ' · 🔥' : '') + (game.waiting ? ' · ⏩' : '') + (game.roof ? ' · 🏠' : '');
+    $('weaponhud').textContent = game.vehicle.hud() || (game.boat.on ? T('🚣 W/S rudern · A/D drehen · E aussteigen') : '') || game.combat.hud();
     const L = game.progress.level, lo = LEVELS[L - 1] || 0, hi = LEVELS[L]; ui.level(L, hi ? (game.S.xp - lo) / (hi - lo) * 100 : 100, game.S.xp);
     const sq = game.S.quest >= 12 && !game.creative ? game.progress.active()[0] : null, oh = game.orders.hud();
-    $('sidequest').innerHTML = (sq ? `<b>Nebenaufgabe:</b> ${sq.t}${game.progress.progressText(sq)}` : '') + (oh ? `${sq ? '<br>' : ''}${oh}` : '');
+    $('sidequest').innerHTML = (sq ? `<b>${T('Nebenaufgabe:')}</b> ${sq.t}${game.progress.progressText(sq)}` : '') + (oh ? `${sq ? '<br>' : ''}${oh}` : '');
     document.body.classList.toggle('creative', game.creative);
     const bo = game.life.boss, showBoss = bo && bo.state !== 'sleep' && bo.state !== 'dead' && bo.pos.distanceTo(player.pos) < 75;
     $('bossbar').style.display = showBoss ? 'block' : 'none'; if (showBoss) $('bossbar').querySelector('i').style.width = Math.max(0, bo.hp / 950 * 100) + '%';
     $('buildhint').style.display = game.build.ghost ? 'block' : 'none';
-    if (game.build.ghost) $('buildhint').textContent = `${game.build.bp.icon} ${game.build.bp.name} – ${game.build.valid ? 'Linksklick / E: hier bauen' : game.build.why} · R / Mausrad: drehen · X: abbrechen`;
+    if (game.build.ghost) $('buildhint').textContent = `${game.build.bp.icon} ${game.build.bp.name} – ${game.build.valid ? T('Linksklick / E: hier bauen') : game.build.why} · ${T('R / Mausrad: drehen · X: abbrechen')}`;
     game.highlight(target, player.pos);
     ui.setClock(game.S.time, game.S.day, extra);
     const q = game.quests[game.S.quest]; ui.setQuest(q ? q.t : '', q ? q.x() : '', game.S.quest + 1, game.quests.length);
@@ -431,7 +459,7 @@ function step() {
   if (playing) for (const m of game.S.marks) {
     v.copy(B(m.x, m.y, 0)); v.y = player.pos.y + 1.5; const d = Math.hypot(m.x - player.pos.x, m.y + player.pos.z); if (d < 3) continue;
     v.project(camera); if (v.z > 1 || Math.abs(v.x) > 1 || Math.abs(v.y) > 1) continue;
-    ph += `<div class="pin" style="left:${(v.x + 1) / 2 * innerWidth}px;top:${(1 - v.y) / 2 * innerHeight}px;--c:${m.c}"><i></i><span>${m.label} · ${Math.round(d)} m</span></div>`;
+    ph += `<div class="pin" style="left:${(v.x + 1) / 2 * innerWidth}px;top:${(1 - v.y) / 2 * innerHeight}px;--c:${m.c}"><i></i><span>${markLabel(m)} · ${Math.round(d)} m</span></div>`;
   }
   const sk = game.life.dog?.seek;
   if (playing && sk) { v.copy(game.life.dog.pos); v.y += 1.2; const d = game.life.dog.pos.distanceTo(player.pos); v.project(camera);

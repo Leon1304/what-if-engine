@@ -10,7 +10,7 @@ const browser = await chromium.launch({ args: ['--use-angle=metal', '--enable-gp
 const page = await browser.newPage({ viewport: { width: 960, height: 540 } });
 let errors = 0; page.on('pageerror', e => { console.log('PAGE ERROR', e.message); errors++; });
 page.on('console', m => { if (m.type() === 'error') { console.log('console error', m.text()); errors++; } });
-await page.goto(`http://localhost:${srv.address().port}/index.html?autostart=1`);
+await page.goto(`http://localhost:${srv.address().port}/index.html?lang=de&autostart=1`);
 await page.waitForFunction(() => window.__game, null, { timeout: 120000 });
 await page.evaluate(() => {
   const { game, player, THREE, B } = window.__game;

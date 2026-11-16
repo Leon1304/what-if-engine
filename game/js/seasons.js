@@ -6,8 +6,11 @@
 // storm (Unwetter: hail, gale, lightning strikes near you; in winter a Schneesturm). A storm is announced an hour before (toast, radio):
 // find shelter in time – outside it hurts and chills you (game.update), under a roof, in a house or in the car you are safe.
 import * as THREE from 'three';
+import { T, TN } from './i18n.js';
 
-export const SEASONS = ['Herbst', 'Winter', 'Frühling', 'Sommer'];
+export const SEASONS = ['Herbst', 'Winter', 'Frühling', 'Sommer'];       // i18n-ok: ids (S.season, compared everywhere) – shown via seasonName()
+const SEASON_NAME = { Herbst: T('Herbst'), Winter: T('Winter'), Frühling: T('Frühling'), Sommer: T('Sommer') };
+export const seasonName = s => SEASON_NAME[s] || s || '';
 export const SEASON_DAYS = 4;
 const ICON = { Herbst: '🍂', Winter: '❄️', Frühling: '🌱', Sommer: '☀️' };
 const WEATHER = {     // chance per season of the next weather
@@ -15,7 +18,7 @@ const WEATHER = {     // chance per season of the next weather
   Frühling: { regen: .42, gewitter: .14, nebel: .1, unwetter: .06, klar: .28 }, Sommer: { klar: .42, gewitter: .27, regen: .13, nebel: .08, unwetter: .1 },
 };
 export const STORMS = new Set(['unwetter', 'schneesturm']);
-const NAME = { klar: 'klar und trocken', regen: 'Regen', nebel: 'Nebel', gewitter: 'Gewitter', schnee: 'Schnee', unwetter: 'ein schweres Unwetter mit Hagel', schneesturm: 'ein Schneesturm' };
+const NAME = { klar: T('klar und trocken'), regen: T('Regen'), nebel: T('Nebel'), gewitter: T('Gewitter'), schnee: T('Schnee'), unwetter: T('ein schweres Unwetter mit Hagel'), schneesturm: T('ein Schneesturm') };
 const ICONW = { regen: '🌧️', nebel: '🌫️', gewitter: '⛈️', schnee: '🌨️', unwetter: '🌪️', schneesturm: '🌨️❄️' };
 const GROUND = new Set(['Gras', 'Gras_hell', 'Waldboden', 'Moos', 'Laub', 'Trampelpfad', 'Bankett', 'Bachufer', 'Schotter', 'Pflaster', 'Gehweg', 'Acker', 'Steinbruch', 'Laubstreu', 'Laubstreu_gelb', 'Nadelstreu', 'Moospolster']);
 const CONIFER = new Set(['Fichte_a', 'Fichte_b', 'Kiefer', 'Latsche']);
@@ -59,7 +62,7 @@ export class Seasons {
           else if (t.kind === 'ground') col.lerp(snow, .9 * k); else if (t.kind === 'roof') col.lerp(snow, .95 * k); else if (t.kind === 'conifer') col.lerp(snow, .75 * k);
           else if (t.kind === 'leaves') col.lerp(frost, .5).lerp(snow, .6 * k); else col.lerp(snow, .55 * k);
         } else if (season === 'Herbst' && t.kind === 'bloom') col.lerp(C('#9a8a5a'), .35);
-        else if (season === 'Frühling' || season === 'Sommer') {
+        else if (season === 'Frühling' || season === 'Sommer') {   // i18n-ok (season id)
           const s = season === 'Sommer' ? 1 : .7;
           if (t.kind === 'leaves') col.lerp(season === 'Sommer' ? lush : green, .8 * s);
           else if (t.kind === 'ground') col.lerp(green, .18 * s);
@@ -83,7 +86,7 @@ export class Seasons {
     this.changed = false;
     if (season !== this.season) {
       const first = this.season === null; this.season = season; this.recolor(season); S.season = season; this.changed = !first;
-      if (!first) g.ui.toast(`${ICON[season]} Der ${season === 'Frühling' ? 'Frühling' : season} beginnt.${season === 'Winter' ? ' Es wird bitterkalt – auf den Feldern wächst nichts.' : season === 'Frühling' ? ' Die Felder wachsen schneller.' : ''}`, 'good');
+      if (!first) g.ui.toast({ Herbst: T('🍂 Der Herbst beginnt.'), Winter: T('❄️ Der Winter beginnt. Es wird bitterkalt – auf den Feldern wächst nichts.'), Frühling: T('🌱 Der Frühling beginnt. Die Felder wachsen schneller.'), Sommer: T('☀️ Der Sommer beginnt.') }[season], 'good');
     }
     // weather: S.weather = kind, S.weatherUntil / S.nextWeather (absolute game hours)
     if (!S.weather) S.weather = 'klar';
@@ -91,18 +94,19 @@ export class Seasons {
       const w = this.pick();
       if (STORMS.has(w)) this.warn(w);
       else if (w !== 'klar') { S.weather = w; S.weatherUntil = S.abs + 1 + Math.random() * 2.5;
-        g.ui.toast({ regen: '🌧️ Es fängt an zu regnen.', nebel: '🌫️ Nebel zieht auf.', gewitter: '⛈️ Ein Gewitter zieht auf!', schnee: '🌨️ Es fängt an zu schneien.' }[w]); }
+        g.ui.toast({ regen: T('🌧️ Es fängt an zu regnen.'), nebel: T('🌫️ Nebel zieht auf.'), gewitter: T('⛈️ Ein Gewitter zieht auf!'), schnee: T('🌨️ Es fängt an zu schneien.') }[w]); }
       else S.nextWeather = S.abs + 2 + Math.random() * 4;
     }
     // storm: warning an hour ahead, then 1–1.5 hours of hail / blizzard
     if (S.stormAt && S.weather === 'klar' && S.abs >= S.stormAt) {
       S.weather = S.stormKind || 'unwetter'; S.weatherUntil = S.abs + 1 + Math.random() * .5; S.stormHurt = 0; S.lastStorm = S.abs; delete S.stormAt;
-      g.audio.sfx('thunder'); g.ui.toast(S.weather === 'schneesturm' ? '🌨️ Der Schneesturm ist da! Draußen erfrierst du schnell – rein ins Warme!' : '🌪️ Das Unwetter ist da – Hagel und Blitze! Draußen bist du in Gefahr.', 'warn');
+      g.audio.sfx('thunder'); g.ui.toast(S.weather === 'schneesturm' ? T('🌨️ Der Schneesturm ist da! Draußen erfrierst du schnell – rein ins Warme!') : T('🌪️ Das Unwetter ist da – Hagel und Blitze! Draußen bist du in Gefahr.'), 'warn');
     }
     if (STORMS.has(S.weather) && S.abs > (S.weatherUntil || 0)) {           // the storm passes
       const kind = S.weather, ok = (S.stormHurt || 0) < 8; g.progress.stat('storms'); if (ok) g.progress.stat('storm_ok');
       g.album?.see(kind === 'schneesturm' ? 'n_schneesturm' : 'n_unwetter');
-      g.ui.toast(ok ? `${kind === 'schneesturm' ? '🌨️ Der Schneesturm' : '🌪️ Das Unwetter'} ist vorbei – gut, dass du rechtzeitig Schutz gesucht hast.` : `${kind === 'schneesturm' ? 'Der Schneesturm' : 'Das Unwetter'} zieht ab. Das war knapp.`, 'good');
+      const snow = kind === 'schneesturm';
+      g.ui.toast(ok ? (snow ? T('🌨️ Der Schneesturm ist vorbei – gut, dass du rechtzeitig Schutz gesucht hast.') : T('🌪️ Das Unwetter ist vorbei – gut, dass du rechtzeitig Schutz gesucht hast.')) : (snow ? T('Der Schneesturm zieht ab. Das war knapp.') : T('Das Unwetter zieht ab. Das war knapp.')), 'good');
     }
     if (S.weather !== 'klar' && S.abs > (S.weatherUntil || 0)) { S.weather = 'klar'; S.nextWeather = S.abs + 4 + Math.random() * 7; }
     if (season !== 'Winter' && S.weather === 'schnee') S.weather = 'regen';
@@ -128,17 +132,18 @@ export class Seasons {
   warn(kind) {
     const S = this.S, g = this.g; if (this.season === 'Winter') kind = 'schneesturm'; else if (kind === 'schneesturm') kind = 'unwetter';
     S.stormAt = S.abs + 1; S.stormKind = kind; g.audio.sfx('alarm');
-    g.ui.toast(kind === 'schneesturm' ? '⚠️ Unwetterwarnung: In einer Stunde kommt ein Schneesturm! Such dir rechtzeitig ein Dach über dem Kopf.' : '⚠️ Unwetterwarnung: In einer Stunde zieht ein schweres Unwetter mit Hagel auf! Such dir rechtzeitig Schutz.', 'warn');
+    g.ui.toast(kind === 'schneesturm' ? T('⚠️ Unwetterwarnung: In einer Stunde kommt ein Schneesturm! Such dir rechtzeitig ein Dach über dem Kopf.') : T('⚠️ Unwetterwarnung: In einer Stunde zieht ein schweres Unwetter mit Hagel auf! Such dir rechtzeitig Schutz.'), 'warn');
   }
   // radio weather report (Funkstation): fixes the next weather so the report is right
   forecast() {
     const S = this.S, N = NAME;
-    if (S.stormAt) return `⚠️ UNWETTERWARNUNG: In ${Math.max(1, Math.round((S.stormAt - S.abs) * 60))} Minuten kommt ${N[S.stormKind]}. Suchen Sie sofort Schutz!`;
-    if (S.weather !== 'klar') { const h = Math.max(0, (S.weatherUntil || S.abs) - S.abs); return `Zurzeit ${N[S.weather]}, noch etwa ${Math.max(1, Math.round(h))} Stunde${Math.round(h) > 1 ? 'n' : ''}. Danach klart es auf.`; }
+    if (S.stormAt) return T('⚠️ UNWETTERWARNUNG: In {n} Minuten kommt {weather}. Suchen Sie sofort Schutz!', { n: Math.max(1, Math.round((S.stormAt - S.abs) * 60)), weather: N[S.stormKind] });
+    if (S.weather !== 'klar') { const h = Math.max(0, (S.weatherUntil || S.abs) - S.abs); const n = Math.max(1, Math.round(h)); return TN(n, 'Zurzeit {weather}, noch etwa eine Stunde. Danach klart es auf.', 'Zurzeit {weather}, noch etwa {n} Stunden. Danach klart es auf.', { weather: N[S.weather] }); }
     if (!S.forecast) { let w = 'klar'; for (let i = 0; i < 4 && w === 'klar'; i++) w = this.pick(); S.forecast = w; }
-    if (STORMS.has(S.forecast)) { const h = Math.max(1, Math.round((S.nextWeather ?? S.abs + 3) - S.abs)); return `Die nächsten ${h} Stunde${h > 1 ? 'n' : ''} trocken, danach droht ${N[S.forecast]}. Halten Sie Ihre Hütte bereit!`; }
+    if (STORMS.has(S.forecast)) { const h = Math.max(1, Math.round((S.nextWeather ?? S.abs + 3) - S.abs)); return TN(h, 'Die nächste Stunde trocken, danach droht {weather}. Halten Sie Ihre Hütte bereit!', 'Die nächsten {n} Stunden trocken, danach droht {weather}. Halten Sie Ihre Hütte bereit!', { weather: N[S.forecast] }); }
     const h = Math.max(1, Math.round((S.nextWeather ?? S.nextRain ?? S.abs + 3) - S.abs)); S.nextWeather = S.abs + h;
-    return `Die nächsten ${h} Stunde${h > 1 ? 'n' : ''} bleibt es trocken, danach ${N[S.forecast]}.${this.season === 'Winter' ? ' Strenger Frost!' : ''}`;
+    return TN(h, 'Die nächste Stunde bleibt es trocken, danach {weather}.', 'Die nächsten {n} Stunden bleibt es trocken, danach {weather}.', { weather: N[S.forecast] }) + (this.season === 'Winter' ? ' ' + T('Strenger Frost!') : '');
   }
-  label() { return `${this.icon} ${this.season || ''}${this.S.weather && this.S.weather !== 'klar' ? ' · ' + (ICONW[this.S.weather] || '') : ''}${this.S.stormAt ? ` · ⚠️ Unwetter in ${Math.max(1, Math.round((this.S.stormAt - this.S.abs) * 60))} min` : ''}`; }
+  get name() { return seasonName(this.season); }          // the season in the chosen language (this.season stays the German id)
+  label() { return `${this.icon} ${this.name}${this.S.weather && this.S.weather !== 'klar' ? ' · ' + (ICONW[this.S.weather] || '') : ''}${this.S.stormAt ? ' · ' + T('⚠️ Unwetter in {n} min', { n: Math.max(1, Math.round((this.S.stormAt - this.S.abs) * 60)) }) : ''}`; }
 }

@@ -4,6 +4,7 @@
 // lake, the meadows, the village – and thins out upwards, so hills and the lookout tower stick out of it. In the mountains it is a
 // sea of mist below the hut. Its uniforms (uMist, uMistColor) are written straight into every compiled program once per frame.
 import * as THREE from 'three';
+import { T } from './i18n.js';
 import { creekX } from './life.js';
 import { LAKES } from './regions.js';
 
@@ -167,8 +168,8 @@ export class Mood {
     if (!s.seen) return;
     g.progress.stat('meteor'); this.album('sternschnuppe');
     if (s.fire) return this.fireball(s);
-    if (!g.S.flags.wish) { g.S.flags.wish = 1; g.ui.toast('🌠 Eine Sternschnuppe – wünsch dir was!', 'good'); g.progress.add(10, 'Sternschnuppe'); }
-    else g.ui.toast('🌠 Sternschnuppe!');
+    if (!g.S.flags.wish) { g.S.flags.wish = 1; g.ui.toast(T('🌠 Eine Sternschnuppe – wünsch dir was!'), 'good'); g.progress.add(10, T('Sternschnuppe')); }
+    else g.ui.toast(T('🌠 Sternschnuppe!'));
   }
   // the fireball hits the forest 40–80 m away in the direction it fell: a glowing meteorite lies there (a drop, saved)
   fireball(s) {
@@ -180,8 +181,8 @@ export class Mood {
     g.S.meteorAt = g.S.abs; setTimeout(() => { g.audio.sfx('boom'); g.ui.damage?.(); }, 1500);
     g.addDrop({ id: 'meteorit', n: 1, p: p.toArray().map(v => +v.toFixed(2)) });
     const bx = +p.x.toFixed(1), by = +(-p.z).toFixed(1);
-    if (g.S.marks.length < 8) g.S.marks.push({ x: bx, y: by, label: 'Einschlag', c: '#ff9a3a' });
-    g.ui.toast('☄️ Ein Feuerball! Er schlägt im Wald ein – dort liegt jetzt etwas (Wegmarker „Einschlag“).', 'good');
+    if (g.S.marks.length < 8) g.S.marks.push({ x: bx, y: by, label: 'Einschlag', c: '#ff9a3a' });   // German id, shown via T() in main.js markLabel()
+    g.ui.toast(T('☄️ Ein Feuerball! Er schlägt im Wald ein – dort liegt jetzt etwas (Wegmarker „Einschlag“).'), 'good');
     this.album('feuerball');
   }
   album(id) { if (this.seen.has(id)) return; this.seen.add(id); this.g.album?.see('n_' + id); }

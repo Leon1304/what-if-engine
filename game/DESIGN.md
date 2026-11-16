@@ -1,4 +1,4 @@
-# Waldtankstelle – Spielkonzept
+# Northwood – Spielkonzept (früher „Waldtank“; die Tankstelle im Spiel heißt weiter „Waldtank“)
 
 Survival-Erkundungsspiel aus der Ich-Perspektive (POV). Die erste Map ist ein Stück Wald mit Landstraße und einer
 verlassenen Tankstelle. Die Map wird in Blender gebaut (`game/blender/`), als `game/map.glb` exportiert und im Browser

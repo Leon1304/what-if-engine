@@ -9,7 +9,7 @@ const browser = await chromium.launch({ args: ['--use-angle=metal', '--enable-gp
 const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
 page.on('pageerror', e => console.log('PAGE ERROR', e.message));
 await page.addInitScript(q => { try { localStorage.setItem('waldtank_quality', q); } catch { } }, process.argv[2] || 'mittel');
-await page.goto(`http://localhost:${srv.address().port}/index.html?autostart=1`);
+await page.goto(`http://localhost:${srv.address().port}/index.html?lang=de&autostart=1`);
 await page.waitForFunction(() => window.__game, null, { timeout: 120000 });
 const spots = [['Auto (Start)', 'spawn', 0], ['Vorplatz', [8, -16], 40], ['Laden innen', [26, -6, .25], 90], ['Wald / Bach', [48, 20], 200], ['Hochsitz', [58, 48], 30], ['Wohnwagen', [-40, -36], 250], ['Dorf', [-60, 175], 0], ['Waldsee', [-64, 18], 90], ['Gebirge: Pass', [1.75, 910], 0], ['Gebirge: Hütte', [-10, 1086], 40]];
 const out = await page.evaluate(async spots => {

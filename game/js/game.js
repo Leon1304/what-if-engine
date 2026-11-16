@@ -17,6 +17,7 @@ import { Album } from './album.js';
 import { Story } from './story.js';
 import { Ice } from './ice.js';
 import { Orders } from './orders.js';
+import { T, TN, LOCALE } from './i18n.js';
 
 // Save games: slots auto / 1 / 2 / 3 in localStorage (+ export / import as a file). Everything is stored by name or id, so a newer
 // version of the map or the game can load an older save: unknown objects / items are skipped, new ones start in their default state.
@@ -25,6 +26,7 @@ const SAVE_PREFIX = 'waldtank_save_', OLD_SAVE = 'waldtank_save_v1', SAVE_VERSIO
 const POOL = 8;
 const clamp = (v, a = 0, b = 100) => Math.max(a, Math.min(b, v));
 const MOVING = new Set(['door', 'slide', 'lid', 'drawer']);
+const eur = v => (+v).toLocaleString(LOCALE, { minimumFractionDigits: 2, maximumFractionDigits: 2 });   // money for display
 const DIFF_DMG = g => g.creative ? 0 : Math.max(.5, DIFF[g.S.diff]?.dmg || .5);         // storms hurt a little even without enemies
 
 export class Game {
@@ -65,7 +67,7 @@ export class Game {
     const S = this.S; S.creative = 1; S.flags.free = 1; S.flags.bag = S.flags.expbag = 1; S.quest = this.quests.length; S.money = 999; S.time = 10;
     for (const k of ['axt', 'hammer', 'spaten', 'saege', 'angel', 'messer', 'taschenlampe', 'karte', 'feuerzeug', 'handfunk']) if (!this.has(k)) this.add(k, 1, true);
     for (const p of this.places) S.known[p.id] = 1;
-    this.ui.toast('🎨 Kreativ-Modus: kein Hunger, kein Schaden – bauen und herstellen ohne Material. K = Kreativ-Menü (Gegenstände, Zeit, Wetter, Ereignisse), V = fliegen.', 'good');
+    this.ui.toast(T('🎨 Kreativ-Modus: kein Hunger, kein Schaden – bauen und herstellen ohne Material. K = Kreativ-Menü (Gegenstände, Zeit, Wetter, Ereignisse), V = fliegen.'), 'good');
   }
 
   // ---------------------------------------------------------------- inventory
@@ -73,7 +75,8 @@ export class Game {
   capacity() { const f = this.S.flags; return this.creative ? 48 : f.expbag ? 48 : f.trekbag ? 36 : f.bigbag ? 28 : f.bag ? 20 : 10; }
   wearBag(flag, name, quiet) {
     const before = this.capacity(); this.S.flags.bag = true; this.S.flags[flag] = true; const now = this.capacity();
-    if (!quiet) this.ui.toast(now > before ? `🎒 ${name} aufgesetzt – jetzt ${now} Plätze.${flag === 'bag' ? ' Tab öffnet ihn.' : ''}` : `🎒 ${name} – dein Rucksack ist schon größer (${now} Plätze).`, now > before ? 'good' : '');
+    if (!quiet) this.ui.toast(now > before ? (flag === 'bag' ? T('🎒 {name} aufgesetzt – jetzt {n} Plätze. Tab öffnet ihn.', { name, n: now }) : T('🎒 {name} aufgesetzt – jetzt {n} Plätze.', { name, n: now }))
+      : T('🎒 {name} – dein Rucksack ist schon größer ({n} Plätze).', { name, n: now }), now > before ? 'good' : '');
     return true;
   }
   hasAxe() { return this.has('axt') || this.has('profiaxt') || this.creative; }
@@ -82,7 +85,7 @@ export class Game {
   addAll(gives) {
     const need = Object.entries(gives).filter(([k]) => !ITEMS[k]?.ammo && !ITEMS[k]?.equip), free = this.capacity() - this.S.inv.length;
     const newSlots = need.reduce((a, [k, n]) => { const max = ITEMS[k]?.mat ? 30 : 10, room = this.S.inv.filter(s => s.id === k).reduce((b, s) => b + max - s.n, 0); return a + Math.max(0, Math.ceil((n - room) / max)); }, 0);
-    if (newSlots > free) { this.ui.toast('Dein Rucksack ist voll.', 'warn'); this.audio.sfx('error'); return false; }
+    if (newSlots > free) { this.ui.toast(T('Dein Rucksack ist voll.'), 'warn'); this.audio.sfx('error'); return false; }
     for (const [k, n] of Object.entries(gives)) this.add(k, n, true); return true;
   }
   // inside a building (shop, village houses, chapel, mill, trailer, caravan, your cabin)? → warm-ish, dry, safe from animals
@@ -98,20 +101,20 @@ export class Game {
   add(id, n = 1, quiet = false, f) {
     const it = ITEMS[id];
     if (['bag', 'bigbag', 'trekbag', 'expbag'].includes(it?.equip)) return this.wearBag(it.equip, it.name, quiet);
-    if (it?.equip === 'jacket') { this.S.flags.jacket = true; if (!quiet) this.ui.toast('🧥 Jacke angezogen – du frierst nur noch halb so schnell.'); return true; }
-    if (it?.battery && this.has('taschenlampe')) { this.S.battery = 100; if (!quiet) this.ui.toast('🔋 Taschenlampe aufgeladen.'); return true; }
+    if (it?.equip === 'jacket') { this.S.flags.jacket = true; if (!quiet) this.ui.toast(T('🧥 Jacke angezogen – du frierst nur noch halb so schnell.')); return true; }
+    if (it?.battery && this.has('taschenlampe')) { this.S.battery = 100; if (!quiet) this.ui.toast(T('🔋 Taschenlampe aufgeladen.')); return true; }
     if (it?.ammo) { for (let i = 0; i < n; i++) this.combat.addAmmo(id); return true; }
-    if (id === 'geld') { this.S.money = +(this.S.money + 43.2 * n).toFixed(2); if (!quiet) this.ui.toast('💶 43,20 € eingesteckt. Im Dorf gibt es einen Händler …'); return true; }
-    if (it?.equip === 'fur') { this.S.flags.fur = true; if (!quiet) this.ui.toast('🧥 Fellmantel angezogen – dir wird so schnell nicht mehr kalt.'); return true; }
+    if (id === 'geld') { this.S.money = +(this.S.money + 43.2 * n).toFixed(2); if (!quiet) this.ui.toast(T('💶 43,20 € eingesteckt. Im Dorf gibt es einen Händler …')); return true; }
+    if (it?.equip === 'fur') { this.S.flags.fur = true; if (!quiet) this.ui.toast(T('🧥 Fellmantel angezogen – dir wird so schnell nicht mehr kalt.')); return true; }
     const max = it?.mat ? 30 : 10, inv = this.S.inv;
     const room = inv.filter(s => s.id === id).reduce((a, s) => a + max - s.n, 0) + (this.capacity() - inv.length) * max;
-    if (room < n) { this.ui.toast(this.S.flags.bag ? 'Dein Rucksack ist voll.' : 'Deine Taschen sind voll – du brauchst einen Rucksack.', 'warn'); this.audio.sfx('error'); return false; }
+    if (room < n) { this.ui.toast(this.S.flags.bag ? T('Dein Rucksack ist voll.') : T('Deine Taschen sind voll – du brauchst einen Rucksack.'), 'warn'); this.audio.sfx('error'); return false; }
     let left = n;
     const fresh = it?.spoil ? (f ?? it.spoil) : undefined;                 // food: the stack keeps the oldest freshness
     while (left > 0) { let s = inv.find(s => s.id === id && s.n < max); if (!s) { s = { id, n: 0 }; if (fresh !== undefined) s.f = fresh; inv.push(s); } else if (fresh !== undefined) s.f = Math.min(s.f ?? it.spoil, fresh);
       const k = Math.min(left, max - s.n); s.n += k; left -= k; }
     this.album?.see('i_' + id);
-    if (!quiet) this.ui.toast(`+ ${n > 1 ? n + '× ' : ''}${it?.icon || ''} ${it?.name || id}${it?.rare ? ' ★ selten!' : ''}`, it?.rare ? 'good' : ''); this.ui.renderHotbar(inv, this.S.sel); return true;
+    if (!quiet) { const count = n > 1 ? n + '× ' : '', item = `${it?.icon || ''} ${it?.name || id}`; this.ui.toast(it?.rare ? T('+ {count}{item} ★ selten!', { count, item }) : `+ ${count}${item}`, it?.rare ? 'good' : ''); } this.ui.renderHotbar(inv, this.S.sel); return true;
   }
   take(id, n = 1) {
     for (let i = this.S.inv.length - 1; i >= 0 && n > 0; i--) { const s = this.S.inv[i]; if (s.id !== id) continue; const k = Math.min(n, s.n); s.n -= k; n -= k; if (!s.n) this.S.inv.splice(i, 1); }
@@ -124,18 +127,18 @@ export class Game {
     if (k >= inv.length) k = inv.length - 1;
     if (i !== k) [inv[i], inv[k]] = [inv[k], inv[i]];
     this.S.sel = k; this.audio.sfx('pickup'); this.ui.renderHotbar(inv, k);
-    this.ui.toast(`✋ ${ITEMS[inv[k].id].icon} ${ITEMS[inv[k].id].name} in der Hand (Platz ${k + 1}).`); return true;
+    this.ui.toast(T('✋ {item} in der Hand (Platz {n}).', { item: `${ITEMS[inv[k].id].icon} ${ITEMS[inv[k].id].name}`, n: k + 1 })); return true;
   }
   useSlot(i) {
     const s = this.S.inv[i]; if (!s) return; const it = ITEMS[s.id];
-    if (s.id === 'fackel') { if (this.torchOn) return this.ui.toast('Die Fackel brennt schon.'); if (!this.has('feuerzeug')) return this.ui.toast('Du brauchst ein Feuerzeug.');
-      this.take('fackel'); this.torchOn = true; this.torchT = 240; this.audio.sfx('fire'); return this.ui.toast('🔥 Fackel angezündet (4 Minuten).'); }
+    if (s.id === 'fackel') { if (this.torchOn) return this.ui.toast(T('Die Fackel brennt schon.')); if (!this.has('feuerzeug')) return this.ui.toast(T('Du brauchst ein Feuerzeug.'));
+      this.take('fackel'); this.torchOn = true; this.torchT = 240; this.audio.sfx('fire'); return this.ui.toast(T('🔥 Fackel angezündet (4 Minuten).')); }
     if (it.read) return this.read(s.id);
-    if (it.weapon) return this.ui.toast(`${it.icon} ${it.name}: Linksklick = ${WEAPONS[it.weapon].melee ? 'zustechen' : 'schießen, R = nachladen, rechte Maustaste = zielen'}.`);
-    if (s.id === 'spieluhr') { this.audio.sfx('musicbox'); return this.ui.toast('🎶 Die Spieluhr klimpert ein altes Wiegenlied …'); }
-    if (s.id === 'kerze') { if (!this.has('feuerzeug')) return this.ui.toast('Du brauchst ein Feuerzeug.'); this.take('kerze'); this.candleT = 180; return this.ui.toast('🕯️ Die Kerze brennt.'); }
-    if (it.battery && this.has('taschenlampe')) { this.take(s.id); this.S.battery = 100; return this.ui.toast('🔋 Taschenlampe aufgeladen.'); }
-    if (!it.use) return this.ui.toast(it.desc || 'Damit kann man so nichts anfangen.');
+    if (it.weapon) { const item = `${it.icon} ${it.name}`; return this.ui.toast(WEAPONS[it.weapon].melee ? T('{item}: Linksklick = zustechen.', { item }) : T('{item}: Linksklick = schießen, R = nachladen, rechte Maustaste = zielen.', { item })); }
+    if (s.id === 'spieluhr') { this.audio.sfx('musicbox'); return this.ui.toast(T('🎶 Die Spieluhr klimpert ein altes Wiegenlied …')); }
+    if (s.id === 'kerze') { if (!this.has('feuerzeug')) return this.ui.toast(T('Du brauchst ein Feuerzeug.')); this.take('kerze'); this.candleT = 180; return this.ui.toast(T('🕯️ Die Kerze brennt.')); }
+    if (it.battery && this.has('taschenlampe')) { this.take(s.id); this.S.battery = 100; return this.ui.toast(T('🔋 Taschenlampe aufgeladen.')); }
+    if (!it.use) return this.ui.toast(it.desc || T('Damit kann man so nichts anfangen.'));
     const st = this.S.stats;
     const table = this.build.near('tisch', this.P.pos, 2.2) ? 1.2 : 1;
     for (const [k, v] of Object.entries(it.use)) st[k] = clamp(st[k] + (k === 'hunger' && v > 0 ? v * table : v));
@@ -151,7 +154,7 @@ export class Game {
     const f = this.P.forward(new THREE.Vector3()); f.y = 0; f.normalize(); const p = this.P.pos.clone().addScaledVector(f, .9);
     const fl = this.build.room(p)?.floor; p.y = fl ?? this.W.groundY(p.x, p.z, this.P.pos.y + 1.2);
     this.addDrop({ id: s.id, n: s.n, p: p.toArray().map(v => +v.toFixed(2)), f: s.f });
-    this.ui.toast(`${ITEMS[s.id].icon} ${ITEMS[s.id].name} abgelegt – mit E wieder aufheben.`); this.ui.renderHotbar(this.S.inv, this.S.sel);
+    this.ui.toast(T('{item} abgelegt – mit E wieder aufheben.', { item: `${ITEMS[s.id].icon} ${ITEMS[s.id].name}` })); this.ui.renderHotbar(this.S.inv, this.S.sel);
   }
   addDrop(d) {
     const it = ITEMS[d.id]; if (!it) return; const g = new THREE.Group(); g.position.fromArray(d.p);
@@ -169,21 +172,21 @@ export class Game {
   dropTarget(o, f) { let best = null, ba = .2; for (const r of this.drops) { const d = r.g.position.clone().add(new THREE.Vector3(0, .15, 0)).sub(o), L = d.length(); if (L > 2.6) continue; const a = d.normalize().angleTo(f); if (a < ba) { ba = a; best = r; } } return best; }
   // trader Kurt
   buy(id) { const pr = TRADE.buy[id]; if (!pr || this.S.money < pr) return;
-    const eq = ITEMS[id]?.equip; if (eq && this.S.flags[eq]) return this.ui.toast(`Kurt: „Den ${ITEMS[id].name} hast du doch schon auf dem Rücken.“`); if (!this.add(id, 1)) return; this.S.money = +(this.S.money - pr).toFixed(2); this.audio.sfx('coins'); this.progress.add(2, ''); }
+    const eq = ITEMS[id]?.equip; if (eq && this.S.flags[eq]) return this.ui.toast(T('Kurt: „Den {item} hast du doch schon auf dem Rücken.“', { item: ITEMS[id].name })); if (!this.add(id, 1)) return; this.S.money = +(this.S.money - pr).toFixed(2); this.audio.sfx('coins'); this.progress.add(2, ''); }
   sell(id, all) { const pr = TRADE.sell[id], n = all ? this.count(id) : Math.min(1, this.count(id)); if (!pr || !n) return; this.take(id, n); this.S.money = +(this.S.money + pr * n).toFixed(2);
-    this.progress.stat('sold_' + id, n); this.progress.stat('earned', pr * n); this.audio.sfx('coins'); this.ui.toast(`💶 ${n}× ${ITEMS[id].name} verkauft: +${(pr * n).toFixed(2).replace('.', ',')} €`); }
+    this.progress.stat('sold_' + id, n); this.progress.stat('earned', pr * n); this.audio.sfx('coins'); this.ui.toast(T('💶 {n}× {item} verkauft: +{money} €', { n, item: ITEMS[id].name, money: eur(pr * n) })); }
   talk(what) {
-    if (what === 'story' && Object.keys(this.S.notes).length >= 5) { this.S.flags.kurtStory = 1; this.add('patronen_gewehr', 1, true); this.ui.toast('Kurt: „Brandt! Hab ich’s doch gewusst. Hier, nimm die Patronen – für alle Fälle.“', 'good'); what = 'radio'; }
+    if (what === 'story' && Object.keys(this.S.notes).length >= 5) { this.S.flags.kurtStory = 1; this.add('patronen_gewehr', 1, true); this.ui.toast(T('Kurt: „Brandt! Hab ich’s doch gewusst. Hier, nimm die Patronen – für alle Fälle.“'), 'good'); what = 'radio'; }
     if (what === 'radio' && this.S.flags.kurtStory && !this.S.flags.gotRadio) { if (!this.add('handfunk', 1, true)) return; this.S.flags.gotRadio = 1; this.audio.sfx('radio');
-      setTimeout(() => this.ui.toast('Kurt: „Und nimm mein altes Funkgerät. Kanal 7 – abends hört man manchmal Leute aus der Stadt. Find raus, was Brandt vorhat!“', 'good'), 1800); }
+      setTimeout(() => this.ui.toast(T('Kurt: „Und nimm mein altes Funkgerät. Kanal 7 – abends hört man manchmal Leute aus der Stadt. Find raus, was Brandt vorhat!“'), 'good'), 1800); }
     if (what === 'order') this.orders.accept(); if (what === 'deliver') this.orders.deliver();
   }
   // sleep in a bed until 7:00 (from 18:00): time passes, you heal, fields grow, the night's animals are gone
   sleep(bed) {
     const S = this.S, ui = this.ui, P = this.P;
-    if (S.time > 6 && S.time < 18) return ui.toast('Du bist nicht müde. Schlafen geht ab 18 Uhr.');
+    if (S.time > 6 && S.time < 18) return ui.toast(T('Du bist nicht müde. Schlafen geht ab 18 Uhr.'));
     const foe = this.life.animals.some(a => ['wolf', 'boar', 'bear', 'grimm'].includes(a.kind) && a.state !== 'dead' && a.pos.distanceTo(P.pos) < 30);
-    if (foe && !this.indoor(P.pos)) { this.audio.sfx('error'); return ui.toast('Zu gefährlich – Raubtiere in der Nähe!', 'warn'); }
+    if (foe && !this.indoor(P.pos)) { this.audio.sfx('error'); return ui.toast(T('Zu gefährlich – Raubtiere in der Nähe!'), 'warn'); }
     const hours = S.time >= 18 ? 24 - S.time + 7 : 7 - S.time;
     ui.fade?.(); this.audio.sfx('sleep');
     setTimeout(() => {
@@ -194,7 +197,7 @@ export class Game {
       if (S.genFuel > 0) S.genFuel = Math.max(0, S.genFuel - hours);
       for (const f of this.life.fires) { f.fuel -= hours; if (f.fuel <= 0) { f.fuel = 0; f.on = false; } }
       this.build.update(0, hours); this.health.update(0, hours, true); this.life.clear(); this.S.flags.slept = 1; this.progress.stat('slept');
-      ui.toast(`☀️ Gut geschlafen. Tag ${S.day}, 7:00 Uhr.${st.hunger < 30 || st.thirst < 30 ? ' Du hast Hunger und Durst.' : ''}`, 'good'); this.save();
+      ui.toast(st.hunger < 30 || st.thirst < 30 ? T('☀️ Gut geschlafen. Tag {day}, 7:00 Uhr. Du hast Hunger und Durst.', { day: S.day }) : T('☀️ Gut geschlafen. Tag {day}, 7:00 Uhr.', { day: S.day }), 'good'); this.save();
     }, 1200);
   }
   canCraft(r) {
@@ -213,16 +216,16 @@ export class Game {
     }
     if (r.place === 'fire') {
       const f = this.P.forward(); f.y = 0; f.normalize(); const p = this.P.pos.clone().addScaledVector(f, 1.6); p.y = this.W.groundY(p.x, p.z, this.P.pos.y + 1);
-      this.life.addFire(p, 6); this.audio.sfx('fire'); this.ui.toast('🔥 Lagerfeuer brennt. E = Holz nachlegen, kochen.');
+      this.life.addFire(p, 6); this.audio.sfx('fire'); this.ui.toast(T('🔥 Lagerfeuer brennt. E = Holz nachlegen, kochen.'));
     } else {
       if (r.ammoN) { const w = ITEMS[Object.keys(r.gives)[0]].ammo[0]; this.S.ammo[w] = (this.S.ammo[w] || 0) + r.ammoN; }
       else for (const [k, v] of Object.entries(r.gives)) this.add(k, r.id === 'bretter' && this.has('saege') ? 4 : v, true);
-      this.audio.sfx('craft'); this.ui.toast(`🛠️ ${r.name} hergestellt.`); this.progress.add(r.bench ? 8 : 4, r.name); this.progress.stat('crafted');
+      this.audio.sfx('craft'); this.ui.toast(T('🛠️ {name} hergestellt.', { name: r.name })); this.progress.add(r.bench ? 8 : 4, r.name); this.progress.stat('crafted');
     }
     this.ui.renderInventory(this);
   }
   read(id) {
-    if (id === 'notiz_hochsitz') { this.S.flags.notiz = 1; this.ui.read('Notizzettel', this.byName.Notizzettel?.u.text || ''); }
+    if (id === 'notiz_hochsitz') { this.S.flags.notiz = 1; this.ui.read(T('Notizzettel'), this.byName.Notizzettel?.u.text || ''); }
   }
 
   // ---------------------------------------------------------------- world helpers
@@ -287,42 +290,41 @@ export class Game {
   }
   verb(t) {
     if (!t) return '';
-    if (t.down) return '[E] Runterklettern';
-    if (t.tree) return t.tree.fixed || t.tree.kind === 'Linde' ? 'Ein mächtiger Baum' : `[E] Baum fällen (Axt) ${t.tree.hits || 0}/${this.build.chopsNeeded()}`;
+    if (t.down) return T('[E] Runterklettern');
+    if (t.tree) return t.tree.fixed || t.tree.kind === 'Linde' ? T('Ein mächtiger Baum') : T('[E] Baum fällen (Axt) {n}/{max}', { n: t.tree.hits || 0, max: this.build.chopsNeeded() });
     if (t.build || t.log) return this.build.verb(t);
     if (t.exit) return this.vehicle.verb();
     if (t.boatExit) return this.boat.verb();
     if (t.dog) return this.life.dogVerb();
-    if (t.drop) return `[E] ${ITEMS[t.drop.id].icon} ${ITEMS[t.drop.id].name}${t.drop.n > 1 ? ' ×' + t.drop.n : ''} aufheben`;
-    if (t.carcass) return this.has('messer') ? '[E] Zerlegen (Messer)' : 'Erlegtes Tier – ein Messer zum Zerlegen fehlt';
+    if (t.drop) return T('[E] {name} aufheben', { name: `${ITEMS[t.drop.id].icon} ${ITEMS[t.drop.id].name}${t.drop.n > 1 ? ' ×' + t.drop.n : ''}` });
+    if (t.carcass) return this.has('messer') ? T('[E] Zerlegen (Messer)') : T('Erlegtes Tier – ein Messer zum Zerlegen fehlt');
     if (t.ice) return this.ice.verb(t);
     if (t.fire) { const f = t.fire;
-      if (!f.on) return this.brenn() && this.has('feuerzeug') ? '[E] Feuer wieder anzünden' : 'Feuer aus – Holz + Feuerzeug nötig';
-      const c = this.cookable(); if (c) return `[E] ${c[2]}`; if (this.brenn()) return '[E] Holz nachlegen'; return 'Lagerfeuer – wärmt dich'; }
+      if (!f.on) return this.brenn() && this.has('feuerzeug') ? T('[E] Feuer wieder anzünden') : T('Feuer aus – Holz + Feuerzeug nötig');
+      const c = this.cookable(); if (c) return `[E] ${c[2]}`; if (this.brenn()) return T('[E] Holz nachlegen'); return T('Lagerfeuer – wärmt dich'); }
     const it = t.it, u = it.u, L = it.label;
     switch (u.interact) {
       case 'door': case 'lid': case 'slide': case 'drawer':
-        if (u.interact === 'slide' && u.auto && this.strom()) return L + ' (öffnet automatisch)';
-        if (u.code && u.locked && !it.state.unlocked) return `[E] ${L}: Code eingeben`;
-        return `[E] ${L} ${it.target ? 'schließen' : 'öffnen'}`;
-      case 'switch': return `[E] ${L} (${this.S.flags.lightsOff ? 'an' : 'aus'})`;
-      case 'pickup': return `[E] ${L} aufheben`;
-      case 'search': return it.state.searched ? L + ' (leer)' : `[E] ${L} durchsuchen`;
-      case 'pickup': return `[E] ${L} aufheben`;
-      case 'pump': return `[E] ${L} benutzen`;
-      case 'read': return u.diary && this.S.diary?.[u.diary] ? `[E] ${L} (gelesen) – nochmal lesen` : `[E] ${L} lesen`;
-      case 'trade': return `[E] Mit ${L.split(' ')[0]} reden / handeln`;
-      case 'talk': return `[E] Mit ${L.split(' ')[0]} reden`;
+        if (u.interact === 'slide' && u.auto && this.strom()) return T('{name} (öffnet automatisch)', { name: L });
+        if (u.code && u.locked && !it.state.unlocked) return T('[E] {name}: Code eingeben', { name: L });
+        return it.target ? T('[E] {name} schließen', { name: L }) : T('[E] {name} öffnen', { name: L });
+      case 'switch': return this.S.flags.lightsOff ? T('[E] {name} (an)', { name: L }) : T('[E] {name} (aus)', { name: L });
+      case 'pickup': return T('[E] {name} aufheben', { name: L });
+      case 'search': return it.state.searched ? T('{name} (leer)', { name: L }) : T('[E] {name} durchsuchen', { name: L });
+      case 'pump': return T('[E] {name} benutzen', { name: L });
+      case 'read': return u.diary && this.S.diary?.[u.diary] ? T('[E] {name} (gelesen) – nochmal lesen', { name: L }) : T('[E] {name} lesen', { name: L });
+      case 'trade': return T('[E] Mit {name} reden / handeln', { name: L.split(' ')[0] });
+      case 'talk': return T('[E] Mit {name} reden', { name: L.split(' ')[0] });
       case 'use':
-        if (u.use === 'auto') return this.vehicle.verb(); if (u.use === 'bett') return `[E] ${L}: schlafen`; if (u.use === 'boot') return this.boat.verb();
-        if (u.use === 'graben') return it.state.dug ? 'Hier ist schon alles ausgegraben' : this.has('spaten') ? '[E] Unter dem Steinkreuz graben (Spaten)' : 'Ein Kreuz aus Steinen – der Boden darunter ist locker';
-        if (u.use === 'sprengen') return '[E] Geröll sprengen (2 Sprengpulver, Zündschnur, Feuerzeug)';
-        if (u.use === 'zuender') return this.S.flags.ending ? 'Zündmaschine – ' + (this.S.flags.ending === 'wahrheit' ? 'Kabel gekappt' : 'leer') : '[E] Zündmaschine untersuchen';
-        if (u.use === 'funkaggregat') return this.S.flags.funkPower ? 'Notstrom-Aggregat läuft' : '[E] Aggregat betanken (voller Kanister)';
-        if (u.use === 'sender') return this.S.flags.funkPower ? `[E] Funksender: ${this.S.flags.funkCalled ? 'Wetterbericht abfragen' : 'Bergwacht rufen'}` : 'Funksender – kein Strom';
+        if (u.use === 'auto') return this.vehicle.verb(); if (u.use === 'bett') return T('[E] {name}: schlafen', { name: L }); if (u.use === 'boot') return this.boat.verb();
+        if (u.use === 'graben') return it.state.dug ? T('Hier ist schon alles ausgegraben') : this.has('spaten') ? T('[E] Unter dem Steinkreuz graben (Spaten)') : T('Ein Kreuz aus Steinen – der Boden darunter ist locker');
+        if (u.use === 'sprengen') return T('[E] Geröll sprengen (2 Sprengpulver, Zündschnur, Feuerzeug)');
+        if (u.use === 'zuender') return this.S.flags.ending ? (this.S.flags.ending === 'wahrheit' ? T('Zündmaschine – Kabel gekappt') : T('Zündmaschine – leer')) : T('[E] Zündmaschine untersuchen');
+        if (u.use === 'funkaggregat') return this.S.flags.funkPower ? T('Notstrom-Aggregat läuft') : T('[E] Aggregat betanken (voller Kanister)');
+        if (u.use === 'sender') return this.S.flags.funkPower ? (this.S.flags.funkCalled ? T('[E] Funksender: Wetterbericht abfragen') : T('[E] Funksender: Bergwacht rufen')) : T('Funksender – kein Strom');
         break;
     }
-    if (u.ladder) return this.onHochsitz ? '[E] Runterklettern' : '[E] Leiter hochklettern';
+    if (u.ladder) return this.onHochsitz ? T('[E] Runterklettern') : T('[E] Leiter hochklettern');
     return `[E] ${L}`;
   }
   interact(t) {
@@ -345,13 +347,13 @@ export class Game {
     }
     switch (u.interact) {
       case 'door': case 'lid': case 'slide': case 'drawer': {
-        if (u.needs === 'strom' && !this.strom()) { if (it.name.startsWith('Schiebetuer')) S.flags.frontTried = 1; A.sfx('locked'); return ui.toast(u.locked_msg || 'Ohne Strom geht das nicht.'); }
+        if (u.needs === 'strom' && !this.strom()) { if (it.name.startsWith('Schiebetuer')) S.flags.frontTried = 1; A.sfx('locked'); return ui.toast(u.locked_msg || T('Ohne Strom geht das nicht.')); }
         if (u.locked && !it.state.unlocked && u.code) { this.codeFor = it; A.sfx('key'); return this.openPanel?.('code'); }
         if (u.locked && !it.state.unlocked) {
           if (it.name === 'Hintertuer') S.flags.backTried = 1;
-          if (u.key && this.has(u.key)) { it.state.unlocked = 1; A.sfx('switch'); ui.toast('🔑 Aufgeschlossen.'); }
-          else if (this.has('brecheisen')) { it.state.unlocked = 1; A.sfx('chop'); ui.toast('🔧 Mit dem Brecheisen aufgebrochen.'); }
-          else { A.sfx('locked'); return ui.toast(u.locked_msg || 'Abgeschlossen.'); }
+          if (u.key && this.has(u.key)) { it.state.unlocked = 1; A.sfx('switch'); ui.toast(T('🔑 Aufgeschlossen.')); }
+          else if (this.has('brecheisen')) { it.state.unlocked = 1; A.sfx('chop'); ui.toast(T('🔧 Mit dem Brecheisen aufgebrochen.')); }
+          else { A.sfx('locked'); return ui.toast(u.locked_msg || T('Abgeschlossen.')); }
         }
         it.target = it.target ? 0 : 1; A.sfx(u.interact === 'slide' ? 'slide' : it.name.includes('Kuehl') ? 'switch' : u.interact === 'door' ? 'creak' : 'door');
         if (it.target && u.item && !it.state.got) { it.state.got = 1; setTimeout(() => this.add(u.item), 400); }
@@ -359,46 +361,46 @@ export class Game {
         return;
       }
       case 'switch':
-        if (!this.strom()) { A.sfx('switch'); return ui.toast('Klick. Nichts passiert – kein Strom.'); }
+        if (!this.strom()) { A.sfx('switch'); return ui.toast(T('Klick. Nichts passiert – kein Strom.')); }
         S.flags.lightsOff = !S.flags.lightsOff; A.sfx('switch'); return;
       case 'pickup':
         if (this.add(u.item)) {
           A.sfx('pickup');
           if (!u.infinite) { it.node.visible = false; it.state.taken = 1; }
           if (u.item === 'notiz_hochsitz') this.read('notiz_hochsitz');
-          if (u.item === 'bergkristall') { this.progress.stat('kristall'); this.progress.add(20, 'Bergkristall'); }
+          if (u.item === 'bergkristall') { this.progress.stat('kristall'); this.progress.add(20, T('Bergkristall')); }
         }
         return;
       case 'search': {
-        if (it.state.searched) return ui.toast('Hier ist nichts mehr.');
+        if (it.state.searched) return ui.toast(T('Hier ist nichts mehr.'));
         A.sfx(it.name.startsWith('Sack') ? 'rustle' : 'door');
         if (u.loot) {                    // loot list: hand out what fits, the rest stays inside
           const left = (it.state.left || u.loot).filter(([id]) => ITEMS[id]); const keep = [];
           for (const [id, n] of left) if (!this.add(id, n, true)) keep.push([id, n]);
           const got = left.filter(x => !keep.includes(x));
-          if (got.length) ui.toast(u.found && !keep.length && !it.state.left ? u.found : 'Gefunden: ' + got.map(([id, n]) => `${n > 1 ? n + '× ' : ''}${ITEMS[id].icon} ${ITEMS[id].name}`).join(', '), 'good');
-          if (keep.length) { it.state.left = keep; ui.toast('Dein Rucksack ist voll – der Rest bleibt hier.', 'warn'); } else { it.state.searched = 1; delete it.state.left; this.emptySack(it); if (it.name.startsWith('Sack')) this.progress.stat('sacks'); }
+          if (got.length) ui.toast(u.found && !keep.length && !it.state.left ? u.found : T('Gefunden: {list}', { list: got.map(([id, n]) => `${n > 1 ? n + '× ' : ''}${ITEMS[id].icon} ${ITEMS[id].name}`).join(', ') }), 'good');
+          if (keep.length) { it.state.left = keep; ui.toast(T('Dein Rucksack ist voll – der Rest bleibt hier.'), 'warn'); } else { it.state.searched = 1; delete it.state.left; this.emptySack(it); if (it.name.startsWith('Sack')) this.progress.stat('sacks'); }
           if (it.name === 'Schatzkiste' && got.length) { S.flags.treasure = 1; this.audio.sfx('win'); }
-          if (u.stash && got.length) { this.progress.stat('stash'); this.progress.add(40, 'Geheimversteck'); this.audio.sfx('badge'); setTimeout(() => ui.toast(`🗝️ Geheimversteck gefunden! (${this.W.interactives.filter(x => x.u.stash && (x.state.searched || x === it)).length}/${this.W.interactives.filter(x => x.u.stash).length})`, 'good'), 500); }
+          if (u.stash && got.length) { this.progress.stat('stash'); this.progress.add(40, T('Geheimversteck')); this.audio.sfx('badge'); setTimeout(() => ui.toast(T('🗝️ Geheimversteck gefunden! ({n}/{total})', { n: this.W.interactives.filter(x => x.u.stash && (x.state.searched || x === it)).length, total: this.W.interactives.filter(x => x.u.stash).length }), 'good'), 500); }
           if (got.length) A.sfx('pickup'); return;
         }
-        if (this.add(u.item, u.item === 'dosenbohnen' ? 2 : 1, true)) { it.state.searched = 1; if (u.bonus) this.add(u.bonus, 1, true); ui.toast(u.found || `Gefunden: ${ITEMS[u.item].name}`); A.sfx('pickup'); }
+        if (this.add(u.item, u.item === 'dosenbohnen' ? 2 : 1, true)) { it.state.searched = 1; if (u.bonus) this.add(u.bonus, 1, true); ui.toast(u.found || T('Gefunden: {list}', { list: ITEMS[u.item].name })); A.sfx('pickup'); }
         return;
       }
       case 'trade': this.S.flags.metKurt = 1; return this.openPanel?.('trade');
       case 'talk': return this.talkNpc(it);
       case 'read':
         if (u.diary) return this.story.readPage(it);
-        if (u.note && !this.S.notes[u.note]) { this.S.notes[u.note] = 1; this.progress.add(15, 'Notiz'); setTimeout(() => ui.toast(`📜 Notiz ${Object.keys(this.S.notes).length}/5 gefunden (Nebenaufgabe „Das stille Dorf“).`, 'good'), 400); }
+        if (u.note && !this.S.notes[u.note]) { this.S.notes[u.note] = 1; this.progress.add(15, T('Notiz')); setTimeout(() => ui.toast(T('📜 Notiz {n}/5 gefunden (Nebenaufgabe „Das stille Dorf“).', { n: Object.keys(this.S.notes).length }), 'good'), 400); }
         if (it.name === 'Tagebuch_Henning') S.flags.diary = 1;
         if (u.reveal) { const ids = u.reveal === 'all' ? this.places.filter(p => p.region === 'tal').map(p => p.id) : u.reveal === 'berg_all' ? this.places.filter(p => p.region === 'berg').map(p => p.id) : u.reveal.split(','); let n = 0;
           for (const id of ids) if (!this.S.known[id] && !this.S.found[id]) { this.S.known[id] = 1; n++; }
-          if (n) setTimeout(() => ui.toast(`🗺️ ${n} ${n > 1 ? 'Orte' : 'Ort'} auf deiner Karte eingetragen.`, 'good'), 300); }
+          if (n) setTimeout(() => ui.toast(TN(n, '🗺️ {n} Ort auf deiner Karte eingetragen.', '🗺️ {n} Orte auf deiner Karte eingetragen.'), 'good'), 300); }
         return ui.read(it.label, u.text || '');
       case 'pump':
-        if (!this.strom()) { A.sfx('error'); return ui.toast('Das Display bleibt dunkel. Ohne Strom pumpt hier nichts.'); }
-        if (this.has('kanister')) { A.sfx('fuel'); this.swap('kanister', 'kanister_voll'); return ui.toast('⛽ Kanister mit Diesel gefüllt.'); }
-        A.sfx('beep'); return ui.toast('Die Säule ist bereit – aber du hast kein Auto hier. Mit einem leeren Kanister könntest du tanken.');
+        if (!this.strom()) { A.sfx('error'); return ui.toast(T('Das Display bleibt dunkel. Ohne Strom pumpt hier nichts.')); }
+        if (this.has('kanister')) { A.sfx('fuel'); this.swap('kanister', 'kanister_voll'); return ui.toast(T('⛽ Kanister mit Diesel gefüllt.')); }
+        A.sfx('beep'); return ui.toast(T('Die Säule ist bereit – aber du hast kein Auto hier. Mit einem leeren Kanister könntest du tanken.'));
       case 'use': return this.use(it);
     }
   }
@@ -408,62 +410,62 @@ export class Game {
       case 'generator':
         if (this.has('kanister_voll')) {
           this.swap('kanister_voll', 'kanister'); const was = on; S.genFuel = Math.min(14, S.genFuel + 10); A.sfx('genstart');
-          return ui.toast(was ? '⛽ Nachgetankt. Tank wieder voll.' : '⚡ Das Aggregat springt an! Die Tankstelle hat Strom.', 'good');
+          return ui.toast(was ? T('⛽ Nachgetankt. Tank wieder voll.') : T('⚡ Das Aggregat springt an! Die Tankstelle hat Strom.'), 'good');
         }
-        if (on) return ui.toast(`Das Aggregat brummt. Tank: ${Math.round(S.genFuel / 14 * 100)} %.`);
-        A.sfx('error'); S.flags.genTried = 1; return ui.toast('Der Tank ist leer. Du brauchst einen Kanister mit Diesel.');
+        if (on) return ui.toast(T('Das Aggregat brummt. Tank: {n} %.', { n: Math.round(S.genFuel / 14 * 100) }));
+        A.sfx('error'); S.flags.genTried = 1; return ui.toast(T('Der Tank ist leer. Du brauchst einen Kanister mit Diesel.'));
       case 'handpumpe':
-        if (this.has('kanister')) { A.sfx('pump'); this.swap('kanister', 'kanister_voll'); return ui.toast('🛢️ Kanister mit Diesel gefüllt (20 Liter).', 'good'); }
-        return ui.toast(this.has('kanister_voll') ? 'Dein Kanister ist schon voll.' : 'Ein Fass Diesel mit Handpumpe. Dafür bräuchtest du einen Kanister.');
+        if (this.has('kanister')) { A.sfx('pump'); this.swap('kanister', 'kanister_voll'); return ui.toast(T('🛢️ Kanister mit Diesel gefüllt (20 Liter).'), 'good'); }
+        return ui.toast(this.has('kanister_voll') ? T('Dein Kanister ist schon voll.') : T('Ein Fass Diesel mit Handpumpe. Dafür bräuchtest du einen Kanister.'));
       case 'sicherung':
         S.flags.fuse = 1; A.sfx('switch');
-        return ui.toast(on ? 'Alle Sicherungen drin. Notstrom läuft.' : 'Hauptschalter an – trotzdem nichts. Das Netz ist tot. Ein Zettel: „Notstrom: Aggregat hinterm Haus“.');
+        return ui.toast(on ? T('Alle Sicherungen drin. Notstrom läuft.') : T('Hauptschalter an – trotzdem nichts. Das Netz ist tot. Ein Zettel: „Notstrom: Aggregat hinterm Haus“.'));
       case 'funk':
-        if (S.flags.radioCalled) return ui.toast('„Bergwacht hier. Wir kommen bei Sonnenaufgang. Halten Sie durch!“');
-        if (!on) { A.sfx('error'); S.flags.funkTried = S.flags.funkTried || 0; return ui.toast('Das Funkgerät hängt am Netz – ohne Strom bleibt es tot.'); }
+        if (S.flags.radioCalled) return ui.toast(T('„Bergwacht hier. Wir kommen bei Sonnenaufgang. Halten Sie durch!“'));
+        if (!on) { A.sfx('error'); S.flags.funkTried = S.flags.funkTried || 0; return ui.toast(T('Das Funkgerät hängt am Netz – ohne Strom bleibt es tot.')); }
         if (this.has('batterie_9v')) {
           this.take('batterie_9v'); S.flags.radioCalled = 1; A.sfx('radio');
           const now = S.abs; let r = (S.day - 1) * 24 + 6.5; while (r < now + 3) r += 24; S.rescueAt = r;
-          return ui.read('Funkgerät', '„… hier Bergwacht Nordwald. Wir haben Sie. Die Forststraße ist blockiert, wir kommen bei Sonnenaufgang mit dem Geländewagen. Bleiben Sie, wo es warm ist – und halten Sie sich von den Wölfen fern. Ende.“');
+          return ui.read(T('Funkgerät'), T('„… hier Bergwacht Nordwald. Wir haben Sie. Die Forststraße ist blockiert, wir kommen bei Sonnenaufgang mit dem Geländewagen. Bleiben Sie, wo es warm ist – und halten Sie sich von den Wölfen fern. Ende.“'));
         }
-        S.flags.funkTried = 1; A.sfx('radio'); return ui.toast('Es knackt, das Display flackert und geht aus. Der Notakku ist leer – ein 9-V-Block fehlt.');
-      case 'telefon': A.sfx('beep'); return ui.toast('Kein Freizeichen. Die Leitung ist tot.');
-      case 'kasse': if (!on) return ui.toast('Die Kasse ist aus.'); A.sfx('beep'); return ui.toast('Piep. „Bitte Kassierer anmelden.“');
+        S.flags.funkTried = 1; A.sfx('radio'); return ui.toast(T('Es knackt, das Display flackert und geht aus. Der Notakku ist leer – ein 9-V-Block fehlt.'));
+      case 'telefon': A.sfx('beep'); return ui.toast(T('Kein Freizeichen. Die Leitung ist tot.'));
+      case 'kasse': if (!on) return ui.toast(T('Die Kasse ist aus.')); A.sfx('beep'); return ui.toast(T('Piep. „Bitte Kassierer anmelden.“'));
       case 'kaffee':
-        if (!on) { A.sfx('error'); return ui.toast('Kein Strom.'); }
-        A.sfx('coffee'); setTimeout(() => this.add('kaffee'), 2200); return ui.toast('☕ Die Maschine brüht einen Kaffee …');
+        if (!on) { A.sfx('error'); return ui.toast(T('Kein Strom.')); }
+        A.sfx('coffee'); setTimeout(() => this.add('kaffee'), 2200); return ui.toast(T('☕ Die Maschine brüht einen Kaffee …'));
       case 'mikrowelle':
-        if (!on) return ui.toast('Kein Strom.');
-        if (!this.has('dosensuppe')) return ui.toast('Eine Mikrowelle. Mit einer Dosensuppe wäre sie nützlich.');
-        A.sfx('micro'); this.take('dosensuppe'); setTimeout(() => this.add('suppe_warm'), 3000); return ui.toast('Die Suppe dreht sich …');
-      case 'atm': if (!on) return ui.toast('Der Bildschirm ist schwarz.'); A.sfx('beep'); return ui.toast('„Verbindung zur Bank nicht möglich.“');
+        if (!on) return ui.toast(T('Kein Strom.'));
+        if (!this.has('dosensuppe')) return ui.toast(T('Eine Mikrowelle. Mit einer Dosensuppe wäre sie nützlich.'));
+        A.sfx('micro'); this.take('dosensuppe'); setTimeout(() => this.add('suppe_warm'), 3000); return ui.toast(T('Die Suppe dreht sich …'));
+      case 'atm': if (!on) return ui.toast(T('Der Bildschirm ist schwarz.')); A.sfx('beep'); return ui.toast(T('„Verbindung zur Bank nicht möglich.“'));
       case 'spuelen': A.sfx('flush'); return;
       case 'brunnen':
-        if (this.has('topf')) { this.swap('topf', 'topf_klar'); A.sfx('water'); return ui.toast('🫕 Topf mit klarem Brunnenwasser gefüllt.'); }
-        A.sfx('drink'); this.S.stats.thirst = clamp(this.S.stats.thirst + 35); this.S.flags.drank = 1; return ui.toast('Klares, kaltes Brunnenwasser.');
-      case 'wasserhahn': A.sfx('water'); this.S.stats.thirst = clamp(this.S.stats.thirst + 30); this.S.flags.drank = 1; return ui.toast('Du trinkst Leitungswasser.');
+        if (this.has('topf')) { this.swap('topf', 'topf_klar'); A.sfx('water'); return ui.toast(T('🫕 Topf mit klarem Brunnenwasser gefüllt.')); }
+        A.sfx('drink'); this.S.stats.thirst = clamp(this.S.stats.thirst + 35); this.S.flags.drank = 1; return ui.toast(T('Klares, kaltes Brunnenwasser.'));
+      case 'wasserhahn': A.sfx('water'); this.S.stats.thirst = clamp(this.S.stats.thirst + 30); this.S.flags.drank = 1; return ui.toast(T('Du trinkst Leitungswasser.'));
       case 'auto': return this.vehicle.use();
-      case 'boot': if (this.ice.frozen && this.region() === 'tal') { this.audio.sfx('error'); return ui.toast('Das Ruderboot ist im Eis festgefroren. Lauf einfach übers Eis!'); } return this.boat.enter();
+      case 'boot': if (this.ice.frozen && this.region() === 'tal') { this.audio.sfx('error'); return ui.toast(T('Das Ruderboot ist im Eis festgefroren. Lauf einfach übers Eis!')); } return this.boat.enter();
       case 'graben': return this.dig(it);
       case 'sprengen': return this.blast(it);
       case 'funkaggregat':
-        if (S.flags.funkPower) return ui.toast('Das Aggregat tuckert. Der Sender hat Strom.');
-        if (!this.has('kanister_voll')) { A.sfx('error'); return ui.toast('Der Tank ist leer. Ein voller Kanister Diesel würde reichen (Dieselfass im Schuppen der Tankstelle).'); }
-        this.swap('kanister_voll', 'kanister'); S.flags.funkPower = 1; A.sfx('genstart'); this.progress.add(30, 'Notstrom'); return ui.toast('⚡ Das Aggregat springt an – in der Funkhütte leuchten die Anzeigen.', 'good');
+        if (S.flags.funkPower) return ui.toast(T('Das Aggregat tuckert. Der Sender hat Strom.'));
+        if (!this.has('kanister_voll')) { A.sfx('error'); return ui.toast(T('Der Tank ist leer. Ein voller Kanister Diesel würde reichen (Dieselfass im Schuppen der Tankstelle).')); }
+        this.swap('kanister_voll', 'kanister'); S.flags.funkPower = 1; A.sfx('genstart'); this.progress.add(30, T('Notstrom')); return ui.toast(T('⚡ Das Aggregat springt an – in der Funkhütte leuchten die Anzeigen.'), 'good');
       case 'sender': return this.radio();
       case 'zuender': return this.story.zuender();
       case 'bett': return this.sleep(it);
       case 'bachwasser':
-        if (this.has('topf')) { this.swap('topf', 'topf_wasser'); A.sfx('water'); return ui.toast('Topf mit Bachwasser gefüllt. Am Feuer abkochen!'); }
+        if (this.has('topf')) { this.swap('topf', 'topf_wasser'); A.sfx('water'); return ui.toast(T('Topf mit Bachwasser gefüllt. Am Feuer abkochen!')); }
         A.sfx('drink'); this.S.stats.thirst = clamp(this.S.stats.thirst + 25); this.S.flags.drank = 1;
-        if (Math.random() < .4) { this.hurt(10, 'Bachwasser'); this.health.upset(40); return ui.toast('Das Wasser schmeckt modrig … dein Bauch grummelt.', 'warn'); }
-        return ui.toast('Kaltes Bachwasser. Riskant, aber es löscht den Durst.');
+        if (Math.random() < .4) { this.hurt(10, 'Bachwasser'); this.health.upset(40); return ui.toast(T('Das Wasser schmeckt modrig … dein Bauch grummelt.'), 'warn'); }
+        return ui.toast(T('Kaltes Bachwasser. Riskant, aber es löscht den Durst.'));
       case 'lagerfeuer': {
         const p = it.center.clone(); p.y = this.W.groundY(p.x, p.z, p.y + 1);
         const f = this.life.fires.find(f => f.pos.distanceTo(p) < 1.5); if (f) return this.fireAction(f);
-        if (!this.has('feuerzeug')) return ui.toast('Eine alte Feuerstelle. Mit 3 Holz und einem Feuerzeug könntest du sie anzünden.');
-        if (this.brenn() < 3) return ui.toast(`Du brauchst 3 Äste oder Brennholz (hast ${this.brenn()}).`);
-        this.takeBrenn(3); this.life.addFire(p, 8, false); this.audio.sfx('fire'); return ui.toast('🔥 Das Feuer brennt.');
+        if (!this.has('feuerzeug')) return ui.toast(T('Eine alte Feuerstelle. Mit 3 Holz und einem Feuerzeug könntest du sie anzünden.'));
+        if (this.brenn() < 3) return ui.toast(T('Du brauchst 3 Äste oder Brennholz (hast {n}).', { n: this.brenn() }));
+        this.takeBrenn(3); this.life.addFire(p, 8, false); this.audio.sfx('fire'); return ui.toast(T('🔥 Das Feuer brennt.'));
       }
     }
     ui.toast(it.label);
@@ -471,54 +473,54 @@ export class Game {
   // ---------------------------------------------------------------- puzzles: code locks, digging, blasting, the radio station, Henning
   tryCode(code) {
     const it = this.codeFor; if (!it) return false; const u = it.u;
-    if (String(code) !== String(u.code)) { this.audio.sfx('error'); this.ui.toast('❌ Falscher Code.', 'warn'); return false; }
-    it.state.unlocked = 1; it.target = 1; this.codeFor = null; this.audio.sfx('switch'); this.progress.add(40, 'Code geknackt');
-    this.ui.toast('🔓 Klick – das Schloss springt auf!', 'good'); return true;
+    if (String(code) !== String(u.code)) { this.audio.sfx('error'); this.ui.toast(T('❌ Falscher Code.'), 'warn'); return false; }
+    it.state.unlocked = 1; it.target = 1; this.codeFor = null; this.audio.sfx('switch'); this.progress.add(40, T('Code geknackt'));
+    this.ui.toast(T('🔓 Klick – das Schloss springt auf!'), 'good'); return true;
   }
   dig(it) {
     const ui = this.ui;
-    if (it.state.dug) return ui.toast('Hier ist schon alles ausgegraben.');
-    if (!this.has('spaten')) { this.audio.sfx('error'); return ui.toast('Der Boden unter dem Steinkreuz ist locker. Mit einem Spaten könntest du hier graben.'); }
-    it.state.dug = 1; this.S.flags.dug = 1; this.audio.sfx('dig'); setTimeout(() => this.audio.sfx('dig'), 450); this.progress.add(30, 'gegraben');
+    if (it.state.dug) return ui.toast(T('Hier ist schon alles ausgegraben.'));
+    if (!this.has('spaten')) { this.audio.sfx('error'); return ui.toast(T('Der Boden unter dem Steinkreuz ist locker. Mit einem Spaten könntest du hier graben.')); }
+    it.state.dug = 1; this.S.flags.dug = 1; this.audio.sfx('dig'); setTimeout(() => this.audio.sfx('dig'), 450); this.progress.add(30, T('gegraben'));
     const box = this.byName.Schatzkiste; if (box) { box.state.shown = 1; box.node.visible = true; }
-    ui.toast('⛏️ Du gräbst … und stößt auf eine alte Holzkiste!', 'good');
+    ui.toast(T('⛏️ Du gräbst … und stößt auf eine alte Holzkiste!'), 'good');
   }
   blast(it) {
     const ui = this.ui, need = [['schwarzpulver', 2], ['seil', 1], ['feuerzeug', 1]], miss = need.filter(([k, n]) => this.count(k) < n);
     if (it.state.gone) return;
-    if (miss.length) { this.audio.sfx('error'); return ui.toast(`Zum Sprengen fehlt: ${miss.map(([k, n]) => `${n}× ${ITEMS[k].name}`).join(', ')}. (Zündschnur = Seil)`, 'warn'); }
+    if (miss.length) { this.audio.sfx('error'); return ui.toast(T('Zum Sprengen fehlt: {list}. (Zündschnur = Seil)', { list: miss.map(([k, n]) => `${n}× ${ITEMS[k].name}`).join(', ') }), 'warn'); }
     if (it.state.fuse) return;
     this.take('schwarzpulver', 2); this.take('seil', 1); it.state.fuse = 1; this.audio.sfx('fuse');
-    ui.toast('🧨 Die Zündschnur brennt – schnell weg vom Geröll!', 'warn');
+    ui.toast(T('🧨 Die Zündschnur brennt – schnell weg vom Geröll!'), 'warn');
     setTimeout(() => {
       this.audio.sfx('boom'); it.node.visible = false; it.state.gone = 1; delete it.state.fuse; this.S.flags.blasted = 1;
       const d = it.center.distanceTo(this.P.pos); if (d < 7) { this.hurt((7 - d) * 9, 'Sprengung'); ui.damage(); }
-      this.combat.puff(it.center, '#9a948a', 30); this.progress.add(60, 'Sprengung');
-      ui.toast('💥 BUMM! Der Weg ist frei – dahinter funkelt es violett.', 'good'); this.save();
+      this.combat.puff(it.center, '#9a948a', 30); this.progress.add(60, T('Sprengung'));
+      ui.toast(T('💥 BUMM! Der Weg ist frei – dahinter funkelt es violett.'), 'good'); this.save();
     }, 3200);
   }
   radio() {
     const S = this.S, ui = this.ui;
-    if (!S.flags.funkPower) { this.audio.sfx('error'); return ui.toast('Der Sender ist tot. Draußen hinter der Hütte steht ein Notstrom-Aggregat.'); }
+    if (!S.flags.funkPower) { this.audio.sfx('error'); return ui.toast(T('Der Sender ist tot. Draußen hinter der Hütte steht ein Notstrom-Aggregat.')); }
     this.audio.sfx('radio');
     if (!S.flags.funkCalled) {
       S.flags.funkCalled = 1; for (const id of ['pass', 'berghuette']) if (!S.found[id]) S.known[id] = 1;
-      return ui.read('Funksender – Kanal 3', '„… Funkstation Nordwald? Hier Bergwacht! Wir dachten, die Station ist verlassen. Sie suchen Förster Albers? Der hat sich vor einer Woche von der <b>Steinberghütte</b> gemeldet – seitdem nichts mehr. Die Passstraße ist seit dem Steinschlag gesperrt; den Schlüssel für die Schranke finden Sie dort am Haken neben der Tür. Mit einem Auto kommen Sie hoch. Und: Kanal 3 gibt Ihnen jederzeit den Wetterbericht. Ende.“<br><i>Pass-Schranke und Steinberghütte sind auf deiner Karte eingetragen.</i>');
+      return ui.read(T('Funksender – Kanal 3'), T('„… Funkstation Nordwald? Hier Bergwacht! Wir dachten, die Station ist verlassen. Sie suchen Förster Albers? Der hat sich vor einer Woche von der <b>Steinberghütte</b> gemeldet – seitdem nichts mehr. Die Passstraße ist seit dem Steinschlag gesperrt; den Schlüssel für die Schranke finden Sie dort am Haken neben der Tür. Mit einem Auto kommen Sie hoch. Und: Kanal 3 gibt Ihnen jederzeit den Wetterbericht. Ende.“<br><i>Pass-Schranke und Steinberghütte sind auf deiner Karte eingetragen.</i>'));
     }
-    return ui.toast(`📻 Wetterbericht: ${this.seasons.forecast()}`);
+    return ui.toast(T('📻 Wetterbericht: {text}', { text: this.seasons.forecast() }));
   }
   talkNpc(it) {
     const S = this.S, ui = this.ui;
     if (it.u.npc !== 'henning') return ui.toast(it.label);
     if (!S.flags.henning) {
       S.flags.henning = 1; this.addAll({ patronen_gewehr: 1, medizin: 1 }); this.audio.sfx('quest');
-      return ui.read('Henning, der Förster', '„Mensch, ein Mensch! Ich sitz hier oben fest, seit mir der Steinschlag die Straße zugemacht hat – das Bein ist verstaucht, und das Funkgerät der Hütte ist hin. Du bist mit dem Auto über den Pass? Respekt.<br>Hier, nimm die Patronen und die Tabletten – ich hab genug. Und hör zu: Im alten <b>Stollen „Glück auf“</b> drüben am Osthang liegen hinter dem Geröll noch Bergkristalle. Mit Sprengpulver und einer Zündschnur kriegst du das frei. Die Kiste mit dem Pulver steht vorm Eingang.<br>Grüß mir Kurt – und Bello, falls du ihn findest!“');
+      return ui.read(T('Henning, der Förster'), T('„Mensch, ein Mensch! Ich sitz hier oben fest, seit mir der Steinschlag die Straße zugemacht hat – das Bein ist verstaucht, und das Funkgerät der Hütte ist hin. Du bist mit dem Auto über den Pass? Respekt.<br>Hier, nimm die Patronen und die Tabletten – ich hab genug. Und hör zu: Im alten <b>Stollen „Glück auf“</b> drüben am Osthang liegen hinter dem Geröll noch Bergkristalle. Mit Sprengpulver und einer Zündschnur kriegst du das frei. Die Kiste mit dem Pulver steht vorm Eingang.<br>Grüß mir Kurt – und Bello, falls du ihn findest!“'));
     }
-    const tips = ['„Auf den Gipfel geht’s hinter der Hütte rauf. Das Gipfelbuch trägt dir alle Wege ein.“', '„Im Bergsee beißen Saiblinge. Angel hast du?“', '„Hier oben wird’s nachts bitterkalt. Bleib nicht draußen, sonst holst du dir was weg.“',
-      '„Gämsen sind schnell – mit dem Gewehr musst du gut zielen.“', '„Die Bären kommen im Herbst bis an die Hütte. Feuer hilft.“',
-      S.flags.grimm ? '„Du hast den alten Grimm erlegt? Respekt. Jetzt kann ich wieder ruhig schlafen.“' : '„Und lass dich nicht vom alten Grimm erwischen – drüben in der Bärenhöhle am Osthang.“'];
+    const tips = [T('„Auf den Gipfel geht’s hinter der Hütte rauf. Das Gipfelbuch trägt dir alle Wege ein.“'), T('„Im Bergsee beißen Saiblinge. Angel hast du?“'), T('„Hier oben wird’s nachts bitterkalt. Bleib nicht draußen, sonst holst du dir was weg.“'),
+      T('„Gämsen sind schnell – mit dem Gewehr musst du gut zielen.“'), T('„Die Bären kommen im Herbst bis an die Hütte. Feuer hilft.“'),
+      S.flags.grimm ? T('„Du hast den alten Grimm erlegt? Respekt. Jetzt kann ich wieder ruhig schlafen.“') : T('„Und lass dich nicht vom alten Grimm erwischen – drüben in der Bärenhöhle am Osthang.“')];
     if (!S.flags.grimmTold && !S.flags.grimm) { S.flags.grimmTold = 1; this.audio.sfx('quest');
-      return ui.read('Henning, der Förster', '„Noch was: Drüben am Osthang, in der <b>Bärenhöhle</b>, haust der <i>alte Grimm</i> – ein Riesenbär, anderthalbmal so groß wie die anderen. Feuer schreckt ihn nicht. Wenn er sich duckt, stürmt er geradeaus los – dann spring zur Seite! Nimm das Gewehr und viel Munition mit. Wer ihn erlegt, dem zahl ich 40 Euro.“'); }
+      return ui.read(T('Henning, der Förster'), T('„Noch was: Drüben am Osthang, in der <b>Bärenhöhle</b>, haust der <i>alte Grimm</i> – ein Riesenbär, anderthalbmal so groß wie die anderen. Feuer schreckt ihn nicht. Wenn er sich duckt, stürmt er geradeaus los – dann spring zur Seite! Nimm das Gewehr und viel Munition mit. Wer ihn erlegt, dem zahl ich 40 Euro.“')); }
     this.npcTip = ((this.npcTip ?? -1) + 1) % tips.length; return ui.toast(`🧔 Henning: ${tips[this.npcTip]}`);
   }
   // ---------------------------------------------------------------- two maps: travel over the pass, region borders, deep water
@@ -530,8 +532,8 @@ export class Game {
       const dy = V.yaw; V.yaw = to === 'berg' ? 0 : Math.PI; V.v = 5; V.pitch = V.roll = 0; V.camPos = null; this.P.yaw += V.yaw - dy; V.enterYaw += V.yaw - dy; V.pose();
       S.time += .5; if (S.time >= 24) { S.time -= 24; S.day++; } S.abs = (S.day - 1) * 24 + S.time; S.car.fuel = Math.max(1, S.car.fuel - 8);
       this.life.clear(); if (this.life.car) { this.scene.remove(this.life.car.mesh); this.life.car = null; }
-      if (to === 'berg' && !S.flags.berg) { S.flags.berg = 1; this.progress.add(80, 'Über den Pass'); }
-      this.ui.toast(to === 'berg' ? '⛰️ Eine halbe Stunde Serpentinen später: das Hochtal am Steinberg. Hier oben ist es kälter.' : '🌲 Zurück im Nordwald – vor dir liegt das Dorf Tannbach.', 'good');
+      if (to === 'berg' && !S.flags.berg) { S.flags.berg = 1; this.progress.add(80, T('Über den Pass')); }
+      this.ui.toast(to === 'berg' ? T('⛰️ Eine halbe Stunde Serpentinen später: das Hochtal am Steinberg. Hier oben ist es kälter.') : T('🌲 Zurück im Nordwald – vor dir liegt das Dorf Tannbach.'), 'good');
       this.traveling = false; this.save();
     }, 1200);
   }
@@ -545,8 +547,8 @@ export class Game {
     }
     if (this.boat.on) return;
     const R = REGIONS[reg], bx = P.pos.x, by = -P.pos.z; let nx = Math.max(R.x0 + 1.5, Math.min(R.x1 - 1.5, bx)), ny = Math.max(R.y0 + 1.5, Math.min(R.y1 - 1.5, by)), why = '';
-    if (reg === 'tal' && ny > PASS.y + 3 && Math.abs(bx - PASS.x) < 12) { ny = PASS.y + 3; why = 'Zu Fuß ist der Pass zu weit – 12 km bergauf. Nimm das Auto.'; }
-    if (reg === 'berg' && ny < BERG_IN + 1) { ny = BERG_IN + 1; why = 'Zu Fuß ist es zu weit ins Tal – fahr mit dem Auto zurück.'; }
+    if (reg === 'tal' && ny > PASS.y + 3 && Math.abs(bx - PASS.x) < 12) { ny = PASS.y + 3; why = T('Zu Fuß ist der Pass zu weit – 12 km bergauf. Nimm das Auto.'); }
+    if (reg === 'berg' && ny < BERG_IN + 1) { ny = BERG_IN + 1; why = T('Zu Fuß ist es zu weit ins Tal – fahr mit dem Auto zurück.'); }
     if (nx !== bx || ny !== by) { P.pos.x = nx; P.pos.z = -ny; P.vel.x = P.vel.z = 0; P.sync(); if (why && this.edgeT <= 0) { this.edgeT = 5; this.ui.toast(why, 'warn'); } }
   }
   waterGuard() {
@@ -554,7 +556,7 @@ export class Game {
     const bx = P.pos.x, by = -P.pos.z;
     for (const L of LAKES) if (Math.hypot(bx - L.x, by - L.y) < L.r && P.pos.y < L.z - 1.1) {
       if (this.safePos) { P.pos.copy(this.safePos); P.vel.set(0, 0, 0); P.sync(); }
-      if (this.waterT <= 0) { this.waterT = 5; this.ui.toast(L.name === 'See' ? 'Zu tief zum Waten. Am Steg liegt ein Ruderboot.' : 'Zu tief – hier geht es nicht weiter.', 'warn'); }
+      if (this.waterT <= 0) { this.waterT = 5; this.ui.toast(L.name === 'See' ? T('Zu tief zum Waten. Am Steg liegt ein Ruderboot.') : T('Zu tief – hier geht es nicht weiter.'), 'warn'); }
       return;
     }
     if (P.onGround) (this.safePos ||= new THREE.Vector3()).copy(P.pos);
@@ -567,18 +569,18 @@ export class Game {
     for (let i = 0; i < 9; i++) { pts.push(q.clone()); q.lerp(p, 1 / (9 - i)); q.x += (Math.random() - .5) * 2.4 * (i < 8 ? 1 : 0); q.z += (Math.random() - .5) * 2.4 * (i < 8 ? 1 : 0); }
     pts.push(p.clone()); const bolt = new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), new THREE.LineBasicMaterial({ color: '#eef4ff', fog: false }));
     this.scene.add(bolt); setTimeout(() => this.scene.remove(bolt), 180); this.audio.sfx('strike'); this.combat.puff(p, '#ffe9a0', 14);
-    if (d < 5) { this.hurt(28 * DIFF_DMG(this), 'Blitz'); this.ui.toast('⚡ Der Blitz schlägt direkt neben dir ein! Runter vom freien Feld!', 'warn'); }
-    else if (!this.S.flags.strikeTip) { this.S.flags.strikeTip = 1; this.ui.toast('⚡ Ein Blitz schlägt ganz in der Nähe ein – such dir Schutz!', 'warn'); }
+    if (d < 5) { this.hurt(28 * DIFF_DMG(this), 'Blitz'); this.ui.toast(T('⚡ Der Blitz schlägt direkt neben dir ein! Runter vom freien Feld!'), 'warn'); }
+    else if (!this.S.flags.strikeTip) { this.S.flags.strikeTip = 1; this.ui.toast(T('⚡ Ein Blitz schlägt ganz in der Nähe ein – such dir Schutz!'), 'warn'); }
     return true;
   }
   takeBrenn(n) { const a = Math.min(n, this.count('ast')); this.take('ast', a); this.take('holz', n - a); }
   fireAction(f) {
     const ui = this.ui;
-    if (!f.on) { if (this.brenn() && this.has('feuerzeug')) { this.takeBrenn(1); f.on = true; f.fuel = 3; this.audio.sfx('fire'); return ui.toast('🔥 Wieder angezündet.'); } return; }
+    if (!f.on) { if (this.brenn() && this.has('feuerzeug')) { this.takeBrenn(1); f.on = true; f.fuel = 3; this.audio.sfx('fire'); return ui.toast(T('🔥 Wieder angezündet.')); } return; }
     const c = this.cookable();
     if (c) { const [from, to, , msg] = c; for (const [k, n] of Object.entries(from)) { this.take(k, n); const back = ITEMS[k].after; if (back && k !== Object.keys(from)[0] && to !== 'topf_abgekocht') this.add(back, 1, true); }
       this.add(to, from.hecht ? 2 : 1, true); this.audio.sfx('fire'); this.progress.stat('cooked'); return ui.toast(msg); }
-    if (this.brenn()) { this.takeBrenn(1); f.fuel += this.has('holz') ? 3 : 2; this.audio.sfx('fire'); return ui.toast('Holz nachgelegt.'); }
+    if (this.brenn()) { this.takeBrenn(1); f.fuel += this.has('holz') ? 3 : 2; this.audio.sfx('fire'); return ui.toast(T('Holz nachgelegt.')); }
   }
   // what can be cooked at a fire right now: [needs, gives, verb, message]
   cookable() {
@@ -586,13 +588,13 @@ export class Game {
     return this.cookList(water).find(([need]) => Object.entries(need).every(([k, n]) => this.count(k) >= n));
   }
   cookList(water) {
-    return [[{ dosensuppe: 1 }, 'suppe_warm', 'Suppe am Feuer erwärmen', '🍲 Heiße Suppe!'], [{ topf_wasser: 1 }, 'topf_abgekocht', 'Wasser abkochen', 'Wasser abgekocht – jetzt sicher trinkbar.'],
-      [{ fleisch: 1 }, 'fleisch_gebraten', 'Fleisch braten', '🍖 Fleisch gebraten.'], [{ steinpilz: 1 }, 'pilz_gebraten', 'Pilze braten', '🍳 Pilze gebraten.'],
-      [{ fisch: 1 }, 'fisch_gebraten', 'Fisch braten', '🍣 Fisch gebraten.'], [{ saibling: 1 }, 'fisch_gebraten', 'Saibling braten', '🍣 Saibling gebraten.'], [{ hecht: 1 }, 'fisch_gebraten', 'Hecht braten', '🍣 Hecht gebraten – reicht für zwei.'],
-      [{ pfifferling: 1 }, 'pilz_gebraten', 'Pfifferlinge braten', '🍳 Pfifferlinge gebraten.'], [{ kaninchen: 1 }, 'kaninchen_gebraten', 'Kaninchen braten', '🍗 Kaninchenbraten!'],
-      water && [{ kraeuter: 1, [water]: 1 }, 'tee', 'Kräutertee kochen', '🍵 Kräutertee – hilft gegen Erkältung.'],
-      [{ kartoffel: 1 }, 'ofenkartoffel', 'Kartoffel in die Glut legen', '🥔 Ofenkartoffel!'], [{ kuerbis: 1, topf: 1 }, 'kuerbissuppe', 'Kürbissuppe kochen', '🍲 Kürbissuppe!'],
-      water && [{ mehl: 1, [water]: 1 }, 'fladenbrot', 'Fladenbrot backen', '🫓 Fladenbrot gebacken.']].filter(Boolean);
+    return [[{ dosensuppe: 1 }, 'suppe_warm', T('Suppe am Feuer erwärmen'), T('🍲 Heiße Suppe!')], [{ topf_wasser: 1 }, 'topf_abgekocht', T('Wasser abkochen'), T('Wasser abgekocht – jetzt sicher trinkbar.')],
+      [{ fleisch: 1 }, 'fleisch_gebraten', T('Fleisch braten'), T('🍖 Fleisch gebraten.')], [{ steinpilz: 1 }, 'pilz_gebraten', T('Pilze braten'), T('🍳 Pilze gebraten.')],
+      [{ fisch: 1 }, 'fisch_gebraten', T('Fisch braten'), T('🍣 Fisch gebraten.')], [{ saibling: 1 }, 'fisch_gebraten', T('Saibling braten'), T('🍣 Saibling gebraten.')], [{ hecht: 1 }, 'fisch_gebraten', T('Hecht braten'), T('🍣 Hecht gebraten – reicht für zwei.')],
+      [{ pfifferling: 1 }, 'pilz_gebraten', T('Pfifferlinge braten'), T('🍳 Pfifferlinge gebraten.')], [{ kaninchen: 1 }, 'kaninchen_gebraten', T('Kaninchen braten'), T('🍗 Kaninchenbraten!')],
+      water && [{ kraeuter: 1, [water]: 1 }, 'tee', T('Kräutertee kochen'), T('🍵 Kräutertee – hilft gegen Erkältung.')],
+      [{ kartoffel: 1 }, 'ofenkartoffel', T('Kartoffel in die Glut legen'), T('🥔 Ofenkartoffel!')], [{ kuerbis: 1, topf: 1 }, 'kuerbissuppe', T('Kürbissuppe kochen'), T('🍲 Kürbissuppe!')],
+      water && [{ mehl: 1, [water]: 1 }, 'fladenbrot', T('Fladenbrot backen'), T('🫓 Fladenbrot gebacken.')]].filter(Boolean);
   }
   // pickups glow softly when you are close, the target under the crosshair glows brighter (Pause → "Gegenstände hervorheben")
   highlight(t, pos) {
@@ -620,62 +622,64 @@ export class Game {
   makeQuests() {
     const S = this.S, g = this;
     return [
-      { t: 'Gestrandet', x: () => 'Dein Auto ist liegen geblieben. Schau dich mit der <b>Maus</b> um und lauf mit <b>W A S D</b>. <b>B</b> öffnet dein Handbuch mit allen Tasten und Tipps.', target: () => null,
+      { id: 'Gestrandet', t: T('Gestrandet'), x: () => T('Dein Auto ist liegen geblieben. Schau dich mit der <b>Maus</b> um und lauf mit <b>W A S D</b>. <b>B</b> öffnet dein Handbuch mit allen Tasten und Tipps.'), target: () => null,
         done: () => g.P.pos.distanceTo(g.W.spots.spawn.pos) > 4 },
-      { t: 'Kofferraum', x: () => 'Öffne den Kofferraum deines Autos: hinsehen und <b>E</b> drücken.', target: () => g.posOf('Auto_Kofferraum'), done: () => g.byName.Auto_Kofferraum?.target === 1 },
-      { t: 'Ausrüstung', x: () => 'Nimm <b>Rucksack</b> und <b>Taschenlampe</b> mit (E). <b>Tab</b> öffnet den Rucksack, <b>F</b> schaltet die Lampe ein.',
+      { id: 'Kofferraum', t: T('Kofferraum'), x: () => T('Öffne den Kofferraum deines Autos: hinsehen und <b>E</b> drücken.'), target: () => g.posOf('Auto_Kofferraum'), done: () => g.byName.Auto_Kofferraum?.target === 1 },
+      { id: 'Ausrüstung', t: T('Ausrüstung'), // i18n-ok (id = save key)
+        x: () => T('Nimm <b>Rucksack</b> und <b>Taschenlampe</b> mit (E). <b>Tab</b> öffnet den Rucksack, <b>F</b> schaltet die Lampe ein.'),
         target: () => g.posOf(!S.flags.bag ? 'Rucksack' : 'Taschenlampe'), done: () => S.flags.bag && g.has('taschenlampe') },
-      { t: 'Zur Tankstelle', x: () => 'Folge der Straße nach <b>Norden</b> zur Tankstelle „Waldtank“. <b>Shift</b> = sprinten (kostet Ausdauer).',
+      { id: 'Zur Tankstelle', t: T('Zur Tankstelle'), x: () => T('Folge der Straße nach <b>Norden</b> zur Tankstelle „Waldtank“. <b>Shift</b> = sprinten (kostet Ausdauer).'),
         target: () => B(4, -14, 0), done: () => { const p = g.P.pos; return p.x > -3 && p.x < 40 && -p.z > -24 && -p.z < 26; } },
-      { t: 'Hineinkommen', x: () => S.flags.backTried ? 'Abgeschlossen. Irgendwo hier ist bestimmt ein Schlüssel versteckt – such rund um die Hintertür.'
-          : S.flags.frontTried ? 'Die Schiebetür klemmt ohne Strom. Versuch es hinten – um das Gebäude herum zur <b>Hintertür</b>.' : 'Die Tankstelle ist dunkel. Versuch hineinzukommen (Eingang vorne).',
+      { id: 'Hineinkommen', t: T('Hineinkommen'), x: () => S.flags.backTried ? T('Abgeschlossen. Irgendwo hier ist bestimmt ein Schlüssel versteckt – such rund um die Hintertür.')
+          : S.flags.frontTried ? T('Die Schiebetür klemmt ohne Strom. Versuch es hinten – um das Gebäude herum zur <b>Hintertür</b>.') : T('Die Tankstelle ist dunkel. Versuch hineinzukommen (Eingang vorne).'),
         target: () => S.flags.backTried ? (g.has('schluessel_hinten') ? g.posOf('Hintertuer') : g.posOf('Blumenkuebel')) : S.flags.frontTried ? g.posOf('Hintertuer') : g.posOf('Schiebetuer_S'),
         done: () => g.insideShop(g.P.pos) },
-      { t: 'Stärken', x: () => 'Iss <b>und</b> trink etwas. Aufheben (E), in der Leiste mit <b>1–5</b> wählen und <b>Q</b> drücken – oder im Rucksack (Tab).',
+      { id: 'Stärken', t: T('Stärken'), // i18n-ok (id = save key)
+        x: () => T('Iss <b>und</b> trink etwas. Aufheben (E), in der Leiste mit <b>1–5</b> wählen und <b>Q</b> drücken – oder im Rucksack (Tab).'),
         target: () => null, done: () => S.flags.ate && S.flags.drank },
-      { t: 'Kein Licht', x: () => 'Finde den <b>Sicherungskasten</b> im Büro (Tür „Personal“ hinter den Kühlregalen).', target: () => g.posOf('Sicherungskasten'), done: () => S.flags.fuse },
-      { t: 'Notstrom', x: () => 'Das Netz ist tot. Das Aggregat braucht Diesel: Hol den <b>Kanister</b> aus dem Lager.', target: () => g.posOf('Kanister'), done: () => g.has('kanister') || g.has('kanister_voll') || g.strom() },
-      { t: 'Diesel', x: () => 'Füll den Kanister am <b>Dieselfass im Schuppen</b> hinter dem Haus (Handpumpe).', target: () => g.posOf('Dieselfass'), done: () => g.has('kanister_voll') || g.strom() },
-      { t: 'Strom!', x: () => 'Betanke das <b>Stromaggregat</b> hinter dem Haus und wirf es an.', target: () => g.posOf('Generator'), done: () => g.strom() },
-      { t: 'Hilferuf', x: () => 'Licht! Ruf mit dem <b>Funkgerät</b> im Büro Hilfe.', target: () => g.posOf('Funkgeraet'), done: () => S.flags.funkTried || S.flags.radioCalled },
-      { t: 'Ein Hinweis', x: () => 'Der Notakku ist leer. Auf dem Schreibtisch liegt ein <b>Notizzettel</b>.', target: () => g.posOf('Notizzettel'), done: () => S.flags.notiz || S.flags.radioCalled,
-        onDone: () => g.ui.toast('🎓 Tutorial abgeschlossen! Ab jetzt bist du auf dich gestellt.', 'good') },
-      { t: 'Bernds Hochsitz', x: () => 'Hol den <b>9-V-Block</b> aus dem Hochsitz. Pfad hinter dem Holzstapel, dann am <b>Bach</b> entlang nach Norden. Nachts: Wölfe!',
+      { id: 'Kein Licht', t: T('Kein Licht'), x: () => T('Finde den <b>Sicherungskasten</b> im Büro (Tür „Personal“ hinter den Kühlregalen).'), target: () => g.posOf('Sicherungskasten'), done: () => S.flags.fuse },
+      { id: 'Notstrom', t: T('Notstrom'), x: () => T('Das Netz ist tot. Das Aggregat braucht Diesel: Hol den <b>Kanister</b> aus dem Lager.'), target: () => g.posOf('Kanister'), done: () => g.has('kanister') || g.has('kanister_voll') || g.strom() },
+      { id: 'Diesel', t: T('Diesel'), x: () => T('Füll den Kanister am <b>Dieselfass im Schuppen</b> hinter dem Haus (Handpumpe).'), target: () => g.posOf('Dieselfass'), done: () => g.has('kanister_voll') || g.strom() },
+      { id: 'Strom!', t: T('Strom!'), x: () => T('Betanke das <b>Stromaggregat</b> hinter dem Haus und wirf es an.'), target: () => g.posOf('Generator'), done: () => g.strom() },
+      { id: 'Hilferuf', t: T('Hilferuf'), x: () => T('Licht! Ruf mit dem <b>Funkgerät</b> im Büro Hilfe.'), target: () => g.posOf('Funkgeraet'), done: () => S.flags.funkTried || S.flags.radioCalled },
+      { id: 'Ein Hinweis', t: T('Ein Hinweis'), x: () => T('Der Notakku ist leer. Auf dem Schreibtisch liegt ein <b>Notizzettel</b>.'), target: () => g.posOf('Notizzettel'), done: () => S.flags.notiz || S.flags.radioCalled,
+        onDone: () => g.ui.toast(T('🎓 Tutorial abgeschlossen! Ab jetzt bist du auf dich gestellt.'), 'good') },
+      { id: 'Bernds Hochsitz', t: T('Bernds Hochsitz'), x: () => T('Hol den <b>9-V-Block</b> aus dem Hochsitz. Pfad hinter dem Holzstapel, dann am <b>Bach</b> entlang nach Norden. Nachts: Wölfe!'),
         target: () => g.has('batterie_9v') ? null : g.posOf('Batterie_9V'), done: () => g.has('batterie_9v') || S.flags.radioCalled },
-      { t: 'Funkspruch', x: () => 'Zurück ins Büro und mit dem <b>Funkgerät</b> Hilfe rufen.', target: () => g.posOf('Funkgeraet'), done: () => S.flags.radioCalled },
-      { t: 'Durchhalten', x: () => { const left = Math.max(0, S.rescueAt - S.abs); return `Die Bergwacht kommt bei Sonnenaufgang (6:30) – noch ${Math.floor(left)} h ${Math.floor(left % 1 * 60)} min. Bleib warm, satt und weg von den Wölfen. Halte <b>Z</b> gedrückt, um drinnen (mit Strom) oder am Feuer zu warten.`; },
+      { id: 'Funkspruch', t: T('Funkspruch'), x: () => T('Zurück ins Büro und mit dem <b>Funkgerät</b> Hilfe rufen.'), target: () => g.posOf('Funkgeraet'), done: () => S.flags.radioCalled },
+      { id: 'Durchhalten', t: T('Durchhalten'), x: () => { const left = Math.max(0, S.rescueAt - S.abs); return T('Die Bergwacht kommt bei Sonnenaufgang (6:30) – noch {h} h {m} min. Bleib warm, satt und weg von den Wölfen. Halte <b>Z</b> gedrückt, um drinnen (mit Strom) oder am Feuer zu warten.', { h: Math.floor(left), m: Math.floor(left % 1 * 60) }); },
         target: () => null, done: () => S.rescueAt && S.abs >= S.rescueAt, onDone: () => g.win() },
     ];
   }
   makePlaces() {
     const sp = this.W.spots;
     return [
-      { id: 'panne', name: 'Deine Panne', pos: sp.spawn?.pos, r: 8 }, { id: 'tanke', name: 'Tankstelle „Waldtank“', pos: B(14, 0, 0), r: 20 },
-      { id: 'schuppen', name: 'Schuppen', pos: B(44, -12, 0), r: 5 }, { id: 'bach', name: 'Der Bach', test: p => Math.abs(p.x - creekX(-p.z)) < 5 },
-      { id: 'hochsitz', name: 'Bernds Hochsitz', pos: sp.ziel_hochsitz?.pos, r: 10 }, { id: 'feuer', name: 'Alte Feuerstelle', pos: sp.ziel_feuerstelle?.pos, r: 7 },
-      { id: 'bus', name: 'Bushaltestelle', pos: B(roadX(40) - 5.2, 40, 0), r: 7 }, { id: 'camp', name: 'Verlassener Wohnwagen', pos: sp.ziel_wohnwagen?.pos, r: 10 },
-      { id: 'dorf', name: 'Dorf Tannbach', pos: B(-60, 182, 0), r: 24, icon: '🏘️' }, { id: 'kapelle', name: 'Kapelle Tannbach', pos: B(-48, 197.5, 0), r: 8, icon: '⛪' },
-      { id: 'hof', name: 'Bauernhof mit Scheune', pos: B(-38, 158, 0), r: 12, icon: '🌾' }, { id: 'turm', name: 'Aussichtsturm Hirschkopf', pos: sp.ziel_turm?.pos, r: 12, icon: '🗼', flat: 1 },
-      { id: 'ruine', name: 'Burgruine Falkenstein', pos: sp.ziel_ruine?.pos, r: 14, icon: '🏰' }, { id: 'steinbruch', name: 'Alter Steinbruch', pos: sp.ziel_steinbruch?.pos, r: 18, icon: '⛏️' },
-      { id: 'muehle', name: 'Alte Mühle', pos: sp.ziel_muehle?.pos, r: 10, icon: '⚙️' },
-      { id: 'see', name: 'Waldsee', pos: sp.ziel_see?.pos, r: 20, icon: '🎣', flat: 1 }, { id: 'werkstatt', name: 'Werkstatt „KFZ Brandt“', pos: B(-52.8, 167.5, 0), r: 7, icon: '🔧' },
-      { id: 'insel', name: 'Insel im Waldsee', pos: sp.ziel_insel?.pos, r: 4.5, icon: '🏝️', flat: 1 }, { id: 'forsthaus', name: 'Forsthaus Eichengrund', pos: sp.ziel_forsthaus?.pos, r: 11, icon: '🏠', flat: 1 },
-      { id: 'funkturm', name: 'Funkstation Nordwald', pos: sp.ziel_funkturm?.pos, r: 12, icon: '📡', flat: 1 }, { id: 'pass', name: 'Pass-Schranke', pos: B(PASS.x, PASS.y, 0), r: 9, icon: '🚧', flat: 1 },
+      { id: 'panne', name: T('Deine Panne'), pos: sp.spawn?.pos, r: 8 }, { id: 'tanke', name: T('Tankstelle „Waldtank“'), pos: B(14, 0, 0), r: 20 },
+      { id: 'schuppen', name: T('Schuppen'), pos: B(44, -12, 0), r: 5 }, { id: 'bach', name: T('Der Bach'), test: p => Math.abs(p.x - creekX(-p.z)) < 5 },
+      { id: 'hochsitz', name: T('Bernds Hochsitz'), pos: sp.ziel_hochsitz?.pos, r: 10 }, { id: 'feuer', name: T('Alte Feuerstelle'), pos: sp.ziel_feuerstelle?.pos, r: 7 },
+      { id: 'bus', name: T('Bushaltestelle'), pos: B(roadX(40) - 5.2, 40, 0), r: 7 }, { id: 'camp', name: T('Verlassener Wohnwagen'), pos: sp.ziel_wohnwagen?.pos, r: 10 },
+      { id: 'dorf', name: T('Dorf Tannbach'), pos: B(-60, 182, 0), r: 24, icon: '🏘️' }, { id: 'kapelle', name: T('Kapelle Tannbach'), pos: B(-48, 197.5, 0), r: 8, icon: '⛪' },
+      { id: 'hof', name: T('Bauernhof mit Scheune'), pos: B(-38, 158, 0), r: 12, icon: '🌾' }, { id: 'turm', name: T('Aussichtsturm Hirschkopf'), pos: sp.ziel_turm?.pos, r: 12, icon: '🗼', flat: 1 },
+      { id: 'ruine', name: T('Burgruine Falkenstein'), pos: sp.ziel_ruine?.pos, r: 14, icon: '🏰' }, { id: 'steinbruch', name: T('Alter Steinbruch'), pos: sp.ziel_steinbruch?.pos, r: 18, icon: '⛏️' },
+      { id: 'muehle', name: T('Alte Mühle'), pos: sp.ziel_muehle?.pos, r: 10, icon: '⚙️' },
+      { id: 'see', name: T('Waldsee'), pos: sp.ziel_see?.pos, r: 20, icon: '🎣', flat: 1 }, { id: 'werkstatt', name: T('Werkstatt „KFZ Brandt“'), pos: B(-52.8, 167.5, 0), r: 7, icon: '🔧' },
+      { id: 'insel', name: T('Insel im Waldsee'), pos: sp.ziel_insel?.pos, r: 4.5, icon: '🏝️', flat: 1 }, { id: 'forsthaus', name: T('Forsthaus Eichengrund'), pos: sp.ziel_forsthaus?.pos, r: 11, icon: '🏠', flat: 1 },
+      { id: 'funkturm', name: T('Funkstation Nordwald'), pos: sp.ziel_funkturm?.pos, r: 12, icon: '📡', flat: 1 }, { id: 'pass', name: T('Pass-Schranke'), pos: B(PASS.x, PASS.y, 0), r: 9, icon: '🚧', flat: 1 },
       // the mountains (second map)
-      { id: 'steinberg', name: 'Hochtal Steinberg', pos: sp.berg_start?.pos, r: 22, icon: '⛰️', flat: 1 }, { id: 'berghuette', name: 'Steinberghütte', pos: sp.ziel_berghuette?.pos, r: 14, icon: '🛖', flat: 1 },
-      { id: 'bergwerk', name: 'Stollen „Glück auf“', pos: sp.ziel_bergwerk?.pos, r: 12, icon: '⛏️', flat: 1 }, { id: 'gipfel', name: 'Gipfel des Steinbergs', pos: sp.ziel_gipfel?.pos, r: 7, icon: '⛳', flat: 1 },
-      { id: 'bergsee', name: 'Bergsee', pos: sp.ziel_bergsee?.pos, r: 15, icon: '💧', flat: 1 }, { id: 'heustadel', name: 'Heustadel auf der Alm', pos: sp.ziel_heustadel?.pos, r: 9, icon: '🌾', flat: 1 },
+      { id: 'steinberg', name: T('Hochtal Steinberg'), pos: sp.berg_start?.pos, r: 22, icon: '⛰️', flat: 1 }, { id: 'berghuette', name: T('Steinberghütte'), pos: sp.ziel_berghuette?.pos, r: 14, icon: '🛖', flat: 1 },
+      { id: 'bergwerk', name: T('Stollen „Glück auf“'), pos: sp.ziel_bergwerk?.pos, r: 12, icon: '⛏️', flat: 1 }, { id: 'gipfel', name: T('Gipfel des Steinbergs'), pos: sp.ziel_gipfel?.pos, r: 7, icon: '⛳', flat: 1 },
+      { id: 'bergsee', name: T('Bergsee'), pos: sp.ziel_bergsee?.pos, r: 15, icon: '💧', flat: 1 }, { id: 'heustadel', name: T('Heustadel auf der Alm'), pos: sp.ziel_heustadel?.pos, r: 9, icon: '🌾', flat: 1 },
     ].map(p => { if (p.flat && p.pos) p.test = q => Math.hypot(q.x - p.pos.x, q.z - p.pos.z) < p.r; p.region = p.pos ? regionOf(-p.pos.z) : 'tal'; return p; });
   }
   win() {
     this.S.flags.won = 1; this.audio.sfx('win'); this.life.clear();
     const st = this.S, found = Object.keys(st.found).length;
-    document.getElementById('winstats').innerHTML = `Überlebt bis Tag ${st.day}, ${String(Math.floor(st.time)).padStart(2, '0')}:${String(Math.floor(st.time % 1 * 60)).padStart(2, '0')} · Orte entdeckt: ${found}/${this.places.length}`;
+    document.getElementById('winstats').innerHTML = T('Überlebt bis Tag {day}, {time} · Orte entdeckt: {n}/{total}', { day: st.day, time: `${String(Math.floor(st.time)).padStart(2, '0')}:${String(Math.floor(st.time % 1 * 60)).padStart(2, '0')}`, n: found, total: this.places.length });
     this.ui.show('win', true); document.exitPointerLock?.(); this.save();
   }
   freePlay() {          // after the rescue: keep living in the forest (building, farming, exploring)
     this.S.flags.won = 0; this.S.flags.free = 1; this.S.quest = this.quests.length; this.ui.show('win', false);
-    this.ui.toast('Freies Spiel: Die Bergwacht wartet unten im Tal. Bau dir eine Hütte, leg Felder an, erkunde alles.', 'good');
+    this.ui.toast(T('Freies Spiel: Die Bergwacht wartet unten im Tal. Bau dir eine Hütte, leg Felder an, erkunde alles.'), 'good');
   }
 
   // ---------------------------------------------------------------- per frame
@@ -693,10 +697,10 @@ export class Game {
     this.roof = roof || indoor; this.bed = bed; this.inside = indoor;
     const safe = (this.insideShop(P.pos) && this.strom()) || this.life.fires.some(f => f.on && f.pos.distanceTo(P.pos) < 4) || ((this.has('schlafsack') || roof || bed) && !wolfNear)
       || (indoor && indoor !== 'shop');
-    if (keys.KeyZ && !safe && !this._waitTip) { this._waitTip = 1; this.ui.toast(wolfNear ? 'Zu gefährlich – Raubtiere in der Nähe!' : 'Warten geht in Häusern, in deiner Hütte, am Feuer, im Unterstand, am Bett oder mit Schlafsack.', 'warn'); setTimeout(() => this._waitTip = 0, 4000); }
+    if (keys.KeyZ && !safe && !this._waitTip) { this._waitTip = 1; this.ui.toast(wolfNear ? T('Zu gefährlich – Raubtiere in der Nähe!') : T('Warten geht in Häusern, in deiner Hütte, am Feuer, im Unterstand, am Bett oder mit Schlafsack.'), 'warn'); setTimeout(() => this._waitTip = 0, 4000); }
     const waiting = this.waiting = !!keys.KeyZ && safe; const scale = waiting ? 30 : 1;
     S.time += dt * scale / 60; S.abs = (S.day - 1) * 24 + S.time;
-    if (S.time >= 24) { S.time -= 24; S.day++; this.ui.toast(`Tag ${S.day} beginnt.`); }
+    if (S.time >= 24) { S.time -= 24; S.day++; this.ui.toast(T('Tag {day} beginnt.', { day: S.day })); }
     const dark = this.sky.darkness(S.time);
     // seasons + weather (seasons.js)
     this.seasons.update(dt * scale); this.ice.update();
@@ -704,7 +708,7 @@ export class Game {
     this.build.update(dt, dt * scale / 60);
     for (const sp of this.W.spinners) sp.pivot.rotateOnAxis(sp.axis, sp.speed * dt);
     // generator fuel
-    if (S.genFuel > 0) { S.genFuel -= dt * scale / 60; if (S.genFuel <= 0) { S.genFuel = 0; this.ui.toast('⚠️ Das Aggregat stottert und geht aus. Tank leer!', 'warn'); } }
+    if (S.genFuel > 0) { S.genFuel -= dt * scale / 60; if (S.genFuel <= 0) { S.genFuel = 0; this.ui.toast(T('⚠️ Das Aggregat stottert und geht aus. Tank leer!'), 'warn'); } }
     // survival
     const drain = waiting ? scale * .35 : 1, inside = !!indoor, shop = indoor === 'shop';
     this.health.update(dt, dt * scale / 60);
@@ -725,7 +729,7 @@ export class Game {
       env -= storm === 'schneesturm' ? .55 : .18; const hail = (storm === 'schneesturm' ? .15 : .6) * DIFF_DMG(this) * dt;
       if (hail > 0) { st.health = clamp(st.health - hail); this.S.stormHurt = (this.S.stormHurt || 0) + hail; this.lastCause = storm === 'schneesturm' ? 'Schneesturm' : 'Hagel';
         if ((this.hailT = (this.hailT || 0) - dt) < 0) { this.hailT = 1.2 + Math.random(); this.ui.damage(); this.audio.sfx(storm === 'schneesturm' ? 'none' : 'hail');
-          if (!this._stormTip) { this._stormTip = 1; this.ui.toast(storm === 'schneesturm' ? '🥶 Der Schneesturm frisst deine Wärme – schnell unter ein Dach!' : '🧊 Hagelkörner prasseln auf dich ein – such dir ein Dach!', 'warn'); setTimeout(() => this._stormTip = 0, 15000); } } }
+          if (!this._stormTip) { this._stormTip = 1; this.ui.toast(storm === 'schneesturm' ? T('🥶 Der Schneesturm frisst deine Wärme – schnell unter ein Dach!') : T('🧊 Hagelkörner prasseln auf dich ein – such dir ein Dach!'), 'warn'); setTimeout(() => this._stormTip = 0, 15000); } } }
     }
     if (env < 0 && waiting && this.has('schlafsack')) env *= .3;
     st.warmth = clamp(st.warmth + env * dt * (waiting ? scale * .35 : 1));
@@ -734,14 +738,14 @@ export class Game {
     let hp = -this.health.hpDrain(); if (st.hunger <= 0) hp -= .3; if (st.thirst <= 0) hp -= .4; if (st.warmth <= 0) hp -= .5;
     if (st.hunger > 40 && st.thirst > 40 && st.warmth > 35) hp += .12 * (waiting && this.bed ? 6 : 1);
     st.health = clamp(st.health + hp * dt * drain);
-    if (hp < 0 && st.health < 100) this.lastCause = st.warmth <= 0 ? 'Kälte' : st.thirst <= 0 ? 'Durst' : st.hunger <= 0 ? 'Hunger' : this.health.ill.erk > 60 ? 'Fieber' : 'Magen';
+    if (hp < 0 && st.health < 100) this.lastCause = st.warmth <= 0 ? 'Kälte' : st.thirst <= 0 ? 'Durst' : st.hunger <= 0 ? 'Hunger' : this.health.ill.erk > 60 ? 'Fieber' : 'Magen';   // i18n-ok (cause id, shown by die())
     this.slow = (st.warmth < 15 ? .85 : 1) * (st.health < 25 ? .85 : 1);
     if (st.health <= 0) return this.die();
     // flashlight / torch
-    if (S.flags.flashOn) { S.battery = Math.max(0, S.battery - dt * .2); if (!S.battery) { S.flags.flashOn = false; this.ui.toast('🔦 Batterie leer.', 'warn'); } }
+    if (S.flags.flashOn) { S.battery = Math.max(0, S.battery - dt * .2); if (!S.battery) { S.flags.flashOn = false; this.ui.toast(T('🔦 Batterie leer.'), 'warn'); } }
     const flick = S.battery < 15 ? (Math.random() < .1 ? .2 : 1) : 1;
     P.flash.intensity = S.flags.flashOn ? 45 * flick : 0;
-    if (this.torchOn) { this.torchT -= dt; if (this.torchT <= 0) { this.torchOn = false; this.ui.toast('Die Fackel ist heruntergebrannt.'); } }
+    if (this.torchOn) { this.torchT -= dt; if (this.torchT <= 0) { this.torchOn = false; this.ui.toast(T('Die Fackel ist heruntergebrannt.')); } }
     P.torch.intensity = this.torchOn ? 9 + 3 * Math.sin(performance.now() / 60) : this.candleT > 0 ? 2.2 + .4 * Math.sin(performance.now() / 90) : 0;
     // movers (doors …) ease to their target; automatic door opens with power when someone is near
     for (const it of this.W.movers) {
@@ -765,16 +769,16 @@ export class Game {
     const q = this.quests[S.quest];
     if (q && q.done()) { S.quest++; this.audio.sfx('quest'); this.progress.add(50, q.t); q.onDone?.(); this.save(); }
     for (const pl of this.places) if (!S.found[pl.id] && (pl.test ? pl.test(P.pos) : pl.pos && pl.pos.distanceTo(P.pos) < pl.r)) {
-      S.found[pl.id] = 1; this.progress.add(40, pl.name); this.ui.toast(`📍 Entdeckt: ${pl.name} (${Object.keys(S.found).length}/${this.places.length})`, 'good'); }
+      S.found[pl.id] = 1; this.progress.add(40, pl.name); this.ui.toast(T('📍 Entdeckt: {name} ({n}/{total})', { name: pl.name, n: Object.keys(S.found).length, total: this.places.length }), 'good'); }
     this.secT -= dt; if (this.secT < 0) { this.secT = 1; if (this.walkAcc) { this.progress.stat('walk', this.walkAcc); this.walkAcc = 0; } this.progress.update(); }
     for (const r of this.drops) r.g.children[1].position.y = .42 + .04 * Math.sin(performance.now() / 400 + r.p[0]);
     // tips
     this.tipT -= dt;
     if (this.tipT < 0) {
       this.tipT = 6;
-      if (dark > .55 && this.has('taschenlampe') && !S.flags.flashOn && !inside && !S.flags.tipFlash) { S.flags.tipFlash = 1; this.ui.toast('Es wird dunkel. F = Taschenlampe.'); }
-      else if (st.warmth < 30 && !S.flags.tipCold) { S.flags.tipCold = 1; this.ui.toast('Dir ist kalt! Geh rein, zieh dir was an oder mach ein Feuer (C).', 'warn'); }
-      else if ((st.hunger < 25 || st.thirst < 25) && !S.flags.tipFood) { S.flags.tipFood = 1; this.ui.toast('Du brauchst Essen und Trinken.', 'warn'); }
+      if (dark > .55 && this.has('taschenlampe') && !S.flags.flashOn && !inside && !S.flags.tipFlash) { S.flags.tipFlash = 1; this.ui.toast(T('Es wird dunkel. F = Taschenlampe.')); }
+      else if (st.warmth < 30 && !S.flags.tipCold) { S.flags.tipCold = 1; this.ui.toast(T('Dir ist kalt! Geh rein, zieh dir was an oder mach ein Feuer (C).'), 'warn'); }
+      else if ((st.hunger < 25 || st.thirst < 25) && !S.flags.tipFood) { S.flags.tipFood = 1; this.ui.toast(T('Du brauchst Essen und Trinken.'), 'warn'); }
     }
     this.saveT += dt; if (this.saveT > 20) { this.saveT = 0; this.save(); }
   }
@@ -816,8 +820,9 @@ export class Game {
   }
   die() {
     this.S.flags.dead = 1; this.audio.sfx('hurt'); document.exitPointerLock?.();
-    const cause = { Bär: 'Der Bär war stärker.', Wildschwein: 'Das Wildschwein hat dich erwischt.', Wolf: 'Die Wölfe waren schneller.', Kälte: 'Du bist erfroren.', Durst: 'Du bist verdurstet.', Hunger: 'Du bist verhungert.', Sturz: 'Ein böser Sturz.', Bachwasser: 'Das Bachwasser war keine gute Idee.', Unfall: 'Ein schwerer Unfall.', Fieber: 'Das Fieber war zu stark.', Magen: 'Dein Magen hat nicht mitgemacht.', Sprengung: 'Zu nah an der Sprengung.',
-      Hagel: 'Das Unwetter hat dich draußen erwischt.', Blitz: 'Vom Blitz getroffen.', Schneesturm: 'Im Schneesturm erfroren.', Grimm: 'Der alte Grimm war stärker.' }[this.lastCause] || 'Die Nacht war zu lang.';
+    // keys = cause ids passed to hurt() (game, combat, life, …); the values are shown
+    const cause = { Bär: T('Der Bär war stärker.'), Wildschwein: T('Das Wildschwein hat dich erwischt.'), Wolf: T('Die Wölfe waren schneller.'), Kälte: T('Du bist erfroren.'), Durst: T('Du bist verdurstet.'), Hunger: T('Du bist verhungert.'), Sturz: T('Ein böser Sturz.'), Bachwasser: T('Das Bachwasser war keine gute Idee.'), Unfall: T('Ein schwerer Unfall.'), Fieber: T('Das Fieber war zu stark.'), Magen: T('Dein Magen hat nicht mitgemacht.'), Sprengung: T('Zu nah an der Sprengung.'),
+      Hagel: T('Das Unwetter hat dich draußen erwischt.'), Blitz: T('Vom Blitz getroffen.'), Schneesturm: T('Im Schneesturm erfroren.'), Grimm: T('Der alte Grimm war stärker.') }[this.lastCause] || T('Die Nacht war zu lang.');
     document.getElementById('deadcause').textContent = cause; this.ui.show('dead', true);
   }
 
@@ -825,7 +830,7 @@ export class Game {
   snapshot() {
     const its = {};
     for (const it of this.W.interactives) if (!it.built && (it.target || Object.keys(it.state).length)) its[it.name] = { t: it.target, s: it.state };
-    this.S.questId = this.quests[this.S.quest]?.t || '';
+    this.S.questId = this.quests[this.S.quest]?.id || '';          // German quest title (stable across languages)
     if (this.boat.ok) this.S.boat = this.boat.save();
     return { v: SAVE_VERSION, at: Date.now(), S: this.S, its, build: this.build.save(), car: this.vehicle.ok ? this.vehicle.save() : null,
       fires: this.life.fires.filter(f => f.on && !f.owned).map(f => ({ p: f.pos.toArray(), fuel: f.fuel })), pos: this.P.pos.toArray(), yaw: this.P.yaw, torch: this.torchOn ? this.torchT : 0 };
@@ -862,7 +867,7 @@ export class Game {
     if (this.S.boat) this.boat.load(this.S.boat);
     for (const r of [...this.drops]) this.scene.remove(r.g); this.drops = []; for (const x of d.S.drops || []) this.addDrop(x);
     // quest by name (robust against inserted quest steps)
-    this.quests = this.makeQuests(); const qi = this.quests.findIndex(q => q.t === d.S.questId); if (qi >= 0) this.S.quest = qi;
+    this.quests = this.makeQuests(); const qi = this.quests.findIndex(q => q.id === d.S.questId); if (qi >= 0) this.S.quest = qi;
     const p = new THREE.Vector3().fromArray(d.pos || [0, 0, 0]);
     this.P.setPose(p, d.yaw || 0); if (!this.P.free()) this.P.unstick();          // the map may have changed under the saved position
     if (d.torch) { this.torchOn = true; this.torchT = d.torch; }

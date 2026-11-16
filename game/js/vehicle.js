@@ -6,6 +6,7 @@ import * as THREE from 'three';
 import { roadX } from './life.js';
 import { B } from './world.js';
 import { regionOf, bergRoadDist, REGIONS } from './regions.js';
+import { T } from './i18n.js';
 
 const up = new THREE.Vector3(0, 1, 0), tmp = new THREE.Vector3(), q = new THREE.Quaternion(), e = new THREE.Euler(0, 0, 0, 'YXZ');
 const ray = new THREE.Ray();
@@ -32,28 +33,28 @@ export class Vehicle {
   get S() { return this.g.S.car || (this.g.S.car = { fixed: 0, fuel: 0 }); }
   verb() {
     const S = this.S, g = this.g;
-    if (this.driving) return '[E] Aussteigen';
-    if (!S.fixed) return g.has('keilriemen') && g.has('werkzeugkasten') ? '[E] Auto reparieren (Keilriemen + Werkzeugkasten)' : 'Dein Auto – Keilriemen gerissen';
-    if (S.fuel <= 0) return g.has('kanister_voll') ? '[E] Tanken (voller Kanister)' : 'Dein Auto – der Tank ist leer (voller Kanister nötig)';
-    return `[E] Einsteigen (Tank ${Math.round(S.fuel)} %)`;
+    if (this.driving) return T('[E] Aussteigen');
+    if (!S.fixed) return g.has('keilriemen') && g.has('werkzeugkasten') ? T('[E] Auto reparieren (Keilriemen + Werkzeugkasten)') : T('Dein Auto – Keilriemen gerissen');
+    if (S.fuel <= 0) return g.has('kanister_voll') ? T('[E] Tanken (voller Kanister)') : T('Dein Auto – der Tank ist leer (voller Kanister nötig)');
+    return T('[E] Einsteigen (Tank {n} %)', { n: Math.round(S.fuel) });
   }
   use() {
     const S = this.S, g = this.g, A = g.audio;
     if (!S.fixed) {
-      if (!(g.has('keilriemen') && g.has('werkzeugkasten'))) { A.sfx('error'); return g.ui.toast(g.S.flags.carTried ? 'Keilriemen gerissen. In einer Werkstatt gäbe es Ersatz – vielleicht im Dorf?' : (g.S.flags.carTried = 1, 'Der Anlasser orgelt – nichts. Unter der Haube: der Keilriemen ist gerissen. Ersatz + Werkzeug, dann läuft er wieder.')); }
-      g.take('keilriemen'); S.fixed = 1; A.sfx('build'); g.progress.add(120, 'Auto repariert');
-      return g.ui.toast(S.fuel > 0 ? '🔧 Repariert! Steig ein (E).' : '🔧 Keilriemen gewechselt! Jetzt fehlt nur noch Sprit: voller Kanister (Zapfsäule mit Strom oder Dieselfass).', 'good');
+      if (!(g.has('keilriemen') && g.has('werkzeugkasten'))) { A.sfx('error'); return g.ui.toast(g.S.flags.carTried ? T('Keilriemen gerissen. In einer Werkstatt gäbe es Ersatz – vielleicht im Dorf?') : (g.S.flags.carTried = 1, T('Der Anlasser orgelt – nichts. Unter der Haube: der Keilriemen ist gerissen. Ersatz + Werkzeug, dann läuft er wieder.'))); }
+      g.take('keilriemen'); S.fixed = 1; A.sfx('build'); g.progress.add(120, T('Auto repariert'));
+      return g.ui.toast(S.fuel > 0 ? T('🔧 Repariert! Steig ein (E).') : T('🔧 Keilriemen gewechselt! Jetzt fehlt nur noch Sprit: voller Kanister (Zapfsäule mit Strom oder Dieselfass).'), 'good');
     }
     if (S.fuel <= 0) {
-      if (!g.has('kanister_voll')) { A.sfx('error'); return g.ui.toast('Der Tank ist leer. Füll einen Kanister am Dieselfass im Schuppen oder an der Zapfsäule.'); }
-      g.swap('kanister_voll', 'kanister'); S.fuel = 100; A.sfx('fuel'); return g.ui.toast('⛽ Getankt (20 Liter reichen für etwa 15 km). Einsteigen mit E.', 'good');
+      if (!g.has('kanister_voll')) { A.sfx('error'); return g.ui.toast(T('Der Tank ist leer. Füll einen Kanister am Dieselfass im Schuppen oder an der Zapfsäule.')); }
+      g.swap('kanister_voll', 'kanister'); S.fuel = 100; A.sfx('fuel'); return g.ui.toast(T('⛽ Getankt (20 Liter reichen für etwa 15 km). Einsteigen mit E.'), 'good');
     }
     this.enter();
   }
   enter() {
     const g = this.g; this.driving = true; this.v = 0; g.P.vel.set(0, 0, 0); this.enterYaw = this.yaw; g.P.yaw = this.yaw; g.P.pitch = -.05;
     for (const p of this.parts) if (p.it && ['door', 'lid'].includes(p.it.u.interact)) p.it.target = 0;
-    this.camPos = null; this.inside = false; g.audio.sfx('door'); g.audio.sfx('genstart'); g.ui.toast('🚗 W/S Gas und Bremse, A/D lenken, Maus: umsehen, C: Fahrersicht, E: aussteigen.');
+    this.camPos = null; this.inside = false; g.audio.sfx('door'); g.audio.sfx('genstart'); g.ui.toast(T('🚗 W/S Gas und Bremse, A/D lenken, Maus: umsehen, C: Fahrersicht, E: aussteigen.'));
   }
   exit() {
     const g = this.g, P = g.P; this.driving = false; this.v = 0;
@@ -105,7 +106,7 @@ export class Vehicle {
     const R = REGIONS[berg ? 'berg' : 'tal'], px = Math.max(R.x0 + 3, Math.min(R.x1 - 3, this.pos.x)), pz = Math.max(-(R.y1 - 2), Math.min(-(R.y0 - 6), this.pos.z));
     if (px !== this.pos.x || pz !== this.pos.z) { this.pos.x = px; this.pos.z = pz; this.v = 0; }
     S.fuel = Math.max(0, S.fuel - Math.abs(step) / 150);
-    if (S.fuel <= 0 && !this._empty) { this._empty = 1; g.ui.toast('⛽ Der Tank ist leer!', 'warn'); }
+    if (S.fuel <= 0 && !this._empty) { this._empty = 1; g.ui.toast(T('⛽ Der Tank ist leer!'), 'warn'); }
     if (S.fuel > 0) this._empty = 0;
     // ground: four wheels
     const W = g.W, side = new THREE.Vector3(-dir.z, 0, dir.x), h = (f, s) => { const p = this.pos.clone().addScaledVector(dir, f).addScaledVector(side, s); return W.groundY(p.x, p.z, this.pos.y + 3); };

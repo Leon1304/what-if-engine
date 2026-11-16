@@ -7,8 +7,9 @@
 //   Food spoils: items with ITEMS[id].spoil (game hours) carry s.f = hours left on their stack (backpack, storage, dropped bundles).
 //   Cold keeps food longer: the cool box (×0.2), winter (×0.5), the mountains (×0.7). Spoiled food turns into „Verdorbenes Essen“.
 import { ITEMS } from './items.js';
+import { T, TN } from './i18n.js';
 
-export const ILL = { erk: { name: 'Erkältung', icon: '🤧' }, mag: { name: 'Magenverstimmung', icon: '🤢' } };
+export const ILL = { erk: { name: T('Erkältung'), icon: '🤧' }, mag: { name: T('Magenverstimmung'), icon: '🤢' } };
 const COOL = { kuehlbox: .2 };
 const RISK = { aus: .5, leicht: .6, mittel: 1, schwer: 1.4 };
 
@@ -27,7 +28,7 @@ export class Health {
   }
   freshText(s) {
     const sp = ITEMS[s.id]?.spoil; if (!sp) return ''; const f = s.f ?? sp;
-    return f < 4 ? `⚠️ verdirbt bald (${Math.max(0, f).toFixed(0)} h)` : `🕒 frisch: noch ${Math.round(f)} h`;
+    return f < 4 ? T('⚠️ verdirbt bald ({n} h)', { n: Math.max(0, f).toFixed(0) }) : T('🕒 frisch: noch {n} h', { n: Math.round(f) });
   }
   // eating / drinking: cures and risks
   eat(id) {
@@ -41,13 +42,13 @@ export class Health {
   }
   upset(n) {
     const I = this.ill, was = I.mag; I.mag = Math.min(100, Math.max(I.mag, n));
-    if (!was) { this.g.ui.toast('🤢 Dir wird übel – Magenverstimmung. Hunger und Durst steigen schneller. Kräutertee oder Medizin helfen.', 'warn'); this.g.progress.stat('ill'); this.g.audio.sfx('retch'); }
+    if (!was) { this.g.ui.toast(T('🤢 Dir wird übel – Magenverstimmung. Hunger und Durst steigen schneller. Kräutertee oder Medizin helfen.'), 'warn'); this.g.progress.stat('ill'); this.g.audio.sfx('retch'); }
   }
   catchCold() {
     const I = this.ill; I.erk = 25; this.g.progress.stat('ill'); this.g.audio.sfx('cough');
-    this.g.ui.toast('🤧 Hatschi! Du hast dich erkältet. Halt dich warm, trink Kräutertee oder nimm Medizin.', 'warn');
+    this.g.ui.toast(T('🤧 Hatschi! Du hast dich erkältet. Halt dich warm, trink Kräutertee oder nimm Medizin.'), 'warn');
   }
-  cured() { this.g.progress.stat('cured'); this.g.ui.toast('😊 Du bist wieder gesund!', 'good'); }
+  cured() { this.g.progress.stat('cured'); this.g.ui.toast(T('😊 Du bist wieder gesund!'), 'good'); }
   // effects the game applies every frame
   get staminaK() { return this.ill.erk > 0 ? .6 : 1; }
   get coldLossK() { return this.ill.erk > 0 ? 1.25 : 1; }
@@ -60,7 +61,7 @@ export class Health {
     if (hours > 0) {
       // spoiling: backpack, storage, dropped bundles
       const k = this.coldK(P.pos), n = this.age(S.inv, hours, k);
-      if (n) { g.ui.toast(`🤢 ${n > 1 ? n + ' Sachen' : 'Etwas'} in deinem Rucksack ${n > 1 ? 'sind' : 'ist'} verdorben.`, 'warn'); g.ui.renderHotbar(S.inv, S.sel); }
+      if (n) { g.ui.toast(TN(n, '🤢 Etwas in deinem Rucksack ist verdorben.', '🤢 {n} Sachen in deinem Rucksack sind verdorben.'), 'warn'); g.ui.renderHotbar(S.inv, S.sel); }
       for (const s of g.build.list) if (s.inv) this.age(s.inv, hours, (COOL[s.type] ?? 1) * this.coldK(s.grp.position));
       for (const r of [...g.drops]) {
         const sp = ITEMS[r.id]?.spoil; if (!sp) continue; r.f = (r.f ?? sp) - hours * this.coldK(r.g.position);
