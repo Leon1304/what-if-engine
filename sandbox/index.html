@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>What If Town</title>
+<link rel="icon" href="data:,">
+<style>
+  :root {
+    --fg: #f4f1ea; --mut: #aeb4bf; --dim: #7c8390; --panel: rgba(16, 19, 26, .74); --panel2: rgba(28, 32, 42, .82); --line: rgba(255, 255, 255, .1);
+    --acc: #ff7a3d; --acc2: #ffb35c; --bad: #ff5a4a; --good: #6fd38a; --r: 14px;
+    --ui: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #0c0e12; color: var(--fg); font: 14px/1.4 var(--ui); user-select: none; -webkit-user-select: none; }
+  button { font: inherit; color: inherit; cursor: pointer; border: 0; background: none; }
+  button:disabled { opacity: .35; cursor: default; }
+  :focus-visible { outline: 2px solid var(--acc2); outline-offset: 2px; }
+
+  /* Welten (iframes, Doppelpuffer) */
+  #worlds { position: fixed; inset: 0; }
+  iframe.world { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; display: block; background: #0c0e12; }
+  iframe.world.loading { opacity: 0; pointer-events: none; z-index: 0; }
+  iframe.world.active { opacity: 1; z-index: 1; transition: opacity .35s; }
+
+  .glass { background: var(--panel); border: 1px solid var(--line); border-radius: var(--r); backdrop-filter: blur(10px) saturate(1.2); -webkit-backdrop-filter: blur(10px) saturate(1.2); box-shadow: 0 8px 28px rgba(0, 0, 0, .28); }
+  #ui { position: fixed; inset: 0; z-index: 5; pointer-events: none; }
+  #ui > * { pointer-events: auto; }
+
+  /* oben */
+  #top { position: absolute; left: 16px; right: 16px; top: 14px; display: flex; align-items: flex-start; gap: 12px; pointer-events: none; }
+  #top > * { pointer-events: auto; }
+  .brand { padding: 9px 14px; display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+  .brand b { font-size: 17px; letter-spacing: .01em; white-space: nowrap; } .brand b i { font-style: normal; color: var(--acc); }
+  .brand span { color: var(--mut); font-size: 12.5px; white-space: nowrap; }
+  #stats { flex: 1; display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; pointer-events: none; min-width: 0; }
+  .stat { padding: 7px 14px 8px; min-width: 112px; text-align: center; transition: border-color .3s, transform .2s; }
+  .stat small { display: block; color: var(--mut); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; white-space: nowrap; }
+  .stat b { display: block; font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1.15; white-space: nowrap; }
+  .stat.bad b { color: var(--bad); } .stat.hot { border-color: rgba(255, 90, 74, .7); }
+  .tools { display: flex; gap: 8px; }
+  .tbtn { height: 40px; min-width: 40px; padding: 0 12px; display: inline-flex; align-items: center; justify-content: center; gap: 6px; font-weight: 600; white-space: nowrap; }
+  .tbtn:hover { background: var(--panel2); } .tbtn.on { color: var(--acc2); border-color: rgba(255, 179, 92, .5); }
+
+  /* Szenario-Karten */
+  #cards { position: absolute; left: 16px; top: 92px; width: 248px; padding: 12px; display: flex; flex-direction: column; gap: 8px; max-height: calc(100% - 200px); overflow: auto; }
+  #cards h3 { margin: 0 2px 2px; font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--mut); font-weight: 600; }
+  .card { display: grid; grid-template-columns: 38px 1fr; gap: 2px 10px; align-items: center; text-align: left; padding: 9px 10px; border-radius: 11px; background: rgba(255, 255, 255, .04); border: 1px solid transparent; transition: background .15s, border-color .15s; }
+  .card .ic { grid-row: span 2; width: 38px; height: 38px; display: grid; place-items: center; font-size: 22px; border-radius: 10px; background: rgba(255, 255, 255, .07); }
+  .card b { font-size: 14.5px; display: flex; justify-content: space-between; align-items: baseline; gap: 6px; }
+  .card b em { font-style: normal; font-size: 10.5px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--dim); }
+  .card span { font-size: 12px; color: var(--mut); line-height: 1.3; }
+  .card:not(:disabled):hover { background: rgba(255, 122, 61, .12); border-color: rgba(255, 122, 61, .35); }
+  .card.sel { background: rgba(255, 122, 61, .18); border-color: var(--acc); }
+  .card:not(:disabled) b em { color: var(--acc2); }
+
+  /* Hinweis + Countdown */
+  #hint { position: absolute; left: 50%; top: 92px; transform: translateX(-50%); padding: 9px 16px; font-weight: 600; white-space: nowrap; display: none; pointer-events: none; }
+  #hint.show { display: block; animation: pop .25s; } #hint kbd { font: 600 11px var(--ui); padding: 1px 6px; border-radius: 5px; background: rgba(255, 255, 255, .14); margin: 0 2px; }
+  #countdown { position: absolute; inset: 0; display: none; place-items: center; pointer-events: none; }
+  #countdown.show { display: grid; }
+  #countdown .n { font-size: min(32vw, 220px); font-weight: 800; line-height: 1; color: #fff; text-shadow: 0 6px 40px rgba(255, 90, 40, .55), 0 2px 6px rgba(0, 0, 0, .6); animation: count 1s ease-out; }
+  #countdown .n.small { font-size: min(7vw, 40px); animation: none; }
+  #countdown .s { margin-top: 10px; text-align: center; color: var(--fg); font-weight: 600; text-shadow: 0 1px 4px rgba(0, 0, 0, .8); }
+  @keyframes count { from { transform: scale(1.6); opacity: 0; } 25% { opacity: 1; } to { transform: scale(.9); opacity: .9; } }
+  @keyframes pop { from { transform: translateX(-50%) translateY(-6px); opacity: 0; } }
+
+  /* Zeitleiste */
+  #bar { position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%); width: min(880px, calc(100% - 32px)); padding: 8px 10px; display: flex; align-items: center; gap: 8px; }
+  #bar .ib { width: 38px; height: 38px; border-radius: 10px; display: grid; place-items: center; font-size: 16px; flex: none; }
+  #bar .ib:hover:not(:disabled) { background: rgba(255, 255, 255, .1); }
+  #play { background: var(--acc) !important; color: #1b0f08; font-size: 15px; }
+  #play:hover { filter: brightness(1.08); }
+  #time { font-variant-numeric: tabular-nums; color: var(--mut); font-size: 12.5px; white-space: nowrap; min-width: 82px; text-align: center; }
+  #track { position: relative; flex: 1; min-width: 80px; height: 38px; display: flex; align-items: center; }
+  #seek { width: 100%; margin: 0; -webkit-appearance: none; appearance: none; height: 6px; border-radius: 3px; background: linear-gradient(90deg, var(--acc) var(--p, 0%), rgba(255, 255, 255, .16) var(--p, 0%)); outline: none; cursor: pointer; }
+  #seek::-webkit-slider-thumb { -webkit-appearance: none; width: 16px; height: 16px; border-radius: 50%; background: #fff; box-shadow: 0 1px 4px rgba(0, 0, 0, .5); }
+  #seek::-moz-range-thumb { width: 16px; height: 16px; border: 0; border-radius: 50%; background: #fff; }
+  #seek:disabled { cursor: default; }
+  .mark { position: absolute; top: -3px; transform: translateX(-50%); font-size: 10px; font-weight: 600; color: var(--acc2); pointer-events: none; white-space: nowrap; }
+  .mark::after { content: ''; position: absolute; left: 50%; top: 13px; width: 2px; height: 12px; margin-left: -1px; background: var(--acc2); border-radius: 1px; }
+  #speed { display: flex; background: rgba(255, 255, 255, .06); border-radius: 10px; padding: 3px; flex: none; }
+  #speed button { padding: 6px 8px; border-radius: 7px; font-size: 12px; font-weight: 600; color: var(--mut); font-variant-numeric: tabular-nums; }
+  #speed button.on { background: rgba(255, 255, 255, .16); color: var(--fg); }
+  #reset { padding: 0 12px; height: 38px; border-radius: 10px; background: rgba(255, 255, 255, .08); font-weight: 600; font-size: 12.5px; white-space: nowrap; flex: none; }
+  #reset:hover:not(:disabled) { background: rgba(255, 255, 255, .15); }
+
+  /* Laden, Hilfe, Meldungen */
+  #boot { position: fixed; inset: 0; z-index: 20; display: grid; place-items: center; background: radial-gradient(ellipse at 50% 40%, #1d2330, #0b0d11 70%); transition: opacity .5s; }
+  #boot.gone { opacity: 0; pointer-events: none; }
+  #boot .box { text-align: center; padding: 24px; }
+  #boot h1 { margin: 0; font-size: clamp(34px, 7vw, 56px); letter-spacing: -.01em; } #boot h1 i { font-style: normal; color: var(--acc); }
+  #boot p { color: var(--mut); margin: 8px 0 22px; }
+  .spin { width: 40px; height: 40px; margin: 0 auto 12px; border-radius: 50%; border: 3px solid rgba(255, 255, 255, .12); border-top-color: var(--acc); animation: sp 1s linear infinite; }
+  @keyframes sp { to { transform: rotate(360deg); } }
+  #bootmsg { font-variant-numeric: tabular-nums; color: var(--fg); font-weight: 600; }
+  #helpbox { position: absolute; right: 16px; top: 66px; width: 290px; padding: 14px 16px; display: none; }
+  #helpbox.show { display: block; }
+  #helpbox h4 { margin: 0 0 8px; font-size: 13px; }
+  #helpbox dl { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; margin: 0; font-size: 12.5px; }
+  #helpbox dt { font-weight: 600; white-space: nowrap; } #helpbox dd { margin: 0; color: var(--mut); }
+  #toast { position: absolute; left: 50%; bottom: 82px; transform: translateX(-50%); padding: 9px 16px; max-width: calc(100% - 32px); display: none; pointer-events: none; }
+  #toast.show { display: block; animation: pop .25s; } #toast.err { border-color: rgba(255, 90, 74, .7); }
+
+  /* kleine Fenster */
+  @media (max-width: 860px) {
+    #cards { top: auto; bottom: 74px; left: 16px; right: 16px; width: auto; flex-direction: row; overflow-x: auto; padding: 8px; max-height: none; }
+    #cards h3 { display: none; }
+    .card { flex: none; width: 190px; } .card span { display: none; } .card .ic { grid-row: auto; }
+    #hint, #toast { top: auto; bottom: 156px; white-space: normal; text-align: center; max-width: calc(100% - 32px); }
+    #stats .stat { min-width: 90px; padding: 5px 10px; } .stat b { font-size: 18px; }
+    #top { flex-wrap: wrap; } #stats { order: 3; flex-basis: 100%; justify-content: flex-start; }
+  }
+  @media (max-width: 560px) {
+    #time, #speed button:nth-child(1) { display: none; }
+    #reset { font-size: 0; width: 38px; padding: 0; } #reset::before { content: '🏙'; font-size: 16px; }
+    .brand span { display: none; } .tbtn .lbl { display: none; }
+  }
+</style>
+</head>
+<body>
+<div id="worlds"></div>
+<div id="ui">
+  <div id="top">
+    <div class="brand glass"><b>What <i>If</i> Town</b><span id="phase">Stadt wird gebaut …</span></div>
+    <div id="stats"></div>
+    <div class="tools">
+      <button id="snd" class="tbtn glass" title="Ton an/aus (Ton wird beim ersten Mal berechnet)"><span class="ico">🔇</span><span class="lbl">Ton</span></button>
+      <button id="help" class="tbtn glass" title="Steuerung">?</button>
+    </div>
+  </div>
+  <aside id="cards" class="glass"><h3>Szenarien</h3></aside>
+  <div id="hint" class="glass"></div>
+  <div id="countdown"><div><div class="n" id="cdn">3</div><div class="s" id="cds"></div></div></div>
+  <div id="helpbox" class="glass">
+    <h4>Steuerung</h4>
+    <dl>
+      <dt>Ziehen</dt><dd>Kamera drehen</dd>
+      <dt>Rechts / Shift + Ziehen</dt><dd>Kamera verschieben</dd>
+      <dt>Mausrad / Pinch</dt><dd>Zoomen</dd>
+      <dt>W A S D</dt><dd>Verschieben</dd>
+      <dt>Q / E</dt><dd>Drehen</dd>
+      <dt>Leertaste</dt><dd>Abspielen / Pause</dd>
+      <dt>1 – 4</dt><dd>Tempo 0,25× · 0,5× · 1× · 2×</dd>
+      <dt>R</dt><dd>Von vorn</dd>
+      <dt>Esc</dt><dd>Zielen abbrechen</dd>
+    </dl>
+  </div>
+  <div id="toast" class="glass"></div>
+  <div id="bar" class="glass">
+    <button id="play" class="ib" title="Abspielen / Pause (Leertaste)">⏸</button>
+    <button id="restart" class="ib" title="Von vorn (R)">↺</button>
+    <span id="time">0,0 / 0,0 s</span>
+    <div id="track"><input id="seek" type="range" min="0" max="60" step="0.01" value="0" aria-label="Zeit"></div>
+    <div id="speed" role="group" aria-label="Tempo">
+      <button data-r="0.25">¼×</button><button data-r="0.5">½×</button><button data-r="1" class="on">1×</button><button data-r="2">2×</button>
+    </div>
+    <button id="reset" title="Zurück zur heilen Stadt">Stadt zurücksetzen</button>
+  </div>
+</div>
+<div id="boot"><div class="box"><div class="spin"></div><h1>What <i>If</i> Town</h1><p>Wähle ein Szenario, zeig auf die Stadt – und sieh zu, was passiert.</p><div id="bootmsg">Stadt wird gebaut …</div></div></div>
+<script type="module" src="js/main.js"></script>
+</body>
+</html>

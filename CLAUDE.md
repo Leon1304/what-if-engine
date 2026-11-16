@@ -70,3 +70,9 @@ Spielstände müssen nach Updates laden (`SAVE_VERSION` in `js/game.js`; localSt
 ## Spiel „Cogtopia“ (fabrik/)
 Fabrik-Incremental (Three.js, Low Poly, alles prozedural in `fabrik/js/models/`, keine GLB), unabhängig von Engine und anderen Spielen. Englisch/Deutsch wählbar: sichtbare Texte nur über `t()`/`name()` (`fabrik/js/i18n.js`, `js/lang/en.js` + `de.js` mit gleichen Schlüsseln); die Logik `js/sim.js` liefert nur Ids/Zahlen, ist deterministisch (20 Ticks/s) und DOM-frei. Konzept `fabrik/DESIGN.md`, Aufbau `fabrik/README.md`.
 Vor dem Push: `node fabrik/tools/rules.mjs` → `RULES OK` (inkl. Bot-Partie fürs Balancing), `node fabrik/tools/meta-rules.mjs` → `META OK` (Glücksrad, Serie, Ereignisse, Album, Ziele, Wochen-Herausforderung), `node fabrik/tools/models.mjs <ordner>` → `MODELS OK`, `node fabrik/tools/play.mjs <ordner>` → `PLAY OK`. Spielstände müssen nach Updates laden (`SAVE_VERSION` in `js/sim.js`, `Factory.load` repariert fremde/alte Stände).
+
+Vor dem Push: `node fabrik/tools/rules.mjs` → `RULES OK` (inkl. Bot-Partie fürs Balancing), `node fabrik/tools/models.mjs <ordner>` → `MODELS OK`, `node fabrik/tools/play.mjs <ordner>` → `PLAY OK`. Spielstände müssen nach Updates laden (`SAVE_VERSION` in `js/sim.js`, `Factory.load` repariert fremde/alte Stände).
+
+## Spiel „What If Town“ (sandbox/)
+Katastrophen-Sandbox auf der Video-Engine: eine Engine-Seite im Live-Modus (`CFG.live`, v3.50, `docs/API.md` „Live-Modus“) als `<iframe>`, die Hülle `sandbox/` (DOM-Oberfläche, Ton im Eltern-Fenster) steuert sie über `whatif.live`. Konzept `sandbox/DESIGN.md`, Aufbau `sandbox/README.md`. Neue Effekte, Gebäude und Szenarien-Bausteine gehören in `template.html` (Engine-Regeln oben), nicht in die Hülle. `bash sandbox/build.sh` baut `sandbox/world.html` (nicht im Repo).
+Vor dem Push: `bash sandbox/build.sh && node sandbox/tools/check.mjs --gpu` → `SANDBOX OK`, bei Engine-Änderungen außerdem `bash tests/run.sh` (enthält `live-mode`).

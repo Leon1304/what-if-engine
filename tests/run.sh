@@ -217,6 +217,28 @@ you = any(a['kind'] == 'react' and a.get('who') == 'you' for a in d['ac'])
 print('ok' if qa == ['ENDCARD', 'HOOK', 'MISMATCH', 'PACING 5.40–9.40', 'YOU'] and you and d['rx'] >= 1 and d['n'] >= 11 else 'got ' + ' · '.join(qa) + ' | you cut %s | react %s | cuts %s' % (you, d['rx'], d['n']))" 2>&1)
   if [ "$dr" = ok ]; then echo "ok   directing  autoCut → 'you' · reactCut · HOOK PACING YOU MISMATCH ENDCARD"; else echo "FAIL directing: $dr"; fail=1; fi;;
 esac
+# v3.50 live mode (tests/live-mode): whatif.live exists (autoplay off), seek / t, cam() set + read back ([x, z] → ground height, zoom / tilt limits), pick() of the frame centre = the
+#   orbit target and null above the horizon, stats() (timer as clock, keys value), marker, shift drag / W pan forward (grab the ground), a click goes to on('click'), the clock stops at dur
+#   and play() rewinds, the video HUD is hidden
+case " $names " in *" live-mode "*)
+  lm=$(node render.mjs live-mode.html --probe "(async () => { const L = whatif.live; if (!L) return 'nolive'; const f2 = x => x.toFixed(2), raf = () => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+    const auto = L.playing; L.seek(3); const t1 = L.t, c = L.cam({ at: [5, -20], az: 60, el: 40, dist: 90 }); whatif.seek(4);
+    const r = canvas.getBoundingClientRect(), cx = r.left + r.width / 2, cy = r.top + r.height / 2, p = L.pick(cx, cy), pe = p ? Math.hypot(p[0] - 5, p[2] + 20) : 99;
+    L.cam({ el: 4 }); whatif.seek(4); const sky = L.pick(cx, r.top + 2); const lim = L.cam({ dist: 5000 }).dist + '/' + L.cam({ el: 120 }).el; L.cam({ dist: 90, el: 40 }); whatif.seek(4);
+    const st = L.stats(2), sT = st.find(s => s.label === 'Impact in'), sH = st.find(s => s.label === 'Houses');
+    L.marker(p, 8); const mk = LIVEMK.visible && Math.abs(LIVEMK.position.x - 5) < 0.01; L.marker(null);
+    const fw = [-Math.sin(Math.PI / 3), -Math.cos(Math.PI / 3)], mv = () => { const a = L.cam().at; return (a[0] - 5) * fw[0] + (a[2] + 20) * fw[1]; };
+    const ev = (ty, x, y, o = {}) => stage.dispatchEvent(new PointerEvent(ty, { pointerId: 7, clientX: x, clientY: y, button: 0, bubbles: true, isPrimary: true, pointerType: 'mouse', ...o }));
+    ev('pointerdown', cx, cy, { shiftKey: true }); ev('pointermove', cx, cy + 60); ev('pointermove', cx, cy + 120); ev('pointerup', cx, cy + 120); const drag = mv();
+    L.cam({ at: [5, -20] }); window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyW' })); await raf(); await raf(); window.dispatchEvent(new KeyboardEvent('keyup', { code: 'KeyW' })); const key = mv();
+    L.cam({ at: [5, -20] }); let got = null; const off = L.on('click', e => { got = e.point; }); ev('pointerdown', cx, cy); ev('pointerup', cx, cy); off(); const clk = !!got && Math.hypot(got[0] - 5, got[2] + 20) < 1.5;
+    L.seek(9.95); L.play(); last = performance.now() - 100; loop(performance.now()); const endT = L.t, endP = L.playing; L.play(); const rew = L.t; L.pause();
+    const hud = getComputedStyle(document.getElementById('hud')).display;
+    return ['auto=' + auto, 't=' + t1, 'at=' + c.at.map(f2).join('/'), 'pick=' + (pe < 0.5), 'sky=' + sky, 'lim=' + lim, 'stats=' + st.length + '/' + sT?.text + '/' + sH?.value, 'marker=' + mk,
+      'drag=' + (drag > 1), 'key=' + (key > 1), 'click=' + clk, 'end=' + endT + '/' + endP + '/' + rew, 'hud=' + hud].join(' '); })()" 2>&1 | tail -1 | tr -d '"')
+  if [ "$lm" = "auto=false t=3 at=5.00/0.00/-20.00 pick=true sky=null lim=400/88 stats=2/00:04/6 marker=true drag=true key=true click=true end=10/false/0 hud=none" ]; then echo "ok   live mode  $lm"
+  else echo "FAIL live mode: '$lm'"; fail=1; fi;;
+esac
 # cover stage: thumbnails (THUMB, A/B variants → cover-b.jpg …) of example + every scene with an A/B THUMB array; COVERS=all = every scene that defines THUMB
 cv=""; for s in $names; do case "$s" in example) cv="$cv $s";; *) [ -f "$s.html" ] || continue; if [ "${COVERS:-}" = all ]; then grep -q '^const THUMB' "$s.story.js" && cv="$cv $s"; else grep -q '^const THUMB = \[' "$s.story.js" && cv="$cv $s"; fi;; esac; done
 cover() { s=$1; rm -f "cover_$s.jpg" "cover_$s"-[a-h].jpg; timeout 900 node render.mjs "$s.html" --cover "cover_$s.jpg" > "cover_$s.log" 2>&1; n=$(grep -c '^const THUMB = \[' "$s.story.js" 2>/dev/null); want=$(( n > 0 ? 2 : 1 ))

@@ -8,3 +8,8 @@ node_modules
 # Blender backup copies
 *.blend1
 _site/
+
+# What If Town: Build-Ergebnis (bash sandbox/build.sh)
+sandbox/world.html
+sandbox/.world.check.mjs
+sandbox/world.events.json

@@ -117,6 +117,7 @@ Alle übrigen `CFG`-Schlüssel stehen bei ihrer Funktion in diesem Dokument (`gr
 | `life` (true) | v3.44: Leerlauf-Leben auf jeder stehenden Figur (Ellbogen leicht gebeugt, Kopf schaut sich unter Mocap um, Augen führen); auch `pose(f, 'idle', 12, 12)` mit fester Zeit atmet, blinzelt und spielt Reaktionen (`{ freeze: true }` = altes Standbild). `figure({ life: false })` pro Figur |
 | `attend` (true) | v3.44: Figuren ohne eigenes `look` drehen Kopf und Augen zu großen Ereignissen (`explode`, Meteor, Rakete, Bombe, Blitz, `attend(t, at)`); `figure({ attend: false })` pro Figur |
 | `figDetail` (2) · `figDetailFar` (0.03) | v3.44: Kleidungsdetails an `figure()` (Taille, Kragen, Saum, Brust-/Gesäßtaschen, Hosenumschlag, Schuhkappen, Schattierung) und Massen (Taille, Saum/Kragen); `1` = alter schlichter Look (auch `figure({ detail: 1 })`, `horde({ detail: 1 })`). Unter `figDetailFar` (Anteil der Bildhöhe) blendet die Figur die Details aus |
+| `live` (null) | v3.50 Live-Modus: Seite wird zur spielbaren Welt für das Spiel in `sandbox/` (Orbit-Kamera statt `CAM`, kein Video-HUD, Uhr über `whatif.live`); `{ cam, autoplay, loop, maxW }`, siehe **Live-Modus (v3.50, Spiel sandbox/)** |
 
 Ton-Schlüssel (`voice`, Musik und Geräusche in `AUDIO`) liest `voice.py` bzw. die Tonspur; sie stehen in der SKILL.md und werden hier nicht beschrieben.
 
@@ -1747,7 +1748,7 @@ Rauch, Staub, Feuerbälle und Wolken bestehen aus **beleuchteten Rauchballen**: 
 - `volPuffs(max, (st, add) => …)`: eigene Ballen-Effekte: `add(x, y, z, r, deckung, hitze, licht, drehung, farbe (THREE.Color), form 0–3, bodenY)` pro Ballen und Bild; `hitze` 0 = kalter Rauch, 0,3 = warm von unten, 1 = glühend orange, 1,6 = weißglühend; `licht` 0–1 = wie viel Sonne ihn erreicht (Selbstschatten einer großen Wolke).
 - **Explosion:** `explode()` bringt jetzt einen rollenden Feuerball, eine von unten angeglühte Rauchsäule, Funken als Striche entlang ihrer Flugbahn (auch in der Bewegungsunschärfe Striche statt Punktreihen), aufsteigende Glutfunken und Hitzeflimmern mit. API unverändert.
 - **Meteor / Asteroid:** kantiger, verkraterter Brocken, dessen Vorderseite weiß → orange glüht (Glutrisse auf der Rückseite), Plasma-Glühen und Bugstoßwelle an der Front, langer ionisierter Schweif (`trail`: Länge), breiter Glühschein, abstiebende Funken, Rauchspur aus Ballen. Gilt für `meteor()` und `asteroidImpact()`; API unverändert.
-- **Einsturz:** `collapse()` mit `pancake`/`topple` zerlegt das Gebäude in Stockwerks-Bänder (eigene Meshes an den Schnitten geteilt, je Band und Material eine Mesh, Betondecke an jedem Schnitt): `pancake` = der obere Block sackt durch und zerdrückt die unteren Stockwerke eins nach dem anderen, dann sich selbst am Boden, Staub schießt an der Bruchkante heraus, Fenster platzen; `topple` = bricht über einem stehenden Stumpf ab, der obere Teil knickt leicht und fällt weg, zerbricht beim Aufschlag. Fallbewegung analytisch (Funktion von t). `vfx: false` (Option) = alte Variante für dieses Gebäude, `dustK` = Staubmenge.
+- **Einsturz:** `collapse()` mit `pancake`/`topple` zerlegt das Gebäude in Stockwerks-Bänder (eigene Meshes an den Schnitten geteilt, je Band und Material eine Mesh, Betondecke an jedem Schnitt – seit v3.50 je Band eine eigene ganze Platte, auch der stehende Stumpf von `topple` ist oben geschlossen statt schwarz offen): `pancake` = der obere Block sackt durch und zerdrückt die unteren Stockwerke eins nach dem anderen, dann sich selbst am Boden, Staub schießt an der Bruchkante heraus, Fenster platzen; `topple` = bricht über einem stehenden Stumpf ab, der obere Teil knickt leicht und fällt weg, zerbricht beim Aufschlag. Fallbewegung analytisch (Funktion von t). `vfx: false` (Option) = alte Variante für dieses Gebäude, `dustK` = Staubmenge.
 - **Licht von Explosionen/Einschlägen:** blitzt kurz auf und fällt in ~0,1–0,35 s auf ein schwaches Glühen ab (vorher 1,2–2,4 s volle Stärke: weiße Fahrbahnmarkierungen und Böden wurden HDR-überstrahlt, schienen durch Rauch, QA WASHOUT). Straßen/Markierungen (`surf` mit Spur-Attribut) werden zusätzlich auf 1,35 begrenzt. Dichte Rauchkerne sind deckend (nichts Helles scheint durch eine dicke Wolke).
 - Funken mit `geo: 'trail'` (neu in `emit`): Strich entlang der eigenen Geschwindigkeit, Länge = Tempo × `streak` (s, Standard 0,05).
 - Leistung: Ballen sind billige Quads (ein Texturzugriff, keine Rauschfunktion im Shader). asteroid-la: siehe Testbericht.
@@ -2049,3 +2050,36 @@ Alles rein aus t; Platz-Entscheidungen fallen einmal pro Fenster aus dessen eige
 - **TEASE-Blitze** 0,5 / 0,4 statt 0,85 / 0,7 (kein weißes Bild bei jedem Sprung).
 - **QA**: `QA: WASHOUT` meldet auch milchige Bilder ohne Blitz (dunkelste 5 % ≥ `CFG.qaMilky` 0,36, 90 % innerhalb 0,3, zwei Proben 0,1 s auseinander) – geprüft bei 15/50/85 % jeder Einstellung, beiderseits jedes Schnitts, TEASE-Ein/Aus und Blitz-Enden. `QA: DARK` prüft auch die Proben bei 12/88 % jeder Einstellung (farbig).
 - Test: `tests/light-post` (Nachtgesicht an der Linse + Lampe über einem Kopf, Raum bei Tag, Nahaufnahme mit Blickpunkt hinter der Figur, weißer Schleier ohne Blitz → genau eine `WASHOUT`-Zeile).
+
+# Live-Modus (v3.50, Spiel sandbox/)
+Mit `CFG.live` wird eine fertige Engine-Seite zur spielbaren Welt: das Spiel in `sandbox/` lädt sie als `<iframe>` und steuert sie über `whatif.live`. Szene, Story, `STATS`, `SHAKES` usw. bleiben wie im Video; **jedes Bild bleibt eine reine Funktion von t, nur die Kamera gehört dem Spieler.** Ohne `CFG.live` ändert sich an Videos nichts.
+
+`CFG.live = { cam: { at, az, el, dist, fov, min, max }, autoplay, loop, maxW }` (Standardwerte):
+| Schlüssel | Wirkung |
+|---|---|
+| `cam.at` ([0, 0, 0]) | Drehpunkt der Orbit-Kamera `[x, y, z]` (Welt-m) |
+| `cam.az` (35) · `cam.el` (38) | Richtung (Grad, um y) und Höhenwinkel (Grad, begrenzt auf 4–88) der Kamera vom Drehpunkt aus |
+| `cam.dist` (140) · `cam.min` (8) · `cam.max` (650) | Abstand zum Drehpunkt (m) und Zoom-Grenzen. Kamera-`far` ist 1200 m, Nebel nach `SKY` (Tag ~320 m × `CFG.fogScale`): wer weit herauszoomen lässt, setzt `fogScale` hoch bzw. `max` kleiner |
+| `cam.fov` (45) | Bildwinkel (vertikal, Grad; kein `FOVK`) |
+| `autoplay` (true) | Uhr läuft nach dem Laden los; `false` = steht bei 0 bis `play()` |
+| `loop` (false) | am Ende von vorn; sonst bleibt die Uhr bei `dur` stehen (`playing` → false) |
+| `maxW` (1920) | höchste Render-Breite in px (Pixeldichte wird darauf begrenzt) |
+
+**Steuerung (im iframe):** linke Maus ziehen = drehen · rechte Maus oder Shift + ziehen = verschieben (der Boden „klebt“ an der Maus) · Mausrad = zoomen · Touch: ein Finger dreht, zwei Finger zoomen (Pinch) und verschieben · W A S D / Pfeile = verschieben (W = vorwärts in Blickrichtung) · Q / E = drehen. Ein Klick ohne Ziehen (< 4 px) geht an das Spiel (`on('click')`), Rechtsklick öffnet kein Menü. Tasten kommen nur an, solange das iframe den Fokus hat; sonst steuert das Eltern-Fenster über `cam()`.
+
+**API `whatif.live`** (nur mit `CFG.live`, sonst `null`):
+- `t` · `playing` · `rate` (nur lesen), `dur`
+- `play()` (am Ende: von vorn; bei `rate < 0` am Anfang: vom Ende) · `pause()` · `seek(t)` (auf 0…dur begrenzt, läuft weiter, wenn sie lief) · `setRate(r)` (Zeitraffer, Zeitlupe, rückwärts mit `r < 0`; ungültig → 1)
+- `cam(o?)` setzt beliebige von `{ at, az, el, dist, fov, min, max }` und liefert den Stand `{ at: [x, y, z], az, el, dist, fov, min, max }` (begrenzt) zurück; `at` als `[x, z]` = auf die Bodenhöhe `groundH`
+- `pick(clientX, clientY)` → Bodenpunkt `[x, y, z]` unter dem Bildschirmpunkt (Strahl über `groundH`, nur Gelände, keine Gebäude) oder `null` (Himmel)
+- `marker(at, r = 10, color = '#FF5A3A')` Zielring auf dem Boden (`at` = `[x, y, z]` oder `[x, z]`, Radius m), Ring und Mittelpunkt immer sichtbar (ohne Tiefe, ohne Nebel), die schwache Füllung nur auf dem Boden (Gebäude verdecken sie); `marker(null)` = weg. Spiel-UI, kein Teil der Szene
+- `aim(on)` Fadenkreuz-Cursor an/aus
+- `on('click' | 'move', fn)` → Abmeldefunktion; `fn({ x, y, point })` mit Client-px und `point` wie `pick()` (`move` nur ohne gedrückte Taste)
+- `stats(t = jetzt)` → sichtbare `STATS` zur Zeit t: `[{ label, type, value, text, max, up, bad }]`; `text` im Format des HUD (Timer `clock`, Meter `pct`, Zeitleiste `year`, `stars` als ★)
+- `fps` aus der echten Bildzeit (Mittel der ersten 20 Bilder, dann geglättet)
+
+**Abgeschaltet im Live-Modus:** `CAM` (inkl. Schnitte, `TRANS`-Übergänge, `CAMFX`, Handkamera/`sway`, Punch-in, `fy`), Tiefenunschärfe (DOF) und Tilt-Shift (`mini`), das ganze Video-HUD (Captions, Zähler, Badge, Endcard und ihre Abdunklung, Karten, Cover, Abspielleiste; nur `#gl` und `#flash` bleiben), Loop-Überblendung, Klick-/Tasten-Steuerung des Players. **Bleiben:** `SHAKES`, Druckwellen-Treffer (`camReact`, Linsenstaub), `FLASHES`, Bewegungsunschärfe der Szene, alle `POSTCAM`-Haken (LOD, Raumhüllen …; `liveCamera()` ruft sie wie `updateCamera()` nach `lookAt` mit gesetztem `CAMFOV` auf), Schatten folgen dem Drehpunkt.
+
+**Ton:** das iframe spielt keinen Ton (Autoplay-Sperre, Uhr ohne Audio). Das Eltern-Fenster holt die Tonspur mit `await iframe.contentWindow.whatif.renderAudio()` (WAV als Base64) und spielt sie selbst, synchron zu `whatif.live.t` (bei `setRate`/`seek` neu ansetzen).
+
+Bildgröße: die Seite füllt das ganze Fenster (jedes Seitenverhältnis), Kamera-`near` wächst mit dem Abstand (0,1–0,6 m). `render.mjs --shots` funktioniert weiter (über `whatif.seek`, Kamera = aktueller `cam()`-Stand). Test: `tests/live-mode` (API, Bodenpunkt in der Bildmitte, Verschieben per Ziehen und W, Klick, Ende der Uhr, HUD aus).

@@ -1,0 +1,26 @@
+{
+  "title": "What If Town",
+  "tagline": "Eine kleine Stadt, ein großes Was-wäre-wenn: Asteroid, Tsunami, Zombies",
+  "tagline_en": "One small town, one big what-if: asteroid, tsunami, zombies",
+  "description": "Katastrophen-Sandbox auf der Engine der What-If-Videos: Szenario wählen, Ziel in der Stadt anklicken, zusehen. Zähler laufen live mit, die Zeitleiste spult vor und zurück, die Kamera gehört dir.",
+  "genre": "Sandbox · Simulation",
+  "tags": [
+    "3D",
+    "Sandbox",
+    "Katastrophen"
+  ],
+  "controls": [
+    "Maus",
+    "Tastatur"
+  ],
+  "status": "bald",
+  "added": "2026-11-17",
+  "order": 30,
+  "color": "#e8873a",
+  "emoji": "☄️",
+  "files": [
+    "index.html",
+    "js",
+    "world.html"
+  ]
+}

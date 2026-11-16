@@ -281,6 +281,9 @@
   #stage.land #thumb .hd { left: 4%; bottom: 4%; transform: none; }
   /* v2.30 long-video mode (every 16:9 video): calm HUD, chapter title cards, fact cards as lower thirds, two-line subtitles in sentence case, wider timeline, 2D map cards */
   #stage.land .stat .tl { width: calc(62 * var(--u)); }
+  /* v3.50 live mode (CFG.live, game sandbox/): the 3D fills the window, no video HUD, captions, end card or play bar — the game draws its own UI around it */
+  #stage.live { cursor: grab; touch-action: none; } #stage.live.drag { cursor: grabbing; } #stage.live.aim { cursor: crosshair; }
+  #stage.live > :not(#gl):not(#flash) { display: none !important; }   /* #dim too: it only darkens under the end card / cards */
   #stage.long #cap { padding: 0 17cqw; }
   #stage.long #cap .m { font: 600 calc(4.5 * var(--u))/1.32 var(--ui); text-transform: none; letter-spacing: .003em; text-shadow: 0 0 calc(.45 * var(--u)) rgba(0, 0, 0, .95), 0 calc(.2 * var(--u)) calc(1 * var(--u)) rgba(0, 0, 0, .8); }
   #stage.long #cap.big .m { font-size: calc(5.6 * var(--u)); }
@@ -505,6 +508,13 @@ for (const [k, v] of Object.entries({ dur: 22, seed: 7, filter: 'film', grain: 0
 const TAU = Math.PI * 2, DUR = CFG.dur, EXPORT = !!window.__EXPORT__;
 const LAND = CFG.aspect === '16:9' || CFG.aspect === 'landscape', FOVK = CFG.fovScale ?? (LAND ? 0.68 : 1);   // v2.25: landscape 16:9 (normal YouTube video); vertical fov × FOVK keeps shots framed like 9:16
 if (LAND) { document.getElementById('stage').classList.add('land'); document.getElementById('xlsvg').setAttribute('viewBox', '0 0 100 56.25'); }
+// v3.50 live mode (CFG.live = { cam, autoplay, loop, maxW }): the page is a playable world for the game in sandbox/ — fills the window, free orbit camera
+// (drag = turn, right drag / shift = pan, wheel = zoom, touch: one finger turns, two pinch / pan), the clock only runs through whatif.live (play, pause, seek, rate),
+// whatif.live.pick() turns a click into a world point, stats() reads STATS. Every frame stays a pure function of t; only the camera belongs to the player.
+const LIVEM = CFG.live ? { autoplay: true, loop: false, maxW: 1920, ...CFG.live } : null;
+if (LIVEM) document.getElementById('stage').classList.add('live');
+// LIVECAM (orbit camera, see liveCamera): declared here, not next to updateCamera — updateCamera reads it in every video, so it must exist before any frame
+const LIVECAM = LIVEM ? (c => ({ at: new THREE.Vector3(...(c.at ?? [0, 0, 0])), az: c.az ?? 35, el: c.el ?? 38, dist: c.dist ?? 140, fov: c.fov ?? 45, min: c.min ?? 8, max: c.max ?? 650 }))(LIVEM.cam ?? {}) : null;
 // v2.30 long-video mode — every 16:9 video (CFG.long: false turns it off): 3D in full resolution + 4× MSAA (CFG.fast keeps the old speed), calm HUD (badge row only at the start,
 // at chapters, with data and on the end card), chapter title cards from STEPS, FACTS as lower thirds, two-line subtitles in sentence case (CFG.subWords 16), brighter nights
 // (CFG.nightLift), more aerial haze (CFG.haze), soft spray, wet sand along coasts, 2D map cards (MAP2D), subtitles as .srt (render.mjs --srt)
@@ -8608,7 +8618,7 @@ function _bandSplit(node, K, sd) {
       for (let k = 0; k < K; k++) { if (y1 < lo(k) || y0 > hi(k)) continue; if (y0 >= lo(k) && y1 <= hi(k)) { put(k, mt, tri); break; } const pc = clipY(clipY(tri, lo(k), true), hi(k), false); if (pc.length >= 3) put(k, mt, pc); } } };
   node.traverse(m => { if (!m.isMesh || m.isInstancedMesh || !m.material || Array.isArray(m.material)) return; for (let q = m; q && q !== node.parent; q = q.parent) if (!q.visible) return; addMesh(m.geometry, m.matrixWorld, m.material); });
   _slabM ??= mat('#56524D', { rough: 0.95 }); const lb = localBox(node), ls = lb.getSize(new THREE.Vector3()), lc = lb.getCenter(new THREE.Vector3()), nw = new THREE.Vector3();
-  for (const Y of cuts) { nw.set(c.x, Y, c.z); node.worldToLocal(nw); const sg = new THREE.BoxGeometry(Math.max(0.5, ls.x - 0.3), 0.36, Math.max(0.5, ls.z - 0.3)); sg.translate(lc.x, nw.y, lc.z); addMesh(sg, node.matrixWorld, _slabM); sg.dispose(); }   // floor slab at each cut: both bands get a cap
+  for (const Y of cuts) for (const sy of [-1, 1]) { nw.set(c.x, Y + sy * 0.2, c.z); node.worldToLocal(nw); const sg = new THREE.BoxGeometry(Math.max(0.5, ls.x - 0.3), 0.36, Math.max(0.5, ls.z - 0.3)); sg.translate(lc.x, nw.y, lc.z); addMesh(sg, node.matrixWorld, _slabM); sg.dispose(); }   // floor slab at each cut: each band gets its own whole cap (v3.50: one slab across the cut was sliced too — its top went to the upper band, the stump below stayed open with the black interior showing)
   const bands = per.map((Mp, k) => { const y0 = k ? cuts[k - 1] : gy, y1 = k < K - 1 ? cuts[k] : bb.max.y, pv = new THREE.Vector3(c.x, y0, c.z), g = dyn(grp(world, pv.x, pv.y, pv.z)); g.visible = false;
     for (const [mt, L] of Mp) { const n = L.length, pos = new Float32Array(n * 3), nor = new Float32Array(n * 3), uv = new Float32Array(n * 2), col = mt.vertexColors ? new Float32Array(n * 3) : null, sp = mt.userData?.surf && CFG.surfaces !== false ? new Float32Array(n * 3) : null;
       L.forEach((V, i) => { pos[i * 3] = V[0] - pv.x; pos[i * 3 + 1] = V[1] - pv.y; pos[i * 3 + 2] = V[2] - pv.z; nor[i * 3] = V[3]; nor[i * 3 + 1] = V[4]; nor[i * 3 + 2] = V[5]; uv[i * 2] = V[6]; uv[i * 2 + 1] = V[7]; if (col) { col[i * 3] = V[8]; col[i * 3 + 1] = V[9]; col[i * 3 + 2] = V[10]; } if (sp) { sp[i * 3] = V[11]; sp[i * 3 + 1] = V[12]; sp[i * 3 + 2] = V[13]; } });
@@ -19049,7 +19059,29 @@ function lensDust(t) {
     me.position.set(CAMHIT.sx * lerp(-1.4, 1.4, x) * hw, lerp(-0.7, 0.75, hash(i * 2.9)) * th * z - x * 0.15 * th * z, -z); me.scale.setScalar(sz * (1 + 0.5 * x)); me.rotation.z = hash(i * 4.4) * TAU + x;
     me.material.opacity = (i % 3 === 2 ? 0 : 0.3) * Math.min(1, k * 1.4) * Math.sin(Math.PI * x); });
 }
+// v3.50 live camera (CFG.live): the player's orbit camera round a target point instead of CAM — shakes and blast hits (camReact) still come from the scene,
+// cuts, transitions, handheld drift, depth blur and tilt-shift stay off. LIVECAM: { at (Vector3), az / el (degrees), dist, fov, min / max (zoom limits) }
+function liveCamera(t) {
+  const C = LIVECAM; C.el = clamp(C.el, 4, 88); C.dist = clamp(C.dist, C.min, C.max);
+  const el = C.el * Math.PI / 180, az = C.az * Math.PI / 180, fov = C.fov;
+  _l.copy(C.at); _p.set(C.at.x + Math.sin(az) * Math.cos(el) * C.dist, C.at.y + Math.sin(el) * C.dist, C.at.z + Math.cos(az) * Math.cos(el) * C.dist);
+  _p.y = Math.max(_p.y, groundH(_p.x, _p.z) + 1.6);   // never under the ground
+  shakeAmt = 0; const shH = 0.04 * 2 * Math.tan(fov * Math.PI / 360) * Math.max(2, _p.distanceTo(_l));
+  for (const s of SHAKES) { const d = s.dur ?? 0.6; if (t < s.t || t > s.t + d) continue;
+    const k = 1 - (t - s.t) / d, amp0 = (s.amp ?? 0.3) * k * k, amp = Math.min(amp0, shH); shakeAmt = Math.max(shakeAmt, amp0);
+    _p.x += noise1(t * 30 + 3) * amp; _p.y += noise1(t * 33 + 7) * amp; _l.x += noise1(t * 27 + 11) * amp * 0.6; _l.y += noise1(t * 29 + 13) * amp * 0.6; }
+  const hitRoll = camReact(t, { fov });
+  camFx.blur = camFx.zoom = camFx.dip = camFx.def = 0;
+  for (const r of POV_RIGS) r.head.visible = true;
+  const nr = clamp(C.dist * 0.002, 0.1, 0.6); if (camera.near !== nr) { camera.near = nr; camera.updateProjectionMatrix(); }
+  CAMROLL = hitRoll; camera.position.copy(_p); camera.lookAt(_l); CAMFOV = fov; for (const f of POSTCAM) f(t); if (CAMROLL) camera.rotateZ(CAMROLL);
+  if (camera.fov !== fov) { camera.fov = fov; camera.updateProjectionMatrix(); }
+  camFx.dof = 0; camFx.fy = 0.5; camFx.focus = _p.distanceTo(_l); camFx.mini = 0;
+  sky.position.copy(camera.position);
+  lensDust(t);
+}
 function updateCamera(t) {
+  if (LIVECAM) return liveCamera(t);
   let i = 0; for (let j = 0; j < CAM.length; j++) if (CAM[j].t <= t) i = j;
   const a = CAM[i], b = CAM[i + 1];
   let fov = a.fov ?? 45, fy = a.fy ?? 0.5, dof = a.dof ?? 0, kf = 0;
@@ -20962,19 +20994,19 @@ function update(t) {
 // which dissolves in over the last shot → the final frame equals frame 0, the restart is seamless. Everything is a function of t, so this stays frame-exact.
 const loopV = $('loopv'), loopCtx = loopV.getContext('2d');
 const draw = t => {
-  const u = LOOPX && !THUMB_ON ? clamp((t - (DUR - LOOPX)) / LOOPX) : 0;
+  const u = LOOPX && !THUMB_ON && !LIVEM ? clamp((t - (DUR - LOOPX)) / LOOPX) : 0;   // v3.50 live: no loop dissolve
   if (u > 0) {
     update(t - DUR); composer.render();
     const c = renderer.domElement; if (loopV.width !== c.width || loopV.height !== c.height) { loopV.width = c.width; loopV.height = c.height; }
     loopCtx.drawImage(c, 0, 0);
   }
   loopV.style.opacity = u > 0 ? sm01(u).toFixed(4) : '0';
-  update(t); if (map2dK(t) < 0.999) composer.render();   // v2.30: a full-frame map card hides the 3D scene → skip it
+  update(t); if (LIVEM || map2dK(t) < 0.999) composer.render();   // v2.30: a full-frame map card hides the 3D scene → skip it
 };
-let maxW = EXPORT ? (LAND ? 1920 : 1080) : (LAND ? 1600 : 900), clock = 0, playing = true, dirty = true, last = performance.now();
+let maxW = EXPORT ? (LAND ? 1920 : 1080) : LIVEM ? LIVEM.maxW : (LAND ? 1600 : 900), clock = 0, playing = LIVEM ? LIVEM.autoplay !== false : true, dirty = true, last = performance.now(), RATE = 1, LIVEFPS = 0, LIVEFN = 0;
 function fit() {
   const bw = document.body.clientWidth, bh = document.body.clientHeight;
-  const AR = LAND ? 16 / 9 : 9 / 16; let w = bw, h = bw / AR; if (h > bh) { h = bh; w = bh * AR; }
+  const AR = LIVEM ? bw / Math.max(1, bh) : LAND ? 16 / 9 : 9 / 16; let w = bw, h = bw / AR; if (h > bh) { h = bh; w = bh * AR; }   // live mode: the whole window
   w = Math.max(1, Math.floor(w)); h = Math.max(1, Math.floor(h));
   stage.style.width = w + 'px'; stage.style.height = h + 'px';
   const pr = Math.min(EXPORT ? 8 : (window.devicePixelRatio || 1), maxW / w) * (CFG.renderScale ?? 1);
@@ -20993,8 +21025,10 @@ async function soundOn() {
 function startAudio(from) { stopAudio(); const s = audio.ctx.createBufferSource(); s.buffer = audio.buf; s.connect(audio.ctx.destination); s.start(0, Math.min(from, DUR - 0.01)); audio.src = s; audio.at = audio.ctx.currentTime - from; }
 function stopAudio() { if (audio.src) { try { audio.src.stop(); } catch (e) {} audio.src = null; } }
 function loop(now) {
-  const dt = Math.min(0.1, (now - last) / 1000); last = now;
-  if (playing) {
+  const raw = (now - last) / 1000, dt = Math.max(0, Math.min(0.1, raw)); last = now;   // v3.50: ≥ 0 — the first rAF time stamp can lie before last (was: a negative step, the live clock ran below 0)
+  if (raw > 0) { LIVEFN++; LIVEFPS += (1 / raw - LIVEFPS) / Math.min(LIVEFN, 20); }   // v3.50 live fps: mean of the first 20 frames, then smoothed — from the real (uncapped) frame time
+  if (playing && LIVEM) { clock += dt * RATE; if (clock >= DUR) { if (LIVEM.loop) clock %= DUR; else { clock = DUR; playing = false; dirty = true; } } if (clock < 0) { if (LIVEM.loop) clock = DUR + clock % DUR; else { clock = 0; playing = false; dirty = true; } } }   // v3.50 live: the game runs the clock (rate, no audio here)
+  else if (playing) {
     clock = audio.on && audio.src ? audio.ctx.currentTime - audio.at : clock + dt;
     if (clock >= DUR) { clock = 0; if (audio.on) startAudio(0); }
   }
@@ -21003,15 +21037,59 @@ function loop(now) {
   requestAnimationFrame(loop);
 }
 stage.addEventListener('click', () => {
+  if (LIVEM) return;   // live mode: clicks belong to the game (camera, aiming)
   if (!audio.on) { playing = true; stage.classList.remove('paused'); soundOn(); return; }
   playing = !playing; stage.classList.toggle('paused', !playing); $('pilltxt').textContent = 'Paused · tap';
   if (playing) startAudio(clock); else stopAudio();
 });
 window.addEventListener('keydown', e => {
+  if (LIVEM) return;
   if (e.code === 'Space') { e.preventDefault(); stage.click(); }
   if (e.key === 'r' || e.key === 'R') { clock = 0; if (audio.on && playing) startAudio(0); dirty = true; }
   if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') { clock = clamp(clock + (e.key === 'ArrowRight' ? 1 : -1), 0, DUR - 0.01); if (audio.on && playing) startAudio(clock); dirty = true; }
 });
+// v3.50 live mode input: orbit camera (drag turns, right drag / shift drag pans, wheel / pinch zooms, W A S D pans, Q / E turns),
+// a click without dragging goes to the game (whatif.live.on('click', fn) → { x, y, point: [x, y, z] on the ground }), hover likewise ('move')
+const LIVEON = { click: [], move: [] };
+function livePick(cx, cy) {   // screen point (client px) → point on the ground (ray march over groundH, then bisect); null = sky
+  const r = canvas.getBoundingClientRect(), rc = new THREE.Raycaster(); rc.setFromCamera(new THREE.Vector2((cx - r.left) / r.width * 2 - 1, -(cy - r.top) / r.height * 2 + 1), camera);
+  const o = rc.ray.origin, d = rc.ray.direction, at = s => [o.x + d.x * s, o.y + d.y * s, o.z + d.z * s], under = s => { const [x, y, z] = at(s); return y <= groundH(x, z); };
+  let a = 0; for (let s = 0.5; s < 4000; s += Math.max(0.5, s * 0.01)) { if (under(s)) { let b = s; for (let i = 0; i < 24; i++) { const m = (a + b) / 2; if (under(m)) b = m; else a = m; } const [x, , z] = at(b); return [x, groundH(x, z), z]; } a = s; }
+  return null;
+}
+let LIVEMK = null;   // target ring on the ground (whatif.live.marker) — game UI, not part of the scene
+function liveMarker(at, r = 10, color = '#FF5A3A') {
+  if (!at) { if (LIVEMK) LIVEMK.visible = false; dirty = true; return; }
+  if (!LIVEMK) { LIVEMK = new THREE.Group(); const m = new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.85, depthTest: false, depthWrite: false, fog: false, side: THREE.DoubleSide });
+    const ring = new THREE.Mesh(new THREE.RingGeometry(0.94, 1, 96), m), dot = new THREE.Mesh(new THREE.CircleGeometry(0.035, 24), m), fill = new THREE.Mesh(new THREE.CircleGeometry(0.94, 96), m.clone());
+    Object.assign(fill.material, { opacity: 0.07, depthTest: true }); fill.renderOrder = 998;   // the fill lies on the ground only (depth-tested, faint — it tinted every roof inside the ring); ring + dot stay always visible
+    for (const x of [ring, dot, fill]) { x.rotation.x = -Math.PI / 2; if (x !== fill) x.renderOrder = 999; LIVEMK.add(x); } LIVEMK.mats = [m, fill.material]; scene.add(LIVEMK); }
+  LIVEMK.visible = true; LIVEMK.position.set(at[0], groundH(at[0], at[2] ?? at[1]) + 0.3, at[2] ?? at[1]); LIVEMK.scale.setScalar(r); for (const m of LIVEMK.mats) m.color.set(color); dirty = true;
+}
+if (LIVEM) {
+  const P = new Map(); let down = null, pinch = null;
+  const pan = (dx, dy) => { const C = LIVECAM, az = C.az * Math.PI / 180, k = C.dist * 0.0016; C.at.x -= (Math.cos(az) * dx + Math.sin(az) * dy) * k; C.at.z -= (-Math.sin(az) * dx + Math.cos(az) * dy) * k; C.at.y = groundH(C.at.x, C.at.z); dirty = true; };   // grab the ground: drag right → world right, drag down / W → forward
+  stage.addEventListener('contextmenu', e => e.preventDefault());
+  stage.addEventListener('pointerdown', e => { try { stage.setPointerCapture(e.pointerId); } catch (_) {} P.set(e.pointerId, [e.clientX, e.clientY]);
+    if (P.size === 1) down = { x: e.clientX, y: e.clientY, moved: 0, pan: e.button === 2 || e.shiftKey }; else { down = null; const [a, b] = [...P.values()]; pinch = { d: Math.hypot(a[0] - b[0], a[1] - b[1]), m: [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2] }; } });
+  stage.addEventListener('pointermove', e => { const q = P.get(e.pointerId);
+    if (!q) { if (LIVEON.move.length) { const pt = livePick(e.clientX, e.clientY); for (const f of LIVEON.move) f({ x: e.clientX, y: e.clientY, point: pt }); } return; }
+    const dx = e.clientX - q[0], dy = e.clientY - q[1]; P.set(e.pointerId, [e.clientX, e.clientY]);
+    if (pinch && P.size === 2) { const [a, b] = [...P.values()], d = Math.hypot(a[0] - b[0], a[1] - b[1]), m = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+      LIVECAM.dist *= pinch.d / Math.max(1, d); pan(m[0] - pinch.m[0], m[1] - pinch.m[1]); pinch = { d, m }; dirty = true; return; }
+    if (!down) return; down.moved += Math.abs(dx) + Math.abs(dy); if (down.moved < 4) return; stage.classList.add('drag');
+    if (down.pan) pan(dx, dy); else { LIVECAM.az -= dx * 0.3; LIVECAM.el += dy * 0.22; dirty = true; } });
+  const up = e => { if (!P.has(e.pointerId)) return; P.delete(e.pointerId); if (P.size < 2) pinch = null; stage.classList.remove('drag');
+    if (down && down.moved < 4 && e.type === 'pointerup' && e.button !== 2) { const pt = livePick(e.clientX, e.clientY); for (const f of LIVEON.click) f({ x: e.clientX, y: e.clientY, point: pt }); }
+    if (!P.size) down = null; };
+  stage.addEventListener('pointerup', up); stage.addEventListener('pointercancel', up);
+  stage.addEventListener('wheel', e => { e.preventDefault(); LIVECAM.dist *= Math.exp(clamp(e.deltaY * (e.deltaMode === 1 ? 33 : e.deltaMode === 2 ? 400 : 1), -200, 200) * 0.0012); dirty = true; }, { passive: false });
+  const KEYS = new Set(); window.addEventListener('keydown', e => { if (/^(Key[WASDQE]|Arrow\w+)$/.test(e.code)) KEYS.add(e.code); }); window.addEventListener('keyup', e => KEYS.delete(e.code)); window.addEventListener('blur', () => KEYS.clear());
+  let kl = performance.now(); const keyLoop = now => { const dt = Math.max(0, Math.min(0.1, (now - kl) / 1000)); kl = now;
+    if (KEYS.size) { const v = 520 * dt, has = (...k) => k.some(c => KEYS.has(c)); pan((has('KeyA', 'ArrowLeft') ? v : 0) - (has('KeyD', 'ArrowRight') ? v : 0), (has('KeyW', 'ArrowUp') ? v : 0) - (has('KeyS', 'ArrowDown') ? v : 0));
+      if (has('KeyQ')) LIVECAM.az += 70 * dt; if (has('KeyE')) LIVECAM.az -= 70 * dt; dirty = true; }
+    requestAnimationFrame(keyLoop); }; requestAnimationFrame(keyLoop);
+}
 // --- thumbnail: the cover is a real YouTube/Instagram thumbnail in the video's look (render.mjs --cover) ---
 // THUMB = { t, text: 'Zombies *ate* my _farm_', sub: 'Part 2', cam: { p: [x,y,z], l: [x,y,z], fov }, expr: 'scared', lookCam: true, ring: [x%, y%, size%], arrow: [x%, y%, deg] } — all optional
 let THUMB_ON = false;
@@ -22326,6 +22404,18 @@ function motionAudit(o = {}) {
 }
 window.whatif = {
   dur: DUR, cover: CFG.coverT,
+  live: LIVEM ? {   // v3.50 live mode API (CFG.live) — the game in sandbox/ drives the page through this
+    get t() { return clock; }, get playing() { return playing; }, get rate() { return RATE; }, dur: DUR,
+    play() { if (clock >= DUR - 1e-3 && RATE > 0) clock = 0; else if (clock <= 1e-3 && RATE < 0) clock = DUR; playing = true; dirty = true; }, pause() { playing = false; dirty = true; },
+    seek(t) { clock = clamp(+t || 0, 0, DUR); dirty = true; }, setRate(r) { RATE = Number.isFinite(+r) ? +r : 1; },
+    cam(o) { const C = LIVECAM; if (o) { if (o.at) { const [x, a, b] = o.at; C.at.set(x, b == null ? groundH(x, a) : a, b ?? a); } for (const k of ['az', 'el', 'dist', 'fov', 'min', 'max']) if (o[k] != null) C[k] = +o[k];
+      C.el = clamp(C.el, 4, 88); C.dist = clamp(C.dist, C.min, C.max); dirty = true; } return { at: C.at.toArray(), az: C.az, el: C.el, dist: C.dist, fov: C.fov, min: C.min, max: C.max }; },
+    pick: livePick, marker: liveMarker, aim(on) { stage.classList.toggle('aim', !!on); },
+    on(ev, fn) { (LIVEON[ev] ??= []).push(fn); return () => { LIVEON[ev] = LIVEON[ev].filter(f => f !== fn); }; },
+    stats(t = clock) { return STATS.filter(s => t >= (s.show ?? 0) && t < (s.hide ?? Infinity)).map(s => { const ty = s.type ?? 'num', v = statVal(s, t), f = s.fmt ?? { timer: 'clock', meter: 'pct', timeline: 'year' }[ty];
+      return { label: s.label, type: ty, value: v, text: ty === 'stars' ? '★'.repeat(Math.round(v)) : fmtNum(v, f), max: s.max ?? (ty === 'stars' ? 5 : 100), up: s.up ?? null, bad: !!s.bad }; }); },
+    get fps() { return LIVEFPS; }
+  } : null,
   seek(t) { playing = false; clock = t; draw(t); },
   setRenderWidth(px) { maxW = px; fit(); },
   fps(f) { FPS = f; },
