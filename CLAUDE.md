@@ -63,3 +63,7 @@ Spielstände müssen nach Updates laden (`SAVE_VERSION` in `js/game.js`; localSt
 ## Spielhalle (Übersicht aller Spiele, Netlify)
 `hub/` + `tools/site/build.mjs` bauen `_site/` mit der Übersicht und jedem Spiel, das eine `game.json` im eigenen Ordner hat (Netlify über `netlify.toml`, zusätzlich GitHub Pages-Wurzel).
 **Jedes neue Spiel bekommt eine `game.json`** (Titel, Tagline, Tags, `files`, `save`-Präfix …) und ein Cover (`node tools/site/covers.mjs <ordner>`), dann `node tools/site/build.mjs && node tools/site/check.mjs` → `SITE OK` / `HUB OK`. Details `docs/spiele-seite.md`.
+
+## Spiel „Cogtopia“ (fabrik/)
+Fabrik-Incremental (Three.js, Low Poly, alles prozedural in `fabrik/js/models/`, keine GLB), unabhängig von Engine und anderen Spielen. Englisch/Deutsch wählbar: sichtbare Texte nur über `t()`/`name()` (`fabrik/js/i18n.js`, `js/lang/en.js` + `de.js` mit gleichen Schlüsseln); die Logik `js/sim.js` liefert nur Ids/Zahlen, ist deterministisch (20 Ticks/s) und DOM-frei. Konzept `fabrik/DESIGN.md`, Aufbau `fabrik/README.md`.
+Vor dem Push: `node fabrik/tools/rules.mjs` → `RULES OK` (inkl. Bot-Partie fürs Balancing), `node fabrik/tools/models.mjs <ordner>` → `MODELS OK`, `node fabrik/tools/play.mjs <ordner>` → `PLAY OK`. Spielstände müssen nach Updates laden (`SAVE_VERSION` in `js/sim.js`, `Factory.load` repariert fremde/alte Stände).

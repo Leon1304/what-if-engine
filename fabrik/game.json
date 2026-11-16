@@ -1,0 +1,34 @@
+{
+  "title": "Cogtopia",
+  "tagline": "Bohren, befördern, verarbeiten – deine Fabrik ist nie fertig",
+  "description": "Fabrik-Aufbau mit Suchtfaktor: Bohrer, Bänder, Öfen, Pressen und Montage zu Produktionsketten verbinden. Goldteile, Takt-Bonus, Maschinen-Sterne, geheime Rezepte am Experimentiertisch, Aufträge, Grundstücke, Offline-Fabrik und neue Welten per Prestige. Mit Gerald dem Praktikanten.",
+  "genre": "Fabrik · Incremental",
+  "tags": [
+    "3D",
+    "Aufbau",
+    "Idle",
+    "Handy",
+    "Englisch",
+    "Deutsch"
+  ],
+  "controls": [
+    "Maus",
+    "Touch"
+  ],
+  "status": "neu",
+  "added": "2026-11-16",
+  "order": 10,
+  "color": "#e8873a",
+  "emoji": "🏭",
+  "cover": "cover.jpg",
+  "files": [
+    "index.html",
+    "js"
+  ],
+  "save": "fabrik.",
+  "coverShot": {
+    "wait": 9000,
+    "eval": "(async()=>{for (const e of document.body.querySelectorAll('*')) if (e.tagName !== 'CANVAS' && !e.querySelector('canvas')) e.style.visibility = 'hidden';})()",
+    "after": 3000
+  }
+}

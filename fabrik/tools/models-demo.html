@@ -1,0 +1,232 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cogtopia – Models</title>
+<script type="importmap">{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/" } }</script>
+<style>
+  html, body { margin: 0; height: 100%; background: #1c1e24; overflow: hidden; font: 14px/1.3 system-ui, sans-serif; }
+  canvas { width: 100%; height: 100%; display: block; }
+  #bar { position: fixed; left: 8px; top: 8px; display: flex; flex-wrap: wrap; gap: 4px; max-width: calc(100% - 16px); }
+  #bar button { border: 0; border-radius: 8px; padding: 5px 9px; background: #fff4dcdd; color: #2a2420; font-weight: 700; cursor: pointer; }
+  #bar button.on { background: #f2c230; }
+  #info { position: fixed; left: 8px; bottom: 8px; color: #fff; background: #0008; padding: 4px 8px; border-radius: 6px; }
+  body.shot #bar, body.shot #info { display: none; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="bar"></div>
+<div id="info"></div>
+<script type="module">
+import * as THREE from 'three';
+import { Stage } from '../js/stage.js';
+import { CameraRig } from '../js/camera.js';
+import { setBeltStyle, BELT_SKINS } from '../js/materials.js';
+import { makeBuilding, BeltInstancer, BUILDING_TYPES, SIZES, BELT_Y, beltKind } from '../js/models/buildings.js';
+import { ItemRenderer, ITEM_LOOK } from '../js/models/items.js';
+import { makePlot, PLOT } from '../js/models/terrain.js';
+import { makeGerald, makeSteve } from '../js/models/people.js';
+import { Fx } from '../js/models/fx.js';
+
+const qs = new URLSearchParams(location.search);
+if (qs.has('shot')) document.body.classList.add('shot');
+const canvas = document.getElementById('c');
+const stage = new Stage(canvas, { quality: qs.get('q') || 'hoch' });
+const rig = new CameraRig(stage.camera, canvas, { minDist: 2, maxDist: 120 });
+const scene = stage.scene;
+let world = new THREE.Group(); scene.add(world);
+let updaters = [], tick = null;
+const fx = new Fx(scene, { format: n => n.toLocaleString('en-US') });
+const items = new ItemRenderer(scene);
+const belts = new BeltInstancer(scene);
+const DV = [[1, 0], [0, 1], [-1, 0], [0, -1]];
+
+function clear() {
+  scene.remove(world); world.traverse(o => { if (o.isMesh && o.geometry && o.userData.own) o.geometry.dispose(); });
+  updaters.forEach(u => u.dispose?.()); updaters = []; tick = null; world = new THREE.Group(); scene.add(world);
+  belts.begin(); belts.end(); items.begin(); items.end(); fx.clear(); stage.setGrid(false); occ = [];
+}
+let occ = [];
+const refreshOcc = () => updaters.forEach(u => u.plot?.setOccupied((x, y) => occ.some(([ox, oy, n]) => x >= ox && x < ox + n && y >= oy && y < oy + n)));
+const add = (b, x, y) => { b.group.position.set(x, 0, y); world.add(b.group); updaters.push(b); occ.push([Math.floor(x), Math.floor(y), b.size]); refreshOcc(); return b; };
+// einfaches Grundstück unter einer Szene
+function ground(biome = 'wiese', cx = 0, cy = 0, o = {}) { const p = makePlot(cx, cy, { biome, seed: 3, deposit: () => null, ...o }); world.add(p.group); updaters.push({ update: t => p.update(t), dispose: () => p.dispose(), plot: p }); return p; }
+// Pfeil am Ausgang (Prüfung der Drehung)
+function marker(b) {
+  for (const p of b.ports.out) { const m = new THREE.Mesh(new THREE.ConeGeometry(.08, .22, 8).rotateZ(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0xff2a6a }));
+    m.userData.own = true; m.position.set(b.group.position.x + p.x, BELT_Y + .5, b.group.position.z + p.z); m.rotation.y = -p.dir * Math.PI / 2; world.add(m); }
+}
+// Teile entlang eines Bandweges (Zellen mit Ein-/Ausgangsrichtung)
+function pathPos(cell, f) {
+  const [x, y, din, dout] = cell, cx = x + .5, cz = y + .5, E = [cx - DV[din][0] * .5, cz - DV[din][1] * .5], X = [cx + DV[dout][0] * .5, cz + DV[dout][1] * .5];
+  if (din === dout) return [E[0] + (X[0] - E[0]) * f, E[1] + (X[1] - E[1]) * f];
+  const u = 1 - f; return [u * u * E[0] + 2 * u * f * cx + f * f * X[0], u * u * E[1] + 2 * u * f * cz + f * f * X[1]];
+}
+function loopCells(x0, y0, w, h) {
+  const out = [], push = (x, y, d) => out.push([x, y, d]);
+  for (let i = 0; i < w - 1; i++) push(x0 + i, y0, 0);
+  for (let j = 0; j < h - 1; j++) push(x0 + w - 1, y0 + j, 1);
+  for (let i = 0; i < w - 1; i++) push(x0 + w - 1 - i, y0 + h - 1, 2);
+  for (let j = 0; j < h - 1; j++) push(x0, y0 + h - 1 - j, 3);
+  return out.map((c, i) => [c[0], c[1], out[(i - 1 + out.length) % out.length][2], c[2]]);
+}
+
+const S = {};
+// Übersicht: alle Gebäude auf einer Wiese, laufend, Sterne 1–5
+S.buildings = () => {
+  ground('wiese', 0, 0); ground('wiese', 1, 0); ground('wiese', 0, 1); ground('wiese', 1, 1);
+  const types = BUILDING_TYPES.filter(t => SIZES[t] > 1); let i = 0;
+  types.forEach((t, k) => { const col = k % 5, row = Math.floor(k / 5), n = SIZES[t];
+    const b = add(makeBuilding(t, { rot: 0, ore: 'kupfererz', filter: 'zahnrad' }), 3 + col * 5 + (3 - n) / 2, 3 + row * 5 + (3 - n) / 2); b.lv = 1 + (i++ % 5); });
+  [['verteiler', {}], ['sortierer', { filter: 'kupferdraht' }], ['tunnel', {}], ['tunnel', { exit: true }], ['band', {}], ['band', { inDir: 3 }], ['band', { inDir: 1 }]].forEach(([t, o], k) => add(makeBuilding(t, { rot: 0, ...o }), 4 + k * 3, 14));
+  tick = (t) => updaters.forEach((b, k) => b.group && b.update(t, { busy: (Math.floor(t / 4 + k) % 3) !== 0, progress: (t * .4 + k * .13) % 1, level: b.lv, gold: k % 4 === 1, fill: .5 + .5 * Math.sin(t * .5 + k), takt: (t * .1) % 1 }));
+  rig.jumpTo(14, 9.5, 20, 0);
+};
+// Kleine Fabrik: Bohrer → Ofen → Presse → Verkauf, Teile auf den Bändern, Gerald, Dr. Steve, Münzen
+S.factory = () => {
+  ground('wiese', 0, 0, { seed: 4, deposit: (x, y) => (x >= 1 && x <= 4 && y >= 3 && y <= 6 && (x + y) % 5 !== 0 ? { item: 'eisenerz', rich: x === 2 } : (Math.hypot(x - 12, y - 11) < 1.6 ? { item: 'kupfererz', rich: false } : null)) });
+  const dr = add(makeBuilding('bohrer', { rot: 0, ore: 'eisenerz' }), 2, 4); dr.lv = 3;
+  const of = add(makeBuilding('ofen', { rot: 0 }), 6, 4); of.lv = 2;
+  const pr = add(makeBuilding('presse', { rot: 0 }), 10, 4); pr.lv = 1;
+  const vk = add(makeBuilding('verkauf', { rot: 0 }), 15, 4); vk.lv = 4;
+  const lb = add(makeBuilding('labor', { rot: 1 }), 8, 8); lb.lv = 2;
+  const lg = add(makeBuilding('lager', { rot: 3 }), 12, 1.0); lg.lv = 1;
+  const segs = [[4, 6, 'eisenerz'], [8, 10, 'eisenbarren'], [12, 15, 'eisenplatte']];
+  for (const [a, b] of segs) for (let x = a; x < b; x++) occ.push([x, 5, 1]); refreshOcc();
+  const G = makeGerald(); world.add(G.group); const St = makeSteve(); world.add(St.group); St.group.position.set(10.3, 0, 8.6); St.group.rotation.y = Math.PI * .75;
+  let next = 0;
+  tick = t => {
+    belts.begin(); for (const [a, b] of segs) for (let x = a; x < b; x++) belts.add(x, 5, 0, 'straight'); belts.end();
+    items.begin(); for (const [a, b, id] of segs) for (let i = 0; i < (b - a) * 2; i++) { const x = a + ((i * .5 + t * 1.2) % (b - a)); items.add(x, 5.5, id, i === 2 && id === 'eisenplatte', 0); } items.end();
+    for (const u of updaters) if (u.group) u.update(t, { busy: true, level: u.lv, progress: (t * .5) % 1, takt: .7, fill: .6 });
+    const gx = 3 + ((t * .35) % 12); G.group.position.set(gx, 0, 7.2); G.group.rotation.y = 0; G.update(t, { anim: 'walk', speed: .35 });
+    St.update(t, { anim: 'tinker' });
+    if (t > next) { next = t + 1.1; fx.coins([16, 1.2, 5], 4, { text: '+' + (48).toLocaleString('en-US') }); }
+  };
+  rig.jumpTo(10, 5, 15, 0);
+};
+// Ein Gebäude nah, alle Teile bewegt
+S.one = (type = qs.get('type') || 'bohrer', rot = +(qs.get('rot') || 0)) => {
+  ground('wiese');
+  const n = SIZES[type], b = add(makeBuilding(type, { rot, ore: 'eisenerz', filter: 'zahnrad', level: 4, inDir: qs.has('in') ? +qs.get('in') : undefined }), 6, 6);
+  b.lv = 4; marker(b);
+  tick = t => b.update(t, { busy: true, progress: (t * .4) % 1, level: 4, gold: true, fill: .7, takt: .65 });
+  rig.jumpTo(6 + n / 2, 6 + n / 2, 2.6 + n * 1.6, 0);
+};
+// Drehungen: jede Maschine in rot 0–3 mit Ausgangspfeil
+S.rotations = (only) => {
+  for (let cx = 0; cx < 3; cx++) for (let cy = 0; cy < 3; cy++) ground('wiese', cx, cy);
+  const list = only ? [only] : BUILDING_TYPES; let y = 1, col = 0, rowH = 0;
+  list.forEach((t, i) => { const n = SIZES[t]; let x = 1 + col * 23;
+    for (let r = 0; r < 4; r++) { const b = add(makeBuilding(t, { rot: r, inDir: t === 'band' ? (r + 3) % 4 : undefined }), x, y); b.lv = r + 1; marker(b); x += n + 2; }
+    rowH = Math.max(rowH, n); col++; if (col === 2) { col = 0; y += rowH + 1.5; rowH = 0; } });
+  tick = t => updaters.forEach(b => b.group && b.update(t, { busy: true, level: b.lv, progress: (t * .3) % 1 }));
+  rig.jumpTo(22, 13, 36, 0);
+};
+// Bänder mit fahrenden Teilen: Schleife mit Kurven, Tunnel, Verteiler, Sortierer
+S.belts = () => {
+  ground('wiese'); stage.setGrid(true);
+  const loop = loopCells(2, 2, 9, 6), loop2 = loopCells(4, 10, 5, 4).reverse().map(([x, y, a, b]) => [x, y, (b + 2) % 4, (a + 2) % 4]);
+  const ids = Object.keys(ITEM_LOOK);
+  tick = (t) => {
+    belts.begin();
+    for (const c of [...loop, ...loop2]) belts.add(c[0], c[1], c[3], beltKind(c[2], c[3]));
+    belts.add(12, 3, 0, 'tunnelIn'); belts.add(14, 3, 0, 'tunnelOut'); belts.add(11, 3, 0, 'straight'); belts.add(15, 3, 0, 'straight');
+    belts.end();
+    items.begin();
+    for (const L of [loop, loop2]) { const N = L.length, sp = 1.6; for (let i = 0; i < N * 2; i++) { const s = (i * .5 + t * sp) % N, c = L[Math.floor(s)], [wx, wz] = pathPos(c, s % 1); items.add(wx, wz, ids[i % ids.length], i % 7 === 3); } }
+    items.end();
+    updaters.forEach(b => b.group && b.update(t, { busy: true, level: 3, filterColor: 'kupferdraht', flap: .5 + .5 * Math.sin(t * 2) }));
+  };
+  for (const c of [...loop, ...loop2]) occ.push([c[0], c[1], 1]); for (const x of [11, 12, 13, 14, 15]) occ.push([x, 3, 1]); refreshOcc();
+  add(makeBuilding('verteiler', { rot: 0 }), 12, 6); add(makeBuilding('sortierer', { rot: 0, filter: 'kupferdraht' }), 14, 6);
+  add(makeBuilding('band', { rot: 0 }), 11, 6); add(makeBuilding('band', { rot: 3, inDir: 0 }), 13, 6);
+  rig.jumpTo(8, 7, 15, 0);
+};
+// Alle Teile (oben normal, unten Gold)
+S.items = () => {
+  ground('wiese');
+  const ids = Object.keys(ITEM_LOOK);
+  occ.push([0, 0, 16]); refreshOcc();
+  tick = t => { items.begin(); ids.forEach((id, i) => { const x = 2.5 + (i % 10) * .6, z = 4 + Math.floor(i / 10) * .7; items.add(x, z, id, false, t * .5, .02, 1.6); items.add(x, z + 2.4, id, true, t * .5, .02, 1.6); }); items.end(); };
+  rig.jumpTo(5.2, 6.3, 7.5, 0);
+};
+// Gelände einer Welt: offen mit Vorkommen + Ruine, kaufbar, gesperrt
+S.terrain = (biome = qs.get('biome') || 'wiese') => {
+  stage.setBiome(biome);
+  const ores = { wiese: ['stein', 'eisenerz', 'kupfererz', 'kohle', 'sand'], wueste: ['sand', 'kupfererz', 'oel', 'sand'], eis: ['eisenerz', 'kohle', 'kristall'], mond: ['kristall', 'titanerz', 'stein'] }[biome];
+  const deposit = (x, y) => { for (let i = 0; i < ores.length; i++) { const cx = 3 + (i % 3) * 5 + (i > 2 ? 2 : 0), cy = 3 + Math.floor(i / 3) * 6; const d = Math.hypot(x - cx, y - cy); if (d < 1.8 + (i % 2)) return { item: ores[i], rich: d < 1 }; } return null; };
+  const p0 = ground(biome, 0, 0, { deposit, ruins: [[11, 11]], seed: 7 });
+  ground(biome, 1, 0, { state: 'buyable', label: '25,000', seed: 8, deposit: (x, y) => (Math.hypot(x - 22, y - 6) < 2 ? { item: ores[1], rich: false } : null) });
+  ground(biome, 0, 1, { state: 'locked', seed: 9 }); ground(biome, 1, 1, { state: 'buyable', label: '40,000', seed: 10 });
+  const b = add(makeBuilding('bohrer', { rot: 0, ore: ores[1] }), 7, 2); b.lv = 2;
+  tick = t => updaters.forEach(u => u.group ? u.update(t, { busy: true, level: 2 }) : u.update(t));
+  stage.setGrid(qs.has('grid'));
+  rig.jumpTo(14, 13, 34, 0);
+};
+// Figuren: Gerald und Dr. Steve in allen Bewegungen
+S.people = () => {
+  ground('wiese');
+  const G = ['idle', 'walk', 'sit', 'wave', 'trip', 'cheer'], St = ['idle', 'walk', 'tinker', 'cheer', 'wave', 'think'];
+  const figs = [];
+  G.forEach((a, i) => { const f = makeGerald(); f.group.position.set(3 + i * .9, 0, 5); f.group.rotation.y = -Math.PI / 4; world.add(f.group); figs.push([f, a]); });
+  St.forEach((a, i) => { const f = makeSteve(); f.group.position.set(2.4 + i * .9, 0, 6.4); f.group.rotation.y = -Math.PI / 4; world.add(f.group); figs.push([f, a]); });
+  // Gerald sitzt auf einem Band (Bandkante bei lokal x ≈ +0,06, Blick vom Band weg)
+  const sit = figs[2][0]; const bench = add(makeBuilding('band', { rot: 0 }), 4.3, 4.1); sit.group.position.set(4.8, 0, 4.6 + .36 + .06 - .12); sit.group.rotation.y = -Math.PI / 2;
+  const lab = add(makeBuilding('labor', { rot: 1 }), 1.2, 7.4);
+  tick = t => { figs.forEach(([f, a], i) => f.update(t, { anim: a, speed: .6, since: Math.floor(t / 3) * 3, phase: i * .37 })); bench.update(t, {}); lab.update(t, { busy: true, level: 2 }); };
+  occ.push([0, 0, 16]); refreshOcc();
+  rig.jumpTo(5.0, 5.7, 6.2, 0);
+};
+// Effekte: Münzen, Funken, Rauch, Konfetti, Staub, Puff, Kiste
+S.fx = () => {
+  ground('wiese');
+  add(makeBuilding('verkauf', { rot: 0 }), 4, 3); occ.push([0, 0, 16]); refreshOcc();
+  let next = 0;
+  tick = t => {
+    updaters.forEach(b => b.group && b.update(t, { busy: true, level: 3, takt: .8 }));
+    if (t > next) { next = t + 1.2;
+      fx.coins([5, 1.3, 4], 6, { text: '+' + (120).toLocaleString('en-US') }); fx.coins([5.4, 1.4, 3.6], 4, { gold: true, text: '+3,000' });
+      fx.sparks([7.5, .4, 4], 18, 0xffc040); fx.smoke([8.5, .3, 3.5], { n: 6 }); fx.confetti([6, 1.5, 6.5], 60); fx.dust([3.5, 0, 6.5], 1.4); fx.poof([8.5, .2, 6], 1); fx.crateOpen([7, 0, 8], {}); fx.sparkle?.([5, .8, 7.5]);
+    }
+  };
+  rig.jumpTo(5.8, 4.2, 10, 0);
+};
+// Große Fabrik: viele Bänder + 20 000 Teile (Leistung)
+S.stress = () => {
+  for (let cx = 0; cx < 3; cx++) for (let cy = 0; cy < 3; cy++) ground('wiese', cx, cy, { seed: cx * 3 + cy });
+  const loops = []; for (let i = 0; i < 6; i++) for (let j = 0; j < 6; j++) loops.push(loopCells(2 + i * 7.5 | 0, 2 + j * 7.5 | 0, 6, 6));
+  const ids = Object.keys(ITEM_LOOK);
+  tick = t => { belts.begin(); for (const L of loops) for (const c of L) belts.add(c[0], c[1], c[3], beltKind(c[2], c[3])); belts.end();
+    items.begin(); let n = 0; for (const L of loops) { const N = L.length; for (let i = 0; i < N * 28 && n < 20000; i++, n++) { const s = (i / 28 + t * 1.6) % N, c = L[Math.floor(s)], [wx, wz] = pathPos(c, s % 1); items.add(wx + ((i % 3) - 1) * .2, wz + ((i % 5) - 2) * .06, ids[i % ids.length], i % 50 === 0); } } items.end(); };
+  rig.jumpTo(24, 24, 45, 0);
+};
+
+const names = Object.keys(S);
+const bar = document.getElementById('bar');
+for (const n of names) { const b = document.createElement('button'); b.textContent = n; b.onclick = () => show(n); bar.appendChild(b); }
+for (const bm of ['wiese', 'wueste', 'eis', 'mond']) { const b = document.createElement('button'); b.textContent = 'terrain ' + bm; b.onclick = () => show('terrain', bm); bar.appendChild(b); }
+for (const sk of Object.keys(BELT_SKINS)) { const b = document.createElement('button'); b.textContent = 'belt ' + sk; b.onclick = () => setBeltStyle(BELT_SKINS[sk]); bar.appendChild(b); }
+let cur = null;
+function show(n, ...a) { clear(); if (n !== 'terrain') stage.setBiome('wiese'); cur = n; S[n](...a); [...bar.children].forEach(b => b.classList.toggle('on', b.textContent === n)); }
+
+let last = performance.now(), T = 0, fixedT = null;
+function frame(now) {
+  const dt = Math.min(.1, (now - last) / 1000); last = now; T += dt;
+  const t = fixedT ?? T;
+  rig.update(dt); stage.setFocus(rig.target, rig.distance); stage.update(dt);
+  tick?.(t); fx.update(dt);
+  stage.render();
+  const i = stage.renderer.info.render; document.getElementById('info').textContent = `${cur} · ${i.calls} calls · ${(i.triangles / 1000).toFixed(0)}k tris · ${items.count} items`;
+  requestAnimationFrame(frame);
+}
+show(qs.get('view') || 'factory');
+requestAnimationFrame(frame);
+window.__demo = { show, stage, rig, fx, items, belts, THREE, setT: t => { fixedT = t; }, get info() { const i = stage.renderer.info.render; return { calls: i.calls, tris: i.triangles }; }, names };
+</script>
+</body>
+</html>
