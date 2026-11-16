@@ -1,11 +1,11 @@
-# Publishes the games on GitHub Pages: https://leon1304.github.io/what-if-engine/game/ (Waldtank) and …/insel/ (Schwebeinsel)
-# Only the playable files go online (index.html, js/, map.glb); Blender scripts and tools stay in the repo.
+# Publishes the Spielhalle on GitHub Pages: https://leon1304.github.io/what-if-engine/ (overview) with every game that has a game.json
+# (…/game/ Waldtank, …/insel/ Schwebeinsel, …/fabrik/ Cogtopia, new games appear automatically). Same build as Netlify: tools/site/build.mjs.
+# Only the playable files go online (game.json "files"); Blender scripts, tools and docs stay in the repo.
 name: game-pages
 
 on:
   push:
     branches: [main]
-    paths: ['game/**', 'insel/**', '.github/workflows/game-pages.yml']
   workflow_dispatch:
 
 permissions:
@@ -22,18 +22,25 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: github-pages
-      url: ${{ steps.deploy.outputs.page_url }}game/
+      url: ${{ steps.deploy.outputs.page_url }}
     steps:
       - uses: actions/checkout@v7
-      - name: Collect the playable files
+        with:
+          fetch-depth: 0
+      - name: Anything new for the site?
+        id: changed
         run: |
-          mkdir -p _site/game _site/insel
-          cp -r game/index.html game/js game/map.glb _site/game/
-          cp -r insel/index.html insel/js _site/insel/
-          printf '<!doctype html><meta http-equiv="refresh" content="0; url=game/">' > _site/index.html
-      - uses: actions/configure-pages@v6
-      - uses: actions/upload-pages-artifact@v5
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then echo "build=1" >> "$GITHUB_OUTPUT"; exit 0; fi
+          if node tools/site/build.mjs --unchanged --from "${{ github.event.before }}" --to "${{ github.sha }}"; then echo "build=0" >> "$GITHUB_OUTPUT"; else echo "build=1" >> "$GITHUB_OUTPUT"; fi
+      - name: Build the Spielhalle
+        if: steps.changed.outputs.build == '1'
+        run: node tools/site/build.mjs
+      - if: steps.changed.outputs.build == '1'
+        uses: actions/configure-pages@v6
+      - if: steps.changed.outputs.build == '1'
+        uses: actions/upload-pages-artifact@v5
         with:
           path: _site
       - id: deploy
+        if: steps.changed.outputs.build == '1'
         uses: actions/deploy-pages@v5

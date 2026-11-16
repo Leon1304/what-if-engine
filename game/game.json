@@ -1,0 +1,36 @@
+{
+  "title": "Waldtank",
+  "tagline": "Überleben im Nordwald – mit verlassener Tankstelle, Dorf und Gebirge",
+  "description": "Survival-Erkundung aus der Ich-Perspektive: Bäume fällen, Hütte bauen, jagen, angeln, Auto reparieren und über den Pass ins Gebirge fahren. Mit Hund Bello, Jahreszeiten und mehreren Gegnerarten.",
+  "genre": "Survival · Erkundung",
+  "tags": [
+    "3D",
+    "Ego-Sicht",
+    "Survival",
+    "Bauen"
+  ],
+  "controls": [
+    "Maus",
+    "Tastatur"
+  ],
+  "status": "spielbar",
+  "added": "2026-11-14",
+  "order": 30,
+  "color": "#c2652f",
+  "emoji": "🌲",
+  "cover": "cover.jpg",
+  "files": [
+    "index.html",
+    "js",
+    "map.glb"
+  ],
+  "save": "waldtank_save_",
+  "coverShot": {
+    "wait": 9000,
+    "click": [
+      "Neues Spiel"
+    ],
+    "eval": "(async()=>{await new Promise(r=>setTimeout(r,6000));for (const e of document.body.querySelectorAll('*')) if (e.tagName !== 'CANVAS' && !e.querySelector('canvas')) e.style.visibility = 'hidden';})()",
+    "after": 8000
+  }
+}

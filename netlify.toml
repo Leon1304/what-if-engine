@@ -1,0 +1,27 @@
+# Spielhalle auf Netlify: Übersicht + alle Spiele mit game.json (tools/site/build.mjs, Doku docs/spiele-seite.md)
+[build]
+  command = "node tools/site/build.mjs"
+  publish = "_site"
+  # Engine-/Video-Commits lösen keinen Build aus – nur Änderungen an Spielen, hub/ oder tools/site/
+  ignore = "node tools/site/build.mjs --unchanged"
+
+[build.environment]
+  NODE_VERSION = "22"
+  PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD = "1"
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+
+[[headers]]
+  for = "/index.html"
+  [headers.values]
+    Cache-Control = "public, max-age=0, must-revalidate"
+
+[[headers]]
+  for = "/*.glb"
+  [headers.values]
+    Content-Type = "model/gltf-binary"
+    Cache-Control = "public, max-age=86400"

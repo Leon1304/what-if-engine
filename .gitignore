@@ -7,3 +7,4 @@ node_modules
 
 # Blender backup copies
 *.blend1
+_site/

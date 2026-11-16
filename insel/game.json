@@ -1,0 +1,36 @@
+{
+  "title": "Schwebeinsel",
+  "tagline": "Ein kleines Dorf über den Wolken, Kachel für Kachel",
+  "description": "Gemütliches Sechseck-Aufbauspiel: Wiesen, Wälder, Bäche, Mühlen und Häuser auf eine schwebende Insel legen. Passende Nachbarn bringen Punkte, das Dorf wächst mit Bewohnern, Wetter und Jahreszeiten. Kein Verlieren.",
+  "genre": "Aufbau · Puzzle",
+  "tags": [
+    "3D",
+    "Gemütlich",
+    "Aufbau",
+    "Handy"
+  ],
+  "controls": [
+    "Maus",
+    "Touch"
+  ],
+  "status": "spielbar",
+  "added": "2026-11-16",
+  "order": 20,
+  "color": "#4b95c9",
+  "emoji": "🏝️",
+  "cover": "cover.jpg",
+  "files": [
+    "index.html",
+    "js"
+  ],
+  "save": "insel.",
+  "coverShot": {
+    "wait": 8000,
+    "click": [
+      "Neue Insel",
+      "Insel erschaffen"
+    ],
+    "eval": "(async()=>{const W=ms=>new Promise(r=>setTimeout(r,ms));const {game,ui}=__insel;game.S.tut=99;for(let i=0;i<70&&game.S.stack.length;i++){const c=game.current();let best=null;for(const [q,r] of game.slots())for(let o=0;o<6;o++){const e=game.evaluate(c.k,q,r,o);if(e.ok&&(!best||e.pts+Math.random()*3>best.e.pts))best={q,r,o,e};}if(!best){game.S.stack.splice(game.S.pick,1);continue;}game.place(best.q,best.r,best.o);if(i%10==9)await W(200);}const {stage,rig,app,THREE}=__insel;stage.setWeather('klar');stage.setWeather=()=>{};let x=0,z=0,n=0;for(const k of game.board.keys()){const [q,r]=k.split(',').map(Number);const p=app.tilePos(q,r);x+=p[0];z+=p[2];n++;}rig.jumpTo(new THREE.Vector3(x/n,0,z/n),30,.75,0);await W(7000);for (const e of document.body.querySelectorAll('*')) if (e.tagName !== 'CANVAS' && !e.querySelector('canvas')) e.style.visibility = 'hidden';})()",
+    "after": 9000
+  }
+}

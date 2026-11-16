@@ -59,3 +59,7 @@ Blender nur live öffnen, wenn Leon zuschauen will (Mac wird warm); Viewport dan
 Gemütliches Sechseck-Aufbauspiel (Three.js, Low Poly, alles prozedural in `insel/js/models/`, keine GLB), unabhängig von Engine und Waldtank. Konzept `insel/DESIGN.md`, Aufbau `insel/README.md`.
 Vor dem Push: `node insel/tools/rules.mjs` → `RULES OK` und `node insel/tools/play.mjs <ordner>` → `PLAY OK` (bei UI-/Kamera-/Leben-Änderungen auch `ui-demo.mjs`, `stage-shots.mjs`, `life-logic.mjs`).
 Spielstände müssen nach Updates laden (`SAVE_VERSION` in `insel/js/game.js`). GitHub Pages (Workflow `game-pages`): https://leon1304.github.io/what-if-engine/insel/
+
+## Spielhalle (Übersicht aller Spiele, Netlify)
+`hub/` + `tools/site/build.mjs` bauen `_site/` mit der Übersicht und jedem Spiel, das eine `game.json` im eigenen Ordner hat (Netlify über `netlify.toml`, zusätzlich GitHub Pages-Wurzel).
+**Jedes neue Spiel bekommt eine `game.json`** (Titel, Tagline, Tags, `files`, `save`-Präfix …) und ein Cover (`node tools/site/covers.mjs <ordner>`), dann `node tools/site/build.mjs && node tools/site/check.mjs` → `SITE OK` / `HUB OK`. Details `docs/spiele-seite.md`.

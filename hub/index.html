@@ -1,0 +1,253 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Spielhalle</title>
+<meta name="description" content="Alle Browser-Spiele an einem Ort – direkt spielen, ohne Download.">
+<meta name="theme-color" content="#14121f" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#f6f1e7" media="(prefers-color-scheme: light)">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Nunito:wght@500;700;800&display=swap">
+<style>
+:root {
+  --bg: #f6f1e7; --bg2: #ede5d6; --card: #fffdf8; --ink: #2b2433; --ink2: #5d5466; --mute: #8d8496; --line: #e2d8c6;
+  --chip: #efe7d8; --chip-on: #2b2433; --chip-on-ink: #fffdf8; --shadow: 0 1px 2px rgba(43,36,51,.06), 0 8px 28px rgba(43,36,51,.10);
+  --shadow-hi: 0 2px 4px rgba(43,36,51,.08), 0 18px 44px rgba(43,36,51,.18); --glow: rgba(255,170,80,.18);
+  --r: 20px; --font: 'Nunito', system-ui, sans-serif; --title: 'Fredoka', 'Nunito', system-ui, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #14121f; --bg2: #1c1930; --card: #211d33; --ink: #f3eefb; --ink2: #c3bad3; --mute: #8a819c; --line: #322c49;
+    --chip: #2a2540; --chip-on: #f3eefb; --chip-on-ink: #14121f; --shadow: 0 1px 2px rgba(0,0,0,.3), 0 10px 30px rgba(0,0,0,.35);
+    --shadow-hi: 0 2px 6px rgba(0,0,0,.4), 0 22px 50px rgba(0,0,0,.5); --glow: rgba(140,110,255,.16);
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #14121f; --bg2: #1c1930; --card: #211d33; --ink: #f3eefb; --ink2: #c3bad3; --mute: #8a819c; --line: #322c49;
+  --chip: #2a2540; --chip-on: #f3eefb; --chip-on-ink: #14121f; --shadow: 0 1px 2px rgba(0,0,0,.3), 0 10px 30px rgba(0,0,0,.35);
+  --shadow-hi: 0 2px 6px rgba(0,0,0,.4), 0 22px 50px rgba(0,0,0,.5); --glow: rgba(140,110,255,.16);
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body { margin: 0; min-height: 100vh; background: var(--bg); color: var(--ink); font: 600 16px/1.5 var(--font);
+  background-image: radial-gradient(1200px 600px at 85% -10%, var(--glow), transparent 60%), radial-gradient(900px 500px at -10% 10%, var(--glow), transparent 60%); }
+a { color: inherit; }
+.wrap { max-width: 1180px; margin: 0 auto; padding: 0 16px; }
+@media (min-width: 720px) { .wrap { padding: 0 28px; } }
+
+/* Kopf */
+header.wrap { padding-top: max(40px, env(safe-area-inset-top)); padding-bottom: 8px; }
+.top { display: flex; align-items: center; gap: 14px; }
+.logo { width: 46px; height: 46px; flex: none; }
+h1 { margin: 0; font: 700 clamp(30px, 6vw, 46px)/1 var(--title); letter-spacing: -.01em; }
+.sub { margin: 10px 0 0; color: var(--ink2); max-width: 46ch; }
+.theme { margin-left: auto; width: 42px; height: 42px; border-radius: 50%; border: 1px solid var(--line); background: var(--card); color: var(--ink);
+  font-size: 18px; cursor: pointer; display: grid; place-items: center; box-shadow: var(--shadow); }
+.theme:focus-visible, .chip:focus-visible, .sort:focus-visible, .play:focus-visible, .card a.cover:focus-visible { outline: 3px solid #ff9a3c; outline-offset: 2px; }
+
+/* Hervorgehoben */
+.hero { margin: 26px 0 8px; display: grid; grid-template-columns: 1fr; border-radius: calc(var(--r) + 6px); overflow: hidden; background: var(--card);
+  box-shadow: var(--shadow-hi); border: 1px solid var(--line); position: relative; }
+@media (min-width: 860px) { .hero { grid-template-columns: 1.35fr 1fr; } }
+.hero > * { min-width: 0; }
+.hero .cover { aspect-ratio: 16 / 9; }
+@media (min-width: 860px) { .hero .cover { aspect-ratio: auto; min-height: 340px; } .hero .cover img { position: absolute; inset: 0; } }
+.hero .body { padding: 22px 22px 24px; display: flex; flex-direction: column; gap: 10px; justify-content: center; }
+@media (min-width: 860px) { .hero .body { padding: 34px 34px 34px 30px; } }
+.kicker { font: 800 12px/1 var(--font); letter-spacing: .12em; text-transform: uppercase; color: var(--accent); }
+.hero h2 { margin: 0; font: 700 clamp(28px, 4.4vw, 42px)/1.05 var(--title); }
+.hero p { margin: 0; color: var(--ink2); }
+.hero .desc { font-weight: 500; }
+
+/* Leiste */
+.bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 30px 0 16px; }
+.bar h3 { margin: 0 auto 0 0; font: 700 22px/1 var(--title); }
+.bar h3 small { color: var(--mute); font: 700 15px var(--font); margin-left: 6px; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip, .sort { border: 0; border-radius: 999px; padding: 7px 13px; background: var(--chip); color: var(--ink2); font: 800 13px/1 var(--font); cursor: pointer; }
+.chip[aria-pressed="true"] { background: var(--chip-on); color: var(--chip-on-ink); }
+.sort { appearance: none; padding-right: 30px; background-image: linear-gradient(45deg, transparent 50%, currentColor 50%), linear-gradient(135deg, currentColor 50%, transparent 50%);
+  background-position: calc(100% - 16px) 50%, calc(100% - 11px) 50%; background-size: 5px 5px; background-repeat: no-repeat; }
+
+/* Karten */
+.grid { display: grid; gap: 18px; grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr)); padding-bottom: 20px; }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: var(--r); overflow: hidden; box-shadow: var(--shadow);
+  display: flex; flex-direction: column; transition: transform .25s cubic-bezier(.2,.8,.2,1), box-shadow .25s; }
+.card:hover { transform: translateY(-4px); box-shadow: var(--shadow-hi); }
+.cover { position: relative; display: block; aspect-ratio: 16 / 10; overflow: hidden; background: var(--accent); text-decoration: none; }
+.cover img { position: relative; z-index: 1; width: 100%; height: 100%; object-fit: cover; display: block; transition: transform .6s cubic-bezier(.2,.8,.2,1); }
+.card:hover .cover img, .hero:hover .cover img { transform: scale(1.045); }
+.art { position: absolute; inset: 0; display: grid; place-items: center; font-size: clamp(64px, 12vw, 110px);
+  background: radial-gradient(circle at 30% 25%, rgba(255,255,255,.35), transparent 55%), linear-gradient(135deg, var(--accent), color-mix(in srgb, var(--accent) 55%, #1a1030)); }
+.art::after { content: ''; position: absolute; inset: 0; background-image: radial-gradient(rgba(255,255,255,.18) 1.5px, transparent 1.6px); background-size: 18px 18px; mask-image: linear-gradient(transparent, #000); }
+.art span { position: relative; z-index: 1; filter: drop-shadow(0 8px 16px rgba(0,0,0,.25)); }
+.badges { position: absolute; left: 12px; top: 12px; display: flex; gap: 6px; z-index: 2; }
+.badge { padding: 5px 9px; border-radius: 999px; font: 800 11px/1 var(--font); letter-spacing: .06em; text-transform: uppercase; background: rgba(20,16,30,.72); color: #fff; backdrop-filter: blur(6px); }
+.badge.neu { background: #ff7a2f; }
+.badge.beta { background: #7a5cff; }
+.badge.bald { background: #5f6b7a; }
+.card .body { padding: 16px 18px 18px; display: flex; flex-direction: column; gap: 8px; flex: 1; }
+.card h4 { margin: 0; font: 700 22px/1.1 var(--title); }
+.card p { margin: 0; color: var(--ink2); font-size: 15px; }
+.meta { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 2px; }
+.tag { font: 800 12px/1 var(--font); color: var(--ink2); background: var(--chip); padding: 6px 9px; border-radius: 8px; }
+.foot { display: flex; align-items: center; gap: 10px; margin-top: auto; padding-top: 10px; }
+.when { color: var(--mute); font-size: 13px; font-weight: 700; margin-right: auto; }
+.play { display: inline-flex; align-items: center; gap: 8px; padding: 11px 18px; border-radius: 14px; text-decoration: none; font: 800 15px/1 var(--font);
+  background: var(--accent); color: #fff; box-shadow: 0 4px 0 color-mix(in srgb, var(--accent) 60%, #000), 0 8px 18px color-mix(in srgb, var(--accent) 35%, transparent);
+  transition: transform .12s, box-shadow .12s; text-shadow: 0 1px 1px rgba(0,0,0,.25); }
+.play:hover { transform: translateY(-1px); }
+.play:active { transform: translateY(3px); box-shadow: 0 1px 0 color-mix(in srgb, var(--accent) 60%, #000); }
+.play.off { background: var(--chip); color: var(--mute); box-shadow: none; pointer-events: none; text-shadow: none; }
+.play svg { width: 14px; height: 14px; }
+.empty { padding: 40px; text-align: center; color: var(--mute); border: 2px dashed var(--line); border-radius: var(--r); }
+
+footer { padding: 30px 0 max(36px, env(safe-area-inset-bottom)); color: var(--mute); font-size: 14px; border-top: 1px solid var(--line); margin-top: 24px; }
+footer .wrap { display: flex; flex-wrap: wrap; gap: 8px 18px; justify-content: space-between; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+<header class="wrap">
+  <div class="top">
+    <svg class="logo" viewBox="0 0 64 64" aria-hidden="true">
+      <defs><linearGradient id="lg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ffb347"/><stop offset="1" stop-color="#ff6a3d"/></linearGradient></defs>
+      <rect x="4" y="12" width="56" height="40" rx="18" fill="url(#lg)"/>
+      <rect x="14" y="27" width="14" height="5" rx="2.5" fill="#fff"/><rect x="18.5" y="22.5" width="5" height="14" rx="2.5" fill="#fff"/>
+      <circle cx="43" cy="26" r="4" fill="#fff"/><circle cx="50" cy="33" r="4" fill="#fff" opacity=".85"/>
+    </svg>
+    <h1>Spielhalle</h1>
+    <button class="theme" id="theme" type="button" aria-label="Hell/Dunkel umschalten">◐</button>
+  </div>
+  <p class="sub" id="sub">Alle Spiele an einem Ort. Direkt im Browser, ohne Download, dein Spielstand bleibt auf deinem Gerät.</p>
+</header>
+
+<main class="wrap">
+  <section id="hero"></section>
+  <div class="bar">
+    <h3>Alle Spiele <small id="count"></small></h3>
+    <div class="chips" id="chips" role="group" aria-label="Nach Art filtern"></div>
+    <select class="sort" id="sort" aria-label="Sortieren">
+      <option value="last">Zuletzt gespielt</option>
+      <option value="new">Neueste zuerst</option>
+      <option value="az">A–Z</option>
+    </select>
+  </div>
+  <section class="grid" id="grid" aria-live="polite"></section>
+</main>
+
+<footer><div class="wrap"><span id="built"></span><span>Neue Spiele erscheinen hier automatisch.</span></div></footer>
+
+<!-- Wird beim Bauen (tools/site/build.mjs) mit allen Spielen gefüllt -->
+<script id="games-data" type="application/json">{"games":[]}</script>
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  const store = {
+    get(k) { try { return localStorage.getItem(k); } catch { return null; } },
+    set(k, v) { try { localStorage.setItem(k, v); } catch {} },
+    has(prefix) { try { for (let i = 0; i < localStorage.length; i++) if ((localStorage.key(i) || '').startsWith(prefix)) return true; } catch {} return false; },
+  };
+  let data = { games: [] };
+  try { data = JSON.parse($('games-data').textContent); } catch {}
+  const games = data.games || [];
+
+  // Hell/Dunkel
+  const applyTheme = t => { if (t) document.documentElement.dataset.theme = t; else delete document.documentElement.dataset.theme; };
+  applyTheme(store.get('hub.theme'));
+  $('theme').onclick = () => {
+    const dark = document.documentElement.dataset.theme ? document.documentElement.dataset.theme === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches;
+    const t = dark ? 'light' : 'dark'; applyTheme(t); store.set('hub.theme', t);
+  };
+
+  const DAY = 864e5, today = Date.now();
+  const ago = ts => {
+    const s = (today - ts) / 1000;
+    if (s < 90) return 'gerade eben';
+    if (s < 3600) return `vor ${Math.round(s / 60)} Min.`;
+    if (s < 86400) return `vor ${Math.round(s / 3600)} Std.`;
+    const d = Math.round(s / 86400); return d === 1 ? 'gestern' : `vor ${d} Tagen`;
+  };
+  const daysSince = iso => iso ? (today - new Date(iso + 'T12:00:00').getTime()) / DAY : 1e9;
+  const last = g => +store.get('hub.last.' + g.id) || 0;
+  const hasSave = g => g.save && store.has(g.save);
+  const badgeOf = g => g.status === 'bald' ? ['bald', 'Bald'] : g.status === 'beta' ? ['beta', 'Beta'] :
+    (g.status === 'neu' || daysSince(g.added) <= 14) ? ['neu', 'Neu'] : daysSince(g.updated) <= 5 ? ['', 'Update'] : null;
+  const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const playIcon = '<svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 1.8v10.4a.8.8 0 0 0 1.2.7l8.6-5.2a.8.8 0 0 0 0-1.4L4.2 1.1A.8.8 0 0 0 3 1.8z" fill="currentColor"/></svg>';
+
+  const cover = (g, eager) => {
+    const b = badgeOf(g);
+    return `<a class="cover" href="${esc(g.path)}" data-id="${esc(g.id)}" tabindex="-1" aria-hidden="true">
+      <div class="art"><span>${esc(g.emoji)}</span></div>
+      ${g.cover ? `<img src="${esc(g.cover)}" alt="" ${eager ? '' : 'loading="lazy"'} decoding="async" onerror="this.remove()">` : ''}
+      ${b ? `<div class="badges"><span class="badge ${b[0]}">${b[1]}</span></div>` : ''}</a>`;
+  };
+  const button = g => g.status === 'bald' ? `<span class="play off">Bald</span>`
+    : `<a class="play" href="${esc(g.path)}" data-id="${esc(g.id)}">${playIcon}${hasSave(g) ? 'Weiterspielen' : 'Spielen'}</a>`;
+  const when = g => last(g) ? `Gespielt ${ago(last(g))}` : g.updated ? `Stand ${new Date(g.updated + 'T12:00:00').toLocaleDateString('de-DE', { day: 'numeric', month: 'short' })}` : '';
+
+  // Hervorgehoben: zuletzt gespielt, sonst das neueste Spiel
+  const playable = games.filter(g => g.status !== 'bald');
+  const recent = [...playable].sort((a, b) => last(b) - last(a))[0];
+  const newest = [...playable].sort((a, b) => (b.added || '').localeCompare(a.added || '') || a.order - b.order)[0];
+  const hero = recent && last(recent) ? recent : newest;
+  if (hero) {
+    $('hero').innerHTML = `<article class="hero" style="--accent:${esc(hero.color)}">
+      ${cover(hero, true)}
+      <div class="body">
+        <span class="kicker">${hero === recent && last(recent) ? 'Weiter, wo du warst' : 'Neu in der Spielhalle'}</span>
+        <h2>${esc(hero.title)}</h2>
+        <p>${esc(hero.tagline)}</p>
+        ${hero.description ? `<p class="desc">${esc(hero.description)}</p>` : ''}
+        <div class="meta">${[hero.genre, ...hero.controls].filter(Boolean).map(t => `<span class="tag">${esc(t)}</span>`).join('')}</div>
+        <div class="foot"><span class="when">${when(hero)}</span>${button(hero)}</div>
+      </div></article>`;
+  }
+
+  // Filter aus den Tags aller Spiele
+  const tags = [...new Set(games.flatMap(g => g.tags))].sort((a, b) => a.localeCompare(b, 'de'));
+  let tag = null;
+  $('chips').innerHTML = ['Alle', ...tags].map((t, i) => `<button class="chip" type="button" aria-pressed="${i === 0}" data-tag="${i ? esc(t) : ''}">${esc(t)}</button>`).join('');
+  $('chips').onclick = e => {
+    const b = e.target.closest('.chip'); if (!b) return;
+    tag = b.dataset.tag || null;
+    for (const c of $('chips').children) c.setAttribute('aria-pressed', c === b);
+    render();
+  };
+  const sortSel = $('sort');
+  sortSel.value = store.get('hub.sort') || (games.some(g => last(g)) ? 'last' : 'new');
+  sortSel.onchange = () => { store.set('hub.sort', sortSel.value); render(); };
+
+  function render() {
+    const list = games.filter(g => !tag || g.tags.includes(tag));
+    const s = sortSel.value;
+    list.sort((a, b) => (a.status === 'bald') - (b.status === 'bald') || (
+      s === 'az' ? a.title.localeCompare(b.title, 'de') :
+      s === 'new' ? (b.added || '').localeCompare(a.added || '') || a.order - b.order :
+      last(b) - last(a) || a.order - b.order));
+    $('count').textContent = `${playable.length} ${playable.length === 1 ? 'Spiel' : 'Spiele'}`;
+    $('grid').innerHTML = list.length ? list.map(g => `<article class="card" style="--accent:${esc(g.color)}">
+      ${cover(g)}
+      <div class="body">
+        <h4>${esc(g.title)}</h4>
+        <p>${esc(g.tagline)}</p>
+        <div class="meta">${[g.genre, ...g.tags.filter(t => !(g.genre || '').includes(t))].filter(Boolean).slice(0, 4).map(t => `<span class="tag">${esc(t)}</span>`).join('')}</div>
+        <div class="foot"><span class="when">${when(g)}</span>${button(g)}</div>
+      </div></article>`).join('') : '<div class="empty">Keine Spiele in dieser Kategorie.</div>';
+  }
+  render();
+
+  // Merken, was zuletzt gespielt wurde
+  document.addEventListener('click', e => { const a = e.target.closest('a[data-id]'); if (a) store.set('hub.last.' + a.dataset.id, Date.now()); });
+  window.addEventListener('pageshow', e => { if (e.persisted) location.reload(); });
+
+  if (data.built) $('built').textContent = `Aktualisiert am ${new Date(data.built).toLocaleDateString('de-DE', { day: 'numeric', month: 'long', year: 'numeric' })}`;
+})();
+</script>
+</body>
+</html>
