@@ -35,7 +35,7 @@ Lokal: `cd fabrik && python3 -m http.server 8000`, dann http://localhost:8000. K
 - **29 Teile** von Stein bis Rakete; Rezepte automatisch oder fest im Info-Panel, Sortierer mit Filter (auch „Goldteile“).
 - **Besonderes:** Goldteile (×25, bleiben golden durch die ganze Kette), Takt an der Verkaufsstation (bis ×2), Maschinen-Sterne ★1–★5,
   Experimentiertisch mit 12 geheimen Rezepten und Rezeptbuch (Tipps von Dr. Steve), Gerald der Praktikant, Kisten mit Spannung,
-  Aufträge (3 + Tagesauftrag), 7 × 7 Grundstücke mit Preis-Schild (manchmal mit Ruine und Kiste), 36 Forschungen, 17 Patente,
+  Aufträge (3 + Tagesauftrag), 5 × 5 Grundstücke à 24 × 24 Felder mit Preis-Schild (manchmal mit Ruine und Kiste), 36 Forschungen, 17 Patente,
   4 Welten (Wiese, Wüste, Eis, Mond), 28 Erfolge mit Bandfarben und Titeln, Offline-Einnahmen („Während du weg warst …“).
 - **Belohnungsgefühl:** Münzen und Beträge fliegen von der Verkaufsstation, Gold-Jackpot mit Funkeln und Fanfare, Entdeckungskarte mit Konfetti,
   Stern beim Level-up, Takt-Ring, Erfolgs-Toasts, Kisten öffnen sich mit Wackeln, Deckel und Strahlen.

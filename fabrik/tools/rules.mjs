@@ -1,6 +1,6 @@
 // Regeln der Spiellogik ohne Browser: node fabrik/tools/rules.mjs → letzte Zeile RULES OK (sonst Exit-Code 1)
 // Optionen: --quick (ohne Bot-Partie), --bot-hours=N (Länge der Bot-Partie, Standard 4 h Spielzeit, bricht bei Prestige ab), --verbose
-import { Factory, SAVE_VERSION, START_MONEY, MAP, PLOT, PLOTS, START_PLOT, DX, DY, DT, TPS, outCell, XP_LV } from '../js/sim.js';
+import { Factory, SAVE_VERSION, START_MONEY, MAP, PLOT, PLOTS, START_PLOT, START_BASE, DX, DY, DT, TPS, outCell, XP_LV } from '../js/sim.js';
 import { ITEMS, ITEM_IDS, RAW, BUILDINGS, BUILDING_IDS, RECIPES, RECIPE_IDS, HIDDEN_RECIPES, RESEARCH, RESEARCH_IDS, PATENTS, PATENT_IDS,
   BIOMES, BIOME_IDS, ACHIEVEMENTS, ACHIEVEMENT_IDS, CRATES, CRATE_IDS, COLORS, TITLES, TUTORIAL } from '../js/data.js';
 import { LANGS, DICTS, KINDS, t, name, desc, setLang, getLang, onLang, keys } from '../js/i18n.js';
@@ -10,7 +10,7 @@ import { route, bpRotate, encodeBp, decodeBp } from '../js/blueprint.js';
 const ARGS = process.argv.slice(2), QUICK = ARGS.includes('--quick'), VERBOSE = ARGS.includes('--verbose');
 const BOT_H = +(ARGS.find(a => a.startsWith('--bot-hours=')) || '=4').split('=')[1];
 let fail = 0; const ok = (c, m) => { console.log((c ? '✓ ' : '✗ ') + m); if (!c) fail++; };
-const O = START_PLOT * PLOT;                      // Ursprung des Startgrundstücks (48)
+const O = START_BASE;                             // Ursprung der Start-Anordnung (48, Ecke des 24×24-Startgrundstücks)
 // alles erforscht; Strom-Schonfrist, damit die älteren Tests ohne Kraftwerk laufen (Strom wird in Abschnitt 20 geprüft)
 const allResearch = (f, grace = true) => { for (const id of RESEARCH_IDS) if (!f.S.research.includes(id)) f.S.research.push(id); if (grace) f.S.powerGrace = 1e9; f._mods(); };
 const rich = f => { f.S.money = 1e40; return f; };
@@ -105,9 +105,9 @@ const fmt = s => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2,
   const v = es[0], near = (item) => { for (let y = v.y - 10; y < v.y + 12; y++) for (let x = v.x - 10; x < v.x + 12; x++) { const d = f.deposit(x, y), c = f.canPlace('bohrer', x, y, 0); if (d && d.item === item && c.ok && c.item === item) return true; } return false; };
   ok(near('stein') && near('eisenerz'), 'Stein- und Eisen-Vorkommen in Reichweite (≤ 10 Felder), Bohrer setzbar');
   ok(['wueste', 'eis', 'mond'].every(b => { const g = new Factory({ seed: 3, biome: b }); return g.deposit(O + 2, O + 2)?.item === 'stein' && g.deposit(O + 11, O + 2)?.item === 'eisenerz'; }), 'auch in den anderen Welten Stein und Eisen am Start');
-  ok(f.deposit(O + 20, O + 2) === null && f.plotState(START_PLOT + 1, START_PLOT) === 'buyable' && f.plotState(0, 0) === 'locked' && f.plotState(START_PLOT, START_PLOT) === 'open', 'fremdes Land verdeckt, Nachbarn kaufbar');
+  ok(f.deposit(O + PLOT + 4, O + 2) === null && f.plotState(START_PLOT + 1, START_PLOT) === 'buyable' && f.plotState(0, 0) === 'locked' && f.plotState(START_PLOT, START_PLOT) === 'open', 'fremdes Land verdeckt, Nachbarn kaufbar');
   ok(f.contracts.length === 3 && f.contracts.every(c => c.n > 0 && c.left > 0 && ITEMS[c.item] && c.key === 'contract.deliver'), 'drei Aufträge, sprachneutral (key + Ids)');
-  const c1 = f.canPlace('bohrer', O + 5, O + 5, 0), c2 = f.canPlace('presse', O + 5, O + 5, 0), c3 = f.canPlace('band', O + 20, O, 0), c4 = f.canPlace('band', v.x, v.y, 0);
+  const c1 = f.canPlace('bohrer', O + 5, O + 5, 0), c2 = f.canPlace('presse', O + 5, O + 5, 0), c3 = f.canPlace('band', O + PLOT + 2, O, 0), c4 = f.canPlace('band', v.x, v.y, 0);
   ok(c1.reason === 'deposit' && c2.reason === 'research' && c3.reason === 'plot' && c4.reason === 'occupied', `Gründe: ${c1.reason}, ${c2.reason}, ${c3.reason}, ${c4.reason}`);
   ok(f.help().key === 'tut.drill' && f.help().target === 'bohrer', 'Anleitung beginnt beim Bohrer');
 }
@@ -353,9 +353,9 @@ function uniqueKeys(f) { const s = new Set(); let n = 0; for (const e of f.S.ent
   ok(!f.buyPlot(0, 0) && f.canBuyPlot(0, 0).reason === 'locked', 'nicht angrenzendes Land ist gesperrt');
   ok(f.canPlace('band', cx * PLOT + 3, cy * PLOT + 3, 0).ok, 'auf neuem Land kann gebaut werden');
   let ruins = 0, crates = 0; const g = new Factory({ seed: 21 }); g.S.money = 1e30;
-  for (let k = 0; k < 48; k++) { let done = false; for (let y = 0; y < PLOTS && !done; y++) for (let x = 0; x < PLOTS && !done; x++) if (g.plotState(x, y) === 'buyable') { const c = g.crates?.length; const res = g.buyPlot(x, y); if (res.ruin) ruins++; done = true; } }
+  for (let k = 0; k < PLOTS * PLOTS - 1; k++) { let done = false; for (let y = 0; y < PLOTS && !done; y++) for (let x = 0; x < PLOTS && !done; x++) if (g.plotState(x, y) === 'buyable') { const c = g.crates?.length; const res = g.buyPlot(x, y); if (res.ruin) ruins++; done = true; } }
   crates = g.S.crates.filter(c => c.src === 'ruin').length;
-  ok(g.S.plots.length === 49 && ruins > 3 && crates === ruins, `ganze Karte kaufbar, ${ruins} Ruinen mit Kiste`);
+  ok(g.S.plots.length === PLOTS * PLOTS && ruins > 3 && crates === ruins, `ganze Karte kaufbar, ${ruins} Ruinen mit Kiste`);
   let kr = 0; for (let y = 0; y < MAP; y++) for (let x = 0; x < MAP; x++) if (g.deposit(x, y)?.item === 'kristall') kr++;
   ok(kr > 0, `Kristall kommt vor (${kr} Felder)`);
 }
@@ -730,25 +730,25 @@ check('Wegsuche: freier Weg, umgeht Hindernisse, endet im Ziel; placePath setzt 
   const n = f.placePath(p); f.debugInsert(f.at(53, 62), 'stein'); secs(f, 30);
   const arrived = f.nodeAt(60, 62).e.items.length === 1;
   f.undo();
-  return p0.length === 8 && p0.every(c => c.type === 'band') && pathOk(f, p) && p.every(c => !(c.x === 57 && c.y >= 58)) && p[p.length - 1].x === 60 && n === p.length && arrived && belts() === s0 && f.canPlacePath(p).ok && !f.canPlacePath([...p, p[0]]).ok;
+  return p0.length === 8 && p0.every(c => c.type === 'band') && pathOk(f, p) && p.every(c => !(c.x === 57 && c.y >= 58 && c.y <= 63)) && p[p.length - 1].x === 60 && n === p.length && arrived && belts() === s0 && f.canPlacePath(p).ok && !f.canPlacePath([...p, p[0]]).ok;
 });
 check('Wegsuche: Ziel ist ein Gebäude → Weg endet davor und zeigt hinein; nichts zu finden → leer', () => {
   const f = rich(new Factory({ seed: 3 }));
   const p = route(f, [50, 62], [55, 55]), last = p[p.length - 1];
-  f.placeLine('band', Array.from({ length: 16 }, (_, i) => [57, O + i, 1]));    // Wand über das ganze Grundstück
+  f.placeLine('band', Array.from({ length: PLOT }, (_, i) => [57, O + i, 1]));    // Wand über das ganze Grundstück
   const none = route(f, [53, 62], [60, 62], { tunnels: false });
   return p.length > 0 && f.nodeAt(last.x + DX[last.rot], last.y + DY[last.rot])?.e.type === 'verkauf' && none.length === 0 && route(f, [55, 55], [60, 60]).length === 0;
 });
 check('Wegsuche: mit Tunnel-Forschung springt der Weg unter der Wand durch, Teile kommen an', () => {
   const f = rich(new Factory({ seed: 3 })); allResearch(f);
-  f.placeLine('band', Array.from({ length: 16 }, (_, i) => [57, O + i, 1]));
+  f.placeLine('band', Array.from({ length: PLOT }, (_, i) => [57, O + i, 1]));
   const p = route(f, [53, 62], [60, 62]), tun = p.filter(c => c.type === 'tunnel');
   const n = f.placePath(p); f.debugInsert(f.at(53, 62), 'stein'); secs(f, 30);
   const a = f.nodeAt(tun[0].x, tun[0].y).e, b = f.nodeAt(tun[1].x, tun[1].y).e;
   return tun.length === 2 && pathOk(f, p) && n === p.length && a.link === b.id && b.exit && f.nodeAt(60, 62).e.items.length === 1;
 });
 // Blaupausen
-const plots = f => { for (const [x, y] of [[4, 3], [4, 2], [4, 4], [3, 4], [2, 3], [3, 2]]) f.buyPlot(x, y); };
+const plots = f => { const c = START_PLOT; for (const [x, y] of [[1, 0], [0, 1], [-1, 0], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]]) f.buyPlot(c + x, c + y); };
 const norm = bp => JSON.stringify({ w: bp.w, h: bp.h, ents: bp.ents.map(({ type, dx, dy, rot, recipe, filter, mk }) => ({ type, dx, dy, rot, recipe, filter, mk })).sort((a, b) => a.dy - b.dy || a.dx - b.dx) });
 function bpFactory() {
   const f = rich(new Factory({ seed: 3 })); allResearch(f); plots(f);
@@ -1031,7 +1031,7 @@ check('Alter Stand v1 lädt: Schonfrist 1800 s (Ereignis), Montage → Strom nac
   const g = Factory.load(JSON.stringify(j)), ev = g.events().find(e => e.type === 'power' && e.kind === 'grace');
   const mo = g.place('montage', O + 11, O + 12, 0);
   g.tick(5); const p = g.entity(mo)?.power;
-  return g.S.v === SAVE_VERSION && SAVE_VERSION === 2 && g.S.powerGrace > 1790 && ev && ev.secs === 1800 && g.S.research.includes('strom') && p === 1 && g.S.wonder.stage === 1 && g.S.ents.every(e => !BUILDINGS[e.type].kind.match(/machine/) || e.mk === 1);
+  return g.S.v === SAVE_VERSION && SAVE_VERSION >= 2 && g.S.powerGrace > 1790 && ev && ev.secs === 1800 && g.S.research.includes('strom') && p === 1 && g.S.wonder.stage === 1 && g.S.ents.every(e => !BUILDINGS[e.type].kind.match(/machine/) || e.mk === 1);
 });
 check('Laden robust gegen kaputte neue Felder (mk, link, dr, wonder, hist, xdep, storm, chal …)', () => {
   const bad = [{ wonder: 'x', hist: [1, [1, 'q'], [5, 'b', 'ufo', 1, 1, 0, 1]], xdep: [{ x: 1e9 }, { x: 50, y: 50, item: 'ufo', left: 5 }, null], storm: null, chal: 5, powerGrace: 'x' },
@@ -1049,6 +1049,18 @@ check('Laden robust gegen kaputte neue Felder (mk, link, dr, wonder, hist, xdep,
   }
   return true;
 });
+
+// Stand v2 (Grundstücke 16×16 in 7×7) → v3 (24×24 in 5×5): Gebäude bleiben, Vorkommen wie früher, Land wird übertragen
+{
+  const f = new Factory({ seed: 3 }); f.S.money = 1e6; f.place('bohrer', O + 10, O + 2, 2);
+  const j = f.toJSON(); j.v = 2; delete j.geo; j.plots = [3 * 7 + 3, 3 * 7 + 4, 4 * 7 + 3];       // alt: Start (3,3), (4,3), (3,4)
+  const g = Factory.load(JSON.stringify(j));
+  ok(g.S.geo === 1 && g.S.v === SAVE_VERSION && [12, 13, 17].every(p => g.S.plots.includes(p)) && g.S.plots.length === 3,
+    `v2 → v3: Land 16er-Grundstücke → 24er (${g.S.plots.sort((a, b) => a - b)}), alte Kartenform (geo 1)`);
+  ok(g.entity(g.at(O + 10, O + 2))?.item === 'eisenerz' && g.deposit(O + 1, O + 1)?.item === 'stein' && g.S.ents.length === f.S.ents.length, 'v2 → v3: Bohrer bleibt auf seinem Eisen, Start-Vorkommen wie früher');
+  const h = Factory.load(JSON.stringify(g.toJSON())); ok(h.S.geo === 1 && JSON.stringify(h.toJSON()) === JSON.stringify(g.toJSON()), 'v3 mit alter Kartenform: Speichern → Laden unverändert');
+  ok(new Factory({ seed: 3 }).S.geo === 2 && PLOT === 24 && PLOTS === 5, 'neue Fabrik: Grundstücke 24×24, 5×5');
+}
 
 // =====================================================================================
 // 28. Großbohrer: 4 gleiche Bohrer im 2×2-Quadrat auf einem Rohstoff verschmelzen (ein Ausgang, +25 %)

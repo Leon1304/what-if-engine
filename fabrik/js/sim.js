@@ -8,13 +8,18 @@ import {
 } from './data.js';
 import { mix, STEP, hashStr, hash2, fbm } from './rng.js';
 
-export const SAVE_VERSION = 2;
+export const SAVE_VERSION = 3;          // v3: Grundstücke 24×24 (vorher 16×16, 7×7) – ältere Stände behalten Lage und Vorkommen (S.geo = 1)
 export const TPS = 20, DT = 1 / TPS;
-export const PLOT = 16, PLOTS = 7, MAP = PLOT * PLOTS, START_PLOT = 3;
+export const PLOT = 24, PLOTS = 5, MAP = PLOT * PLOTS, START_PLOT = 2;          // Grundstück 24×24 Felder (Leons Wunsch 17.11.2026: mehr Platz je Fläche)
+// Ursprung der Start-Anordnung (Verkauf, vier Start-Vorkommen; 16×16 groß) – Ecke des Startgrundstücks wie früher (48),
+// der neue Platz liegt rechts und unten; alte Stände liegen so genau gleich
+export const START_BASE = START_PLOT * PLOT;
+// Kartenaufbau alter Stände (v ≤ 2): Grundstücke 16×16 in 7×7, Start (3,3) – nur noch für Vorkommen/Räumen der Startfläche
+const LEGACY = { plot: 16, plots: 7, start: 3 };
 export const DX = [1, 0, -1, 0], DY = [0, 1, 0, -1];          // rot 0 = +x, 1 = +z (Sim-y), 2 = −x, 3 = −z
 export const START_MONEY = 200;
 export const SP = 0.25;                 // Mindestabstand der Teile auf einem Band (→ max. 4 je Feld)
-export const PLOT_COST = 500, PLOT_GROW = 1.7;  // Preis des ersten zugekauften Grundstücks, Anstieg je weiteres
+export const PLOT_COST = 1000, PLOT_GROW = 1.7;  // Preis des ersten zugekauften Grundstücks, Anstieg je weiteres
 export const BELT_BASE = 1.0;           // Felder pro Sekunde
 export const TAKT_GAP = 2.5, TAKT_TIME = 60;   // Lücke etwas großzügiger als 2 s, damit ein Bohrer (alle 2 s) den Takt hält
 export const XP_LV = [0, 30, 120, 400, 1200];   // Erfahrung für ★2 … ★5
@@ -100,7 +105,7 @@ export class Factory {
       contracts: [], daily: null, crates: [], boosts: { turbo: 0, goldrain: 0 },
       ger: { wait: 150, on: 0, ph: '', t: 0, dur: 0, x0: 0, z0: 0, x1: 0, z1: 0, ex: 0, ez: 0, belt: 0, x: 0, z: 0, line: '' },
       book: { found: [], tips: [], fails: [] }, ach: [], deco: { colors: ['standard'], color: 'standard', titles: [], title: '' },
-      bonusStart: 0, tut: 0, meta: {},
+      bonusStart: 0, tut: 0, meta: {}, geo: 2,
       // Ausbau 2
       powerGrace: 0, wonder: { stage: 1, have: {}, day: '' }, hist: [], xdep: [], storm: { next: 600, left: 0 }, chal: null,
       stats: { earned: 0, sold: 0, mined: 0, gold: 0, crafted: 0, lost: 0, made: {}, soldBy: {}, rate: {}, mrate: {}, cs: {}, cm: {},
@@ -119,7 +124,7 @@ export class Factory {
       this._mods();
     }
     S.money = START_MONEY + this.M.start + S.bonusStart;
-    const c = START_PLOT * PLOT + 7;                  // Verkaufsstation mitten auf dem Startgrundstück
+    const c = START_BASE + 7;                        // Verkaufsstation mitten auf dem Startgrundstück
     const e = this._doPlace('verkauf', c, c, 0, 0); e.paid = 0;
     // Mond: ohne Strom läuft keine Maschine → Strom gilt als erforscht, ein Solarfeld steht schon
     if (BIOMES[S.biome].allPower) {
@@ -154,15 +159,17 @@ export class Factory {
     const S = this.S, B = BIOMES[S.biome];
     this.dep = new Uint8Array(MAP * MAP); this.rich = new Uint8Array(MAP * MAP); this.ruin = new Uint8Array(PLOTS * PLOTS);
     const res = Object.entries(B.deposits).map(([id, p], i) => ({ t: IDX[id], seed: (S.seed * 31 + i * 7919 + 17) >>> 0, ...p }));
+    // geo 1 = Stand von vor den großen Grundstücken: Ringe, Startfläche und Start-Vorkommen wie damals (Bohrer bleiben auf ihrem Erz)
+    const old = S.geo === 1, GP = old ? LEGACY.plot : PLOT, GS = old ? LEGACY.start : START_PLOT;
     for (let y = 0; y < MAP; y++) for (let x = 0; x < MAP; x++) {
-      const cx = (x / PLOT) | 0, cy = (y / PLOT) | 0, ring = Math.max(Math.abs(cx - START_PLOT), Math.abs(cy - START_PLOT));
+      const cx = (x / GP) | 0, cy = (y / GP) | 0, ring = Math.max(Math.abs(cx - GS), Math.abs(cy - GS));
       let best = -1, bv = 0;
       for (const r of res) { if (ring < (r.ring || 0)) continue; const d = fbm(r.seed, x, y, r.scale) - r.thr; if (d > bv) { bv = d; best = r.t; } }
       if (best >= 0) { this.dep[y * MAP + x] = best + 1; this.rich[y * MAP + x] = bv > 0.1 ? 1 : 0; }
     }
     // Startgrundstück: aufgeräumt, garantiert Stein und Eisen in Reichweite der Verkaufsstation
-    const o = START_PLOT * PLOT;
-    for (let y = o; y < o + PLOT; y++) for (let x = o; x < o + PLOT; x++) { this.dep[y * MAP + x] = 0; this.rich[y * MAP + x] = 0; }
+    const g0 = GS * GP, o = old ? g0 : START_BASE;
+    for (let y = g0; y < g0 + GP; y++) for (let x = g0; x < g0 + GP; x++) { this.dep[y * MAP + x] = 0; this.rich[y * MAP + x] = 0; }
     const fourth = { wiese: 'kohle', wueste: 'sand', eis: 'kristall', mond: 'titanerz' }[S.biome] || 'kohle';
     const stamp = (id, x0, y0, w, h) => { for (let y = y0; y < y0 + h; y++) for (let x = x0; x < x0 + w; x++) { const i = y * MAP + x; this.dep[i] = IDX[id] + 1; this.rich[i] = (x > x0 && x < x0 + w - 1 && y > y0 && y < y0 + h - 1) ? 1 : 0; } };
     stamp('stein', o + 1, o + 1, 4, 4); stamp('eisenerz', o + 10, o + 1, 4, 4); stamp('kupfererz', o + 1, o + 10, 4, 4); stamp(fourth, o + 11, o + 11, 3, 3);
@@ -1494,7 +1501,7 @@ export class Factory {
   addCrate(src = 'meta') { this._addCrate(String(src)); return this.S.crates.length - 1; }
   // freie Quadrate size×size auf eigenem Land, nächste zuerst (near = [x, y], sonst Mitte des Startgrundstücks)
   freeCells(n = 1, near = null, size = 1) {
-    const [nx, ny] = Array.isArray(near) ? near : [START_PLOT * PLOT + 8, START_PLOT * PLOT + 8], out = [];
+    const [nx, ny] = Array.isArray(near) ? near : [START_BASE + 8, START_BASE + 8], out = [];
     for (const p of this.S.plots) {
       const cx = (p % PLOTS) * PLOT, cy = ((p / PLOTS) | 0) * PLOT;
       for (let y = cy; y < cy + PLOT; y++) for (let x = cx; x < cx + PLOT; x++) {
@@ -1982,6 +1989,17 @@ export class Factory {
     if (ver < 2) { if (S.research.includes('montage') && !S.research.includes('strom')) S.research.push('strom'); S.powerGrace = POWER.grace; }
     if (BIOMES[biome].allPower && !S.research.includes('strom')) S.research.push('strom');
     S.ach = uniq(S.ach.filter(a => has(ACHIEVEMENTS, a)));
+    // v ≤ 2: alte Grundstücke (16×16 in 7×7) → alle neuen 24×24-Grundstücke, die sie berühren; Gebäude behalten ihre Felder
+    S.geo = ver >= 3 && (src.geo === 1 || src.geo === 2) ? src.geo : ver >= 3 ? 2 : 1;
+    if (ver < 3) {
+      const L = LEGACY, np = new Set();
+      for (const p of arr(src.plots)) {
+        if (!Number.isInteger(p) || p < 0 || p >= L.plots * L.plots) continue;
+        const ox = (p % L.plots) * L.plot, oy = ((p / L.plots) | 0) * L.plot;
+        for (let cy = (oy / PLOT) | 0; cy <= ((oy + L.plot - 1) / PLOT | 0); cy++) for (let cx = (ox / PLOT) | 0; cx <= ((ox + L.plot - 1) / PLOT | 0); cx++) if (cx < PLOTS && cy < PLOTS) np.add(cy * PLOTS + cx);
+      }
+      S.plots = [...np];
+    }
     S.plots = [...new Set(S.plots.filter(p => Number.isInteger(p) && p >= 0 && p < PLOTS * PLOTS))];
     if (!S.plots.includes(START_PLOT * PLOTS + START_PLOT)) S.plots.unshift(START_PLOT * PLOTS + START_PLOT);
     S.crates = S.crates.filter(isObj).map(c => ({ src: typeof c.src === 'string' ? c.src : 'old' }));

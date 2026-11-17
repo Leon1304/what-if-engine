@@ -155,7 +155,7 @@ export class View {
       if (!p) {
         const ruin = w.st === 'buyable' && sim.ruin && sim.ruin[w.cy * PLOTS + w.cx];
         const plot = makePlot(w.cx, w.cy, { biome: this.biome, state: w.st, seed: (sim.S.seed % 997) + w.cx * 7 + w.cy * 13,
-          deposit: w.st === 'open' ? (x, y) => sim.deposit(x, y) : () => null, ruins: ruin ? [[w.cx * PLOT + 6, w.cy * PLOT + 7]] : [], label: w.st === 'buyable' ? fmtNum(cost) : '' });
+          deposit: w.st === 'open' ? (x, y) => sim.deposit(x, y) : () => null, ruins: ruin ? [[w.cx * PLOT + PLOT / 2 - 2, w.cy * PLOT + PLOT / 2 - 1]] : [], label: w.st === 'buyable' ? fmtNum(cost) : '' });
         this.root.add(plot.group); p = { plot, st: w.st, label: '' }; this.P.set(k, p);
       }
       if (w.st === 'buyable') { const l = fmtNum(cost); if (l !== p.label) { p.plot.setLabel(l); p.label = l; } }

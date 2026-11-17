@@ -1,4 +1,4 @@
-// Fließband – Gelände je Grundstück (16×16 Felder): Boden je Welt (Wiese/Wüste/Eis/Mond) mit Farbstreuung je Feld,
+// Fließband – Gelände je Grundstück (24×24 Felder): Boden je Welt (Wiese/Wüste/Eis/Mond) mit Farbstreuung je Feld,
 // Vorkommen als flache Erz-Felsen (≤ 0,13 hoch, damit Bohrer und Bänder darüber passen), Ruinen mit Kiste,
 // Deko (instanziert, nur auf freien Feldern, unter Gebäuden ausblendbar), gesperrte Grundstücke mit Nebel,
 // Preisschild (Text kommt von außen) und Vorhängeschloss. Raster: stage.setGrid() (Shader im Bodenmaterial).
@@ -7,7 +7,7 @@ import { Kit, instantiate, PI, TAU, hash2, shade, mixc } from '../kit.js';
 import { MATS, terrainMat, makeFogMat, oilMat, U } from '../materials.js';
 import { ITEM_LOOK } from './items.js';
 
-export const PLOT = 16;
+export const PLOT = 24;                 // muss zu sim.js PLOT passen
 const H = (x, y, s) => hash2(x, y, s);
 
 // ---------- Böden ----------

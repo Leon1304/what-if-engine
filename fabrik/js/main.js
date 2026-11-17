@@ -7,7 +7,7 @@ import { CameraRig } from './camera.js';
 import { Sound } from './audio.js';
 import { setItemLook } from './models/items.js';
 import { ITEMS, ITEM_IDS, BUILDINGS, BUILDING_IDS, TUTORIAL } from './data.js';
-import { Factory, DT, TPS, PLOT, START_PLOT, DX, DY, MAP } from './sim.js';
+import { Factory, DT, TPS, PLOT, START_PLOT, START_BASE, DX, DY, MAP } from './sim.js';
 import { Meta, startChallenge, isoWeek } from './meta.js';
 import * as storage from './storage.js';
 import { t, fmtNum, onLang, getLang } from './i18n.js';
@@ -35,7 +35,7 @@ const meta = new Meta();
 
 // lokales Datum YYYY-MM-DD (Glücksrad, Serie, Tagesauftrag)
 const today = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
-const START = START_PLOT * PLOT + 8;                   // Mitte der Start-Verkaufsstation
+const START = START_BASE + 8;                   // Mitte der Start-Verkaufsstation
 // Startabstand: im Hochformat weiter weg, damit das Startgrundstück ins Bild passt
 const startDist = (d = 26) => d * Math.min(1.7, Math.max(1, .95 / Math.max(.3, stage.width / stage.height)));
 
@@ -81,9 +81,9 @@ const app = {
     if (!c.ok) { ui.toast(t('reason.money') + ' ' + t('ui.needCoins', { cost: c.cost }), 'err'); sound.play('error', { gain: .4 }); return; }
     const yes = await ui.confirm('🗺️ ' + t('ui.plots'), t('ui.buyPlotQ', { cost: c.cost }), t('ui.buyPlot', { cost: c.cost }));
     if (!yes) return;
-    if (sim.buyPlot(cx, cy)) { rig.setBounds(view.bounds()); rig.flyTo(cx * PLOT + 8, cy * PLOT + 8, Math.max(rig.distance, 30)); ui.renderPanel(true); }
+    if (sim.buyPlot(cx, cy)) { rig.setBounds(view.bounds()); rig.flyTo(cx * PLOT + PLOT / 2, cy * PLOT + PLOT / 2, Math.max(rig.distance, 30)); ui.renderPanel(true); }
   },
-  flyToPlot(cx, cy) { rig.flyTo(cx * PLOT + 8, cy * PLOT + 8, Math.max(26, rig.distance)); },
+  flyToPlot(cx, cy) { rig.flyTo(cx * PLOT + PLOT / 2, cy * PLOT + PLOT / 2, Math.max(30, rig.distance)); },
   // ---------- Strom-/Engpass-Überlagerung ----------
   setOverlay(kind, on = !this.ov[kind]) { this.ov[kind] = !!on; view.setOverlay(kind, this.ov[kind]); ui.renderOverlay(true); ui.setTool(this.tool); if (on) sound.play('click', { gain: .6 }); },
   // ---------- Drohnen verknüpfen ----------

@@ -5,7 +5,7 @@
 // Alle Texte über i18n (t/name/desc), Zahlen über fmtNum. Klicks per Delegation (data-act), damit Neuzeichnen nichts kaputt macht.
 import { t, name, desc, fmtNum, fmtTime, getLang, setLang, onLang, LANGS } from './i18n.js';
 import { BUILDINGS, ITEMS, ITEM_IDS, RESEARCH, PATENTS, BIOMES, ACHIEVEMENTS, COLORS, TITLES, TUTORIAL, RECIPES, RAW } from './data.js';
-import { PRESTIGE_AT, XP_LV, PLOTS, PLOT, START_PLOT, TAKT_TIME } from './sim.js';
+import { PRESTIGE_AT, XP_LV, PLOTS, PLOT, START_PLOT, START_BASE, TAKT_TIME } from './sim.js';
 import * as storage from './storage.js';
 import { esc, $, clamp, fmtRate, ROMAN, pct, clock, PANEL_ICON, SIDE, MENU } from './ui/common.js';
 export { PANEL_ICON, SIDE, MENU };
@@ -845,7 +845,7 @@ export class UI {
     if (!el) { el = this._ptrEl = document.createElement('div'); el.className = 'pointer'; el.innerHTML = '<div class="in">👇</div>'; this.el.anchors.appendChild(el); }
     let p = null; const sim = this.sim;
     if (want === 'sell') { const s = sim.S.ents.find(e => e.type === 'verkauf'); if (s) p = [s.x + 1, 1.9, s.y + 1]; }
-    else if (want === 'deposit') { const o = START_PLOT * PLOT; p = sim.at(o + 11, o + 2) ? [o + 2.5, .5, o + 2.5] : [o + 12, .5, o + 3]; }
+    else if (want === 'deposit') { const o = START_BASE; p = sim.at(o + 11, o + 2) ? [o + 2.5, .5, o + 2.5] : [o + 12, .5, o + 3]; }
     if (!p) { el.style.display = 'none'; return; }
     const s = this.app.stage.screenPos(p); el.style.display = s.visible ? '' : 'none'; el.style.transform = `translate(${s.x.toFixed(0)}px, ${s.y.toFixed(0)}px)`;
   }

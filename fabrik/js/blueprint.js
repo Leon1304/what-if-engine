@@ -1,6 +1,6 @@
 // Cogtopia – Baupläne ohne DOM/Three: L-förmige Bandwege (Ziehen mit der Maus), Wegsuche (A*), Blaupausen drehen/teilen,
 // Fabrik fürs Startmenü, große Test-Fabrik (Leistung). Nur öffentliche Sim-Methoden (place/placeLine/buyPlot/buyResearch) plus Startgeld.
-import { DX, DY, PLOT, PLOTS, START_PLOT, MAP, outCell } from './sim.js';
+import { DX, DY, PLOT, PLOTS, START_PLOT, START_BASE, MAP, outCell } from './sim.js';
 import { BUILDINGS, BUILDING_IDS, RECIPES, RECIPE_IDS, ITEM_IDS } from './data.js';
 
 // Richtung (rot) für einen Einzelschritt
@@ -43,7 +43,7 @@ export function cellsOf(points, endDir) {
 export function buildDemo(f) {
   const S = f.S, keep = S.money; S.money = 1e7;
   for (const r of ['kupfer', 'tunnel', 'verteiler', 'labor']) f.buyResearch(r);
-  const o = START_PLOT * PLOT;                       // 48
+  const o = START_BASE;                             // Ursprung der Start-Anordnung (48)
   // Eisen → Ofen → Verkauf
   f.place('bohrer', o + 10, o + 2, 2);              // Ausgang (57,51)
   f.placeLine('band', [[o + 9, o + 3, 2], [o + 8, o + 3, 2]]);

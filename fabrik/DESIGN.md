@@ -26,7 +26,7 @@ Unabhängig von Engine, Waldtank und Schwebeinsel. **Sprache wählbar** (Englisc
    und blockiert es, bis man ihn anklickt (höchstens 20 s, dann geht er von selbst). Nie dauerhaft schädlich.
 6. **Kisten (Zufallsbelohnung):** aus Aufträgen, Gerald, Ruinen auf neuen Grundstücken, Erfolgen. Inhalt gewichtet zufällig: Geldsack, Turbo (×2 Tempo für 2 Min),
    Forschungs-Gutschein (−50 % auf eine Forschung), Bandfarbe/Deko, Goldregen (nächste 20 geförderte Teile golden), sehr selten Patent.
-7. **Grundstücke:** Karte aus 16×16-Feldern; Start ist das Mittelfeld. Nachbarfelder kaufen (Preis steigt) deckt neue Vorkommen auf, manchmal Kristall oder eine Ruine mit Kiste.
+7. **Grundstücke:** Karte aus 5 × 5 Grundstücken à 24×24 Feldern (bis 17.11.2026: 7 × 7 à 16×16); Start ist das Mittelfeld. Nachbarfelder kaufen (Preis steigt) deckt neue Vorkommen auf, manchmal Kristall oder eine Ruine mit Kiste.
 8. **Aufträge:** 3 Plätze, z. B. „Liefere 40 Kupferdraht in 4 Min“ (zählt verkaufte Teile). Belohnung Geld + Kiste. Ein Tagesauftrag pro Kalendertag (Datum kommt von außen, Sim bleibt rein), größere Belohnung.
 9. **Offline-Fabrik:** Beim Zurückkommen läuft die Fabrik rechnerisch weiter: Durchschnittseinnahmen der letzten 5 Spielminuten × Abwesenheit (max. 8 h) × 50 % (Patente erhöhen). Meldung „Während du weg warst …“.
 10. **Neue Fabrik (Prestige):** ab 1 Mio. verdient im aktuellen Durchgang. Patente = floor(sqrt(verdient / 100 000)). Patentbaum mit dauerhaften Boni und neuen Welten.
@@ -216,5 +216,9 @@ Leons Wunsch: „Wenn ich auf einer Ressource 4 Fabriken habe, soll daraus eine 
 Ein gestauter Bohrer/eine gestaute Maschine bekommt in `diagnose` die Schlüssel `diag.flowCons` („noch 4× Schmelzofen nötig“), `diag.flowBelt` (Band zu langsam) oder `diag.flowWrong` (festes Rezept nimmt das Teil nicht). Das Info-Panel zeigt den Block „Durchsatz“ (liefert / Band trägt / Abnehmer schaffen) mit der Warnung, auch bevor sich etwas staut.
 
 ## Mehr Platz, Band-Einmündungen (17.11.2026)
-- Land: `PLOT_COST = 500`, Anstieg `PLOT_GROW = 1,7` je Grundstück (vorher 1000 × 2,5): 500, 850, 1.445, 2.457, 4.177 … Wer auf noch nicht gekauftes Nachbarland baut oder ein Band dorthin zieht, bekommt sofort den Kauf angeboten (Zeiger-Hinweis „klick, um das Grundstück zu kaufen“). Bot: Prestige 87:26 statt 97:48.
+- Land: `PLOT_COST = 1000`, Anstieg `PLOT_GROW = 1,7` je Grundstück (vorher 1000 × 2,5 für kleinere Flächen): 1.000, 1.700, 2.890, 4.913 … Wer auf noch nicht gekauftes Nachbarland baut oder ein Band dorthin zieht, bekommt sofort den Kauf angeboten (Zeiger-Hinweis „klick, um das Grundstück zu kaufen“). Bot: Prestige 87:26 statt 97:48.
 - Bänder, die seitlich in ein gerades Band laufen (auch Rutschen von Bohrern/Maschinen), zeigen dort eine offene Schiene mit Übergangsplatte: Band-Varianten `straightL` / `straightR` / `straightLR` (view.js `mergeKind` aus `n.feed`).
+
+## Größere Grundstücke (17.11.2026, SAVE_VERSION 3)
+Leon: „mehr Platz auf einer einzelnen Fläche“ → `PLOT = 24`, `PLOTS = 5` (Karte 120 × 120), Start (2,2). Die Start-Anordnung (Verkauf, vier Start-Vorkommen) liegt wie früher bei 48 (`START_BASE`), der neue Platz rechts und unten.
+Ältere Stände (v ≤ 2) behalten alle Koordinaten; `S.geo = 1` erzeugt Vorkommen, Ringe und die geräumte Startfläche wie früher (geprüft: alle 112 × 112 Felder gleich), gekaufte 16er-Grundstücke werden zu allen 24er-Grundstücken, die sie berühren. Neue Fabriken/Prestige: `geo = 2`. Bot: Prestige 77 min.
