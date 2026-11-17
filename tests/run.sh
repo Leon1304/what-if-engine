@@ -239,6 +239,21 @@ case " $names " in *" live-mode "*)
   if [ "$lm" = "auto=false t=3 at=5.00/0.00/-20.00 pick=true sky=null lim=400/88 stats=2/00:04/6 marker=true drag=true key=true click=true end=10/false/0 hud=none" ]; then echo "ok   live mode  $lm"
   else echo "FAIL live mode: '$lm'"; fail=1; fi;;
 esac
+# v3.52 crime-scene tools (tests/live-pick, game krimi/): views, a click in the middle of the crate's screen box picks the crate, the tiny coin gets its 44 px hull, screen(),
+#   the lid opens on the game clock after an event, lang() with texts, highlight list, inspect flies in and back, say() sets the actor's face
+case " $names " in *" live-pick "*)
+  lp=$(timeout 300 node render.mjs live-pick.html --probe "(async () => { const L = whatif.live; if (!L || !L.view) return 'nolive'; const W = ms => new Promise(r => setTimeout(r, ms));
+    const pump = setInterval(() => draw(DUR), 30), A = p => Promise.race([p, W(5000)]);   // render pages have no frame loop (EXPORT) → drive the frames so camera flights finish
+    const views = (L.views || []).join('/'); await A(L.view('v_main')); await W(300);
+    const sc = L.screen('crate'), pc = sc && (L.pick(sc.cx, sc.cy) || {}).id, so = L.screen('coin'), po = so && (L.pick(so.cx, so.cy) || {}).id;
+    const lid0 = LIVE.lid.rotation.x; L.events([{ id: 'bin_lid', at: L.now }]); await W(900); const lid1 = LIVE.lid.rotation.x;
+    const lg = await A(L.lang('de', { 'scene.note': 'HALLO' })); const hl = L.highlight('crate', true).join(','); L.highlight(null);
+    await A(L.inspect('coin')); const ins = L.inspecting; await A(L.inspect(null)); const back = L.inspecting;
+    L.say('hilde', { expr: 'nervous', talk: 1 }); await W(200); const ex = typeof LIVE.hilde.expr === 'function' ? LIVE.hilde.expr(L.now) : LIVE.hilde.expr;
+    clearInterval(pump); return [views, pc, po, Math.round(so ? Math.min(so.w, so.h) : 0), lid0.toFixed(1), lid1.toFixed(1), lg, hl, ins, back ?? 'none', ex].join(' '); })()" 2>&1 | tail -1 | tr -d '"')
+  set -- $lp
+  if [ "${2:-}" = crate ] && [ "${3:-}" = coin ] && [ "${4:-0}" -ge 44 ] && [ "${5:-}" = "0.0" ] && [ "${6:-0}" != "0.0" ] && [ "${7:-}" = de ] && [ "${8:-}" = crate ] && [ "${9:-}" = coin ] && [ "${10:-}" = none ] && [ "${10:-}" = none ] && [ "${11:-}" = nervous ]; then echo "ok   live pick  $lp"; else echo "FAIL live pick: $lp"; fail=1; fi;;
+esac
 # cover stage: thumbnails (THUMB, A/B variants → cover-b.jpg …) of example + every scene with an A/B THUMB array; COVERS=all = every scene that defines THUMB
 cv=""; for s in $names; do case "$s" in example) cv="$cv $s";; *) [ -f "$s.html" ] || continue; if [ "${COVERS:-}" = all ]; then grep -q '^const THUMB' "$s.story.js" && cv="$cv $s"; else grep -q '^const THUMB = \[' "$s.story.js" && cv="$cv $s"; fi;; esac; done
 cover() { s=$1; rm -f "cover_$s.jpg" "cover_$s"-[a-h].jpg; timeout 900 node render.mjs "$s.html" --cover "cover_$s.jpg" > "cover_$s.log" 2>&1; n=$(grep -c '^const THUMB = \[' "$s.story.js" 2>/dev/null); want=$(( n > 0 ? 2 : 1 ))

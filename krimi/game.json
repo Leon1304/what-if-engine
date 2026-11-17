@@ -1,0 +1,18 @@
+{
+  "title": "Red String",
+  "tagline": "Kleine Kriminalfälle am Tatort lösen – mit Lupe, Verhör und rotem Faden an der Pinnwand",
+  "tagline_en": "Solve small crimes with a magnifier, interrogations and a red string on the cork board",
+  "description": "Detektivspiel mit erfundenen Fällen: Akte lesen, den Tatort untersuchen, Zeugen befragen und Widersprüche vorhalten. An der Pinnwand verbindet man Spuren, Aussagen und Personen mit Fäden, bis die Geschichte trägt, und erhebt Anklage mit drei Belegen. Zum Schluss die Nachstellung. Kein Zeitdruck, kein Verlieren. Deutsch und Englisch.",
+  "genre": "Krimi · Rätsel",
+  "tags": ["Krimi", "Rätsel", "Gemütlich", "Handy"],
+  "controls": ["Maus", "Touch", "Tastatur"],
+  "status": "neu",
+  "added": "2026-11-16",
+  "order": 15,
+  "color": "#b3261e",
+  "emoji": "🧶",
+  "cover": "cover.jpg",
+  "files": ["index.html", "css", "js", "cases"],
+  "save": "krimi.",
+  "coverShot": { "wait": 2500, "click": ["[data-act=\"new\"]", "[data-case]"], "after": 1500 }
+}

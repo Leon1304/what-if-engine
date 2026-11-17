@@ -9,7 +9,10 @@ node_modules
 *.blend1
 _site/
 
-# What If Town: Build-Ergebnis (bash sandbox/build.sh)
-sandbox/world.html
+# What If Town: Build-Nebenprodukte (world.html selbst liegt im Repo, damit das Spiel online läuft)
 sandbox/.world.check.mjs
 sandbox/world.events.json
+
+# Red String: Build-Nebenprodukte (world.html liegt im Repo)
+krimi/cases/*/.world.check.mjs
+krimi/cases/*/world.events.json

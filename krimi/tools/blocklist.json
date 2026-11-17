@@ -1,0 +1,31 @@
+{
+  "_comment": "Ton-Sperrliste für case-check.mjs (ganze Wörter, ohne Groß/Klein). words.<sprache>.all gilt in jedem Fall, words.<sprache>.murder nur außerhalb von Mordfällen (meta.kind: murder erlaubt sie). words.* gilt für jede Sprache. names: echte Kriminalfälle und bekannte Personen → nur Warnung.",
+  "words": {
+    "*": { "all": ["gore"], "murder": [] },
+    "de": {
+      "all": [
+        "blut", "blutig", "blutet", "blutend", "blutlache", "wunde", "wunden", "verwundet", "messer", "messerstich", "dolch", "klinge",
+        "waffe", "waffen", "pistole", "revolver", "gewehr", "erstochen", "erschossen", "erschlagen", "erwürgt",
+        "leiche", "leichen", "eingeweide", "gehirn", "schädel", "folter", "gefoltert", "massaker", "abgeschlachtet", "zerstückelt",
+        "selbstmord", "suizid"
+      ],
+      "murder": ["tot", "tote", "toter", "toten", "tod", "todes", "gift", "giftig", "vergiftet", "mord", "morde", "mörder", "mörderin", "ermordet", "töten", "getötet"]
+    },
+    "en": {
+      "all": [
+        "blood", "bloody", "bleeding", "bled", "wound", "wounds", "wounded", "knife", "knives", "dagger", "blade",
+        "weapon", "weapons", "pistol", "revolver", "gun", "guns", "rifle", "stabbed", "stabbing", "shot dead", "strangled", "beaten to death",
+        "corpse", "corpses", "guts", "brains", "skull", "torture", "tortured", "massacre", "slaughter", "slaughtered", "dismembered", "suicide"
+      ],
+      "murder": ["dead", "death", "died", "poison", "poisoned", "poisonous", "murder", "murdered", "murderer", "kill", "killed", "killer"]
+    }
+  },
+  "names": [
+    "Jack the Ripper", "Ted Bundy", "Jeffrey Dahmer", "Charles Manson", "John Wayne Gacy", "Zodiac", "Lizzie Borden", "Al Capone",
+    "Fritz Haarmann", "Peter Kürten", "Jürgen Bartsch", "Josef Fritzl", "Natascha Kampusch", "Madeleine McCann", "JonBenét Ramsey",
+    "O. J. Simpson", "Ed Gein", "Harold Shipman", "Fred West", "Rose West", "Ian Brady", "Myra Hindley", "Aileen Wuornos",
+    "Gladbeck", "Dr. Crippen", "Bonnie Parker", "Clyde Barrow", "Ronnie Biggs", "Monika Weimar", "Vera Brühne",
+    "Sherlock Holmes", "Hercule Poirot", "Miss Marple", "Columbo", "Derrick", "Schimanski",
+    "Angela Merkel", "Olaf Scholz", "Donald Trump", "Elon Musk", "Taylor Swift", "Helene Fischer", "Thomas Gottschalk", "Dieter Bohlen"
+  ]
+}

@@ -13,11 +13,12 @@
     "Maus",
     "Tastatur"
   ],
-  "status": "bald",
+  "status": "neu",
   "added": "2026-11-17",
   "order": 30,
   "color": "#e8873a",
   "emoji": "☄️",
+  "cover": "cover.jpg",
   "files": [
     "index.html",
     "js",

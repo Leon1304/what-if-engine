@@ -1,0 +1,90 @@
+/* Pinnwand: Kork, Karten (Fotos, Zettel, Karteikarten), Fäden als SVG */
+.board { position: absolute; inset: 0; display: flex; flex-direction: column; }
+.btools { flex: none; display: flex; align-items: center; gap: 8px; padding: 8px 12px; flex-wrap: wrap; background: #1b1511; border-bottom: 1px solid #33281f; }
+.btools .lbl { color: var(--light2); font: 400 13px/1 var(--type); letter-spacing: .12em; text-transform: uppercase; }
+.spool { appearance: none; cursor: pointer; min-height: 44px; padding: 4px 12px 4px 6px; border-radius: 22px; border: 2px solid transparent; background: #261e18; color: var(--light);
+  display: inline-flex; align-items: center; gap: 8px; font-weight: 700; font-size: 14px; }
+.spool i { width: 30px; height: 30px; border-radius: 50%; flex: none; box-shadow: inset 0 0 0 3px rgba(0,0,0,.25), inset 0 0 0 6px rgba(255,255,255,.18);
+  background: repeating-linear-gradient(0deg, var(--c) 0 3px, color-mix(in srgb, var(--c) 70%, #000) 3px 5px); }
+.spool[aria-pressed=true] { border-color: var(--c); background: #33271f; }
+.spool.red { --c: #c8322a; } .spool.green { --c: #2f8a55; } .spool.blue { --c: #3b6fc0; }
+.btools .help { color: var(--light2); font-size: 13px; flex: 1 1 220px; min-width: 0; }
+.btools .count { color: var(--light2); font-size: 13px; white-space: nowrap; }
+
+.cork-scroll { position: relative; flex: 1 1 auto; min-height: 0; overflow-y: auto; overflow-x: hidden; overscroll-behavior: contain; }
+.cork { position: relative; min-height: 100%;
+  background-color: #b48552;
+  background-image:
+    radial-gradient(circle at 20% 30%, rgba(80,45,15,.35) 0 1px, transparent 1.6px),
+    radial-gradient(circle at 70% 60%, rgba(255,230,190,.18) 0 1px, transparent 1.8px),
+    radial-gradient(circle at 45% 80%, rgba(60,30,10,.3) 0 1.2px, transparent 2px),
+    radial-gradient(130% 90% at 50% 40%, transparent 55%, rgba(40,20,5,.45));
+  background-size: 7px 7px, 11px 13px, 17px 15px, 100% 100%;
+  box-shadow: inset 0 0 0 10px #5b3b22, inset 0 0 0 12px #3d2716, inset 0 6px 30px rgba(0,0,0,.4); }
+.cork .empty { position: absolute; left: 50%; top: 40%; transform: translate(-50%, -50%); width: min(420px, 80%); text-align: center; background: var(--note); color: var(--ink);
+  padding: 16px; font: 400 18px/1.35 var(--hand); box-shadow: 0 6px 14px rgba(0,0,0,.35); rotate: -2deg; }
+svg.strings { position: absolute; left: 0; top: 0; overflow: visible; pointer-events: none; z-index: 3; }
+svg.strings path { fill: none; stroke-linecap: round; }
+svg.strings .th { stroke-width: 3.2; filter: drop-shadow(0 2px 1.5px rgba(0,0,0,.45)); }
+svg.strings .th.loose { opacity: .78; stroke-dasharray: none; }
+svg.strings .th.red, svg.strings .knot.red { stroke: #c8322a; } svg.strings .th.green, svg.strings .knot.green { stroke: #2f8a55; } svg.strings .th.blue, svg.strings .knot.blue { stroke: #3b6fc0; }
+svg.strings .knot { fill: #f2e6cf; stroke-width: 3; }
+svg.strings .knot.hot { fill: var(--gold); r: 11; }
+svg.strings .tmp { stroke-width: 3.2; stroke-dasharray: 8 6; opacity: .9; }
+
+.card { position: absolute; width: var(--cw, 158px); z-index: 2; touch-action: none; cursor: grab; user-select: none; -webkit-user-select: none;
+  transform: rotate(var(--rot, 0deg)); transition: box-shadow .15s, transform .2s; filter: drop-shadow(0 6px 8px rgba(0,0,0,.4)); }
+.card:hover { z-index: 4; }
+.card.drag { cursor: grabbing; z-index: 6; transform: rotate(0deg) scale(1.04); filter: drop-shadow(0 14px 16px rgba(0,0,0,.45)); transition: none; }
+.card.target { outline: 3px solid var(--gold); outline-offset: 3px; }
+.card.sel { outline: 3px dashed var(--gold); outline-offset: 3px; }
+.card.born { animation: born .9s cubic-bezier(.2,1.4,.4,1) both; }
+@keyframes born { 0% { transform: rotate(-20deg) scale(.2); opacity: 0; } 60% { opacity: 1; } 100% { transform: rotate(var(--rot, 0deg)) scale(1); } }
+.card .face { position: relative; padding: 8px 8px 10px; color: var(--ink); font-size: 13px; line-height: 1.25; overflow: hidden; }
+.card .kind { font: 400 10px/1 var(--type); letter-spacing: .12em; text-transform: uppercase; color: var(--ink2); margin-bottom: 4px; }
+.card .txt { display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }
+.card .who { font: 700 12px/1.2 var(--font); color: var(--ink2); margin-top: 4px; }
+.card .pin { position: absolute; left: 50%; top: -20px; width: 44px; height: 44px; margin-left: -22px; display: grid; place-items: center; cursor: crosshair; z-index: 5; touch-action: none; }
+.card .pin::before { content: ''; width: 16px; height: 16px; border-radius: 50%; background: radial-gradient(circle at 35% 30%, #ff8a7a, #c8322a 55%, #7c1610);
+  box-shadow: 0 3px 3px rgba(0,0,0,.45); }
+.card .pin:hover::before { transform: scale(1.25); }
+/* Fotos (Personen, Spuren) */
+.card.k-person .face, .card.k-clue .face { background: #f6f0e2; padding: 7px 7px 10px; }
+.card .photo { height: 84px; margin-bottom: 7px; background: #2c3238; overflow: hidden; position: relative; display: grid; place-items: center; color: #d9d2c0; }
+.card .photo .ico { width: 40px; height: 40px; opacity: .85; }
+.card .photo .num { position: absolute; right: 6px; bottom: 6px; width: 22px; height: 20px; background: linear-gradient(#ffd23c, #e8b311); color: #111; font: 800 11px/1 var(--font);
+  clip-path: polygon(50% 0, 100% 100%, 0 100%); display: grid; place-items: end center; padding-bottom: 3px; }
+.card.k-person .photo { background: #3b3f45; }
+.card.k-person b { display: block; font-size: 14px; }
+.card.k-person small { display: block; color: var(--ink2); font-size: 12px; }
+/* Zettel (Aussagen) */
+.card.k-statement .face { background: linear-gradient(var(--note), var(--note2)); font: 400 15px/1.25 var(--hand); padding-top: 12px; }
+.card.k-statement .txt { -webkit-line-clamp: 5; }
+.card.k-statement .face::after { content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 10px; background: linear-gradient(transparent, rgba(0,0,0,.06)); }
+/* Karteikarten (Erkenntnisse, Orte) */
+.card.k-insight .face, .card.k-place .face { background: #fffdf6; background-image: linear-gradient(transparent 22px, rgba(200,50,42,.5) 22px, rgba(200,50,42,.5) 23px, transparent 23px),
+  repeating-linear-gradient(transparent 0 17px, rgba(43,94,166,.13) 17px 18px); background-position: 0 0, 0 28px; padding-top: 6px; }
+.card.k-insight .kind { color: var(--red); }
+.card.k-insight .txt { font-weight: 700; -webkit-line-clamp: 5; }
+.card.k-place .face { padding-bottom: 12px; }
+
+/* Details-Blatt einer Karte */
+.cdetail { display: flex; gap: 16px; align-items: flex-start; }
+.cdetail .big { flex: none; width: 150px; }
+.cdetail .big .photo { height: 150px; background: #2c3238; display: grid; place-items: center; color: #d9d2c0; }
+.cdetail .big .photo .ico { width: 64px; height: 64px; }
+.cdetail .txtbig { font-size: 18px; margin: 0 0 8px; }
+.cdetail .det { color: var(--ink2); margin: 0 0 8px; }
+.cdetail ul { margin: 6px 0 0; padding-left: 18px; color: var(--ink2); font-size: 14px; }
+@media (max-width: 520px) { .cdetail { flex-direction: column; } .cdetail .big { width: 128px; } .cdetail .big .photo { height: 110px; width: 100%; } }
+
+@media (max-width: 899px) {
+  .card { --cw: 134px; }
+  .card .photo { height: 66px; }
+  .card .face { font-size: 12px; }
+  .card.k-statement .face { font-size: 14px; }
+  .btools { padding: 6px 8px; gap: 6px; }
+  .btools .help { flex-basis: 100%; order: 9; font-size: 12px; }
+  .spool { font-size: 13px; padding-right: 10px; }
+}
+@media (max-width: 400px) { .spool span { display: none; } .spool { padding: 4px 6px; } }

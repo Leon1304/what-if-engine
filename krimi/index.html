@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#16110d">
+<title>Red String</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Special+Elite&family=Kalam:wght@400;700&family=Source+Sans+3:wght@400;600;700;800&display=swap">
+<link rel="stylesheet" href="css/krimi.css">
+<link rel="stylesheet" href="css/board.css">
+</head>
+<body>
+<div id="boot" aria-live="polite"><div class="boot-t">Red String</div><div class="boot-line"><i></i></div></div>
+
+<section id="menu" class="screen" hidden></section>
+
+<section id="game" class="screen" hidden>
+  <header class="bar">
+    <button class="ib" data-act="file" data-t-title="ui.nav.file" data-t-aria="ui.nav.file"><span class="ico" data-ico="file"></span><span class="lbl" data-t="ui.nav.fileShort"></span></button>
+    <div class="ctitle"><b id="caseTitle"></b><small id="progress"></small></div>
+    <nav class="tabs" role="tablist">
+      <button class="tab" role="tab" data-tab="scene"><span class="ico" data-ico="search"></span><span data-t="ui.nav.scene"></span></button>
+      <button class="tab" role="tab" data-tab="talk"><span class="ico" data-ico="chat"></span><span data-t="ui.nav.talk"></span></button>
+      <button class="tab" role="tab" data-tab="board"><span class="ico" data-ico="pin"></span><span data-t="ui.nav.board"></span><kbd class="k">Tab</kbd></button>
+      <button class="tab" role="tab" data-tab="accuse"><span class="ico" data-ico="gavel"></span><span data-t="ui.nav.accuse"></span></button>
+    </nav>
+    <div class="tools">
+      <button class="ib" data-act="notebook" data-t-title="ui.nav.notebookT" data-t-aria="ui.nav.notebook"><span class="ico" data-ico="book"></span></button>
+      <button class="ib" data-act="hint" data-t-title="ui.nav.hintT" data-t-aria="ui.nav.hint"><span class="ico" data-ico="bulb"></span></button>
+      <label class="langsel ib" data-t-title="ui.settings.lang"><span class="ico" data-ico="globe"></span><select id="langSel" data-t-aria="ui.settings.lang"></select></label>
+      <button class="ib" data-act="menu" data-t-title="ui.nav.menu" data-t-aria="ui.nav.menu"><span class="ico" data-ico="menu"></span></button>
+    </div>
+  </header>
+  <div class="views">
+    <section class="view" id="v-scene" data-view="scene"><div class="stage-host"></div></section>
+    <section class="view" id="v-talk" data-view="talk"></section>
+    <section class="view" id="v-board" data-view="board"></section>
+    <section class="view" id="v-accuse" data-view="accuse"></section>
+  </div>
+</section>
+
+<div id="layer"></div>
+<div id="lab" aria-live="polite"></div>
+<div id="toasts" aria-live="polite"></div>
+<script type="module" src="js/main.js"></script>
+</body></html>

@@ -1,0 +1,166 @@
+{
+  "id": "c01-kuchen",
+  "meta": { "level": 1, "minutes": 12, "version": 1, "kind": "theft", "at": 920, "replay": 40, "clock": [900, 920] },
+
+  "places": [
+    { "id": "kitchen", "views": [{ "id": "v_entry" }, { "id": "v_counter" }, { "id": "v_back" }], "walk": { "garden": 1 } },
+    { "id": "garden", "views": [], "walk": { "kitchen": 1 } }
+  ],
+
+  "people": [
+    { "id": "hilde",   "type": "human", "suspect": false, "mood": "angry",   "stand": "v_counter",
+      "look": { "build": "old", "hairStyle": "bun", "hair": "#e4e0d8", "shirt": "#7a3f5e", "skirt": "#3d3346", "glasses": true } },
+    { "id": "marlene", "type": "human", "suspect": true,  "mood": "smug",    "stand": "v_entry", "cleared": "marlene_jury",
+      "look": { "build": "woman", "hairStyle": "short", "hair": "ginger", "shirt": "#3f6b5a", "pants": "#2c2c34", "apron": "#f1ede3", "flour": true } },
+    { "id": "timo",    "type": "human", "suspect": true,  "mood": "nervous", "stand": "v_back",
+      "look": { "build": "kid", "hatStyle": "capBack", "hat": "#d24a3a", "shirt": "#3b7dd8", "pants": "#4a5568", "shoeSize": 35 } },
+    { "id": "bruno",   "type": "dog", "breed": "dachshund", "suspect": true, "mood": "guilty", "stand": "v_back", "cleared": "bruno_lured",
+      "look": { "fur": "#8a4b22", "collar": "#2f6fb0", "cream": true, "crumbs": true } },
+    { "id": "pia",  "type": "human", "lab": true, "suspect": false, "mood": "deadpan",
+      "look": { "build": "woman", "coat": true, "glasses": true, "hairStyle": "curly", "hair": "black" } },
+    { "id": "otto", "type": "human", "lab": true, "suspect": false, "mood": "happy",
+      "look": { "build": "heavy", "beard": true, "hatStyle": "cap", "hat": "#5b6b3a" } }
+  ],
+
+  "facts": [
+    { "id": "cake_there",       "person": "hilde",   "place": "kitchen", "at": 905 },
+    { "id": "hilde_jury",       "person": "hilde",   "place": "garden",  "at": 906, "timeEnd": 920 },
+    { "id": "marlene_jury",     "person": "marlene", "place": "garden",  "at": 900, "timeEnd": 920 },
+    { "id": "marlene_rival",    "person": "marlene" },
+    { "id": "timo_sent_in",     "person": "timo",    "place": "kitchen", "at": 905 },
+    { "id": "crash",                                 "place": "kitchen", "at": 910 },
+    { "id": "cake_fell",                             "place": "kitchen", "at": 910 },
+    { "id": "small_shoe",                            "place": "kitchen" },
+    { "id": "timo_alone",       "person": "timo",    "place": "kitchen", "at": 910 },
+    { "id": "bruno_in_kitchen", "person": "bruno",   "place": "kitchen", "at": 911 },
+    { "id": "bruno_lured",      "person": "bruno",   "place": "garden",  "at": 912 },
+    { "id": "timo_biscuits",    "person": "timo" },
+    { "id": "kitchen_ban",      "person": "timo" },
+    { "id": "timo_afraid",      "person": "timo" },
+    { "id": "bruno_ate",        "person": "bruno", "truth": false, "refuted": "bruno_lured" }
+  ],
+
+  "topics": [
+    { "id": "tp_cake" },
+    { "id": "tp_where" },
+    { "id": "tp_bruno" },
+    { "id": "tp_plate",    "after": ["plate_crack"] },
+    { "id": "tp_print",    "after": ["sugar_print"] },
+    { "id": "tp_biscuits", "after": ["bruno_crumbs", "biscuit_pack"] },
+    { "id": "tp_note",     "after": ["fridge_note"] }
+  ],
+
+  "clues": [
+    { "id": "fridge_note",  "place": "kitchen", "view": "v_back",    "obj": "fridge_paper",   "find": "look",
+      "supports": ["kitchen_ban"], "born": 0 },
+    { "id": "cherry_floor", "place": "kitchen", "view": "v_back",    "obj": "cherry",         "find": "zoom",
+      "supports": ["cake_fell"], "born": 12 },
+    { "id": "sugar_print",  "place": "kitchen", "view": "v_counter", "obj": "sugar_patch",    "find": "zoom",
+      "supports": ["small_shoe"], "born": 13 },
+    { "id": "bruno_crumbs", "place": "kitchen", "view": "v_back",    "obj": "bruno_fur",      "find": "zoom",
+      "supports": ["bruno_lured"], "born": 23.2 },
+    { "id": "biscuit_pack", "place": "kitchen", "view": "v_back",    "obj": "biscuit_packet", "find": "open", "opens": "timo_jacket",
+      "needs": ["bruno_crumbs"], "supports": ["timo_biscuits"], "born": 25 },
+    { "id": "plate_crack",  "place": "kitchen", "view": "v_back",    "obj": "cracked_plate",  "find": "open", "opens": "bin_lid",
+      "supports": ["cake_fell"], "born": 29.9 }
+  ],
+
+  "statements": [
+    { "id": "s_h_cake",   "person": "hilde", "topic": "tp_cake",  "expr": "angry",   "claims": ["cake_there"] },
+    { "id": "s_h_where",  "person": "hilde", "topic": "tp_where", "expr": "smug",    "claims": ["marlene_jury", "hilde_jury"] },
+    { "id": "s_h_forks",  "person": "hilde", "topic": "tp_where", "expr": "calm",    "claims": ["timo_sent_in"] },
+    { "id": "s_h_bruno",  "person": "hilde", "topic": "tp_bruno", "expr": "angry",   "claims": ["bruno_ate"], "guess": true, "react": "point" },
+    { "id": "s_h_bruno2", "person": "hilde", "topic": "tp_bruno", "expr": "blush",   "follow": true, "react": "sigh" },
+    { "id": "s_h_plate",  "person": "hilde", "topic": "tp_plate", "expr": "surprised" },
+    { "id": "s_h_print",  "person": "hilde", "topic": "tp_print", "expr": "smug" },
+    { "id": "s_h_note",   "person": "hilde", "topic": "tp_note",  "expr": "sad",     "claims": ["kitchen_ban"] },
+
+    { "id": "s_m_cake",     "person": "marlene", "topic": "tp_cake",     "expr": "nervous", "claims": ["marlene_rival"] },
+    { "id": "s_m_flour",    "person": "marlene", "topic": "tp_cake",     "expr": "annoyed" },
+    { "id": "s_m_where",    "person": "marlene", "topic": "tp_where",    "expr": "smug",    "claims": ["marlene_jury"] },
+    { "id": "s_m_crash",    "person": "marlene", "topic": "tp_where",    "expr": "calm",    "claims": ["crash"] },
+    { "id": "s_m_bruno",    "person": "marlene", "topic": "tp_bruno",    "expr": "deadpan" },
+    { "id": "s_m_plate",    "person": "marlene", "topic": "tp_plate",    "expr": "determined" },
+    { "id": "s_m_print",    "person": "marlene", "topic": "tp_print",    "expr": "smug",    "react": "shrug" },
+    { "id": "s_m_biscuits", "person": "marlene", "topic": "tp_biscuits", "expr": "deadpan", "claims": ["timo_biscuits"] },
+    { "id": "s_m_note",     "person": "marlene", "topic": "tp_note",     "expr": "calm",    "claims": ["kitchen_ban"] },
+
+    { "id": "s_t_cake",     "person": "timo", "topic": "tp_cake",     "expr": "nervous",       "claims": ["timo_sent_in"] },
+    { "id": "s_t_where",    "person": "timo", "topic": "tp_where",    "expr": "nervous",       "claims": ["timo_sent_in", "marlene_jury"] },
+    { "id": "s_t_bruno",    "person": "timo", "topic": "tp_bruno",    "expr": "nervous+sweat", "claims": ["bruno_in_kitchen"] },
+    { "id": "s_t_plate",    "person": "timo", "topic": "tp_plate",    "expr": "nervous+sweat" },
+    { "id": "s_t_print",    "person": "timo", "topic": "tp_print",    "expr": "confused" },
+    { "id": "s_t_biscuits", "person": "timo", "topic": "tp_biscuits", "expr": "happy",         "claims": ["timo_biscuits"] },
+    { "id": "s_t_note",     "person": "timo", "topic": "tp_note",     "expr": "sad",           "claims": ["kitchen_ban"] },
+
+    { "id": "s_b_cake",     "person": "bruno", "topic": "tp_cake",     "kind": "action" },
+    { "id": "s_b_where",    "person": "bruno", "topic": "tp_where",    "kind": "action" },
+    { "id": "s_b_bruno",    "person": "bruno", "topic": "tp_bruno",    "kind": "action" },
+    { "id": "s_b_biscuits", "person": "bruno", "topic": "tp_biscuits", "kind": "action" }
+  ],
+
+  "contradictions": [
+    { "id": "x_bruno", "statement": "s_h_bruno", "cards": ["plate_crack", "cake_fell"], "follow": "s_h_bruno2" }
+  ],
+
+  "deductions": [
+    { "id": "d_fell",    "from": ["cherry_floor", "plate_crack"], "kind": "blue",  "gives": "cake_fell" },
+    { "id": "d_when",    "from": ["sugar_print", "s_h_forks"],    "kind": "red",   "gives": "timo_alone" },
+    { "id": "d_when_b",  "from": ["sugar_print", "s_t_where"],    "kind": "red",   "gives": "timo_alone" },
+    { "id": "d_why",     "from": ["fridge_note", "plate_crack"],  "kind": "red",   "gives": "timo_afraid" },
+    { "id": "d_bruno",   "from": ["bruno_crumbs", "biscuit_pack"], "kind": "green", "gives": "bruno_lured" },
+    { "id": "d_marlene", "from": ["s_h_where", "s_t_where"],      "kind": "green", "gives": "marlene_jury" }
+  ],
+
+  "solution": {
+    "who": ["timo"], "how": "cake_fell", "when": "timo_alone", "why": "timo_afraid",
+    "cards": { "how": ["cake_fell"], "when": ["timo_alone"], "why": ["timo_afraid"] }
+  },
+
+  "hints": [
+    { "id": "h_fell",   "goal": "cake_fell" },
+    { "id": "h_when",   "goal": "timo_alone" },
+    { "id": "h_why",    "goal": "timo_afraid" },
+    { "id": "h_accuse", "goal": "accuse" }
+  ],
+
+  "objects": [
+    { "id": "counter",        "place": "kitchen", "view": "v_counter", "role": "prop",      "size": [2.4, 0.9, 0.65] },
+    { "id": "cake_dome",      "place": "kitchen", "view": "v_counter", "role": "prop",      "size": [0.32, 0.27, 0.32], "on": "counter" },
+    { "id": "cake_forks",     "place": "kitchen", "view": "v_counter", "role": "prop",      "size": [0.18, 0.03, 0.08], "on": "counter" },
+    { "id": "sugar_patch",    "place": "kitchen", "view": "v_counter", "role": "clue",      "size": [0.5, 0.003, 0.4] },
+    { "id": "stove",          "place": "kitchen", "view": "v_counter", "role": "prop",      "size": [0.9, 0.9, 0.65] },
+    { "id": "fridge",         "place": "kitchen", "view": "v_back",    "role": "prop",      "size": [0.7, 1.85, 0.7] },
+    { "id": "fridge_paper",   "place": "kitchen", "view": "v_back",    "role": "clue",      "size": [0.15, 0.21, 0.003], "on": "fridge", "readable": true, "langCheck": true },
+    { "id": "cherry",         "place": "kitchen", "view": "v_back",    "role": "clue",      "size": [0.025, 0.025, 0.025], "on": "fridge", "proxy": [0.12, 0.06, 0.12] },
+    { "id": "bin",            "place": "kitchen", "view": "v_back",    "role": "prop",      "size": [0.3, 0.45, 0.3] },
+    { "id": "bin_lid",        "place": "kitchen", "view": "v_back",    "role": "container", "size": [0.3, 0.03, 0.3], "on": "bin" },
+    { "id": "cracked_plate",  "place": "kitchen", "view": "v_back",    "role": "clue",      "size": [0.3, 0.04, 0.3], "in": "bin_lid" },
+    { "id": "coat_hooks",     "place": "kitchen", "view": "v_entry",    "role": "prop",      "size": [0.8, 0.1, 0.08] },
+    { "id": "timo_jacket",    "place": "kitchen", "view": "v_entry",    "role": "container", "size": [0.45, 0.6, 0.12], "on": "coat_hooks" },
+    { "id": "biscuit_packet", "place": "kitchen", "view": "v_entry",    "role": "clue",      "size": [0.06, 0.13, 0.03], "in": "timo_jacket" },
+    { "id": "back_door",      "place": "kitchen", "view": "v_back",    "role": "prop",      "size": [0.9, 2.0, 0.05] },
+    { "id": "bruno_snout",    "place": "kitchen", "view": "v_back",    "role": "prop",      "size": [0.06, 0.05, 0.08], "on": "bruno" },
+    { "id": "bruno_fur",      "place": "kitchen", "view": "v_back",    "role": "clue",      "size": [0.12, 0.08, 0.1], "on": "bruno" },
+    { "id": "sink",           "place": "kitchen", "view": "v_entry",   "role": "prop",      "size": [1.2, 0.9, 0.6] },
+    { "id": "shelf",          "place": "kitchen", "view": "v_entry",   "role": "prop",      "size": [1.0, 0.25, 0.3] },
+    { "id": "otto_thermos",   "place": "kitchen", "view": "v_entry",   "role": "extra",     "size": [0.09, 0.3, 0.09], "on": "shelf" },
+    { "id": "window",         "place": "kitchen", "view": "v_entry",   "role": "prop",      "size": [1.2, 1.0, 0.1] },
+    { "id": "wall_clock",     "place": "kitchen", "view": "v_entry",   "role": "prop",      "size": [0.3, 0.3, 0.05] }
+  ],
+
+  "extras": {
+    "thermos": { "obj": "otto_thermos", "place": "kitchen", "badge": "otto_thermos" },
+    "lab": [
+      { "id": "otto_start",   "who": "otto", "on": "start" },
+      { "id": "pia_cream",    "who": "pia",  "on": "bruno_snout" },
+      { "id": "pia_cherry",   "who": "pia",  "on": "cherry_floor" },
+      { "id": "pia_print",    "who": "pia",  "on": "sugar_print" },
+      { "id": "pia_crumbs",   "who": "pia",  "on": "bruno_crumbs" },
+      { "id": "otto_flask",   "who": "otto", "on": "otto_thermos" },
+      { "id": "otto_solved",  "who": "otto", "on": "solved" }
+    ]
+  },
+
+  "renamed": {}
+}

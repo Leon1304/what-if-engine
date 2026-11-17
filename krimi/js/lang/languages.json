@@ -1,0 +1,7 @@
+{
+  "default": "en",
+  "languages": [
+    { "code": "de", "name": "Deutsch", "dir": "ltr", "locale": "de-DE", "hour12": false, "voice": { "narrator": "de-narrator" } },
+    { "code": "en", "name": "English", "dir": "ltr", "locale": "en-US", "hour12": true, "voice": { "narrator": "Declan Sage" } }
+  ]
+}
