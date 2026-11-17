@@ -743,7 +743,7 @@ function skyEnv() {
   scene.environment = tex;
 }
 const NLIFT = { night: 1, storm: 0.7, dusk: 0.35, deepsea: 0.4, apocalypse: 0.3 };   // v2.30 long videos: how much darker skies get lifted
-const ENVI = { underwater: 0.2, deepsea: 0.08, day: 0.3, golden: 0.24, dusk: 0.14, night: 0.15, dawn: 0.17, storm: 0.26, apocalypse: 0.12, space: 0.04 }, WINDY = { storm: 2.6, apocalypse: 1.7, dusk: 1.1, underwater: 1.8, deepsea: 1.2 };
+const ENVI = { underwater: 0.2, deepsea: 0.08, day: 0.3, golden: 0.24, dusk: 0.14, night: 0.15, dawn: 0.17, storm: 0.26, apocalypse: 0.12, space: 0.04, high: 0.3, strato: 0.12 }, WINDY = { storm: 2.6, apocalypse: 1.7, dusk: 1.1, underwater: 1.8, deepsea: 1.2 };
 scene.fog = new THREE.Fog('#000000', 40, 260);
 var FOGK = CFG.fogScale ?? Math.max(1, Math.min(2.2, (CFG.area ?? 36) / 60));
 if (CFG.mini && CFG.fogScale == null) FOGK *= typeof CFG.mini === 'object' ? CFG.mini.clear ?? 1.8 : 1.8;   // v3.37 miniature look: clear air like a tilt-shift photo (haze starts further out)   // fog distance × FOGK (ship() / aircraft() raise it for huge vessels so they don't vanish in the haze; v3.21: big sets with CFG.area > 60 m see further)
@@ -793,7 +793,11 @@ const SKIES = {
   mars:       { top: '#8C6A50', bot: '#E2B48A', fog: '#D0A07A', near: 40, far: 260, sun: '#FFE6CC', si: 2.2, el: 30, hs: '#E8C0A0', hg: '#5A2E1E', hi: 0.9, stars: 0, orb: 0.0012, glow: 0.5, exp: 1, nk: 0, cl: [0, 0.5, '#D8A880', '#C09070'] },
   jupiter:    { top: '#6A4A30', bot: '#E8C9A0', fog: '#D6B48C', near: 10, far: 90, sun: '#FFF0D8', si: 1.6, el: 60, hs: '#F0D8B8', hg: '#4A3020', hi: 1.0, stars: 0, orb: 0, glow: 0.3, exp: 1.05, nk: 0, cl: [0, 0.5, '#E0C090', '#B08060'] },
   neptune:    { top: '#06124A', bot: '#2E5EC8', fog: '#2448A8', near: 8, far: 80, sun: '#CFE0FF', si: 1.2, el: 50, hs: '#6A8AE0', hg: '#0A1440', hi: 0.9, stars: 0, orb: 0, glow: 0.2, exp: 1.1, nk: 0, cl: [0, 0.5, '#3A6AD8', '#1A3A90'] },
-  space:      { top: '#000004', bot: '#04071A', fog: '#04071A', near: 600, far: 1100, sun: '#FFFFFF', si: 3.2, el: 20, hs: '#334455', hg: '#000000', hi: 0.15, stars: 1, orb: 0.0016, glow: 0.8, exp: 1, nk: 0, cl: [0, 0.5, '#000000', '#000000'] }
+  space:      { top: '#000004', bot: '#04071A', fog: '#04071A', near: 600, far: 1100, sun: '#FFFFFF', si: 3.2, el: 20, hs: '#334455', hg: '#000000', hi: 0.15, stars: 1, orb: 0.0016, glow: 0.8, exp: 1, nk: 0, cl: [0, 0.5, '#000000', '#000000'] },
+  // v3.51 altitude skies: high = above the clouds (~10 km: deep blue zenith, pale haze at the horizon, no clouds overhead — put a cloudSea() below) ·
+  //   strato = stratosphere / edge of space (~20–40 km: black zenith, thin bright-blue band at the horizon, a few stars, hard sunlight; a planet('earth') below shows the curve)
+  high:       { top: '#0A3C9E', bot: '#A8CDF2', fog: '#B4D2F2', near: 260, far: 1150, sun: '#FFF8EC', si: 3.3, el: 38, hs: '#9EC2F0', hg: '#C8D4E4', hi: 1.05, stars: 0, orb: 0.0013, glow: 0.55, exp: 1, nk: 0, cl: [0, 0.5, '#000000', '#000000'] },
+  strato:     { top: '#010309', bot: '#1C4294', fog: '#2A56A8', near: 420, far: 1150, sun: '#FFFFFF', si: 3.6, el: 28, hs: '#5A80C0', hg: '#6C7C94', hi: 0.6, stars: 0.45, orb: 0.0011, glow: 0.9, exp: 1, nk: 0, cl: [0, 0.5, '#000000', '#000000'] }
 };
 // v3.5 night & storm: a moonlit key, cooler fill and a lifted ground colour of the hemisphere → shadowed sides stay readable (CFG.nightLook: false = the old, darker values)
 if (CFG.nightLook !== false) { Object.assign(SKIES.night, { sun: '#A9C1FF', si: 1.85, hs: '#7088CC', hg: '#2C3550', hi: 0.8 }); Object.assign(SKIES.storm, { si: 0.95, hs: '#93A0B4', hg: '#3C434E', hi: 0.9 }); }
@@ -816,7 +820,9 @@ const LOOK = {
   apocalypse: { rim: ['#FF8A50', 1.0], sh: ['#5A2414', 0.05], hl: ['#FF8A40', 0.04], sat: 1.03, con: 1.05, lift: ['#4A2414', 0.03], open: 0.3, rays: 0.8, haze: 1, dust: 1 },
   underwater: { rim: ['#BFF4FF', 0.6], sh: ['#0A4A70', 0.04], hl: ['#A0F0FF', 0.025], sat: 1, con: 1, lift: ['#0A3A50', 0.02], open: 0.2, rays: 0.9, haze: 0, dust: 0.8 },
   deepsea:    { rim: ['#7FD8FF', 0.8], sh: ['#062A50', 0.05], hl: ['#80DCFF', 0.02], sat: 1, con: 1, lift: ['#0A3050', 0.03], open: 0.35, rays: 0.5, haze: 0, dust: 0.8 },
-  space:      { rim: ['#DDE6FF', 0.6], rays: 0, haze: 0, dust: 0 }
+  space:      { rim: ['#DDE6FF', 0.6], rays: 0, haze: 0, dust: 0 },
+  high:       { rim: ['#FFF4E0', 0.55], sh: ['#3A66C8', 0.04], hl: ['#FFE6C0', 0.03], sat: 1.06, con: 1, lift: ['#20304A', 0.004], open: 0.06, rays: 0.2, haze: 0, dust: 0 },
+  strato:     { rim: ['#CFE0FF', 0.8], sh: ['#2A4C9A', 0.05], hl: ['#FFF2DC', 0.02], sat: 1.04, con: 1, lift: ['#101C34', 0.01], open: 0.18, rays: 0, haze: 0, dust: 0 }
 };
 // look v2: complementary light — warm key, cool shadows (each sky had one hue for key, fill, fog, rim and grade); contrast now comes from the tone curve (con 1 everywhere),
 //   nights and storms no longer desaturated. Golden / dusk / dawn: ground haze × 0.7 (it swallowed the background in the same colour).
@@ -1715,7 +1721,7 @@ function runBiome(kind, o) {
 // dressing that matches the ground colour (green → plain + hills · sand → plain-sand + mesa · white → plain-snow + snow · grey → plain-stone + skyline, dark grey → hills):
 // sparse trees, bushes and rocks in a ring beyond everything built, tufts, pebbles and a few flowers in the play area — cameras, paths, props and crowds stay free
 // (runBiome). Not under water, in space or on planets. Off: ground({ dress: false }) or CFG.autoDress: false. Own RNG; the global one is restored afterwards.
-const NODRESS_SKY = ['underwater', 'deepsea', 'space', 'mercury', 'venus', 'mars', 'jupiter', 'neptune'];
+const NODRESS_SKY = ['underwater', 'deepsea', 'space', 'mercury', 'venus', 'mars', 'jupiter', 'neptune', 'high', 'strato'];
 function autoDress() {
   if (_dressed || CFG.autoDress === false || GROUND.dress === false || SKY.some(([, n]) => NODRESS_SKY.includes(n))) return;
   const hx = String(GROUND.color ?? '#5F7F3B').replace('#', ''), [r, g, b] = [0, 2, 4].map(i => parseInt(hx.slice(i, i + 2), 16) / 255), mx = Math.max(r, g, b), mn = Math.min(r, g, b), l = (mx + mn) / 2, sat = mx === mn ? 0 : (mx - mn) / (1 - Math.abs(2 * l - 1));
@@ -15148,6 +15154,12 @@ function faceFx(f, kind, t0, t1, o = {}) {
   if (kind === 'sweat') for (let i = 0; i < 3; i++) { const d = dyn(_glyph(g, 'drop', '#8FD8FF')); F.push(t => { const k = ((t - t0) / 0.9 + i / 3) % 1, sx = i % 2 ? 1 : -1; d.position.set(sx * 0.21, 0.36 - 0.35 * k * k, 0.12); d.scale.setScalar(on(t) ? Math.min(1, k * 6) * (1 - k * 0.4) : 0); }); }
   else if (kind === 'tears') for (const sx of [-1, 1]) { const st = dyn(grp(g, sx * 0.085, 0.17, 0.2)); box(st, 0.035, 1, 0.012, '', 0, -1, 0, { mat: mat('#7FC8FF', { basic: true, opacity: 0.85 }), cast: false }); const dr = dyn(_glyph(g, 'drop', '#7FC8FF'));
     F.push(t => { const k = clamp((t - t0) / 0.5); st.scale.y = on(t) ? 0.2 * k : 0; const q = ((t - t0) / 0.6 + (sx > 0 ? 0.5 : 0)) % 1; dr.position.set(sx * 0.1, -0.05 - 0.6 * q * q, 0.2); dr.scale.setScalar(on(t) && t > t0 + 0.4 ? 1 : 0); }); }
+  else if (kind === 'boil') {   // v3.51: exposed water boils at body temperature (Armstrong limit, vacuum): bubbles fizz on the lips and in the eyes, wisps of vapour rise off them
+    const BM = mat('#EAF6FF', { basic: true, opacity: 0.9 }), VM = mat('#F4F8FC', { basic: true, opacity: 0.55 }), spots = [[0, -0.015, 0.215, 0.05], [-0.085, 0.115, 0.21, 0.02], [0.085, 0.115, 0.21, 0.02]];
+    spots.forEach(([sx, sy, sz, w], si) => { for (let i = 0; i < (si ? 2 : 7); i++) { const b = dyn(grp(g)); ball(b, 0.005 + 0.004 * hash(i + si * 9), '', 0, 0, 0, { mat: BM, detail: 1, cast: false }); const ph = hash(i * 3.3 + si);
+      F.push(t => { const k = ((t - t0) * 2.6 + ph) % 1, on2 = on(t) && t > t0 + 0.1 * si; b.position.set(sx + (hash(i * 7 + si) - 0.5) * w, sy + (hash(i * 5 + si) - 0.5) * w * 0.5 + 0.02 * k, sz + 0.01 * k); b.scale.setScalar(on2 ? Math.sin(Math.PI * k) * 1.2 : 0); }); }
+      for (let i = 0; i < 3; i++) { const v = dyn(grp(g)); ball(v, 0.016, '', 0, 0, 0, { mat: VM, detail: 1, cast: false }); F.push(t => { const k = ((t - t0) / 0.9 + i / 3 + si * 0.2) % 1; v.position.set(sx + 0.03 * Math.sin(k * 5 + i), sy + 0.03 + 0.22 * k, sz + 0.03 * k); v.scale.setScalar(on(t) ? (0.5 + 1.6 * k) * (1 - k) * 1.4 : 0); }); } });
+    const nh = AUDIO.hits?.length ?? 0; sfx(t0, 'boil', o.vol ?? 0.5); if ((AUDIO.hits?.length ?? 0) > nh) AUDIO.hits[nh].dur = Math.max(0.5, t1 - t0); }
   else if (kind === 'blush') for (const sx of [-1, 1]) { const b = dyn(grp(g, sx * 0.115, 0.11, 0.196)); box(b, 0.08, 0.04, 0.006, '', 0, 0, 0, { mat: mat('#FF5A6E', { basic: true, opacity: 0.75 }), cast: false }); F.push(t => { b.scale.setScalar(env3(t, t0, t1, 0.3, 0.3)); }); }
   else if (kind === 'steam') for (let i = 0; i < 6; i++) { const b = dyn(grp(g)); ball(b, 0.06, '', 0, 0, 0, { mat: mat('#F2F2F2', { basic: true, opacity: 0.85 }), detail: 1, cast: false }); const sx = i % 2 ? 1 : -1;
     F.push(t => { const k = ((t - t0) / 0.7 + i / 6) % 1; b.position.set(sx * (0.22 + 0.15 * k), 0.15 + 0.35 * k, -0.02); b.scale.setScalar(on(t) ? (0.6 + 1.8 * k) * (1 - k) : 0); }); }
@@ -16043,6 +16055,60 @@ function volcano(p, x, z, o = {}) {
     glow(x, y + top + 6, z, { t0: te, t1: DUR, intensity: 120, dist: 120, color: '#FF6A2A' }); SHAKES.push({ t: VT(te), amp: 0.6, dur: 2.5 }); sfx(te, 'explosion', 1.3); sfx(te + 0.2, 'rumble', 1); AUDIO.hits[AUDIO.hits.length - 1].dur = 6; }
   return g;
 }
+// v3.51 mountain(p, x, z, { h: 320, r: 420, y, ridges: 4, seed, snow: 0.45, rock, flags: true, plume: true, climbers: 0 }) → { g, summit: [x,y,z], at(u, az) }
+//   A big high-mountain peak (Himalaya-style): faceted rock with sharp ridges running down from the summit, rock bands and gullies, snow and ice where the slope is gentle and
+//   above the snow line (snow = share of the height from the top, 0..1), a small corniced snow summit, a spindrift plume blowing off downwind (plume, from CFG.sunAz side away),
+//   strings of faded prayer flags from the summit cairn (flags), optional climbers in down suits roped on the summit ridge (climbers: n). y = base height (sink it into a cloudSea).
+//   at(u, az) = a point on the slope (u = 0 summit … 1 foot, az in degrees) for callouts and camera targets. Static (baked), only plume and flags move.
+function mountain(p, x, z, o = {}) {
+  const H = o.h ?? 320, R = o.r ?? 420, Y = o.y ?? 0, NR = o.ridges ?? 4, sd = o.seed ?? 3.7, SN = o.snow ?? 0.45, g = grp(p ?? world, x, Y, z), NC = { cast: false };
+  const RING = 44, SEG = 120, rA = [...Array(NR).keys()].map(i => i / NR * TAU + (hash(sd + i) - 0.5) * 0.9);
+  const prof = (u, a) => { let k = 0; for (const ra of rA) { const d = Math.atan2(Math.sin(a - ra), Math.cos(a - ra)); k = Math.max(k, Math.pow(Math.max(0, Math.cos(d)), 26)); }
+    const n = noise2(Math.cos(a) * u * 6 + sd, Math.sin(a) * u * 6 - sd) - 0.5, n2 = noise2(Math.cos(a) * u * 19 + sd * 2, Math.sin(a) * u * 19) - 0.5;
+    return { h: H * Math.pow(1 - u, 1.25) * (1 + 0.18 * n * u) + H * 0.1 * k * Math.sin(Math.PI * Math.min(1, u * 1.2)) - H * 0.035 * (1 - k) * Math.sin(u * 40 + a * 3) * u + n2 * H * 0.02 * u, rr: u * R * (1 + 0.22 * n) * (1 - 0.1 * k) }; };
+  const pos = [], col = [], idx = [], c = new THREE.Color(), rock = new THREE.Color(o.rock ?? '#6E6258'), rock2 = new THREE.Color('#3E3A38'), snow = new THREE.Color('#F2F6FA'), ice = new THREE.Color('#CFE0EE');
+  pos.push(0, H, 0); for (let i = 1; i <= RING; i++) { const u = Math.pow(i / RING, 1.35); for (let j = 0; j < SEG; j++) { const a = j / SEG * TAU, P = prof(u, a); pos.push(Math.sin(a) * P.rr, P.h, Math.cos(a) * P.rr); } }
+  const V = (i, j) => 1 + (i - 1) * SEG + (j % SEG);
+  for (let j = 0; j < SEG; j++) idx.push(0, V(1, j), V(1, j + 1));
+  for (let i = 1; i < RING; i++) for (let j = 0; j < SEG; j++) { const a = V(i, j), b = V(i, j + 1), cc = V(i + 1, j), d = V(i + 1, j + 1); idx.push(a, cc, b, b, cc, d); }
+  let geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); geo.setIndex(idx); geo = geo.toNonIndexed(); geo.computeVertexNormals();
+  const PA = geo.attributes.position, NA = geo.attributes.normal; for (let i = 0; i < PA.count; i += 3) { const yy = (PA.getY(i) + PA.getY(i + 1) + PA.getY(i + 2)) / 3, ny = (NA.getY(i) + NA.getY(i + 1) + NA.getY(i + 2)) / 3, hh = yy / H;
+    const band = Math.sin(yy * 0.21 + hash(i * 0.11) * 0.6) > 0.55, sl = clamp((ny - 0.8 + (hh - (1 - SN)) * 0.4) * 6) * (hh > 1 - SN ? 1 : 0), jn = (hash(i * 0.37) - 0.5) * 0.05;
+    c.copy(band ? rock2 : rock).offsetHSL(0, 0, jn); if (hh > 0.965) c.copy(snow); else if (sl > 0.5) c.copy(hash(i * 0.9) > 0.85 ? ice : snow).offsetHSL(0, 0, jn * 0.4); for (let k = 0; k < 3; k++) col.push(c.r, c.g, c.b); }
+  geo.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+  mesh(g, geo, new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.95 }), 0, 0, 0, { cast: true });
+  const top = [x, Y + H, z];
+  // summit: corniced snow cap and a cairn
+  _ell(g, '#F4F8FC', 0, H - 0.6, 0, 3.2, 1.6, 2.4, { detail: 2, rough: 0.9 }); _ell(g, '#E8EEF4', 2.2, H - 1.2, -0.6, 2.2, 1.0, 1.4, { detail: 1 });
+  for (let i = 0; i < 6; i++) box(g, 0.5 - i * 0.05, 0.3, 0.45 - i * 0.04, '#6A625C', (hash(i) - 0.5) * 0.1, H + 0.3 + i * 0.26, (hash(i * 2) - 0.5) * 0.1, { ry: i * 0.6 });
+  const M = { g, summit: top, at: (u, az) => { const a = az * Math.PI / 180, P = prof(u, a); return [x + Math.sin(a) * P.rr, Y + P.h, z + Math.cos(a) * P.rr]; } };
+  if (o.flags !== false) { const fl = dyn(grp(g, 0, H + 1.6, 0)), FC = ['#2E6FD8', '#F4F4F0', '#D8342A', '#3E9E4A', '#F2C531'], N = 3, flags = [];
+    for (let s = 0; s < N; s++) { const az = rA[s % NR] + 0.35, L = 9 + s * 3, ex = Math.sin(az) * L, ez = Math.cos(az) * L, P2 = prof(L / R, az), ey = P2.h - H - 1.1;
+      for (let k = 0; k < 14; k++) { const u = (k + 0.5) / 14, px = ex * u, pz = ez * u, py = ey * u - Math.sin(Math.PI * u) * 0.6, q = dyn(grp(fl, px, py, pz)); q.rotation.y = az + Math.PI / 2;
+        box(q, 0.34, 0.28, 0.01, '', 0, -0.3, 0, { mat: mat(FC[k % 5], { opacity: 0.92, rough: 0.9 }), cast: false }); flags.push([q, k + s * 3]); }
+      _seg(fl, [0, 0, 0], [ex, ey, ez], 0.008, 0.008, '#B8A88A', NC); }
+    tick(t => flags.forEach(([q, k]) => { q.rotation.x = 0.45 + 0.25 * Math.sin(t * 6 + k * 0.9); q.rotation.z = 0.08 * Math.sin(t * 7.3 + k); })); }
+  if (o.plume !== false) { const a = ((CFG.sunAz ?? 0) + 120) * Math.PI / 180; emit('smoke', { at: [x, Y + H + 2, z], t0: -5, t1: DUR + 1, rate: 7, size: H * 0.05, speed: H * 0.03, spread: 0.25, g: 0.05, life: 6, opacity: 0.35, lensOk: true, colors: ['#FFFFFF', '#EEF4FA'], wind: [Math.sin(a) * H * 0.04, Math.cos(a) * H * 0.04] }); }
+  M.climbers = []; for (let i = 0; i < (o.climbers ?? 0); i++) { const az = rA[0] * 180 / Math.PI, Pc = M.at(0.012 + i * 0.008, az), f = figure({ costume: 'winter', shirt: ['#E8322A', '#F2C531', '#2E86AB'][i % 3], expr: 'calm', look: 'cam' });
+    f.root.position.set(Pc[0] - x, Pc[1] - Y, Pc[2] - z); g.add(f.root); f.root.rotation.y = rA[0] + Math.PI; noHit(f); M.climbers.push(f); }
+  return M;
+}
+// v3.51 cloudSea(p, { x, z, y: 0, r: 1300, lumps: 14, color, shade, puffs: 70, drift: [3, 1] }) → { g, top(x, z) }
+//   A deck of cumulus seen from above (flights, mountain tops, balloons): a lumpy shaded cloud surface out to the horizon (the far edge fades into the sky fog) with soft puffs on
+//   top near the middle, the whole layer drifting slowly (drift m/s). Use it under SKY 'high' / 'day' / 'golden'; for a stratosphere view put a planet('earth') under it instead.
+function cloudSea(p, o = {}) {
+  const x = o.x ?? 0, z = o.z ?? 0, Y = o.y ?? 0, R = o.r ?? 1300, L = o.lumps ?? 14, g = dyn(grp(p ?? world, x, Y, z)), S = 110, [dx, dz] = o.drift ?? [3, 1];
+  const ht = (px, pz) => { const n = noise2(px * 0.011 + 3.1, pz * 0.011 - 1.7), n2 = noise2(px * 0.034 - 7, pz * 0.034 + 2), n3 = noise2(px * 0.09, pz * 0.09); return L * (Math.max(0, n - 0.32) * 1.6 + n2 * 0.45 + n3 * 0.12) - L * 0.25; };
+  const geo = new THREE.PlaneGeometry(2 * R, 2 * R, S, S); geo.rotateX(-Math.PI / 2); const P = geo.attributes.position, cols = [], cw = new THREE.Color(o.color ?? '#FFFFFF'), cs = new THREE.Color(o.shade ?? '#B8C6DA'), c = new THREE.Color();
+  for (let i = 0; i < P.count; i++) { const px = P.getX(i), pz = P.getZ(i), d = Math.hypot(px, pz) / R, h = ht(px, pz) * (1 - d * d * 0.7); P.setY(i, h); c.copy(cs).lerp(cw, clamp(0.35 + h / L * 0.9)); cols.push(c.r, c.g, c.b); }
+  geo.setAttribute('color', new THREE.Float32BufferAttribute(cols, 3)); geo.computeVertexNormals();
+  const deck = mesh(g, geo, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1, emissive: new THREE.Color('#5A6A80'), emissiveIntensity: 0.25 }), 0, 0, 0, { cast: false }); deck.receiveShadow = true;
+  const n = o.puffs ?? 70, sgeo = softGeo(n), sm = softMaterial({}, 'smoke', true), im = new THREE.InstancedMesh(sgeo, sm, n), O3 = new THREE.Object3D(), pc = new THREE.Color(o.color ?? '#FFFFFF');
+  im.frustumCulled = false; im.castShadow = false; im.renderOrder = 2; g.add(dyn(im)); for (let i = 0; i < n; i++) { im.setColorAt(i, pc); sgeo.attributes.aFade.array[i] = 0.55 + 0.4 * hash(i * 2.9); }
+  sgeo.attributes.aFade.needsUpdate = true; const pr = Math.min(R * 0.4, 380), PP = [...Array(n).keys()].map(i => { const a = hash(i * 1.3) * TAU, rr = Math.sqrt(hash(i * 7.7)) * pr, px = Math.cos(a) * rr, pz = Math.sin(a) * rr; return [px, ht(px, pz) + L * 0.4, pz, L * (1.6 + 1.8 * hash(i * 5.1))]; });
+  tick(t => { g.position.set(x + dx * t, Y, z + dz * t); for (let i = 0; i < n; i++) { const [px, py, pz, s] = PP[i]; O3.position.set(px, py + s * 0.25, pz); O3.scale.setScalar(s); O3.updateMatrix(); im.setMatrixAt(i, O3.matrix); } im.instanceMatrix.needsUpdate = true; });
+  return { g, top: (px, pz) => Y + ht(px - x, pz - z) };
+}
 // tornado(p, { x, z, path: [[x,z], …], t0, t1, speed, h, r }) — spinning dust funnel that wanders along a path, debris orbiting, wind roar
 function tornado(p, o = {}) {
   const H = o.h ?? 60, R = o.r ?? 10, g = dyn(grp(p ?? world, o.x ?? 0, 0, o.z ?? 0)), t0 = o.t0 ?? 0, NC = { cast: false }, rings = [];
@@ -16460,6 +16526,60 @@ function balloons(p, x, y, z, o = {}) {
   for (let i = 0; i < n; i++) { const q = dyn(grp(g)); _ell(q, cols[i % cols.length], 0, 0, 0, 0.14, 0.17, 0.14, { detail: 2, rough: 0.3 }); cone(q, 0.02, 0.03, cols[i % cols.length], 0, -0.19, 0, { seg: 6 }); const s = box(q, 0.004, 1, 0.004, '#F4F4F4', 0, -1.2, 0, { cast: false }); void s; B.push(q); }
   tick(t => B.forEach((q, i) => { const a = (i / n - 0.5) * 1.1, rel = o.release != null ? Math.max(0, t - o.release - i * 0.15) : 0; q.position.set(Math.sin(a) * 0.5 + 0.05 * Math.sin(t * 1.3 + i) + rel * 0.3 * Math.sin(i), 1.2 + Math.cos(a) * 0.15 + 0.04 * Math.sin(t * 1.7 + i * 2) + rel * rel * 0.6, 0.05 * Math.cos(t + i)); q.rotation.z = -a * 0.6 + 0.08 * Math.sin(t + i); }));
   return { g };
+}
+// v3.51 balloonChair(p, { at: [x,y,z] | t => [x,y,z], ry, n: 44, r: 0.5, colors, rider, jugs: 2, pop: [t0, t1], popN, sway: 1 }) → { g, root, seat, pos(t), left(t) }
+//   An aluminium lawn chair (tube frame, woven webbing seat and back, armrests, bent legs) tied to a cluster of big balloons on their own strings, two water jugs as ballast.
+//   The whole rig moves with `at` (pure: the position is a function of t). It sways gently, the cluster lags and wobbles a little more. rider: a rig that sits in it the whole time
+//   (sit() on the moving seat). pop: [t0, t1] — balloons burst one after another (pop sound, a few rubber shreds, its string drops away); popN = how many burst (default all).
+//   seat = the floor point under the seat front for sit() · left(t) = balloons still flying.
+function balloonChair(p, o = {}) {
+  const n = o.n ?? 44, R = o.r ?? 0.5, cols = o.colors ?? ['#E8322A', '#F7C531', '#2E86AB', '#3E9E4A', '#E85AA8', '#F28A2A', '#8A5AE0', '#F4F1E8'], NC = { cast: false };
+  const at = typeof o.at === 'function' ? o.at : (() => { const a = o.at ?? [0, 0, 0]; return () => a; })(), g = dyn(grp(p ?? world, 0, 0, 0, o.ry ?? 0)), B = { g, root: g };
+  const ch = grp(g), AL = mat('#C9CED6', { metal: 0.85, rough: 0.32 }), W1 = mat(o.web ?? '#2E9E5A', { rough: 0.8 }), W2 = mat(o.web2 ?? '#F2F2EC', { rough: 0.8 });
+  const tube = (a, b, r = 0.016) => _seg(ch, a, b, r, r, '', { mat: AL, cast: true });
+  // frame: front legs bend back into the armrests, back legs into the backrest posts (seat 0.42 m, back up to 1.0 m)
+  for (const sx of [-1, 1]) { const X = sx * 0.29;
+    tube([X, 0, 0.22], [X, 0.42, 0.18]); tube([X, 0.42, 0.18], [X, 0.62, 0.16]); tube([X, 0.62, 0.16], [X, 0.62, -0.26]);   // front leg → armrest
+    tube([X, 0, -0.3], [X, 0.42, -0.22]); tube([X, 0.42, -0.22], [X, 1.0, -0.36]);   // back leg → backrest post
+    tube([X, 0.4, 0.2], [X, 0.4, -0.22]);   // seat rail
+    box(ch, 0.05, 0.022, 0.46, '#E8E0D0', X, 0.625, -0.05, { rough: 0.7 });   // armrest pad
+    box(ch, 0.045, 0.02, 0.06, '#3A3A3E', X, 0, 0.22); box(ch, 0.045, 0.02, 0.06, '#3A3A3E', X, 0, -0.3); }   // rubber feet
+  tube([-0.29, 0.4, 0.2], [0.29, 0.4, 0.2]); tube([-0.29, 0.4, -0.22], [0.29, 0.4, -0.22]); tube([-0.29, 1.0, -0.36], [0.29, 1.0, -0.36]); tube([-0.29, 0.05, 0.22], [0.29, 0.05, 0.22], 0.012);
+  for (let i = 0; i < 6; i++) box(ch, 0.56, 0.012, 0.055, '', 0, 0.405, 0.17 - i * 0.075, { mat: i % 2 ? W2 : W1 });   // seat webbing, across
+  for (let i = 0; i < 7; i++) { const u = i / 6, yy = 0.47 + u * 0.5, zz = -0.23 - u * 0.13; box(ch, 0.56, 0.055, 0.012, '', 0, yy, zz, { mat: i % 2 ? W2 : W1, rx: 0.26 }); }   // backrest webbing
+  for (const sx of [-0.15, 0.15]) box(ch, 0.05, 0.5, 0.01, '', sx, 0.47, -0.235, { mat: W2, rx: 0.26 });   // two straps along the back
+  // ballast: water jugs on short ropes under the armrests
+  const nj = o.jugs ?? 2; for (let i = 0; i < nj; i++) { const sx = i % 2 ? 1 : -1, jx = sx * 0.36, jy = 0.12;
+    _seg(ch, [jx, 0.62, -0.05], [jx, jy + 0.3, -0.05], 0.006, 0.006, '#C8B48A', NC); box(ch, 0.2, 0.26, 0.14, '', jx, jy, -0.05, { mat: mat('#DCE8F0', { opacity: 0.75, rough: 0.2 }) });
+    box(ch, 0.19, 0.18, 0.13, '', jx, jy + 0.01, -0.05, { mat: mat('#7FB8E0', { opacity: 0.6 }), cast: false }); cyl(ch, 0.03, 0.03, 0.04, '#2E86AB', jx, jy + 0.26, -0.05, { seg: 8 }); }
+  // the cluster: four ropes from the frame corners to a ring 2 m up, one string per balloon from the ring
+  const RY = 2.1; for (const [cx, cz] of [[-0.29, 0.16], [0.29, 0.16], [-0.29, -0.3], [0.29, -0.3]]) _seg(ch, [cx, cz > 0 ? 0.62 : 0.98, cz > 0 ? cz : -0.34], [0, RY, -0.05], 0.007, 0.007, '#E8E2D2', NC);
+  ball(ch, 0.05, '#B8BCC4', 0, RY, -0.05, { metal: 0.8 });
+  const bl = grp(g), C3 = new THREE.Color(), O3 = new THREE.Object3D(), bgeo = G('bchB', () => { const q = new THREE.SphereGeometry(1, 14, 10); q.scale(1, 1.18, 1); return q; });
+  const im = new THREE.InstancedMesh(bgeo, new THREE.MeshStandardMaterial({ roughness: 0.28, metalness: 0, flatShading: false }), n); im.castShadow = true; im.frustumCulled = false; bl.add(dyn(im));
+  const knot = new THREE.InstancedMesh(G('bchK', () => new THREE.ConeGeometry(1, 1.4, 6)), new THREE.MeshStandardMaterial({ roughness: 0.4 }), n); knot.frustumCulled = false; bl.add(dyn(knot));
+  const sg = new THREE.BufferGeometry(), sp = new Float32Array(n * 6); sg.setAttribute('position', new THREE.BufferAttribute(sp, 3)); const lines = new THREE.LineSegments(sg, new THREE.LineBasicMaterial({ color: '#F2F2F2', transparent: true, opacity: 0.8 })); lines.frustumCulled = false; bl.add(dyn(lines));
+  const home = [], [p0, p1] = o.pop ?? [1e9, 1e9], np = o.popN ?? n, popT = [];
+  for (let i = 0; i < n; i++) { const a = i * 2.39996, k = Math.sqrt((i + 0.5) / n), rr = 0.55 + k * 1.9, h = RY + 2.6 + (1 - k * k) * 1.3 + hash(i * 3.1) * 0.5;   // golden-angle dome
+    home.push([Math.cos(a) * rr, h, Math.sin(a) * rr - 0.05, 0.85 + hash(i * 1.7) * 0.3]); C3.set(cols[i % cols.length]); im.setColorAt(i, C3); knot.setColorAt(i, C3); }
+  const order = [...Array(n).keys()].sort((a, b) => hash(a * 9.7) - hash(b * 9.7)); order.forEach((i, j) => { popT[i] = j < np ? p0 + (p1 - p0) * (np > 1 ? j / (np - 1) : 0) + (hash(i * 4.4) - 0.5) * 0.08 * (p1 - p0) / Math.max(1, np) : 1e9; });
+  order.slice(0, np).forEach((i, j) => { if (popT[i] < 1e8 && (j % 3 === 0 || np < 8)) sfx(popT[i], 'pop', 0.45 + 0.3 * hash(i)); });
+  B.left = t => popT.filter(q => t < q).length;
+  const seat = grp(g, 0, 0, 0.12); B.seat = seat; B.pos = t => at(t);
+  tick(t => { const P = at(t), sw = o.sway ?? 1; g.position.set(P[0], P[1], P[2]); g.rotation.set(0.035 * sw * Math.sin(t * 0.7), (o.ry ?? 0) + 0.06 * sw * Math.sin(t * 0.23), 0.04 * sw * Math.sin(t * 0.53 + 1));
+    bl.rotation.set(-0.05 * sw * Math.sin(t * 0.7 - 0.6), 0, -0.06 * sw * Math.sin(t * 0.53 + 0.4));
+    for (let i = 0; i < n; i++) { const [hx, hy, hz, s] = home[i], dt = t - popT[i], gone = dt >= 0, wx = 0.12 * Math.sin(t * 1.1 + i * 1.3), wz = 0.1 * Math.cos(t * 0.9 + i * 0.7);
+      const sc = gone ? 0 : R * s, bx = hx + wx, by = hy + 0.05 * Math.sin(t * 1.4 + i), bz = hz + wz;
+      O3.position.set(bx, by, bz); O3.rotation.set(wz * 0.8, i, -wx * 0.8); O3.scale.setScalar(sc); O3.updateMatrix(); im.setMatrixAt(i, O3.matrix);
+      O3.position.set(bx, by - R * s * 1.18, bz); O3.rotation.set(0, 0, 0); O3.scale.setScalar(gone ? 0 : 0.06); O3.updateMatrix(); knot.setMatrixAt(i, O3.matrix);
+      // string: ring → knot; after the pop the free end falls and swings below the ring
+      const fx = gone ? Math.sin(i) * 0.3 : bx, fy = gone ? Math.max(RY - 1.4, by - R * s * 1.3 - dt * 6) : by - R * s * 1.3, fz = gone ? Math.cos(i) * 0.3 : bz;
+      sp.set([0, RY, -0.05, fx, fy, fz], i * 6); }
+    im.instanceMatrix.needsUpdate = true; knot.instanceMatrix.needsUpdate = true; sg.attributes.position.needsUpdate = true; });
+  // shreds of rubber at each pop
+  order.slice(0, np).forEach(i => { if (popT[i] > 1e8) return; const [hx, hy, hz] = home[i]; emit('confetti', { at: tt => { const v = new THREE.Vector3(hx, hy, hz); bl.updateWorldMatrix(true, false); v.applyMatrix4(bl.matrixWorld); return [v.x, v.y, v.z]; }, t0: popT[i], burst: 6, size: 0.09, colors: [cols[i % cols.length]], speed: 2.4, life: 1.2, lensOk: true }); });
+  if (o.rider) { if (!o.rider.root.parent) world.add(o.rider.root); sit(o.rider, -1, { seat, h: 0.44 }); }
+  return B;
 }
 function discoBall(p, x, y, z, o = {}) {
   const g = dyn(grp(p ?? world, x, y, z)), NC = { cast: false }; box(g, 0.02, 1, 0.02, '#9A9EA4', 0, 0.2, 0); const b = dyn(grp(g)); ball(b, 0.32, '#C9CDD3', 0, 0, 0, { detail: 2, metal: 1, rough: 0.15 });
@@ -21956,7 +22076,7 @@ function qaLook(o = {}) {
       const fd = camera.position.distanceTo(_l), macro = (key.hand === 1.5 || (key.fov ?? 45) <= 30) && fd < 2.3, fgD = fd >= 4 ? Math.min(2, 0.3 * fd) : 0;
       const where = s.cover != null ? `cover ${'ABCDEFGH'[s.cover]} (THUMB at ${s.t.toFixed(1)} s)` : `shot ${s.n} (${s.a.toFixed(1)}–${s.b.toFixed(1)} s) at ${s.t.toFixed(1)} s`, id = s.cover != null ? 'c' + s.cover : 's' + s.n;
       if (!Number.isFinite(fd) || !Number.isFinite(camera.fov)) { put('EMPTY' + id, 2, `EMPTY – ${where}: the camera position or lens is not a number (NaN) – nothing is drawn; check the CAM key there (p, l, follow, fov) and that CFG has handheld`); continue; }
-      const M = qalMeasure(qalFrame(pov ? POV_ON?.root : null, false, s.cover != null ? Math.max(fin.uniforms.uVig.value, 0.55) : fin.uniforms.uVig.value), fgD), darkSky = (skyNow.nk ?? 0) >= 0.75 || skyNow === SKIES.space || skyNow === SKIES.mercury;
+      const M = qalMeasure(qalFrame(pov ? POV_ON?.root : null, !!s.probe, s.cover != null ? Math.max(fin.uniforms.uVig.value, 0.55) : fin.uniforms.uVig.value), fgD), darkSky = (skyNow.nk ?? 0) >= 0.75 || skyNow === SKIES.space || skyNow === SKIES.mercury || skyNow === SKIES.strato;
       const barT = s.cover != null || SPLITS.some(x => s.t >= x.t && s.t < x.t + x.dur) ? 0 : cineBars(s.t), heads = pov ? [] : qalHeads(macro, 1 - 2 * barT);
       if (o.stats) stats.push({ where, probe: !!s.probe, fd: +fd.toFixed(1), ...Object.fromEntries(Object.entries(M).map(([k, v]) => [k, +v.toFixed(3)])), sky: Object.keys(SKIES).find(k => SKIES[k] === skyNow), heads: heads.map(x => x.i + ':' + x.cut.toFixed(2)) });
       if (M.dead > (darkSky ? 0.6 : 0.35)) put('DARK' + id, M.dead, `DARK – ${where}: ${(M.dead * 100).toFixed(0)} % of the frame is a near-black area (not counting the sky${darkSky ? '; dark sky, limit 60 %' : ''}${s.probe ? ' (near the ' + (s.t - s.a < (s.b - s.a) / 2 ? 'start' : 'end') + ' of the shot)' : ''}) – light the subject (lamp, flashlight, lit windows, CFG.nightLift, CFG.fill), use a lighter SKY there or turn the camera off the dark wall / shadow`);   // v3.46: the probes near both ends of every shot are coloured frames too (DARK at 12 / 88 %: a dark stretch between two shot middles was missed)

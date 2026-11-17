@@ -58,7 +58,7 @@ Figuren haben ein Cartoon-Gesicht (runde Augen mit Iris, Pupille und Glanzpunkte
 
 ## `SKY`
 
-`[[t, preset], …]` blendet zwischen Presets: day · golden · dusk · night · dawn · storm · apocalypse · space · underwater · deepsea.
+`[[t, preset], …]` blendet zwischen Presets: day · golden · dusk · night · dawn · storm · apocalypse · space · underwater · deepsea · high (über den Wolken, v3.51) · strato (Stratosphäre, v3.51).
 
 ## Nacht
 
@@ -654,7 +654,7 @@ Jede Figur hat Hände mit Fingern (Handfläche, drei Finger, Zeigefinger, Daumen
 
 ## Cartoon-Schauspiel
 - `boing(obj, t, { amp, dur })`: Stauchen und Strecken mit Nachwippen.
-- `faceFx(rig, kind, t0, t1)`: sweat · tears · blush · steam · question · exclaim · hearts · zzz · anger.
+- `faceFx(rig, kind, t0, t1)`: sweat · tears · blush · steam · question · exclaim · hearts · zzz · anger · boil (v3.51).
 - **Gesicht hinter Ausrüstung (v3.26):** Was vor dem Gesicht sitzt (Maske, Helm, Pflaster, Brille), verdeckt Augen, Mund, Nase usw. jetzt auch, wenn es erst später dazukommt oder wieder verschwindet (`appear()`, `vanish()`, Sichtbarkeit in einem Tick): die Engine rechnet die Abdeckung pro Kombination sichtbarer Kopf-Teile (auf deren Ruhelage, rein von t, einmal pro Kombination). Symbole von `faceFx` zählen nicht.
 - `soot(rig, t)`: nach einer Explosion schwarzes Gesicht und Kleidung (Augen bleiben weiß), verkokelte Afro-Haare, Rauchkringel. `wet(rig, t0, { t1 })`: klitschnass, dunkler, glänzend, tropft.
 - `idle(rig, t0, t1, kind)`: tap · cross · scratch · watch · shift · hips · stretch · pocket; `idleMix(rig, t0, t1)` streut zufällige kleine Aktionen. (`cross` und `tap` verschränken die Arme wie `gesture(…, 'cross')`.)
@@ -2083,3 +2083,12 @@ Mit `CFG.live` wird eine fertige Engine-Seite zur spielbaren Welt: das Spiel in 
 **Ton:** das iframe spielt keinen Ton (Autoplay-Sperre, Uhr ohne Audio). Das Eltern-Fenster holt die Tonspur mit `await iframe.contentWindow.whatif.renderAudio()` (WAV als Base64) und spielt sie selbst, synchron zu `whatif.live.t` (bei `setRate`/`seek` neu ansetzen).
 
 Bildgröße: die Seite füllt das ganze Fenster (jedes Seitenverhältnis), Kamera-`near` wächst mit dem Abstand (0,1–0,6 m). `render.mjs --shots` funktioniert weiter (über `whatif.seek`, Kamera = aktueller `cam()`-Stand). Test: `tests/live-mode` (API, Bodenpunkt in der Bildmitte, Verschieben per Ziehen und W, Klick, Ende der Uhr, HUD aus).
+
+# Neu in v3.51 (Höhe: Gipfel, Wolkendecke, Stratosphäre, Ballon-Stuhl)
+Für Höhen- und Größenvergleiche („How high can you go?“, Flug, Bergsteigen, Stratosphärensprung). Alles rein aus t.
+- **`SKY` 'high'** (~10 km, über den Wolken: tiefblauer Zenit, heller Dunst am Horizont, keine Wolken darüber) und **'strato'** (~20–40 km: schwarzer Zenit, schmales blaues Band am Horizont, ein paar Sterne, harte Sonne). Darunter gehört etwas: `cloudSea()` bei 'high', `planet(world, x, y, z, { kind: 'earth', r: 1100 })` mit Oberkante ca. 150 m unter dem Motiv bei 'strato' (gekrümmte Erde). Beide ohne `dress()`; 'strato' zählt für `QA: DARK` als dunkler Himmel.
+- **`cloudSea(p, { x, z, y: 0, r: 1300, lumps: 14, color, shade, puffs: 70, drift: [3, 1] })`** → `{ g, top(x, z) }`: Wolkendecke von oben – hügelige, schattierte Oberfläche bis zum Horizont (der Rand verschwindet im Himmelsdunst), weiche Wolkenballen in der Mitte, zieht langsam (`drift` m/s). Für Flugzeug-, Gipfel- und Ballon-Shots.
+- **`mountain(p, x, z, { h: 320, r: 420, y, ridges: 4, seed, snow: 0.45, rock, flags: true, plume: true, climbers: 0 })`** → `{ g, summit, at(u, az), climbers }`: Hochgebirgsgipfel (Himalaya-Stil) – facettierter Fels mit scharfen Graten vom Gipfel abwärts, Felsbänder, Schnee und Eis nur auf flachen Stellen oberhalb der Schneegrenze (`snow` = Anteil der Höhe von oben), Wechte und Steinmann auf dem Gipfel, Gebetsfahnen-Schnüre (`flags`, wehen), Schneefahne vom Gipfel (`plume`, gegen `CFG.sunAz`), `climbers: n` Bergsteiger in Daunenanzügen am Grat. `y` = Fußhöhe (in eine `cloudSea` absenken, Gipfel ragt heraus). `at(u, az)` = Punkt am Hang (u 0 = Gipfel … 1 = Fuß, az in Grad) für Callouts und Kamera. Statisch, nur Fahnen und Schneefahne bewegen sich.
+- **`balloonChair(p, { at: [x,y,z] | t => [x,y,z], ry, n: 44, r: 0.5, colors, web, web2, rider, jugs: 2, pop: [t0, t1], popN, sway: 1 })`** → `{ g, root, seat, pos(t), left(t) }`: Alu-Gartenstuhl (Rohrrahmen, gewebte Sitz- und Lehnenbänder, Armlehnen, Gummifüße, zwei Wasserkanister als Ballast) an einer Traube großer Ballons, jeder an seiner Schnur über einen Ring. Bewegt sich mit `at` (Funktion von t; an Schnitten darf sie springen, so fährt ein Stuhl durch mehrere Sets), schwingt leicht, die Traube schwingt nach. `rider` = Figur, die die ganze Zeit darin sitzt (`sit()` auf dem bewegten Sitz). `pop` = Ballons platzen nacheinander (Knall, Gummifetzen, die Schnur fällt herab), `popN` wie viele; `left(t)` = Ballons, die noch fliegen.
+- **`faceFx(rig, 'boil', t0, t1)`**: Wasser kocht bei Körpertemperatur (Armstrong-Grenze, Vakuum) – Bläschen sprudeln auf den Lippen und am unteren Augenrand, Dampffäden steigen auf, Blubber-Sound.
+- Test: `tests/altitude` (Gipfel mit Bergsteigern über der Wolkendecke, Linienflugzeug über den Wolken in 'high', Stuhl mit Fahrer über der gekrümmten Erde in 'strato', Speichel kocht, Ballons platzen).
