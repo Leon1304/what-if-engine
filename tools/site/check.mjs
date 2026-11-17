@@ -39,8 +39,9 @@ for (const [name, vp, scheme] of [['desktop-dunkel', { width: 1280, height: 900 
   await page.close();
 }
 
-// Links und Cover jedes Spiels
+// Links und Cover jedes Spiels („bald“: nur das Cover, die Karte hat keinen Link)
 for (const g of games) {
+  if (g.status === 'bald') { if (g.cover) { const c = await fetch(base + g.cover); ok(c.ok, `${g.title}: Cover ${g.cover} → ${c.status}`); } continue; }
   const r = await fetch(base + g.path); ok(r.ok, `${g.title}: ${g.path} → ${r.status}`);
   if (g.cover) { const c = await fetch(base + g.cover); ok(c.ok, `${g.title}: Cover ${g.cover} → ${c.status}`); }
 }
