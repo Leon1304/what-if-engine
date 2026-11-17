@@ -75,6 +75,8 @@ Wird vom /whatif-Skill vor jedem Video gelesen und danach aktualisiert.
 | nächste Serie | Vorschlag: orange (danach z. B. pink) |
 | asteroid-la (Einzelvideo, Miniatur-/Tilt-Shift-Look, gerendert 15.11.) | orange |
 | how-high-can-you-go (GV1, Erklärvideo, gerendert 17.11.) | yellow |
+| gong-farmer (WJ1, History, gerendert 16.11.) | lime |
+| plague-doctor-1656 (WJ3, History, ernst, gerendert 17.11.) | green |
 
 ## Dr. Steve (nur Serien)
 - **Fake-Titel (`CFG.steveTitle`, nie wiederholen):** benutzt: „Scientist (online certificate)“ (ZF1–ZF6) · „Expert (10k hours in GTA 5)“ (NL1) · „Gravity Expert (fell off a bike once)“ (EG1) · „Zombie Expert (PhD from a cereal box)“ (ZC1) · „Ocean Expert (went to an aquarium once)“ (SA1) · „Shark Expert (owns a shark-tooth necklace)“ (MB1). Ideen: Expert (watched 1 video) · Scientist (self-declared) · Professor (YouTube comments) · Genius (says his mom) · Doctor (of vibes) · Researcher (Wikipedia, 4 min)
@@ -284,6 +286,8 @@ MB1 Megalodon in your pool ✔ gebaut → Abstimmung: A T. rex in the city · B 
 - el-chapo-tunnel (TC12, True Crime, Declan Sage, ernst): „Nobody moves.“ · „Even his.“
 - asteroid-la (15.11.): „And you’re stuck in traffic.“ · „The rock isn’t what gets you. The air is.“ · „Six thousand Hiroshimas, in one parking lot.“ · „L.A. traffic just saved your life.“
 - how-high-can-you-go (GV1, 17.11.): „Your spit.“ · „Your balloons quit next.“ · „Bold plan.“
+- gong-farmer (WJ1, 16.11.): „Nobody wants to smell you.“ · „Two years of waste. And the smell is the safe part.“ · „Worst job in London — and well paid.“
+- plague-doctor-1656 (WJ3, 17.11., ernst): „The city pays you to go where nobody will.“ · „Your mask? Built on a mistake.“
 
 ## Benutzte Dr.-Steve-Tipps
 - ZF1: „Walk like a zombie. Zero sus.“
@@ -332,6 +336,8 @@ MB1 Megalodon in your pool ✔ gebaut → Abstimmung: A T. rex in the city · B 
 - krampus-night: – (kein Slang)
 - asteroid-la: – (kein Slang)
 - how-high-can-you-go: – (kein Slang)
+- gong-farmer: – (kein Slang)
+- plague-doctor-1656: – (kein Slang)
 
 ## Gerald-Momente
 - ZF1: Heuballen, Funken fliegen vorbei · ZF2: Kellertür, tanzt zur Musik · ZF3: Silo, isst den letzten Mais
@@ -375,6 +381,8 @@ Die Bewertungskarte ist seit 11.11.2026 abgeschafft; jedes Video endet mit Endca
 - el-chapo-tunnel: „So one question never goes away:“
 - asteroid-la: „Which is why L.A. still asks —“
 - how-high-can-you-go: „So, once more:“
+- gong-farmer: „So ask yourself:“
+- plague-doctor-1656: „So ask yourself:“ (versehentlich gleich wie gong-farmer; nicht noch einmal verwenden)
 - Archiv der alten Bewertungskarten (Pointen nicht wiederverwenden): ZF1 „Barn: gone. Vibes: immaculate.“ · ZF2 „Great acoustics. Terrible neighbors.“ · ZF3 „Corn every day. Would not recommend.“ · ZF4 „Loud. Smelly. Better than walking.“ · ZF5 „Warm. Way too warm.“ · ZF6 „Great views. Zero fuel.“ · NL1 „Great weather. Zero free will.“ · E19 „Forty-two minutes. No snacks.“ · E24 „Twenty years. Zero lasers.“ · E1 „Perfect landing. Terrible snacks.“ · E6 „Sixty hours, lost to a grandma.“ · Bouncing Betty „Built to jump. Still in the ground.“ · Groundskeeper „Great traps. Cellar smells terrible.“
 
 ## Video-Log
@@ -425,3 +433,5 @@ Die Bewertungskarte ist seit 11.11.2026 abgeschafft; jedes Video endet mit Endca
 | 2026-11-15 | What if Krampus came to your house? (krampus-night, H12 Horror zur Krampusnacht am 5.12., 55,1 s, red, Erzähler Storm Styles, Engine v3.34: Kostüme `krampus` (Fell, Holzmaske, Hörner, Huf, Ketten, Glocken, Kraxe) und `nicholas` (Bischof), `birchSwitch`, `torch`, `crozier`, `book`, `treatBoot`; Dorf im Schnee, Stiefel vor der Tür, Krampuslauf mit Fackeln, einer bleibt – Türspion: keine Maske, Rute im Stiefel, Ketten auf dem Dach, Krampus in der Stube, Nikolaus liest dein Jahr vor, Krampus geht; Endcard Open it / Hide under the bed / Clean your room. Fast.) | – | – | Endcard A/B/C | ja |
 | 2026-11-15 | What if an asteroid hit Los Angeles? (asteroid-la, Einzelvideo, 43 s, orange, Erzähler Denzel, erstes Video im Miniatur-/Tilt-Shift-Look; Engine v3.37: `CFG.mini`/`shot('mini')`, `asteroidImpact()`, `suburb()`, `beachLife()`; 140-m-Brocken als „zweite Sonne“ über Modell-L.A., Einschlag nördlich von Downtown, Pilzwolke, Druckwelle drückt Downtown und Vororte platt, Twist: „you“ steht im Stau 20 Meilen entfernt und überlebt) |
 | 2026-11-17 | How high can you go before you die? (how-high-can-you-go, GV1 Größenvergleich, Erklärvideo, 41,6 s, yellow, Erzähler Adam, Engine v3.51: `balloonChair()` (Gartenstuhl an Ballons mit Fahrer, Ballons platzen), `mountain()` (Gipfel mit Bergsteigern), `cloudSea()`, Himmel `high`/`strato`, `faceFx('boil')`; „you“ steigt im Ballonstuhl auf: Everest/Todeszone → Linienflug (30 s bis Bewusstlosigkeit) → Armstrong-Grenze ~19 km, Speichel kocht, Blut nicht; Ballons platzen lange vor dem Weltraum; Faktenkarte ~19 km (NASA · Armstrong limit); Thumbnails A/B) | GV1 | – | Endcard Everest / Jet height / Never · Loop „So, once more:“ | nein |
+| 2026-11-16 | What if you were a gong farmer for one night? (gong-farmer, WJ1 Worst Jobs in History, History, 41 s, lime, Erzähler Adam, Engine v3.47/v3.47.1: tudorHouse, cobbleLane, lantern, bucket, sack, cesspit, cart, stink, shovel, Kostüm tudor, dress('medieval'); Tudor-London bei Nacht: Bohlen runter, Leiter in die Abortgrube, Dämpfe lassen die Kerze schrumpfen, Fässer auf den Pferdekarren, im Morgengrauen Lohn und der Karren verlässt die Stadt; Faktenkarte 13s 4d Strafe vor 21 Uhr (Laws of the Market); Zähler Shift ends in 8:00 → 0:00 und Stench 12 → 96 %) | WJ1 | – | Endcard A/B/C · Loop „So ask yourself:“ | nein |
+| 2026-11-17 | What if you were a plague doctor in 1656? (plague-doctor-1656, WJ3 Worst Jobs in History, History, 44,7 s, green, Erzähler Adam, Engine v3.53: townhouse()/alley() (italienische Altstadt, Sampietrini `surf: 'setts'`, Bogen), doorMark() (versiegelte Tür), herbs(), belltower() (SFX `toll`), Kostüm plaguedoctor, Musikstil baroque; Rom bei Nacht: Pestarzt mit Schnabelmaske in verrauchter Gasse, Kräuter in den Schnabel, Untersuchung mit dem Stab, versiegelte Häuser, Bettzeug wird verbrannt; Mythos „Die Maske schützte“ → FALSE; Faktenkarte 55+ Zutaten im Theriak (National Geographic); Zähler Shift ends in + Houses visited 12/40) | WJ3 | – | Endcard Yes, someone has to / Only with the coat / Never · Loop „So ask yourself:“ | nein |
