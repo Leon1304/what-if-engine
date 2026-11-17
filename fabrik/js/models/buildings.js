@@ -2,131 +2,29 @@
 // Gebaut wird im lokalen Rahmen: Mitte des Gebäudes im Ursprung, Ausgabe nach +x (rot 0), links = −z, rechts = +z.
 // Die Gruppe hat ihren Ursprung an der Ecke von Feld (0,0) (Integration: group.position.set(x, 0, y)), 1 Feld = 1 Einheit.
 // Drehung rot 0–3 um die Gebäudemitte: 0 = +x, 1 = +z, 2 = −x, 3 = −z. Geometrie wird je Typ/Variante zwischengespeichert.
-// state: { busy (bool|0…1), progress (0…1), level (1…5), gold (bool), fill (0…1, Lager), takt (0…1, Verkauf), filterColor, ore }
+// state: { busy (bool|0…1), progress (0…1), level (1…5), mk (1…3), gold (bool), fill (0…1, Lager), takt (0…1, Verkauf), filterColor, ore, power (0…1, < 0.05 = Lampe blinkt rot) }
+// Neue Typen (power.js, wonder.js) lesen zusätzlich: load (0…1, Kraftwerk), sun (Solar), storm (bool), stage/progress (Wunder) – siehe dort.
 import * as THREE from 'three';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { Kit, instantiate, PI, TAU, BELT_Y, starGeo, shade, tpl } from '../kit.js';
 import { MATS, makeHeatMat, makeGoldMat, beltMat, U } from '../materials.js';
 import { ITEM_LOOK } from './items.js';
+import { POWER_DEFS } from './power.js';
+import { WONDER_DEFS } from './wonder.js';
+import { mkDecor, mkAnim, MK_TYPES } from './upgrades.js';
+import { C, LEVEL_C, face, plinth, chute, intake, fstripes, vstripes, beacon, panel, smokeStack, animSmoke, lattice, ladder, railing, bricks, OUT_INDEX } from './parts.js';
 
 export { BELT_Y };
-export const SIZES = { band: 1, tunnel: 1, verteiler: 1, sortierer: 1, bohrer: 2, ofen: 2, presse: 2, drahtzug: 2, montage: 3, raffinerie: 3, experiment: 3, labor: 2, verkauf: 2, lager: 2 };
+export const SIZES = { band: 1, tunnel: 1, verteiler: 1, sortierer: 1, bohrer: 2, ofen: 2, presse: 2, drahtzug: 2, montage: 3, raffinerie: 3, experiment: 3, labor: 2, verkauf: 2, lager: 2,
+  kraftwerk: 3, solar: 2, mast: 1, heizer: 1, drohnenhafen: 2, wunder: 5, grossbohrer: 4 };
+// Zusatz-Gebäude aus eigenen Dateien: { size, aoH, build(k, o) → info, anim(ctx, t, state), api(ctx, b) → Methoden, dispose(ctx) }
+const EXT = { ...POWER_DEFS, ...WONDER_DEFS };
 export const BUILDING_TYPES = Object.keys(SIZES);
 // Feld vor der Mitte der Vorderkante (Index entlang der Kante, von −z nach +z gezählt): 2×2 → 1, 3×3 → 1
-export const OUT_INDEX = n => Math.floor(n / 2);
+export { OUT_INDEX };
 // Kurvenart aus Ein- und Ausgangsrichtung (Bewegungsrichtung der Teile)
 export function beltKind(inDir, outDir) { if (inDir === undefined || inDir === null) return 'straight'; const d = ((outDir - inDir) % 4 + 4) % 4; return d === 1 ? 'right' : d === 3 ? 'left' : 'straight'; }
 
-// ---------- Farben ----------
-const C = {
-  concrete: 0xc2baab, concrete2: 0xa89f90, seam: 0x8e8678, steel: 0x9aa2ac, steelD: 0x5c626c, dark: 0x34373e, rubber: 0x26282c, black: 0x1a1b1f,
-  yel: 0xf2c230, orange: 0xe8742a, orangeD: 0xb85a20, red: 0xd2463a, brick: 0xb44c3a, brick2: 0xa44234, mortar: 0x8a7a6c, blue: 0x3a78c8, blueD: 0x2a5a9a,
-  teal: 0x26a296, tealD: 0x1c7a72, purple: 0x7a5ac8, purpleD: 0x5a3e98, green: 0x4aa046, greenD: 0x357a32, white: 0xeef0f2, cream: 0xf4ecd8,
-  pink: 0xe25a9a, pinkD: 0xb03e78, wood: 0xb07a44, woodD: 0x8a5a30, copper: 0xd8783a, brass: 0xd8aa40, glass: 0xbfe6f2, coal: 0x2a2826, mint: 0x7ae0b8,
-};
-const LEVEL_C = [0x8a8a8a, 0x9a9aa2, 0xcd7f32, 0xc8ccd6, 0xffc23a, 0xff6ad5];
-
-// ---------- gemeinsame Bauteile ----------
-// Wandrahmen: Außenseite zeigt in Richtung a (0 = +x, 1 = +z, 2 = −x, 3 = −z), lokale x = nach außen, z = entlang der Wand
-const faceRot = a => [0, -PI / 2, PI, PI / 2][a];
-function face(k, p, a, fn) { k.in(p, faceRot(a), fn); }
-
-// Betonsockel n×n mit Fugen, Ecken-Bolzen, Warnstreifen an der Vorderkante
-function plinth(k, n, o = {}) {
-  const s = n - .06, h = o.h ?? .06;
-  k.bev(C.concrete, [0, 0, 0], [s, h, s], .025, { ao: false, shade: .98 });
-  for (let i = 1; i < n; i++) { const v = -n / 2 + i; k.box(C.seam, [v, h - .004, 0], [.012, .006, s - .06], { ao: false }); k.box(C.seam, [0, h - .004, v], [s - .06, .006, .012], { ao: false }); }
-  for (const x of [-1, 1]) for (const z of [-1, 1]) { k.cyl(C.steelD, [x * (s / 2 - .06), h, z * (s / 2 - .06)], .022, .012, 6, { layer: 'metal' }); }
-  const cz = o.cz ?? (OUT_INDEX(n) + .5 - n / 2);
-  if (o.stripes !== false) for (const [za, zb] of [[-s / 2 + .1, cz - .3], [cz + .3, s / 2 - .1]]) if (zb - za > .1) k.stripes([s / 2 - .07, h, (za + zb) / 2], zb - za, .07, .006, { r: [0, PI / 2, 0] });
-  // Gebrauchsspuren: Ölflecken, Kratzer
-  for (let i = 0; i < n * 2; i++) k.cyl(0x7a7468, [k.R(-s / 2 + .15, s / 2 - .15), h, k.R(-s / 2 + .15, s / 2 - .15)], k.R(.03, .08), .003, 7, { ao: false, jit: .1 });
-}
-// Ausgabe-Rutsche an der Vorderkante (x = n/2) bei z = zc: Gehäuse, dunkle Öffnung, Gummilappen (Teil 'flap'), grüner Pfeil
-function chute(k, n, zc, body = C.steel) {
-  const x = n / 2, y0 = BELT_Y - .03;
-  k.bev(C.steelD, [x - .2, 0, zc], [.36, y0, .5], .02, { layer: 'metal' });                // Unterbau
-  k.box(C.rubber, [x - .17, y0, zc], [.34, .012, .36]);                                       // Gleitbahn
-  for (const s of [-1, 1]) { k.bev(body, [x - .2, y0, zc + s * .22], [.36, .3, .05], .012, { layer: 'metal' }); k.stripes([x - .2, y0 + .3, zc + s * .22], .34, .05, .004); }
-  k.bev(body, [x - .26, y0 + .26, zc], [.26, .08, .5], .02, { layer: 'metal' });           // Haube
-  k.box(C.black, [x - .36, y0, zc], [.02, .26, .38], { ao: false });                          // Öffnung (dunkel)
-  k.part('flap', [x - .14, y0 + .26, zc], s => { for (let i = 0; i < 4; i++) s.box(C.rubber, [0, -.2, -.135 + i * .09], [.012, .2, .08], { ao: false, jit: .08 }); });
-  // grüner Pfeil (leuchtet) auf der Haube
-  k.in([x - .2, y0 + .345, zc], 0, () => { k.box(0x3adf6a, [-.02, 0, 0], [.08, .008, .03], { layer: 'glow' }); k.prism(0x3adf6a, [.04, 0, 0], .07, .008, .07, { layer: 'glow', r: [0, PI / 2, 0], order: 'YXZ' }); });
-}
-// Einlass-Klappe an einer Seite (Pfeil nach innen): a = Seite, w = Abstand der Wand von der Mitte
-function intake(k, a, w, z = 0, col = C.steel) {
-  face(k, [0, 0, 0], a, () => {
-    k.bev(col, [w - .02, BELT_Y - .04, z], [.1, .3, .42], .02, { layer: 'metal' });
-    k.box(C.black, [w + .03, BELT_Y - .01, z], [.012, .2, .3], { ao: false });
-    k.in([w + .042, BELT_Y + .26, z], 0, () => { k.prism(C.yel, [0, -.035, 0], .07, .06, .008, { r: [PI / 2, 0, PI], order: 'XYZ', layer: 'glow', jit: 0 }); });
-  });
-}
-// Warnstreifen auf einer senkrechten Fläche (Seite a): fstripes = waagrechtes Band (L entlang der Wand, w hoch), vstripes = senkrecht (L hoch, w breit)
-function fstripes(k, p, a, L, w) { face(k, p, a, () => k.in([0, 0, 0], PI / 2, () => k.stripes([0, 0, 0], L, w, .006, { r: [PI / 2, 0, 0] }))); }
-function vstripes(k, p, a, L, w) { face(k, p, a, () => k.stripes([0, 0, 0], L, w, .006, { r: [0, 0, -PI / 2] })); }
-// Statuslampe (Ebene 'lamp' → je Gebäude eigenes Material)
-function beacon(k, p, h = .14) {
-  k.cyl(C.steelD, p, .018, h, 6, { layer: 'metal' });
-  k.cyl(C.dark, [p[0], p[1] + h, p[2]], .045, .03, 10, { layer: 'metal' });
-  k.cyl(0xffffff, [p[0], p[1] + h + .03, p[2]], .036, .05, 10, { layer: 'lamp', bevel: .4 });
-  k.cyl(C.dark, [p[0], p[1] + h + .08, p[2]], .03, .012, 10, { layer: 'metal' });
-}
-// Steuerpult mit Knöpfen und Fortschrittsbalken (Teil 'bar', Skala x)
-function panel(k, p, ry = 0, body = C.steelD) {
-  k.in(p, ry, () => {
-    k.bev(body, [0, 0, 0], [.16, .34, .26], .02, { layer: 'metal' });
-    k.in([0, .34, 0], 0, () => {
-      k.bev(C.dark, [0, -.04, 0], [.2, .06, .3], .015, { r: [0, 0, .5] });
-      k.box(0x1a2a22, [.012, .025, 0], [.11, .01, .22], { r: [0, 0, .5], ao: false });
-      k.part('bar', [.02, .035, -.1], s => s.box(0x5aff8a, [0, 0, .1], [.03, .006, .2], { layer: 'glow', ao: false }), [0, 0, .5]);
-      for (const [i, c] of [[0, 0xff4a3a], [1, 0x4aff7a], [2, 0xffd040]]) k.cyl(c, [-.05, .012, -.08 + i * .08], .018, .02, 8, { layer: 'glow', r: [0, 0, .5] });
-    });
-  });
-}
-// kleine Rauchwolken (Teil 'smoke'): vier Bälle, die nach oben ziehen
-function smokeStack(k, p, name = 'smoke', col = 0xe8e4de) {
-  k.part(name, p, s => { for (let i = 0; i < 4; i++) s.part(name + i, [0, 0, 0], q => { q.ball(col, [0, 0, 0], .1, { detail: 1, ao: false, jit: .02 }); q.ball(col, [.06, .03, .03], .07, { detail: 1, ao: false, jit: .02 }); q.ball(col, [-.05, .02, -.04], .065, { detail: 1, ao: false, jit: .02 }); }); });
-}
-function animSmoke(P, name, t, amt, rise = .9, drift = [.25, .1]) {
-  for (let i = 0; i < 4; i++) {
-    const o = P[name + i]; if (!o) continue; const f = (t * .45 + i / 4) % 1;
-    o.position.set(drift[0] * f + Math.sin(t * 1.3 + i) * .03, f * rise, drift[1] * f);
-    const sc = amt * Math.sin(Math.min(1, f * 1.15) * PI) * (.6 + f * .9); o.scale.setScalar(Math.max(.001, sc)); o.visible = sc > .01;
-  }
-}
-// Gitter-Turm (Bohrer): vier Pfosten von unten (b) nach oben (t), Kreuzstreben
-function lattice(k, b, tp, y0, y1, col, brace) {
-  const P = [[-1, -1], [1, -1], [1, 1], [-1, 1]];
-  for (const [x, z] of P) k.beam(col, [x * b, y0, z * b], [x * tp, y1, z * tp], .06, { layer: 'metal' });
-  const lv = 3;
-  for (let i = 0; i < lv; i++) {
-    const ya = y0 + (y1 - y0) * i / lv, yb = y0 + (y1 - y0) * (i + 1) / lv, wa = b + (tp - b) * i / lv, wb = b + (tp - b) * (i + 1) / lv;
-    for (let j = 0; j < 4; j++) { const [x1, z1] = P[j], [x2, z2] = P[(j + 1) % 4];
-      if (j !== 0 || i > 0) k.beam(brace, [x1 * wa, ya, z1 * wa], [x2 * wb, yb, z2 * wb], .022, { layer: 'metal' });
-      k.beam(brace, [x1 * wb, yb, z1 * wb], [x2 * wb, yb, z2 * wb], .026, { layer: 'metal' }); }
-  }
-}
-// Leiter (entlang y) an Stelle p, Breite w, Höhe h, Richtung ry
-function ladder(k, p, h, ry = 0, w = .16, col = C.yel) {
-  k.in(p, ry, () => { for (const z of [-w / 2, w / 2]) k.box(col, [0, 0, z], [.02, h, .02], { layer: 'metal' }); for (let y = .08; y < h; y += .09) k.box(col, [0, y, 0], [.014, .014, w], { layer: 'metal' }); });
-}
-// Geländer um ein Rechteck (Halbmaße hx, hz) auf Höhe y
-function railing(k, y, hx, hz, col = C.yel, skip = -1) {
-  const P = [[-hx, -hz], [hx, -hz], [hx, hz], [-hx, hz]];
-  for (let j = 0; j < 4; j++) { if (j === skip) continue; const a = P[j], b = P[(j + 1) % 4];
-    k.beam(col, [a[0], y + .16, a[1]], [b[0], y + .16, b[1]], .018, { layer: 'metal' }); k.beam(col, [a[0], y + .08, a[1]], [b[0], y + .08, b[1]], .012, { layer: 'metal' });
-    const n = Math.max(1, Math.round(Math.hypot(b[0] - a[0], b[1] - a[1]) / .25)); for (let i = 0; i <= n; i++) { const t = i / n; k.box(col, [a[0] + (b[0] - a[0]) * t, y, a[1] + (b[1] - a[1]) * t], [.018, .17, .018], { layer: 'metal' }); } }
-}
-// Ziegel auf einer Wand (Rahmen face): z0…z1, y0…y1
-function bricks(k, z0, z1, y0, y1, skip) {
-  const ch = .085; let row = 0;
-  for (let y = y0; y < y1 - .03; y += ch, row++) {
-    let z = z0 - (row % 2 ? .07 : 0);
-    while (z < z1 - .02) { const L = .14 + k.R(0, .03), za = Math.max(z, z0), zb = Math.min(z + L, z1);
-      if (zb - za > .04 && !(skip && skip((za + zb) / 2, y + ch / 2))) k.boxc(k.rand() < .2 ? C.brick2 : C.brick, [.008, y + ch / 2, (za + zb) / 2], [.03, ch - .014, zb - za - .014], { jit: .06 });
-      z += L; }
-  }
-}
 // Sterne-Plakette: zwei Meshes (an/aus), Geometrie je Stufe zwischengespeichert
 const STAR_GEO = {};
 function starGeos(n) {
@@ -291,6 +189,108 @@ const MACH = {
     ladder(k, [-.68, .06, .3], 1.3, PI / 2);
     panel(k, [.55, .06, -.08], 0, C.orangeD);
     return { badge: [.55, .065, .62], heatColor: 0xff8a30 };
+  },
+  // Großbohrer 4×4 (aus 4 Bohrern verschmolzen): Bohrturm mit Kronenrad über der Hauptbohrung, vier Nebenbohrer in den Ecken,
+  // Sammelrohre in einen Erztrichter, EIN Ausgang vorn; Leitstand mit Fenstern, Tanks, Leitern, Geländer, Schornsteine.
+  grossbohrer(k, o) {
+    const n = 4; plinth(k, n, { h: .08 }); chute(k, n, .5, C.orange);
+    // Hauptbohrung mit Kragen, Warnring und Erzbrocken
+    const cx = -.25, cz = -.2;
+    k.cyl(C.black, [cx, .081, cz], .5, .006, 18, { ao: false });
+    k.ring(C.steelD, [cx, .08, cz], .66, .5, .07, 22, { layer: 'metal' });
+    k.ring(C.yel, [cx, .15, cz], .7, .64, .012, 22);
+    for (let i = 0; i < 12; i++) k.cyl(C.dark, [cx + Math.cos(i / 12 * TAU) * .58, .15, cz + Math.sin(i / 12 * TAU) * .58], .022, .02, 6, { layer: 'metal' });
+    for (let i = 0; i < 16; i++) { const a = i / 16 * TAU + k.R(0, .3), r = k.R(.72, .95); k.ball(0xffffff, [cx + Math.cos(a) * r, .1, cz + Math.sin(a) * r], [k.R(.05, .1), k.R(.04, .07), k.R(.05, .09)], { dod: true, layer: 'ore', r: [k.R(0, 3), k.R(0, 3), 0] }); }
+    // Bohrturm (Gitter), zwei Plattformen, Kronenrad
+    k.in([cx, 0, cz], 0, () => {
+      lattice(k, .62, .3, .08, 1.5, C.orange, C.orangeD);
+      k.in([0, 1.5, 0], 0, () => lattice(k, .3, .2, 0, 1.25, C.orange, C.orangeD));
+      k.bev(C.dark, [0, 1.48, 0], [.86, .06, .86], .02, { layer: 'metal' });
+      railing(k, 1.54, .42, .42, C.yel, 0);
+      k.bev(C.dark, [0, 2.72, 0], [.56, .06, .56], .02, { layer: 'metal' });
+      railing(k, 2.78, .27, .27, C.yel, -1);
+      // Kronenrad mit Lagerböcken (Teil 'crown' dreht sich um x)
+      for (const z of [-.16, .16]) k.bev(C.steelD, [0, 2.78, z], [.12, .3, .05], .015, { layer: 'metal' });
+      k.part('crown', [0, 3.0, 0], c => {
+        c.gear(C.orange, [0, 0, 0], .26, .07, 14, { r: [PI / 2, 0, 0], hole: .25 });
+        c.cyl(C.dark, [0, 0, 0], .07, .36, 10, { layer: 'metal', r: [PI / 2, 0, 0] });
+        for (let i = 0; i < 6; i++) c.in([0, 0, 0], 0, () => c.box(C.steelD, [Math.cos(i / 6 * TAU) * .13, Math.sin(i / 6 * TAU) * .13, 0], [.03, .03, .09], { layer: 'metal' }));
+      });
+      beacon(k, [.2, 2.78, .2], .16);
+      // Seile vom Kronenrad zum Bohrkopf
+      for (const x of [-.05, .05]) k.box(C.dark, [x, 1.62, 0], [.012, 1.36, .012], { layer: 'metal', ao: false });
+      // Motorhaus auf der unteren Plattform
+      k.in([.18, 1.54, -.22], 0, () => {
+        k.bev(C.orange, [0, 0, 0], [.42, .34, .3], .04);
+        for (let i = 0; i < 6; i++) k.box(C.steelD, [-.215, .05 + i * .045, 0], [.02, .025, .24], { layer: 'metal' });
+        k.bev(C.dark, [0, .34, 0], [.32, .05, .24], .02, { layer: 'metal' });
+        k.pipe(C.steelD, [[.1, .36, .06], [.1, .62, .06], [.18, .7, .06]], .03, { layer: 'metal' });
+        smokeStack(k, [.22, .74, .06], 'smoke', 0x8a8680);
+      });
+      // Großer Bohrkopf (stampft) mit drehendem Bohrer
+      k.part('head', [0, 1.05, 0], h => {
+        h.cyl(C.orange, [0, 0, 0], .3, .36, 14, { bevel: .1, bevel2: .1 });
+        h.cyl(C.yel, [0, .16, 0], .305, .07, 14);
+        h.cyl(C.dark, [0, .36, 0], .18, .14, 12, { layer: 'metal' });
+        h.beam(C.steelD, [0, .5, 0], [0, .56, 0], .26, { layer: 'metal' });
+        for (let i = 0; i < 10; i++) { const a = i / 10 * TAU; h.ball(C.steelD, [Math.cos(a) * .3, .32, Math.sin(a) * .3], .02, { detail: 0, layer: 'metal' }); }
+        for (const s of [-1, 1]) h.box(C.steel, [0, .04, s * .31], [.1, .32, .04], { layer: 'metal' });
+        h.part('bit', [0, 0, 0], b => {
+          b.cyl(C.steelD, [0, -.14, 0], .13, .14, 10, { layer: 'metal' });
+          for (let i = 0; i < 14; i++) b.in([0, -.16 - i * .05, 0], i * .5, () => b.box(C.steel, [0, 0, 0], [.22 - i * .009, .035, .05], { layer: 'metal', r: [.25, 0, 0] }));
+          b.cone(C.steel, [0, -.86, 0], .08, .14, 8, { layer: 'metal', r: [PI, 0, 0] });
+        });
+      });
+    });
+    ladder(k, [cx - .66, .08, cz + .3], 1.42, PI / 2);
+    // Vier Nebenbohrer in den Ecken mit Sammelrohren zum Erztrichter
+    const hop = [1.15, .5];
+    const sat = [[-1.42, -1.42], [-1.42, 1.42], [1.4, -1.42], [1.42, 1.48]];
+    sat.forEach(([x, z], i) => {
+      k.ring(C.steelD, [x, .08, z], .3, .2, .05, 14, { layer: 'metal' });
+      for (let j = 0; j < 5; j++) { const a = j / 5 * TAU + i; k.ball(0xffffff, [x + Math.cos(a) * .32, .1, z + Math.sin(a) * .32], [.05, .035, .045], { dod: true, layer: 'ore' }); }
+      for (const [a, b] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) k.beam(C.orangeD, [x + a * .22, .08, z + b * .22], [x + a * .1, .72, z + b * .1], .035, { layer: 'metal' });
+      k.bev(C.orange, [x, .7, z], [.3, .2, .3], .03);
+      k.bev(C.dark, [x, .9, z], [.22, .05, .22], .015, { layer: 'metal' });
+      k.part('drl' + i, [x, .7, z], d => {
+        d.cyl(C.steelD, [0, -.1, 0], .07, .1, 8, { layer: 'metal' });
+        for (let j = 0; j < 7; j++) d.in([0, -.12 - j * .06, 0], j * .6, () => d.box(C.steel, [0, 0, 0], [.12 - j * .008, .03, .03], { layer: 'metal', r: [.25, 0, 0] }));
+      });
+      // Sammelrohr (Förderschlauch) zum Trichter
+      const mid = [(x + hop[0]) / 2, .62, (z + hop[1]) / 2];
+      k.pipe(C.steelD, [[x, .82, z], [x + (hop[0] - x) * .2, .82, z + (hop[1] - z) * .2], mid, [hop[0] - .08 * Math.sign(hop[0] - x || 1), .6, hop[1]]], .055, { layer: 'metal' });
+      for (let j = 1; j <= 3; j++) { const t = j / 4; k.cyl(C.yel, [x + (hop[0] - x) * t, .78 - .12 * t, z + (hop[1] - z) * t], .065, .03, 8); }
+    });
+    // Erztrichter über der Rutsche
+    k.in([hop[0], 0, hop[1]], 0, () => {
+      for (const [a, b] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) k.box(C.steelD, [a * .22, .08, b * .22], [.05, .5, .05], { layer: 'metal' });
+      k.wedge(C.orangeD, [0, .5, 0], .56, .22, .56, { r: [0, 0, PI] });
+      k.bev(C.orange, [0, .56, 0], [.6, .14, .6], .03);
+      for (let j = 0; j < 8; j++) k.ball(0xffffff, [k.R(-.2, .2), .72, k.R(-.2, .2)], [.07, .05, .06], { dod: true, layer: 'ore' });
+      k.stripes([.31, .62, 0], .56, .06, .004, { r: [0, PI / 2, 0] });
+    });
+    // Leitstand mit Fenstern, Tür, Antenne
+    k.in([-1.45, 0, 0], 0, () => {
+      k.bev(C.cream, [0, .08, 0], [.6, .62, .9], .04);
+      k.bev(C.orangeD, [0, .7, 0], [.68, .06, .98], .02);
+      face(k, [0, 0, 0], 0, () => { for (const z of [-.24, .24]) { k.box(C.dark, [.305, .5, z], [.01, .22, .3], { ao: false }); k.box(C.glass, [.31, .5, z], [.006, .18, .26], { layer: 'glow', ao: false }); } });
+      face(k, [0, 0, 0], 3, () => { k.box(C.steelD, [.46, .3, 0], [.012, .4, .22], { layer: 'metal' }); k.cyl(C.yel, [.47, .32, .08], .015, .012, 6, { ax: 'x' }); });
+      k.cyl(C.steelD, [.18, .76, .3], .012, .5, 6, { layer: 'metal' }); k.ball(0xff3a2a, [.18, 1.27, .3], .025, { layer: 'glow', detail: 1 });
+      k.cyl(C.dark, [-.12, .76, -.25], .09, .03, 10, { layer: 'metal' });
+      k.part('dish', [-.12, .82, -.25], d => { d.cyl(C.white, [0, .06, 0], .14, .03, 12, { r: [.5, 0, 0] }); d.cyl(C.steelD, [0, 0, 0], .02, .08, 6, { layer: 'metal' }); });
+    });
+    // Tanks hinten (Kühlwasser, Diesel) mit Rohren zum Turm
+    for (const [x, col] of [[-.15, C.blue], [.55, C.red]]) {
+      k.cyl(col, [x, .08, -1.6], .24, .6, 14, { bevel: .15, bevel2: .15 });
+      for (const y of [.2, .5]) k.cyl(C.steelD, [x, .08 + y, -1.6], .245, .03, 14, { layer: 'metal' });
+      k.ring(C.yel, [x, .69, -1.6], .2, .16, .02, 12);
+    }
+    k.pipe(C.copper, [[-.15, .5, -1.36], [-.15, .5, -1.0], [cx, .5, cz - .7]], .028, { layer: 'metal' });
+    k.pipe(C.copper, [[.55, .3, -1.36], [.55, .3, -.95], [cx + .5, .3, cz - .5]], .024, { layer: 'metal' });
+    panel(k, [1.55, .08, -.55], 0, C.orangeD);
+    beacon(k, [1.75, .08, 1.0], .2);
+    for (const z of [-1.0, 1.0]) k.stripes([0, .081, z * 1.92], 3.6, .06, .005, {});
+    return { badge: [1.6, .085, -1.75], heatColor: 0xff8a30 };
   },
   ofen(k, o) {
     const n = 2; plinth(k, n); chute(k, n, .5, C.steelD);
@@ -680,17 +680,54 @@ const MACH = {
   },
 };
 
-// Vorlage (zwischengespeichert)
+// Vorlage (zwischengespeichert): Typ + Variante (Bandkurve/Tunnel) + Ausbaustufe mk (1–3)
 const CACHE = new Map();
-function templateFor(type, variant) {
-  const key = type + ':' + variant; let T = CACHE.get(key);
+export const MK_MAX = 3;
+const mkOf = (type, mk) => MK_TYPES.includes(type) ? Math.max(1, Math.min(MK_MAX, (mk | 0) || 1)) : 1;
+function templateFor(type, variant, mk = 1) {
+  const key = type + ':' + variant + ':' + mk; let T = CACHE.get(key);
   if (T) return T;
   let k, info = {};
   if (type === 'band') k = beltTemplate(variant);
   else if (type === 'tunnel') k = beltTemplate(variant === 'exit' ? 'tunnelOut' : 'tunnelIn');
-  else { k = new Kit(1000 + BUILDING_TYPES.indexOf(type)); k.aoH = .7; info = MACH[type](k, {}) || {}; }
+  else {
+    k = new Kit(1000 + BUILDING_TYPES.indexOf(type)); k.aoH = EXT[type]?.aoH ?? .7;
+    info = (EXT[type] ? EXT[type].build(k, {}) : MACH[type](k, {})) || {};
+    if (mk > 1) mkDecor(type, k, mk, info);
+  }
   T = { built: k.build(), info }; CACHE.set(key, T); return T;
 }
+
+// ---------- Hülle für weit entfernte Gebäude (LOD): alle Ebenen inkl. Teile in Ruhelage zusammengeführt ----------
+// Eigene Materialien der Gebäude (Lampe, Glut, Erz, Stufe, Takt, Filter) werden auf gemeinsame abgebildet.
+// mirror = true: an z gespiegelt (2×2 bei rot 1/2), Dreiecke umgedreht → Instanzen ohne negative Determinante.
+const HULL = new Map();
+const HULL_SKIP = /^(smoke|fx|zap|glint|b\d$)/;
+const HULL_LAYER = { lamp: 'hlamp', heat: 'hheat', ore: 'hore', lv: 'metal', takt: 'base', filter: 'glow' };
+export function hullFor(type, variant = '', mk = 1, mirror = false) {
+  mk = mkOf(type, mk); const key = type + ':' + variant + ':' + mk + (mirror ? ':m' : ''); let H = HULL.get(key);
+  if (H) return H;
+  const T = templateFor(type, variant, mk), L = {}, M = new THREE.Matrix4();
+  const walk = (node, m) => {
+    for (const [layer, g] of Object.entries(node.geos)) { const c = g.clone(); if (c.attributes.uv && layer !== 'belt') c.deleteAttribute('uv'); c.applyMatrix4(m); (L[HULL_LAYER[layer] || layer] ||= []).push(c); }
+    for (const p of node.parts) if (!HULL_SKIP.test(p.name)) walk(p, m.clone().multiply(p.matrix));
+  };
+  walk(T.built, M);
+  H = {};
+  for (const [layer, list] of Object.entries(L)) {
+    let g = mergeGeometries(list, false); list.forEach(x => x.dispose());
+    if (!g) continue;
+    if (mirror) { g.applyMatrix4(new THREE.Matrix4().makeScale(1, 1, -1)); for (const name of Object.keys(g.attributes)) { const A = g.attributes[name], s = A.itemSize, arr = A.array;
+      for (let i = 0; i < A.count; i += 3) for (let j = 0; j < s; j++) { const t = arr[(i + 1) * s + j]; arr[(i + 1) * s + j] = arr[(i + 2) * s + j]; arr[(i + 2) * s + j] = t; } } }
+    g.computeBoundingSphere(); H[layer] = g;
+  }
+  HULL.set(key, H); return H;
+}
+export const HULL_MATS = (() => {
+  const heat = makeHeatMat(0xff7a20); heat.heat = .35;
+  return { ...MATS, belt: beltMat, hlamp: new THREE.MeshBasicMaterial({ color: new THREE.Color(0xffb030).multiplyScalar(2.2) }), hheat: heat,
+    hore: new THREE.MeshStandardMaterial({ color: 0x8a7a6c, roughness: .7, flatShading: true }) };
+})();
 
 const lerp = (a, b, t) => a + (b - a) * t;
 const goldPlain = makeGoldMat();
@@ -709,14 +746,20 @@ function makeTaktMat() {
 }
 
 // =====================================================================================================================
+// makeBuilding(type, { rot, level, mk, ore, filter, inDir, kind, exit }) →
+//   { group, update(t, state), ports, size, type, kind, parts, spots, mk, setRot, setLevel, setMk(1–3), setOre, setFilter, anchor(name) → [x,y,z] Welt,
+//     lodKey(), lodMatrix(), dispose(), … Zusatz je Typ (z. B. wunder: setStage, launch) }
+// Gebäude ohne Ausgang (keine Rutsche): Verkauf, Kraftwerk, Solar, Mast, Heizer, Wunder.
+const NO_OUT = new Set(['verkauf', 'kraftwerk', 'solar', 'mast', 'heizer', 'wunder']);
 export function makeBuilding(type, opts = {}) {
   if (!SIZES[type]) throw new Error('unknown building ' + type);
   const n = SIZES[type];
   let variant = '';
   if (type === 'band') variant = opts.kind || beltKind(opts.inDir, opts.rot ?? 0);
   if (type === 'tunnel') variant = opts.exit ? 'exit' : 'entry';
-  const T = templateFor(type, variant), info = T.info;
-  const mats = { ...MATS, belt: beltMat };
+  let mk = mkOf(type, opts.mk);
+  let T = templateFor(type, variant, mk), info = T.info;
+  const mats = { ...MATS, belt: beltMat, ...(EXT[type]?.mats || {}) };
   const heat = mats.heat = makeHeatMat(info.heatColor ?? 0xff7a20);
   const lamp = mats.lamp = new THREE.MeshBasicMaterial({ color: LAMP.idle.clone() });
   const filt = mats.filter = new THREE.MeshBasicMaterial({ color: new THREE.Color(0xffffff) });
@@ -724,56 +767,83 @@ export function makeBuilding(type, opts = {}) {
   const lvMat = new THREE.MeshStandardMaterial({ color: LEVEL_C[1], roughness: .35, metalness: .7, flatShading: true });
   let takt = null; if (info.takt) takt = mats.takt = makeTaktMat();
   const own = [heat, lamp, filt, ore, lvMat, takt].filter(Boolean);
-  const inst = instantiate(T.built, mats);
   const root = new THREE.Group(), pivot = new THREE.Group();
-  pivot.position.set(n / 2, 0, n / 2); pivot.add(inst.group); root.add(pivot);
+  pivot.position.set(n / 2, 0, n / 2); root.add(pivot);
   root.userData.type = type; root.name = type;
-  const P = inst.parts;
-  // Sterne (nicht bei Bändern/Tunneln)
-  let badge = null;
-  if (info.badge) { badge = makeBadge(lvMat); badge.position.set(...info.badge); if (info.small) badge.scale.setScalar(.8); inst.group.add(badge); }
-  const setLevel = l => { l = Math.max(0, Math.min(5, l | 0)); if (badge) badge.userData.set(l); lvMat.color.set(LEVEL_C[l] ?? LEVEL_C[1]); };
-  setLevel(opts.level ?? 1);
+  // Sterne (nicht bei Bändern/Tunneln) und Gold-Funkeln an der Rutsche: einmal angelegt, beim Ausbau umgehängt
+  let badge = null; if (info.badge) { badge = makeBadge(lvMat); if (info.small) badge.scale.setScalar(.8); }
+  let glint = null;
+  if (n >= 2 && !NO_OUT.has(type)) { glint = new THREE.Group(); glint.name = 'glint'; const sg = starGeo(4, .3); for (let i = 0; i < 3; i++) { const m = new THREE.Mesh(sg, goldPlain); m.scale.set(.06, .01, .06); m.rotation.x = PI / 2; glint.add(m); }
+    glint.position.set(n / 2 - .15, BELT_Y + .45, n === 3 ? 0 : OUT_INDEX(n) + .5 - n / 2); glint.visible = false; }
+  let inst = null, P = {};
+  let rot = opts.rot ?? 0;
   // Kurven: Vorlage läuft von −x nach ±z → so drehen, dass der Ausgang in Richtung rot zeigt
   const rOff = variant === 'right' ? -1 : variant === 'left' ? 1 : 0;
   // gerade Größen (2×2): die Sim nimmt immer das Feld mit Index n/2 in Weltrichtung → bei rot 1 und 2 spiegeln
   const mir = r => (n % 2 === 0 && n > 1 && (((r % 4) + 4) % 4 === 1 || ((r % 4) + 4) % 4 === 2)) ? -1 : 1;
-  const setRot = r => { pivot.rotation.y = -(((r + rOff) % 4 + 4) % 4) * PI / 2; inst.group.scale.z = mir(r); root.userData.rot = r; };
-  setRot(opts.rot ?? 0);
+  const mount = () => {
+    if (inst) pivot.remove(inst.group);
+    inst = instantiate(T.built, mats); P = inst.parts; pivot.add(inst.group);
+    if (badge) { badge.position.set(...(T.info.badge || info.badge)); inst.group.add(badge); }
+    if (glint) inst.group.add(glint);
+    inst.group.scale.z = mir(rot);
+  };
+  mount();
+  // Ausgänge (Mitte der Kante des Ausgabefeldes, in Gruppenkoordinaten) – bei jeder Drehung neu
+  const outs = [];
+  const loc2grp = (x, z) => { const r = ((rot + rOff) % 4 + 4) % 4, a = -r * PI / 2, c = Math.cos(a), s = Math.sin(a); return [n / 2 + x * c + z * s, n / 2 - x * s + z * c]; };
+  const portOf = (x, z, d) => { const [gx, gz] = loc2grp(x, z * mir(rot)); return { x: gx, z: gz, dir: ((rot + rOff + d) % 4 + 4) % 4 }; };
+  const calcPorts = () => {
+    outs.length = 0;
+    if (type === 'verteiler') outs.push(portOf(.5, 0, 0), portOf(0, -.5, 3), portOf(0, .5, 1));
+    else if (type === 'sortierer') outs.push(portOf(.5, 0, 0), portOf(0, -.5, 3));
+    else if (type === 'band') outs.push(portOf(variant === 'straight' ? .5 : 0, variant === 'left' ? -.5 : variant === 'right' ? .5 : 0, variant === 'left' ? 3 : variant === 'right' ? 1 : 0));
+    else if (type === 'tunnel') { if (variant === 'exit') outs.push(portOf(.5, 0, 0)); }
+    else if (!NO_OUT.has(type)) outs.push(portOf(n / 2, OUT_INDEX(n) + .5 - n / 2, 0));
+  };
+  const setRot = r => { rot = r; pivot.rotation.y = -(((r + rOff) % 4 + 4) % 4) * PI / 2; inst.group.scale.z = mir(r); root.userData.rot = r; calcPorts(); };
+  setRot(rot);
+  const setLevel = l => { l = Math.max(0, Math.min(5, l | 0)); if (badge) badge.userData.set(l); lvMat.color.set(LEVEL_C[l] ?? LEVEL_C[1]); };
+  setLevel(opts.level ?? 1);
   const setOre = id => { const L = ITEM_LOOK[id]; if (L) ore.color.set(L.color); };
   if (opts.ore) setOre(opts.ore);
   const setFilter = c => { if (c === null || c === undefined) { filt.color.setRGB(.3, .32, .36); return; } const L = typeof c === 'string' ? ITEM_LOOK[c] : null; filt.color.set(L ? L.color : c).multiplyScalar(1.4); };
   setFilter(opts.filter ?? null);
-  // Gold-Funkeln an der Rutsche
-  let glint = null;
-  if (n >= 2) { glint = new THREE.Group(); const sg = starGeo(4, .3); for (let i = 0; i < 3; i++) { const m = new THREE.Mesh(sg, goldPlain); m.scale.set(.06, .01, .06); m.rotation.x = PI / 2; glint.add(m); }
-    glint.position.set(n / 2 - .15, BELT_Y + .45, n === 3 ? 0 : .5); glint.visible = false; inst.group.add(glint); }
-  // Ausgänge (Mitte der Kante des Ausgabefeldes, in Gruppenkoordinaten)
-  const outs = [];
-  const loc2grp = (x, z) => { const r = (((opts.rot ?? 0) + rOff) % 4 + 4) % 4, a = -r * PI / 2, c = Math.cos(a), s = Math.sin(a); return [n / 2 + x * c + z * s, n / 2 - x * s + z * c]; };
-  const portOf = (x, z, d) => { const [gx, gz] = loc2grp(x, z * mir(opts.rot ?? 0)); return { x: gx, z: gz, dir: (((opts.rot ?? 0) + rOff + d) % 4 + 4) % 4 }; };
-  if (type === 'verteiler') outs.push(portOf(.5, 0, 0), portOf(0, -.5, 3), portOf(0, .5, 1));
-  else if (type === 'sortierer') outs.push(portOf(.5, 0, 0), portOf(0, -.5, 3));
-  else if (type === 'band') outs.push(portOf(variant === 'straight' ? .5 : 0, variant === 'left' ? -.5 : variant === 'right' ? .5 : 0, variant === 'left' ? 3 : variant === 'right' ? 1 : 0));
-  else if (type === 'tunnel') { if (variant === 'exit') outs.push(portOf(.5, 0, 0)); }
-  else if (type !== 'verkauf') outs.push(portOf(n / 2, OUT_INDEX(n) + .5 - n / 2, 0));
+  // Ausbaustufe: Vorlage tauschen, Grundriss bleibt
+  const setMk = m => { m = mkOf(type, m); if (m === mk) return mk; mk = m; T = templateFor(type, variant, mk); mount(); root.userData.mk = mk; lastT = null; return mk; };
+  root.userData.mk = mk;
+  // Ankerpunkt (info.spots[name], z. B. 'cable') in Weltkoordinaten
+  const _a = new THREE.Vector3();
+  const anchor = (name = 'cable') => { const s = (T.info.spots || {})[name]; if (!s) return null; root.updateWorldMatrix(true, true); return _a.set(s[0], s[1], s[2]).applyMatrix4(inst.group.matrixWorld).toArray(); };
 
   // ---------- Bewegung ----------
   let lastT = null, act = 0, spin = 0, cyc = 0, flyA = 0;
-  const crates = info.crates || 0;
+  const ext = EXT[type] || null;
+  const ctx = { type, root, mats, heat, lamp, ore, store: {}, get P() { return P; }, get info() { return T.info; }, get mk() { return mk; }, act: 0, spin: 0, cyc: 0, dt: 0 };
   const update = (t, s = {}) => {
     const dt = lastT === null ? 0 : Math.min(.1, Math.max(0, t - lastT)); lastT = t;
     const busy = typeof s.busy === 'number' ? s.busy : s.busy ? 1 : 0;
     act = lerp(act, busy, 1 - Math.exp(-4 * dt)); if (lastT !== null && dt === 0 && busy) act = Math.max(act, busy * .999);
     spin += act * dt; cyc += act * dt;
     if (s.level !== undefined && s.level !== root.userData.level) { root.userData.level = s.level; setLevel(s.level); }
+    if (s.mk !== undefined && s.mk !== mk) setMk(s.mk);
     if (s.ore !== undefined && s.ore !== root.userData.ore) { root.userData.ore = s.ore; setOre(s.ore); }
     if (s.filterColor !== undefined && s.filterColor !== root.userData.filter) { root.userData.filter = s.filterColor; setFilter(s.filterColor); }
+    if (!root.visible) return;                                   // ausgeblendet (LOD-Hülle zeigt es): keine Bewegung rechnen
     lamp.color.copy(busy > .5 ? LAMP.busy : LAMP.idle).multiplyScalar(.8 + .2 * Math.sin(t * (busy > .5 ? 6 : 2)));
+    if (s.power !== undefined && s.power < .05 && !NO_OUT.has(type)) lamp.color.setRGB(1.6, .15, .1).multiplyScalar(Math.sin(t * 5) > 0 ? 1.4 : .25);   // kein Strom: rot blinkend
     if (P.bar) P.bar.scale.z = Math.max(.02, s.progress ?? 0);
     if (P.flap) P.flap.rotation.z = act * (.25 + .15 * Math.sin(t * 9)) * (type === 'sortierer' ? 0 : 1);
     if (glint) { glint.visible = !!s.gold; if (s.gold) glint.children.forEach((m, i) => { const a = t * 2 + i * 2.1; m.position.set(Math.cos(a) * .12, Math.sin(t * 5 + i) * .08, Math.sin(a) * .22); const k2 = .5 + .5 * Math.sin(t * 9 + i * 2); m.scale.set(.05 * k2 + .02, .01, .05 * k2 + .02); m.rotation.z = t * 3 + i; }); }
+    if (ext) { ctx.act = act; ctx.spin = spin; ctx.cyc = cyc; ctx.dt = dt; ext.anim?.(ctx, t, s); return; }
     switch (type) {
+      case 'grossbohrer': {
+        P.bit.rotation.y = spin * 10; P.crown.rotation.z = -spin * 6;
+        const st = cyc * 1.6; P.head.position.y = -.14 * act - .07 * act * Math.abs(Math.sin(st * PI)); P.head.position.x = act * .008 * Math.sin(t * 36);
+        for (let i = 0; i < 4; i++) { const d = P['drl' + i]; d.rotation.y = spin * (16 + i * 2) * (i % 2 ? -1 : 1); d.position.y = -.04 * act * Math.abs(Math.sin(st * PI + i)); }
+        P.dish.rotation.y = Math.sin(t * .3) * 1.4;
+        animSmoke(P, 'smoke', t, .35 + .65 * act, 1.0, [.25, -.05]); break;
+      }
       case 'bohrer': {
         P.bit.rotation.y = spin * 14;
         const st = cyc * 2.2; P.head.position.y = -.1 * act - .05 * act * Math.abs(Math.sin(st * PI)); P.head.position.x = act * .006 * Math.sin(t * 40);
@@ -827,36 +897,45 @@ export function makeBuilding(type, opts = {}) {
         P.van.position.y = act * .006 * Math.abs(Math.sin(t * 13)); P.van.position.x = -act * .02 * (.5 + .5 * Math.sin(t * .8)); break;
       }
       case 'lager': {
-        const f = Math.max(0, Math.min(1, s.fill ?? 0)), show = Math.round(f * crates);
+        const crates = T.info.crates || 0, f = Math.max(0, Math.min(1, s.fill ?? 0)), show = Math.round(f * crates);
         for (let i = 0; i < crates; i++) P['cr' + i].visible = i < show;
         P.gauge.scale.y = Math.max(.02, f); P.gauge.position.y = -.07 * (1 - f); break;
       }
       case 'verteiler': P.paddle.rotation.y = -spin * 3 - t * .3; break;
       case 'sortierer': { const sw = s.flap ?? act; P.flap.rotation.y = lerp(0, .85, sw) ; break; }
     }
+    if (mk > 1) mkAnim(type, P, t, act, mk, s, ctx);
   };
   update(0, { busy: 0, level: opts.level ?? 1 });
-  return {
-    group: root, update, ports: { out: outs }, size: n, type, kind: variant, parts: P, setRot, setLevel, setOre, setFilter,
-    spots: info.spots || {},
-    dispose() { own.forEach(m => m.dispose()); },
+  const api = {
+    group: root, update, ports: { out: outs }, size: n, type, kind: variant, get parts() { return P; }, setRot, setLevel, setOre, setFilter, setMk, anchor,
+    get mk() { return mk; }, get spots() { return T.info.spots || {}; }, get rot() { return rot; },
+    // LOD: Schlüssel der Hülle (hullFor) und Lage der Vorlage in der Welt
+    lodKey() { return { type, variant, mk, mirror: mir(rot) < 0 }; },
+    lodMatrix(out = new THREE.Matrix4()) { root.updateWorldMatrix(true, false); pivot.updateMatrix(); return out.multiplyMatrices(root.matrixWorld, pivot.matrix); },
+    dispose() { own.forEach(m => m.dispose()); ext?.dispose?.(ctx); },
   };
+  if (ext?.api) Object.defineProperties(api, Object.getOwnPropertyDescriptors(ext.api(ctx, api)));   // Getter bleiben Getter
+  return api;
 }
 
 // =====================================================================================================================
 // Bänder und Tunnel als Instanzen (für viele hundert Felder): begin() → add(x, y, rot, kind) … → end()
-// kind: 'straight' | 'left' | 'right' | 'tunnelIn' | 'tunnelOut'
+// kind: 'straight' | 'left' | 'right' | 'tunnelIn' | 'tunnelOut'; add(x, y, rot, kind, frost 0…1, speed Tempo-Faktor)
 export class BeltInstancer {
   constructor(parent, { capacity = 512, shadows = true } = {}) { this.parent = parent; this.K = new Map(); this.cap0 = capacity; this.shadows = shadows; this._m = new THREE.Matrix4(); }
   _kind(kind) {
     let K = this.K.get(kind); if (K) return K;
     const variant = kind === 'tunnelIn' ? 'entry' : kind === 'tunnelOut' ? 'exit' : kind;
     const T = templateFor(kind.startsWith('tunnel') ? 'tunnel' : 'band', variant);
-    K = { layers: Object.entries(T.built.geos).map(([layer, geo]) => ({ layer, geo })), meshes: [], cap: 0, n: 0 }; this.K.set(kind, K); this._grow(K, this.cap0); return K;
+    K = { layers: Object.entries(T.built.geos).map(([layer, geo]) => ({ layer, geo: layer === 'belt' ? geo.clone() : geo })), meshes: [], cap: 0, n: 0, fb: null }; this.K.set(kind, K); this._grow(K, this.cap0); return K;
   }
   _grow(K, cap) {
     const mats = { ...MATS, belt: beltMat };
-    const old = K.meshes;
+    const old = K.meshes, oldFb = K.fb;
+    // je Instanz: Frost 0…1 und Verlangsamung (1 − Tempo-Faktor) für Pfeile und Gurt (Attribut aBelt, nur Ebene 'belt')
+    const bl = K.layers.find(l => l.layer === 'belt');
+    if (bl) { K.fb = new THREE.InstancedBufferAttribute(new Float32Array(cap * 2), 2); K.fb.setUsage(THREE.DynamicDrawUsage); if (oldFb) K.fb.array.set(oldFb.array.subarray(0, K.n * 2)); bl.geo.setAttribute('aBelt', K.fb); }
     K.meshes = K.layers.map(({ layer, geo }, i) => {
       const m = new THREE.InstancedMesh(geo, mats[layer] || MATS.base, cap); m.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
       m.castShadow = this.shadows && layer !== 'belt'; m.receiveShadow = true; m.frustumCulled = false; m.count = 0;
@@ -866,13 +945,15 @@ export class BeltInstancer {
     K.cap = cap;
   }
   begin() { for (const K of this.K.values()) K.n = 0; }
-  add(x, y, rot = 0, kind = 'straight') {
+  // frost 0…1 (Eiswelt: Band außerhalb eines Heizers), speed = Tempo-Faktor des Bands (n.slow, Sandsturm …), 1 = normal
+  add(x, y, rot = 0, kind = 'straight', frost = 0, speed = 1) {
     const K = this._kind(kind); if (K.n >= K.cap) this._grow(K, K.cap * 2);
     const off = kind === 'right' ? -1 : kind === 'left' ? 1 : 0;
     const a = -(((rot + off) % 4 + 4) % 4) * PI / 2, c = Math.cos(a), s = Math.sin(a), o = K.n * 16;
     for (const m of K.meshes) { const e = m.instanceMatrix.array; e[o] = c; e[o + 1] = 0; e[o + 2] = -s; e[o + 3] = 0; e[o + 4] = 0; e[o + 5] = 1; e[o + 6] = 0; e[o + 7] = 0; e[o + 8] = s; e[o + 9] = 0; e[o + 10] = c; e[o + 11] = 0; e[o + 12] = x + .5; e[o + 13] = 0; e[o + 14] = y + .5; e[o + 15] = 1; }
+    if (K.fb) { K.fb.array[K.n * 2] = frost; K.fb.array[K.n * 2 + 1] = 1 - Math.max(0, Math.min(1, speed)); }
     K.n++;
   }
-  end() { for (const K of this.K.values()) for (const m of K.meshes) { m.count = K.n; m.visible = K.n > 0; if (K.n) { m.instanceMatrix.needsUpdate = true; m.computeBoundingSphere(); } } }
-  dispose() { for (const K of this.K.values()) for (const m of K.meshes) { this.parent.remove(m); m.dispose(); } this.K.clear(); }
+  end() { for (const K of this.K.values()) { for (const m of K.meshes) { m.count = K.n; m.visible = K.n > 0; if (K.n) { m.instanceMatrix.needsUpdate = true; m.computeBoundingSphere(); } } if (K.fb && K.n) K.fb.needsUpdate = true; } }
+  dispose() { for (const K of this.K.values()) { for (const m of K.meshes) { this.parent.remove(m); m.dispose(); } for (const l of K.layers) if (l.layer === 'belt') l.geo.dispose(); } this.K.clear(); }
 }

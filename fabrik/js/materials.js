@@ -46,6 +46,8 @@ export const baseMat = new THREE.MeshStandardMaterial({ vertexColors: true, flat
 export const metalMat = new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: .36, metalness: .62, envMapIntensity: 1.05 });
 // Leuchtet immer (Lampen, Anzeigen) – über 1 → Bloom
 export const glowMat = new THREE.MeshBasicMaterial({ vertexColors: true, color: new THREE.Color(2.6, 2.6, 2.6) });
+// Chrom (Mk III): spiegelnd, hell
+export const chromeMat = new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: .12, metalness: 1, envMapIntensity: 1.6 });
 // Glas: durchsichtig, spiegelt
 export const glassMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: .06, metalness: .2, transparent: true, opacity: .42, depthWrite: false, envMapIntensity: 1.6 });
 
@@ -85,12 +87,13 @@ export function makeHeatMat(color = 0xff7a20) {
 export const beltMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: .7, metalness: .05 });
 beltMat.onBeforeCompile = sh => {
   Object.assign(sh.uniforms, { uBeltPhase: U.uBeltPhase, uBeltColor: U.uBeltColor, uArrowColor: U.uArrowColor });
-  sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec2 vBUv;')
-    .replace('#include <begin_vertex>', '#include <begin_vertex>\nvBUv = uv;');
+  sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec2 vBUv; attribute vec2 aBelt; varying vec2 vBelt;')
+    .replace('#include <begin_vertex>', '#include <begin_vertex>\nvBUv = uv; vBelt = aBelt;');
   sh.fragmentShader = sh.fragmentShader.replace('#include <common>', `#include <common>
-varying vec2 vBUv; uniform float uBeltPhase; uniform vec3 uBeltColor, uArrowColor;`)
+varying vec2 vBUv; varying vec2 vBelt; uniform float uBeltPhase; uniform vec3 uBeltColor, uArrowColor;
+float bh(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }`)
     .replace('#include <color_fragment>', `#include <color_fragment>
-{ float x = vBUv.x - .5, y = vBUv.y - uBeltPhase;
+{ float x = vBUv.x - .5, y = vBUv.y - uBeltPhase * (1. - vBelt.y);
   // Lamellen quer (weich, mit Abstand ausgeblendet gegen Flimmern)
   float ly = fract(y * 7.); float fwl = fwidth(y * 7.);
   float slat = smoothstep(.5 - fwl, .5 + fwl, abs(ly - .5) * 2.) * (1. - smoothstep(.15, .5, fwl));
@@ -101,9 +104,15 @@ varying vec2 vBUv; uniform float uBeltPhase; uniform vec3 uBeltColor, uArrowColo
   c = mix(c, uArrowColor, a * .92 * (1. - smoothstep(.3, .9, fw)));
   // Ränder etwas dunkler
   c *= 1. - .35 * smoothstep(.36, .5, abs(x));
+  // Frost: eisiger Belag von den Rändern her, Kristall-Glitzern (fest am Band, wandert nicht mit)
+  if (vBelt.x > .001) { float f = vBelt.x; vec2 q = vec2(vBUv.x * 9., vBUv.y * 9.); float n = bh(floor(q)) * .5 + bh(floor(q * 2.3)) * .5;
+    float edge = smoothstep(.5 - .42 * f, .5, abs(x) + n * .12 * f);
+    float cov = clamp(f * (.55 + .45 * n) + edge, 0., 1.);
+    c = mix(c, vec3(.82, .9, .98), cov * .85);
+    c += vec3(.6, .8, 1.) * step(.985 - .03 * f, bh(floor(q * 3.1))) * f * .8; }
   diffuseColor.rgb = c; }`);
 };
-beltMat.customProgramCacheKey = () => 'belt1';
+beltMat.customProgramCacheKey = () => 'belt2';
 
 // ---------- Wasser / Öl (Becken, Pfützen) ----------
 function makeLiquid(a, b, key, gloss = .1) {
@@ -158,4 +167,4 @@ export function makeFogMat(color = 0xdfe6ee, opacity = .7) {
 export const ghostMat = c => new THREE.MeshStandardMaterial({ color: c, transparent: true, opacity: .5, emissive: c, emissiveIntensity: .35, depthWrite: false, flatShading: true });
 
 // Standard-Satz für instantiate()
-export const MATS = { base: baseMat, metal: metalMat, glow: glowMat, glass: glassMat, gold: goldMat, belt: beltMat, water: waterMat, oil: oilMat };
+export const MATS = { base: baseMat, metal: metalMat, glow: glowMat, glass: glassMat, gold: goldMat, belt: beltMat, water: waterMat, oil: oilMat, chrome: chromeMat };

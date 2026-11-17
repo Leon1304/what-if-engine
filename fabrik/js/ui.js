@@ -1,34 +1,33 @@
 // Cogtopia – Oberfläche: Startmenü, HUD, Bauleiste, Info-Panel, alle Panels (Forschung, Aufträge, Rezeptbuch, Statistik,
 // Erfolge, Land, Kisten, Neue Fabrik, Einstellungen, Spielstände), Anleitung, Sprechblasen, Toasts und eigene Dialoge.
+// Ausbau 2 in ui/meta.js (Glücksrad, Serie, Ereignisse, Album, Ziele, Wunder, Wochen-Herausforderung, Hinweise) und
+// ui/tools.js (Menü, Blaupausen, Überlagerungen, Fotomodus, Zeitraffer) – beide als Mixins auf UI.prototype.
 // Alle Texte über i18n (t/name/desc), Zahlen über fmtNum. Klicks per Delegation (data-act), damit Neuzeichnen nichts kaputt macht.
 import { t, name, desc, fmtNum, fmtTime, getLang, setLang, onLang, LANGS } from './i18n.js';
 import { BUILDINGS, ITEMS, ITEM_IDS, RESEARCH, PATENTS, BIOMES, ACHIEVEMENTS, COLORS, TITLES, TUTORIAL, RECIPES, RAW } from './data.js';
 import { PRESTIGE_AT, XP_LV, PLOTS, PLOT, START_PLOT, TAKT_TIME } from './sim.js';
 import * as storage from './storage.js';
-
-const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-const $ = (s, el = document) => el.querySelector(s);
-const clamp = (x, a = 0, b = 1) => x < a ? a : x > b ? b : x;
-// kleine Raten mit einer Nachkommastelle (0,4/s statt 0/s)
-const fmtRate = v => v > 0 && v < 10 ? (Math.round(v * 10) / 10).toFixed(1).replace('.', getLang() === 'de' ? ',' : '.').replace(/[.,]0$/, '') : fmtNum(v);
+import { esc, $, clamp, fmtRate, ROMAN, pct, clock, PANEL_ICON, SIDE, MENU } from './ui/common.js';
+export { PANEL_ICON, SIDE, MENU };
+import { MetaUI } from './ui/meta.js';
+import { ToolsUI } from './ui/tools.js';
 
 export const CATS = [
-  ['logistics', ['band', 'tunnel', 'verteiler', 'sortierer', 'lager']],
+  ['logistics', ['band', 'tunnel', 'verteiler', 'sortierer', 'lager', 'drohnenhafen']],
   ['mining', ['bohrer']],
   ['processing', ['ofen', 'presse', 'drahtzug', 'raffinerie', 'montage']],
-  ['special', ['verkauf', 'labor', 'experiment']],
+  ['power', ['kraftwerk', 'solar', 'mast', 'heizer']],
+  ['special', ['verkauf', 'labor', 'experiment', 'wunder']],
 ];
 export const HOTKEYS = ['band', 'bohrer', 'ofen', 'verkauf', 'presse', 'drahtzug', 'montage', 'labor', 'verteiler'];
-const EMO = { band: '➡️', tunnel: '🕳️', verteiler: '🔀', sortierer: '🔃', bohrer: '⛏️', ofen: '🔥', presse: '🔨', drahtzug: '🧵', montage: '🦾',
-  raffinerie: '🛢️', experiment: '🧪', labor: '🔬', verkauf: '💰', lager: '📦' };
-export const PANELS = [
-  ['research', '🔬'], ['contracts', '📋'], ['book', '📖'], ['stats', '📈'], ['achievements', '🏆'], ['plots', '🗺️'], ['crates', '🎁'], ['prestige', '🏭'], ['settings', '⚙️'], ['game', '💾'],
-];
+export const EMO = { band: '➡️', tunnel: '🕳️', verteiler: '🔀', sortierer: '🔃', bohrer: '⛏️', grossbohrer: '⛏️', ofen: '🔥', presse: '🔨', drahtzug: '🧵', montage: '🦾',
+  raffinerie: '🛢️', experiment: '🧪', labor: '🔬', verkauf: '💰', lager: '📦', kraftwerk: '🏭', solar: '☀️', mast: '🗼', heizer: '♨️', drohnenhafen: '🚁', wunder: '🚀' };
+export const PANELS = Object.entries(PANEL_ICON);
 const FLAGS = { en: '🇬🇧', de: '🇩🇪' };
 // Taste für Rückgängig: auf dem Mac ⌘Z (main.js nimmt Strg und ⌘), sonst Strg Z / Ctrl Z
 const IS_MAC = (() => { try { const n = globalThis.navigator || {}; return /Mac|iPhone|iPad|iPod/i.test(n.userAgentData?.platform || n.platform || ''); } catch { return false; } })();
 export const undoKey = () => t(IS_MAC ? 'ui.undoKeyMac' : 'ui.undoKey');
-const STATE_CLS = { work: 'ok', wait: 'warn', full: 'bad', norecipe: 'warn', nodeposit: 'bad', idle: 'mute' };
+const STATE_CLS = { work: 'ok', wait: 'warn', full: 'bad', norecipe: 'warn', nodeposit: 'bad', idle: 'mute', nopower: 'bad', nofuel: 'bad', nolink: 'warn', done: 'ok' };
 
 export class UI {
   constructor(app) {
@@ -42,7 +41,8 @@ export class UI {
       boosts: $('.hud .boosts', this.root), side: $('.side', this.root), bar: $('.buildbar', this.root), toolbar: $('.toolbar', this.root),
       info: $('.info', this.root), sheet: $('.sheet', this.root), toasts: $('.toasts', this.root), tut: $('.tut', this.root), anchors: $('.anchors', this.root),
       menu: $('.menu', this.root), modals: $('.modals', this.root), overlay: $('.overlay', this.root), ctip: $('.ctip', this.root), btip: $('.btip', this.root),
-      title: $('.hud .ttl', this.root),
+      title: $('.hud .ttl', this.root), topc: $('.topc', this.root), goal: $('.topc .goal', this.root), evbar: $('.topc .evbar', this.root),
+      ovl: $('.ovl', this.root), photo: $('.photo', this.root), media: $('.media', this.root),
     };
     this.root.addEventListener('click', e => {
       if (e.target === this.el.sheet) { this.closePanel(); return; }
@@ -50,6 +50,7 @@ export class UI {
       this.app.sound?.unlock(); this.act(el.dataset.act, el.dataset, el, e);
     });
     this.root.addEventListener('input', e => { const el = e.target.closest('[data-set]'); if (el) this._setting(el.dataset.set, el.type === 'checkbox' ? el.checked : el.value, true); });
+    this.root.addEventListener('keydown', e => { if (e.key === 'Enter' && e.target.matches('input[data-enter]')) { e.preventDefault(); this.act(e.target.dataset.enter, e.target.dataset, e.target); } });
     this.root.addEventListener('change', e => { const el = e.target.closest('[data-set]'); if (el) this._setting(el.dataset.set, el.type === 'checkbox' ? el.checked : el.value, false); });
     this.root.addEventListener('pointerdown', () => { this.ptrDown = true; }, true);
     addEventListener('pointerup', () => { this.ptrDown = false; }, true);
@@ -84,7 +85,11 @@ export class UI {
 <div class="toasts"></div>
 <div class="ctip"></div>
 <div class="btip"></div>
+<div class="topc live"><div class="goal"></div><div class="evbar"></div></div>
+<div class="ovl live"></div>
 <div class="sheet live"></div>
+<div class="photo live"></div>
+<div class="media live"></div>
 <div class="menu live"></div>
 <div class="overlay live"></div>
 <div class="modals live"></div>`;
@@ -114,7 +119,8 @@ export class UI {
   setMode(m) {
     this.mode = m; this.root.classList.remove('mode-boot', 'mode-menu', 'mode-play'); this.root.classList.add('mode-' + m);
     if (m === 'menu') { this.closePanel(); this.select(0); this.showMenu(); } else this.el.menu.innerHTML = '';
-    if (m === 'play') { this.shown = this.sim.S.money; this.rpShown = this.sim.S.rp; this.sig = {}; this._bar(); this.renderTut(true); }
+    if (m === 'play') { this.shown = this.sim.S.money; this.rpShown = this.sim.S.rp; this.sig = {}; this.hintNow = null; this._bar(); this.renderTut(true); this.renderOverlay(true); this._goalSig = this._evSig = null; }
+    else { this.el.goal.innerHTML = ''; this.el.evbar.innerHTML = ''; this.el.ovl.innerHTML = ''; this.el.ovl.classList.remove('on'); }
   }
   showMenu() {
     const a = storage.info(storage.AUTO), lang = getLang(), other = Object.keys(LANGS).find(l => l !== lang);
@@ -126,6 +132,7 @@ export class UI {
   <div class="mbtns">
     ${cont ? `<button class="btn main big" data-act="continue"><span>▶ ${esc(t('ui.continue'))}</span><small>${esc(this._slotLine(a))}</small></button>` : ''}
     <button class="btn ${cont ? 'wood' : 'main big'}" data-act="new">✚ ${esc(t('ui.newFactory'))}</button>
+    <button class="btn" data-act="panel" data-p="challenge">🏁 ${esc(t('chal.title'))}</button>
     <button class="btn" data-act="loadmenu">📂 ${esc(t('ui.load'))}</button>
     <button class="btn" data-act="panel" data-p="settings">⚙️ ${esc(t('ui.settings'))}</button>
   </div>
@@ -145,34 +152,48 @@ export class UI {
   // Seitenknöpfe, Bauleiste, Werkzeugzeile
   // =====================================================================================================
   _side() {
-    this.el.side.innerHTML = PANELS.map(([p, ic]) => `<button class="btn icon sb" data-act="panel" data-p="${p}" aria-label="${esc(t('ui.p.' + p))}"><span>${ic}</span>${p === 'crates' ? '<i class="badge"></i>' : ''}</button>`).join('');
+    this.el.side.innerHTML = SIDE.map(p => `<button class="btn icon sb" data-act="panel" data-p="${p}" aria-label="${esc(t('ui.p.' + p))}"><span>${PANEL_ICON[p]}</span>${p === 'crates' || p === 'menu' ? '<i class="badge"></i>' : ''}</button>`).join('');
   }
   _bar() {
     const sim = this.sim, tool = this.app.tool;
     const hk = b => { const i = HOTKEYS.indexOf(b); return i >= 0 ? `<kbd>${i + 1}</kbd>` : ''; };
+    const ov = this.app.ov || {}, pw = !sim || sim.S.research.includes('strom') || BIOMES[sim.S.biome]?.allPower;
     let h = `<div class="grp tools"><div class="gl">${esc(t('ui.cat.tools'))}</div><div class="gb">
       <button class="bb tool ${tool === 'remove' ? 'sel' : ''}" data-act="tool" data-b="remove" data-tip="remove"><span class="im"><span class="emo">🧨</span></span><span class="c">${esc(t('ui.remove'))}</span><kbd>X</kbd></button>
-      <button class="bb tool" data-act="undo" data-tip="undo"><span class="im"><span class="emo">↶</span></span><span class="c">${esc(t('ui.undo'))}</span><kbd>${esc(undoKey())}</kbd></button></div></div>`;
-    for (const [cat, list] of CATS) {
+      <button class="bb tool" data-act="undo" data-tip="undo"><span class="im"><span class="emo">↶</span></span><span class="c">${esc(t('ui.undo'))}</span><kbd>${esc(undoKey())}</kbd></button>
+      <button class="bb tool ${tool === 'bp' ? 'sel' : ''}" data-act="tool" data-b="bp" data-tip="bp"><span class="im"><span class="emo">📐</span></span><span class="c">${esc(t('ui.bp'))}</span><kbd>B</kbd></button>
+      ${pw ? `<button class="bb tool ov ${ov.power ? 'sel' : ''}" data-act="overlay" data-k="power" data-tip="ovPower"><span class="im"><span class="emo">⚡</span></span><span class="c">${esc(t('ui.ovPowerShort'))}</span><kbd>P</kbd></button>` : ''}
+      <button class="bb tool ov ${ov.issues ? 'sel' : ''}" data-act="overlay" data-k="issues" data-tip="ovIssues"><span class="im"><span class="emo">🩺</span></span><span class="c">${esc(t('ui.ovIssuesShort'))}</span><kbd>I</kbd></button></div></div>`;
+    for (const [cat, list0] of CATS) {
+      const list = list0.filter(b => this._shown(b)); if (!list.length) continue;
       h += `<div class="grp"><div class="gl">${esc(t('ui.cat.' + cat))}</div><div class="gb">`;
       for (const b of list) {
-        const un = sim ? sim.isUnlocked(b) : BUILDINGS[b].unlock === 'start';
+        const un = this._usable(b);
         h += `<button class="bb ${un ? '' : 'locked'} ${tool === b ? 'sel' : ''}" data-act="tool" data-b="${b}"><span class="im">${this.bIcon(b)}</span><span class="c">${un ? this.coin(sim ? sim.costOf(b) : BUILDINGS[b].cost) : '🔒'}</span>${hk(b)}</button>`;
       }
       h += '</div></div>';
     }
     this.el.bar.innerHTML = h; this._barSig = '';
   }
+  // Gebäude in der Bauleiste zeigen? Freigeschaltet oder die Forschung dafür ist gerade kaufbar (Vorschau); Wunder erst nach dem ersten Prestige
+  _shown(b) {
+    const sim = this.sim, d = BUILDINGS[b]; if (!d) return false;
+    if (!sim) return d.unlock === 'start' && !d.prestige;
+    if (d.prestige && sim.S.total.prestiges < d.prestige) return false;
+    if (sim.isUnlocked(b)) return true;
+    const r = RESEARCH[d.unlock]; return !!r && r.req.every(q => sim.S.research.includes(q));
+  }
+  _usable(b) { const sim = this.sim, d = BUILDINGS[b]; if (!sim) return d.unlock === 'start'; return sim.isUnlocked(b) && !(d.prestige && sim.S.total.prestiges < d.prestige) && !(d.unique && (sim.count[b] || 0) > 0); }
   // günstige Aktualisierung (Kosten, leistbar, gesperrt)
   _barUpdate() {
     const sim = this.sim; if (!sim) return;
     const undo = this.el.bar.querySelector('[data-b="undo"], [data-act="undo"]'), canU = sim.canUndo ? !!sim.canUndo() : true;
     if (undo && undo.classList.contains('dis') === canU) undo.classList.toggle('dis', !canU);
-    let sig = sim.S.research.length + ':' + this.app.tool + ':';
+    let sig = sim.S.research.length + '/' + (sim.count.wunder || 0) + ':' + this.app.tool + ':';
     const st = [];
-    for (const [, list] of CATS) for (const b of list) { const un = sim.isUnlocked(b), c = sim.costOf(b); st.push([b, un, c, un && sim.S.money >= c]); sig += (un ? 1 : 0) + ',' + c + ',' + (sim.S.money >= c ? 1 : 0) + ';'; }
+    for (const [, list] of CATS) for (const b of list) { const un = this._usable(b), c = sim.costOf(b); st.push([b, un, c, un && sim.S.money >= c]); sig += (un ? 1 : 0) + ',' + c + ',' + (sim.S.money >= c ? 1 : 0) + ';'; }
     if (sig === this._barSig) return;
-    const relock = this._barSig && this._barSig.split(':')[0] !== String(sim.S.research.length);
+    const relock = this._barSig && this._barSig.split(':')[0] !== sig.split(':')[0];
     this._barSig = sig;
     if (relock) { this._bar(); this._barSig = sig; }
     for (const [b, un, c, can] of st) {
@@ -181,18 +202,23 @@ export class UI {
       const ce = el.querySelector('.c'); const html = un ? this.coin(c) : '🔒'; if (ce.innerHTML !== html) ce.innerHTML = html;
     }
     this.el.bar.querySelector('[data-b="remove"]')?.classList.toggle('sel', this.app.tool === 'remove');
+    this.el.bar.querySelector('[data-b="bp"]')?.classList.toggle('sel', this.app.tool === 'bp');
+    for (const k of ['power', 'issues']) this.el.bar.querySelector(`[data-k="${k}"]`)?.classList.toggle('sel', !!this.app.ov?.[k]);
   }
   _btip(b) {
     const ty = b.dataset.b || b.dataset.tip, sim = this.sim; if (!ty) return;
     let h;
     if (ty === 'remove') h = `<b>${esc(t('ui.remove'))} <kbd>X</kbd></b><p>${esc(t('ui.hint.remove'))}</p>`;
     else if (ty === 'undo') h = `<b>${esc(t('ui.undo'))} <kbd>${esc(undoKey())}</kbd></b><p>${esc(t('ui.hint.undo'))}</p>`;
+    else if (ty === 'bp') h = `<b>${esc(t('ui.bp'))} <kbd>B</kbd></b><p>${esc(t('ui.hint.bp'))}</p>`;
+    else if (ty === 'ovPower') h = `<b>${esc(t('ui.ovPower'))} <kbd>P</kbd></b><p>${esc(t('ui.hint.ovPower'))}</p>`;
+    else if (ty === 'ovIssues') h = `<b>${esc(t('ui.ovIssues'))} <kbd>I</kbd></b><p>${esc(t('ui.hint.ovIssues'))}</p>`;
     else {
-      const d = BUILDINGS[ty], un = !sim || sim.isUnlocked(ty), i = HOTKEYS.indexOf(ty);
+      const d = BUILDINGS[ty], un = !sim || this._usable(ty), i = HOTKEYS.indexOf(ty);
       h = `<b>${esc(name('building', ty))}${i >= 0 ? ` <kbd>${i + 1}</kbd>` : ''}</b><p>${esc(desc('building', ty))}</p>
         <div class="ln"><span>${esc(t('ui.size'))}</span><span>${d.w}×${d.h}</span></div>
         <div class="ln"><span>${esc(t('ui.cost'))}</span>${this.coin(sim ? sim.costOf(ty) : d.cost)}</div>
-        ${un ? '' : `<div class="lock">🔒 ${esc(t('ui.needsResearch', { id: d.unlock }))}</div>`}`;
+        ${un ? '' : `<div class="lock">🔒 ${esc(d.prestige && sim && sim.S.total.prestiges < d.prestige ? t('reason.prestige') : d.unique && sim && sim.count[ty] ? t('reason.unique') : t('ui.needsResearch', { id: d.unlock }))}</div>`}`;
     }
     const tip = this.el.btip; tip.innerHTML = h; tip.classList.add('on');
     const r = b.getBoundingClientRect(), w = tip.offsetWidth;
@@ -205,12 +231,8 @@ export class UI {
   // Werkzeugzeile über der Bauleiste
   _tool(tool) {
     const el = this.el.toolbar;
-    if (!tool || this.mode !== 'play') { el.classList.remove('on'); el.innerHTML = ''; this._barSig = ''; return; }
-    let h;
-    if (tool === 'remove') h = `<span class="im"><span class="emo">🧨</span></span><span class="tx"><b>${esc(t('ui.remove'))}</b><small>${esc(t('ui.hint.remove'))}</small></span>`;
-    else h = `<span class="im">${this.bIcon(tool)}</span><span class="tx"><b>${esc(name('building', tool))} · ${this.coin(this.sim.costOf(tool))}</b><small>${esc(t('ui.hint.' + (tool === 'band' ? 'belt' : tool === 'bohrer' ? 'drill' : tool === 'tunnel' ? 'tunnel' : 'build')))}</small></span>`;
-    h += `${tool !== 'remove' ? `<button class="btn small" data-act="rotate">⟳ <kbd>R</kbd></button>` : ''}<button class="btn small ghost" data-act="cancelTool">✕ <kbd>Esc</kbd></button>`;
-    el.innerHTML = h; el.classList.add('on'); this._barSig = '';
+    if ((!tool && !this.app.linkFrom) || this.mode !== 'play' || this.app.photoOn) { el.classList.remove('on'); el.innerHTML = ''; this._barSig = ''; return; }
+    el.innerHTML = this._toolbarHtml(tool); el.classList.add('on'); this._barSig = '';
   }
   setTool(tool) { this._tool(tool); this._barUpdate(); this.el.btip.classList.remove('on'); }
   // Hinweis am Mauszeiger (Kosten oder Grund)
@@ -277,6 +299,19 @@ export class UI {
       case 'tut-ok': if (sim) sim.S.tut = TUTORIAL.length + 1; this.renderTut(true); break;
       case 'tut-restart': if (sim) sim.S.tut = 0; this.renderTut(true); this.closePanel(); break;
       case 'overlay-close': this.el.overlay.innerHTML = ''; this.el.overlay.classList.remove('on'); break;
+      // Ausbau 2
+      case 'overlay': app.setOverlay(d.k); break;
+      case 'upgrade': {
+        if (sim.upgrade(this.selId)) { this.renderInfo(true); break; }
+        const c = sim.canUpgrade(this.selId); this.toast(c.reason === 'money' ? `${t('reason.money')} ${t('ui.needCoins', { cost: c.cost })}` : c.reason === 'research' ? '🔒 ' + t('ui.needsResearch', { id: c.need }) : t('reason.' + c.reason), 'err'); app.sound?.play('error', { gain: .4 }); break;
+      }
+      case 'link-start': app.startLink(this.selId); break;
+      case 'link-clear': sim.link(this.selId, 0); this.renderInfo(true); app.sound?.play('click'); break;
+      case 'link-cancel': app.cancelLink(); break;
+      case 'fly-ent': app.flyToEntity(+d.id); if (this.panel) this.closePanel(); break;
+      case 'autojoin': app.setAutoJoin(d.v === 'on'); this.renderPanel(true); break;
+      case 'route': app.setBeltMode(d.v); this.renderPanel(true); break;
+      default: await this._actMeta(a, d, el) || await this._actTools(a, d, el);
     }
   }
   _setting(k, v, live) {
@@ -286,6 +321,7 @@ export class UI {
     else if (k === 'music') { app.setMusic(v === true || v === 'on'); this.renderPanel(true); }
     else if (k === 'musicVol') app.setVolumes(+v / 100, undefined, !live);
     else if (k === 'sfxVol') { app.setVolumes(undefined, +v / 100, !live); if (!live) app.sound?.play('coin'); }
+    else if (k.startsWith('ph.')) this._photoSet(k.slice(3), v);
   }
   async _overwrite(slot) {
     const i = storage.info(slot); if (!i || i.empty) return true;
@@ -301,13 +337,15 @@ export class UI {
   // =====================================================================================================
   openPanel(p) {
     if (!p) return this.closePanel();
-    if (this.mode !== 'play' && p !== 'settings') return;
+    if (this.mode !== 'play' && p !== 'settings' && p !== 'challenge') return;
+    if (p === 'photo') { this.app.photo(true); return; }
     this.panel = p; this.el.sheet.classList.add('on'); this.root.classList.add('sheet-open'); this.el.btip.classList.remove('on'); this.el.sheet.dataset.p = p;
-    this.el.sheet.innerHTML = `<div class="card panel"><div class="hd"><span class="pi">${PANELS.find(x => x[0] === p)?.[1] || ''}</span><h2>${esc(t('ui.p.' + p))}</h2><button class="btn icon small ghost x" data-act="close" aria-label="${esc(t('ui.close'))}">✕</button></div><div class="bd"></div></div>`;
+    this.el.sheet.innerHTML = `<div class="card panel"><div class="hd"><span class="pi">${PANEL_ICON[p] || ''}</span><h2>${esc(t('ui.p.' + p))}</h2><button class="btn icon small ghost x" data-act="close" aria-label="${esc(t('ui.close'))}">✕</button></div><div class="bd"></div></div>`;
     this.sig[p] = null; this.renderPanel(true);
     for (const b of this.el.side.querySelectorAll('[data-p]')) b.classList.toggle('on', b.dataset.p === p);
     this.app.sound?.play('click');
     if (p === 'research' || p === 'contracts' || p === 'plots') this.app.panelOpened?.(p);
+    this.panelOpened?.(p);
   }
   closePanel() {
     if (!this.panel) return; this.panel = null; this.el.sheet.classList.remove('on'); this.root.classList.remove('sheet-open'); this.el.sheet.innerHTML = '';
@@ -460,7 +498,9 @@ export class UI {
       <div class="set"><label>${esc(t('ui.quality'))}</label>${seg('quality', q, [['hoch', esc(t('ui.q.hoch'))], ['mittel', esc(t('ui.q.mittel'))], ['niedrig', esc(t('ui.q.niedrig'))]])}</div>
       <div class="set"><label>${esc(t('ui.music'))}</label>${seg('music', mu ? 'on' : 'off', [['on', esc(t('ui.on'))], ['off', esc(t('ui.off'))]])}<input type="range" min="0" max="100" value="${Math.round(app.settings.musicVol * 100)}" data-set="musicVol" aria-label="${esc(t('ui.music'))}"></div>
       <div class="set"><label>${esc(t('ui.sfx'))}</label><input type="range" min="0" max="100" value="${Math.round(app.settings.sfxVol * 100)}" data-set="sfxVol" aria-label="${esc(t('ui.sfx'))}"></div>
-      <div class="set"><label>${esc(t('ui.grid'))}</label>${seg('grid', gm, [['on', esc(t('ui.grid.on'))], ['build', esc(t('ui.grid.build'))], ['off', esc(t('ui.grid.off'))]])}</div>`;
+      <div class="set"><label>${esc(t('ui.grid'))}</label>${seg('grid', gm, [['on', esc(t('ui.grid.on'))], ['build', esc(t('ui.grid.build'))], ['off', esc(t('ui.grid.off'))]])}</div>
+      <div class="set"><label>${esc(t('ui.autoJoin'))}</label>${seg('autojoin', app.settings.autoJoin ? 'on' : 'off', [['on', esc(t('ui.on'))], ['off', esc(t('ui.off'))]])}<small class="mute">${esc(t('ui.autoJoinNote'))}</small></div>
+      <div class="set"><label>${esc(t('ui.beltDrag'))}</label>${seg('route', app.settings.beltMode, [['l', '⌐ ' + esc(t('ui.routeL'))], ['route', '⤳ ' + esc(t('ui.route'))]])}<small class="mute">${esc(t('ui.routeNote'))}</small></div>`;
     if (sim && this.mode === 'play') {
       const S = sim.S;
       h += `<div class="set"><label>${esc(t('ui.color'))}</label><div class="swatches">${S.deco.colors.filter(c => COLORS[c]).map(c => `<button class="swb ${S.deco.color === c ? 'on' : ''}" data-act="color" data-id="${c}" title="${esc(name('color', c))}"><i style="background:${COLORS[c].color}"></i><small>${esc(name('color', c))}</small></button>`).join('')}</div>
@@ -504,17 +544,21 @@ export class UI {
   }
   _info(e) {
     const sim = this.sim, n = sim.N.get(e.id), paid = n ? n.e.paid : 0, belt = e.kind === 'belt' || e.kind === 'tunnel' || e.kind === 'split' || e.kind === 'sort';
-    const noXp = belt || e.kind === 'sell' || e.kind === 'store';
+    const noXp = belt || e.kind === 'sell' || e.kind === 'store' || ['power', 'solar', 'mast', 'heater', 'drone', 'wonder'].includes(e.kind);
     const stars = noXp ? '' : `<span class="stars">${[1, 2, 3, 4, 5].map(i => `<i class="${i <= e.level ? 'on' : ''}">★</i>`).join('')}</span>`;
+    const mk = e.mk ? `<span class="mk mk${e.mk}">Mk ${ROMAN[e.mk]}</span>` : '';
     let xp = '';
     if (!noXp) {
       if (e.level >= 5) xp = `<div class="xp"><div class="bar thin gold"><i style="width:100%"></i></div><small>${esc(t('ui.maxStars'))}</small></div>`;
       else { const a = XP_LV[e.level - 1], b = XP_LV[e.level], p = clamp((e.xp - a) / (b - a)); xp = `<div class="xp"><div class="bar thin gold"><i style="width:${(p * 100).toFixed(1)}%"></i></div><small>${esc(t('ui.xpNext', { xp: Math.floor(e.xp - a), need: b - a, level: e.level + 1 }))}</small></div>`; }
     }
+    const kv = (k, v) => `<div class="kv"><span>${esc(k)}</span><b>${v}</b></div>`;
+    const net = e.net >= 0 && sim.nets ? sim.nets[e.net] : null;
+    const netLine = () => net ? kv('⚡ ' + t('ui.grid1'), `${fmtNum(net.supply)} / ${fmtNum(net.demand)} · ${net.demand > 0 ? pct(net.supply / net.demand) : 100} %`) : '';
     let body = '';
     switch (e.kind) {
       case 'drill':
-        body = e.item ? `<div class="kv"><span>${esc(t('ui.mines'))}</span><b>${this.iIcon(e.item, false, 'sm')}${esc(name('item', e.item))}</b></div><div class="kv"><span>${esc(t('ui.speed'))}</span><b>${esc(t('unit.perMin', { n: fmtRate(e.rate * 60) }))}</b></div><div class="kv"><span>${esc(t('ui.outBuf'))}</span><b>${e.out} / 4</b></div>`
+        body = e.item ? `<div class="kv"><span>${esc(t('ui.mines'))}</span><b>${this.iIcon(e.item, false, 'sm')}${esc(name('item', e.item))}</b></div><div class="kv"><span>${esc(t('ui.speed'))}</span><b>${esc(t('unit.perMin', { n: fmtRate(e.rate * 60) }))}</b></div><div class="kv"><span>${esc(t('ui.outBuf'))}</span><b>${e.out} / ${e.cap ?? 4 * (e.mk || 1)}</b></div>${e.parts ? `<div class="kv"><span>${esc(t('ui.mergedFrom'))}</span><b>⛏️ ${esc(t('ui.mergedN', { n: e.parts }))}</b></div>` : ''}`
           : `<p class="warn">${esc(t('ui.noDeposit'))}</p>`;
         break;
       case 'machine': {
@@ -531,7 +575,7 @@ export class UI {
         body = `<p class="note">${esc(t('ui.expHint'))}</p><div class="bufs">${[e.a, e.b].map(x => x ? `<span class="buf">${this.iIcon(x, false, 'sm')}${esc(name('item', x))}</span>` : `<span class="buf emp">?</span>`).join('<i class="op">+</i>')}</div>`;
         if (e.busy) body += `<div class="bar thin"><i style="width:${(e.progress * 100).toFixed(0)}%"></i></div>`;
         break;
-      case 'lab': body = `<p class="note">${esc(t('ui.labHint'))}</p><div class="kv"><span>${esc(t('ui.queue'))}</span><b>${e.count} / 6</b></div><div class="kv"><span>${esc(t('ui.rp'))}</span><b>🧪 ${fmtNum(sim.S.rp)}</b></div>`; break;
+      case 'lab': body = `<p class="note">${esc(t('ui.labHint'))}</p><div class="kv"><span>${esc(t('ui.queue'))}</span><b>${e.count} / ${6 * (e.mk || 1)}</b></div><div class="kv"><span>${esc(t('ui.rp'))}</span><b>🧪 ${fmtNum(sim.S.rp)}</b></div>`; break;
       case 'sell': {
         const tm = sim.M.taktMax, p = clamp(e.streak / TAKT_TIME);
         body = `<div class="kv"><span>${esc(t('ui.rhythm'))}</span><b class="takt">×${(Math.round(e.takt * 100) / 100).toFixed(2)}</b></div><div class="bar thin green"><i style="width:${(p * 100).toFixed(1)}%"></i></div><small class="mute">${esc(t('ui.taktHint', { max: tm }))}</small>
@@ -547,11 +591,56 @@ export class UI {
           ${items.map(i => `<button class="fb ${e.filter === i ? 'on' : ''}" data-act="filter" data-i="${i}" title="${esc(name('item', i))}">${this.iIcon(i, false, 'sm')}<small>${esc(name('item', i))}</small></button>`).join('')}</div>`; break;
       }
       case 'tunnel': body = `<div class="kv"><span>${esc(t('ui.tunnel'))}</span><b>${esc(t(e.link ? (e.exit ? 'ui.tunnelExit' : 'ui.tunnelEntry') : 'ui.tunnelOpen'))}</b></div><div class="kv"><span>${esc(t('ui.parts'))}</span><b>${e.count}</b></div>`; break;
+      case 'power': {
+        const d = BUILDINGS.kraftwerk;
+        body = kv('🔥 ' + t('ui.fuel'), `${(d.fuel || []).map(i => this.iIcon(i, false, 'sm')).join('')} ${e.fuel} / ${d.cap || 8}${e.burning ? ' · ' + esc(t('ui.burning')) : ''}`)
+          + kv('⚡ ' + t('ui.output'), `${fmtNum(e.out)} / ${fmtNum(d.power)}`) + `<div class="bar thin gold"><i style="width:${pct(e.out / d.power)}%"></i></div>`
+          + kv('📡 ' + t('ui.range'), t('ui.tiles', { n: e.range })) + netLine();
+        break;
+      }
+      case 'solar': body = kv('☀️ ' + t('ui.output'), `${fmtRate(e.out)} / ${fmtRate(BUILDINGS.solar.power * (BIOMES[sim.S.biome]?.solarMul || 1))}`) + (sim.S.storm?.left > 0 ? `<p class="warn">🌪️ ${esc(t('ui.stormDark'))}</p>` : '') + kv('📡 ' + t('ui.range'), t('ui.tiles', { n: e.range })) + netLine(); break;
+      case 'mast': body = kv('📡 ' + t('ui.range'), t('ui.tiles', { n: e.range })) + (net ? netLine() : `<p class="warn">${esc(t('ui.noGridHere'))}</p>`); break;
+      case 'heater': body = `<p class="note">${esc(t('ui.heaterHint'))}</p>` + kv('📡 ' + t('ui.range'), t('ui.tiles', { n: e.range })); break;
+      case 'drone': {
+        const tg = e.link ? sim.N.get(e.link) : null, from = sim.mn.filter(m => m.kind === 'drone' && m.e.link === e.id);
+        body = kv('🚁 ' + t('ui.drones'), `${e.drones}`) + kv('📦 ' + t('ui.parts'), `${e.count} → ${e.out}`)
+          + `<div class="kv"><span>${esc(t('ui.sendsTo'))}</span><b>${tg ? `<button class="lnk" data-act="fly-ent" data-id="${tg.id}">${esc(name('building', tg.e.type))} (${tg.e.x}, ${tg.e.y})</button>` : '—'}</b></div>`
+          + (from.length ? `<div class="kv"><span>${esc(t('ui.receivesFrom'))}</span><b>${from.map(m => `<button class="lnk" data-act="fly-ent" data-id="${m.id}">(${m.e.x}, ${m.e.y})</button>`).join(' ')}</b></div>` : '')
+          + `<div class="row ia2">${this.app.linkFrom === e.id ? `<button class="btn small" data-act="link-cancel">✕ ${esc(t('ui.cancel'))}</button>` : `<button class="btn small main" data-act="link-start">🔗 ${esc(t(tg ? 'ui.relink' : 'ui.link'))}</button>`}${tg ? `<button class="btn small ghost" data-act="link-clear">⛓️‍💥 ${esc(t('ui.unlink'))}</button>` : ''}</div>`;
+        break;
+      }
+      case 'wonder': {
+        const w = sim.wonder();
+        body = w.done ? `<p class="note">🚀 ${esc(t('diag.wonderDone'))}</p>` : `<div class="lbl">${esc(t('ui.wonderStage', { n: w.stage, total: w.stages }))} · ${esc(t('wonder.' + w.stage + '.name'))}</div>`
+          + Object.keys(w.need).map(i => `<div class="need">${this.iIcon(i, false, 'sm')}<span>${esc(name('item', i))}</span><div class="bar thin"><i style="width:${pct((w.have[i] || 0) / w.need[i])}%"></i></div><b>${fmtNum(Math.min(w.have[i] || 0, w.need[i]))} / ${fmtNum(w.need[i])}</b></div>`).join('')
+          + `<div class="row ia2"><button class="btn small" data-act="panel" data-p="wonder">🚀 ${esc(t('ui.p.wonder'))}</button></div>`;
+        break;
+      }
       default: body = `<div class="kv"><span>${esc(t('ui.parts'))}</span><b>${e.count ?? 0} / 4</b></div>${e.blocked ? `<p class="warn">🛋️ ${esc(t('gerald.sit'))}</p>` : ''}`;
     }
-    return `<div class="ih"><span class="im">${this.bIcon(e.type)}</span><div class="it"><b>${esc(name('building', e.type))}</b>${stars}</div><button class="btn icon small ghost x" data-act="info-close" aria-label="${esc(t('ui.close'))}">✕</button></div>
-      ${belt ? '' : (st => `<div class="state ${STATE_CLS[st] || ''}"><i></i>${esc(t('state.' + st))}</div>`)(e.state === 'norecipe' && e.auto ? 'wait' : e.state)}${xp}
-      <div class="ib">${body}</div>
+    // Strom (Verbraucher)
+    let power = '';
+    if (e.use > 0 && (e.power ?? 1) > 0) {
+      const p = e.power ?? 1, grace = sim.S.powerGrace > 0;
+      power = `<div class="pw ${p <= 0 ? 'bad' : p < 1 ? 'warn' : 'ok'}"><span>⚡ ${esc(t('ui.power'))}</span><b>${p <= 0 ? esc(t('state.nopower')) : pct(p) + ' %'}</b><small>${esc(t('ui.powerUse', { n: e.use }))}${grace && e.net < 0 ? ' · ' + esc(t('ui.grace', { secs: Math.ceil(sim.S.powerGrace) })) : ''}</small></div>`;
+    }
+    // Diagnose mit Tipp
+    let diag = '';
+    const dg = sim.diagnose ? sim.diagnose(e.id) : null;
+    if (dg && (!belt || dg.state !== 'ok')) diag = `<div class="diag s${dg.sev >= 2.5 ? 3 : dg.sev >= 1.5 ? 2 : dg.sev > 0 ? 1 : 0}"><i>${dg.sev >= 2 ? '⚠️' : dg.sev > 0 ? '💡' : '✅'}</i><span>${esc(t(dg.key, dg.vars))}</span></div>`;
+    // Ausbau
+    let upg = '';
+    const cu = sim.canUpgrade ? sim.canUpgrade(e.id) : null;
+    if (cu && cu.reason !== 'noupgrade' && cu.reason !== 'unknown') {
+      if (cu.reason === 'maxmk') upg = `<div class="upg max"><span class="mk mk3">Mk III</span><small>${esc(t('reason.maxmk'))}</small></div>`;
+      else upg = `<div class="upg"><button class="btn small ${cu.ok ? 'main' : ''}" data-act="upgrade" ${cu.reason === 'research' ? 'disabled' : ''}>⬆ ${esc(t('ui.upgrade', { mk: ROMAN[cu.mk] }))} ${this.coin(cu.cost)}</button>
+        <small class="${cu.ok ? 'mute' : 'bad'}">${esc(cu.ok ? t('ui.upgradeFx', { mk: ROMAN[cu.mk] }) + (cu.power ? ' · ' + t('ui.upgradePower', { n: cu.power }) : '') : cu.reason === 'research' ? '🔒 ' + t('ui.needsResearch', { id: cu.need }) : t('reason.' + cu.reason))}</small></div>`;
+    }
+    const st = e.state === 'norecipe' && e.auto ? 'wait' : e.state;
+    return `<div class="ih"><span class="im">${this.bIcon(e.type)}</span><div class="it"><b>${esc(name('building', e.type))} ${mk}</b>${stars}</div><button class="btn icon small ghost x" data-act="info-close" aria-label="${esc(t('ui.close'))}">✕</button></div>
+      ${belt ? '' : `<div class="state ${STATE_CLS[st] || ''}"><i></i>${esc(t('state.' + st))}</div>`}${xp}
+      ${power}${diag}
+      <div class="ib">${body}</div>${upg}
       <div class="ia"><button class="btn small" data-act="rot-ent">⟳ ${esc(t('ui.rotate'))} <kbd>R</kbd></button><button class="btn small" data-act="pip-ent">💧 ${esc(t('ui.copy'))} <kbd>C</kbd></button><button class="btn small danger" data-act="del-ent">🧨 ${esc(t('ui.remove'))}${paid ? ` <small>+${fmtNum(paid)}</small>` : ''}</button></div>`;
   }
 
@@ -562,7 +651,12 @@ export class UI {
     const el = this.el.tut, sim = this.sim;
     for (const x of this.root.querySelectorAll('.pulse')) x.classList.remove('pulse');
     this.tutPoint = null;
-    if (!sim || this.mode !== 'play' || sim.S.tut > TUTORIAL.length) { el.classList.remove('on'); el.innerHTML = ''; this._tutSig = ''; return; }
+    if (sim && this.mode === 'play' && sim.S.tut > TUTORIAL.length && this.hintNow && !this.app.photoOn) {      // Hinweise nach der Anleitung (Strom, Ausbau, Blaupausen)
+      const h = this.hintNow, sig = 'hint:' + h + ':' + getLang();
+      if (force || sig !== this._tutSig) el.innerHTML = `<span class="pip">💡</span><div class="bub panel hint"><div class="st"><span>${esc(t('ui.hintTitle'))}</span></div><p>${t('hint.' + h, { undo: esc(undoKey()) })}</p><div class="row"><button class="btn small main" data-act="hint-ok">${esc(t('ui.gotIt'))}</button>${h === 'power' ? `<button class="btn small" data-act="overlay" data-k="power">⚡ ${esc(t('ui.ovPower'))}</button>` : h === 'bp' ? `<button class="btn small" data-act="tool" data-b="bp">📐 ${esc(t('ui.bp'))}</button>` : ''}</div></div>`;
+      this._tutSig = sig; el.classList.add('on'); return;
+    }
+    if (!sim || this.mode !== 'play' || sim.S.tut > TUTORIAL.length || this.app.photoOn) { el.classList.remove('on'); el.innerHTML = ''; this._tutSig = ''; return; }
     const h = sim.help();
     const sig = h.key + ':' + getLang() + ':' + h.step;
     if (h.done) {
@@ -589,7 +683,7 @@ export class UI {
         case 'discover': this.recipeCard(ev.recipe); this.bubble('steve', t('steve.eureka'), 3); break;
         case 'fail': if (!ev.known) this.toast('💥 ' + t('event.fail', ev), 'mute'); else this._rl('failk', 12) && this.toast('💥 ' + t('event.failKnown', ev), 'mute'); if (Math.random() < .3) this.bubble('steve', t('steve.explode'), 2.5); break;
         case 'levelup': if (this._rl('lvl', 2.5)) this.toast('⭐ ' + t('event.levelup', ev), 'gold'); break;
-        case 'research': this.toast('🔬 ' + t('event.research', ev), 'ok'); this._bar(); break;
+        case 'research': this.toast('🔬 ' + t('event.research', ev), 'ok'); this._bar(); this._researchHint(ev.id); break;
         case 'patent': this.toast('📜 ' + t('event.patent', ev), 'ok'); break;
         case 'plot': {
           const ids = Object.keys(ev.found || {});
@@ -614,6 +708,7 @@ export class UI {
           break;
         case 'tip': { const m = t('steve.tip', { a: ev.ins[0], b: ev.ins[1] }); this.bubble('steve', m, 6); this.toast('💡 ' + m, 'ok'); break; }
         case 'tut': this.renderTut(true); if (this.sim.S.tut < TUTORIAL.length) this.app.sound?.play('levelup', { gain: .5 }); break;
+        default: this._onEvent2(ev);
       }
     }
   }
@@ -696,7 +791,7 @@ export class UI {
       const s = stage.screenPos(p); b.el.style.display = s.visible ? '' : 'none'; b.el.style.transform = `translate(${s.x.toFixed(0)}px, ${s.y.toFixed(0)}px)`;
     }
     this._pointer();
-    if (this.mode !== 'play' || !sim) return;
+    if (this.mode !== 'play' || !sim || this.app.media) return;
     // Handy: Toasts direkt über dem obersten unteren Element (Bauleiste, Werkzeugzeile, Info-Panel)
     if (innerWidth <= 760 && !this.panel) {
       let top = innerHeight;
@@ -716,6 +811,8 @@ export class UI {
     if (S.boosts.goldrain > 0) bs.push(`<span class="chip boost gold">🌟 ${esc(t('ui.goldrain'))} <b>${S.boosts.goldrain}</b></span>`);
     if (S.vouchers > 0) bs.push(`<span class="chip boost">🎟️ <b>${S.vouchers}</b></span>`);
     const g = sim.gerald(); if (g && g.phase === 'sit') bs.push(`<span class="chip boost warn">🛋️ ${esc(t('ui.geraldSits'))} <b>${Math.ceil(g.sitLeft)}</b></span>`);
+    const ch = this.app.meta?.challenge?.(); if (ch) bs.unshift(`<span class="chip boost chal" data-act="panel" data-p="challenge">🏁 <b>${ch.done ? esc(t('ui.chalOver')) : clock(ch.left)}</b></span>`);
+    if (sim.S.powerGrace > 0 && sim.offgrid?.length) bs.push(`<span class="chip boost warn" data-act="overlay" data-k="power">⚡ ${esc(t('ui.graceShort'))} <b>${clock(sim.S.powerGrace)}</b></span>`);
     const bh = bs.join(''); if (this.el.boosts._h !== bh) { this.el.boosts.innerHTML = bh; this.el.boosts._h = bh; }
     const tt = S.deco.title ? name('title', S.deco.title) : ''; if (this.el.title.textContent !== tt) this.el.title.textContent = tt;
     const badge = this.el.side.querySelector('[data-p="crates"] .badge'); if (badge) { const c = S.crates.length; badge.textContent = c || ''; badge.classList.toggle('on', c > 0); }
@@ -724,6 +821,7 @@ export class UI {
     this.el.side.querySelector('[data-p="prestige"]')?.classList.toggle('ready', sim.canPrestige());
     this._barUpdate();
     this.renderPanel(false); this.renderInfo(false); this.renderTut(false);
+    this._frame2(dt);
   }
   _pop(el) { el.classList.remove('pop'); void el.offsetWidth; el.classList.add('pop'); }
   _pointer() {
@@ -737,3 +835,4 @@ export class UI {
     const s = this.app.stage.screenPos(p); el.style.display = s.visible ? '' : 'none'; el.style.transform = `translate(${s.x.toFixed(0)}px, ${s.y.toFixed(0)}px)`;
   }
 }
+Object.assign(UI.prototype, MetaUI, ToolsUI);

@@ -2,7 +2,7 @@
 // Blickrichtung in 90°-Schritten (yawStep, +45° Versatz → diagonale Sicht), Neigung hängt vom Abstand ab (nah flacher, weit steiler).
 // Maus: links/mitte ziehen = schieben (Griffpunkt bleibt unter dem Zeiger), rechts ziehen = frei drehen, rastet beim Loslassen weich ein,
 // Rad = zoomen zum Zeiger. Touch: 1 Finger schieben, 2 Finger zoomen + drehen (rastet danach ein). Tasten: WASD/Pfeile, Q/E, +/-.
-// Schwung nach dem Schieben, Grenzen als Rechteck.
+// Schwung nach dem Schieben, Grenzen als Rechteck. shake(strength, secs) lässt die Kamera wackeln (Erdbeben).
 import * as THREE from 'three';
 
 const clamp = (x, a, b) => x < a ? a : x > b ? b : x;
@@ -72,8 +72,12 @@ export class CameraRig {
   restore(o) { if (o) this.jumpTo(o.x || 0, o.z || 0, o.d ?? this.g.d, o.step ?? 0); }
 
   // ---------------- Bild für Bild ----------------
+  // Wackeln (Erdbeben, Einschlag): strength ≈ Ausschlag in Einheiten bei Abstand 30, secs = Dauer (klingt weich ab). Mehrere addieren sich.
+  shake(strength = .35, secs = 1.6) { this._sk = (this._sk || []).filter(s => s.age < s.dur); this._sk.push({ s: strength, dur: Math.max(.05, secs), age: 0, ph: Math.random() * 100 }); }
+  get shaking() { return !!this._sk?.some(s => s.age < s.dur); }
   update(dt = 1 / 60) {
     dt = clamp(dt, 0, .1); const c = this.c, g = this.g;
+    if (this._sk) for (const s of this._sk) s.age += dt;
     if (this.fly) {
       const F = this.fly; F.s = Math.min(1, F.s + dt / F.dur); const e = ease(F.s);
       c.t.lerpVectors(F.from.t, F.to.t, e);
@@ -98,7 +102,16 @@ export class CameraRig {
   _place() {
     const c = this.c, cam = this.camera, off = this._offset(c.yaw, this.pitchAt(c.d));
     cam.position.copy(c.t).addScaledVector(off, c.d);
-    cam.up.set(0, 1, 0); cam.lookAt(c.t); cam.updateMatrixWorld();
+    cam.up.set(0, 1, 0); cam.lookAt(c.t);
+    if (this._sk && this._sk.length) {
+      let x = 0, y = 0, z = 0, roll = 0;
+      for (const s of this._sk) { if (s.age >= s.dur) continue; const u = s.age / s.dur, env = s.s * (1 - u) * (1 - u) * Math.min(1, s.age * 20) * c.d / 30, a = s.age + s.ph;
+        x += env * (Math.sin(a * 37) * .6 + Math.sin(a * 23.3) * .4); y += env * (Math.sin(a * 41.7) * .5 + Math.sin(a * 17.1) * .3); z += env * (Math.sin(a * 29.9) * .6 + Math.sin(a * 13.7) * .4);
+        roll += env * .02 * Math.sin(a * 31); }
+      cam.position.x += x; cam.position.y += y; cam.position.z += z; cam.rotateZ(roll);
+      if (this._sk.every(s => s.age >= s.dur)) this._sk = null;
+    }
+    cam.updateMatrixWorld();
   }
 
   // ---------------- Strahlen / Zoom ----------------

@@ -1,27 +1,101 @@
 // Fließband (Cogtopia) – Ton: alles prozedural mit WebAudio, keine Dateien.
-// Effekte (Bau-Klack, Abriss, Münze mit steigender Tonhöhe, Gold-Jackpot, Entdeckungs-Fanfare, Fehler, Kiste, Gerald-Quietschen …),
-// leises Fabrik-Grundrauschen abhängig von der Maschinenzahl, ruhige Musik-Schleife (Marimba, weiche Flächen, leichter Bass).
+// Effekte (Bau-Klack, Abriss, Münze mit steigender Tonhöhe, Gold-Jackpot, Entdeckungs-Fanfare, Fehler, Kiste, Gerald-Quietschen,
+// Strom, Stromausfall, Drohne, Meteor, Beben, Sturm, Glücksrad, Serie, Durchbruch, Album-Karte, Upgrade, Wunder, Raketenstart …),
+// Fabrik-Grundrauschen abhängig von der Maschinenzahl, Kraftwerks-Brummen, Sturmwind,
+// Musik je Welt (setWorld: wiese / wueste / eis / mond, eigene Tonart, Tempo, Instrumente), Dichte-Schichten wachsen mit der Fabrik.
 // Musik und Effekte über getrennte Lautstärken; bis unlock() (Nutzergeste) bleibt alles still.
 const clamp = (x, a = 0, b = 1) => x < a ? a : x > b ? b : x;
+const sst = (a, b, x) => { const t = clamp((x - a) / (b - a)); return t * t * (3 - 2 * t); };
 const mtof = m => 440 * Math.pow(2, (m - 69) / 12);
 const R = (a, b) => a + Math.random() * (b - a);
 const pick = a => a[Math.floor(Math.random() * a.length)];
 
-// Musik: F-Dur-Pentatonik, gemütlich, ~84 bpm. Akkorde relativ zum Grundton (MIDI 65 = F4)
-const ROOT = 65, PENT = [0, 2, 4, 7, 9], BPM = 84;
-const CH = {
-  I: [0, 4, 7, 11], vi: [-3, 0, 4, 7], IV: [-7, -3, 0, 4], V: [-5, -1, 2, 7], ii: [-10, -7, -3, 0], iii: [-8, -5, -1, 2],
-};
-const PROGS = [['I', 'vi', 'IV', 'V'], ['I', 'iii', 'IV', 'V'], ['IV', 'I', 'ii', 'V'], ['vi', 'IV', 'I', 'V']];
+// Grundwerte der Wiese (auch von den Effekten benutzt): F-Dur-Pentatonik
+const ROOT = 65, PENT = [0, 2, 4, 7, 9];
 const VOWELS = { i: [320, 2300], e: [500, 1900], a: [800, 1200], o: [520, 900], u: [360, 800] };
 
-export const SOUND_NAMES = ['build', 'remove', 'rotate', 'click', 'coin', 'jackpot', 'discover', 'error', 'crate', 'squeak', 'levelup', 'contract', 'plot', 'research', 'cheer'];
+// Dichte-Schichten: ab dieser Maschinenzahl blendet die Schicht ein (Fläche + Melodie immer)
+export const LAYERS = { pad: 0, mel: 0, bass: 5, perc: 15, counter: 40, extra: 100 };
+
+// ---------------------------------------------------------------- Musikstile je Welt
+// root (MIDI), scale (Halbtöne), bpm, swing (Anteil einer Achtel), chords (relativ zu root), progs, rhythms (16tel-Raster je Takt),
+// melOct (Oktavlage der Melodie), echo (Verzögerung in Vierteln), fb (Rückkopplung), rev (Hallanteil).
+// Je Schicht eine Funktion (s = Sound, t = Zeit, st = 16tel im Takt 0…15, ch = Akkord, m = Planungszustand).
+const STYLES = {
+  // Grüne Wiese: gemütliche Marimba, F-Dur-Pentatonik, ~84 bpm
+  wiese: {
+    root: 65, scale: PENT, bpm: 84, swing: .08, melOct: 0, echo: .75, fb: .28, rev: .45, tone: 9000,
+    chords: { I: [0, 4, 7, 11], vi: [-3, 0, 4, 7], IV: [-7, -3, 0, 4], V: [-5, -1, 2, 7], ii: [-10, -7, -3, 0], iii: [-8, -5, -1, 2] },
+    progs: [['I', 'vi', 'IV', 'V'], ['I', 'iii', 'IV', 'V'], ['IV', 'I', 'ii', 'V'], ['vi', 'IV', 'I', 'V']],
+    rhythms: [[0, 4, 6, 8, 12], [0, 6, 8, 12, 14], [0, 4, 8, 10, 12], [0, 2, 4, 8, 12], [0, 6, 12]], degStart: 5,
+    pad(s, t, ch, bar) { const dur = 60 / this.bpm * 4; for (const d of ch) for (const det of [-6, 6]) s._tone(t, mtof(this.root - 12 + d), .9, { type: 'triangle', a: .5, hold: dur - .6, g: .022, lp: 900, detune: det, dest: s.L.pad }); if (bar % 4 === 0 && Math.random() < .6) s._bell(t, mtof(this.root + 24 + pick(PENT)), .022, 1.6, { dest: s.L.pad }); },
+    mel(s, t, midi, v) { s._mallet(t, midi, v, s.L.mel); },
+    bass(s, t, st, ch) { if (st === 0 || st === 8) { const n = this.root - 24 + ch[0] + (st === 8 ? 7 : 0); s._tone(t, mtof(n), .55, { type: 'triangle', g: .12, lp: 600, dest: s.L.bass, a: .01 }); s._tone(t, mtof(n), .45, { g: .1, dest: s.L.bass, a: .01 }); } },
+    perc(s, t, st) { if (st % 4 === 2) s._noise(t, .04, { type: 'highpass', f: 7000, g: st === 6 || st === 14 ? .022 : .012, dest: s.L.perc }); if (st === 4 || st === 12) s._noise(t, .03, { f: 1800, q: 3, g: .04, dest: s.L.perc }); },
+    counter(s, t, st, ch, m) { if (st % 8 === 4 && Math.random() < .7) s._bell(t, mtof(this.root + 12 + ch[(m.bar + st / 4) % ch.length]), .03, 1, { dest: s.L.counter }); },
+    extra(s, t, st, ch) { if (st % 2 === 0) s._mallet(t, this.root - 12 + ch[(st / 2) % ch.length] + (st >= 8 ? 12 : 0), .45, s.L.extra); },
+  },
+  // Wüste: D-Hijaz (phrygisch-dominant), gezupfte Oud, Darbuka (Maqsum), Bordun D/A, Ney als Gegenstimme, ~92 bpm
+  wueste: {
+    root: 62, scale: [0, 1, 4, 5, 7, 8, 10], bpm: 92, swing: 0, melOct: 0, echo: .5, fb: .22, rev: .35, tone: 7000,
+    chords: { I: [0, 4, 7], II: [1, 5, 8], iv: [-7, -4, 0], vii: [-2, 1, 5] },
+    progs: [['I', 'II', 'I', 'vii'], ['I', 'iv', 'II', 'I'], ['iv', 'II', 'I', 'I'], ['I', 'I', 'II', 'vii']],
+    rhythms: [[0, 2, 3, 4, 6, 8, 11, 12], [0, 3, 6, 8, 10, 12, 14], [0, 1, 2, 4, 8, 10, 12], [0, 4, 6, 7, 8, 12]], degStart: 7,
+    pad(s, t, ch, bar) { const dur = 60 / this.bpm * 4; for (const [n, g] of [[this.root - 24, .05], [this.root - 17, .03]]) for (const det of [-5, 5]) s._tone(t, mtof(n), .9, { type: 'sawtooth', a: .4, hold: dur - .5, g: g * .5, lp: 520, detune: det, dest: s.L.pad }); },
+    mel(s, t, midi, v) { s._pluck(t, midi, v, s.L.mel); if (Math.random() < .18) s._pluck(t - .05, midi + 1, v * .45, s.L.mel); },
+    bass(s, t, st, ch) { if (st === 0 || st === 6 || st === 10) s._pluck(t, this.root - 24 + ch[0] + (st === 10 ? 7 : 0), 1.1, s.L.bass, 1600); },
+    perc(s, t, st) { // Maqsum: D T . T D . T .
+      const D = st === 0 || st === 10, T = st === 4 || st === 8 || st === 14, K = st % 2 === 1 && Math.random() < .35;
+      if (D) { s._tone(t, 120, .22, { f2: 62, glide: .12, g: .2, dest: s.L.perc }); s._noise(t, .07, { type: 'lowpass', f: 350, g: .12, dest: s.L.perc }); }
+      if (T) { s._noise(t, .05, { f: 3600, q: 2.5, g: .1, dest: s.L.perc }); s._tone(t, 820, .03, { g: .03, dest: s.L.perc }); }
+      if (K) s._noise(t, .025, { f: 2400, q: 3, g: .04, dest: s.L.perc, pan: R(-.4, .4) });
+    },
+    counter(s, t, st, ch, m) { if (st === 0 && m.bar % 2 === 0) s._ney(t, this.root + 12 + ch[Math.floor(Math.random() * ch.length)], 60 / this.bpm * 3.5, s.L.counter); },
+    extra(s, t, st, ch) { if (st % 2 === 1 && Math.random() < .6) s._pluck(t, this.root + 12 + pick(ch), .35, s.L.extra, 5000); },
+  },
+  // Eiswelt: E-Lydisch, Celesta/Glocken, kristallene Flächen, Glasharmonika, ~70 bpm, viel Hall
+  eis: {
+    root: 64, scale: [0, 2, 4, 6, 7, 9, 11], bpm: 70, swing: 0, melOct: 12, echo: 1, fb: .38, rev: .75, tone: 11000,
+    chords: { I: [0, 4, 7, 11], II: [2, 6, 9, 13], vi: [-3, 0, 4, 7], iii: [-8, -5, -1, 2] },
+    progs: [['I', 'II', 'I', 'vi'], ['vi', 'II', 'I', 'I'], ['I', 'iii', 'II', 'I'], ['I', 'vi', 'II', 'II']],
+    rhythms: [[0, 6, 8], [0, 4, 10], [0, 8, 12], [0, 6, 10, 12]], degStart: 7,
+    pad(s, t, ch, bar) { const dur = 60 / this.bpm * 4; for (const d of ch) { s._tone(t, mtof(this.root - 12 + d), 1.4, { a: 1.2, hold: dur - 1.1, g: .028, dest: s.L.pad, vib: [.3, 6] }); s._tone(t, mtof(this.root + d), 1.2, { type: 'triangle', a: 1.5, hold: dur - 1.4, g: .007, lp: 4000, detune: 7, dest: s.L.pad }); }
+      s._noise(t, dur, { type: 'bandpass', f: 7000, q: 6, g: .006, a: 1.5, dest: s.L.pad }); },
+    mel(s, t, midi, v) { s._celesta(t, midi, v, s.L.mel); },
+    bass(s, t, st, ch) { if (st === 0) s._tone(t, mtof(this.root - 24 + ch[0]), 1.6, { a: .08, hold: 1.2, g: .1, dest: s.L.bass }); if (st === 8) s._tone(t, mtof(this.root - 24 + ch[0] + 7), 1.2, { a: .08, g: .06, dest: s.L.bass }); },
+    perc(s, t, st) { if (st % 4 === 2 && Math.random() < .8) s._noise(t, .025, { f: R(6500, 9000), q: 9, g: .05, dest: s.L.perc, pan: R(-.6, .6) }); if (st === 8) s._tone(t, 2637, .15, { g: .015, dest: s.L.perc }); },
+    counter(s, t, st, ch, m) { if (st === 0 && m.bar % 2 === 1) s._glassHarp(t, this.root + ch[1 + (m.bar >> 1) % (ch.length - 1)], 60 / this.bpm * 3.6, s.L.counter); },
+    extra(s, t, st, ch) { if (st % 2 === 0) s._celesta(t, this.root + 12 + ch[(st / 2) % ch.length], .35, s.L.extra); },
+  },
+  // Mond: A-Äolisch, Synth-Arpeggio, analoger Bass, tiefe Flächen, Sinus-Glocken, weites Echo, ~96 bpm
+  mond: {
+    root: 57, scale: [0, 2, 3, 5, 7, 8, 10], bpm: 96, swing: 0, melOct: 12, echo: 1.5, fb: .45, rev: .6, tone: 8000,
+    chords: { i: [0, 3, 7, 10], VI: [-4, 0, 3, 7], VII: [-2, 2, 5, 9], iv: [5, 8, 12, 15] },
+    progs: [['i', 'VI', 'VII', 'i'], ['i', 'iv', 'VI', 'VII'], ['VI', 'VII', 'i', 'i'], ['i', 'i', 'iv', 'VII']],
+    rhythms: [[0, 2, 4, 6, 8, 10, 12, 14]], degStart: 5, arp: true,
+    pad(s, t, ch, bar) { const dur = 60 / this.bpm * 4; for (const d of ch.slice(0, 3)) for (const det of [-9, 9]) s._tone(t, mtof(this.root - 12 + d), 1, { type: 'sawtooth', a: .9, hold: dur - .8, g: .018, lp: 520, q: 2, detune: det, dest: s.L.pad }); },
+    mel(s, t, midi, v) { s._tone(t, mtof(midi), .22, { type: 'square', g: .045 * v, lp: 1700, q: 3, dest: s.L.mel }); },
+    bass(s, t, st, ch) { if (st % 2 === 0) s._synBass(t, this.root - 24 + ch[0] + (st % 8 === 6 ? 12 : 0), st % 8 === 0 ? 1 : .6, s.L.bass); },
+    perc(s, t, st) { if (st === 0 || st === 8 || st === 11) { s._tone(t, 130, .22, { f2: 42, glide: .12, g: .22, dest: s.L.perc }); }
+      if (st % 4 === 2) s._noise(t, .035, { type: 'highpass', f: 8500, g: .03, dest: s.L.perc }); if (st === 4 || st === 12) s._noise(t, .09, { f: 1600, q: .8, g: .05, dest: s.L.perc }); },
+    counter(s, t, st, ch, m) { if (st === 0 || (st === 10 && Math.random() < .5)) s._bell(t, mtof(this.root + 24 + ch[Math.floor(Math.random() * ch.length)]), .03, 2.2, { dest: s.L.counter }); },
+    extra(s, t, st, ch) { s._tone(t, mtof(this.root + 24 + ch[st % ch.length]), .1, { type: 'sawtooth', g: .012, lp: 2600, dest: s.L.extra }); },
+  },
+};
+export const WORLDS = Object.keys(STYLES);
+
+export const SOUND_NAMES = ['build', 'remove', 'rotate', 'click', 'coin', 'jackpot', 'discover', 'error', 'crate', 'squeak', 'levelup', 'contract', 'plot', 'research', 'cheer',
+  'power', 'blackout', 'drone', 'meteor', 'quake', 'storm', 'wheel', 'win', 'streak', 'breakthrough', 'card', 'upgrade', 'wonder', 'launch'];
+
+// Pegel der großen Effekte (Spitze ≈ 0,7 allein, nichts läuft in den Begrenzer)
+const FX_GAIN = { power: .7, blackout: .65, meteor: .5, quake: .42, breakthrough: .55, card: .75, upgrade: .65, wonder: .4, launch: .45, win: .85, discover: .8 };
 
 export class Sound {
   constructor(opts = {}) {
     this.ctx = null; this.ready = false; this.offline = false;
     this.vol = { music: opts.music ?? .5, sfx: opts.sfx ?? .8 }; this.musicOn = opts.musicOn ?? true;
-    this.fac = { machines: 0, busy: 0 }; this._coins = [];
+    this.fac = { machines: 0, busy: 0 }; this._coins = []; this.world = STYLES[opts.world] ? opts.world : 'wiese';
+    this.pow = { plants: 0, load: 0 }; this.stormOn = false;
     if (opts.context) { this.ctx = opts.context; this.offline = true; this._build(); }
   }
   get context() { return this.ctx; }
@@ -48,7 +122,16 @@ export class Sound {
     this.musicMix.gain.setTargetAtTime(on ? 1 : 0, this.ctx.currentTime, on ? .6 : .25);
     if (on) this.m.t = Math.max(this.m.t, this.ctx.currentTime + .1);
   }
-  // Fabrik-Atmo: machines = Anzahl Maschinen, busy = Anteil 0…1 (oder Anzahl beschäftigter Maschinen)
+  // Welt wechseln (Musikstil): weich aus- und wieder einblenden, Wechsel zum nächsten Taktanfang
+  setWorld(biome) {
+    if (!STYLES[biome] || biome === this.world && !this.m?.pending) return;
+    this.world = biome; if (!this.ready) return;
+    const now = this.ctx.currentTime, m = this.m;
+    if (!m.started) { this._applyStyle(biome, now); return; }
+    m.pending = biome; m.switchAt = now + .9;
+    this.styleG.gain.cancelScheduledValues(now); this.styleG.gain.setTargetAtTime(0, now, .25);
+  }
+  // Fabrik-Atmo: machines = Anzahl Maschinen, busy = Anteil 0…1 (oder Anzahl beschäftigter Maschinen); steuert auch die Musik-Schichten
   setFactory({ machines = 0, busy } = {}) {
     machines = Math.max(0, machines | 0);
     let b = busy ?? (machines ? 1 : 0); if (b > 1) b = machines ? b / machines : 0;
@@ -57,6 +140,31 @@ export class Sound {
     this.humG.gain.setTargetAtTime(machines ? .02 + .05 * L : 0, t, .9);
     this.rumbleG.gain.setTargetAtTime(machines ? (.015 + .05 * L) * (.5 + .5 * this.fac.busy) : 0, t, .9);
     this.humLp.frequency.setTargetAtTime(120 + 160 * L * this.fac.busy, t, 1.2);
+    for (const [k, th] of Object.entries(LAYERS)) {
+      const v = th <= 0 ? 1 : sst(th * .6, th * 1.25, machines); this.lv[k] = v;
+      this.L[k].gain.setTargetAtTime(v * (k === 'mel' ? .9 : 1), t, 1.5);
+    }
+  }
+  // Kraftwerks-Brummen (Dauer): plants = Anzahl Kraftwerke, load = Auslastung 0…1
+  setPower({ plants = 0, load = 0 } = {}) {
+    this.pow = { plants: Math.max(0, plants | 0), load: clamp(load) };
+    if (!this.ready) return; const t = this.ctx.currentTime, P = this.pow, L = P.plants ? 1 - Math.exp(-P.plants / 2.5) : 0;
+    this.powG.gain.setTargetAtTime(L * (.025 + .05 * P.load), t, .6);
+    this.powLp.frequency.setTargetAtTime(160 + 500 * P.load, t, .8);
+    this.powBuzz.gain.setTargetAtTime(L * .012 * P.load, t, .6);
+  }
+  // Sandsturm-Wind (Dauer)
+  setStorm(on) {
+    this.stormOn = !!on; if (!this.ready) return;
+    this.windG.gain.setTargetAtTime(on ? .16 : 0, this.ctx.currentTime, on ? 1.2 : 1.8);
+  }
+  // Glücksrad: abbremsende Tickfolge über secs Sekunden (segs Segmente je Umdrehung, turns Umdrehungen) → Anzahl Ticks
+  wheelSpin(secs = 4, { segs = 8, turns = 4 } = {}) {
+    if (!this.ready) return 0;
+    const t0 = this.ctx.currentTime + .02, total = segs * turns; let n = 0;
+    // Winkel (in Segmenten) θ(t) = total·(1 − (1 − t/secs)²) → Tick bei jedem ganzen Segment
+    for (let k = 1; k <= total; k++) { const u = 1 - Math.sqrt(1 - k / total), at = u * secs; this.play('wheel', { at: at + (t0 - this.ctx.currentTime), gain: .7 + .3 * (k / total) }); n++; }
+    this.play('win', { at: secs + .15 }); return n;
   }
   _facLevel() { return 1 - Math.exp(-this.fac.machines / 14); }
 
@@ -66,18 +174,26 @@ export class Sound {
     this.out = c.createGain(); this.out.gain.value = .8;
     const comp = c.createDynamicsCompressor(); comp.threshold.value = -16; comp.knee.value = 8; comp.ratio.value = 4; comp.attack.value = .003; comp.release.value = .2;
     const lim = c.createDynamicsCompressor(); lim.threshold.value = -4; lim.knee.value = 0; lim.ratio.value = 20; lim.attack.value = .001; lim.release.value = .08;
-    this.out.connect(comp); comp.connect(lim); lim.connect(c.destination);
+    // Sicherheits-Begrenzer: linear bis 0,8, darüber weich bis höchstens 0,98 (nie Übersteuern)
+    const clip = c.createWaveShaper(), N = 2048, cv = new Float32Array(N);
+    for (let i = 0; i < N; i++) { const x = i / (N - 1) * 4 - 2, a = Math.abs(x); cv[i] = Math.sign(x) * (a <= .8 ? a : .8 + .18 * Math.tanh((a - .8) / .18)); }
+    clip.curve = cv; clip.oversample = 'none';
+    this.out.connect(comp); comp.connect(lim); lim.connect(clip); clip.connect(c.destination);
     // Hall
-    this.rev = c.createConvolver(); this.rev.buffer = this._impulse(2.2, 3); const revOut = this._g(.42); this.rev.connect(revOut); revOut.connect(this.out);
-    // Musik
+    this.rev = c.createConvolver(); this.rev.buffer = this._impulse(2.6, 3); const revOut = this._g(.42); this.rev.connect(revOut); revOut.connect(this.out);
+    // Musik: Schichten → Stil-Blende → Mischung → Klang → Lautstärke
     this.musicVol = this._g(this.vol.music); this.musicVol.connect(this.out);
     this.musicTone = this._f('lowpass', 9000); this.musicTone.connect(this.musicVol);
     this.musicMix = this._g(this.musicOn ? 1 : 0); this.musicMix.connect(this.musicTone);
     this.music = this._g(.55); this.music.connect(this.musicMix);
-    const mRev = this._g(.45); this.music.connect(mRev); mRev.connect(this.rev);
-    // Echo für die Marimba
-    this.delay = c.createDelay(2); this.delay.delayTime.value = 60 / BPM * .75; const fb = this._g(.28), dl = this._f('lowpass', 2400);
-    this.delay.connect(dl); dl.connect(fb); fb.connect(this.delay); dl.connect(this.music); this.echo = this._g(.18); this.echo.connect(this.delay);
+    this.mRev = this._g(.45); this.music.connect(this.mRev); this.mRev.connect(this.rev);
+    this.styleG = this._g(1); this.styleG.connect(this.music);
+    // Echo (Melodie, Gegenstimme)
+    this.delay = c.createDelay(4); this.delay.delayTime.value = .5; this.dFb = this._g(.28); const dl = this._f('lowpass', 2400);
+    this.delay.connect(dl); dl.connect(this.dFb); this.dFb.connect(this.delay); dl.connect(this.styleG); this.echo = this._g(.18); this.echo.connect(this.delay);
+    this.L = {}; this.lv = {};
+    for (const k of Object.keys(LAYERS)) { const g = this._g(LAYERS[k] <= 0 ? (k === 'mel' ? .9 : 1) : 0); g.connect(this.styleG); this.L[k] = g; this.lv[k] = LAYERS[k] <= 0 ? 1 : 0; }
+    this.L.mel.connect(this.echo); this.L.counter.connect(this.echo);
     // Effekte
     this.sfxBus = this._g(this.vol.sfx); this.sfxBus.connect(this.out);
     this.sfx = this._g(1); this.sfx.connect(this.sfxBus); const sRev = this._g(.22); this.sfx.connect(sRev); sRev.connect(this.rev);
@@ -99,12 +215,34 @@ export class Sound {
     }
     const lfo = c.createOscillator(); lfo.frequency.value = .13; const lg = this._g(.18); lfo.connect(lg); lg.connect(wob.gain); lfo.start();
     this.rumbleG = this._g(0); const rl = this._f('lowpass', 260); const rs = c.createBufferSource(); rs.buffer = this.brown; rs.loop = true; rs.connect(rl); rl.connect(this.rumbleG); this.rumbleG.connect(this.amb); rs.start(0, R(0, 3));
+    // Kraftwerk: Netzbrummen 50/100/150 Hz + leises Knistern
+    this.powG = this._g(0); this.powLp = this._f('lowpass', 200, 1.2); this.powLp.connect(this.powG); this.powG.connect(this.amb);
+    for (const [type, f, g] of [['sawtooth', 50, .35], ['sine', 100, .8], ['sine', 150, .3]]) { const o = c.createOscillator(); o.type = type; o.frequency.value = f; const og = this._g(g); o.connect(og); og.connect(this.powLp); o.start(); }
+    this.powBuzz = this._g(0); const pb = c.createBufferSource(); pb.buffer = this.white; pb.loop = true; const pbf = this._f('bandpass', 3200, 4); pb.connect(pbf); pbf.connect(this.powBuzz); this.powBuzz.connect(this.amb); pb.start(0, R(0, 1));
+    // Sturm: Rauschen durch wandernde Bandpässe
+    this.windG = this._g(0); this.windG.connect(this.amb);
+    for (const [f, q, rate, g] of [[500, 1.4, .13, 1], [1300, 3, .21, .5], [240, .9, .08, .8]]) {
+      const s = c.createBufferSource(); s.buffer = this.white; s.loop = true; const bp = this._f('bandpass', f, q), gg = this._g(g * .5);
+      const l = c.createOscillator(); l.frequency.value = rate; const lg2 = this._g(f * .45); l.connect(lg2); lg2.connect(bp.frequency);
+      const l2 = c.createOscillator(); l2.frequency.value = rate * 1.7; const lg3 = this._g(g * .35); l2.connect(lg3); lg3.connect(gg.gain);
+      s.connect(bp); bp.connect(gg); gg.connect(this.windG); s.start(0, R(0, 1.5)); l.start(); l2.start();
+    }
     const t0 = c.currentTime;
-    this.m = { t: t0 + .25, step: 0, bar: 0, prog: PROGS[0], motif: null, motifAt: -1 };
+    this.m = { t: t0 + .25, step: 0, bar: 0, prog: null, motif: null, vary: false, pending: null, switchAt: 0, started: false };
     this.nf = t0 + .4;                                    // nächster Fabrik-Takt
+    this._plk = new Map();
     this.ready = true;
+    this._applyStyle(this.world, t0);
     if (!this.offline && typeof setInterval !== 'undefined') this._timer = setInterval(() => this._tick(), 100);
-    this.setFactory(this.fac);
+    this.setFactory(this.fac); this.setPower(this.pow); this.setStorm(this.stormOn);
+  }
+  // Stil sofort setzen (Echo, Hall, Klang), Planung neu beginnen
+  _applyStyle(name, t) {
+    const S = this.st = STYLES[name], m = this.m;
+    this.delay.delayTime.setValueAtTime(60 / S.bpm * S.echo, t); this.dFb.gain.setValueAtTime(S.fb, t);
+    this.mRev.gain.setValueAtTime(S.rev, t); this.musicTone.frequency.setValueAtTime(S.tone, t);
+    this.styleG.gain.cancelScheduledValues(t); this.styleG.gain.setValueAtTime(this.styleG.gain.value, t); this.styleG.gain.setTargetAtTime(1, t, .5);
+    m.step = 0; m.bar = 0; m.prog = S.progs[0]; m.motif = null; m.t = Math.max(m.t, t);
   }
   dispose() { clearInterval(this._timer); try { if (!this.offline) this.ctx?.close(); } catch (e) { /* egal */ } this.ready = false; }
   _impulse(sec, decay) {
@@ -191,7 +329,7 @@ export class Sound {
     if (!this.ready) return false;
     const c = this.ctx, t = c.currentTime + .01 + (o.at || 0);
     const fn = this['_s_' + name]; if (!fn) return false;
-    const g = this._g(o.gain ?? 1); g.connect(this.sfx); this._d = g;
+    const g = this._g((o.gain ?? 1) * (FX_GAIN[name] ?? 1)); g.connect(this.sfx); this._d = g;
     let r = true;
     try { r = fn.call(this, t, o) !== false; } finally { this._d = null; }
     return r;
@@ -296,16 +434,197 @@ export class Sound {
     for (let i = 0; i < 7; i++) this._noise(t + R(.05, .6), .03, { f: R(900, 1500), q: 1.2, g: .1, pan: R(-.6, .6) });   // Klatschen
   }
 
+  // ---------------------------------------------------------------- Instrumente der Weltmusik
+  // gezupfte Saite (Karplus-Strong, als Puffer je Ton vorberechnet und zwischengespeichert)
+  _pluckBuf(midi) {
+    const key = midi | 0; let b = this._plk.get(key); if (b) return b;
+    const c = this.ctx, sr = c.sampleRate, f = mtof(key), P = Math.max(2, Math.round(sr / f)), n = Math.floor(sr * 1.6), d = new Float32Array(n);
+    let lp = 0; for (let i = 0; i < P; i++) { lp = lp * .5 + (Math.random() * 2 - 1) * .5; d[i] = lp; }
+    const damp = .4985 + .0012 * clamp((84 - key) / 40);
+    for (let i = P; i < n; i++) d[i] = damp * (d[i - P] + d[i - P + 1 < i ? i - P + 1 : i - P]);
+    let mx = 0; for (let i = 0; i < n; i++) mx = Math.max(mx, Math.abs(d[i])); const k = mx ? .9 / mx : 1;
+    b = c.createBuffer(1, n, sr); const ch = b.getChannelData(0); for (let i = 0; i < n; i++) ch[i] = d[i] * k;
+    this._plk.set(key, b); return b;
+  }
+  _pluck(t, midi, v = 1, dest, lp = 3800) {
+    const c = this.ctx, s = c.createBufferSource(); s.buffer = this._pluckBuf(midi);
+    const f = this._f('lowpass', lp, .8), body = this._f('peaking', 420, 1.2); body.gain.value = 5;
+    const g = this._g(.11 * v); s.connect(f); f.connect(body); body.connect(g); this._out(g, { dest });
+    s.start(Math.max(t, c.currentTime)); s.stop(t + 1.6);
+  }
+  // Ney (Flöte): Sinus mit Vibrato + Atemrauschen
+  _ney(t, midi, dur, dest) {
+    const f = mtof(midi);
+    this._tone(t, f, .5, { a: .25, hold: dur, g: .045, vib: [5, 14], dest });
+    this._tone(t, f * 2, .4, { a: .3, hold: dur * .8, g: .008, dest });
+    this._noise(t, .5, { f, q: 6, a: .2, hold: dur, g: .02, dest });
+  }
+  // Celesta: heller Glockenton
+  _celesta(t, midi, v = 1, dest) {
+    const f = mtof(midi), o = { dest };
+    this._tone(t, f, 1.1, { ...o, g: .07 * v, a: .002 });
+    this._tone(t, f * 2, .5, { ...o, g: .025 * v, a: .002 });
+    this._tone(t, f * 3.01, .18, { ...o, g: .012 * v, a: .001 });
+  }
+  // Glasharmonika: langsam einschwingend, leicht schwebend
+  _glassHarp(t, midi, dur, dest) {
+    const f = mtof(midi);
+    this._tone(t, f, 1, { a: .5, hold: dur, g: .04, vib: [4.5, 5], dest });
+    this._tone(t, f * 2, .8, { a: .6, hold: dur * .8, g: .012, detune: 4, dest });
+  }
+  // analoger Synth-Bass: Sägezahn mit Filterhüllkurve
+  _synBass(t, midi, v, dest) {
+    const c = this.ctx, o = c.createOscillator(), o2 = c.createOscillator(), f = mtof(midi); o.type = 'sawtooth'; o2.type = 'square'; o.frequency.value = f; o2.frequency.value = f / 2;
+    const b = this._f('lowpass', 200, 6), g = c.createGain(), end = t + .4;
+    b.frequency.setValueAtTime(220, t); b.frequency.linearRampToValueAtTime(900 * v + 200, t + .015); b.frequency.setTargetAtTime(220, t + .02, .07);
+    this._env(g.gain, t, .005, .07 * v, .25, .06);
+    const g2 = this._g(.5); o.connect(b); o2.connect(g2); g2.connect(b); b.connect(g); this._out(g, { dest });
+    o.start(t); o2.start(t); o.stop(end); o2.stop(end);
+  }
+  // Ton mit wanderndem Panorama (Drohne, Meteor)
+  _sweep(node, t, p0, p1, dur) {
+    const c = this.ctx; if (!c.createStereoPanner) { this._out(node, {}); return; }
+    const p = c.createStereoPanner(); p.pan.setValueAtTime(p0, t); p.pan.linearRampToValueAtTime(p1, t + dur); node.connect(p); p.connect(this._d || this.sfx);
+  }
+
+  // ---------------------------------------------------------------- neue Effekte
+  _s_power(t) {                                                   // Kraftwerk fährt an: Relais-Klack, Brummen steigt
+    this._noise(t, .03, { f: 2500, q: 2, g: .2 });
+    this._tone(t, 90, .1, { f2: 50, glide: .08, g: .2 });
+    const c = this.ctx, b = this._f('lowpass', 150, 2), g = c.createGain(), end = t + 1.7;
+    b.frequency.setValueAtTime(150, t); b.frequency.exponentialRampToValueAtTime(900, t + 1);
+    g.gain.setValueAtTime(0, t); this._env(g.gain, t + .05, .5, .1, .5, .7);
+    for (const [ty, f] of [['sawtooth', 50], ['sawtooth', 100.6], ['sine', 150]]) { const o = c.createOscillator(); o.type = ty; o.frequency.setValueAtTime(f * .5, t); o.frequency.exponentialRampToValueAtTime(f, t + .8); o.connect(b); o.start(t); o.stop(end); }
+    b.connect(g); this._out(g, {});
+    this._noise(t + .3, .9, { f: 3200, q: 5, g: .03, a: .3 });
+  }
+  _s_blackout(t) {                                                // Strom weg: Sinkflug, Knistern, Klonk
+    const c = this.ctx, b = this._f('lowpass', 1200, 3), g = c.createGain(), end = t + 2;
+    b.frequency.setValueAtTime(1200, t); b.frequency.exponentialRampToValueAtTime(90, t + 1.4);
+    this._env(g.gain, t, .01, .12, .9, .5);
+    for (const f of [120, 241]) { const o = c.createOscillator(); o.type = 'sawtooth'; o.frequency.setValueAtTime(f, t); o.frequency.exponentialRampToValueAtTime(f / 5, t + 1.5); o.connect(b); o.start(t); o.stop(end); }
+    b.connect(g); this._out(g, {});
+    for (let i = 0; i < 14; i++) this._noise(t + R(0, .9), R(.008, .03), { type: 'highpass', f: R(2500, 6000), g: R(.04, .12), pan: R(-.6, .6) });
+    this._tone(t + 1.45, 70, .3, { f2: 40, g: .22 }); this._noise(t + 1.45, .12, { type: 'lowpass', f: 500, g: .12, brown: true });
+  }
+  _s_drone(t) {                                                   // Rotor-Surren fliegt vorbei (Doppler + Panorama)
+    const c = this.ctx, dur = 1.8, g = c.createGain(), b = this._f('bandpass', 900, 1.5), am = this._g(.5), end = t + dur + .1;
+    this._env(g.gain, t, .5, .09, .5, .7);
+    for (const [ty, f] of [['sawtooth', 180], ['square', 362]]) { const o = c.createOscillator(); o.type = ty; o.frequency.setValueAtTime(f * 1.06, t); o.frequency.linearRampToValueAtTime(f, t + dur * .5); o.frequency.linearRampToValueAtTime(f * .92, t + dur); o.connect(b); o.start(t); o.stop(end); }
+    const l = c.createOscillator(); l.frequency.value = 34; const lg = this._g(.5); l.connect(lg); lg.connect(am.gain); l.start(t); l.stop(end);
+    b.connect(am); am.connect(g); this._sweep(g, t, -.8, .8, dur);
+  }
+  _s_meteor(t) {                                                  // Pfeifen im Fall, dann Einschlag
+    const c = this.ctx, fall = 1.5, o = c.createOscillator(), g = c.createGain();
+    o.frequency.setValueAtTime(2600, t); o.frequency.exponentialRampToValueAtTime(380, t + fall);
+    this._env(g.gain, t, fall * .8, .06, .05, .1); o.connect(g); this._sweep(g, t, .7, -.1, fall); o.start(t); o.stop(t + fall + .2);
+    this._noise(t, .2, { type: 'highpass', f: 1500, f2: 600, glide: fall, g: .07, a: fall * .9 });
+    const ti = t + fall;
+    this._tone(ti, 75, 1.2, { f2: 28, glide: .8, g: .4 });
+    this._noise(ti, 1.6, { type: 'lowpass', f: 900, f2: 120, glide: 1.2, g: .32, brown: true });
+    this._noise(ti, .15, { f: 1800, q: .7, g: .2 });
+    for (let i = 0; i < 12; i++) this._noise(ti + R(.1, 1.2), .03, { f: R(1500, 4000), q: 3, g: R(.03, .07), pan: R(-.7, .7) });
+    [0, 7, 12].forEach((d, i) => this._bell(ti + .35 + i * .09, mtof(88 + d), .025, 1));      // Kristalle klingen
+  }
+  _s_quake(t) {                                                   // Beben: tiefes Grollen mit Wanken + Klappern
+    const c = this.ctx, dur = 2.2, s = c.createBufferSource(); s.buffer = this.brown; s.loop = true;
+    const b = this._f('lowpass', 140, 1), g = c.createGain(), trem = this._g(.6);
+    this._env(g.gain, t, .25, .45, .8, dur - .9);
+    const l = c.createOscillator(); l.frequency.value = 7; const lg = this._g(.4); l.connect(lg); lg.connect(trem.gain);
+    s.connect(b); b.connect(trem); trem.connect(g); this._out(g, {}); s.start(t, R(0, 2)); s.stop(t + dur + .3); l.start(t); l.stop(t + dur + .3);
+    this._tone(t, 36, .9, { a: .3, hold: dur - 1, g: .25, vib: [3, 30] });
+    for (let i = 0; i < 22; i++) { const tt = t + R(.15, dur - .2); this._noise(tt, .02, { f: R(1800, 4500), q: 4, g: R(.02, .06), pan: R(-.8, .8) }); if (i % 4 === 0) this._tone(tt, R(500, 900), .06, { g: .015 }); }
+  }
+  _s_storm(t) {                                                   // Sturm-Böe
+    const c = this.ctx, dur = 2.4, s = c.createBufferSource(); s.buffer = this.white; s.loop = true;
+    const b = this._f('bandpass', 400, 1.2), g = c.createGain();
+    b.frequency.setValueAtTime(350, t); b.frequency.exponentialRampToValueAtTime(1400, t + dur * .45); b.frequency.exponentialRampToValueAtTime(450, t + dur);
+    this._env(g.gain, t, dur * .4, .2, .9, dur * .2);
+    s.connect(b); b.connect(g); this._sweep(g, t, -.5, .5, dur); s.start(t, R(0, 1)); s.stop(t + dur + .5);
+    for (let i = 0; i < 10; i++) this._noise(t + R(.3, dur), .015, { type: 'highpass', f: 5000, g: R(.02, .05), pan: R(-.8, .8) });   // Sandkörner
+  }
+  _s_wheel(t) {                                                   // ein Rad-Tick
+    this._noise(t, .012, { type: 'highpass', f: 3800, g: .2 });
+    this._tone(t, 2100, .025, { type: 'triangle', g: .07 });
+    this._tone(t, 520, .03, { g: .05 });
+  }
+  _s_win(t) {                                                     // Gewinn
+    [0, 4, 7, 12, 16].forEach((d, i) => { this._tone(t + i * .07, mtof(72 + d), .3, { type: 'triangle', g: .08 }); this._bell(t + i * .07, mtof(84 + d), .03, .6); });
+    const te = t + .4; for (const d of [0, 4, 7, 12]) this._brass(te, 60 + d, .5, .04);
+    for (let i = 0; i < 6; i++) this._coin(te + .1 + i * .08, i, .08, R(-.5, .5));
+    for (let i = 0; i < 16; i++) this._tone(te + R(0, .9), R(3000, 6500), .07, { g: .015, pan: R(-.8, .8) });
+  }
+  _s_streak(t) {                                                  // Serie / Tagesbonus: aufsteigende Glocken + Tröte
+    [0, 7, 12, 19].forEach((d, i) => this._bell(t + i * .12, mtof(76 + d), .05, 1));
+    this._tone(t + .5, mtof(79), .35, { type: 'triangle', f2: mtof(91), glide: .2, g: .06 });
+    this._noise(t + .45, .8, { type: 'highpass', f: 7000, g: .04, a: .1 });
+    for (let i = 0; i < 4; i++) this._coin(t + .55 + i * .07, 2 + i * 2, .07);
+  }
+  _s_breakthrough(t) {                                            // Durchbruch: Sog nach oben, großer Akkord, Tiefton
+    this._noise(t, .7, { f: 300, f2: 6000, glide: .7, q: 1.5, g: .12, a: .6 });
+    this._tone(t, 200, .7, { f2: 1600, glide: .7, type: 'sawtooth', lp: 3000, g: .03, a: .6 });
+    const tc = t + .7;
+    this._tone(tc, 110, 1.2, { f2: 45, glide: .6, g: .3 });
+    for (const m of [60, 67, 72, 76, 79, 84]) { this._bell(tc, mtof(m + 12), .03, 2); this._tone(tc, mtof(m), 1.5, { type: 'triangle', a: .02, g: .025, lp: 2500 }); }
+    for (let i = 0; i < 20; i++) this._tone(tc + R(0, 1.2), R(2500, 7000), .08, { g: .012, pan: R(-.9, .9) });
+  }
+  _s_card(t, o) {                                                 // Album-Karte: Wusch, Schnapp, Glöckchen (reicher je Variante)
+    const v = o.variant || 'normal', lvl = { normal: 0, gold: 1, perfect: 2, mega: 3 }[v] ?? 0;
+    this._noise(t, .2, { f: 800, f2: 3500, glide: .18, q: 1, g: .12, a: .1 });
+    this._noise(t + .2, .02, { type: 'highpass', f: 3000, g: .18 }); this._tone(t + .2, 1200, .03, { type: 'triangle', g: .06 });
+    this._bell(t + .24, mtof(84), .05, .8); this._bell(t + .32, mtof(91), .04, 1);
+    if (lvl >= 1) { for (let i = 0; i < 10; i++) this._tone(t + .3 + R(0, .7), R(3500, 7000), .06, { g: .018, pan: R(-.8, .8) }); this._bell(t + .42, mtof(96), .04, 1.4); }
+    if (lvl >= 2) [0, 4, 7, 12, 16, 19].forEach((d, i) => this._tone(t + .45 + i * .05, mtof(79 + d), .2, { type: 'triangle', g: .045 }));
+    if (lvl >= 3) { for (const m of [60, 64, 67, 72]) this._brass(t + .75, m, .7, .035); this._tone(t + .75, 98, .5, { f2: 60, glide: .3, g: .25 }); }
+  }
+  _s_upgrade(t) {                                                 // Upgrade: Ratsche steigt, Aufladen, Akkord
+    for (let i = 0; i < 8; i++) { const tt = t + i * .055; this._noise(tt, .015, { f: 1800 + i * 300, q: 4, g: .12 }); this._tone(tt, 300 + i * 90, .03, { type: 'square', g: .02, lp: 2500 }); }
+    this._tone(t + .1, 220, .5, { type: 'sawtooth', f2: 1760, glide: .45, lp: 2800, g: .04, a: .05 });
+    const tc = t + .55; for (const d of [0, 4, 7, 12]) this._bell(tc, mtof(76 + d), .04, 1.1);
+    this._tone(tc, 130, .3, { f2: 65, g: .2 }); this._noise(tc, .5, { type: 'highpass', f: 6000, g: .05, a: .02 });
+  }
+  _s_wonder(t, o) {                                               // Wunder-Stufe: Pauken-Wirbel + Blechfanfare, wächst mit der Stufe
+    const k = clamp(((o.stage ?? 1) - 1) / 4), b = 60 / 108, base = 55 + Math.round(k * 5);
+    for (let i = 0; i < 12; i++) this._tone(t + i * .045, 92, .12, { f2: 70, glide: .08, g: .06 + i * .012 });
+    const tf = t + .6;
+    const line = [[0, 0, .3], [4, .5, .3], [7, 1, .3], [12, 1.5, 1.4]];
+    line.forEach(([d, at, du]) => this._brass(tf + at * b, base + 12 + d, du, .05 + .02 * k));
+    const tc = tf + 1.5 * b, voices = [0, 7, 12, 16, 19, 24].slice(0, 3 + Math.round(k * 3));
+    for (const d of voices) this._brass(tc, base + d, 1.5, .03);
+    this._tone(tc, 82, 1, { f2: 41, glide: .5, g: .35 }); this._noise(tc, .5, { type: 'lowpass', f: 400, g: .2, brown: true });
+    this._noise(tc - .2, 2, { type: 'highpass', f: 5500, g: .05 + .03 * k, a: .25 });
+    for (let i = 0; i < 6 + k * 10; i++) this._bell(tc + .2 + i * .06, mtof(84 + PENT[i % 5] + 12 * Math.floor(i / 5)), .018, .8);
+  }
+  _s_launch(t) {                                                  // Raketenstart: 3 Pieper, Zündung, Brüllen, Abklingen (~9 s)
+    for (let i = 0; i < 3; i++) { this._tone(t + i, 880, .12, { type: 'square', g: .035, lp: 3000, hold: .08 }); this._tone(t + i, 1760, .08, { g: .015 }); }
+    const ti = t + 3; this._tone(ti, 1320, .4, { type: 'square', g: .04, lp: 3000, hold: .25 });
+    this._noise(ti, .25, { f: 1200, q: .6, g: .3 }); this._tone(ti, 60, 1.5, { f2: 30, glide: 1, g: .4 });
+    const c = this.ctx, s = c.createBufferSource(); s.buffer = this.brown; s.loop = true;
+    const b = this._f('lowpass', 200, .8), g = c.createGain(), dur = 6;
+    b.frequency.setValueAtTime(200, ti); b.frequency.exponentialRampToValueAtTime(1100, ti + 1.5); b.frequency.exponentialRampToValueAtTime(260, ti + dur);
+    g.gain.setValueAtTime(0, ti); g.gain.linearRampToValueAtTime(.55, ti + .4); g.gain.setValueAtTime(.55, ti + 1.8); g.gain.exponentialRampToValueAtTime(.001, ti + dur);
+    s.connect(b); b.connect(g); this._out(g, {}); s.start(ti, R(0, 2)); s.stop(ti + dur + .1);
+    const w = c.createBufferSource(); w.buffer = this.white; w.loop = true; const wb = this._f('bandpass', 900, .7), wg = c.createGain();
+    wg.gain.setValueAtTime(0, ti); wg.gain.linearRampToValueAtTime(.12, ti + .3); wg.gain.exponentialRampToValueAtTime(.001, ti + dur * .8);
+    w.connect(wb); wb.connect(wg); this._out(wg, {}); w.start(ti, R(0, 1)); w.stop(ti + dur);
+    this._tone(ti + .2, 42, 2, { a: .4, hold: 1.8, g: .22, vib: [9, 40] });
+    for (let i = 0; i < 18; i++) this._noise(ti + R(.1, 2.5), .04, { type: 'lowpass', f: 900, g: R(.05, .12), brown: true, pan: R(-.8, .8) });   // Knallen im Strahl
+    for (const d of [0, 4, 7, 12]) this._brass(ti + 2.2, 60 + d, 1.8, .03);
+  }
+
   // ---------------------------------------------------------------- Planung
+  // horizon: so weit im Voraus planen (offline z. B. die ganze Länge: _tick(8))
   _tick(horizon = .45) {
     if (!this.ready) return;
     const c = this.ctx, now = c.currentTime, until = now + horizon;
     this._factoryTick(now, until);
     if (this.musicOn && this.vol.music > 0) this._musicTick(now, until); else this.m.t = Math.max(this.m.t, until);
   }
+  // offline: Musik und Atmo für secs Sekunden im Voraus planen (Tests, Export)
+  renderAhead(secs = 8) { this._tick(secs); }
   // Fabrik-Takt: weiche Stampfer und Klonks, passend zum Musiktempo
   _factoryTick(now, until) {
-    const beat = 60 / BPM, L = this._facLevel(), B = this.fac.busy;
+    const beat = 60 / (this.st?.bpm || 84), L = this._facLevel(), B = this.fac.busy;
     if (this.nf < now - .5) this.nf = now + .05;
     while (this.nf < until) {
       const t = this.nf; this.nf += beat / 2;
@@ -324,48 +643,38 @@ export class Sound {
     }
   }
   _musicTick(now, until) {
-    const m = this.m, dt8 = 60 / BPM / 2;
+    const m = this.m;
     if (m.t < now - .5) m.t = now + .05;
+    m.started = true;
     while (m.t < until) {
-      const st = m.step % 8, t = m.t + (st % 2 ? dt8 * .08 : 0);             // leichter Swing
+      if (m.pending && m.t >= m.switchAt) { const p = m.pending; m.pending = null; this._applyStyle(p, m.t); }
+      const S = this.st, d16 = 60 / S.bpm / 4, st = m.step % 16, t = m.t + (st % 4 === 2 ? S.swing * d16 * 2 : 0);
       if (st === 0) this._bar(t, m);
-      const chord = CH[m.prog[m.bar % 4]];
-      // Melodie (Motiv über 2 Takte, wird wiederholt und leicht verändert)
-      const ev = m.motif[(m.bar % 2) * 8 + st];
-      if (ev && !(m.vary && Math.random() < .15)) this._mallet(t, ev.midi, ev.v, this._mdest());
-      // Bass: Grundton auf 1, Quinte auf 3
-      if (st === 0 || st === 4) {
-        const n = ROOT - 24 + chord[0] + (st === 4 ? 7 : 0);
-        this._tone(t, mtof(n), .55, { type: 'triangle', g: .12, lp: 600, dest: this.music, a: .01 });
-        this._tone(t, mtof(n), .45, { g: .1, dest: this.music, a: .01 });
-      }
-      // Schellen auf den Achteln dazwischen, Holz auf 2 und 4
-      if (st % 2) this._noise(t, .04, { type: 'highpass', f: 7000, g: st === 3 || st === 7 ? .022 : .012, dest: this.music });
-      if (st === 2 || st === 6) this._noise(t, .03, { f: 1800, q: 3, g: .04, dest: this.music });
-      m.step++; m.t += dt8;
-      if (m.step % 8 === 0) m.bar++;
+      const ch = S.chords[m.prog[m.bar % 4]], on = k => this.lv[k] > .02;
+      // Melodie (Motiv über 2 Takte, wird wiederholt und leicht verändert); Mond: Arpeggio aus Akkordtönen
+      if (S.arp) { if (st % 2 === 0) { const i = (st / 2) % 4, up = (m.bar % 2) ? 3 - i : i; S.mel(this, t, S.root + S.melOct + ch[up % ch.length] + (st >= 8 ? 12 : 0), st % 8 === 0 ? 1 : .7); } }
+      else { const ev = m.motif[(m.bar % 2) * 16 + st]; if (ev && !(m.vary && Math.random() < .15)) S.mel(this, t, ev.midi, ev.v); }
+      if (on('bass')) S.bass(this, t, st, ch);
+      if (on('perc')) S.perc(this, t, st);
+      if (on('counter')) S.counter(this, t, st, ch, m);
+      if (on('extra')) S.extra(this, t, st, ch, m);
+      m.step++; m.t += d16;
+      if (m.step % 16 === 0) m.bar++;
     }
   }
-  _mdest() { if (!this._md) { this._md = this._g(1); this._md.connect(this.music); this._md.connect(this.echo); } return this._md; }
   _bar(t, m) {
-    if (m.bar % 16 === 0) { m.prog = m.bar === 0 ? PROGS[0] : pick(PROGS); }
+    const S = this.st;
+    if (m.bar % 16 === 0) m.prog = m.bar === 0 ? S.progs[0] : pick(S.progs);
     if (m.bar % 8 === 0 || !m.motif) { m.motif = this._makeMotif(); m.vary = false; } else if (m.bar % 4 === 0) m.vary = true;
-    const chord = CH[m.prog[m.bar % 4]];
-    // weiche Fläche (zwei verstimmte Dreiecke je Ton, langsam ein und aus)
-    const dur = 60 / BPM * 4;
-    for (const d of chord) {
-      const f = mtof(ROOT - 12 + d);
-      for (const det of [-6, 6]) this._tone(t, f, .9, { type: 'triangle', a: .5, hold: dur - .6, g: .022, lp: 900, detune: det, dest: this.music });
-    }
-    if (m.bar % 4 === 0 && Math.random() < .6) this._bell(t, mtof(ROOT + 24 + pick(PENT)), .022, 1.6, { dest: this.music });
+    S.pad(this, t, S.chords[m.prog[m.bar % 4]], m.bar);
   }
   _makeMotif() {
-    const out = new Array(16).fill(null), rhythm = pick([[0, 2, 3, 4, 6], [0, 3, 4, 6, 7], [0, 2, 4, 5, 6], [0, 1, 2, 4, 6], [0, 3, 6]]);
-    let deg = 5 + Math.floor(R(0, 3));                                           // Index in zwei Oktaven Pentatonik
+    const S = this.st, L = S.scale.length, out = new Array(32).fill(null), rhythm = pick(S.rhythms);
+    let deg = S.degStart + Math.floor(R(0, 3));                                   // Index in zwei Oktaven der Tonleiter
     for (let half = 0; half < 2; half++) for (const s of rhythm) {
-      if (half && s >= 6 && Math.random() < .5) continue;                        // Atempause am Ende
-      deg = clamp(deg + pick([-2, -1, -1, 0, 1, 1, 2]), 0, 9);
-      out[half * 8 + s] = { midi: ROOT + PENT[deg % 5] + 12 * Math.floor(deg / 5), v: s === 0 ? .9 : R(.5, .8) };
+      if (half && s >= 12 && Math.random() < .5) continue;                        // Atempause am Ende
+      deg = clamp(deg + pick([-2, -1, -1, 0, 1, 1, 2]), 0, L * 2 - 1);
+      out[half * 16 + s] = { midi: S.root + S.melOct + S.scale[deg % L] + 12 * Math.floor(deg / L), v: s === 0 ? .9 : R(.5, .8) };
     }
     return out;
   }

@@ -5,12 +5,14 @@ import { ITEMS, ITEM_IDS, RAW, BUILDINGS, BUILDING_IDS, RECIPES, RECIPE_IDS, HID
   BIOMES, BIOME_IDS, ACHIEVEMENTS, ACHIEVEMENT_IDS, CRATES, CRATE_IDS, COLORS, TITLES, TUTORIAL } from '../js/data.js';
 import { LANGS, DICTS, KINDS, t, name, desc, setLang, getLang, onLang, keys } from '../js/i18n.js';
 import * as store from '../js/storage.js';
+import { route, bpRotate, encodeBp, decodeBp } from '../js/blueprint.js';
 
 const ARGS = process.argv.slice(2), QUICK = ARGS.includes('--quick'), VERBOSE = ARGS.includes('--verbose');
 const BOT_H = +(ARGS.find(a => a.startsWith('--bot-hours=')) || '=4').split('=')[1];
 let fail = 0; const ok = (c, m) => { console.log((c ? '✓ ' : '✗ ') + m); if (!c) fail++; };
 const O = START_PLOT * PLOT;                      // Ursprung des Startgrundstücks (48)
-const allResearch = f => { for (const id of RESEARCH_IDS) if (!f.S.research.includes(id)) f.S.research.push(id); f._mods(); };
+// alles erforscht; Strom-Schonfrist, damit die älteren Tests ohne Kraftwerk laufen (Strom wird in Abschnitt 20 geprüft)
+const allResearch = (f, grace = true) => { for (const id of RESEARCH_IDS) if (!f.S.research.includes(id)) f.S.research.push(id); if (grace) f.S.powerGrace = 1e9; f._mods(); };
 const rich = f => { f.S.money = 1e40; return f; };
 const secs = (f, s) => f.tick(Math.round(s * TPS));
 const fmt = s => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
@@ -24,10 +26,14 @@ const fmt = s => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2,
     'eisenplatte', 'zahnrad', 'kupferdraht', 'rohr', 'linse', 'schaltkreis', 'motor', 'akku', 'fenster', 'roboter', 'computer', 'laser', 'solarpanel', 'rakete', 'schrott'];
   ok(want.every(i => ITEMS[i]) && ITEM_IDS.length === want.length, 'alle Gegenstands-Ids aus DESIGN.md vorhanden (' + ITEM_IDS.length + ')');
   ok(ITEM_IDS.every(i => { const x = ITEMS[i]; return x.name && x.desc && x.value > 0 && /^#[0-9a-f]{6}$/i.test(x.color) && shapes.includes(x.shape) && Number.isInteger(x.tier) && x.rp > 0; }), 'jeder Gegenstand hat name, desc, value, color, shape, tier, rp');
-  const bWant = ['band', 'tunnel', 'verteiler', 'sortierer', 'bohrer', 'ofen', 'presse', 'drahtzug', 'montage', 'raffinerie', 'experiment', 'labor', 'verkauf', 'lager'];
-  const sizes = { band: 1, tunnel: 1, verteiler: 1, sortierer: 1, bohrer: 2, ofen: 2, presse: 2, drahtzug: 2, montage: 3, raffinerie: 3, experiment: 3, labor: 2, verkauf: 2, lager: 2 };
+  const bWant = ['band', 'tunnel', 'verteiler', 'sortierer', 'bohrer', 'ofen', 'presse', 'drahtzug', 'montage', 'raffinerie', 'experiment', 'labor', 'verkauf', 'lager',
+    'kraftwerk', 'solar', 'mast', 'heizer', 'drohnenhafen', 'wunder', 'grossbohrer'];
+  const sizes = { band: 1, tunnel: 1, verteiler: 1, sortierer: 1, bohrer: 2, ofen: 2, presse: 2, drahtzug: 2, montage: 3, raffinerie: 3, experiment: 3, labor: 2, verkauf: 2, lager: 2,
+    kraftwerk: 3, solar: 2, mast: 1, heizer: 1, drohnenhafen: 2, wunder: 5, grossbohrer: 4 };
   ok(bWant.every(b => BUILDINGS[b] && BUILDINGS[b].w === sizes[b] && BUILDINGS[b].h === sizes[b]) && BUILDING_IDS.length === bWant.length, 'alle Gebäude-Ids mit Größen aus DESIGN.md');
-  ok(BUILDING_IDS.every(b => { const d = BUILDINGS[b]; return d.name && d.desc && d.cost > 0 && (d.unlock === 'start' || RESEARCH[d.unlock]?.fx.building === b); }), 'jedes Gebäude: Name, Kosten, Freischaltung über passende Forschung');
+  ok(BUILDING_IDS.every(b => { const d = BUILDINGS[b]; return d.name && d.desc && d.cost > 0 && (d.unlock === 'start' || RESEARCH[d.unlock]?.fx.building === b || RESEARCH[d.unlock]?.fx.also?.includes(b)); }), 'jedes Gebäude: Name, Kosten, Freischaltung über passende Forschung');
+  ok(RESEARCH.montage.req.includes('strom') && RESEARCH.strom && RESEARCH.upgrade1.fx.mk === 2 && RESEARCH.upgrade2.fx.mk === 3 && RESEARCH.drohnen.fx.building === 'drohnenhafen' && BUILDINGS.wunder.prestige === 1,
+    'Ausbau 2: Montage setzt Strom voraus, Upgrade-/Drohnen-Forschung, Wunder erst nach dem ersten Prestige');
   ok(RECIPE_IDS.every(r => { const x = RECIPES[r]; return BUILDINGS[x.building] && ITEMS[x.out] && x.in.every(([i, n]) => ITEMS[i] && n > 0) && x.time > 0 && x.n > 0 && (x.unlock === 'start' || x.unlock === 'hidden' || RESEARCH[x.unlock]); }), 'Rezepte verweisen auf gültige Gebäude/Teile/Forschung');
   ok(RECIPE_IDS.every(r => RECIPES[r].unlock === 'start' || RECIPES[r].unlock === 'hidden' || RESEARCH[RECIPES[r].unlock].fx.recipe === r || RESEARCH[RECIPES[r].unlock].fx.building === RECIPES[r].building), 'Rezept-Freischaltung passt zur Forschung');
   ok(HIDDEN_RECIPES.length >= 8 && HIDDEN_RECIPES.every(r => RECIPES[r].building === 'montage' && RECIPES[r].in.length === 2), `${HIDDEN_RECIPES.length} versteckte Montage-Rezepte mit 2 Zutaten (≥ 8)`);
@@ -79,7 +85,11 @@ const fmt = s => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2,
     ...TUTORIAL.map(s => 'tut.' + s.id), ...['hi', 'lunch', 'shortcut', 'oops', 'coffee', 'belt', 'boss', 'shiny'].map(l => 'gerald.' + l),
     ...['hmm', 'science', 'tip', 'eureka', 'coffee', 'explode'].map(l => 'steve.' + l), ...CRATE_IDS.map(c => 'crate.open.' + c),
     ...['unknown', 'research', 'bounds', 'plot', 'occupied', 'deposit', 'money', 'rp', 'points', 'known', 'locked'].map(r => 'reason.' + r),
-    ...['idle', 'work', 'wait', 'full', 'norecipe', 'nodeposit'].map(s => 'state.' + s)];
+    ...['idle', 'work', 'wait', 'full', 'norecipe', 'nodeposit', 'nopower', 'nofuel', 'nolink', 'done'].map(s => 'state.' + s),
+    ...['prestige', 'unique', 'noupgrade', 'maxmk', 'blocked'].map(r => 'reason.' + r),
+    ...['ok', 'nopower', 'nosupply', 'lowpower', 'nodeposit', 'blocked', 'noexit', 'norecipe', 'missing', 'starved', 'idle', 'gaps', 'nofuel', 'nolink', 'wonder', 'wonderDone', 'slow', 'deadend', 'frozen', 'gerald'].map(k => 'diag.' + k),
+    'event.power.grace', 'event.power.graceEnd', 'event.storm', 'event.stormEnd', 'event.wonder', 'event.launch', 'event.upgrade', 'event.link',
+    ...[1, 2, 3, 4, 5].flatMap(i => ['wonder.' + i + '.name', 'wonder.' + i + '.desc'])];
   ok(simKeys.every(k => k in DICTS.en && k in DICTS.de), 'alle Text-Schlüssel der Sim vorhanden');
 }
 
@@ -648,6 +658,471 @@ check('Review 13: Tunnel kürzer neu gekoppelt → Teile sortiert, p ≤ Länge,
 });
 
 // =====================================================================================
+// 19. Ausbau 2: Bänder verbinden sich bei Berührung (auto-join)
+// =====================================================================================
+const rotAt = (f, x, y) => f.nodeAt(x, y)?.e.rot;
+const entsJ = f => JSON.stringify({ m: f.S.money, e: f.toJSON().ents });
+check('auto-join (a): Sackgasse dreht ihren Ausgang auf ein daneben gesetztes Band, Ereignis join', () => {
+  const f = rich(new Factory({ seed: 3 })); f.events();
+  f.placeLine('band', [[53, 62, 0], [54, 62, 0]]);
+  const id = f.place('band', 54, 63, 0), j = f.events().find(e => e.type === 'join');
+  return rotAt(f, 54, 62) === 1 && rotAt(f, 54, 63) === 1 && j && j.ids.includes(f.at(54, 62)) && j.ids.includes(id);
+});
+check('auto-join (b): einzelnes Band nach gespeistem Nachbarn läuft geradeaus weiter bzw. zum einzigen annehmenden Nachbarn', () => {
+  const f = rich(new Factory({ seed: 3 }));
+  f.placeLine('band', [[53, 62, 0], [54, 62, 0]]); f.place('band', 55, 62, 3);
+  const straight = rotAt(f, 55, 62) === 0;
+  const g = rich(new Factory({ seed: 3 })); g.place('verkauf', 55, 60, 0);
+  g.placeLine('band', [[53, 62, 0], [54, 62, 0]]); g.place('band', 55, 62, 2);
+  g.debugInsert(g.at(53, 62), 'stein'); secs(g, 6);
+  return straight && rotAt(g, 55, 62) === 3 && g.S.stats.sold === 1;
+});
+check('auto-join (c): Band auf dem Ausgangsfeld einer Maschine zeigt von ihr weg', () => {
+  const f = rich(new Factory({ seed: 3 })); f.place('ofen', 53, 52, 0);
+  f.place('band', 55, 53, 2);                                 // Werkzeug zeigt in den Ofen hinein
+  const g = rich(new Factory({ seed: 3 })); g.place('bohrer', O + 1, O + 1, 0); g.place('band', 51, 50, 3);
+  return rotAt(f, 55, 53) === 0 && rotAt(g, 51, 50) === 0;
+});
+check('auto-join (d): Ende einer gezogenen Linie biegt in Verkauf/Maschine ein, Teile kommen an', () => {
+  const f = rich(new Factory({ seed: 3 }));
+  f.placeLine('band', [[53, 57, 0], [54, 57, 0], [55, 57, 0]]);         // Verkauf (55,55) liegt links vom Ende
+  f.debugInsert(f.at(53, 57), 'stein'); secs(f, 6);
+  const g = rich(new Factory({ seed: 3 })); g.place('ofen', 57, 50, 3);  // Ofen 57..58 × 50..51, nimmt von unten an
+  g.placeLine('band', [[54, 52, 0], [55, 52, 0], [56, 52, 0], [57, 52, 0]]);
+  return rotAt(f, 55, 57) === 3 && f.S.stats.sold === 1 && rotAt(g, 57, 52) === 3;
+});
+check('auto-join (e): nie rückwärts, nie Schleife, nie ein bereits verbundenes Band umbiegen', () => {
+  const f = rich(new Factory({ seed: 3 }));
+  f.placeLine('band', [[53, 62, 0], [54, 62, 0], [55, 62, 0]]); f.place('band', 54, 63, 1);
+  const connected = rotAt(f, 54, 62) === 0 && rotAt(f, 53, 62) === 0;
+  f.place('band', 60, 62, 0); f.place('band', 59, 62, 0);                // Sackgasse (60,62) läge rückwärts zum neuen Band
+  const back = rotAt(f, 60, 62) === 0;
+  const g = rich(new Factory({ seed: 3 }));
+  g.placeLine('band', [[53, 60, 0], [54, 60, 1], [54, 61, 2], [53, 61, 2]]);   // U: Ende neben dem Anfang
+  const loop = rotAt(g, 53, 61) === 2;
+  const h = rich(new Factory({ seed: 3 }));                             // einzelnes Band würde die Sackgasse im Kreis schließen
+  h.placeLine('band', [[53, 60, 0], [54, 60, 1], [54, 61, 2]]); h.place('band', 53, 61, 3);
+  return connected && back && loop && rotAt(h, 54, 61) === 2;
+});
+check('auto-join (f): Rückgängig nimmt Band und alle Drehungen zurück (einzeln und gezogen)', () => {
+  const f = rich(new Factory({ seed: 3 })); f.placeLine('band', [[53, 62, 0], [54, 62, 0]]);
+  const s0 = entsJ(f); f.place('band', 54, 63, 0); const turned = rotAt(f, 54, 62) === 1; f.undo();
+  const s1 = entsJ(f); f.placeLine('band', [[56, 63, 2], [55, 63, 2], [54, 63, 2]]); const t2 = rotAt(f, 54, 62) === 1; f.undo();
+  return turned && t2 && s1 === s0 && entsJ(f) === s0;
+});
+check('auto-join (g): abschaltbar (f.opts.autoJoin = false)', () => {
+  const f = rich(new Factory({ seed: 3 })); f.opts.autoJoin = false; f.events();
+  f.placeLine('band', [[53, 62, 0], [54, 62, 0]]); f.place('band', 54, 63, 0); f.place('band', 55, 62, 3);
+  return rotAt(f, 54, 62) === 0 && rotAt(f, 54, 63) === 0 && rotAt(f, 55, 62) === 3 && !f.events().some(e => e.type === 'join');
+});
+
+// =====================================================================================
+// 20. Wegsuche und Blaupausen
+// =====================================================================================
+const pathOk = (f, p) => p.every((c, i) => { if (!i) return true; const a = p[i - 1], d = Math.abs(c.x - a.x) + Math.abs(c.y - a.y);
+  return (d === 1 && a.x + DX[a.rot] === c.x && a.y + DY[a.rot] === c.y) || (a.type === 'tunnel' && c.type === 'tunnel' && a.rot === c.rot && d >= 2 && d <= BUILDINGS.tunnel.range); });
+check('Wegsuche: freier Weg, umgeht Hindernisse, endet im Ziel; placePath setzt alles als eine Undo-Aktion', () => {
+  const f = rich(new Factory({ seed: 3 }));
+  const p0 = route(f, [53, 62], [60, 62]);
+  f.placeLine('band', Array.from({ length: 6 }, (_, i) => [57, 63 - i, 3]));   // Wand x = 57, y 58–63
+  const belts = () => JSON.stringify({ m: f.S.money, e: f.toJSON().ents.filter(e => e.type === 'band') });
+  const p = route(f, [53, 62], [60, 62], { tunnels: false }), s0 = belts();
+  const n = f.placePath(p); f.debugInsert(f.at(53, 62), 'stein'); secs(f, 30);
+  const arrived = f.nodeAt(60, 62).e.items.length === 1;
+  f.undo();
+  return p0.length === 8 && p0.every(c => c.type === 'band') && pathOk(f, p) && p.every(c => !(c.x === 57 && c.y >= 58)) && p[p.length - 1].x === 60 && n === p.length && arrived && belts() === s0 && f.canPlacePath(p).ok && !f.canPlacePath([...p, p[0]]).ok;
+});
+check('Wegsuche: Ziel ist ein Gebäude → Weg endet davor und zeigt hinein; nichts zu finden → leer', () => {
+  const f = rich(new Factory({ seed: 3 }));
+  const p = route(f, [50, 62], [55, 55]), last = p[p.length - 1];
+  f.placeLine('band', Array.from({ length: 16 }, (_, i) => [57, O + i, 1]));    // Wand über das ganze Grundstück
+  const none = route(f, [53, 62], [60, 62], { tunnels: false });
+  return p.length > 0 && f.nodeAt(last.x + DX[last.rot], last.y + DY[last.rot])?.e.type === 'verkauf' && none.length === 0 && route(f, [55, 55], [60, 60]).length === 0;
+});
+check('Wegsuche: mit Tunnel-Forschung springt der Weg unter der Wand durch, Teile kommen an', () => {
+  const f = rich(new Factory({ seed: 3 })); allResearch(f);
+  f.placeLine('band', Array.from({ length: 16 }, (_, i) => [57, O + i, 1]));
+  const p = route(f, [53, 62], [60, 62]), tun = p.filter(c => c.type === 'tunnel');
+  const n = f.placePath(p); f.debugInsert(f.at(53, 62), 'stein'); secs(f, 30);
+  const a = f.nodeAt(tun[0].x, tun[0].y).e, b = f.nodeAt(tun[1].x, tun[1].y).e;
+  return tun.length === 2 && pathOk(f, p) && n === p.length && a.link === b.id && b.exit && f.nodeAt(60, 62).e.items.length === 1;
+});
+// Blaupausen
+const plots = f => { for (const [x, y] of [[4, 3], [4, 2], [4, 4], [3, 4], [2, 3], [3, 2]]) f.buyPlot(x, y); };
+const norm = bp => JSON.stringify({ w: bp.w, h: bp.h, ents: bp.ents.map(({ type, dx, dy, rot, recipe, filter, mk }) => ({ type, dx, dy, rot, recipe, filter, mk })).sort((a, b) => a.dy - b.dy || a.dx - b.dx) });
+function bpFactory() {
+  const f = rich(new Factory({ seed: 3 })); allResearch(f); plots(f);
+  f.placeLine('band', [[50, 56, 0], [51, 56, 0]]);
+  const o = f.place('ofen', 52, 55, 0); f.placeLine('band', [[54, 56, 0], [55, 56, 0]]);   // Ausgang (54,56)
+  f.remove(f.S.ents.find(e => e.type === 'verkauf').id);
+  const p = f.place('presse', 56, 55, 0); f.setRecipe(p, 'rohr'); f.upgrade(p);
+  const so = f.place('sortierer', 58, 56, 0); f.setFilter(so, 'gold');
+  f.place('tunnel', 59, 56, 0); f.place('band', 60, 56, 1); f.place('tunnel', 61, 56, 0);
+  return f;
+}
+check('Blaupause: capture → paste ergibt dieselben Gebäude (Rezept, Filter, Mk, Tunnelpaar), eine Undo-Aktion', () => {
+  const f = bpFactory(), bp = f.capture(50, 55, 61, 56);
+  const c = f.canPaste(bp, 66, 52), s0 = entsJ(f), n = f.paste(bp, 66, 52), cp = f.capture(66, 52, 77, 53);
+  const t1 = f.nodeAt(75, 53).e, t2 = f.nodeAt(77, 53).e;
+  const ok1 = c.ok && n === bp.ents.length && norm(cp) === norm(bp) && t1.link === t2.id && t2.exit && bp.ents.some(e => e.recipe === 'rohr' && e.mk === 2) && bp.ents.some(e => e.filter === 'gold');
+  f.undo();
+  const blocked = f.canPaste(bp, 51, 55), money = (() => { const g = bpFactory(); g.S.money = 5; return g.canPaste(bp, 66, 52); })();
+  const g2 = new Factory({ seed: 3 }); g2.S.money = 1e9; plots(g2); const locked = g2.canPaste(bp, 66, 52);
+  return ok1 && entsJ(f) === s0 && !blocked.ok && blocked.blocked.length > 0 && !money.ok && money.reason === 'money' && !locked.ok && locked.locked.includes('presse') && locked.locked.includes('tunnel');
+});
+check('Blaupause gedreht: capture des Eingefügten = bpRotate (r = 1, 2, 3), Verkauf/Wunder werden nicht kopiert, 4× = Original', () => {
+  const f = bpFactory(); f.place('verkauf', 50, 57, 0); const bp = f.capture(50, 55, 61, 58);
+  let good = !bp.ents.some(e => e.type === 'verkauf') && norm(bpRotate(bpRotate(bp, 1), 3)) === norm(bp) && norm(bpRotate(bp, 4)) === norm(bp);
+  const spots = [[66, 34], [66, 50], [50, 66]];
+  for (let r = 1; r <= 3; r++) {
+    const rb = bpRotate(bp, r), [x, y] = spots[r - 1];
+    if (!f.canPaste(rb, x, y).ok || !f.paste(rb, x, y)) return false;
+    if (norm(f.capture(x, y, x + rb.w - 1, y + rb.h - 1)) !== norm(rb)) good = false;
+  }
+  return good;
+});
+check('Blaupause gedreht arbeitet gleich: Band → Ofen (2×2) → Band in allen 4 Drehungen', () => {
+  const base = { w: 6, h: 2, ents: [{ type: 'band', dx: 0, dy: 1, rot: 0, tag: 'in' }, { type: 'band', dx: 1, dy: 1, rot: 0 }, { type: 'ofen', dx: 2, dy: 0, rot: 0 },
+    { type: 'band', dx: 4, dy: 1, rot: 0 }, { type: 'band', dx: 5, dy: 1, rot: 0, tag: 'out' }] };
+  for (let r = 0; r < 4; r++) {
+    const f = rich(new Factory({ seed: 3 })); f.opts.autoJoin = false; f.remove(f.S.ents[0].id);
+    const bp = bpRotate(base, r), x = 52, y = 52;
+    if (f.paste(bp, x, y) !== 5) return false;
+    const at = t => { const e = bp.ents.find(q => q.tag === t); return f.nodeAt(x + e.dx, y + e.dy); };
+    for (let i = 0; i < 3; i++) { f.debugInsert(at('in').id, 'stein'); secs(f, 1); }
+    secs(f, 20);
+    let z = 0; for (const e of f.S.ents) if (e.items) z += e.items.filter(q => ITEM_IDS[q.t] === 'ziegel').length;
+    if (z !== 3) return false;
+  }
+  return true;
+});
+check('Blaupause teilen: encodeBp/decodeBp verlustfrei (COG1:), kaputte Codes → null', () => {
+  const f = bpFactory(), bp = f.capture(50, 55, 61, 56), code = encodeBp(bp), d = decodeBp(code);
+  const flip = code.slice(0, -3) + (code.at(-3) === 'A' ? 'B' : 'A') + code.slice(-2);
+  const big = encodeBp({ w: 49, h: 2, ents: [] }), over = encodeBp({ w: 3, h: 3, ents: [{ type: 'band', dx: 0, dy: 0, rot: 0 }, { type: 'band', dx: 0, dy: 0, rot: 1 }] });
+  const out = encodeBp({ w: 2, h: 2, ents: [{ type: 'ofen', dx: 1, dy: 1, rot: 0 }] });
+  const bad = [flip, 'COG2:' + code.slice(5), code.slice(5), '', 'COG1:', 'COG1:@@@', 'COG1:AAAA', null, 42, {}, big, over, out, code + 'A', 'COG1:' + 'A'.repeat(30000)];
+  return code.startsWith('COG1:') && code.length < 200 && norm(d) === norm(bp) && bad.every(c => decodeBp(c) === null);
+});
+
+// =====================================================================================
+// 21. Upgrades Mk II / Mk III
+// =====================================================================================
+const dProg = (f, id) => { const e = f.N.get(id).e; e.prog = 0; e.out.length = 0; f.tick(1); return e.prog; };
+check('Upgrades: Forschung nötig, Preis 4× / 12× Baupreis, Tempo ×1,6 / ×2,5, Mk-II-Bohrer braucht Strom', () => {
+  const f = rich(new Factory({ seed: 3 })); const d = f.place('bohrer', O + 1, O + 1, 0);
+  const r0 = f.canUpgrade(d), v = f.canUpgrade(f.S.ents[0].id), b = f.canUpgrade(f.place('band', 60, 62, 0));
+  allResearch(f, false);
+  const c1 = f.canUpgrade(d), p1 = dProg(f, d); f.upgrade(d);
+  const noPow = dProg(f, d), st = f.entity(d).state;
+  f.place('solar', 51, 52, 0);                                         // in Reichweite 3 des Bohrers
+  const p2 = dProg(f, d), c2 = f.canUpgrade(d); f.upgrade(d); const p3 = dProg(f, d);
+  return r0.reason === 'research' && r0.need === 'upgrade1' && v.ok === false && b.reason === 'noupgrade' && c1.cost === 4 * f.costOf('bohrer')
+    && noPow === 0 && st === 'nopower' && Math.abs(p2 / p1 - 1.6) < 1e-9 && c2.cost === 12 * f.costOf('bohrer') && Math.abs(p3 / p1 - 2.5) < 1e-9 && f.canUpgrade(d).reason === 'maxmk';
+});
+check('Upgrades: Puffer ×2, Lager ×2, Verkauf +15 % / +30 %, Ereignis upgrade', () => {
+  const f = rich(new Factory({ seed: 3 })); allResearch(f); f.events();
+  const o = f.place('ofen', 50, 52, 0); f.setRecipe(o, 'eisenbarren'); let n1 = 0; while (f.debugInsert(o, 'eisenerz') && n1 < 99) n1++;
+  f.upgrade(o); let n2 = n1; while (f.debugInsert(o, 'eisenerz') && n2 < 99) n2++;
+  const l = f.place('lager', 53, 60, 0); f.upgrade(l); const v = f.S.ents[0].id;
+  f.S.money = 1e6; const m0 = f.S.money; f.debugInsert(v, 'stein'); const s1 = f.S.money - m0; f.upgrade(v); const m1 = f.S.money; f.debugInsert(v, 'stein'); const s2 = f.S.money - m1;
+  f.upgrade(v); const m2 = f.S.money; f.debugInsert(v, 'stein'); const s3 = f.S.money - m2;
+  const ev = f.events().filter(e => e.type === 'upgrade');
+  return n1 === 4 && n2 === 8 && f.entity(l).cap === 400 && Math.abs(s2 / s1 - 1.15) < 1e-9 && Math.abs(s3 / s1 - 1.3) < 1e-9 && ev.length === 4 && ev[0].mk === 2;
+});
+check('Upgrades: Abriss erstattet alles Bezahlte, Rückgängig nimmt das Upgrade samt Preis zurück', () => {
+  const f = rich(new Factory({ seed: 3 })); allResearch(f); f.S.money = 1e6;
+  const m0 = f.S.money, o = f.place('ofen', 50, 52, 0); f.upgrade(o); f.upgrade(o); const paid = f.N.get(o).e.paid; f.remove(o);
+  const full = f.S.money === m0;
+  const p = f.place('presse', 50, 52, 0), m1 = f.S.money; f.upgrade(p); f.undo();
+  return full && paid > 1000 && f.N.get(p).e.mk === 1 && f.S.money === m1 && f.N.get(p).e.paid === BUILDINGS.presse.cost;
+});
+
+// =====================================================================================
+// 22. Strom
+// =====================================================================================
+check('Strom: Kraftwerk + Mast bilden ein Netz, Verbraucher außer Reichweite → nopower (Diagnose)', () => {
+  const f = rich(new Factory({ seed: 3 })); allResearch(f, false);
+  const K = f.place('kraftwerk', 53, 48, 0); for (let i = 0; i < 8; i++) f.debugInsert(K, 'kohle');
+  const M1 = f.place('montage', 49, 53, 0), M2 = f.place('montage', 58, 58, 0); f.tick(1);
+  const a = f.powerInfo(), e2 = f.entity(M2), dg = f.diagnose(M2);
+  const mast = f.place('mast', 57, 53, 0); f.tick(1); const b = f.powerInfo();
+  return a.length === 1 && a[0].supply === 40 && a[0].demand === 10 && a[0].users.includes(M1) && e2.state === 'nopower' && e2.power === 0 && dg.key === 'diag.nopower'
+    && b.length === 1 && b[0].demand === 20 && b[0].nodes.includes(mast) && b[0].nodes.includes(K) && f.entity(M2).power === 1 && !f.events().some(e => e.type === 'power');
+});
+check('Strom: Unterversorgung bremst anteilig (Solar 8 für 20 → 40 %), ohne Angebot steht alles (diag.nosupply)', () => {
+  const f = rich(new Factory({ seed: 3 })); allResearch(f, false);
+  const M1 = f.place('montage', 49, 53, 0), M2 = f.place('montage', 58, 58, 0); f.place('mast', 57, 53, 0); const so = f.place('solar', 52, 51, 0);
+  f.setRecipe(M1, 'schaltkreis'); f.debugInsert(M1, 'eisenplatte'); f.debugInsert(M1, 'kupferdraht'); f.debugInsert(M1, 'kupferdraht');
+  f.tick(2); const e = f.N.get(M1).e, p0 = e.prog; f.tick(10); const dp = (e.prog - p0) / 10;
+  const full = DT * f.M.mach * f.starMul(e) / RECIPES.schaltkreis.time;
+  const pw = f.entity(M1).power; f.remove(so); f.tick(1);
+  return Math.abs(pw - 0.4) < 1e-9 && Math.abs(dp / full - 0.4) < 1e-9 && f.entity(M1).state === 'nopower' && f.diagnose(M1).key === 'diag.nosupply';
+});
+check('Strom: Kraftwerk verbrennt anteilig zur Last (10 von 40 → ein Stück Kohle hält 16 s), ohne Kohle kein Strom', () => {
+  const f = rich(new Factory({ seed: 3 })); allResearch(f, false);
+  const K = f.place('kraftwerk', 53, 48, 0); f.place('montage', 49, 53, 0); f.debugInsert(K, 'kohle'); f.debugInsert(K, 'kohle');
+  const nope = !f.debugInsert(K, 'stein');
+  secs(f, 20); const b20 = f.S.stats.burned; secs(f, 15); const sup = f.powerInfo()[0].supply;
+  return nope && b20 === 2 && sup === 0 && f.diagnose(K).key === 'diag.nofuel';
+});
+check('Strom: Schonfrist alter Stände – unversorgte Verbraucher laufen voll, danach Ereignis graceEnd und Stillstand', () => {
+  const f = rich(new Factory({ seed: 3 })); allResearch(f, false); f.S.powerGrace = 2;
+  const M = f.place('montage', 49, 53, 0); f.tick(1); const during = f.entity(M).power;
+  secs(f, 2.1); const ev = f.events().find(e => e.type === 'power' && e.kind === 'graceEnd');
+  return during === 1 && ev && f.entity(M).power === 0 && f.S.powerGrace === 0;
+});
+check('Mond: Strom erforscht, Solarfeld steht schon; Bohrer ohne Strom fördert nichts, mit Mast schon', () => {
+  const f = new Factory({ seed: 3, biome: 'mond' }); f.S.money = 1e6;
+  const so = f.S.ents.find(e => e.type === 'solar'), d = f.place('bohrer', O + 1, O + 1, 0); secs(f, 20);
+  const none = f.S.stats.mined === 0 && f.entity(d).state === 'nopower' && f.entity(d).use === 3;
+  f.place('mast', 53, 55, 0); secs(f, 20);
+  return f.S.research.includes('strom') && so && f.powerInfo()[0].supply === 16 && none && f.S.stats.mined > 0;
+});
+
+// =====================================================================================
+// 23. Drohnen
+// =====================================================================================
+function droneNet() {
+  const f = rich(new Factory({ seed: 3 })); allResearch(f);
+  f.place('bohrer', 59, 59, 2);                                     // Kohle, Ausgang (58,60)
+  f.placeLine('band', [[58, 60, 2], [57, 60, 2], [56, 60, 2], [55, 60, 2]]);
+  const D1 = f.place('drohnenhafen', 53, 60, 2), D2 = f.place('drohnenhafen', 60, 52, 3);   // D2 gibt auf (61,51) aus
+  f.place('verteiler', 61, 51, 3); f.place('verkauf', 61, 49, 0); f.place('band', 60, 51, 2); const K = f.place('kraftwerk', 57, 50, 0);
+  return { f, D1, D2, K };
+}
+const transit = f => { let c = inTransit(f); for (const e of f.S.ents) if (e.dr) for (const d of e.dr) c += d.load.length; return c; };
+check('Drohnen: link verbindet Sender → Empfänger, Teile kommen an; Teilebilanz mit Kraftwerk (gefördert = verkauft + verbrannt + unterwegs)', () => {
+  const { f, D1, D2 } = droneNet();
+  const before = f.debugInsert(D1, 'kohle', false, 2); const l = f.link(D1, D2); let seen = 0;
+  for (let i = 0; i < 120 * TPS; i++) { f.tick(); if (i % 40 === 0) f.forEachDrone(0.5, (x, z, h, it, g, k) => { if (it && h > 0.8) seen++; }); }
+  const st = f.S.stats;
+  return !before && l && !f.link(D1, D1) && !f.link(D1, f.S.ents[0].id) && st.sold > 20 && st.burned >= 1 && seen > 0 && st.mined === st.sold + st.burned + transit(f) && st.lost === 0 && uniqueKeys(f);
+});
+check('Drohnen: +1 Drohne je Mk, Trennen bringt die Ladung zurück (Bilanz bleibt), Rückgängig verbindet wieder', () => {
+  const { f, D1, D2 } = droneNet(); f.link(D1, D2); f.upgrade(D1); f.upgrade(D1);
+  let n = 0; f.forEachDrone(1, () => n++); const dc = f.droneCount();
+  secs(f, 30); let flying = 0; for (const d of f.N.get(D1).e.dr) flying += d.s !== 0;
+  f.link(D1, 0); const st = f.S.stats, bal = st.mined === st.sold + st.burned + transit(f) && st.lost === 0;
+  f.undo(); const relinked = f.N.get(D1).e.link === D2;
+  f.remove(D2); const cut = f.N.get(D1).e.link === 0 && st.mined === st.sold + st.burned + transit(f) + st.lost;
+  return n === 4 && dc === 4 && flying > 0 && bal && relinked && cut && f.N.get(D1).e.dr.every(d => d.s === 0 && !d.load.length);
+});
+
+// =====================================================================================
+// 24. Weltwunder
+// =====================================================================================
+check('Wunder: erst nach dem ersten Prestige, nur eins, nimmt nur Teile der aktuellen Stufe', () => {
+  const f = rich(new Factory({ seed: 3 })); const c0 = f.canPlace('wunder', 49, 49, 0);
+  f.S.total.prestiges = 1; const w = f.place('wunder', 49, 49, 0), c1 = f.canPlace('wunder', 56, 58, 0);
+  const a = f.debugInsert(w, 'stein'), b = f.debugInsert(w, 'motor'), c = f.debugInsert(w, 'ziegel');
+  return c0.reason === 'prestige' && !f.isUnlocked('wunder') === false && w && c1.reason === 'unique' && !a && !b && c && f.S.wonder.have.ziegel === 1 && f.S.stats.wonderIn === 1;
+});
+check('Wunder: Stufe fertig → Ereignis wonder, dauerhafter Bonus (+10 % Verkauf), Fortschritt bleibt über Prestige (auch abgerissen)', () => {
+  const f = rich(new Factory({ seed: 3 })); f.S.total.prestiges = 1; const w = f.place('wunder', 49, 49, 0); f.events();
+  f.S.wonder.have = { ziegel: 1999, eisenplatte: 999 }; const v0 = f.val[ITEM_IDS.indexOf('stein')];
+  f.debugInsert(w, 'ziegel'); const full = !f.debugInsert(w, 'ziegel'); f.debugInsert(w, 'eisenplatte');
+  const ev = f.events().find(e => e.type === 'wonder'), v1 = f.val[ITEM_IDS.indexOf('stein')];
+  f.debugInsert(w, 'motor'); f.remove(w); f.S.stats.earned = 2e6; f.prestige('wiese');
+  return full && ev && ev.stage === 1 && !ev.launch && Math.abs(v1 / v0 - 1.1 / 1) < 1e-9 && f.S.wonder.stage === 2 && f.S.wonder.have.motor === 1 && Math.abs(f.M.sell - 1.1) < 1e-9;
+});
+check('Wunder Stufe 5: Start (launch), Titel Rocket Tycoon, 10 Kisten; Stufe 4: eine Kiste je Tag', () => {
+  const f = rich(new Factory({ seed: 3 })); f.S.total.prestiges = 1; f.S.wonder.stage = 5; f.S.wonder.have = { rakete: 50, roboter: 49 }; f._mods();
+  const w = f.place('wunder', 49, 49, 0), c0 = f.S.crates.length; f.events(); f.debugInsert(w, 'roboter');
+  const ev = f.events().find(e => e.type === 'wonder'), c1 = f.S.crates.length;
+  f.setToday('2026-11-16'); const c2 = f.S.crates.length; f.setToday('2026-11-16'); f.setToday('2026-11-17');
+  return ev && ev.stage === 5 && ev.launch && f.S.deco.titles.includes('tycoon') && c1 === c0 + 10 && c2 === c1 + 1 && f.S.crates.length === c2 + 1 && f.wonder().done && !f.debugInsert(w, 'rakete');
+});
+
+// =====================================================================================
+// 25. Welt-Regeln: Sandsturm, Frost, vorübergehende Vorkommen
+// =====================================================================================
+check('Wüste: Sandsturm alle 8–12 min für 45 s – Bänder × 0,5, Solar 0, Ereignis storm', () => {
+  const f = rich(new Factory({ seed: 5, biome: 'wueste' })); allResearch(f, false);
+  const b = f.place('band', 53, 62, 0), so = f.place('solar', 58, 62, 0);
+  f.S.storm.next = 1; f.events(); secs(f, 1.05);
+  const on = f.events().find(e => e.type === 'storm'), sl = f.N.get(b).sl, out = f.entity(so).out;
+  secs(f, 46); const off = f.events().find(e => e.type === 'storm' && !e.on);
+  const gaps = []; let last = f.time;
+  for (let i = 0; i < 60 * 60 * TPS; i++) { f.tick(); if ((i & 31) === 0) for (const e of f.events()) if (e.type === 'storm') { if (e.on) gaps.push(f.time - last); else last = f.time; } }
+  return on && on.on && on.secs === 45 && sl === 0.5 && out === 0 && off && f.N.get(b).sl === 1 && f.entity(so).out === 12 && gaps.length >= 4 && gaps.every(g => g >= 479 && g <= 722);
+});
+check('Eis: Bänder frieren (× 0,6), ein Heizer mit Strom hält 4 Felder warm (frozen je Band)', () => {
+  const f = rich(new Factory({ seed: 5, biome: 'eis' })); allResearch(f, false);
+  const near = f.place('band', 53, 62, 0), far = f.place('band', 62, 50, 0); f.tick(1);
+  const fz = f.entity(near).frozen && f.entity(far).frozen && f.N.get(near).sl === 0.6;
+  f.place('heizer', 55, 60, 0); f.tick(1); const noPow = f.entity(near).frozen;
+  f.place('solar', 56, 61, 0); f.tick(1);
+  f.debugInsert(near, 'stein'); f.debugInsert(far, 'stein'); f.tick(5);
+  const pn = f.N.get(near).e.items[0].p, pf = f.N.get(far).e.items[0].p;
+  return fz && noPow && !f.entity(near).frozen && f.entity(far).frozen && Math.abs(pf / pn - 0.6) < 1e-9 && f.diagnose(far).key === 'diag.frozen';
+});
+check('addDeposit: vorübergehendes Vorkommen, Bohrer passt sich an, läuft ab und stellt das Alte wieder her (auch über Speichern/Laden)', () => {
+  const f = rich(new Factory({ seed: 3 })); f.events();
+  const bad = [f.addDeposit(-1, 0, 'kristall', 5), f.addDeposit(53, 62, 'ziegel', 5), f.addDeposit(53, 62, 'kristall', 0)].some(Boolean);
+  for (const [x, y] of [[53, 62], [54, 62], [53, 63], [54, 63]]) f.addDeposit(x, y, 'kristall', 3, true);
+  const d = f.place('bohrer', 53, 62, 0), dep = f.deposit(53, 62), item = f.entity(d).item;
+  f.addDeposit(50, 50, 'kristall', 2); const over = f.deposit(50, 50).item;
+  const g = Factory.load(JSON.stringify(f.toJSON())); secs(f, 4); secs(g, 4);
+  const ev = f.events().filter(e => e.type === 'deposit');
+  return !bad && dep.item === 'kristall' && dep.rich && item === 'kristall' && over === 'kristall' && f.deposit(53, 62) === null && f.entity(d).state === 'nodeposit'
+    && f.deposit(50, 50).item === 'stein' && g.deposit(50, 50).item === 'stein' && g.deposit(54, 63) === null && f.S.xdep.length === 0 && ev.filter(e => !e.on).length === 5;
+});
+
+// =====================================================================================
+// 26. Verlauf, Kisten, freie Felder, Engpässe, Zähler fürs Album
+// =====================================================================================
+check('Verlauf: [tick, b|r|u, type, x, y, rot, mk], Ringpuffer 3000, über Prestige geleert', () => {
+  const f = rich(new Factory({ seed: 3 })); allResearch(f); f.tick(5);
+  const o = f.place('ofen', 50, 52, 1); f.upgrade(o); f.remove(o);
+  const h = f.history().slice(-3);
+  for (let i = 0; i < 1600; i++) { const id = f.place('band', 49 + (i % 15), 60 + ((i / 15 | 0) % 4), 0); f.remove(id); }
+  const len = f.history().length; f.S.stats.earned = 2e6; f.prestige();
+  return h[0].join() === '5,b,ofen,50,52,1,1' && h[1][1] === 'u' && h[1][6] === 2 && h[2][1] === 'r' && len === 3000 && f.history().length <= 2;
+});
+check('addCrate/freeCells: Kiste mit Quelle, freie Quadrate auf eigenem Land, nächste zuerst', () => {
+  const f = new Factory({ seed: 3 }); f.events(); const i = f.addCrate('meteor'), ev = f.events().find(e => e.type === 'crate');
+  const c = f.freeCells(3, [56, 56], 3);
+  const free = c.every(([x, y]) => { for (let j = 0; j < 3; j++) for (let k = 0; k < 3; k++) if (!f.isOpen(x + k, y + j) || f.at(x + k, y + j)) return false; return true; });
+  return f.S.crates[i].src === 'meteor' && ev && c.length === 3 && free && f.freeCells(5).length === 5;
+});
+check('Engpässe: diagnose/bottlenecks – Ausgang voll, fehlende Zutat, kein Rezept; Auslastung 0–1', () => {
+  const f = rich(new Factory({ seed: 3 })); allResearch(f);
+  const d = f.place('bohrer', O + 1, O + 1, 0), m = f.place('presse', 53, 60, 0); f.setRecipe(m, 'zahnrad'); f.debugInsert(m, 'eisenbarren');
+  const mo = f.place('montage', 57, 58, 0); secs(f, 40);
+  const dd = f.diagnose(d), dm = f.diagnose(m), bn = f.bottlenecks(5);
+  return dd.blocked && dd.key === 'diag.noexit' && dm.key === 'diag.missing' && dm.missing[0] === 'eisenbarren' && dm.vars.item === 'eisenbarren'
+    && bn[0].id === d && bn.some(b => b.id === mo && b.key === 'diag.norecipe') && dd.util >= 0 && dd.util <= 1 && f.diagnose(9999) === null;
+});
+check('Zähler fürs Album: goldMade (golden hergestellt) und perfect (★5-Maschine)', () => {
+  const f = new Factory({ seed: 3 }); chain(f); f.S.boosts.goldrain = 5; f.S.patents.push('belegschaft'); f.S.ents.forEach(e => { e.lvl = 5; }); secs(f, 60);
+  return f.S.total.goldMade.eisenerz === 5 && f.S.total.goldMade.eisenbarren >= 4 && f.S.total.perfect.eisenerz > 10 && f.S.total.perfect.eisenbarren > 5;
+});
+
+// =====================================================================================
+// 27. Speichern/Laden mit allem, alter Stand v1
+// =====================================================================================
+function fullFactory(seed) {
+  const f = busyFactory(seed); f.S.powerGrace = 0; f.S.total.prestiges = 1; f.S.wonder.have = { ziegel: 12 };
+  for (const [x, y] of [[4, 3], [4, 2], [3, 2]]) f.buyPlot(x, y);
+  const at = (t, s) => { const [x, y] = f.freeCells(1, [70, 45], s)[0]; return f.place(t, x, y, 2); };
+  const D1 = at('drohnenhafen', 2), D2 = at('drohnenhafen', 2); f.link(D1, D2); f.upgrade(D1);
+  for (let i = 0; i < 6; i++) f.debugInsert(D1, 'stein', false, 2);
+  const K = at('kraftwerk', 3); for (let i = 0; i < 4; i++) f.debugInsert(K, 'kohle'); at('mast', 1); at('solar', 2);
+  f.upgrade(f.S.ents.find(e => e.type === 'ofen').id);
+  at('wunder', 5); f.addDeposit(70, 40, 'kristall', 400);
+  return f;
+}
+check('Speichern/Laden mit Strom, Drohnen, Wunder, Upgrades, Verlauf, Vorkommen: identisch und läuft identisch weiter', () => {
+  const f = fullFactory(31); secs(f, 90);
+  const j1 = JSON.stringify(f.toJSON()), g = Factory.load(j1);
+  if (JSON.stringify(g.toJSON()) !== j1) return false;
+  f.tick(3000); g.tick(3000);
+  const a = JSON.stringify(f.toJSON()), b = JSON.stringify(g.toJSON());
+  const w = rich(new Factory({ seed: 8, biome: 'wueste' })); allResearch(w, false); w.place('band', 53, 62, 0); w.S.storm.next = 2; secs(w, 10);
+  const w2 = Factory.load(JSON.stringify(w.toJSON())); w.tick(1200); w2.tick(1200);
+  return a === b && f.S.ents.some(e => e.dr && e.dr.length === 2) && f.history().length > 10 && JSON.stringify(w.toJSON()) === JSON.stringify(w2.toJSON());
+});
+check('Alter Stand v1 lädt: Schonfrist 1800 s (Ereignis), Montage → Strom nachgetragen, Montage läuft', () => {
+  const f = busyFactory(32); secs(f, 30); const j = f.toJSON();
+  j.v = 1; for (const k of ['powerGrace', 'wonder', 'hist', 'xdep', 'storm', 'chal']) delete j[k];
+  j.research = j.research.filter(r => !['strom', 'upgrade1', 'upgrade2', 'drohnen'].includes(r));
+  for (const e of j.ents) delete e.mk;
+  const g = Factory.load(JSON.stringify(j)), ev = g.events().find(e => e.type === 'power' && e.kind === 'grace');
+  const mo = g.place('montage', O + 11, O + 12, 0);
+  g.tick(5); const p = g.entity(mo)?.power;
+  return g.S.v === SAVE_VERSION && SAVE_VERSION === 2 && g.S.powerGrace > 1790 && ev && ev.secs === 1800 && g.S.research.includes('strom') && p === 1 && g.S.wonder.stage === 1 && g.S.ents.every(e => !BUILDINGS[e.type].kind.match(/machine/) || e.mk === 1);
+});
+check('Laden robust gegen kaputte neue Felder (mk, link, dr, wonder, hist, xdep, storm, chal …)', () => {
+  const bad = [{ wonder: 'x', hist: [1, [1, 'q'], [5, 'b', 'ufo', 1, 1, 0, 1]], xdep: [{ x: 1e9 }, { x: 50, y: 50, item: 'ufo', left: 5 }, null], storm: null, chal: 5, powerGrace: 'x' },
+    { wonder: { stage: 99, have: { ziegel: 1e400, ufo: 3 } }, chal: { week: {}, left: 3 }, total: { goldMade: 5, perfect: { ufo: 1, stein: -1 } } },
+    { chal: { week: '2026-W47', left: 'x', score: 5, junk: {} }, ents: [{ type: 'drohnenhafen', x: 50, y: 50, link: 999, mk: 9, dr: 'x', q: ['ufo', 'stein'] }, { type: 'drohnenhafen', x: 53, y: 50, link: 1, dr: [[7, 'x', -1, ['stein', 'ufo']], 5] },
+      { type: 'kraftwerk', x: 53, y: 53, q: ['ufo', 'kohle', 'stein'], burn: 1e9 }, { type: 'wunder', x: 58, y: 58 }, { type: 'ofen', x: 60, y: 50, mk: -3 }, { type: 'mast', x: 50, y: 60, mk: 2 }] }];
+  for (const s of bad) {
+    const h = Factory.load(s); h.tick(100); h.toJSON(); h.entities(); h.powerInfo(); h.bottlenecks(); h.forEachDrone(0.5, () => 0);
+    const S = h.S; if (![S.money, S.powerGrace, S.wonder.stage, S.storm.next].every(Number.isFinite) || !Array.isArray(S.hist) || !Array.isArray(S.xdep)) return false;
+    if (S.ents.some(e => e.type === 'wunder')) return false;
+    if (s.chal?.week === '2026-W47' && !(S.chal && S.chal.left === 0 && S.chal.score === 5 && !('junk' in S.chal))) return false;
+    if (s.total && (Object.keys(S.total.goldMade).length || 'ufo' in S.total.perfect || 'stein' in S.total.perfect)) return false;
+    for (const e of S.ents) { if (e.mk && (e.mk < 1 || e.mk > 3)) return false; if (e.dr && (e.dr.length !== e.mk || e.dr.some(d => d.load.some(c => c < 0)))) return false; if (e.type === 'kraftwerk' && (e.burn > 4 || e.q.length > 1)) return false; }
+    const j = JSON.stringify(h.toJSON()); if (JSON.stringify(Factory.load(j).toJSON()) !== j) return false;
+  }
+  return true;
+});
+
+// =====================================================================================
+// 28. Großbohrer: 4 gleiche Bohrer im 2×2-Quadrat auf einem Rohstoff verschmelzen (ein Ausgang, +25 %)
+// =====================================================================================
+{
+  const Q = [[0, 0], [2, 0], [0, 2], [2, 2]];
+  const spotOf = (f, x0 = 30, y0 = 30, skip = null) => {
+    for (let y = y0; y < 75; y++) for (let x = x0; x < 75; x++) {
+      if (skip && Math.abs(x - skip[0]) < 6 && Math.abs(y - skip[1]) < 6) continue;
+      const cs = Q.map(([i, j]) => f.canPlace('bohrer', x + i, y + j, 0)); if (!cs.every(c => c.ok)) continue;
+      if (new Set(cs.map(c => c.item)).size === 1 && [0, 1, 2, 3].every(r => { const [cx, cy] = outCell(x, y, 4, 4, r); return f.canPlace('band', cx, cy, 0).ok; })) return [x, y];
+    }
+    return null;
+  };
+  const land = f => { rich(f); allResearch(f); for (let k = 0; k < 4; k++) for (let y = 0; y < PLOTS; y++) for (let x = 0; x < PLOTS; x++) if (f.plotState(x, y) === 'buyable') f.buyPlot(x, y); f.S.money = 1e8; return f; };
+  const f = land(new Factory({ seed: 3 }));
+  const sp = spotOf(f); ok(!!sp, 'Großbohrer: Platz für 4 Bohrer auf einem Rohstoff gefunden ' + sp);
+  const [x, y] = sp, m0 = f.S.money;
+  ok(!f.canPlace('grossbohrer', x, y, 0).ok && f.canPlace('grossbohrer', x, y, 0).reason === 'merge', 'Großbohrer lässt sich nicht direkt bauen (reason merge)');
+  const ids = Q.slice(0, 3).map(([i, j]) => f.place('bohrer', x + i, y + j, 1));
+  const rates = ids.map(id => f.entity(id).rate);
+  ok((f.count.bohrer || 0) === 3 && !f.count.grossbohrer, 'drei Bohrer im Quadrat verschmelzen noch nicht');
+  const [bx, by] = outCell(x, y, 4, 4, 1); f.place('band', bx, by, 1);          // am Ausgang „unten“ liegt schon ein Band
+  const costs = [f.costOf('bohrer')];
+  const per = rates[0] / f.N.get(ids[0]).cov, cov4 = f._drillInfo(x + 2, y + 2).cov, want = (ids.reduce((a, id) => a + f.N.get(id).cov, 0) + cov4) * per * 1.25;
+  const id4 = f.place('bohrer', x + 2, y + 2, 0);
+  const big = f.entity(id4);
+  ok(big && big.type === 'grossbohrer' && big.w === 4 && big.x === x && big.y === y && (f.count.bohrer || 0) === 0 && f.count.grossbohrer === 1, 'vierter Bohrer → ein Großbohrer 4×4, place() liefert seine Id');
+  ok(big.rot === 1 && big.outX === bx && big.outY === by && f.N.get(id4).tgt?.e.type === 'band', 'Ausgang zeigt zum vorhandenen Band (eine Drehung der vier), nur EIN Ausgang');
+  ok(Math.abs(big.rate - want) < 1e-9, `fördert wie seine 4 Bohrer + 25 % (${big.rate.toFixed(3)}/s = 1,25 × ${(want / 1.25).toFixed(3)}/s)`);
+  ok(Math.abs((m0 - f.S.money) - (f.N.get(id4).e.paid + 1)) < 1e-6, 'bezahlter Preis = Summe der vier Bohrer');
+  ok(f.costOf('bohrer') > costs[0], `nächster Bohrer bleibt teuer (${f.costOf('bohrer')} > ${costs[0]}): Großbohrer zählt wie 4 Bohrer`);
+  ok(f.diagnose(id4) && f.bottlenecks().every(b => typeof b.key === 'string'), 'Diagnose kennt den Großbohrer');
+  // Undo trennt wieder auf, dann nimmt es den vierten Bohrer zurück
+  const before = f.S.money; f.undo();
+  ok((f.count.bohrer || 0) === 3 && !f.count.grossbohrer && ids.every(id => f.N.get(id)?.e.type === 'bohrer') && Math.abs(f.S.money - (before + costs[0])) < 1e-6, 'Rückgängig: drei Bohrer mit alten Ids zurück, vierter erstattet');
+  // unterschiedliche Mk → kein Verschmelzen; Ausbau auf gleiche Mk → verschmilzt
+  const up = ids.map(id => f.upgrade(id)); const d4 = f.place('bohrer', x + 2, y + 2, 0);
+  ok(up.every(Boolean) && f.N.get(d4)?.e.type === 'bohrer' && (f.count.bohrer || 0) === 4, 'Mk II + Mk I: kein Großbohrer');
+  ok(f.upgrade(d4) && f.count.grossbohrer === 1 && f.entities().find(e => e.type === 'grossbohrer').mk === 2, 'vierter auf Mk II ausgebaut → Großbohrer Mk II');
+  const gid = f.S.ents.find(e => e.type === 'grossbohrer').id;
+  const cu = f.canUpgrade(gid); ok(cu.ok && cu.cost === Math.round(f.costOf('bohrer') * 4 * 12), 'Großbohrer-Ausbau kostet wie vier Bohrer');
+  ok(f.entity(gid).use === 4 * 4, `braucht Strom wie vier Mk-II-Bohrer (${f.entity(gid).use})`);
+  // Füllen, Ausgang staut sich → 16 × Puffer
+  f.remove(f.N.get(gid).tgt.id); secs(f, 60);
+  ok(f.entity(gid).out === 32 && f.entity(gid).state === 'full', `Ausgabepuffer 16 × Mk-Puffer (${f.entity(gid).out})`);
+  // Abriss erstattet alles, Rückgängig stellt ihn wieder her
+  const paid = f.N.get(gid).e.paid, mB = f.S.money; f.remove(gid);
+  ok(Math.abs(f.S.money - mB - paid) < 1e-6 && !f.count.grossbohrer, 'Abriss erstattet den Preis aller vier Bohrer');
+  f.undo(); ok(f.count.grossbohrer === 1 && f.N.get(gid)?.e.mk === 2, 'Rückgängig stellt den Großbohrer wieder her');
+  // Blaupause: wird als 4 Bohrer aufgenommen und verschmilzt beim Einfügen
+  const bp = f.capture(x, y, x + 3, y + 3);
+  ok(bp.ents.length === 4 && bp.ents.every(e => e.type === 'bohrer' && e.mk === 2), 'Blaupause speichert den Großbohrer als 4 Bohrer');
+  ok(decodeBp(encodeBp(bp))?.ents.length === 4, 'Blaupausen-Code des Großbohrers');
+  const sp2 = spotOf(f, 30, 30, [x, y]);
+  const nP = sp2 ? f.paste(bp, sp2[0], sp2[1]) : 0;
+  ok(nP === 4 && f.count.grossbohrer === 2 && f.N.get(f.at(sp2[0], sp2[1]))?.e.type === 'grossbohrer', 'Einfügen ergibt wieder einen Großbohrer ' + sp2);
+  f.undo(); ok(f.count.grossbohrer === 1 && !f.at(sp2[0], sp2[1]), 'Rückgängig nimmt das ganze Einfügen zurück');
+  // Speichern/Laden; alter Stand mit 4 Bohrern im Quadrat verschmilzt beim Laden
+  const j = JSON.stringify(f.toJSON()), g = Factory.load(j);
+  ok(JSON.stringify(g.toJSON()) === j && g.count.grossbohrer === 1, 'Speichern → Laden behält den Großbohrer');
+  const h = land(new Factory({ seed: 3 }));
+  h._batch = true; for (const [i, jj] of Q) h.place('bohrer', x + i, y + jj, 0); h._batch = false; h._topo();
+  ok((h.count.bohrer || 0) === 4, 'Vorbereitung: 4 Bohrer im Quadrat ohne Verschmelzen');
+  const hl = Factory.load(JSON.stringify(h.toJSON()));
+  ok(hl.count.grossbohrer === 1 && !(hl.count.bohrer > 0), 'Laden: 4 Bohrer im Quadrat werden zum Großbohrer');
+  // Rohstoffe verschieden → kein Verschmelzen
+  const k2 = land(new Factory({ seed: 3 }));
+  let mixed = null;
+  for (let yy = 30; yy < 75 && !mixed; yy++) for (let xx = 30; xx < 75 && !mixed; xx++) { const cs = Q.map(([i, jj]) => k2.canPlace('bohrer', xx + i, yy + jj, 0)); if (cs.every(c => c.ok) && new Set(cs.map(c => c.item)).size > 1) mixed = [xx, yy]; }
+  if (mixed) { for (const [i, jj] of Q) k2.place('bohrer', mixed[0] + i, mixed[1] + jj, 0); ok(!k2.count.grossbohrer && k2.count.bohrer === 4, 'verschiedene Rohstoffe: kein Großbohrer'); }
+}
+
+// =====================================================================================
 // 17. Performance: 2000 Bänder + 300 Maschinen
 // =====================================================================================
 {
@@ -672,12 +1147,20 @@ check('Review 13: Tunnel kürzer neu gekoppelt → Teile sortiert, p ≤ Länge,
     belts += cells.length; return true;
   };
   for (let y0 = 0; y0 + 10 <= MAP && belts < 2000; y0 += 10) for (let x0 = 0; x0 + 2 <= MAP && belts < 2000; x0 += 2) ring(x0, y0);
+  // Strom: alle Öfen Mk II (je 4 Leistung), Masten im Raster, Solarfelder, Kraftwerke; 20 Drohnenpaare in Betrieb
+  for (const n of [...f.mn]) if (n.e.type === 'ofen') f.upgrade(n.id);
+  for (let gy = 2; gy < MAP; gy += 6) for (let gx = 2; gx < MAP; gx += 6) { const c = f.freeCells(1, [gx, gy], 1)[0]; if (c && Math.abs(c[0] - gx) + Math.abs(c[1] - gy) <= 3) f.place('mast', c[0], c[1], 0); }
+  for (const [x, y] of f.freeCells(400, null, 2)) { if ((f.count.solar || 0) >= 60) break; f.place('solar', x, y, 0); }
+  for (const [x, y] of f.freeCells(200, null, 3)) { if ((f.count.kraftwerk || 0) >= 4) break; const k = f.place('kraftwerk', x, y, 0); if (k) for (let i = 0; i < 8; i++) f.debugInsert(k, 'kohle'); }
+  const ports = []; for (const [x, y] of f.freeCells(400, null, 2)) { if (ports.length >= 40) break; const id = f.place('drohnenhafen', x, y, 0); if (id) ports.push(id); }
+  for (let i = 0; i + 1 < ports.length; i += 2) { f.link(ports[i], ports[i + 1]); for (let k = 0; k < 16; k++) f.debugInsert(ports[i], 'stein', false, 2); }
   // zweites Teil je Band (an der Bandmitte geht nicht – hinten nachschieben nach einem Tick)
   f.tick(6); for (const n of f.bn) if (n.kind === 'belt') f.debugInsert(n.id, 'eisenerz');
   f.tick(200);
-  const items = f.itemCount();
-  let ms = Infinity; for (let k = 0; k < 4; k++) { const t0 = performance.now(); f.tick(500); ms = Math.min(ms, (performance.now() - t0) / 500); }
+  const items = f.itemCount(), pi = f.powerInfo(), powered = f.mn.filter(n => n.use > 0 && n.pw > 0).length, users = f.mn.filter(n => n.use > 0).length;
+  let ms = Infinity; for (let k = 0; k < 8; k++) { const t0 = performance.now(); f.tick(500); ms = Math.min(ms, (performance.now() - t0) / 500); }
   ok(belts >= 2000 && mach >= 300, `große Fabrik: ${belts} Bänder, ${mach} Maschinen, ${items} Teile unterwegs`);
+  ok(pi.length >= 1 && users >= 100 && powered >= users * 0.8 && f.droneCount() >= 40, `… mit Strom: ${pi.length} Netze, ${f.count.mast} Masten, ${powered}/${users} Verbraucher versorgt, ${f.droneCount()} Drohnen`);
   ok(ms < 1.5, `Tick: ${ms.toFixed(3)} ms (< 2 ms)`);
   let n = 0; f.forEachItem(0.5, () => n++); f.forEachItem(0.5, () => 0); const t1 = performance.now(); let ms2 = Infinity; for (let k = 0; k < 5; k++) { const t1 = performance.now(); f.forEachItem(0.5, () => 0); ms2 = Math.min(ms2, performance.now() - t1); }
   ok(n === f.itemCount() && ms2 < 8, `forEachItem: ${n} Teile in ${ms2.toFixed(2)} ms`);
@@ -691,7 +1174,7 @@ check('Review 13: Tunnel kürzer neu gekoppelt → Teile sortiert, p ≤ Länge,
 // 18. Bot-Partie: „guter Spieler“ über mehrere Spielstunden (Balancing)
 // =====================================================================================
 class Bot {
-  constructor(f) { this.f = f; this.fails = new Map(); this.expTable = 0; this.labs = 0; this.modules = []; this.plotRev = 0; }
+  constructor(f) { this.f = f; this.fails = new Map(); this.expTable = 0; this.labs = 0; this.modules = []; this.plotRev = 0; this.plants = 0; this.upgrades = 0; }
   // ---- Hilfen ----
   blockedSet() {
     const f = this.f, s = new Set();
@@ -844,11 +1327,12 @@ class Bot {
     const f = this.f, placed = [];
     const undo = () => { for (const id of placed.reverse()) f.remove(id); return false; };
     for (const op of plan.ops) {
-      if (op.line) { for (const [x, y, d] of op.line) { const id = f.place('band', x, y, d); if (!id) return undo(); placed.push(id); } continue; }
+      // Linien wie ein Spieler ziehen (placeLine, mit auto-join)
+      if (op.line) { const k = f.placeLine('band', op.line); for (const [x, y] of op.line) { const id = f.at(x, y); if (id && f.N.get(id).e.type === 'band' && !placed.includes(id)) placed.push(id); } if (k !== op.line.length) return undo(); continue; }
       const id = f.place(op.b, op.x, op.y, op.rot); if (!id) return undo(); placed.push(id);
       if (op.recipe && BUILDINGS[op.b].kind === 'machine') f.setRecipe(id, op.recipe);
     }
-    if (final) { const [x, y] = this.straight(plan.out, 2, 2); const id = f.place(final, x, y, plan.out[2]); if (!id) return undo(); placed.push(id); }
+    if (final) { const sz = BUILDINGS[final].w, [x, y] = this.straight(plan.out, sz, sz); const id = f.place(final, x, y, plan.out[2]); if (!id) return undo(); placed.push(id); }
     return placed;
   }
   build(item, final = 'verkauf') {
@@ -859,15 +1343,75 @@ class Bot {
     for (const o of this.opts(item, new Set())) {
       if (++budget > 30) break;
       let fin = final;
-      const [x, y] = this.straight(o.out, 2, 2);
+      const sz = BUILDINGS[final].w, [x, y] = this.straight(o.out, sz, sz);
       if (final === 'verkauf') { const p = this.routeToSell(o.out, o.occ); if (p) { o.ops.push({ line: p }); fin = null; } }
-      if (fin && !this.fpFree(x, y, 2, 2, o.occ)) continue;
+      if (fin && !this.fpFree(x, y, sz, sz, o.occ)) continue;
       const placed = this.execute(o, fin);
       if (!placed && VERBOSE) console.log(`   [bot ${fmt(this.f.time)}] Bauen fehlgeschlagen: ${item}`, JSON.stringify(o.ops).slice(0, 300));
       if (placed) { if (VERBOSE) console.log(`   [bot ${fmt(this.f.time)}] baut ${item}→${final} (${placed.length} Teile, Geld ${Math.round(this.f.S.money)})`); this.modules.push({ item, final, n: placed.length, t: this.f.time }); return true; }
     }
     if (VERBOSE) console.log(`   [bot ${fmt(this.f.time)}] kein Platz für ${item}→${final} (${budget} Varianten, Geld ${Math.round(this.f.S.money)})`);
     this.fails.set(item + final, key);
+    return false;
+  }
+  // ---- Strom: Kraftwerk mit Kohle-Bohrer bauen, Verbraucher über Masten anschließen ----
+  powerStep() {
+    const f = this.f, S = f.S; if (!f.isUnlocked('kraftwerk')) return false;
+    f._ensurePower();
+    const users = f.mn.filter(n => n.use > 0); if (!users.length) return false;
+    const demand = users.reduce((a, n) => a + n.use, 0);
+    const cap = (f.count.kraftwerk || 0) * BUILDINGS.kraftwerk.power + (f.count.solar || 0) * BUILDINGS.solar.power;
+    if (cap < demand * 1.1) {
+      const need = (f.costOf('kraftwerk') + f.costOf('bohrer')) * 1.05;
+      const coal = this.canMake('kohle') && !this.fails.has('kohlekraftwerk');
+      if (coal && S.money >= need) { if (this.build('kohle', 'kraftwerk')) { this.plants++; return true; } }
+      else if (!coal && S.money >= f.costOf('solar') * 1.05) { if (this.placeNear('solar', 2, users.find(u => u.pw < 1) || users[0])) return true; }
+      else if ((coal ? need : f.costOf('solar')) <= f.incomeRate() * 120) return 'save';
+    }
+    for (const u of f.offgrid) if (this.connect(u)) return true;
+    return false;
+  }
+  // nächstes freies Feld (Quadrat sz) in der Nähe eines Gebäudes
+  placeNear(type, sz, n) {
+    const f = this.f; this.res = this.blockedSet();
+    for (let r = 1; r <= 4; r++) for (let y = n.e.y - r - sz + 1; y <= n.e.y + n.h + r - 1; y++) for (let x = n.e.x - r - sz + 1; x <= n.e.x + n.w + r - 1; x++)
+      if (this.fpFree(x, y, sz, sz, new Set())) { const id = f.place(type, x, y, 0); if (id) return id; }
+    return 0;
+  }
+  // Masten vom nächsten Netzknoten bis in Reichweite des Verbrauchers u setzen
+  connect(u) {
+    const f = this.f; f._ensurePower(); this.res = this.blockedSet();
+    const nodes = f.mn.filter(n => n.kind === 'power' || n.kind === 'solar' || n.kind === 'mast');
+    if (!nodes.length || f.S.money < f.costOf('mast') * 8) return false;
+    const dist = (a, b) => Math.max(0, a.e.x - (b.e.x + b.w - 1), b.e.x - (a.e.x + a.w - 1), a.e.y - (b.e.y + b.h - 1), b.e.y - (a.e.y + a.h - 1));
+    let cur = nodes.reduce((a, b) => dist(a, u) <= dist(b, u) ? a : b);
+    const placed = [];
+    for (let k = 0; k < 12; k++) {
+      if (dist(cur, u) <= cur.d.range) return placed.length > 0 || true;
+      let best = null, bd = 1e9; const R = Math.max(cur.d.range, BUILDINGS.mast.range);
+      for (let y = cur.e.y - R; y <= cur.e.y + cur.h - 1 + R; y++) for (let x = cur.e.x - R; x <= cur.e.x + cur.w - 1 + R; x++) {
+        if (!this.free(x, y, new Set())) continue;
+        const d = Math.max(0, u.e.x - x, x - (u.e.x + u.w - 1), u.e.y - y, y - (u.e.y + u.h - 1));
+        if (d < bd) { bd = d; best = [x, y]; }
+      }
+      if (!best || bd >= dist(cur, u)) break;
+      const id = f.place('mast', best[0], best[1], 0); if (!id) break;
+      placed.push(id); cur = f.N.get(id); this.res = this.blockedSet();
+    }
+    for (const id of placed.reverse()) f.remove(id);
+    return false;
+  }
+  // Upgrades: günstigste Produktionsmaschine ausbauen, wenn Geld übrig und Strom vorhanden ist
+  upgradeStep() {
+    const f = this.f, S = f.S; if (!S.research.includes('upgrade1') || !(f.count.kraftwerk || f.count.solar)) return false;
+    const demand = f.mn.reduce((a, n) => a + n.use, 0), cap = (f.count.kraftwerk || 0) * BUILDINGS.kraftwerk.power + (f.count.solar || 0) * BUILDINGS.solar.power;
+    if (cap < demand + 8) return false;                    // nur mit Reserve im Netz ausbauen
+    let best = null;
+    for (const n of f.mn) {
+      if (!['bohrer', 'ofen', 'presse', 'drahtzug', 'montage'].includes(n.e.type)) continue;
+      const c = f.canUpgrade(n.id); if (c.ok && c.cost <= S.money * 0.2 && (!best || c.cost < best[1])) best = [n.id, c.cost];
+    }
+    if (best && f.upgrade(best[0])) { this.upgrades++; return true; }
     return false;
   }
   // ---- Ein Entscheidungsschritt ----
@@ -877,6 +1421,7 @@ class Bot {
     for (let i = 0; i < S.contracts.length; i++) if (S.contracts[i].done) f.claimContract(i);
     if (S.daily?.done && !S.daily.claimed) f.claimContract('daily');
     while (S.crates.length) f.openCrate(0);
+    const ps = this.powerStep(); if (ps) return;
     // Forschung: billigste bezahlbare zuerst, solange sie höchstens 60 % des Geldes kostet
     const rs = RESEARCH_IDS.map(id => [id, f.canResearch(id)]).filter(([, c]) => c.ok && (c.cost <= S.money * 0.6 || (!S.research.length && this.modules.length >= 3))).sort((a, b) => a[1].cost - b[1].cost);
     if (rs.length) { f.buyResearch(rs[0][0]); return; }
@@ -896,6 +1441,7 @@ class Bot {
         }
       }
     }
+    if (this.upgradeStep()) return;
     // Labor, wenn Forschung an Forschungspunkten hängt
     const needRp = RESEARCH_IDS.some(id => { const c = f.canResearch(id); return c.reason === 'rp' || (c.ok === false && c.reason === 'money' && c.rp > S.rp); });
     const wantLabs = Math.min(6, 1 + Math.floor(f.time / 1500));
@@ -944,7 +1490,9 @@ if (!QUICK) {
       bot.step();
       if (f.S.stats.sold > 0) mark('firstCoin');
       if (f.S.research.length) mark('firstResearch');
-      if (BUILDING_IDS.every(b => f.isUnlocked(b))) mark('allBuildings');
+      if (BUILDING_IDS.every(b => BUILDINGS[b].prestige || f.isUnlocked(b))) mark('allBuildings');
+      if (f.count.kraftwerk) mark('firstPower');
+      if (bot.upgrades) mark('firstUpgrade');
       if (RESEARCH_IDS.every(r => f.S.research.includes(r))) mark('allResearch');
       if (f.S.book.found.length) mark('firstDiscovery');
       if (f.S.plots.length > 1) mark('firstPlot');
@@ -964,13 +1512,15 @@ if (!QUICK) {
   const per = (a, b) => buildTimes.filter(x => x >= a && x < b).length;
   console.log(`   Meilensteine: ${Object.entries(ms).map(([k, v]) => k + ' ' + fmt(v)).join(' · ')}`);
   console.log(`   neue Gebäude (ohne Bänder) je 5 min in der ersten halben Stunde: ${[0, 5, 10, 15, 20, 25].map(m => per(m * 60, m * 60 + 300)).join(', ')}`);
+  console.log(`   Strom: ${f.count.kraftwerk || 0} Kraftwerke, ${f.count.solar || 0} Solar, ${f.count.mast || 0} Masten, ${bot.upgrades} Upgrades, Netze ${f.powerInfo().map(n => n.supply + '/' + n.demand).join(' ')}, ohne Strom ${f.offgrid.length}`);
   console.log(`   Module: ${Object.entries(bot.modules.reduce((a, m) => (a[m.item + (m.final === 'labor' ? '→Labor' : '')] = (a[m.item + (m.final === 'labor' ? '→Labor' : '')] || 0) + 1, a), {})).map(([k, v]) => k + '×' + v).join(', ')}`);
-  ok(ms.firstCoin < 30, `Bot: erste Münze nach ${ms.firstCoin?.toFixed(1)} s (< 30 s)`);
-  ok(ms.firstResearch >= 25 && ms.firstResearch <= 150, `Bot: erste Forschung nach ${fmt(ms.firstResearch ?? 0)} (≈ 1–2 min)`);
+  ok(ms.firstCoin < 15, `Bot: erste Münze nach ${ms.firstCoin?.toFixed(1)} s (< 15 s; vor Ausbau 2: 10,1 s)`);
+  ok(ms.firstResearch >= 20 && ms.firstResearch < 60, `Bot: erste Forschung nach ${fmt(ms.firstResearch ?? 0)} (< 1 min; vor Ausbau 2: 0:34)`);
+  ok(ms.firstPower && bot.upgrades > 0 && (f.count.mast || 0) > 0, `Bot: baut Kraftwerk (${fmt(ms.firstPower ?? 0)}), Masten (${f.count.mast || 0}) und nutzt Upgrades (${bot.upgrades}, erstes ${fmt(ms.firstUpgrade ?? 0)})`);
   const first30 = per(0, 1800);
   ok(first30 >= 25, `Bot: ${first30} neue Gebäude in den ersten 30 min (≈ eins pro Minute)`);
   ok(ms.allBuildings && ms.allBuildings < 2 * 3600, `Bot: alle Gebäude frei nach ${fmt(ms.allBuildings ?? 0)}`);
-  ok(ms.prestige && ms.prestige >= 1.25 * 3600 && ms.prestige <= 3 * 3600, `Bot: Prestige möglich nach ${fmt(ms.prestige ?? 0)} (Bot 1¼–3 h ≙ Mensch grob 2–4 h)`);
+  ok(ms.prestige && ms.prestige >= 1.25 * 3600 && ms.prestige <= 3 * 3600, `Bot: Prestige möglich nach ${fmt(ms.prestige ?? 0)} (Bot 1¼–3 h ≙ Mensch grob 2–4 h; vor Ausbau 2: 90:14)`);
   ok(ms.firstDiscovery, `Bot: erstes verstecktes Rezept nach ${fmt(ms.firstDiscovery ?? 0)}`);
 }
 

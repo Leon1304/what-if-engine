@@ -36,13 +36,14 @@ export const ITEMS = {
   rakete:      { name: 'Rocket',         value: 450, color: '#f4f4f4', shape: 'rocket', tier: 6, rp: 150, desc: 'The pride of every factory. Secret recipe.' },
   schrott:     { name: 'Scrap',          value: 1,    color: '#6b5a4a', shape: 'chunk',  tier: 0, rp: 1,  desc: 'A failed experiment. Worth almost nothing.' },
 };
-export const ITEM_IDS = Object.keys(ITEMS);
+export const ITEM_IDS = Object.keys(ITEMS);           // Reihenfolge nur am Ende erweitern (Blaupausen-Codes, Spielstände)
 export const RAW = ['stein', 'eisenerz', 'kupfererz', 'kohle', 'sand', 'kristall', 'oel', 'titanerz'];
 export const GOLD_MUL = 25;
 
 // ---------- Gebäude ----------
-// kind: belt | tunnel | split | sort | drill | machine | exp | lab | sell | store
-// cost = Grundpreis, scale = Preisanstieg je weiteres Gebäude dieser Art, unlock = 'start' oder Forschungs-Id
+// kind: belt | tunnel | split | sort | drill | machine | exp | lab | sell | store | power | solar | mast | heater | drone | wonder
+// cost = Grundpreis, scale = Preisanstieg je weiteres Gebäude dieser Art, unlock = 'start' oder Forschungs-Id (prestige: erst nach so vielen Neustarts)
+// Reihenfolge nur am Ende erweitern: Blaupausen-Codes (encodeBp) speichern den Index in BUILDING_IDS.
 export const BUILDINGS = {
   band:       { name: 'Conveyor Belt',    kind: 'belt',    w: 1, h: 1, cost: 1,    scale: 1,    unlock: 'start',      desc: 'Carries parts forward. Up to 4 parts per tile.' },
   tunnel:     { name: 'Tunnel Belt',      kind: 'tunnel',  w: 1, h: 1, cost: 10,   scale: 1,    unlock: 'tunnel',     range: 5, desc: 'Place an entrance, then an exit up to 4 tiles further. Parts travel underneath.' },
@@ -58,6 +59,19 @@ export const BUILDINGS = {
   labor:      { name: 'Lab',              kind: 'lab',     w: 2, h: 2, cost: 2500, scale: 1.3, unlock: 'labor',      time: 0.8, desc: 'Dr. Steve turns parts into research points.' },
   verkauf:    { name: 'Sell Station',     kind: 'sell',    w: 2, h: 2, cost: 250, scale: 1.2,  unlock: 'start',      desc: 'Takes anything from every side and pays coins. Keep the rhythm going.' },
   lager:      { name: 'Storage',          kind: 'store',   w: 2, h: 2, cost: 800, scale: 1.15,  unlock: 'lager',      cap: 200, desc: 'Buffers up to 200 parts and releases them to the front.' },
+  // Ausbau 2: Strom, Drohnen, Weltwunder
+  kraftwerk:  { name: 'Power Plant',      kind: 'power',   w: 3, h: 3, cost: 2500, scale: 1.3,  unlock: 'strom',      range: 5, power: 40, burn: 4, fuel: ['kohle', 'oel'], cap: 8,
+    desc: 'Burns coal or oil from belts (one every 4 s at full load) for 40 power. Reaches 5 tiles.' },
+  solar:      { name: 'Solar Panel Field',kind: 'solar',   w: 2, h: 2, cost: 3000, scale: 1.15, unlock: 'strom',      range: 3, power: 8,
+    desc: '8 power from sunlight, more in the desert and on the Moon, nothing in a sandstorm. Reaches 3 tiles.' },
+  mast:       { name: 'Power Pylon',      kind: 'mast',    w: 1, h: 1, cost: 30,   scale: 1,    unlock: 'strom',      range: 6, desc: 'Carries power 6 tiles further. Pylons in reach join one grid.' },
+  heizer:     { name: 'Heater',           kind: 'heater',  w: 1, h: 1, cost: 400,  scale: 1.1,  unlock: 'strom',      range: 4, desc: 'Keeps belts within 4 tiles from freezing. Needs 2 power.' },
+  drohnenhafen:{ name: 'Drone Port',      kind: 'drone',   w: 2, h: 2, cost: 8000, scale: 1.3,  unlock: 'drohnen',    cap: 16, desc: 'Link two ports: drones carry 4 parts at a time from the sender to the receiver. Needs 5 power.' },
+  wunder:     { name: 'World Wonder',     kind: 'wonder',  w: 5, h: 5, cost: 50000, scale: 1,   unlock: 'start', prestige: 1, unique: true,
+    desc: 'One per factory, from your second factory on. Feed it parts in five stages for permanent bonuses.' },
+  // Großbohrer: entsteht von selbst, wenn 4 gleiche Bohrer (gleiche Mk-Stufe) ein 2×2-Quadrat auf demselben Rohstoff bilden. Nicht direkt baubar.
+  grossbohrer:{ name: 'Mega Drill',       kind: 'drill',   w: 4, h: 4, cost: 300, scale: 1,    unlock: 'start', from: 'bohrer', parts: 4, bonus: 1.25, time: 2.0,
+    desc: 'Four drills in a square on one resource merge into one big drill: one output, 25% more ore.' },
 };
 export const BUILDING_IDS = Object.keys(BUILDINGS);
 
@@ -93,7 +107,7 @@ export const RECIPES = {
   roboter_titan:        { name: 'Titanium Robot',   building: 'montage', in: [['titanbarren', 4], ['motor', 1]],    out: 'roboter',     n: 1, time: 8.0, unlock: 'hidden' },
   rakete_titan:         { name: 'Titanium Rocket',  building: 'montage', in: [['titanbarren', 4], ['laser', 1]],    out: 'rakete',      n: 2, time: 8.0, unlock: 'hidden' },
 };
-export const RECIPE_IDS = Object.keys(RECIPES);
+export const RECIPE_IDS = Object.keys(RECIPES);       // Reihenfolge nur am Ende erweitern (Blaupausen-Codes)
 export const HIDDEN_RECIPES = RECIPE_IDS.filter(r => RECIPES[r].unlock === 'hidden');
 
 // ---------- Forschung ----------
@@ -115,7 +129,9 @@ export const RESEARCH = {
   zahnrad:    { name: 'Gears',              cost: 7500,    rp: 0,    req: ['presse'],               fx: { recipe: 'zahnrad' },      desc: 'The press stamps two bars into a gear.' },
   band2:      { name: 'Belt Speed II',      cost: 9000,    rp: 40,   req: ['band1', 'labor'],       fx: { belt: 0.25 },             desc: 'Belts run another 25% faster.' },
   gold1:      { name: 'Gold Vein I',        cost: 12000,   rp: 60,   req: ['labor'],                fx: { gold: 0.005 },            desc: 'Golden parts appear twice as often.' },
-  montage:    { name: 'Assembly',           cost: 18000,   rp: 80,   req: ['drahtzug', 'presse', 'labor'], fx: { building: 'montage', recipe: 'schaltkreis' }, desc: 'The assembler combines plates and wire into circuits.' },
+  strom:      { name: 'Electricity',        cost: 5000,    rp: 0,    req: ['presse'],               fx: { building: 'kraftwerk', also: ['solar', 'mast', 'heizer'] }, desc: 'Power plants, solar fields, pylons and heaters. Assemblers, refineries and experiment tables run on power.' },
+  upgrade1:   { name: 'Mk II Machines',     cost: 20000,   rp: 100,  req: ['strom', 'labor'],       fx: { mk: 2 },                  desc: 'Upgrade machines to Mk II: 60% faster, double buffers, +15% at sell stations. Upgraded machines need power.' },
+  montage:    { name: 'Assembly',           cost: 18000,   rp: 80,   req: ['drahtzug', 'presse', 'labor', 'strom'], fx: { building: 'montage', recipe: 'schaltkreis' }, desc: 'The assembler combines plates and wire into circuits.' },
   linse:      { name: 'Lens Grinding',      cost: 21000,   rp: 120,   req: ['glas', 'drahtzug'],     fx: { recipe: 'linse' },        desc: 'The wire drawer grinds glass into lenses.' },
   bohr2:      { name: 'Drill Speed II',     cost: 24000,   rp: 160,   req: ['bohr1', 'labor'],       fx: { drill: 0.25 },            desc: 'Drills mine another 25% faster.' },
   experiment: { name: 'Experiment Table',   cost: 40000,   rp: 200,  req: ['montage'],              fx: { building: 'experiment' }, desc: 'Combine any two parts and discover secret recipes.' },
@@ -126,9 +142,11 @@ export const RESEARCH = {
   raffinerie: { name: 'Refinery',           cost: 80000,  rp: 500,  req: ['montage'],              fx: { building: 'raffinerie', recipe: 'kunststoff' }, desc: 'Turn oil into plastic.' },
   titan:      { name: 'Titanium Smelting',  cost: 100000,  rp: 400,  req: ['glas'],                 fx: { recipe: 'titanbarren' },  desc: 'The smelter learns to melt titanium ore.' },
   labor2:     { name: 'Doctorate',          cost: 100000,  rp: 600,  req: ['labor'],                fx: { rp: 1 },                  desc: 'Dr. Steve finally finishes his thesis: double research points.' },
+  drohnen:    { name: 'Drones',             cost: 150000,  rp: 600,  req: ['upgrade1', 'lager'],    fx: { building: 'drohnenhafen' }, desc: 'Drone ports fly parts over everything, no belts needed.' },
   akku:       { name: 'Batteries',          cost: 120000,  rp: 600,  req: ['raffinerie'],           fx: { recipe: 'akku' },         desc: 'Copper bar plus plastic makes a battery.' },
   band3:      { name: 'Belt Speed III',     cost: 300000,  rp: 800,  req: ['band2'],                fx: { belt: 0.25 },             desc: 'Belts run another 25% faster.' },
   mach1:      { name: 'Faster Machines',    cost: 380000,  rp: 1000,  req: ['labor'],                fx: { mach: 0.2 },              desc: 'All machines work 20% faster.' },
+  upgrade2:   { name: 'Mk III Machines',    cost: 400000,  rp: 1500, req: ['upgrade1', 'mach1'],    fx: { mk: 3 },                  desc: 'Upgrade machines to Mk III: 2.5 times as fast, triple buffers, +30% at sell stations.' },
   gold2:      { name: 'Gold Vein II',       cost: 450000,  rp: 1200,  req: ['gold1'],                fx: { gold: 0.005 },            desc: 'Even more golden parts.' },
   nacht:      { name: 'Night Shift',        cost: 450000,  rp: 1200,  req: ['labor'],                fx: { offline: 0.25 },          desc: 'Your factory earns 25% more while you are away.' },
   markt:      { name: 'Market Power',       cost: 600000,  rp: 1600,  req: ['labor'],                fx: { sell: 0.25 },             desc: 'Everything sells for 25% more.' },
@@ -168,19 +186,19 @@ export const BIOMES = {
     deposits: { stein: { thr: 0.73, scale: 5 }, eisenerz: { thr: 0.73, scale: 5 }, kupfererz: { thr: 0.74, scale: 5 }, kohle: { thr: 0.77, scale: 4 },
       sand: { thr: 0.75, scale: 5 }, kristall: { thr: 0.91, scale: 3, ring: 1 }, oel: { thr: 0.82, scale: 4, ring: 1 } },
     desc: 'Where every factory begins. Stone, iron, copper, coal and sand.' },
-  wueste: { name: 'Desert', ground: '#e3c27a', sky: '#ffe2b0', beltMul: 1, drillMul: 1,
+  wueste: { name: 'Desert', ground: '#e3c27a', sky: '#ffe2b0', beltMul: 1, drillMul: 1, solarMul: 1.5,
     valueMul: { glas: 1.5, linse: 1.5, fenster: 1.5, kunststoff: 1.5, akku: 1.5, solarpanel: 1.5, laser: 1.5 },
     deposits: { sand: { thr: 0.62, scale: 6 }, kupfererz: { thr: 0.72, scale: 5 }, oel: { thr: 0.73, scale: 5 }, stein: { thr: 0.77, scale: 5 },
       eisenerz: { thr: 0.77, scale: 4 }, kohle: { thr: 0.85, scale: 4 }, kristall: { thr: 0.93, scale: 3, ring: 1 } },
-    desc: 'Lots of sand, copper and oil. Glass and oil products sell for 50% more.' },
-  eis: { name: 'Ice World', ground: '#e8f2fa', sky: '#d4ecff', beltMul: 0.85, drillMul: 1, valueMul: { kristall: 2 },
+    desc: 'Lots of sand, copper and oil. Glass and oil products sell for 50% more. Sandstorms slow belts and darken solar fields.' },
+  eis: { name: 'Ice World', ground: '#e8f2fa', sky: '#d4ecff', beltMul: 1, drillMul: 1, solarMul: 0.6, frost: 0.6, valueMul: { kristall: 2 },
     deposits: { eisenerz: { thr: 0.69, scale: 5 }, kohle: { thr: 0.71, scale: 5 }, kristall: { thr: 0.79, scale: 4 }, stein: { thr: 0.77, scale: 5 },
       kupfererz: { thr: 0.77, scale: 5 }, sand: { thr: 0.81, scale: 4 }, oel: { thr: 0.87, scale: 4, ring: 1 } },
-    desc: 'Iron, coal and crystal. Belts are a bit slower in the cold, crystal is worth double.' },
-  mond: { name: 'Moon', ground: '#9a9aa2', sky: '#0b0d1a', beltMul: 1, drillMul: 1.3, valueMul: {},
+    desc: 'Iron, coal and crystal. Belts freeze and slow down unless a heater is near, crystal is worth double.' },
+  mond: { name: 'Moon', ground: '#9a9aa2', sky: '#0b0d1a', beltMul: 1, drillMul: 1.3, solarMul: 2, allPower: true, valueMul: {},
     deposits: { kristall: { thr: 0.75, scale: 4 }, titanerz: { thr: 0.71, scale: 5 }, stein: { thr: 0.71, scale: 5 }, eisenerz: { thr: 0.79, scale: 4 },
       kupfererz: { thr: 0.79, scale: 4 }, sand: { thr: 0.81, scale: 4 }, kohle: { thr: 0.87, scale: 3 }, oel: { thr: 0.89, scale: 3, ring: 1 } },
-    desc: 'Crystal and titanium. Low gravity makes drills 30% faster.' },
+    desc: 'Crystal and titanium. Low gravity makes drills 30% faster, but every machine needs power.' },
 };
 export const BIOME_IDS = Object.keys(BIOMES);
 
@@ -219,6 +237,8 @@ export const TITLES = {
   geraldfan:  { name: 'Gerald\'s Best Friend' },
   raketenbauer:{ name: 'Rocket Scientist' },
   haendler:   { name: 'Merchant' },
+  tycoon:     { name: 'Rocket Tycoon' },
+  sammler:    { name: 'Master Collector' },
 };
 export const TITLE_IDS = Object.keys(TITLES);
 
@@ -275,3 +295,30 @@ export const CONTRACT = { slots: 3, minSecs: 180, maxSecs: 360, minN: 15, reward
 // ---------- Sprechblasen (Texte in lang/*.js, hier nur die Schlüssel) ----------
 export const GERALD_LINES = ['hi', 'lunch', 'shortcut', 'oops', 'coffee', 'belt', 'boss', 'shiny'];
 export const STEVE_LINES = ['hmm', 'science', 'tip', 'eureka', 'coffee', 'explode'];
+
+// ---------- Ausbau 2: Strom, Upgrades, Drohnen, Weltwunder, Welt-Regeln ----------
+// Strom: Verbrauch je Gebäude-Typ, Zuschlag je Mk-Stufe (ab Mk II), auf dem Mond (allPower) brauchen alle Maschinen mind. moon
+export const POWER = {
+  use: { montage: 10, raffinerie: 15, experiment: 8, heizer: 2, drohnenhafen: 5 },
+  mk: [0, 0, 4, 8], moon: 3,
+  grace: 1800,                                     // Sekunden Schonfrist für alte Spielstände (v1 → v2)
+};
+// Upgrades Mk I–III: Index = Stufe
+export const MK = {
+  types: ['bohrer', 'grossbohrer', 'ofen', 'presse', 'drahtzug', 'montage', 'raffinerie', 'experiment', 'labor', 'lager', 'verkauf', 'drohnenhafen'],
+  cost: [0, 0, 4, 12],                             // × aktueller Baupreis des Typs
+  speed: [1, 1, 1.6, 2.5], buf: [1, 1, 2, 3], sell: [0, 0, 0.15, 0.3],
+  research: [null, null, 'upgrade1', 'upgrade2'],
+};
+// Drohnen: Ladung, Tempo (Felder/s), Wartezeit bis zum Abflug mit halber Ladung
+export const DRONE = { load: 4, speed: 6, wait: 2 };
+// Welt-Regeln: Sandsturm (Wüste), Frost (Eis)
+export const WORLD = { storm: { min: 480, max: 720, secs: 45, belt: 0.5 }, frostRange: 4 };
+// Weltwunder: 5 Stufen; fx wie Forschung (sell/gold/belt …), dailyCrate = +1 Kiste je Tag, crates = Kisten beim Abschluss, title
+export const WONDER = [
+  { need: { ziegel: 2000, eisenplatte: 1000 }, fx: { sell: 0.1 } },
+  { need: { motor: 300, schaltkreis: 300 }, fx: { gold: 0.005 } },
+  { need: { computer: 150, akku: 300 }, fx: { belt: 0.1 } },
+  { need: { laser: 100, solarpanel: 100 }, fx: { dailyCrate: 1 } },
+  { need: { rakete: 50, roboter: 50 }, fx: { sell: 0.1, title: 'tycoon', crates: 10 } },
+];

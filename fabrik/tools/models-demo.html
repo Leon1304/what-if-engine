@@ -79,7 +79,7 @@ const S = {};
 // Übersicht: alle Gebäude auf einer Wiese, laufend, Sterne 1–5
 S.buildings = () => {
   ground('wiese', 0, 0); ground('wiese', 1, 0); ground('wiese', 0, 1); ground('wiese', 1, 1);
-  const types = BUILDING_TYPES.filter(t => SIZES[t] > 1); let i = 0;
+  const types = BUILDING_TYPES.filter(t => SIZES[t] > 1 && SIZES[t] < 5); let i = 0;
   types.forEach((t, k) => { const col = k % 5, row = Math.floor(k / 5), n = SIZES[t];
     const b = add(makeBuilding(t, { rot: 0, ore: 'kupfererz', filter: 'zahnrad' }), 3 + col * 5 + (3 - n) / 2, 3 + row * 5 + (3 - n) / 2); b.lv = 1 + (i++ % 5); });
   [['verteiler', {}], ['sortierer', { filter: 'kupferdraht' }], ['tunnel', {}], ['tunnel', { exit: true }], ['band', {}], ['band', { inDir: 3 }], ['band', { inDir: 1 }]].forEach(([t, o], k) => add(makeBuilding(t, { rot: 0, ...o }), 4 + k * 3, 14));
@@ -205,6 +205,173 @@ S.stress = () => {
     items.begin(); let n = 0; for (const L of loops) { const N = L.length; for (let i = 0; i < N * 28 && n < 20000; i++, n++) { const s = (i / 28 + t * 1.6) % N, c = L[Math.floor(s)], [wx, wz] = pathPos(c, s % 1); items.add(wx + ((i % 3) - 1) * .2, wz + ((i % 5) - 2) * .06, ids[i % ids.length], i % 50 === 0); } } items.end(); };
   rig.jumpTo(24, 24, 45, 0);
 };
+
+// ==== SZENEN MK (Agent Upgrades) ====
+// Ausbaustufen: jede Maschine in Mk I / II / III (Reihen von vorn nach hinten), laufend
+const MKT = ['bohrer', 'ofen', 'presse', 'drahtzug', 'montage', 'raffinerie', 'experiment', 'labor', 'lager', 'verkauf'];
+S.mk = (list = MKT) => {
+  for (let cx = 0; cx < 2; cx++) for (let cy = 0; cy < 2; cy++) ground('wiese', cx, cy, { seed: 5 + cx + cy * 2 });
+  // zwei Blöcke à 5 Typen; je Typ eine Spalte, Mk I → III von vorn nach hinten
+  list.forEach((t, i) => { const n = SIZES[t], x = 2 + (i % 5) * 5.5, z = 2 + Math.floor(i / 5) * 14;
+    for (let m = 1; m <= 3; m++) { const b = add(makeBuilding(t, { rot: 0, mk: m, ore: 'kupfererz' }), x + (3 - n) / 2, z + (m - 1) * 4.2 + (3 - n) / 2); b.lv = 1 + (i % 5); } });
+  tick = t => updaters.forEach((b, k) => b.group && b.update(t, { busy: (Math.floor(t / 5 + k) % 4) !== 0, progress: (t * .4 + k * .13) % 1, level: b.lv, fill: .6, takt: .7 }));
+  rig.jumpTo(13, 16, 40, 0);
+};
+// eine Maschine nah in allen drei Stufen
+S.mkone = (type = qs.get('type') || 'bohrer') => {
+  ground('wiese'); const n = SIZES[type];
+  for (let m = 1; m <= 3; m++) { const b = add(makeBuilding(type, { rot: 0, mk: m, ore: 'eisenerz' }), 2 + (m - 1) * (n + 1.5), 6); b.lv = 3; }
+  tick = t => updaters.forEach(b => b.group && b.update(t, { busy: true, progress: (t * .4) % 1, level: 3, fill: .7, takt: .6 }));
+  rig.jumpTo(2 + (n * 3 + 3) / 2, 6 + n / 2, 5 + n * 3.4, 0);
+};
+// ==== ENDE MK ====
+// ==== SZENEN EFFEKTE/OVERLAYS (Agent Fx) ====
+const { Overlay } = await import('../js/models/overlay.js');
+fx.stage = stage; fx.rig = rig; fx.camera = stage.camera;
+// Ereignisse nacheinander (alle 2,5 s das nächste): Meteor, Beben, VIP-Laster, Goldader, Durchbruch, Album-Karte, Glücksrad, Upgrade
+S.events = (only = qs.get('ev')) => {
+  ground('wiese'); ground('wiese', 1, 0);
+  const vk = add(makeBuilding('verkauf', { rot: 0, level: 3 }), 12, 6), dr = add(makeBuilding('bohrer', { rot: 0, ore: 'eisenerz', level: 2 }), 5, 9), pr = add(makeBuilding('presse', { rot: 0, mk: 2 }), 8, 3);
+  const list = [
+    () => fx.meteor(4, 4, { size: 1 }), () => fx.quakeCracks(9, 10, 3), () => fx.vip([22, 7], [13, 7], { color: 0x2a2c58 }), () => fx.goldvein(6, 10, 2, 8),
+    () => fx.breakthrough([10, 0, 7]), () => fx.albumCard([13, 1.2, 7], { item: 'zahnrad', variant: ['normal', 'gold', 'perfect', 'mega'][Math.floor(Math.random() * 4)] }),
+    () => fx.wheelConfetti([10, .5, 5], { big: true }), () => fx.upgradeSparks(8, 3, 2)];
+  let next = 0, k = 0;
+  if (only !== null && only !== undefined) { const i = +only; list[i]?.(); next = 1e9; }
+  tick = t => { updaters.forEach(u => u.group && u.update(t, { busy: true, level: 3, takt: .6 })); if (t > next) { next = t + 2.5; list[k++ % list.length](); } };
+  rig.jumpTo(11, 7, 17, 0);
+};
+// Alle Ereignisse gleichzeitig (für ein Bild)
+S.eventsAll = () => {
+  ground('wiese'); ground('wiese', 1, 0); ground('wiese', 0, 1); ground('wiese', 1, 1);
+  const vk = add(makeBuilding('verkauf', { rot: 0, level: 3 }), 16, 6); add(makeBuilding('bohrer', { rot: 0, ore: 'eisenerz' }), 6, 13); add(makeBuilding('presse', { rot: 0, mk: 3 }), 11, 13);
+  fx.meteor(6, 5, { size: 1 }); fx.quakeCracks(15, 14, 3, { secs: 60 }); fx.vip([30, 7], [17, 7]); fx.goldvein(7, 14, 2, 60); fx.breakthrough([11, 0, 6]); fx.upgradeSparks(11, 13, 2); fx.wheelConfetti([20, .5, 12]);
+  tick = t => updaters.forEach(u => u.group && u.update(t, { busy: true, level: 3, takt: .6 }));
+  rig.jumpTo(14, 10, 24, 0);
+};
+// Sandsturm (Wüste) mit Solarfeld in Sicherheitsstellung
+S.storm = () => {
+  stage.setBiome('wueste'); ground('wueste'); const so = add(makeBuilding('solar', { rot: 0 }), 6, 6), dr = add(makeBuilding('bohrer', { rot: 0, ore: 'sand' }), 9, 6);
+  fx.storm(true, { strength: 1 });
+  tick = t => updaters.forEach(u => u.group && u.update(t, { busy: true, storm: true, level: 2 }));
+  rig.jumpTo(8, 7, 14, 0);
+};
+// Überlagerungen: Strom-Reichweiten, Netzlinien, „kein Strom“, Engpässe
+let ov = null;
+S.overlay = () => {
+  ground('wiese', 0, 0); ground('wiese', 1, 0);
+  ov ||= new Overlay(scene); ov.visible = true;
+  const kw = add(makeBuilding('kraftwerk', { rot: 0 }), 2, 2), m1 = add(makeBuilding('mast', {}), 9, 4), m2 = add(makeBuilding('mast', {}), 14, 9), so = add(makeBuilding('solar', {}), 22, 3);
+  const mo = add(makeBuilding('montage', { rot: 0 }), 10, 10), ra = add(makeBuilding('raffinerie', { rot: 0 }), 26, 10), of = add(makeBuilding('ofen', { rot: 0 }), 5, 9);
+  ov.setPower([{ s: 1, areas: [{ x: 2, y: 2, w: 3, h: 3, r: 5 }, { x: 9, y: 4, w: 1, h: 1, r: 6 }, { x: 14, y: 9, w: 1, h: 1, r: 6 }] }, { s: .55, areas: [{ x: 22, y: 3, w: 2, h: 2, r: 3 }] }]);
+  const cab = new PW.CableSet(world); updaters.push({ dispose: () => { cab.dispose(); ov.clear(); ov.visible = false; } });
+  tick = t => {
+    updaters.forEach(u => u.group && u.update(t, { busy: u !== ra, load: .7, power: u === ra ? 0 : 1, level: 2 }));
+    const pairs = [[kw, m1], [m1, m2]].map(([a, b]) => [a.anchor('cable'), b.anchor('cable')]); cab.set(pairs);
+    ov.setLines(pairs.map(([a, b]) => ({ a, b, s: 1 })).concat([{ a: so.anchor('cable'), b: [23, 1.2, 6], s: .55 }]));
+    ov.setNoPower([{ x: 27.5, z: 11.5, y: 2.6 }]);
+    ov.setIssues([{ x: 11.5, z: 11.5, y: 2.2, kind: 'missing', item: 'kupferdraht', label: '0/2' }, { x: 6, z: 10, y: 2.6, kind: 'jam', sev: .9 }, { x: 23, z: 4, y: 1.6, kind: 'power', label: '55%' }, { x: 3.5, z: 3.5, y: 3.4, kind: 'missing', item: 'kohle' }]);
+    ov.update(t, stage.camera);
+  };
+  rig.jumpTo(14, 8, 22, 0);
+};
+// ==== ENDE EFFEKTE ====
+// ==== SZENEN TON (Agent Ton) ====
+// ==== ENDE TON ====
+// ==== SZENEN STROM/WUNDER/DROHNEN/LOD/FOTO (Agent Grafik) ====
+const PW = await import('../js/models/power.js'), DR = await import('../js/models/drones.js');
+// Strom: Kraftwerk, Solar, Masten, Heizer, Drohnenhafen, Kabel zwischen den Anschlusspunkten
+S.power = (load = qs.has('load') ? +qs.get('load') : null) => {
+  ground('wiese', 0, 0); ground('wiese', 1, 0);
+  const kw = add(makeBuilding('kraftwerk', { rot: 0, level: 3 }), 2, 2), so = add(makeBuilding('solar', { rot: 0 }), 12, 2.5), so2 = add(makeBuilding('solar', { rot: 1 }), 15, 2.5);
+  const m1 = add(makeBuilding('mast', { rot: 0 }), 7, 4), m2 = add(makeBuilding('mast', { rot: 0 }), 10, 8), m3 = add(makeBuilding('mast', { rot: 0 }), 15, 7);
+  const hz = add(makeBuilding('heizer', { rot: 0 }), 12, 9.5), dh = add(makeBuilding('drohnenhafen', { rot: 1, level: 2 }), 6, 8);
+  const cables = new PW.CableSet(world); updaters.push({ dispose: () => cables.dispose() });
+  const conn = [[kw, m1], [m1, m2], [m2, m3], [m3, so], [m3, so2], [m2, hz], [m2, dh]];
+  tick = t => {
+    updaters.forEach(u => u.group && u.update(t, { busy: true, load: load ?? (.5 + .5 * Math.sin(t * .4)), level: 3, power: 1, sun: 1, docked: 1 }));
+    cables.set(conn.map(([a, b]) => [a.anchor('cable'), b.anchor('cable')]));
+  };
+  rig.jumpTo(9, 6.5, 17, 0);
+};
+// Weltwunder: Baustufen 0–5 nebeneinander (die jeweils nächste wächst), oder ?stage=n
+S.wonder = () => {
+  for (let cx = 0; cx < 3; cx++) ground('wiese', cx, 0);
+  const W = [];
+  for (let i = 0; i < 6; i++) { const b = add(makeBuilding('wunder', { rot: 0 }), 1 + i * 6.5, 4); b.setStage(i, i < 5 ? .5 : 0); W.push(b); }
+  tick = t => W.forEach((b, i) => b.update(t, { busy: true, level: 5, stage: i, progress: i < 5 ? .35 + .3 * (.5 + .5 * Math.sin(t * .5)) : 0 }));
+  rig.jumpTo(17.5, 6.5, 30, 0);
+};
+// Raketenstart: alle 16 s ein neuer Start (Zeit über setT anfahrbar: launch bei t ≡ 1)
+S.launch = () => {
+  ground('wiese', 0, 0); ground('wiese', 1, 0); ground('wiese', 0, 1); ground('wiese', 1, 1);
+  const b = add(makeBuilding('wunder', { rot: 0 }), 13, 13); b.setStage(5, 0);
+  let cyc = -1;
+  tick = t => { const c = Math.floor((t - 1) / 16); if (c !== cyc && t >= 1) { cyc = c; b.resetLaunch(); b.launch(1 + c * 16); } b.update(t, { busy: true, level: 5 }); };
+  rig.jumpTo(16, 16, 22, 0);
+};
+// Drohnen: zwei Häfen, 24 Drohnen auf Achterbahnen mit Kisten (DroneRenderer) + eine einzelne nah (makeDrone)
+let drones = null;
+S.drones = () => {
+  ground('wiese');
+  const a = add(makeBuilding('drohnenhafen', { rot: 0, level: 2 }), 3, 3), b = add(makeBuilding('drohnenhafen', { rot: 2, level: 4 }), 11, 9);
+  drones ||= new DR.DroneRenderer(scene);
+  const one = DR.makeDrone({ item: 'zahnrad' }); one.group.position.set(7, 1.3, 6); one.group.scale.setScalar(1.6); world.add(one.group);
+  const ids = ['eisenplatte', 'zahnrad', 'kupferdraht', 'schaltkreis', 'motor', 'kristall'];
+  updaters.push({ dispose: () => { drones.begin(); drones.end(); } });
+  tick = t => {
+    a.update(t, { busy: true, docked: 1, level: 2 }); b.update(t, { busy: true, docked: 0, level: 4 });
+    one.update(t, { item: 'zahnrad', gold: Math.floor(t / 3) % 2 === 1, fly: 1, tilt: .3 });
+    drones.begin();
+    for (let i = 0; i < 24; i++) { const u = (t * .08 + i / 24) % 1, ang = u * TAU2, r = 4 + (i % 3) * .8;
+      drones.add(8 + Math.cos(ang) * r * 1.2, 7 + Math.sin(ang * 2) * r * .6, 1.4 + (i % 4) * .25, i % 5 === 4 ? null : ids[i % ids.length], i % 7 === 3, i); }
+    drones.end(t);
+  };
+  rig.jumpTo(8, 7, 13, 0);
+};
+const TAU2 = Math.PI * 2;
+// Frost auf Bändern (Eiswelt): Heizer in der Mitte, Bänder außerhalb von Reichweite 4 frieren (langsamer, Eis)
+S.frost = () => {
+  stage.setBiome('eis'); ground('eis'); stage.setWeather({ frost: .4 });
+  const hz = add(makeBuilding('heizer', {}), 7, 7);
+  const loop = loopCells(2, 2, 12, 11), ids = ['eisenerz', 'kohle', 'kristall'];
+  for (const c of loop) occ.push([c[0], c[1], 1]); refreshOcc();
+  updaters.push({ dispose: () => stage.setWeather({ frost: 0 }) });
+  tick = t => {
+    hz.update(t, { power: 1 });
+    belts.begin(); for (const c of loop) { const d = Math.max(Math.abs(c[0] - 7), Math.abs(c[1] - 7)), fr = d > 4 ? Math.min(1, (d - 4) / 1.5) : 0; belts.add(c[0], c[1], c[3], beltKind(c[2], c[3]), fr, fr > .5 ? .6 : 1); } belts.end();
+    items.begin(); const N = loop.length; for (let i = 0; i < N * 2; i++) { const s = (i * .5 + t * 1.2) % N, c = loop[Math.floor(s)], [wx, wz] = pathPos(c, s % 1); items.add(wx, wz, ids[i % 3], false); } items.end();
+  };
+  rig.jumpTo(8, 7.5, 15, 0);
+};
+// Große Fabrik (#17): 300 Maschinen (alle Typen, Mk 1–3), ~2200 Bänder, Teile; LOD (?lod=0 aus)
+let lodSys = null;
+S.stress300 = (useLod = qs.get('lod') !== '0') => {
+  for (let cx = 0; cx < 5; cx++) for (let cy = 0; cy < 5; cy++) ground('wiese', cx, cy, { seed: cx * 5 + cy });
+  lodSys ||= new LOD.BuildingLOD(scene, { near: 26, maxFull: 48 }); lodSys.clear(); lodSys.setEnabled(useLod);
+  const T2 = ['bohrer', 'ofen', 'presse', 'drahtzug', 'labor', 'lager', 'verkauf', 'solar', 'drohnenhafen'], T3 = ['montage', 'raffinerie', 'experiment', 'kraftwerk'];
+  const ms = [], cells = [];
+  for (let i = 0; i < 300; i++) { const col = i % 15, row = Math.floor(i / 15), big = (col + row) % 5 === 0, t = big ? T3[(i >> 1) % T3.length] : T2[i % T2.length];
+    const b = makeBuilding(t, { rot: (i * 7) % 4, mk: 1 + (i % 3), level: 1 + (i % 5), ore: 'kupfererz' }); b.group.position.set(2 + col * 5, 0, 2 + row * 4); world.add(b.group); ms.push(b); lodSys.add(b); }
+  for (let row = 0; row < 20; row++) { const z = 2 + row * 4 + 3; for (let x = 1; x < 77; x++) cells.push([x, z, 0, 0]); for (let col = 0; col < 15; col++) for (let k = 0; k < 3; k++) cells.push([2 + col * 5 + 3 + 1, 2 + row * 4 + k, 1, 1]); }
+  updaters.push({ dispose: () => { lodSys.clear(); ms.forEach(b => b.dispose()); } });
+  const ids = Object.keys(ITEM_LOOK);
+  tick = t => {
+    for (const [i, b] of ms.entries()) b.update(t, { busy: (i + Math.floor(t / 3)) % 4 !== 0, progress: (t * .4 + i * .1) % 1, load: .7, level: 1 + (i % 5) });
+    lodSys.update(stage.camera);
+    belts.begin(); for (const c of cells) belts.add(c[0], c[1], c[2], 'straight'); belts.end();
+    items.begin(); let n = 0; for (let row = 0; row < 20 && n < 4000; row++) { const z = 2 + row * 4 + 3.5; for (let i = 0; i < 190; i++, n++) items.add(1 + ((i * .4 + t * 1.6) % 76), z, ids[(i + row) % ids.length], i % 61 === 0); } items.end();
+  };
+  stage.shadowEvery = 2;
+  rig.jumpTo(38, 41, 70, 0);
+};
+// Fotomodus: Fabrik mit Tilt-Shift, Vignette, Filter (?filter=warm|cool|noir|vivid)
+S.photo = (filter = qs.get('filter') || 'warm') => {
+  S.factory(); stage.setPhoto({ tiltShift: 1, focus: .45, blur: 9, band: .1, vignette: .7, filter });
+  updaters.push({ dispose: () => stage.setPhoto(null) });
+};
+const LOD = await import('../js/models/lod.js');
+// ==== ENDE STROM ====
 
 const names = Object.keys(S);
 const bar = document.getElementById('bar');
