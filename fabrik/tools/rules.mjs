@@ -572,7 +572,7 @@ check('Review 5: erst Ausgang, dann Eingang gebaut → gekoppelt; Teile kommen d
 });
 // Fund 6: Rückgängig eines Abrisses nur mit genug Geld
 check('Review 6: Abriss rückgängig ohne Geld → abgelehnt (false, Ereignis denied), Geld nie negativ; später möglich', () => {
-  const f = new Factory({ seed: 3 }); f.S.money = 1000;
+  const f = new Factory({ seed: 3 }); f.S.money = f.plotCost();   // nach Bau, Abriss und Landkauf genau 0
   const o = f.place('ofen', O + 3, O + 12, 0); f.remove(o); f.buyPlot(START_PLOT + 1, START_PLOT); f.events();
   const m = f.S.money, r = f.undo(), ev = f.events(), denied = ev.find(e => e.type === 'denied');
   const kept = f.canUndo() && !f.entity(o) && f.S.money === m;
@@ -1526,7 +1526,7 @@ if (!QUICK) {
       if (VERBOSE && i % (60 * TPS) === 0) console.log(`   [geld ${fmt(f.time)}] ${JSON.stringify(Object.fromEntries(Object.entries(src).map(([k, v]) => [k, Math.round(v)])))} money ${Math.round(f.S.money)} earned ${Math.round(f.S.stats.earned)}`);
     }
     if (i % (10 * 60 * TPS) === 0 && i) timeline.push({ t: f.time, money: f.S.money, rate: f.incomeRate(), earned: f.S.stats.earned, ents: f.S.ents.filter(e => e.type !== 'band').length, belts: f.count.band || 0, research: f.S.research.length, plots: f.S.plots.length, found: f.S.book.found.length, rp: f.S.rp });
-    if (ms.prestige && f.time > ms.prestige + 1) break;
+    if (ms.prestige && f.time > ms.prestige + 1 && (ms.allBuildings || f.time > 2 * 3600)) break;   // weiter bis alles frei ist (höchstens 2 h)
   }
   const secsTook = (performance.now() - t0) / 1000;
   console.log(`  Bot-Partie (${fmt(f.time)} Spielzeit in ${secsTook.toFixed(1)} s):`);
@@ -1542,7 +1542,7 @@ if (!QUICK) {
   const first30 = per(0, 1800);
   ok(first30 >= 25, `Bot: ${first30} neue Gebäude in den ersten 30 min (≈ eins pro Minute)`);
   ok(ms.allBuildings && ms.allBuildings < 2 * 3600, `Bot: alle Gebäude frei nach ${fmt(ms.allBuildings ?? 0)}`);
-  ok(ms.prestige && ms.prestige >= 1.25 * 3600 && ms.prestige <= 3 * 3600, `Bot: Prestige möglich nach ${fmt(ms.prestige ?? 0)} (Bot 1¼–3 h ≙ Mensch grob 2–4 h; vor Ausbau 2: 90:14)`);
+  ok(ms.prestige && ms.prestige >= 1.25 * 3600 && ms.prestige <= 3 * 3600, `Bot: Prestige möglich nach ${fmt(ms.prestige ?? 0)} (Bot 1¼–3 h ≙ Mensch grob 2–4 h; vor Ausbau 2: 90:14, vor billigerem Land: 97:48)`);
   ok(ms.firstDiscovery, `Bot: erstes verstecktes Rezept nach ${fmt(ms.firstDiscovery ?? 0)}`);
 }
 

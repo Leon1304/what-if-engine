@@ -189,7 +189,7 @@ export default {
   'reason.unknown': 'Unbekannt.',
   'reason.research': 'Noch nicht erforscht.',
   'reason.bounds': 'Außerhalb der Karte.',
-  'reason.plot': 'Dieses Grundstück gehört dir noch nicht.',
+  'reason.plotBuy': 'Noch nicht dein Land – klick, um das Grundstück für {cost:num} Münzen zu kaufen.', 'reason.plot': 'Dieses Grundstück gehört dir noch nicht.',
   'reason.occupied': 'Hier steht schon etwas.',
   'reason.deposit': 'Kein Vorkommen darunter.',
   'reason.money': 'Zu wenig Münzen.',

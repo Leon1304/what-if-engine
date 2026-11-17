@@ -14,6 +14,7 @@ export const PLOT = 16, PLOTS = 7, MAP = PLOT * PLOTS, START_PLOT = 3;
 export const DX = [1, 0, -1, 0], DY = [0, 1, 0, -1];          // rot 0 = +x, 1 = +z (Sim-y), 2 = −x, 3 = −z
 export const START_MONEY = 200;
 export const SP = 0.25;                 // Mindestabstand der Teile auf einem Band (→ max. 4 je Feld)
+export const PLOT_COST = 500, PLOT_GROW = 1.7;  // Preis des ersten zugekauften Grundstücks, Anstieg je weiteres
 export const BELT_BASE = 1.0;           // Felder pro Sekunde
 export const TAKT_GAP = 2.5, TAKT_TIME = 60;   // Lücke etwas großzügiger als 2 s, damit ein Bohrer (alle 2 s) den Takt hält
 export const XP_LV = [0, 30, 120, 400, 1200];   // Erfahrung für ★2 … ★5
@@ -510,7 +511,7 @@ export class Factory {
     if (d.unique && (this.count[type] || 0) > 0) return { ok: false, reason: 'unique', cost };
     if (!Number.isInteger(x) || !Number.isInteger(y) || x < 0 || y < 0 || x + d.w > MAP || y + d.h > MAP) return { ok: false, reason: 'bounds', cost };
     for (let j = 0; j < d.h; j++) for (let i = 0; i < d.w; i++) {
-      if (!this.isOpen(x + i, y + j)) return { ok: false, reason: 'plot', cost };
+      if (!this.isOpen(x + i, y + j)) return { ok: false, reason: 'plot', cost, at: [x + i, y + j] };
       const id = this.grid[(y + j) * MAP + x + i];
       if (id) {
         const o = this.N.get(id);
@@ -1676,7 +1677,8 @@ export class Factory {
     this._emit('research', { id, fx: RESEARCH[id].fx, cost: c.cost, rp: c.rp });
     return true;
   }
-  plotCost() { return Math.round(1000 * Math.pow(2.5, this.S.plots.length - 1) * this.M.plot); }
+  // Land: 500, 850, 1.445, 2.457 … (×1,7 je Grundstück; vorher 1000 × 2,5 – zu wenig Platz für Bänder, Leons Wunsch 17.11.2026)
+  plotCost() { return Math.round(PLOT_COST * Math.pow(PLOT_GROW, this.S.plots.length - 1) * this.M.plot); }
   canBuyPlot(cx, cy) {
     const st = this.plotState(cx, cy), cost = this.plotCost();
     if (st === 'open') return { ok: false, reason: 'known', cost };

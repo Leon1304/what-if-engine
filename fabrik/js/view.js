@@ -25,6 +25,13 @@ const lerp = (a, b, k) => a + (b - a) * k;
 const angLerp = (a, b, k) => { let d = ((b - a + Math.PI) % TAU + TAU) % TAU - Math.PI; return a + d * k; };
 const TOP = { 1: .45, 2: 1.35, 3: 1.6 };     // ungefähre Gebäudehöhe für Trefferboxen vor dem ersten Messen
 const POWER_NODE = { power: 1, solar: 1, mast: 1 };
+// Gerades Band mit Einmündung von der Seite (Band, Bohrer, Maschine schiebt seitlich hinein): Schiene dort offen.
+// Zuführer bewegt sich nach RIGHT(r) → kommt von links (lokal −z) → 'straightL'; nach LEFT(r) → von rechts (+z) → 'straightR'
+function mergeKind(n, r) {
+  if (!n) return 'straight';
+  const L = n.feed & (1 << ((r + 1) & 3)), R = n.feed & (1 << ((r + 3) & 3));
+  return L && R ? 'straightLR' : L ? 'straightL' : R ? 'straightR' : 'straight';
+}
 // Abstand zweier Grundflächen (Chebyshev, 0 = berühren/überlappen)
 const cheb = (a, b) => Math.max(0, b.x - (a.x + a.w - 1), a.x - (b.x + b.w - 1), b.y - (a.y + a.h - 1), a.y - (b.y + b.h - 1));
 
@@ -209,7 +216,7 @@ export class View {
     for (const e of sim.S.ents) {
       if (e.type !== 'band' && e.type !== 'tunnel') continue;
       const n = sim.N.get(e.id), fr = n && n.frozen ? 1 : 0, sp = n && n.sl != null ? n.sl : 1;
-      if (e.type === 'band') this.belts.add(e.x, e.y, e.rot, n && n.curve ? beltKind(n.inDir, e.rot) : 'straight', fr, sp);
+      if (e.type === 'band') this.belts.add(e.x, e.y, e.rot, n && n.curve ? beltKind(n.inDir, e.rot) : mergeKind(n, e.rot), fr, sp);
       else this.belts.add(e.x, e.y, e.rot, e.exit ? 'tunnelOut' : 'tunnelIn', fr, sp);
     }
     this.belts.end();

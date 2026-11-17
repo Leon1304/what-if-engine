@@ -719,6 +719,30 @@ await ctx.close();
     await E(() => __fabrik.ui.act('lang', { l: 'de' })); await G(300);
     ok(/Großbohrer|Verschmolzen/.test(await g.locator('.info').innerText().catch(() => '')), 'Deutsch: Großbohrer im Info-Panel');
   }
+  // Bänder, die seitlich zusammenlaufen: Schiene offen, Übergangsplatte (Varianten straightL/R/LR)
+  const mg = await E(() => {
+    const s = __fabrik.sim; __fabrik.app.select(0);
+    for (let y = 40; y < 70; y++) for (let x = 36; x < 66; x++) {
+      let free = true; for (let i = 0; i < 9 && free; i++) for (let j = -3; j <= 3 && free; j++) free = s.canPlace('band', x + i, y + j, 0).ok;
+      if (!free || !s.canPlace('verkauf', x + 9, y, 0).ok) continue;
+      for (let i = 0; i < 9; i++) s.place('band', x + i, y, 0);                 // Hauptband nach Osten
+      for (let j = 3; j >= 1; j--) s.place('band', x + 3, y + j, 3);             // von Süden (unten) nach Norden hinein
+      for (let j = -3; j <= -1; j++) s.place('band', x + 5, y + j, 1);           // von Norden hinein
+      for (let j = -3; j <= -1; j++) s.place('band', x + 7, y + j, 1);           // T-Stück: von beiden Seiten
+      for (let j = 3; j >= 1; j--) s.place('band', x + 7, y + j, 3);
+      s.place('verkauf', x + 9, y, 0); __fabrik.rig.jumpTo(x + 5, y + .5, 11, 1);
+      for (const [xx, yy] of [[x + 3, y + 3], [x + 5, y - 3], [x + 7, y - 3], [x + 7, y + 3]]) s.debugInsert(s.at(xx, yy), 'stein');
+      return [x, y];
+    }
+    return null;
+  });
+  if (mg) {
+    await G(300); await E(() => __fabrik.view._syncBelts(true)); await E(() => __fabrik.sim.tick(60)); await G(700);
+    const kinds = await E(() => Object.fromEntries([...__fabrik.view.belts.K].map(([k, K]) => [k, K.n])));
+    const [x, y] = mg, fd = await E(([x, y]) => [3, 5, 7].map(i => __fabrik.sim.N.get(__fabrik.sim.at(x + i, y)).feed), mg);
+    ok(kinds.straightL >= 1 && kinds.straightR >= 1 && kinds.straightLR >= 1, `Einmündungen: Hauptband zeigt offene Seiten (${JSON.stringify(kinds)}, feed ${fd})`);
+    await shot('42-baender-muenden', g);
+  }
   await c4.close();
 }
 

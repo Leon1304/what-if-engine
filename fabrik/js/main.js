@@ -256,7 +256,16 @@ function tunnelExit(x, y, rot) {
   for (let k = 1; k <= R; k++) { const n = sim.nodeAt(x - DX[rot] * k, y - DY[rot] * k); if (n && n.e.type === 'tunnel' && n.e.rot === rot) return !n.e.exit && !n.e.link; }
   return false;
 }
+// Bauen auf noch nicht gekauftem Nachbarland: Grundstück dazu (oder null)
+function plotFor(c) {
+  if (!c || c.reason !== 'plot' || !c.at || !app.sim) return null;
+  const cx = Math.floor(c.at[0] / PLOT), cy = Math.floor(c.at[1] / PLOT);
+  return app.sim.plotState(cx, cy) === 'buyable' ? { cx, cy, cost: app.sim.plotCost() } : null;
+}
+// … dann gleich den Kauf anbieten statt nur „gehört dir nicht“
+function offerPlot(c) { const p = plotFor(c); if (!p) return false; app.askPlot(p.cx, p.cy); return true; }
 function reasonText(c, type) {
+  const pl = plotFor(c); if (pl) return '🗺️ ' + t('reason.plotBuy', { cost: pl.cost });
   if (c.reason === 'money') return `${t('reason.money')} ${t('ui.needCoins', { cost: c.cost })}`;
   if (c.reason === 'research') return '🔒 ' + t('ui.needsResearch', { id: c.need || BUILDINGS[type]?.unlock });
   return t('reason.' + c.reason);
@@ -370,7 +379,7 @@ function removeUnder(nx, ny) {
 function placeAt(nx, ny) {
   const sim = app.sim, g = view.groundCell(nx, ny); if (!g) return;
   const [x, y] = footprint(app.tool, g.wx, g.wz), c = sim.canPlace(app.tool, x, y, app.rot);
-  if (!c.ok) { ui.toast(reasonText(c, app.tool), 'err'); sound.play('error', { gain: .4 }); return; }
+  if (!c.ok) { if (offerPlot(c)) return; ui.toast(reasonText(c, app.tool), 'err'); sound.play('error', { gain: .4 }); return; }
   const id = sim.place(app.tool, x, y, app.rot); refreshGhost();
   if (id && app.tool === 'wunder') { app.setTool(null); app.select(id); }
 }
@@ -459,15 +468,17 @@ const endPtr = e => {
     if (!d.moved && d.x === d.sx && d.y === d.sy) {
       const p = view.pick(nx, ny); if (p && p.kind === 'gerald') { if (sim.clickGerald()) view.geraldClicked(); refreshGhost(); return; }
       const c = sim.canPlace('band', d.sx, d.sy, app.rot);
-      if (c.ok) sim.placeLine('band', [[d.sx, d.sy, app.rot]]); else { ui.toast(reasonText(c, 'band'), 'err'); sound.play('error', { gain: .4 }); }
+      if (c.ok) sim.placeLine('band', [[d.sx, d.sy, app.rot]]); else if (!offerPlot(c)) { ui.toast(reasonText(c, 'band'), 'err'); sound.play('error', { gain: .4 }); }
     } else {
       drag = d; const plan = beltPlan(); drag = null;
       if (plan.route) {
         if (!plan.path) { ui.toast('⛔ ' + t('ui.noPath'), 'err'); sound.play('error', { gain: .4 }); }
-        else { const n = sim.placePath(plan.path); if (!n) { ui.toast(reasonText(sim.canPlacePath(plan.path), 'band'), 'err'); sound.play('error', { gain: .4 }); } else app.rot = plan.path[plan.path.length - 1].rot; }
+        else { const n = sim.placePath(plan.path); if (!n) { const cp = sim.canPlacePath(plan.path); if (!offerPlot(cp)) { ui.toast(reasonText(cp, 'band'), 'err'); sound.play('error', { gain: .4 }); } } else app.rot = plan.path[plan.path.length - 1].rot; }
       } else {
         const cells = plan.cells, n = sim.placeLine('band', cells);
-        if (!n) { const c = sim.canPlace('band', cells[0][0], cells[0][1], cells[0][2]); ui.toast(reasonText(c.ok ? { reason: 'money', cost: 1 } : c, 'band'), 'err'); sound.play('error', { gain: .4 }); }
+        const cp = cells.map(([x, y, r]) => sim.canPlace('band', x, y, r)).find(q => q.reason === 'plot');
+        if (cp && offerPlot(cp)) { /* Kauf angeboten (auch wenn ein Teil der Linie schon steht) */ }
+        else if (!n) { const c = sim.canPlace('band', cells[0][0], cells[0][1], cells[0][2]); ui.toast(reasonText(c.ok ? { reason: 'money', cost: 1 } : c, 'band'), 'err'); sound.play('error', { gain: .4 }); }
         app.rot = cells[cells.length - 1][2];
       }
     }

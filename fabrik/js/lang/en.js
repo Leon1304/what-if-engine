@@ -22,7 +22,7 @@ export default {
   'reason.unknown': 'Unknown.',
   'reason.research': 'Not researched yet.',
   'reason.bounds': 'Outside the map.',
-  'reason.plot': 'You don\'t own this land yet.',
+  'reason.plot': 'You don\'t own this land yet.', 'reason.plotBuy': 'Not your land yet – click to buy this plot for {cost:num} coins.',
   'reason.occupied': 'Something is already here.',
   'reason.deposit': 'No deposit underneath.',
   'reason.money': 'Not enough coins.',

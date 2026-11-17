@@ -214,3 +214,7 @@ Leons Wunsch: „Wenn ich auf einer Ressource 4 Fabriken habe, soll daraus eine 
 `f.flow(id)` (Bohrer, Maschine) → `{ item, supply, belt, demand, cons, wrong, main, per, need, limit }` in Teilen/s: folgt Bändern, Tunneln, Verteilern, Sortierern und Lagern bis zu den Abnehmern.
 `belt` = was das Band bis zum ersten Verteiler trägt (Tempo ÷ Teileabstand), `demand` = was die Abnehmer schaffen (Verkauf = unbegrenzt), `need` = wie viele Abnehmer vom häufigsten Typ noch fehlen.
 Ein gestauter Bohrer/eine gestaute Maschine bekommt in `diagnose` die Schlüssel `diag.flowCons` („noch 4× Schmelzofen nötig“), `diag.flowBelt` (Band zu langsam) oder `diag.flowWrong` (festes Rezept nimmt das Teil nicht). Das Info-Panel zeigt den Block „Durchsatz“ (liefert / Band trägt / Abnehmer schaffen) mit der Warnung, auch bevor sich etwas staut.
+
+## Mehr Platz, Band-Einmündungen (17.11.2026)
+- Land: `PLOT_COST = 500`, Anstieg `PLOT_GROW = 1,7` je Grundstück (vorher 1000 × 2,5): 500, 850, 1.445, 2.457, 4.177 … Wer auf noch nicht gekauftes Nachbarland baut oder ein Band dorthin zieht, bekommt sofort den Kauf angeboten (Zeiger-Hinweis „klick, um das Grundstück zu kaufen“). Bot: Prestige 87:26 statt 97:48.
+- Bänder, die seitlich in ein gerades Band laufen (auch Rutschen von Bohrern/Maschinen), zeigen dort eine offene Schiene mit Übergangsplatte: Band-Varianten `straightL` / `straightR` / `straightLR` (view.js `mergeKind` aus `n.feed`).

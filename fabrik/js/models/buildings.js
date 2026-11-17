@@ -83,12 +83,20 @@ function railPts(k, pts, col, h = .05, w = .05, y = BELT_Y - .03) {
   for (let i = 0; i < pts.length - 1; i++) { const a = pts[i], b = pts[i + 1], L = Math.hypot(b[0] - a[0], b[1] - a[1]) + .004, ang = Math.atan2(b[1] - a[1], b[0] - a[0]);
     k.in([(a[0] + b[0]) / 2, y, (a[1] + b[1]) / 2], -ang, () => { k.box(col, [0, 0, 0], [L, h + .03, w], { layer: 'metal' }); k.box(C.yel, [0, h + .03, 0], [L, .012, w * .7], { layer: 'metal', jit: 0 }); }); }
 }
-function beltFrameStraight(k, x0 = -.5, x1 = .5, legs = true) {
+// open = { '-1': true, '1': true }: Einmündung von der Seite (−z links / +z rechts): Schiene dort offen, Übergangsplatte bis zur Feldkante
+function beltFrameStraight(k, x0 = -.5, x1 = .5, legs = true, open = {}) {
   const L = x1 - x0, xm = (x0 + x1) / 2;
   k.box(C.steelD, [xm, BELT_Y - .075, 0], [L, .06, HW * 2 - .02], { layer: 'metal' });              // Wanne unter dem Gurt
   k.box(C.rubber, [xm, BELT_Y - .034, 0], [L, .026, HW * 2]);                                          // Gurt-Kante
-  for (const s of [-1, 1]) railPts(k, [[x0, s * (HW + .025)], [x1, s * (HW + .025)]], C.steel);
-  for (const s of [-1, 1]) k.rivets(C.steelD, [x0 + .1, BELT_Y + .0, s * (HW + .052)], [x1 - .1, BELT_Y + .0, s * (HW + .052)], 3, .01, { r: [PI / 2, 0, 0] });
+  for (const s of [-1, 1]) {
+    if (!open[s]) { railPts(k, [[x0, s * (HW + .025)], [x1, s * (HW + .025)]], C.steel); k.rivets(C.steelD, [x0 + .1, BELT_Y + .0, s * (HW + .052)], [x1 - .1, BELT_Y + .0, s * (HW + .052)], 3, .01, { r: [PI / 2, 0, 0] }); continue; }
+    // Schienenstummel an beiden Ecken (biegen nach außen ab und gehen in die Schienen des einmündenden Bands über)
+    for (const e of [-1, 1]) { const xe = e * (HW + .025); railPts(k, [[e * .5, s * (HW + .025)], [xe, s * (HW + .025)], [xe, s * .5]], C.steel); }
+    // Übergangsplatte (Gummi auf Stahl) zwischen Gurt und Feldkante, gelbe Einfädel-Pfeile
+    k.box(C.steelD, [0, BELT_Y - .075, s * (HW + .07)], [HW * 2, .06, .14], { layer: 'metal' });
+    k.box(C.dark, [0, BELT_Y - .02, s * (HW + .07)], [HW * 2 - .02, .03, .15]);
+    for (const xx of [-.18, .18]) k.in([xx, BELT_Y + .0, s * (HW + .07)], s > 0 ? PI / 2 : -PI / 2, () => k.prism(C.yel, [0, 0, 0], .1, .008, .07, { layer: 'metal', jit: 0, r: [0, PI / 2, 0], order: 'YXZ' }));
+  }
   if (legs) for (const x of [xm]) for (const s of [-1, 1]) { k.box(C.steelD, [x, 0, s * (HW - .02)], [.05, BELT_Y - .08, .04], { layer: 'metal' }); k.box(C.dark, [x, 0, s * (HW - .02)], [.1, .012, .08], { layer: 'metal' }); }
   // Rollen sichtbar unter der Kante
   for (let x = x0 + .125; x < x1; x += .25) k.cyl(C.steel, [x, BELT_Y - .05, 0], .028, HW * 2 + .03, 8, { ax: 'z', layer: 'metal' });
@@ -114,7 +122,9 @@ function beltFrameCurve(k, s) {
 const DEFS = {};
 function beltTemplate(kind) {
   const k = new Kit(11); k.aoH = .25;
-  if (kind === 'straight') { beltFrameStraight(k); k.add(surfStraight(), 0xffffff, [0, 0, 0], [1, 1, 1], { layer: 'belt', keepUv: true, ao: false, jit: 0 }); }
+  if (kind === 'straight' || kind === 'straightL' || kind === 'straightR' || kind === 'straightLR') {
+    const open = { '-1': kind === 'straightL' || kind === 'straightLR', '1': kind === 'straightR' || kind === 'straightLR' };
+    beltFrameStraight(k, -.5, .5, true, open); k.add(surfStraight(), 0xffffff, [0, 0, 0], [1, 1, 1], { layer: 'belt', keepUv: true, ao: false, jit: 0 }); }
   else if (kind === 'left' || kind === 'right') { const s = kind === 'right' ? 1 : -1; beltFrameCurve(k, s); k.add(surfCurve(s), 0xffffff, [0, 0, 0], [1, 1, 1], { layer: 'belt', keepUv: true, ao: false, jit: 0 }); }
   else if (kind === 'tunnelIn' || kind === 'tunnelOut') tunnelBuild(k, kind === 'tunnelOut');
   return k;
