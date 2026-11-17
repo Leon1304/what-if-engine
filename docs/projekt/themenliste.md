@@ -74,7 +74,7 @@ Vier Nischen für TikTok, die mit der Engine machbar sind, plus True Crime als e
 
 ### Größenvergleiche GV1–GV8 (Kategorie Erklärung, 30–45 s)
 Du stehst als Maßstab im Bild, die Kamera fährt hoch/runter, ein Zähler (METERS / KM) läuft mit, jede Stufe bekommt ein Callout am Objekt, die Pointe kommt am Ende. Braucht Vergleichsobjekte als wiederverwendbare Funktionen (Leiter aus Objekten, `kind`).
-- ★ GV1 How high can you go before you die? – Höhenleiter: Everest 8.849 m (Todeszone ab 8.000 m) → Linienflug ~11 km → Armstrong-Grenze ~19 km (Blut kocht) → Sprungrekord ~41 km → ISS 408 km. Zähler ALTITUDE.
+- ★ GV1 How high can you go before you die? – Höhenleiter: Everest 8.849 m (Todeszone ab 8.000 m) → Linienflug ~11 km → Armstrong-Grenze ~19 km (Blut kocht) → Sprungrekord ~41 km → ISS 408 km. Zähler ALTITUDE. ✅ auf GitHub (how-high-can-you-go, 17.11.)
 - ★ GV2 How deep can you dive before your body gives up? – Taucher ohne Gerät (Freitauchrekord ~214 m) → Gerätetauchrekord 332 m → Pottwal ~2.000 m → Titanic 3.800 m → Challenger Deep 10.935 m. Zähler DEPTH, Druck-Zähler daneben.
 - GV3 How deep is the deepest hole ever dug? – Kola-Bohrung 12.262 m, Durchmesser nur 23 cm, Gestein 180 °C; Vergleich mit Burj Khalifa, Everest, Mariana-Graben; Mythos „Höllengeräusche“ → FALSE.
 - GV4 How big was the biggest animal ever, next to you? – Blauwal ~30 m, Herz so groß wie ein Kleinwagen (Callout), Argentinosaurus, Megalodon; Pointe: du passt durch seine Hauptschlagader nicht, aber fast (Mythos → FALSE).

@@ -74,6 +74,7 @@ Wird vom /whatif-Skill vor jedem Video gelesen und danach aktualisiert.
 | el-chapo-tunnel (TC12, True Crime, gerendert 15.11.) | red |
 | nächste Serie | Vorschlag: orange (danach z. B. pink) |
 | asteroid-la (Einzelvideo, Miniatur-/Tilt-Shift-Look, gerendert 15.11.) | orange |
+| how-high-can-you-go (GV1, Erklärvideo, gerendert 17.11.) | yellow |
 
 ## Dr. Steve (nur Serien)
 - **Fake-Titel (`CFG.steveTitle`, nie wiederholen):** benutzt: „Scientist (online certificate)“ (ZF1–ZF6) · „Expert (10k hours in GTA 5)“ (NL1) · „Gravity Expert (fell off a bike once)“ (EG1) · „Zombie Expert (PhD from a cereal box)“ (ZC1) · „Ocean Expert (went to an aquarium once)“ (SA1) · „Shark Expert (owns a shark-tooth necklace)“ (MB1). Ideen: Expert (watched 1 video) · Scientist (self-declared) · Professor (YouTube comments) · Genius (says his mom) · Doctor (of vibes) · Researcher (Wikipedia, 4 min)
@@ -282,6 +283,7 @@ MB1 Megalodon in your pool ✔ gebaut → Abstimmung: A T. rex in the city · B 
 - fortaleza-tunnel (TC11, True Crime, Declan Sage, ernst): „It sells fake grass.“ · „Never found.“
 - el-chapo-tunnel (TC12, True Crime, Declan Sage, ernst): „Nobody moves.“ · „Even his.“
 - asteroid-la (15.11.): „And you’re stuck in traffic.“ · „The rock isn’t what gets you. The air is.“ · „Six thousand Hiroshimas, in one parking lot.“ · „L.A. traffic just saved your life.“
+- how-high-can-you-go (GV1, 17.11.): „Your spit.“ · „Your balloons quit next.“ · „Bold plan.“
 
 ## Benutzte Dr.-Steve-Tipps
 - ZF1: „Walk like a zombie. Zero sus.“
@@ -329,6 +331,7 @@ MB1 Megalodon in your pool ✔ gebaut → Abstimmung: A T. rex in the city · B 
 - vice-city-real: – (kein Slang)
 - krampus-night: – (kein Slang)
 - asteroid-la: – (kein Slang)
+- how-high-can-you-go: – (kein Slang)
 
 ## Gerald-Momente
 - ZF1: Heuballen, Funken fliegen vorbei · ZF2: Kellertür, tanzt zur Musik · ZF3: Silo, isst den letzten Mais
@@ -371,6 +374,7 @@ Die Bewertungskarte ist seit 11.11.2026 abgeschafft; jedes Video endet mit Endca
 - fortaleza-tunnel: „Which is why the neighbors still wonder:“
 - el-chapo-tunnel: „So one question never goes away:“
 - asteroid-la: „Which is why L.A. still asks —“
+- how-high-can-you-go: „So, once more:“
 - Archiv der alten Bewertungskarten (Pointen nicht wiederverwenden): ZF1 „Barn: gone. Vibes: immaculate.“ · ZF2 „Great acoustics. Terrible neighbors.“ · ZF3 „Corn every day. Would not recommend.“ · ZF4 „Loud. Smelly. Better than walking.“ · ZF5 „Warm. Way too warm.“ · ZF6 „Great views. Zero fuel.“ · NL1 „Great weather. Zero free will.“ · E19 „Forty-two minutes. No snacks.“ · E24 „Twenty years. Zero lasers.“ · E1 „Perfect landing. Terrible snacks.“ · E6 „Sixty hours, lost to a grandma.“ · Bouncing Betty „Built to jump. Still in the ground.“ · Groundskeeper „Great traps. Cellar smells terrible.“
 
 ## Video-Log
@@ -420,3 +424,4 @@ Die Bewertungskarte ist seit 11.11.2026 abgeschafft; jedes Video endet mit Endca
 | 2026-11-14 | What if Vice City was real for 24 hours? (vice-city-real, Erklärvideo, 41,6 s, cyan, Erzähler Adam, Engine v3.32: `decoHotel()` (Ocean-Drive-Hotels mit fiktiven Neon-Namen) und `coldFall()` (kältestarrer Leguan fällt von der Palme); Rate-Frage Kreuzfahrt/Alligatoren/Leguane, Antwort alle drei; Faktenkarte 8,2 Mio. Kreuzfahrtpassagiere (PortMiami FY2024), ~1,3 Mio. Alligatoren (FWC), NWS-Miami-Warnungen; Thumbnails A/B) | – | – | Endcard Cruise port / Alligators / Falling iguanas · Loop „So imagine:“ | nein |
 | 2026-11-15 | What if Krampus came to your house? (krampus-night, H12 Horror zur Krampusnacht am 5.12., 55,1 s, red, Erzähler Storm Styles, Engine v3.34: Kostüme `krampus` (Fell, Holzmaske, Hörner, Huf, Ketten, Glocken, Kraxe) und `nicholas` (Bischof), `birchSwitch`, `torch`, `crozier`, `book`, `treatBoot`; Dorf im Schnee, Stiefel vor der Tür, Krampuslauf mit Fackeln, einer bleibt – Türspion: keine Maske, Rute im Stiefel, Ketten auf dem Dach, Krampus in der Stube, Nikolaus liest dein Jahr vor, Krampus geht; Endcard Open it / Hide under the bed / Clean your room. Fast.) | – | – | Endcard A/B/C | ja |
 | 2026-11-15 | What if an asteroid hit Los Angeles? (asteroid-la, Einzelvideo, 43 s, orange, Erzähler Denzel, erstes Video im Miniatur-/Tilt-Shift-Look; Engine v3.37: `CFG.mini`/`shot('mini')`, `asteroidImpact()`, `suburb()`, `beachLife()`; 140-m-Brocken als „zweite Sonne“ über Modell-L.A., Einschlag nördlich von Downtown, Pilzwolke, Druckwelle drückt Downtown und Vororte platt, Twist: „you“ steht im Stau 20 Meilen entfernt und überlebt) |
+| 2026-11-17 | How high can you go before you die? (how-high-can-you-go, GV1 Größenvergleich, Erklärvideo, 41,6 s, yellow, Erzähler Adam, Engine v3.51: `balloonChair()` (Gartenstuhl an Ballons mit Fahrer, Ballons platzen), `mountain()` (Gipfel mit Bergsteigern), `cloudSea()`, Himmel `high`/`strato`, `faceFx('boil')`; „you“ steigt im Ballonstuhl auf: Everest/Todeszone → Linienflug (30 s bis Bewusstlosigkeit) → Armstrong-Grenze ~19 km, Speichel kocht, Blut nicht; Ballons platzen lange vor dem Weltraum; Faktenkarte ~19 km (NASA · Armstrong limit); Thumbnails A/B) | GV1 | – | Endcard Everest / Jet height / Never · Loop „So, once more:“ | nein |

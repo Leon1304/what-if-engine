@@ -1,5 +1,5 @@
 {
- "updated": "2026-11-17T03:49:24Z",
+ "updated": "2026-11-17T10:18:19Z",
  "videos": [
   {
    "slug": "dday",
@@ -254,6 +254,83 @@
     ]
    },
    "auto": true
+  },
+  {
+   "slug": "how-high-can-you-go",
+   "title": "How high can you go before you die?",
+   "kind": "explain",
+   "dur": 41.6,
+   "aspect": "9:16",
+   "accent": "yellow",
+   "series": null,
+   "ending": null,
+   "date": "2026-11-17T10:18:19Z",
+   "status": "ready",
+   "files": {
+    "mp4": {
+     "url": "https://github.com/Leon1304/what-if-engine/releases/download/render-how-high-can-you-go/how-high-can-you-go.mp4",
+     "size": 159562759
+    },
+    "coverA": {
+     "url": "https://github.com/Leon1304/what-if-engine/releases/download/render-how-high-can-you-go/how-high-can-you-go-cover.jpg",
+     "size": 537421,
+     "thumb": "covers/how-high-can-you-go.jpg"
+    },
+    "coverB": {
+     "url": "https://github.com/Leon1304/what-if-engine/releases/download/render-how-high-can-you-go/how-high-can-you-go-cover-b.jpg",
+     "size": 294750,
+     "thumb": "covers/how-high-can-you-go-b.jpg"
+    },
+    "srt": {
+     "url": "https://github.com/Leon1304/what-if-engine/releases/download/render-how-high-can-you-go/how-high-can-you-go.srt",
+     "size": 1602
+    }
+   },
+   "preview": null,
+   "captions": {
+    "youtube": {
+     "title": "How high can you go before you die?",
+     "description": "A lawn chair, a few dozen balloons and a one-way trip to the edge of space. 🎈\nPast Everest's death zone, a jet at cruising altitude, and then the Armstrong limit, where your spit boils at body temperature.\nWhere would you turn back? Comment A, B or C 👇\n\nSources: NASA / Armstrong limit (water boils at 37 °C around 19 km) · FAA (time of useful consciousness at cruising altitude) · Guinness World Records (highest freefall jump, 41.4 km)\n\n#shorts #whatif #edgeofspace #highaltitude #space",
+     "tags": [
+      "how high can you go before you die",
+      "how high can humans go",
+      "edge of space",
+      "armstrong limit",
+      "death zone",
+      "everest death zone",
+      "stratosphere",
+      "high altitude",
+      "cruising altitude",
+      "time of useful consciousness",
+      "spit boils",
+      "water boils at body temperature",
+      "lawn chair balloons",
+      "balloon chair",
+      "weather balloon",
+      "hypoxia",
+      "pressure suit",
+      "altitude sickness",
+      "space facts",
+      "science facts",
+      "explained",
+      "what if",
+      "what if scenarios",
+      "3d animation",
+      "shorts",
+      "whatifthishappenedscenarios",
+      "armstrong line"
+     ],
+     "tagChars": 493
+    },
+    "instagram": "Tie a lawn chair to some balloons and go up. How high before your body quits? 🎈\nEverest's death zone, a passing jet… and the Armstrong limit, where your spit starts to boil.\nWhere would you turn back? Comment A, B or C 👇\n\n#whatif #edgeofspace #highaltitude #space #sciencefacts",
+    "tiktok": "Lawn chair + balloons = how high before you die? 🎈\nAt the Armstrong limit your spit boils. Where would you turn back? Comment A, B or C 👇\n\n#whatif #edgeofspace #highaltitude #space #sciencetok",
+    "hooks": [
+     "Your spit boils before your blood does.",
+     "At 19 km, water boils at body temperature.",
+     "I tied a lawn chair to balloons. Bad idea."
+    ]
+   },
+   "auto": false
   },
   {
    "slug": "gong-farmer",
