@@ -1070,7 +1070,7 @@ function rimFit() {
 const _mats = new Map(), _geo = new Map(), MROUGH = LOOKV2 && CFG.materials !== false ? 0.8 : 0.88;   // look v2: default roughness 0.8 (was 0.88 everywhere: no sheen at all)
 // v2.34 surfaces: mat(hex, { surf }) / box(…, { surf }) draws a pattern on walls and roofs per pixel — no extra geometry, fades with distance:
 //   brick · stone (big blocks) · plank (upright boards) · siding (lapped boards) · tile (roof tiles, shingles) · plaster · concrete (panels) · metal (corrugated sheet)
-const SURF = { brick: 1, stone: 2, plank: 3, siding: 4, tile: 5, plaster: 6, concrete: 7, metal: 8, asphalt: 9, paving: 10, boards: 11, tiles: 12, carpet: 13, wallpaper: 14, marking: 15, cobble: 16 };   // v3.39 marking: road paint (outdoor, snow like the asphalt under it)
+const SURF = { brick: 1, stone: 2, plank: 3, siding: 4, tile: 5, plaster: 6, concrete: 7, metal: 8, asphalt: 9, paving: 10, boards: 11, tiles: 12, carpet: 13, wallpaper: 14, marking: 15, cobble: 16, setts: 17 };   // v3.39 marking: road paint (outdoor, snow like the asphalt under it)
 // v2.35 weather on the ground: rain makes surfaces dark and glossy and leaves puddles that mirror the sky, snow settles on everything that faces up.
 //   emit('rain') / emit('snow') drive it on their own (wet in ~5 s, dry in ~25 s; snow builds in ~16 s). By hand: wetGround(t0, t1, k) · snowCover(t0, t1, k),
 //   whole video: CFG.wet / CFG.snowCover 0..1. CFG.weather: false = off. Pure function of t.
@@ -1128,9 +1128,13 @@ function surfFx(m, kind, o = {}) {   // o.indoor: no weather (rooms) · o.sp: pa
         else if (K < 13.5) k = (sfh(floor(uv * 90.0)) - 0.5) * 0.14 * nf + mo * 1.5 + (sfn(uv * 1.3) - 0.5) * 0.06;   // carpet
         else if (K < 14.5) { vec2 q = fract(uv / 0.26) - 0.5; k = (step(0.5, fract(uv.x / 0.26)) - 0.5) * 0.045 + (1.0 - smoothstep(0.07, 0.09, abs(q.x) + abs(q.y))) * 0.06 * (0.3 + 0.7 * nf) + mo * 0.4; }   // wallpaper: stripes with a small diamond
         else if (K < 15.5) k = (sfh(floor(uv * 40.0)) - 0.5) * 0.06 * nf + mo * 0.5 - smoothstep(0.62, 0.8, sfn(uv * 2.2 + 6.0)) * 0.22;   // road paint: grain and worn spots
-        else { float rw = floor(uv.y / 0.14), uu = uv.x / 0.17 + sfh(vec2(rw, 3.0)) * 0.9 + (sfn(uv * 1.7) - 0.5) * 0.25; vec2 cf = vec2(fract(uu), fract(uv.y / 0.14)), cc = vec2(floor(uu), rw);   // v3.47 cobble: rounded setts in staggered, slightly wavy rows
+        else if (K < 16.5) { float rw = floor(uv.y / 0.14), uu = uv.x / 0.17 + sfh(vec2(rw, 3.0)) * 0.9 + (sfn(uv * 1.7) - 0.5) * 0.25; vec2 cf = vec2(fract(uu), fract(uv.y / 0.14)), cc = vec2(floor(uu), rw);   // v3.47 cobble: rounded setts in staggered, slightly wavy rows
           vec2 cd = (cf - 0.5) * vec2(0.17, 0.14); float cr = length(cd / vec2(0.078, 0.064)) + (sfn(uv * 31.0 + cc) - 0.5) * 0.22 * nf, ce = 1.0 - smoothstep(0.8, 1.02, cr);
           k = mix(-0.48 * (0.45 + 0.55 * nf), (sfh(cc) - 0.5) * 0.3 + (1.0 - cr * cr) * 0.14 - 0.05, ce) + mo * 0.9 + (sfh(floor(uv * 70.0)) - 0.5) * 0.06 * nf; }   // dark mud joints, a tone per stone, domed tops
+        else { vec2 cu = uv + vec2(sfn(uv * 1.7), sfn(uv * 1.7 + 5.0)) * 0.02; float row = floor(cu.y / 0.13), uu = cu.x / 0.13 + 0.5 * mod(row, 2.0) + (sfh(vec2(row, 2.0)) - 0.5) * 0.3;   // v3.53 setts: sampietrini: worn square setts in staggered rows
+          vec2 cf = vec2(fract(uu), fract(cu.y / 0.13)), ci = vec2(floor(uu), row); float e = min(min(cf.x, 1.0 - cf.x), min(cf.y, 1.0 - cf.y)), aa = 1.0 - smoothstep(0.01, 0.045, max(fwidth(uv.x), fwidth(uv.y)));
+          float dome = smoothstep(0.0, 0.32, e);   // rounded, polished tops, dark sandy joints
+          k = mix(-0.08, mix(-0.42, (sfh(ci) - 0.5) * 0.3 - 0.08 + dome * 0.1, smoothstep(0.035, 0.11, e)), aa) + mo * 1.1 + (sfh(floor(uv * 60.0)) - 0.5) * 0.05 * nf; }
         diffuseColor.rgb *= 1.0 + k * sf;
       #ifndef SURF_IN
         float road = max(step(8.5, K) * step(K, 10.5), step(14.5, K)), up = max(smoothstep(0.35, 0.8, fn.y), road * step(0.001, uSnow)), sn = 0.0;   // v3.39: the thin sides of asphalt, paving and paint take the snow too (no dark outlines)
@@ -7242,6 +7246,269 @@ function decoHotel(p, x, z, o = {}) {   // front +z; color (pastel), trim, neon 
   box(g, W * 0.45, 0.04, 0.05, '', 0.6, 2.95, 3.2, { mat: mat(nc, { basic: true, glow: 1.4 }), ...NC });   // neon strip under the canopy
   box(g, 2.2, 2.5, 0.08, '#24323E', 0.6, 0.5, 0.03, { kind: 'glass', ...NC }); box(g, W * 0.6, 0.12, 3.6, '#D8D2C2', 0.6, 0.01, 1.8, NC);   // door + terrace
   return { g, door: doorReg([x, z + 2.4]), top: H };
+}
+// ---- v3.53 old town (17th-century Italian streets: Rome, Naples, Florence …): townhouse · alley · doorMark · herbs · belltower ----
+// Front = +z, bottom at y = 0. Everything static is merged by bake(); shutters, doors, paint strokes and the bell are dyn and move as pure functions of t.
+const OLDTOWN = { italian: { walls: ['#D9A45A', '#C8784E', '#E2C07E', '#B9683F', '#D69A80', '#E6D2A8', '#C99A62', '#B57A55'], shutters: ['#4E6440', '#5E4630', '#3E5A52', '#6E5638', '#56603A'],
+  stone: '#D2C6AA', base: '#8E8676', roof: '#A45A3C', door: '#4A3020', brick: '#9A5A3E' } };
+const _otNight = (c, ei) => { const m = mat('#2A2016', { em: c, ei: 0, own: true }); m.userData.nightEi = ei; m.userData.dayEi = 0.02; NIGHTMATS.push(m); return m; };
+const _otM = {}, _otWin = (lit, k) => _otM[lit + '|' + k] ??= lit ? _otNight(k ? '#FFB45A' : '#FFC878', k ? 0.75 : 1.05) : mat('#17130F', { rough: 0.5 });
+// doorMark(p, x, y, z, { w, h, kind: 'sealed' | 'cross' | 'boards', color, paint: t, nail: t, notice, ry, seed }) → { g, cross, boards }
+//   a quarantined door: planks nailed across the lower half (nail heads, splintered ends), a painted cross in the upper half with drips, a paper notice.
+//   paint: t = the two brush strokes of the cross are painted at t (0.35 s each, soft brush sound); nail: t = the planks are nailed on at t (one knock each). Front = +z, (x, y, z) = door front, bottom centre.
+function doorMark(p, x, y, z, o = {}) {
+  const g = grp(p ?? world, x, y, z, o.ry ?? 0), W = o.w ?? 1.3, H = o.h ?? 2.4, kind = o.kind ?? 'sealed', NC = { cast: false }, wood = o.wood ?? '#8A6A44', sd = o.seed ?? Math.round(x * 7 + z * 3);
+  const M = { g, cross: null, boards: [] };
+  if (kind !== 'boards') {   // painted cross: vertical + horizontal stroke, ragged ends, drips
+    const pc = o.color ?? '#A8201C', pm = mat(pc, { rough: 0.55 }), cy = H * 0.74, L1 = Math.min(0.95, H * 0.4), L2 = Math.min(W * 0.72, 0.7), bw = 0.12;
+    const cg = grp(g, 0, 0, o.pz ?? 0.012); M.cross = cg;
+    const stroke = (x0, y0, len, vert, t0) => { const s = grp(cg, x0, y0, 0); const inner = grp(s); box(inner, vert ? bw : len, vert ? len : bw, 0.008, '', vert ? 0 : len / 2, vert ? -len : -bw / 2, 0, { mat: pm, ...NC });
+        for (let i = 0; i < 3; i++) box(inner, 0.025, 0.04 + hash(sd + i) * 0.03, 0.009, '', vert ? (i - 1) * 0.035 : len * (0.04 + 0.9 * (i / 2)), vert ? -len - 0.03 : -bw / 2 - 0.03, 0, { mat: pm, ...NC });   // ragged brush end
+        if (t0 != null) { dyn(s); tick(t => { const k = clamp((t - t0) / 0.35); s.visible = k > 0.001; if (vert) s.scale.set(1, Math.max(0.001, EASE.out(k)), 1); else s.scale.set(Math.max(0.001, EASE.out(k)), 1, 1); }); }
+        return s; };
+    stroke(0, cy + L1 / 2, L1, true, o.paint ?? null); stroke(-L2 / 2, cy + L1 * 0.18, L2, false, o.paint != null ? o.paint + 0.4 : null);
+    const dg = grp(cg); for (let i = 0; i < 4; i++) { const dx = [-L2 / 2 + 0.08, -0.03, 0.04, L2 / 2 - 0.1][i], dl = 0.08 + hash(sd * 2 + i) * 0.16, top = i === 1 || i === 2 ? cy - L1 / 2 : cy + L1 * 0.18 - bw / 2;
+      box(dg, 0.016, dl, 0.008, '', dx, top - dl, 0, { mat: pm, ...NC }); ball(dg, 0.013, '', dx, top - dl, 0.002, { mat: pm, detail: 0, ...NC }); }   // drips under the strokes
+    if (o.paint != null) { dyn(dg); tick(t => { dg.visible = t >= o.paint + 0.9; }); sfx(o.paint, 'brush', 0.5); sfx(o.paint + 0.4, 'brush', 0.45); }
+  }
+  if (kind !== 'cross') {   // nailed planks over the lower half: two across, one diagonal, nail heads, splintered ends
+    const pl = (cx, cy, len, rz, k) => { const bz = (o.bz ?? 0.03) + k * 0.026, b = grp(g, cx, cy, bz, 0); b.rotation.z = rz; const bi = grp(b);
+      box(bi, len, 0.17, 0.035, shade(wood, (hash(sd + k * 5) - 0.5) * 0.12), 0, -0.085, 0, NC); box(bi, len * 0.96, 0.012, 0.037, shade(wood, -0.18), 0, -0.02, 0.001, NC);   // plank + grain line
+      for (const sx of [-1, 1]) { for (const dy of [-0.045, -0.125]) ball(bi, 0.014, '#2A2622', sx * (len / 2 - 0.08), dy, 0.022, { detail: 0, metal: 0.5, ...NC });   // nail heads
+        cone(bi, 0.04, 0.07, shade(wood, 0.08), sx * (len / 2 + 0.02), -0.085, 0, { seg: 3, rz: -sx * Math.PI / 2, ...NC }); }   // splintered end
+      if (o.nail != null) { dyn(b); const tn = o.nail + k * 0.55; tick(t => { const u = clamp((t - tn) / 0.18); b.visible = t >= tn - 0.25; b.position.z = bz + (1 - EASE.out(u)) * 0.25; }); sfx(tn + 0.18, 'knock', 0.55); }
+      M.boards.push(b); return b; };
+    pl(0, H * 0.5, W * 1.22, 0.035, 0); pl(0, H * 0.24, W * 1.22, -0.03, 1); pl(0, H * 0.37 + 0.08, Math.hypot(W, H * 0.26) * 1.02, Math.atan2(H * 0.26, W) * 0.92, 2);
+  }
+  if (o.notice !== false) { const n = grp(g, W * 0.62, H * 0.62, 0.006); box(n, 0.26, 0.36, 0.006, '#E6DCC2', 0, 0, 0, NC); for (let i = 0; i < 6; i++) box(n, i ? 0.16 + hash(sd + i) * 0.04 : 0.12, 0.012, 0.007, '#4A3A2A', 0, 0.3 - i * 0.045 - (i ? 0.02 : 0), 0.001, NC);   // health office notice: heading + lines
+    ball(n, 0.01, '#2A2622', 0, 0.34, 0.006, { detail: 0, ...NC }); }
+  return M;
+}
+// townhouse(p, x, z, { style: 'italian', w, d, floors, fh0, fh, color, trim, base, shutter, roof, door, shutters: 'mixed' | 'closed' | 'open', lit: 0..1, shut: t, sealed: true | t,
+//   mark: { … doorMark options }, arch: true (arched stone portal), shop: 'left' | 'right' | false, balcony: floor | false, lantern: 'left' | 'right' | false, shrine, chimney, pots, damage: 0..1, seed, ry })
+//   → { g, w, d, h, door, doors, windows, leaves, mark, doorAt: [x, z] }
+//   17th-century plaster townhouse: rusticated stone plinth, string courses, stone window frames with sills and lintels, louvred wooden shutters (closed ones let warm light through
+//   the slats at night), arched portal with a studded double door and iron grille in the lunette, bottega opening with plank shutters, iron balcony, wall lantern, street shrine,
+//   flaking plaster showing brick, damp stains, terracotta downpipe, low tiled roof on a stone cornice with chimney. shut: t swings every open shutter closed at t (staggered, wooden clack).
+function townhouse(p, x, z, o = {}) {
+  const S = OLDTOWN[o.style ?? 'italian'] ?? OLDTOWN.italian, sd = o.seed ?? Math.round(x * 13.1 + z * 7.7), hr = k => hash(sd * 3.7 + k * 1.618 + 0.31);
+  const w = o.w ?? 5.6, d = o.d ?? 7, F = Math.max(1, o.floors ?? 3), g0 = o.fh0 ?? 3.6, fh = o.fh ?? 3.1, h = g0 + (F - 1) * fh, NC = { cast: false };
+  const wall = o.color ?? S.walls[Math.floor(hr(1) * S.walls.length)], st = o.trim ?? S.stone, shC = o.shutter ?? S.shutters[Math.floor(hr(2) * S.shutters.length)], roofC = o.roof ?? S.roof, doorC = o.door ?? S.door;
+  const g = stat(grp(p ?? world, x, o.y ?? (p && p !== world ? 0 : groundH(x, z)), z, o.ry ?? 0)), lit = o.lit ?? 0.35, dmg = o.damage ?? 0.6;
+  box(g, w, h, d, wall, 0, 0, -d / 2, { surf: 'plaster' });   // body: front face at z = 0
+  for (let f = 1; f < F; f++) box(g, w + 0.03, 0.15, 0.1, st, 0, g0 + (f - 1) * fh - 0.08, 0.04, NC);   // string courses between the floors
+  box(g, w + 0.1, 0.2, 0.32, st, 0, h - 0.06, -0.1, NC); box(g, w + 0.3, 0.14, 0.62, shade(st, -0.05), 0, h + 0.14, -0.22, NC);   // stone cornice (two steps)
+  for (let i = 0; i < Math.floor(w / 0.42); i++) box(g, 0.1, 0.1, 0.14, shade(st, -0.1), -w / 2 + 0.25 + i * 0.42, h - 0.16, 0.08, NC);   // corbels under the cornice
+  prism(g, w + 0.36, 1.05, d + 0.9, roofC, 0, h + 0.28, -d / 2 + 0.08, { surf: 'tile' }); box(g, w + 0.4, 0.09, 0.14, shade(roofC, -0.12), 0, h + 0.26, 0.52, NC);   // low tiled roof + eave tiles
+  box(g, w + 0.38, 0.13, 0.22, shade(roofC, -0.1), 0, h + 1.27, -d / 2 + 0.08, NC);   // ridge tiles
+  if (o.chimney ?? hr(5) > 0.35) { const cx = (hr(6) - 0.5) * w * 0.55, cz = -d * (0.35 + hr(7) * 0.3); box(g, 0.55, 1.7, 0.55, wall, cx, h + 0.3, cz, { surf: 'plaster' }); box(g, 0.72, 0.1, 0.72, st, cx, h + 2.0, cz, NC);
+    for (const sx of [-1, 1]) cyl(g, 0.08, 0.1, 0.26, '#A8583A', cx + sx * 0.14, h + 2.1, cz, { seg: 6, ...NC }); }
+  // flaking plaster (brick shows), damp stains rising from the plinth, a terracotta downpipe at a corner
+  const dmgN = Math.round(dmg * (2 + F)), win = [];
+  const free = (cx, cy, ww, hh) => win.every(R => Math.abs(cx - R[0]) > (ww + R[2]) / 2 + 0.15 || Math.abs(cy - R[1]) > (hh + R[3]) / 2 + 0.15);
+  // window grid: columns evenly over the front, ground floor door in the middle column
+  const nc = Math.max(1, Math.min(4, Math.floor((w - 0.4) / 2.6))), cols = Array.from({ length: nc }, (_, i) => -w / 2 + w * (i + 0.5) / nc);
+  const winMat = (k) => _otWin(hr(40 + k) < lit, hr(80 + k) < 0.5 ? 1 : 0), leaves = [], windows = [];
+  const shutMode = k => o.shutters === 'closed' ? 0 : o.shutters === 'open' ? 1 : [0, 0, 1, 2, 1, 0][Math.floor(hr(60 + k) * 6)];   // 0 closed · 1 open · 2 half
+  const windowAt = (cx, cy, ww, wh, k, fl) => {   // cy = bottom of the opening
+    win.push([cx, cy + wh / 2, ww + 0.3, wh + 0.4]);
+    const q = grp(g, cx, cy, 0), M = winMat(k), mode = shutMode(k), lt = M.userData.nightEi != null;
+    box(q, ww, wh, 0.03, '', 0, 0, 0.002, { mat: M, ...NC });   // dark room / warm glass behind
+    if (lt) for (const yy of [0.33, 0.66]) box(q, ww, 0.03, 0.035, '#3A2A1E', 0, wh * yy, 0.01, NC); if (lt) box(q, 0.03, wh, 0.035, '#3A2A1E', 0, 0, 0.01, NC);   // glazing bars of a lit casement
+    for (const sx of [-1, 1]) box(q, 0.12, wh + 0.08, 0.1, st, sx * (ww / 2 + 0.06), -0.04, 0.05, NC);   // stone jambs
+    box(q, ww + 0.36, 0.15, 0.12, st, 0, wh, 0.06, NC); box(q, ww + 0.44, 0.06, 0.18, shade(st, -0.06), 0, wh + 0.15, 0.08, NC);   // lintel + hood moulding
+    box(q, ww + 0.34, 0.08, 0.22, st, 0, -0.08, 0.1, NC); for (const sx of [-1, 1]) box(q, 0.08, 0.1, 0.12, shade(st, -0.1), sx * (ww / 2 + 0.06), -0.18, 0.07, NC);   // sill + brackets
+    if (fl === 1 && hr(90 + k) > 0.4) { box(q, ww + 0.5, 0.06, 0.2, st, 0, wh + 0.3, 0.09, NC); for (const sx of [-1, 1]) box(q, ww / 2 + 0.3, 0.07, 0.18, st, sx * (ww / 4 + 0.12), wh + 0.36, 0.08, { rz: -sx * 0.32, ...NC }); }   // piano nobile: pediment
+    // damp streak under the sill
+    box(q, 0.14, 0.45 + hr(70 + k) * 0.5, 0.012, shade(wall, -0.1), (hr(71 + k) - 0.5) * ww * 0.6, -0.7 - hr(70 + k) * 0.5, 0.004, NC);
+    // shutters: two louvred leaves hinged on the outer edge of the jambs
+    const lw = ww / 2 + 0.12, ang = [0, Math.PI - 0.12, 1.05][mode];
+    for (const sx of [-1, 1]) {
+      const lf = grp(q, sx * (ww / 2 + 0.12), 0, 0.12), inner = grp(lf), back = mode === 0 && lt ? (_otM.back ??= _otNight('#FFB060', 0.55)) : null;
+      box(inner, lw, wh, 0.02, back ? '' : shade(shC, -0.25), -sx * lw / 2, 0, 0.0, back ? { mat: back, ...NC } : NC);   // backing (glows through the slats when the room is lit)
+      for (const zz of [0.012, -0.022]) for (const ex of [0.035, lw - 0.035]) box(inner, 0.07, wh, zz > 0 ? 0.04 : 0.02, shC, -sx * ex, 0, zz, NC); for (const ey of [0.035, wh * 0.5, wh - 0.035]) box(inner, lw, 0.07, 0.02, shC, -sx * lw / 2, ey - 0.035, -0.022, NC); for (const ey of [0.035, wh * 0.5, wh - 0.035]) box(inner, lw, 0.07, 0.04, shC, -sx * lw / 2, ey - 0.035, 0.012, NC);   // stiles + rails
+      const ns = Math.floor((wh - 0.14) / 0.1); for (let i = 0; i < ns; i++) box(inner, lw - 0.1, 0.028, 0.05, shade(shC, 0.04), -sx * lw / 2, 0.08 + i * (wh - 0.16) / ns, 0.016, { rx: -0.55, ...NC });   // slats
+      ball(inner, 0.014, '#2A2622', -sx * (lw - 0.06), wh * 0.5, 0.04, { detail: 0, ...NC });   // latch
+      lf.rotation.y = sx * ang; leaves.push({ g: lf, sx, mode, ang });
+      if (o.shut != null && mode !== 0) { dyn(lf); const ts = o.shut + hr(100 + k) * 0.8 + (sx > 0 ? 0.12 : 0); tick(t => { const u = EASE.inOut(clamp((t - ts) / 0.55)); lf.rotation.y = sx * lerp(ang, 0, u); }); if (sx > 0) sfx(ts + 0.55, 'knock', 0.25); }
+    }
+    windows.push(q);
+    if (o.pots !== false && fl > 0 && hr(110 + k) > 0.72) for (let i = 0; i < 2; i++) { const px = (i - 0.5) * ww * 0.5; cyl(q, 0.1, 0.075, 0.18, '#A8583A', px, 0.0, 0.14, { seg: 7, ...NC }); for (let j = 0; j < 3; j++) ball(q, 0.07, j % 2 ? '#4E7036' : '#5E8442', px + (j - 1) * 0.06, 0.22 + (j % 2) * 0.04, 0.14, { detail: 0, ...NC }); }   // herb pots on the sill
+  };
+  let kw = 0;
+  for (let f = 1; f < F; f++) { const y0 = g0 + (f - 1) * fh + 0.55, wh = f === 1 ? Math.min(1.75, fh - 1.05) : Math.min(1.45, fh - 1.15); cols.forEach(cx => windowAt(cx, y0, Math.min(0.95, w / nc - 0.75), wh, kw++, f)); }
+  // ground floor: arched portal (door) in the column nearest the middle, bottega or a barred window in another
+  const dc = cols[Math.floor((nc - 1) / 2)] + (nc % 2 ? 0 : 0), dw = Math.min(1.4, w / nc - 0.5), dh = Math.min(2.5, g0 - 0.95), ar = dw / 2, arch = o.arch ?? true;
+  win.push([dc, (dh + ar) / 2, dw + 0.6, dh + ar + 0.4]);
+  for (const [a, b] of [[-w / 2 - 0.02, dc - dw / 2 - 0.26], [dc + dw / 2 + 0.26, w / 2 + 0.02]]) if (b - a > 0.05) { box(g, b - a, 0.85, 0.1, o.base ?? S.base, (a + b) / 2, 0, 0.05, { surf: 'stone' }); box(g, b - a + 0.02, 0.07, 0.15, shade(st, -0.06), (a + b) / 2, 0.85, 0.06, NC); }   // rusticated plinth + cap (broken by the portal)
+  box(g, dw + 0.06, dh + (arch ? ar : 0) + 0.02, 0.04, '#0E0B09', dc, 0, -0.01, NC);   // dark entrance behind the leaves
+  for (const sx of [-1, 1]) for (let i = 0; i < 5; i++) { const bh = dh / 5, big = i % 2 === 0; box(g, big ? 0.3 : 0.22, bh - 0.02, 0.14, i % 2 ? shade(st, -0.04) : st, dc + sx * (dw / 2 + (big ? 0.15 : 0.11)), i * bh, 0.07, NC); }   // rusticated jambs
+  if (arch) { const n = 9; for (let i = 0; i < n; i++) { const a = Math.PI * (i + 0.5) / n, v = grp(g, dc + Math.cos(a) * (ar + 0.14), dh + Math.sin(a) * (ar + 0.14), 0.07); v.rotation.z = a - Math.PI / 2;
+      box(v, 0.2, i === (n - 1) / 2 ? 0.36 : 0.28, 0.15, i === (n - 1) / 2 ? shade(st, 0.05) : st, 0, -0.14, 0, NC); }   // voussoirs + keystone
+    mesh(g, G(`otLun${ar}`, () => new THREE.CircleGeometry(ar, 14, 0, Math.PI)), mat('#120E0B'), dc, dh, 0.03, {});   // lunette
+    for (let i = 1; i < 5; i++) { const a = Math.PI * i / 5; _seg(g, [dc, dh, 0.045], [dc + Math.cos(a) * ar * 0.96, dh + Math.sin(a) * ar * 0.96, 0.045], 0.012, 0.012, '#2A2622', NC); }   // iron fan grille
+    mesh(g, G(`otLunR${ar}`, () => new THREE.TorusGeometry(ar * 0.5, 0.012, 4, 10, Math.PI)), mat('#2A2622'), dc, dh, 0.045, {});
+  } else box(g, dw + 0.5, 0.24, 0.14, st, dc, dh, 0.07, NC);
+  box(g, dw + 0.6, 0.08, 0.5, shade(st, -0.08), dc, 0, 0.25, NC);   // threshold step
+  const door = dyn(grp(g, dc - dw / 2, 0, 0.03)); door.userData.sign = 1; door.userData.angle = 1.6;   // openDoor(townhouse, t): the left leaf swings in
+  { const di = grp(door); box(di, dw / 2, dh, 0.07, doorC, dw / 4, 0, 0, NC); for (const yy of [0.18, 1.0]) box(di, dw / 2 - 0.16, Math.min(0.7, dh * 0.3), 0.02, shade(doorC, -0.05), dw / 4, yy, 0.04, NC);
+    for (let i = 0; i < 4; i++) for (let j = 0; j < 2; j++) ball(di, 0.012, '#1E1A16', 0.12 + j * (dw / 2 - 0.24), 0.3 + i * (dh - 0.6) / 3, 0.042, { detail: 0, metal: 0.6, ...NC });   // studs
+    fuse(di); }
+  const rl = grp(g, dc + dw / 4, 0, 0.03); box(rl, dw / 2, dh, 0.07, doorC, 0, 0, 0, NC); for (const yy of [0.18, 1.0]) box(rl, dw / 2 - 0.16, Math.min(0.7, dh * 0.3), 0.02, shade(doorC, -0.05), 0, yy, 0.04, NC);   // right leaf (fixed)
+  mesh(rl, G('otKnock', () => new THREE.TorusGeometry(0.06, 0.012, 5, 12)), mat('#2A2622', { metal: 0.6, rough: 0.4 }), -dw / 4 + 0.16, dh * 0.55, 0.06, {});   // iron ring knocker
+  let mark = null; if (o.sealed) mark = doorMark(g, dc, 0, 0.08, { pz: 0.005, bz: 0.07, w: dw, h: dh, paint: typeof o.sealed === 'number' ? o.sealed : null, seed: sd, ...(o.mark ?? {}) });
+  // bottega or barred window in another column
+  const oc = cols.filter(c => c !== dc), shop = o.shop ?? (w >= 5 && hr(20) > 0.35 ? 'yes' : false);
+  oc.forEach((cx, i) => { const ww = Math.min(1.7, w / nc - 0.55);
+    if (shop && i === 0) { const sh = 1.75, nk = Math.max(3, Math.round(ww / 0.2)); win.push([cx, 0.85 + sh / 2, ww + 0.5, sh + 0.4]); box(g, ww + 0.04, sh, 0.04, '#120E0B', cx, 0.85, -0.01, NC);
+      for (let k = 0; k < nk; k++) box(g, ww / nk - 0.012, sh - 0.06, 0.05, shade('#6A5034', (hash(sd + k) - 0.5) * 0.14), cx - ww / 2 + (k + 0.5) * ww / nk, 0.88, 0.03, NC);   // plank shutters of the bottega (above its masonry counter)
+      box(g, ww + 0.1, 0.05, 0.07, '#2A2622', cx, 1.75, 0.07, { metal: 0.5, ...NC });   // iron bar across
+      for (const sx of [-1, 1]) box(g, 0.16, sh + 0.12, 0.12, st, cx + sx * (ww / 2 + 0.08), 0.85, 0.06, NC); box(g, ww + 0.36, 0.18, 0.12, st, cx, 0.85 + sh, 0.06, NC); }
+    else { const y0 = 1.25, wh = 0.9, wq = Math.min(0.8, ww); win.push([cx, y0 + wh / 2, wq + 0.4, wh + 0.4]); box(g, wq, wh, 0.03, '#17130F', cx, y0, 0.002, NC); for (const sx of [-1, 1]) box(g, 0.1, wh + 0.06, 0.09, st, cx + sx * (wq / 2 + 0.05), y0 - 0.03, 0.045, NC);
+      box(g, wq + 0.3, 0.12, 0.1, st, cx, y0 + wh, 0.05, NC); box(g, wq + 0.3, 0.07, 0.18, st, cx, y0 - 0.07, 0.09, NC);
+      for (let k = 0; k < 4; k++) cyl(g, 0.012, 0.012, wh, '#24201C', cx - wq / 2 + (k + 0.5) * wq / 4, y0, 0.14, { seg: 5, metal: 0.5, ...NC }); for (const yy of [0.25, 0.7]) box(g, wq + 0.06, 0.025, 0.025, '#24201C', cx, y0 + wh * yy, 0.14, NC); }   // inferriata
+  });
+  // flaking plaster patches (brick) and stains, placed where there is no window
+  for (let i = 0, tries = 0; i < dmgN && tries < 40; tries++) { const pw = 0.5 + hr(200 + tries) * 1.0, ph = 0.35 + hr(210 + tries) * 0.7, cx = (hr(220 + tries) - 0.5) * (w - pw - 0.2), cy = 1.0 + hr(230 + tries) * (h - 1.6 - ph) + ph / 2;
+    if (!free(cx, cy, pw, ph)) continue; win.push([cx, cy, pw, ph]); i++;
+    box(g, pw, ph, 0.025, S.brick, cx, cy - ph / 2, 0.0, { surf: 'brick', ...NC }); box(g, pw + 0.08, 0.035, 0.035, shade(wall, 0.05), cx, cy + ph / 2 - 0.01, 0.0, NC); }   // brick showing + broken plaster edge
+  { const sx = hr(240) > 0.5 ? 1 : -1, px = sx * (w / 2 - 0.12); cyl(g, 0.07, 0.07, h - 0.9, '#A8583A', px, 0.85, 0.12, { seg: 7, ...NC }); for (let y = 1.6; y < h - 0.5; y += 2.2) box(g, 0.18, 0.05, 0.1, '#3A3430', px, y, 0.1, NC);
+    _seg(g, [px, h - 0.06, 0.12], [px, h + 0.1, 0.4], 0.07, 0.07, '#A8583A', { seg: 7, ...NC }); cyl(g, 0.11, 0.07, 0.2, '#A8583A', px, 0.7, 0.16, { seg: 7, ...NC }); }   // downpipe with clamps and shoe
+  // balcony on the piano nobile, wall lantern, street shrine
+  const bal = o.balcony ?? (F >= 3 && hr(250) > 0.6 ? 1 : false);
+  if (bal) { const by = g0 + (bal - 1) * fh + 0.45, bw = Math.min(w - 0.6, cols.length > 1 ? 2.4 : 1.8), bx = cols[Math.floor((nc - 1) / 2)];
+    box(g, bw, 0.12, 0.72, st, bx, by, 0.36, NC); box(g, bw + 0.08, 0.05, 0.78, shade(st, -0.06), bx, by - 0.05, 0.36, NC); for (const sx of [-1, 1]) box(g, 0.14, 0.3, 0.5, st, bx + sx * (bw / 2 - 0.2), by - 0.3, 0.25, { rz: 0, ...NC });   // slab + corbels
+    for (let i = 0; i <= Math.round(bw / 0.14); i++) cyl(g, 0.01, 0.01, 0.9, '#24201C', bx - bw / 2 + 0.05 + i * (bw - 0.1) / Math.round(bw / 0.14), by + 0.12, 0.68, { seg: 4, ...NC });   // iron balusters
+    box(g, bw, 0.035, 0.04, '#24201C', bx, by + 1.0, 0.68, { metal: 0.4, ...NC }); for (const sx of [-1, 1]) box(g, 0.035, 0.035, 0.66, '#24201C', bx + sx * (bw / 2 - 0.03), by + 1.0, 0.36, NC); }
+  const lan = o.lantern ?? false;
+  if (lan && free(dc + (lan === 'left' ? -1 : 1) * (dw / 2 + 0.55), 2.9, 0.4, 0.6)) { const sx = lan === 'left' ? -1 : 1, lx = dc + sx * (dw / 2 + 0.55), ly = Math.min(3.1, g0 - 0.35); win.push([lx, 2.9, 0.4, 0.6]);
+    box(g, 0.05, 0.05, 0.5, '#24201C', lx, ly + 0.36, 0.25, NC); box(g, 0.04, 0.3, 0.04, '#24201C', lx, ly + 0.1, 0.03, NC);   // bracket
+    box(g, 0.2, 0.04, 0.2, '#24201C', lx, ly + 0.3, 0.48, NC); cone(g, 0.15, 0.14, '#24201C', lx, ly + 0.33, 0.48, { seg: 4, ry: Math.PI / 4, ...NC });   // lantern roof
+    box(g, 0.14, 0.24, 0.14, '', lx, ly + 0.05, 0.48, { mat: _otNight('#FFC070', 2.2), ...NC }); for (const [a, b] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) box(g, 0.018, 0.27, 0.018, '#24201C', lx + a * 0.075, ly + 0.03, 0.48 + b * 0.075, NC); }
+  const sy = Math.min(2.4, g0 - 1.0), sx0 = o.shrine ? [w / 2 - 0.55, -(w / 2 - 0.55), dc + dw / 2 + 0.75, dc - dw / 2 - 0.75].find(c => Math.abs(c) < w / 2 - 0.4 && free(c, sy + 0.45, 0.8, 1.2)) : null;
+  if (sx0 != null) { win.push([sx0, sy + 0.45, 0.9, 1.1]);
+    box(g, 0.66, 0.9, 0.14, st, sx0, sy, 0.07, NC); box(g, 0.48, 0.66, 0.03, '#3E2E22', sx0, sy + 0.1, 0.14, NC); box(g, 0.4, 0.56, 0.02, '#6A4A6E', sx0, sy + 0.15, 0.155, NC);   // niche + painted panel
+    prism(g, 0.78, 0.22, 0.2, st, sx0, sy + 0.9, 0.1, NC); box(g, 0.74, 0.07, 0.26, shade(st, -0.06), sx0, sy - 0.07, 0.13, NC);
+    cyl(g, 0.03, 0.03, 0.08, '#E6DCC2', sx0, sy + 0.0, 0.22, { seg: 6, ...NC }); ball(g, 0.02, '', sx0, sy + 0.1, 0.22, { mat: _otNight('#FFB850', 2.4), detail: 0, ...NC }); }   // candle
+  const HR = { g, w, d, h, door, doors: [door], windows, leaves, mark };
+  g.updateWorldMatrix(true, false); const dp = g.localToWorld(new THREE.Vector3(dc, 0, 0.9)); HR.doorAt = [dp.x, dp.z]; HR.doorX = dc; doorReg(door);
+  return HR;
+}
+// alley(p, x, z, { len: 40, w: 4.4, ry, seed, style, floors: [2, 4], sealed: fraction | [indices] | (i, side) => bool | t, lit, arch: u (−0.5…0.5 along the lane) | false,
+//   lanterns: true, shrine: true, props: true, depth: 7, ends: true }) → { g, houses: [{ H, side, i, u }], doors: [[x, z]], at(u, s) → [x, z], len, w }
+//   a narrow cobbled lane (sampietrini, a drain channel down the middle) between two rows of townhouses of varied width, height and colour, with an arch spanning the lane
+//   (a room on top), wall lanterns, a shrine, barrels, crates and jars along the walls (never in front of a door). Lane along local z, houses on −x (facing +x) and +x (facing −x).
+function alley(p, x, z, o = {}) {
+  const L = o.len ?? 40, W = o.w ?? 4.4, sd = o.seed ?? 7, g = grp(p ?? world, x, groundH(x, z), z, o.ry ?? 0), A = { g, houses: [], doors: [], len: L, w: W }, NC = { cast: false };
+  const [fa, fb] = o.floors ?? [2, 4], hr = k => hash(sd * 5.3 + k * 1.618 + 0.7);
+  stat(box(g, W + 0.3, 0.06, L, o.street ?? '#6E6A64', 0, -0.035, 0, { surf: 'setts' })); stat(box(g, 0.42, 0.05, L, '#7E7A72', 0, -0.015, 0, { surf: 'stone' }));   // cobbles + drain channel
+  let k = 0;
+  for (const side of [-1, 1]) { let zz = -L / 2, i = 0;
+    while (zz < L / 2 - 1.5) { const hw = Math.min(L / 2 - zz, 4.4 + hr(k * 3 + 1) * 2.4); if (L / 2 - zz - hw < 3.2) { /* last house takes the rest */ }
+      const ww = L / 2 - zz - hw < 3.2 ? L / 2 - zz : hw, F = Math.round(fa + hr(k * 3 + 2) * (fb - fa)), zc = zz + ww / 2, idx = k;
+      const sl = typeof o.sealed === 'function' ? o.sealed(idx, side) : Array.isArray(o.sealed) ? o.sealed.includes(idx) : hr(k * 3 + 3) < (o.sealed ?? 0);
+      const H = townhouse(g, side * (W / 2), zc, { ry: -side * Math.PI / 2, w: ww - 0.02, d: o.depth ?? 7, floors: F, seed: sd * 100 + k, sealed: sl || false, lit: o.lit ?? 0.35,
+        lantern: o.lanterns !== false && k % 3 === 1 ? (k % 2 ? 'left' : 'right') : false, shrine: o.shrine !== false && k === 2 ? 'left' : false, shut: o.shut, style: o.style, y: 0 });
+      A.houses.push({ H, side, i, u: zc / L, sealed: sl }); A.doors.push(H.doorAt); zz += ww; i++; k++; } }
+  // arch across the lane with a room on top (arco)
+  if (o.arch !== false) { const az = (o.arch ?? -0.32) * L, ph = 3.2, r = W / 2, ag = stat(grp(g, 0, 0, az)), st = OLDTOWN.italian.stone, wc = '#D2A464';
+    for (const sx of [-1, 1]) box(ag, 0.5, ph, 1.6, st, sx * (W / 2 - 0.25), 0, 0, { surf: 'stone' });   // piers against the houses
+    const vault = mesh(ag, G(`otVault${r}`, () => { const geo = new THREE.CylinderGeometry(r - 0.5, r - 0.5, 1.6, 18, 1, true, -Math.PI / 2, Math.PI); geo.rotateX(Math.PI / 2); return geo; }), mat('#B8A078', { side: THREE.DoubleSide, surf: 'stone' }), 0, ph, 0, {});
+    for (let i = 0; i < 11; i++) { const a = Math.PI * (i + 0.5) / 11; for (const sz of [-0.8, 0.8]) { const v = grp(ag, Math.cos(a) * (r - 0.3), ph + Math.sin(a) * (r - 0.3), sz); v.rotation.z = a - Math.PI / 2; box(v, 0.42, 0.42, 0.06, i === 5 ? shade(st, 0.05) : st, 0, -0.21, sz > 0 ? 0.02 : -0.02, NC); } }
+    box(ag, W, 3.0, 1.9, wc, 0, ph + r - 0.2, 0, { surf: 'plaster' }); box(ag, W + 0.3, 0.16, 2.3, st, 0, ph + r + 2.8, 0, NC); prism(ag, W + 0.2, 0.7, 2.6, OLDTOWN.italian.roof, 0, ph + r + 2.96, 0, { surf: 'tile' });   // room on the arch
+    for (const sz of [-1, 1]) { const q = grp(ag, 0, ph + r + 0.9, sz * 0.96, sz > 0 ? 0 : Math.PI); box(q, 0.8, 1.1, 0.03, '', 0, 0, 0.0, { mat: _otWin(true, 1), ...NC }); for (const sx of [-1, 1]) box(q, 0.1, 1.15, 0.08, st, sx * 0.45, -0.03, 0.03, NC);
+      box(q, 1.1, 0.1, 0.12, st, 0, 1.1, 0.04, NC); box(q, 1.1, 0.07, 0.18, st, 0, -0.07, 0.07, NC); for (const sx of [-1, 1]) box(q, 0.36, 1.1, 0.04, OLDTOWN.italian.shutters[0], sx * 0.68, 0, 0.06, { ry: sx * 0.1, ...NC }); }
+    A.arch = { z: az, h: ph + r }; }
+  // barrels, crates, jars and a straw heap along the walls, kept away from doors and the lane centre
+  if (o.props !== false) { const doorsL = A.houses.map(({ H, side }) => [side, H.g.position.z + H.doorX * side]);   // door position along the lane (local)
+    for (let n = 0; n < Math.round(L / 6); n++) { const side = hr(300 + n) > 0.5 ? 1 : -1, pz = (hr(310 + n) - 0.5) * (L - 4), px = side * (W / 2 - 0.42);
+      if (doorsL.some(([s, dz]) => s === side && Math.abs(dz - pz) < 1.3) || (A.arch && Math.abs(pz - A.arch.z) < 1.4)) continue;
+      const kd = Math.floor(hr(320 + n) * 4);
+      if (kd === 0) barrel(g, px, pz, { kind: 'wood', y: 0 }); else if (kd === 1) crate(g, px, pz, { kind: 'wood', y: 0, size: 0.6, stack: hr(330 + n) > 0.6 ? 2 : 1 });
+      else if (kd === 2) { const jg = stat(grp(g, px, 0, pz)); for (let j = 0; j < 2; j++) { const jx = (j - 0.5) * 0.36; cyl(jg, 0.13, 0.17, 0.38, '#B0603E', jx, 0, j * 0.1, { seg: 9 }); cyl(jg, 0.17, 0.13, 0.22, '#B0603E', jx, 0.38, j * 0.1, { seg: 9 }); cyl(jg, 0.08, 0.1, 0.06, '#9A5034', jx, 0.6, j * 0.1, { seg: 8, ...NC }); } }   // terracotta jars
+      else { const sg = stat(grp(g, px, 0, pz)); for (let j = 0; j < 5; j++) ball(sg, 0.22 + hr(340 + j) * 0.1, j % 2 ? '#C8A85A' : '#B8984E', (hr(350 + j) - 0.5) * 0.5, 0.08, (hr(360 + j) - 0.5) * 0.6, { detail: 0 }).scale.y = 0.45; } } }   // straw heap
+  if (o.ends !== false) for (const sz of [-1, 1]) stat(box(g, W + 0.3, 0.06, 6, o.street ?? '#6E6A64', 0, -0.035, sz * (L / 2 + 3), { surf: 'setts' }));   // the lane runs on past the last houses
+  A.at = (u, s = 0) => { const v = g.localToWorld(new THREE.Vector3(s * (W / 2 - 0.6), 0, u * L)); return [v.x, v.z]; };
+  g.updateWorldMatrix(true, true); A.doors = A.houses.map(({ H }) => H.doorAt);
+  return A;
+}
+// herbs(p, x, y, z, { kind: 'bundle' | 'bowl' | 'pouch', smoke: t | [t0, t1], scale, ry, rx, rz, seed }) → { g, tip }
+//   aromatic herbs of the miasma age (what went into a plague doctor's beak or was burned against "bad air"): a tied bundle of lavender, rosemary, sage and dried flowers
+//   (grip at the origin, sprigs up +y), a wooden bowl of cloves, petals and sprigs, or a linen pouch with sprigs peeking out. smoke: a thin smouldering wisp with a glowing ember.
+function herbs(p, x = 0, y = 0, z = 0, o = {}) {
+  const g = grp(p ?? world, x, y, z, o.ry ?? 0), k = o.kind ?? 'bundle', sd = o.seed ?? 3, NC = { cast: false }, hr = i => hash(sd * 2.3 + i * 1.618);
+  g.rotation.x = o.rx ?? 0; g.rotation.z = o.rz ?? 0; if (o.scale) g.scale.setScalar(o.scale);
+  const sprig = (pg, base, dir, len, kind, i) => { const tip = [base[0] + dir[0] * len, base[1] + dir[1] * len, base[2] + dir[2] * len];
+    _seg(pg, base, tip, 0.004, 0.0025, kind === 'lav' ? '#6A7A4A' : '#5A6A3A', NC);
+    const n = kind === 'lav' ? 5 : 6; for (let j = 0; j < n; j++) { const u = 0.45 + 0.55 * j / n, P = [base[0] + dir[0] * len * u, base[1] + dir[1] * len * u, base[2] + dir[2] * len * u];
+      if (kind === 'lav') ball(pg, 0.009, j % 2 ? '#7A5AA8' : '#8A68B8', ...P, { detail: 0, ...NC }).scale.set(1, 1.6, 1);
+      else if (kind === 'ros') for (const s of [-1, 1]) _seg(pg, P, [P[0] + s * 0.016, P[1] + 0.008, P[2] + (hr(i * 9 + j) - 0.5) * 0.01], 0.003, 0.001, '#3E5A3A', NC);
+      else if (kind === 'sage') ball(pg, 0.013, '#8A9A78', P[0] + (j % 2 ? 0.012 : -0.012), P[1], P[2], { detail: 0, ...NC }).scale.set(1.4, 0.5, 0.9);
+      else if (j === n - 1) ball(pg, 0.014, ['#D9A436', '#C86A2E', '#E8D6A0'][i % 3], ...tip, { detail: 0, ...NC }); }
+    return tip; };
+  const KINDS = ['lav', 'ros', 'sage', 'flower'];
+  if (k === 'bundle') { const bg = grp(g);
+    for (let i = 0; i < 14; i++) { const a = hr(i) * TAU, s = 0.05 + hr(i + 20) * 0.22; sprig(bg, [Math.cos(a) * 0.012, 0.0, Math.sin(a) * 0.012], [Math.cos(a) * s, 1, Math.sin(a) * s], 0.19 + hr(i + 40) * 0.09, KINDS[i % 4], i); }
+    for (let i = 0; i < 8; i++) { const a = i / 8 * TAU; _seg(bg, [Math.cos(a) * 0.01, -0.07, Math.sin(a) * 0.01], [Math.cos(a) * 0.014, 0.0, Math.sin(a) * 0.014], 0.003, 0.003, '#7A7A4A', NC); }   // cut stems below the tie
+    for (const yy of [0.006, 0.026]) cyl(bg, 0.022, 0.022, 0.012, '#C8B48A', 0, yy, 0, { seg: 8, ...NC });   // twine wraps
+    _seg(bg, [0.02, 0.02, 0], [0.04, -0.03, 0.01], 0.003, 0.003, '#C8B48A', NC); fuse(bg); }
+  else if (k === 'bowl') { const bg = grp(g);
+    cyl(bg, 0.13, 0.09, 0.07, '#7A5234', 0, 0, 0, { seg: 12 }); cyl(bg, 0.115, 0.115, 0.005, '#3E2A1A', 0, 0.066, 0, { seg: 12, ...NC }); cyl(bg, 0.135, 0.135, 0.012, '#6A4428', 0, 0.064, 0, { seg: 12, ...NC });   // turned wooden bowl, rim
+    for (let i = 0; i < 26; i++) { const a = hr(i) * TAU, r = Math.sqrt(hr(i + 30)) * 0.1, yy = 0.07 + (0.1 - r) * 0.18;
+      if (i % 3 === 0) { _seg(bg, [Math.cos(a) * r, yy, Math.sin(a) * r], [Math.cos(a) * r + 0.012, yy + 0.008, Math.sin(a) * r], 0.004, 0.003, '#5A3420', NC); ball(bg, 0.006, '#6A3A22', Math.cos(a) * r + 0.012, yy + 0.008, Math.sin(a) * r, { detail: 0, ...NC }); }   // cloves
+      else ball(bg, 0.011 + hr(i + 60) * 0.006, ['#A8506A', '#D9A436', '#7A5AA8', '#8A9A78', '#C86A2E'][i % 5], Math.cos(a) * r, yy, Math.sin(a) * r, { detail: 0, ...NC }).scale.y = 0.55; }   // petals, flowers, leaves
+    for (let i = 0; i < 4; i++) { const a = i * 1.7; sprig(bg, [Math.cos(a) * 0.05, 0.07, Math.sin(a) * 0.05], [Math.cos(a) * 0.6, 0.5, Math.sin(a) * 0.6], 0.12, KINDS[i % 3], i); }
+    fuse(bg); }
+  else { const bg = grp(g);   // pouch
+    ball(bg, 0.07, '#D8CCB0', 0, 0.06, 0, { detail: 1 }).scale.set(1, 0.95, 0.85); cyl(bg, 0.025, 0.04, 0.04, '#D0C2A4', 0, 0.115, 0, { seg: 8, ...NC }); cyl(bg, 0.028, 0.028, 0.012, '#8A6A44', 0, 0.12, 0, { seg: 8, ...NC });   // linen pouch, tied neck
+    for (let i = 0; i < 5; i++) { const a = i / 5 * TAU; sprig(bg, [Math.cos(a) * 0.01, 0.13, Math.sin(a) * 0.01], [Math.cos(a) * 0.3, 1, Math.sin(a) * 0.3], 0.07 + hr(i) * 0.04, KINDS[i % 4], i); }
+    fuse(bg); }
+  const tip = grp(g, 0, k === 'bowl' ? 0.09 : 0.2, 0);
+  if (o.smoke != null) { const [s0, s1] = Array.isArray(o.smoke) ? o.smoke : [o.smoke, DUR], em = ball(g, 0.012, '', 0, k === 'bowl' ? 0.08 : 0.17, 0, { mat: mat('#FF7A30', { basic: true, glow: 1.6 }), detail: 0, ...NC }); dyn(em);
+    tick(t => { em.visible = t >= s0 && t <= s1; em.scale.setScalar(0.8 + 0.3 * noise1(t * 4 + sd)); });
+    emit('smoke', { at: t => { const v = tip.getWorldPosition(new THREE.Vector3()); return [v.x, v.y, v.z]; }, t0: s0, t1: s1, rate: 5, size: 0.12, opacity: 0.32, lensOk: true }); }
+  return { g, tip };
+}
+// belltower(p, x, z, { w: 3.8, h: 24, color, stone, roof, ring: [[t0, t1], …], period: 2.6, swing: 0.75, vol: 0.8, ry, seed }) → { g, bell, top, at: [x, y, z] (the bell) }
+//   Romanesque brick campanile (Rome): plain shaft with slit windows and a door, then storeys divided by stone cornices with brick dentils, blind arcades and arched twin / triple
+//   openings with white colonnettes, an open belfry on four piers with a bronze bell on a wooden headstock, low pyramid roof with a cross. ring: the bell swings (pure in t,
+//   eased in and out) and tolls at each end of the swing ('toll'), clapper lagging behind.
+function belltower(p, x, z, o = {}) {
+  const w = o.w ?? 3.8, H = o.h ?? 24, bc = o.color ?? '#9A5A3E', st = o.stone ?? '#E4DCCB', g = stat(grp(p ?? world, x, groundH(x, z), z, o.ry ?? 0)), NC = { cast: false };
+  const lv = 3.0, nL = 3, hb = 3.4, h0 = H - nL * lv - hb, dark = mat('#100C0A');
+  box(g, w, h0 + nL * lv, w, bc, 0, 0, 0, { surf: 'brick' }); box(g, w + 0.2, 0.7, w + 0.2, '#8E8676', 0, 0, 0, { surf: 'stone' });
+  const face = (fn) => { for (let i = 0; i < 4; i++) { const a = i * Math.PI / 2, q = grp(g, Math.sin(a) * w / 2, 0, Math.cos(a) * w / 2, a); fn(q, i); } };
+  const archOpen = (q, cx, cy, ow, oh) => { box(q, ow, oh, 0.04, '', cx, cy, 0.0, { mat: dark, ...NC }); mesh(q, G(`btA${ow}`, () => new THREE.CircleGeometry(ow / 2, 12, 0, Math.PI)), dark, cx, cy + oh, 0.024, {});
+    mesh(q, G(`btR${ow}`, () => new THREE.TorusGeometry(ow / 2 + 0.04, 0.05, 4, 12, Math.PI)), mat(st), cx, cy + oh, 0.04, {}); box(q, ow + 0.12, 0.06, 0.12, st, cx, cy - 0.06, 0.05, NC); };
+  face((q, i) => { if (i === 0) { box(q, 1.0, 2.0, 0.04, '', 0, 0.7, 0.0, { mat: mat('#3A2618'), ...NC }); box(q, 1.3, 0.18, 0.12, st, 0, 2.7, 0.05, NC); for (const sx of [-1, 1]) box(q, 0.14, 2.0, 0.1, st, sx * 0.57, 0.7, 0.05, NC); }   // door
+    for (let k = 1; k <= 2; k++) box(q, 0.12, 0.9, 0.04, '', (i % 2 ? -0.6 : 0.6), h0 * k / 3 + 1.2, 0.0, { mat: dark, ...NC }); });   // slit windows
+  for (let L2 = 0; L2 <= nL; L2++) { const y = h0 + L2 * lv; box(g, w + 0.26, 0.16, w + 0.26, st, 0, y - 0.08, 0, NC);   // cornice
+    face(q => { for (let k = 0; k < 14; k++) box(q, 0.12, 0.12, 0.1, shade(bc, -0.06), -w / 2 + 0.2 + k * (w - 0.4) / 13, y - 0.26, 0.06, NC); }); }   // brick dentils
+  for (let L2 = 0; L2 < nL; L2++) { const y = h0 + L2 * lv + 0.45, n = L2 === 0 ? 1 : L2 === 1 ? 2 : 3, ow = n === 1 ? 0.8 : n === 2 ? 0.7 : 0.62, oh = 1.4;
+    face(q => { for (let k = 0; k < n; k++) { const cx = (k - (n - 1) / 2) * (ow + 0.32); archOpen(q, cx, y, ow, oh); if (k) { const mx = cx - (ow + 0.32) / 2; cyl(q, 0.07, 0.07, oh + 0.1, '#F2EEE4', mx, y - 0.04, 0.12, { seg: 8, ...NC }); box(q, 0.22, 0.1, 0.22, '#F2EEE4', mx, y + oh + 0.06, 0.12, NC); } }
+      for (let k = 0; k < 5; k++) mesh(q, G('btBlind', () => new THREE.TorusGeometry(0.32, 0.03, 3, 10, Math.PI)), mat(shade(bc, -0.08)), -w / 2 + 0.38 + k * (w - 0.76) / 4, h0 + L2 * lv + lv - 0.62, 0.03, {}); }); }   // blind arcade frieze
+  // open belfry: four piers, arches between them, floor, the bell
+  const yb = h0 + nL * lv; box(g, w, 0.2, w, st, 0, yb, 0, NC);
+  for (const [sx, sz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) box(g, 0.75, hb, 0.75, bc, sx * (w / 2 - 0.375), yb, sz * (w / 2 - 0.375), { surf: 'brick' });
+  face(q => { box(q, w, 0.7, 0.75, bc, 0, yb + hb - 0.7, -0.375, { surf: 'brick' }); mesh(q, G(`btBA${w}`, () => new THREE.TorusGeometry(w / 2 - 0.75, 0.12, 4, 14, Math.PI)), mat(st), 0, yb + hb - 0.7 - (w / 2 - 0.75) * 0.5, 0.02, {}).scale.y = 0.5;
+    box(q, w - 1.5, 0.08, 0.16, st, 0, yb + 1.05, 0.0, NC); for (let k = 0; k < 7; k++) cyl(q, 0.04, 0.04, 0.85, st, -w / 2 + 0.95 + k * (w - 1.9) / 6, yb + 0.2, -0.05, { seg: 6, ...NC }); });   // parapet balusters
+  box(g, w + 0.3, 0.2, w + 0.3, st, 0, yb + hb, 0, NC);
+  const rf = cone(g, w * 0.78, 1.6, o.roof ?? '#A45A3C', 0, yb + hb + 0.2, 0, { seg: 4, ry: Math.PI / 4, surf: 'tile' }); void rf;
+  cyl(g, 0.05, 0.05, 1.0, '#3A3430', 0, yb + hb + 1.75, 0, { seg: 5, metal: 0.5, ...NC }); box(g, 0.5, 0.06, 0.06, '#3A3430', 0, yb + hb + 2.45, 0, { metal: 0.5, ...NC });   // iron cross
+  // bell: wooden beam across, headstock, bronze bell (lathe), clapper — swings about x
+  const by = yb + hb - 0.85; box(g, w - 1.3, 0.26, 0.3, '#5A3E26', 0, by, 0, NC);
+  const bell = dyn(grp(g, 0, by, 0)), bi = grp(bell);
+  box(bi, 0.5, 0.3, 0.5, '#4A3220', 0, -0.32, 0, NC); for (const sx of [-1, 1]) box(bi, 0.08, 0.22, 0.42, '#2A2622', sx * 0.2, -0.3, 0, { metal: 0.5, ...NC });   // headstock + iron straps
+  const prof = [[0.001, 0], [0.16, 0.02], [0.24, -0.08], [0.27, -0.3], [0.32, -0.55], [0.44, -0.74], [0.5, -0.8], [0.49, -0.84], [0.001, -0.8]].map(([r, yy]) => new THREE.Vector2(r, yy));
+  const bm = mat('#8A6A3A', { metal: 0.75, rough: 0.35 }); mesh(bi, G('btBell', () => new THREE.LatheGeometry(prof, 18)), bm, 0, -0.34, 0, {});
+  cyl(bi, 0.5, 0.5, 0.03, '#6A5030', 0, -1.17, 0, { seg: 18, metal: 0.7, ...NC }); for (const yy of [-0.62, -0.68]) cyl(bi, 0.3, 0.3, 0.02, '#6A5030', 0, yy, 0, { seg: 16, metal: 0.7, ...NC });   // lip + ribs
+  const cl = dyn(grp(bi, 0, -0.5, 0)); _seg(cl, [0, 0, 0], [0, -0.48, 0], 0.025, 0.02, '#2A2622', NC); ball(cl, 0.07, '#2A2622', 0, -0.52, 0, { detail: 1, metal: 0.5, ...NC });
+  const R = o.ring ?? [], P = o.period ?? 2.6, A0 = o.swing ?? 0.75;
+  const angAt = t => { let a = 0; for (const [t0, t1] of R) { if (t < t0 || t > t1 + 1.2) continue; const e = clamp((t - t0) / 1.0) * clamp((t1 + 1.2 - t) / 1.2); a += A0 * EASE.inOut(e) * Math.sin(TAU * (t - t0) / P); } return a; };
+  tick(t => { const a = angAt(t); bell.rotation.x = a; cl.rotation.x = -0.55 * (angAt(t - 0.12) - a) - 0.15 * a; });
+  for (const [t0, t1] of R) for (let tt = t0 + P / 4; tt <= t1 + 0.6; tt += P / 2) { const e = clamp((tt - t0) / 1.0) * clamp((t1 + 1.2 - tt) / 1.2); if (e > 0.35) sfx(tt + 0.05, 'toll', (o.vol ?? 0.8) * (0.6 + 0.4 * e)); }
+  g.updateWorldMatrix(true, false); const bw = g.localToWorld(new THREE.Vector3(0, by - 0.8, 0));
+  return { g, bell, top: H + 2.4, at: [bw.x, bw.y, bw.z] };
 }
 function coldFall(obj, t, o = {}) {   // a cold-stunned animal (iguana, lizard, bird) lets go: before t it clings at `from` (body still), then drops stiff, turns over, bounces once and lies belly-up at `to`
   // o: from [x, y, z], to [x, z] (default straight down), ry, spin (turns while falling), thud (sound volume)
@@ -15601,7 +15868,8 @@ function campfire(p, x, z, o = {}) {
   const s = o.size ?? 1, y = groundH(x, z), g = stat(grp(p ?? world, x, y, z)), t0 = o.t0 ?? 0;
   for (let i = 0; i < 10; i++) { const a = i / 10 * TAU; _ell(g, shade('#7A7670', (hash(i) - 0.5) * 0.2), Math.cos(a) * 0.5 * s, 0.06 * s, Math.sin(a) * 0.5 * s, 0.11 * s, 0.08 * s, 0.09 * s, { detail: 0 }); }
   for (let i = 0; i < 4; i++) { const a = i / 4 * TAU + 0.4, L = cyl(g, 0.05 * s, 0.06 * s, 0.7 * s, '#5A3A22', Math.cos(a) * 0.12 * s, 0.05 * s, Math.sin(a) * 0.12 * s, { seg: 7 }); L.rotation.set(0, -a, 1.25); }
-  emit('fire', { at: [x, y + 0.08, z], t0, t1: o.t1 ?? DUR, rate: 40 * s, size: 0.4 * s }); emit('spark', { at: [x, y + 0.3, z], t0, t1: o.t1 ?? DUR, rate: 3, size: 0.04, speed: 2.5, g: 1 });
+  const lk = o.lensOk ? { lensOk: true } : {};   // v3.53 campfire(…, { lensOk: true }): flames / sparks may drift past the lens
+  emit('fire', { at: [x, y + 0.08, z], t0, t1: o.t1 ?? DUR, rate: 40 * s, size: 0.4 * s, ...lk }); emit('spark', { at: [x, y + 0.3, z], t0, t1: o.t1 ?? DUR, rate: 3, size: 0.04, speed: 2.5, g: 1, ...lk });
   glow(x, y + 0.6, z, { t0, t1: o.t1 ?? DUR, intensity: (o.light ?? 3.5) * s, dist: 6 * s, color: '#FF9A40' }); sfx(t0, 'fire', 0.5); AUDIO.hits[AUDIO.hits.length - 1].dur = (o.t1 ?? DUR) - t0;
   return { g, x, z, y, pos: v3(x, y + 0.35, z) };
 }
@@ -17606,7 +17874,8 @@ function burn(obj, t0, o = {}) {
   let LP = null; if (n) { n.userData.stat = false; dyn(n); n.updateWorldMatrix(true, true); const bb = new THREE.Box3().setFromObject(n), c = bb.getCenter(v3()); LP = n.worldToLocal(v3(c.x, bb.max.y - 0.05, c.z)); }
   const P0 = n ? worldAt(n, LP, t0, own).toArray() : toV(obj).toArray(), sz = o.size ?? (n ? Math.max(0.8, new THREE.Box3().setFromObject(n).getSize(v3()).length() * 0.5) : 1), t1 = t0 + (o.dur ?? DUR);
   const at = n ? (dy = 0) => tt => { const p = worldAt(n, LP, tt, own); return [p.x, p.y + dy, p.z]; } : (dy = 0) => [P0[0], P0[1] + dy, P0[2]];
-  emit('fire', { at: at(), t0, t1: t0 + 0.5, rate: 40 * sz, size: 0.45 * sz, jitter: 0.25 * sz, speed: 1 }); emit('fire', { at: at(), t0: t0 + 0.4, t1, rate: 80 * sz, size: 0.85 * sz, jitter: 0.5 * sz, speed: 1.2 }); emit('smoke', { at: at(sz), t0: t0 + 0.4, t1, rate: 6, size: 0.8 * sz });
+  const lk = o.lensOk ? { lensOk: true } : {};   // v3.53 burn(…, { lensOk: true }): smoke / flames may drift past the lens (fire in a narrow street)
+  emit('fire', { at: at(), t0, t1: t0 + 0.5, rate: 40 * sz, size: 0.45 * sz, jitter: 0.25 * sz, speed: 1, ...lk }); emit('fire', { at: at(), t0: t0 + 0.4, t1, rate: 80 * sz, size: 0.85 * sz, jitter: 0.5 * sz, speed: 1.2, ...lk }); emit('smoke', { at: at(sz), t0: t0 + 0.4, t1, rate: 6, size: 0.8 * sz, ...lk });
   glow(P0[0], P0[1] + 0.5, P0[2], { t0, t1, intensity: 10 * sz, dist: 6 * sz, color: '#FF8A3A', at: n ? at(0.5) : undefined });
   sfx(t0, 'fire', Math.min(1, 0.4 + sz * 0.2)); AUDIO.hits[AUDIO.hits.length - 1].dur = Math.min(DUR, t1) - t0;
   if (n && o.char !== false) { const L = []; n.traverse(m => { if (m.isMesh && m.material?.color && !m.material.isMeshBasicMaterial) { const m2 = m.material.clone(); L.push([m, m.material, m2, m.material.color.clone()]); } });
@@ -18534,7 +18803,8 @@ const COSTUME_BASE = {
   tudor: { shirt: '#E6DCC4', pants: '#6E4A30', shoes: '#3A2618', belt: '#3A2618', hair: '#4A3222', beard: 'stubble' },
   courtier: { shirt: '#3E2A52', pants: '#2A2230', shoes: '#1A1410', coat: true, coatLen: 0.22, beard: 'goatee', hair: '#4A3020', hairStyle: 'short', sleeves: 'long' },
   tudorKing: { shirt: '#7A1A26', pants: '#EEE8DA', shoes: '#D8CBA8', coat: true, coatLen: 0.42, build: 'tudorKing', beard: 'full', hair: '#B5622A', beardColor: '#A8562A', hairStyle: 'short', sleeves: 'long' },
-  tosher: { shirt: '#4E3D2E', pants: '#B5AA8E', shoes: '#2A2018', coat: true, coatLen: 0.44, beard: 'stubble', hair: '#3A2A1E', belt: '#3A2A1C' }
+  tosher: { shirt: '#4E3D2E', pants: '#B5AA8E', shoes: '#2A2018', coat: true, coatLen: 0.44, beard: 'stubble', hair: '#3A2A1E', belt: '#3A2A1C' },
+  plaguedoctor: { shirt: '#23201C', pants: '#23201C', dress: '#23201C', skirtLen: 0.8, legs: '#1E1B18', shoes: '#1A1410', hair: '#2A2420', soles: false },
 };
 for (const k in COSTUME_BASE) { const { skin, ...rest } = COSTUME_BASE[k]; OUTFITS[k] ??= { costume: k, ...rest }; }   // char('you', { outfit: 'santa' }) keeps the character's skin
 
@@ -18963,6 +19233,45 @@ const COSTUMES = (() => {
       for (const H of f.hands ?? []) for (const k of [0, 1]) ball(H.hd, 0.016, k ? Jw[1] : Au, H.sx * 0.02 + (k ? 0.03 : -0.01), -0.1, 0.05, { detail: 1, ...gm, ...NC });   // rings
       _tudorLegs(f, K.pants ?? '#EEE8DA', K.garter ?? '#2A4A8A', K.shoes ?? '#D8CBA8', true);
       _tudorCap(f, K.cap ?? '#141218', W, Au, 0.3, true);
+    },
+    plaguedoctor(f, K) {   // v3.53 17th-century plague doctor (Rome / Naples 1656, cf. the engraving "Doctor Schnabel von Rom", 1656): ankle-length waxed coat (dress key, glossy wax sheen),
+      // leather hood with a shoulder cape, beaked mask (leather beak with stitched seams and two breathing holes, round glass eye lenses in metal rims, straps round the head),
+      // wide-brimmed hat, leather gauntlets, boots, a wooden pointer staff in the right hand (examine without touching). f.staff = the staff group (tip: f.staff.userData.tip).
+      // K.beak (mask leather) · K.coat (coat colour, default = dress) · K.hood · K.lens (glass tint) · K.herbs (true: dried herbs peek out of the beak's vent) · K.staff: false = no staff
+      const z = fz(f), Co = K.coat ?? K.dress ?? '#23201C', Bk = K.beak ?? '#CDBA94', Hd = K.hood ?? '#2A2622', Lt = K.leather ?? '#3A2A1E', Hc = K.hatC ?? '#161412', Ci = parseInt(Co.slice(1), 16);
+      const wax = mat(Co, { rough: 0.32, metal: 0.05, own: true, flat: false });   // wax: a soft sheen on the coat (own material, figLook keeps it)
+      f.root.traverse(m => { if (m.isMesh && !m.userData.hand && m.material?.color?.getHex?.() === Ci && !Array.isArray(m.material)) m.material = wax; });
+      buttons(f, '#14110E', 7, 0.5, 0.072, 0, 0.012); box(f.chest, 0.014, 0.6, 0.006, shade(Co, -0.3), 0.032, -0.04, z + 0.004, NC);   // buttons + overlap seam
+      // hood: covers the head, neck cowl, cape over the shoulders with a hem band
+      hide(f, true);
+      const hd = grp(f.head); rbox(hd, 0.47, 0.5, 0.47, Hd, 0, -0.075, -0.012, { rf: 0.3 }); fuse(hd);
+      const cp = grp(f.chest); cyl(cp, 0.17, 0.25, 0.2, Hd, 0, 0.5, 0, { seg: 12 }); rbox(cp, 0.62, 0.2, 0.4, Hd, 0, 0.44, -0.005, { rf: 0.4 }); rbox(cp, 0.64, 0.04, 0.42, shade(Hd, -0.12), 0, 0.43, -0.005, { rf: 0.4 });
+      for (let i = 0; i < 10; i++) { const a = i / 10 * TAU; box(cp, 0.012, 0.16, 0.012, shade(Hd, -0.2), Math.sin(a) * 0.3, 0.46, Math.cos(a) * 0.195, { ...NC }); }   // stitched seams of the cape
+      fuse(cp);
+      // mask: face plate, glass eyes, beak (curving down), stitch rings, breathing holes, strap round the back of the head
+      const mk = grp(f.head); rbox(mk, 0.37, 0.32, 0.11, Bk, 0, 0.03, 0.2, { rf: 0.4 });
+      const P = [[0, 0.15, 0.235], [0, 0.138, 0.335], [0, 0.112, 0.435], [0, 0.07, 0.525], [0, 0.02, 0.595]], R0 = 0.086, R1 = 0.012;
+      _chain(mk, P, R0, R1, Bk, NC); ball(mk, R0, Bk, ...P[0], { detail: 1, ...NC }); ball(mk, R1 * 1.1, shade(Bk, -0.08), ...P[4], { detail: 0, ...NC });
+      for (const u of [0.22, 0.5, 0.76]) { const i = Math.min(3, Math.floor(u * 4)), fr = u * 4 - i, A = P[i], B = P[i + 1], C = A.map((a, j) => lerp(a, B[j], fr)), D = A.map((a, j) => lerp(a, B[j], Math.min(1, fr + 0.05))), r = lerp(R0, R1, u) + 0.004;
+        _seg(mk, C, D, r, r, shade(Bk, -0.22), NC); }   // stitched seam rings round the beak
+      for (const sx of [-1, 1]) ball(mk, 0.011, '#1A120C', sx * 0.03, 0.198, 0.345, { detail: 0, ...NC });   // breathing holes
+      if (K.herbs) for (let i = 0; i < 5; i++) cone(mk, 0.012, 0.05, ['#5E7A42', '#7A5AA8', '#6A8A4A', '#C8A040', '#4E6A3A'][i], (i - 2) * 0.013, 0.205, 0.29 + (i % 2) * 0.012, { seg: 4, rx: -0.5 + i * 0.1, ...NC });   // herbs in the vent
+      box(mk, 0.38, 0.03, 0.03, shade(Bk, -0.25), 0, 0.33, 0.245, NC);   // brow seam
+      fuse(mk);
+      { const sp = grp(f.head); box(sp, 0.3, 0.04, 0.012, Lt, 0, 0.2, -0.254, NC); for (const sx of [-1, 1]) { box(sp, 0.012, 0.04, 0.42, Lt, sx * 0.241, 0.2, -0.03, NC); ball(sp, 0.016, '#5A5048', sx * 0.243, 0.22, 0.17, { detail: 0, metal: 0.6, ...NC }); } fuse(sp); }   // strap round the back of the hood, rivets at the mask
+      const lm = mat(K.lens ?? '#9EB8C0', { kind: 'glass', em: '#2E4A54', ei: 0.35 }), rm = mat('#5A5048', { metal: 0.7, rough: 0.35 });
+      for (const sx of [-1, 1]) { ball(f.head, 0.046, '', sx * 0.078, 0.215, 0.257, { mat: lm, detail: 2, cast: false }).scale.set(1, 1, 0.45);
+        mesh(f.head, G('pdRim', () => new THREE.TorusGeometry(0.048, 0.012, 5, 16)), rm, sx * 0.078, 0.215, 0.258, { cast: false }); }   // glass eyes in metal rims
+      // wide-brimmed hat over the hood
+      const h = hat(f, 0.405); cyl(h, 0.44, 0.44, 0.024, Hc, 0, -0.02, 0, { seg: 26 }); cyl(h, 0.19, 0.21, 0.18, Hc, 0, 0.0, 0, { seg: 16 }); cyl(h, 0.212, 0.212, 0.04, '#2E2A26', 0, 0.006, 0, { seg: 16, ...NC });
+      // gauntlets, boots
+      gloves(f, Lt); cuffs(f, Lt, -0.29, 0.13, 0.19); cuffs(f, shade(Lt, -0.15), -0.17, 0.02, 0.195);
+      boots(f, '#1A1410', 0.0, 0.205);
+      // pointer staff in the right hand: knob above the fist, ferrule at the tip, leaning forward
+      if (K.staff !== false) { const sg = grp(f.foreR, 0, -0.36, 0.075); sg.rotation.x = -0.55; const si = grp(sg);
+        cyl(si, 0.013, 0.016, 0.9, '#6A4A2A', 0, -0.8, 0, { seg: 7 }); ball(si, 0.024, '#4A3220', 0, 0.1, 0, { detail: 1, ...NC }); cyl(si, 0.018, 0.018, 0.03, '#2A2622', 0, 0.07, 0, { seg: 7, ...NC });
+        cyl(si, 0.016, 0.011, 0.05, '#5A5550', 0, -0.83, 0, { seg: 7, metal: 0.6, ...NC }); fuse(si); sg.userData.tip = v3(0, -0.83, 0); f.staff = sg;
+        hands(f, 'grip', -1e9, 1e9, { side: 'R', fade: 0.01 }); }
     }
   };
 })();
@@ -21224,7 +21533,8 @@ const SND = (() => {
     ambient:    { lead: 'bell',    drums: 'none',    bass: 'synth',   bpmX: 0.8, pad: 1.3, drone: true },
     industrial: { lead: 'saw',     drums: 'gated',   bass: 'octave',  bpmX: 1.0, min: [0, 1, 3, 5, 6, 8, 10], pad: 0.9, drone: true },
     circus:     { lead: 'marimba', lead2: 'whistle', drums: 'bounce', bass: 'upright', bpmX: 1.12, pad: 0.4 },
-    victorian:  { lead: 'concertina', lead2: 'whistle', drums: 'bounce', bass: 'upright', bpmX: 0.98, pad: 0.25, maj: [0, 2, 4, 5, 7, 9, 11], min: [0, 2, 3, 5, 7, 8, 11] }   // v3.49 music hall / street: concertina oom-pah, penny whistle, upright bass
+    victorian:  { lead: 'concertina', lead2: 'whistle', drums: 'bounce', bass: 'upright', bpmX: 0.98, pad: 0.25, maj: [0, 2, 4, 5, 7, 9, 11], min: [0, 2, 3, 5, 7, 8, 11] },   // v3.49 music hall / street: concertina oom-pah, penny whistle, upright bass
+    baroque:    { lead: 'harpsi',  lead2: 'strings', drums: 'none',   bass: 'upright', bpmX: 0.92, min: [0, 2, 3, 5, 7, 8, 11], maj: [0, 2, 4, 5, 7, 9, 11], pad: 0.55, drone: true }   // v3.53 17th-century Italy: harpsichord broken chords, viol / string line, continuo bass, organ drone
   };
   const STYLE_WORDS = [[/victorian|music hall|barrel organ|concertina|accordion|dickens/i, 'victorian'], [/bluegrass|banjo|country|hillbilly|appalach/i, 'bluegrass'], [/western|cowboy|spaghetti|frontier|desert town|saloon/i, 'western'],
     [/military|war film|march|snare|army|battlefield|wartime/i, 'military'], [/synthwave|retro ?wave|80s|neon|outrun/i, 'synthwave'],
@@ -21232,7 +21542,7 @@ const SND = (() => {
     [/arab|middle east|oud|egypt|persian|desert|bazaar/i, 'middleeast'], [/japan|chinese|asia|koto|shamisen|erhu|guzheng|samurai|kung fu/i, 'asian'],
     [/tudor|renaissance|elizabethan|lute|royal court|galliard|pavane/i, 'tudor'], [/celtic|irish|scottish|pirate|sea shanty|viking|medieval|folk/i, 'celtic'], [/latin|mexic|salsa|cuba|brazil|samba|mariachi|flamenco|spanish guitar/i, 'latin'],
     [/tribal|jungle|african|aborigin|caveman|stone age/i, 'tribal'], [/industrial|cyberpunk|factory|metal clang/i, 'industrial'], [/circus|carnival|clown/i, 'circus'],
-    [/ambient|space|cosmic|drone|ethereal/i, 'ambient'], [/orchestra|cinematic|film score|epic|strings|symphon/i, 'orchestral']];
+    [/baroque|harpsichord|renaissance|17th.century|1600s/i, 'baroque'], [/ambient|space|cosmic|drone|ethereal/i, 'ambient'], [/orchestra|cinematic|film score|epic|strings|symphon/i, 'orchestral']];
   const styleOf = () => { const A = AUDIO, s = A.style; if (s === false || s === 'none') return null;
     const o = typeof s === 'object' && s ? s : {}, name = typeof s === 'string' ? s : o.base ?? (STYLE_WORDS.find(([re]) => re.test(A.musicPrompt ?? '')) ?? [])[1];
     const B = STYLES[name] ?? (typeof s === 'object' && s ? {} : null); return B ? { name: name ?? 'custom', ...B, ...o } : null; };
@@ -21291,7 +21601,7 @@ const SND = (() => {
     const reed = (t, f, d, v = 1) => { for (const dt of [-7, 7]) tone('square', f, t, 0.025, Math.max(0, d - 0.06), 0.07, 0.022 * v, music, { detune: dt, lp: 1900, q: 0.8 }); tone('sawtooth', f * 2, t, 0.03, Math.max(0, d - 0.06), 0.06, 0.008 * v, music, { lp: 2600 }); };   // v3.49 concertina reed: two detuned reeds, a little bellows swell
     const brass = (t, fs_, d, v = 1) => fs_.forEach(f => tone('sawtooth', f, t, 0.05, d * 0.6, 0.3, 0.05 * v, music, { lp: 700, lpTo: 2200, q: 1.2 }));
     // v3.36 style instruments (AUDIO.style): plucked strings by Karplus-Strong (one cached buffer per pitch + kind), bowed / blown voices with delayed vibrato, more drums
-    const KSB = new Map(), KSK = { banjo: [0.993, 0.92, 0.9, 1.4], guitar: [0.997, 0.62, 1.6, 1.3], oud: [0.996, 0.45, 1.4, 1.2], lute: [0.995, 0.38, 1.3, 1.15], koto: [0.997, 0.7, 2.0, 1.1], upright: [0.994, 0.3, 1.0, 1.8] };
+    const KSB = new Map(), KSK = { banjo: [0.993, 0.92, 0.9, 1.4], guitar: [0.997, 0.62, 1.6, 1.3], oud: [0.996, 0.45, 1.4, 1.2], lute: [0.995, 0.38, 1.3, 1.15], koto: [0.997, 0.7, 2.0, 1.1], upright: [0.994, 0.3, 1.0, 1.8], harpsi: [0.995, 0.93, 1.5, 0.9] };   // v3.53 harpsichord: bright, quill-plucked
     const ks = (t, f, v = 1, kind = 'guitar') => { const [damp, br, len, g] = KSK[kind] ?? KSK.guitar, key = kind + '|' + f.toFixed(1); let b = KSB.get(key);
       if (!b) { const n = Math.floor(sr * len), P = Math.max(2, Math.round(sr / f)); b = ctx.createBuffer(1, n, sr); const d = b.getChannelData(0); let rs = 7919 + P * 31;
         const rr = () => (rs = (rs * 16807) % 2147483647) / 2147483647; for (let i = 0; i < P && i < n; i++) d[i] = rr() * 2 - 1;
@@ -21385,6 +21695,7 @@ const SND = (() => {
         if ((L === 'oud' || L === 'koto') && lq >= 1) for (let e = 0; e < (lq >= 2 ? 2 : 1); e++) { const dg = d + [0, 2, 4, 3, 1, 5, 4, 2][(n * 4 + q * 2 + e) % 8]; ks(t + e * beat / 2, mtof(deg(dg, 1)), e ? 0.7 : 1, L); }
         if (L === 'strings' && lq >= 1) { if (lq >= 2) for (let e = 0; e < 2; e++) voice2(t + e * beat / 2, ch[(q + e) % 2 ? 2 % ch.length : 0], beat * 0.4, 0.7, 'strings'); else if (q === 0) ch.forEach(f => voice2(t, f, bar * 0.95, 0.6, 'strings')); }
         if (L === 'saw' && lq >= 2) for (let e = 0; e < 4; e++) voice2(t + e * beat / 4, ch[(q * 4 + e) % ch.length] * 2, beat / 4 * 0.8, 0.5, 'saw');
+        if (L === 'harpsi' && lq >= 1) { const pat = [0, 2, 1, 2, 0, 2, 1, 3]; for (let e = 0; e < (lq >= 2 ? 4 : 2); e++) { const tt = t + e * beat / (lq >= 2 ? 4 : 2), f = ch[pat[(q * 2 + e) % 8] % ch.length] * 2; ks(tt, f, e ? 0.65 : 0.9, 'harpsi'); ks(tt + 0.004, f * 2, 0.25, 'harpsi'); } }   // v3.53 broken chords (Alberti-like), octave-coupled quill
         if (L === 'flute' && lq >= 1 && !Md.lead2 && q % 2 === 0) voice2(t, mtof(deg(d + [0, 4, 2, 5][(n + q) % 4], 2)), beat * 1.8, 1, 'flute');
       }
       b0 += bar;
@@ -21413,6 +21724,9 @@ const SND = (() => {
       ticks: (t, v, d = 1) => { for (let x = 0; x < d * 14; x++) tone('square', 1900, t + x / 14, 0.001, 0, 0.025, 0.08 * v, fx); },
       tick: (t, v) => tone('square', 1900, t, 0.001, 0, 0.03, 0.1 * v, fx),
       chime: (t, v) => { bellFx(t, 659, v * 0.8); bellFx(t + 0.34, 523, v * 0.8); },
+      toll: (t, v) => { const f = 196; for (const [r, a, d] of [[0.5, 0.55, 6.5], [1, 0.6, 4.8], [1.19, 0.4, 3.4], [1.5, 0.22, 2.8], [2, 0.45, 3.0], [2.52, 0.18, 2.0], [3.01, 0.15, 1.5], [4.2, 0.08, 1.0]]) tone('sine', f * r, t, 0.003, 0.02, d, 0.15 * a * v, fx);
+        nz(t, 0.001, 0.004, 0.06, 0.22 * v, fx, 'bandpass', 2400, 0, 1.2); tone('sine', f * 0.5, t, 0.01, 0.05, 1.8, 0.1 * v, fx, { to: f * 0.495 }); },   // v3.53 big church bell (hum, prime, minor third, fifth, nominal …, long decay): belltower(), hits k 'toll'
+      brush: (t, v) => { nz(t, 0.04, 0.16, 0.14, 0.14 * v, fx, 'bandpass', 2600, 1700, 0.8); nz(t + 0.02, 0.02, 0.12, 0.1, 0.06 * v, fx, 'highpass', 5200); },   // v3.53 paint brush stroke on wood (doorMark paint)
       bell: (t, v) => { bellFx(t, 1245, v * 0.95); bellFx(t + 0.004, 1870, v * 0.55); bellFx(t + 0.008, 2960, v * 0.3); nz(t, 0.001, 0.002, 0.03, 0.45 * v, fx, 'highpass', 4200); ducks.push(t); },   // v2.40.27 fight-cage bell (ringBell: three quick strikes)   // v2.33.3 shop door chime (ding-dong)
       lid: (t, v) => { const os = tone('sawtooth', 150, t, 0.04, 0.16, 0.12, 0.05 * v, fx, { lp: 900 }); for (let k = 0; k < 6; k++) os.frequency.setValueAtTime(140 + 60 * Math.sin(k * 1.7) + k * 12, t + k * 0.05);
         nz(t, 0.02, 0.15, 0.1, 0.06 * v, fx, 'bandpass', 1300, 0, 3); nz(t + 0.34, 0.002, 0.02, 0.12, 0.4 * v, fx, 'lowpass', 520); tone('sine', 120, t + 0.34, 0.002, 0.02, 0.16, 0.35 * v, fx, { to: 70, glide: 0.12 }); },   // v3.48 wooden lid: hinge creak, then a soft padded thump
@@ -23156,7 +23470,7 @@ function qaHudFace(o = {}) {
 const GQ = { R: null }, _gqV = new THREE.Vector3(), _gqA = new THREE.Vector3(), _gqB = new THREE.Vector3(), _gqF = new THREE.Vector3(), _gqYaw = n => { _gqF.set(0, 0, 1).applyQuaternion(n.quaternion); return Math.atan2(_gqF.x, _gqF.z); };
 function _gqBegin() { GQ.R = { rig: new Map(), car: new Map(), crowd: new Map(), crab: new Map(), fr: 0 }; }
 function _gqFrame(tv, tvid, cut) {   // one sample of the moment shown (scene time ST(tv), video time tvid); cut: a camera cut lies before it
-  const R = GQ.R; if (!R) return; const fr = ++R.fr, ts = ST(tv); if (cut) R.cut = fr; camera.updateMatrixWorld(true);
+  const R = GQ.R; if (!R) return; const fr = ++R.fr, ts = ST(tv); if (cut) { R.cut = fr; (R.cuts ??= new Set()).add(fr); } camera.updateMatrixWorld(true);   // v3.53: every cut is kept (R.cuts) — the report only knew the last one, so a TEASE jump earlier in the video read as a 4–5 m foot slide
   const onS = (x, y, z, r) => audOn(x, y, z, r) >= 0.03;
   const crab = (key, nm, x, z, yaw, on, ok) => {   // CRAB on the fly (velocity from the last sample)
     const C = R.crab.get(key), now = { fr, ts, x, z }; if (!C) { R.crab.set(key, { p: now, run: 0, ang: 0 }); return; }
@@ -23193,7 +23507,7 @@ function _gqReport() {
     for (const c of [6, 9]) { const hm = H(c); let a = -1;
       const end = (b) => { if (a < 0 || b - a < 2) return; const A = L[a], B = L[b], fm = Math.hypot(B[c - 1] - A[c - 1], B[c + 1] - A[c + 1]), bm = Math.hypot(B[2] - A[2], B[3] - A[3]);
         if (fm > 0.08 && (bm <= 0.08 || fm > 0.15 * bm) && (!ws || fm > ws.fm)) ws = { fm, bm, t: A[1], d: B[1] - A[1], side: c === 6 ? 'left' : 'right' }; };
-      for (let k = 0; k < L.length; k++) { const r = L[k], pl = r[4] > 0.9 && r[c] < hm + 0.012 && r[11] < 0.1, cont = k > 0 && L[k - 1][0] === r[0] - 1 && R.cut !== r[0] && !(R.cut > L[k - 1][0] && R.cut <= r[0]);
+      for (let k = 0; k < L.length; k++) { const r = L[k], pl = r[4] > 0.9 && r[c] < hm + 0.012 && r[11] < 0.1, cont = k > 0 && L[k - 1][0] === r[0] - 1 && !R.cuts?.has(r[0]);
         if (pl && a >= 0 && cont) continue; end(k - 1); a = pl ? k : -1; }
       end(L.length - 1); }
     if (ws) out.FOOTSLIDE.push([ws.fm, `FOOTSLIDE – ${nm(f)}: the ${ws.side} foot slides ${(ws.fm * 100).toFixed(0)} cm while planted around ${ws.t.toFixed(2)} s (the body moves ${(ws.bm * 100).toFixed(0)} cm in ${ws.d.toFixed(2)} s) – check where it starts / stops, sit → walk timing, or the speed for its gait`]);
