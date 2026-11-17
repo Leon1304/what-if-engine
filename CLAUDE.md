@@ -3,6 +3,9 @@
 Antworten an Leon: Deutsch, knapp, direkt. Videos, Captions und Posting-Texte: Englisch.
 Kanal: @whatifthishappenedscenarios (YouTube Shorts, Instagram Reels, TikTok).
 
+## Keine Unteragenten (Leons Vorgabe ab 17.11.2026)
+Keine Unteragenten (Agent-Tool), Forks oder Workflows starten, außer Leon verlangt es im aktuellen Auftrag ausdrücklich. Alles selbst und direkt erledigen; frühere Anweisungen zu Unteragenten gelten nicht mehr. Grund: Agenten haben 40 % des Wochenlimits verbraucht, ohne Nutzen. Lange Testläufe und Renders nicht mehrfach parallel starten. Scheint Parallelisierung wirklich nötig: vorher fragen und die Kosten grob nennen.
+
 ## Skill
 Videos entstehen mit dem Skill `/whatif` (`.claude/skills/whatif/SKILL.md`, Kopie des claude.ai-Skills).
 Der Skill wurde für claude.ai geschrieben. Lokal gilt diese Übersetzung:
