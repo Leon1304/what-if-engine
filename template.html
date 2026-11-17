@@ -14627,8 +14627,9 @@ function cart(p, x, z, o = {}) {
     const off = oo.by ? BL / 2 + 0.75 : -C.gap;
     tick(t => { if (!lead._posAt) return; const P = lead._posAt(t), yw = lead._yawAt ? lead._yawAt(t) : ry; g.position.set(P.x + Math.sin(yw) * off, 0, P.z + Math.cos(yw) * off); g.rotation.y = yw;
       const a = dAt(t) / R; for (const wg of wheels) wg.rotation.x = a; });
-    if (oo.sound !== false) (AUDIO.hits ??= []).push({ t: VT(t0), k: 'cart', v: oo.sound ?? 0.5, dur: Math.max(1, (tE ?? t0 + 6) - t0) });
-    return tE; };
+    let pl = 0; for (let i = 1; i < pts.length; i++) pl += Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]);   // v3.47.1: walk() returns no end time — the rumble lasts the walked route (was NaN → the audio build threw)
+    if (oo.sound !== false) (AUDIO.hits ??= []).push({ t: VT(t0), k: 'cart', v: oo.sound ?? 0.5, dur: clamp(pl / (oo.speed ?? 1.3), 1, Math.max(1, DUR - t0)) });
+    return t0 + pl / (oo.speed ?? 1.3); };
   return C;
 }
 // shovel(rig, t0, t1, { tool: true | obj, rate: 0.7 (scoops/s), side, into: [x, y, z] }) → tool: digging / shovelling — bent over, both hands on the shaft, scoop low, lift and
@@ -20683,11 +20684,11 @@ const SND = (() => {
       click: (t, v) => { for (let k = 0; k < 16; k++) nz(t + k * 0.028, 0.001, 0.002, 0.01, 0.3 * v, fx, 'highpass', 3200); tone('sine', 6200, t + 0.5, 0.05, 0.3, 0.1, 0.04 * v, fx, { to: 9200, glide: 0.4 }); },
       song: (t, v, d = 4) => { tone('sine', 180, t, 0.6, Math.max(0.2, d - 1.2), 0.6, 0.13 * v, fx, { to: 330, glide: d * 0.6 }); tone('triangle', 92, t + 0.3, 0.8, Math.max(0.2, d - 1.6), 0.8, 0.08 * v, fx, { to: 70, glide: d * 0.7, lp: 600 }); },
       blow: (t, v) => { nz(t, 0.05, 0.45, 0.7, 0.42 * v, fx, 'bandpass', 900, 380, 0.8); nz(t, 0.02, 0.2, 0.4, 0.2 * v, fx, 'highpass', 2500); },
-      creak: (t, v, d = 0.6) => { for (let k = 0; k < 3; k++) { const tk = t + k * d / 3 + ar() * 0.03; tone('sawtooth', 140 + ar() * 60, tk, 0.02, d / 4, 0.08, 0.05 * v, fx, { to: 220 + ar() * 90, glide: d / 3, lp: 900 }); } nz(t, 0.02, d * 0.6, 0.1, 0.06 * v, fx, 'bandpass', 700, 1100, 6); },   // v3.47 wooden board / door creak
+      creak: (t, v, d = 0.6) => { if (!(d > 0) || !isFinite(d)) d = 0.6; for (let k = 0; k < 3; k++) { const tk = t + k * d / 3 + ar() * 0.03; tone('sawtooth', 140 + ar() * 60, tk, 0.02, d / 4, 0.08, 0.05 * v, fx, { to: 220 + ar() * 90, glide: d / 3, lp: 900 }); } nz(t, 0.02, d * 0.6, 0.1, 0.06 * v, fx, 'bandpass', 700, 1100, 6); },   // v3.47 wooden board / door creak
       shovel: (t, v) => { nz(t, 0.01, 0.12, 0.12, 0.22 * v, fx, 'bandpass', 2400, 900, 1.4); nz(t + 0.25, 0.005, 0.03, 0.18, 0.3 * v, fx, 'lowpass', 700, 200); tone('sine', 180, t + 0.26, 0.002, 0.02, 0.12, 0.2 * v, fx, { to: 70, glide: 0.1 }); },   // v3.47 spade scrape + wet slop
-      slosh: (t, v, d = 0.8) => { for (let k = 0; k < 3; k++) nz(t + k * d / 3, 0.05, d / 5, d / 4, 0.16 * v, fx, 'lowpass', 900 - k * 150, 300 + ar() * 100, 2); },   // v3.47 liquid sloshing in a bucket / barrel
-      cart: (t, v, d = 4) => { nz(t, 0.4, Math.max(0, d - 0.8), 0.4, 0.08 * v, fx, 'lowpass', 220, 0, 0.8); const ts = []; for (let tt = t + 0.1; tt < t + d - 0.2; tt += 0.07 + ar() * 0.09) ts.push(tt); pulses(ts, 0.03, 0.12 * v, fx, 'bandpass', 1300, 2); },   // v3.47 iron-shod wheels on cobbles
-      bell: (t, v, d = 4) => { for (const [r, a] of [[0.5, 0.5], [1, 1], [1.19, 0.45], [1.5, 0.3], [2, 0.35], [2.66, 0.18], [3.0, 0.1]]) tone('sine', 220 * r, t, 0.004, 0.05, d * (1.2 - r * 0.25), 0.16 * v * a, fx); },   // v3.47 church bell toll
+      slosh: (t, v, d = 0.8) => { if (!(d > 0) || !isFinite(d)) d = 0.8; for (let k = 0; k < 3; k++) nz(t + k * d / 3, 0.05, d / 5, d / 4, 0.16 * v, fx, 'lowpass', 900 - k * 150, 300 + ar() * 100, 2); },   // v3.47 liquid sloshing in a bucket / barrel
+      cart: (t, v, d = 4) => { if (!(d > 0) || !isFinite(d)) d = 4; nz(t, 0.4, Math.max(0, d - 0.8), 0.4, 0.08 * v, fx, 'lowpass', 220, 0, 0.8); const ts = []; for (let tt = t + 0.1; tt < t + d - 0.2; tt += 0.07 + ar() * 0.09) ts.push(tt); pulses(ts, 0.03, 0.12 * v, fx, 'bandpass', 1300, 2); },   // v3.47 iron-shod wheels on cobbles
+      bell: (t, v, d = 4) => { if (!(d > 0) || !isFinite(d)) d = 4; for (const [r, a] of [[0.5, 0.5], [1, 1], [1.19, 0.45], [1.5, 0.3], [2, 0.35], [2.66, 0.18], [3.0, 0.1]]) tone('sine', 220 * r, t, 0.004, 0.05, d * (1.2 - r * 0.25), 0.16 * v * a, fx); },   // v3.47 church bell toll
       hooves: (t, v, d = 2, p = 1) => { const r = p === 2 ? 7.5 : 5.2; for (let k = 0; k < d * r; k++) { const tk = t + k / r + (k % 2) * 0.04 + ar() * 0.012; tone('sine', 210 + ar() * 50, tk, 0.001, 0.01, 0.05, 0.12 * v, fx, { to: 110, glide: 0.04 }); nz(tk, 0.001, 0.005, 0.03, 0.12 * v, fx, 'bandpass', 1800, 0, 1.5); } }
     });
     Object.assign(SFX, {   // v2.17 food, hands and acting
