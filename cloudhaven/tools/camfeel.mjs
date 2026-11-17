@@ -37,7 +37,7 @@ await page.waitForTimeout(800);
 // 2) Ziehen (schieben) nah am Boden quer durchs Dorf
 await page.evaluate(() => window.__rec.push({ mark: 'drag' }));
 await page.mouse.move(cx, cy); await page.mouse.down();
-for (let i = 0; i < 60; i++) { await page.mouse.move(cx - i * 9, cy + Math.sin(i / 6) * 40); await page.waitForTimeout(16); }
+for (let i = 0; i < 120; i++) { await page.mouse.move(cx - i * 4.5, cy + Math.sin(i / 12) * 40); await page.waitForTimeout(8); }   // 125 Hz wie eine echte Maus (16-ms-Schritte schlagen gegen 60 Hz: Bilder ohne Eingabe)
 await page.mouse.up(); await page.waitForTimeout(800);
 await page.evaluate(() => window.__rec.push({ mark: 'rot' }));
 // 3) Drehen mit rechter Maustaste
@@ -47,7 +47,7 @@ await page.mouse.up({ button: 'right' }); await page.waitForTimeout(600);
 await page.evaluate(() => window.__rec.push({ mark: 'out' }));
 // 4) Raus zoomen über den Rand ins Leere, dann ziehen über den Inselrand
 await page.mouse.move(60, 60); for (let i = 0; i < 30; i++) { await page.mouse.wheel(0, 120); await page.waitForTimeout(40); }
-await page.mouse.move(200, 200); await page.mouse.down(); for (let i = 0; i < 50; i++) { await page.mouse.move(200 + i * 14, 200 + i * 8); await page.waitForTimeout(16); } await page.mouse.up();
+await page.mouse.move(200, 200); await page.mouse.down(); for (let i = 0; i < 100; i++) { await page.mouse.move(200 + i * 7, 200 + i * 4); await page.waitForTimeout(8); } await page.mouse.up();
 await page.waitForTimeout(800);
 await page.evaluate(() => window.__rec.push({ mark: 'edgezoom' }));
 // 5) Zoom ganz nah an den Rand (Zeiger über Leere)
@@ -59,7 +59,8 @@ console.log('  langsame Teile:', JSON.stringify(await page.evaluate(() => window
 await page.screenshot({ path: path.join(out, 'ende.png') });
 // Auswertung
 const vel = []; for (let i = 1; i < rec.length; i++) vel.push(Math.hypot(rec[i].x - rec[i - 1].x, rec[i].y - rec[i - 1].y, rec[i].z - rec[i - 1].z) / Math.max(8, rec[i].dt) * 16.7);
-const jumps = []; for (let i = 6; i < vel.length - 6; i++) { const win = vel.slice(i - 6, i).concat(vel.slice(i + 1, i + 7)).sort((a, b) => a - b), med = win[8] + .02 * rec[i].d + .01; if (vel[i] > med * 4 && vel[i] > .08 * Math.max(1, rec[i].d)) jumps.push({ i, v: +vel[i].toFixed(2), med: +med.toFixed(2), d: +rec[i].d.toFixed(1), dt: Math.round(rec[i + 1]?.dt || 0) }); }
+// Bild direkt nach exaktem Stillstand = Eingabe-Lücke (Maus-Ereignisse kamen gebündelt, z. B. unter Last), kein Kamerasprung
+const jumps = []; for (let i = 6; i < vel.length - 6; i++) { if (vel[i - 1] === 0 && rec[i].d === rec[i - 1].d) continue; const win = vel.slice(i - 6, i).concat(vel.slice(i + 1, i + 7)).sort((a, b) => a - b), med = win[8] + .02 * rec[i].d + .01; if (vel[i] > med * 4 && vel[i] > .08 * Math.max(1, rec[i].d)) jumps.push({ i, v: +vel[i].toFixed(2), med: +med.toFixed(2), d: +rec[i].d.toFixed(1), dt: Math.round(rec[i + 1]?.dt || 0) }); }
 if (process.env.DUMP) for (const j of jumps.filter(j => j.v > 1).slice(0, 2)) for (let i = j.i - 3; i <= j.i + 3; i++) console.log(i, JSON.stringify(rec[i], (k, v) => typeof v === 'number' ? +v.toFixed(2) : v));
 console.log('  langsame Teile:', JSON.stringify(await page.evaluate(() => window.__slow)));
 const longF = rec.map((r, i) => [i, r.dt]).slice(3).filter(r => r[1] > 50).map(r => r[0] + ':' + Math.round(r[1]));

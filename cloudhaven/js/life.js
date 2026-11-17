@@ -899,14 +899,18 @@ void main(){ float a = uA * pow(1. - vY, 1.3) * (.55 + .45 * sin(vY * 40. - uT *
   // ---------------------------------------------------------------- Bodenhöhe (gepuffert, bilinear)
   gy(x, z) {
     const s = 2, fx = x * s, fz = z * s, ix = Math.floor(fx), iz = Math.floor(fz), tx = fx - ix, tz = fz - iz;
-    const g = (a, b) => { const k = a * 73856093 ^ b * 19349663; let v = this.gc.get(k); if (v === undefined) { v = this.groundAt(a / s, b / s); if (!Number.isFinite(v)) v = 0; if (this.gc.size > 60000) this.gc.clear(); this.gc.set(k, v); } return v; };
+    const g = (a, b) => { const k = (a + 32768) * 65536 + (b + 32768); let v = this.gc.get(k); if (v === undefined) { v = this.groundAt(a / s, b / s); if (!Number.isFinite(v)) v = 0; if (this.gc.size > 60000) this.gc.clear(); this.gc.set(k, v); } return v; };
     const a = g(ix, iz), b = g(ix + 1, iz), c = g(ix, iz + 1), d = g(ix + 1, iz + 1);
     return a + (b - a) * tx + (c - a) * tz + (a - b - c + d) * tx * tz;
   }
 
   // ---------------------------------------------------------------- Kacheln übernehmen
+  // Nur Geändertes neu: gleiche Kachel = gleiches spots-Array (world.js baut es bei jedem Neubau neu). Bodenhöhen-Cache und
+  // Effekt-Einträge bleiben für unveränderte Kacheln, Wegnetz und Spots werden über ein Raster schnell zugeordnet.
   setTiles(list) {
-    this.tiles = list || []; this.byKey = new Map(this.tiles.map(t => [t.key, t])); this.gc.clear();
+    const prev = this.byKey;
+    this.tiles = list || []; this.byKey = new Map(this.tiles.map(t => [t.key, t]));
+    this._dropGround(prev);
     const T = this.tiles;
     // Inselmitte und -radius
     let cx = 0, cz = 0; for (const t of T) { cx += t.cx; cz += t.cz; } if (T.length) { cx /= T.length; cz /= T.length; }
@@ -920,12 +924,34 @@ void main(){ float a = uA * pow(1. - vY, 1.3) * (.55 + .45 * sin(vY * 40. - uT *
     this._buildStaticFx();
   }
 
+  // Bodenhöhen geänderter, neuer und entfernter Kacheln verwerfen (Rest bleibt gültig: groundAt liest nur die eigene Kachel)
+  _dropGround(prev) {
+    const ch = [];
+    for (const t of this.tiles) { const o = prev.get(t.key); if (!o || o.spots !== t.spots || o.kind !== t.kind) ch.push(t); }
+    for (const [k, o] of prev) if (!this.byKey.has(k)) ch.push(o);
+    if (!ch.length) return;
+    if (ch.length > 24) { this.gc.clear(); return; }
+    const r2 = (INR * 1.2 + 1) ** 2;
+    for (const k of this.gc.keys()) {
+      const x = (Math.floor(k / 65536) - 32768) / 2, z = (k % 65536 - 32768) / 2;
+      for (const t of ch) if ((x - t.cx) ** 2 + (z - t.cz) ** 2 < r2) { this.gc.delete(k); break; }
+    }
+  }
+  // nächster Wegknoten innerhalb max (wie die lineare Suche: kleinster Abstand, bei Gleichstand der erste Knoten)
+  _nearest(x, z, max) {
+    const G = this.ngrid; if (!G) return null;
+    const S = 3, i0 = Math.floor((x - max) / S), i1 = Math.floor((x + max) / S), j0 = Math.floor((z - max) / S), j1 = Math.floor((z + max) / S);
+    let best = null, bd = max;
+    for (let i = i0; i <= i1; i++) for (let j = j0; j <= j1; j++) { const c = G.get((i + 32768) * 65536 + (j + 32768)); if (!c) continue;
+      for (const n of c) { const d = Math.hypot(n.x - x, n.z - z); if (d < bd || (d === bd && best && n.i < best.i)) { bd = d; best = n; } } }
+    return best;
+  }
   _buildGraph() {
-    const nodes = [], cells = new Map();
+    const nodes = [], cells = new Map(), ck = (a, b) => (a + 32768) * 65536 + (b + 32768);
     const node = (x, z) => {
       const ix = Math.floor(x), iz = Math.floor(z);
-      for (let a = -1; a <= 1; a++) for (let b = -1; b <= 1; b++) for (const n of cells.get((ix + a) + ',' + (iz + b)) || []) if (Math.hypot(n.x - x, n.z - z) < .35) return n;
-      const n = { i: nodes.length, x, z, adj: [], comp: -1 }; nodes.push(n); const k = ix + ',' + iz; (cells.get(k) || cells.set(k, []).get(k)).push(n); return n;
+      for (let a = -1; a <= 1; a++) for (let b = -1; b <= 1; b++) { const c = cells.get(ck(ix + a, iz + b)); if (c) for (const n of c) if (Math.hypot(n.x - x, n.z - z) < .35) return n; }
+      const n = { i: nodes.length, x, z, adj: [], comp: -1 }; nodes.push(n); const k = ck(ix, iz); (cells.get(k) || cells.set(k, []).get(k)).push(n); return n;
     };
     const link = (a, b) => { if (a === b || a.adj.some(e => e.n === b)) return; const d = Math.hypot(a.x - b.x, a.z - b.z); a.adj.push({ n: b, d }); b.adj.push({ n: a, d }); };
     const poly = P => { let prev = null; for (let i = 0; i < P.length; i++) { if (i > 0) { const a = P[i - 1], b = P[i], L = Math.hypot(b[0] - a[0], b[1] - a[1]), m = Math.max(1, Math.ceil(L / 1.3)); for (let j = 1; j <= m; j++) { const n = node(lerp(a[0], b[0], j / m), lerp(a[1], b[1], j / m)); link(prev, n); prev = n; } } else prev = node(P[0][0], P[0][1]); } };
@@ -941,8 +967,9 @@ void main(){ float a = uA * pow(1. - vY, 1.3) * (.55 + .45 * sin(vY * 40. - uT *
     // Zusammenhang
     let comp = 0; for (const n of nodes) if (n.comp < 0) { const todo = [n]; n.comp = comp; while (todo.length) { const a = todo.pop(); for (const e of a.adj) if (e.n.comp < 0) { e.n.comp = comp; todo.push(e.n); } } comp++; }
     this.nodes = nodes; this.cells = cells;
+    const G = this.ngrid = new Map(); for (const n of nodes) { const k = ck(Math.floor(n.x / 3), Math.floor(n.z / 3)); (G.get(k) || G.set(k, []).get(k)).push(n); }
     // Spots an Wege hängen
-    const nearest = (x, z, max) => { let best = null, bd = max; for (const n of nodes) { const d = Math.hypot(n.x - x, n.z - z); if (d < bd) { bd = d; best = n; } } return best; };
+    const nearest = (x, z, max) => this._nearest(x, z, max);
     for (const type of ['door', 'sit', 'stall', 'fountain']) for (const s of this.spots[type] || []) {
       const n = nearest(s.x, s.z, type === 'door' ? 7.5 : 6.5); s.node = n;
       let ox = n ? n.x - s.x : Math.sin(s.ry || 0), oz = n ? n.z - s.z : Math.cos(s.ry || 0); const L = Math.hypot(ox, oz) || 1; s.ox = ox / L; s.oz = oz / L;
@@ -1117,7 +1144,7 @@ void main(){ float a = uA * pow(1. - vY, 1.3) * (.55 + .45 * sin(vY * 40. - uT *
     // nichts gefunden: kurz stehen und umschauen
     V.st = 'stand'; V.tA = t; V.until = t + 2 + r() * 4; V.face = V.yaw + (r() - .5) * 2; V.talkAmt = 0;
   }
-  _nearNode(x, z) { let best = null, bd = 9; for (const n of this.nodes) { const d = Math.hypot(n.x - x, n.z - z); if (d < bd) { bd = d; best = n; } } return best; }
+  _nearNode(x, z) { return this._nearest(x, z, 9); }
   _arrive(V, t) {
     const g = V.goal || {}, r = V.rand; V.tA = t; V.yaw0 = V.yaw; V.talkAmt = 0;
     if (g.kind === 'home' || g.kind === 'visit') { V.st = 'in'; V.at = g.target; V.until = t + (g.kind === 'visit' ? 8 + r() * 25 : 25 + r() * 60); return; }
@@ -1412,9 +1439,13 @@ void main(){ float a = uA * pow(1. - vY, 1.3) * (.55 + .45 * sin(vY * 40. - uT *
     const p = (a, b, c, d) => { if (pi < 1000) P.put(pi++, a, b, c, d); };
     for (const s of S.light || []) { const y0 = this.gy(s.x, s.z); g([s.x, s.y, s.z, 1.15], [1, .72, .36, 1.5], [0, 0, 0, h01(s.key)]); g([s.x, y0 + .07, s.z, 4.2], [1, .66, .3, .55], [4, 0, 0, 0], [0, 0, 0, 0]); }
     for (const s of S.beam || []) g([s.x, s.y, s.z, 2.6], [1, .9, .7, 2], [0, 0, 0, .3]);
-    for (const s of [...(S.forest || []), ...(S.meadow || [])]) for (let j = 0; j < 14; j++) {
-      const a = h01('ff', s.key, j) * TAU, rr = Math.sqrt(h01('fr', s.key, j)) * 4, x = s.x + Math.cos(a) * rr, z = s.z + Math.sin(a) * rr;
-      g([x, this.gy(x, z) + .5 + h01('fy', s.key, j) * 1.8, z, .32], [.78, 1, .26, 4.5], [1, 0, 0, h01('fs', s.key, j)], [1, 0, 0, 0]);
+    const FF = this._ffMemo ||= new Map();                  // Zufallswerte der Glühwürmchen je Spot merken (Hashes sind teuer)
+    for (const s of [...(S.forest || []), ...(S.meadow || [])]) {
+      let H = FF.get(s.key); if (!H) { H = new Float64Array(56); for (let j = 0; j < 14; j++) H.set([h01('ff', s.key, j) * TAU, Math.sqrt(h01('fr', s.key, j)) * 4, h01('fy', s.key, j), h01('fs', s.key, j)], j * 4); if (FF.size > 4000) FF.clear(); FF.set(s.key, H); }
+      for (let j = 0; j < 14; j++) {
+        const a = H[j * 4], rr = H[j * 4 + 1], x = s.x + Math.cos(a) * rr, z = s.z + Math.sin(a) * rr;
+        g([x, this.gy(x, z) + .5 + H[j * 4 + 2] * 1.8, z, .32], [.78, 1, .26, 4.5], [1, 0, 0, H[j * 4 + 3]], [1, 0, 0, 0]);
+      }
     }
     // Wasserfälle: Gischt oben, Schleier am Fall, Nebel unten, Regenbogen
     for (const s of S.fall || []) {

@@ -1,11 +1,14 @@
 // Spiellogik ohne Grafik: Brett, Stapel, Punkte, Gruppen, Aufgaben, Freischaltungen, Rückgängig, Spielstand.
 // Läuft auch in Node (tools/rules.mjs). Der Zufall steckt im Spielstand (S.rs), deshalb ist jede Insel reproduzierbar.
-import { DIRS, key, unkey, opp, neighbor } from './hex.js';
-import { TILES, KINDS, UNLOCKS, GROUP, GROUP_NAMES, ROAD_OK, affinity, edgesOf } from './tiles.js';
+import { DIRS, key, unkey, opp, neighbor, dist } from './hex.js';
+import { TILES, KINDS, UNLOCKS, GROUP, GROUP_NAMES, ROAD_OK, affinity, edgesOf, MERGE, MERGE_N, MERGE_POOL, MERGE_CHAINS, LEVEL, mergeValue } from './tiles.js';
 
 export const SAVE_VERSION = 1;
 export const START_TILES = 30;
 export const MILESTONES = [5, 10, 20, 35, 50, 75];
+export const MERGE_MODE = 'verschmelzen';
+export const MERGE_R = 3;                              // Standard-Radius des Spielfelds (37 Felder)
+export const MERGE_HAND = 3;                           // so viele Teile sind immer im Vorrat
 const QUEST_N = { wald: [4, 9], feld: [3, 7], dorf: [3, 7], wasser: [3, 6], berg: [2, 4] };
 
 export class Game {
@@ -14,7 +17,7 @@ export class Game {
   emit(type, d = {}) { for (const f of this.fns) f(type, d); }
 
   // ---------- neues Spiel / laden / sichern ----------
-  newGame({ mode = 'klassisch', seed = (Date.now() % 1e9) | 0, name = 'Meine Insel' } = {}) {
+  newGame({ mode = 'klassisch', seed = (Date.now() % 1e9) | 0, name = 'Meine Insel', maxR = MERGE_R } = {}) {
     this.S = { v: SAVE_VERSION, name, mode, seed, rs: seed || 1, tiles: [], stack: [], pick: 0, score: 0,
       unlocked: [], quests: {}, ms: {}, best: {}, stats: { placed: 0, perfect: 0, quests: 0, playtime: 0 },
       time: 9.5, day: 1, created: Date.now(), tut: 0 };
@@ -22,7 +25,8 @@ export class Game {
     this._put({ k: 'start', q: 0, r: 0, o: 0 });
     this._unlockUpTo(0, true);
     if (mode === 'kreativ') this.S.unlocked = [...KINDS];
-    this._refill(mode === 'klassisch' ? START_TILES : 5);
+    if (mode === MERGE_MODE) this._newMerge(maxR);
+    else this._refill(mode === 'klassisch' ? START_TILES : 5);
     this.emit('reset');
     return this;
   }
@@ -33,11 +37,21 @@ export class Game {
     T.tiles = (S.tiles || []).filter(t => TILES[t.k]);                    // unbekannte Kacheln überspringen
     T.stack = (S.stack || []).filter(e => TILES[e.k] && e.k !== 'start');
     T.unlocked = (S.unlocked || []).filter(k => TILES[k]);
+    const M = T.mode === MERGE_MODE;
+    if (M) {                                                              // Verschmelzen: Felder, die ältere Stände nicht kennen
+      T.maxR = Number.isFinite(S.maxR) && S.maxR > 0 ? S.maxR | 0 : MERGE_R;
+      T.hold = S.hold && TILES[S.hold.k] && S.hold.k !== 'start' ? { k: S.hold.k } : null;
+      T.stats.merges = T.stats.merges | 0; T.stats.bestLevel = T.stats.bestLevel || 1; T.stats.bestKind = T.stats.bestKind || '';
+      T.tiles = T.tiles.filter(t => dist(t.q, t.r, 0, 0) <= T.maxR);
+    }
     T.v = SAVE_VERSION; this.S = T; this.board.clear(); this.undoStack = [];
     for (const t of T.tiles) this.board.set(key(t.q, t.r), t);
     if (!this.board.size) this._put({ k: 'start', q: 0, r: 0, o: 0 });
-    this._unlockUpTo(T.score, true);
-    if (T.mode !== 'klassisch' && T.stack.length < 3) this._refill(5);
+    if (M) { if (T.stack.length < MERGE_HAND) this._refillMerge(); }
+    else {
+      this._unlockUpTo(T.score, true);
+      if (T.mode !== 'klassisch' && T.stack.length < 3) this._refill(5);
+    }
     this.emit('reset');
     return this;
   }
@@ -62,6 +76,7 @@ export class Game {
   edges(t) { return edgesOf(t.k, t.o); }
   current() { return this.S.stack[this.S.pick] || this.S.stack[0]; }
   slots() {
+    if (this.S.mode === MERGE_MODE) return this._field().filter(([q, r]) => !this.board.has(key(q, r)));
     const out = new Map();
     for (const t of this.board.values()) for (let i = 0; i < 6; i++) { const [q, r] = neighbor(t.q, t.r, i), k = key(q, r); if (!this.board.has(k)) out.set(k, [q, r]); }
     return [...out.values()];
@@ -70,6 +85,7 @@ export class Game {
 
   // Bewertung einer möglichen Kachel: gültig? Punkte je Kante, perfekt?
   evaluate(kind, q, r, o) {
+    if (this.S.mode === MERGE_MODE) return this._evalMerge(kind, q, r);
     if (this.at(q, r)) return { ok: false, why: 'Hier liegt schon eine Kachel.' };
     const E = edgesOf(kind, o), parts = []; let nb = 0, good = 0, pts = 0, why = '';
     for (let i = 0; i < 6; i++) {
@@ -108,6 +124,7 @@ export class Game {
   supply() { const m = {}; for (const e of this.S.stack) { const c = (m[e.k] ||= { n: 0, quest: 0 }); c.n++; if (e.quest) c.quest++; } return m; }
   setKind(k) { if (this.S.mode === 'kreativ' && TILES[k]) { this.S.stack[0] = { k }; this.S.pick = 0; this.emit('stack'); } }
   place(q, r, o) {
+    if (this.S.mode === MERGE_MODE) return this._placeMerge(q, r, o);
     const S = this.S, e = this.current(); if (!e) return { ok: false, why: 'Der Stapel ist leer.' };
     const ev = this.evaluate(e.k, q, r, o); if (!ev.ok) return ev;
     this.undoStack.push(JSON.stringify(S)); if (this.undoStack.length > 10) this.undoStack.shift();
@@ -161,4 +178,115 @@ export class Game {
     const playtime = this.S.stats.playtime; this.load(S); this.S.stats.playtime = playtime; this.undoStack = keep; this.emit('undo'); return true;
   }
   endless() { this.S.mode = 'endlos'; this._refill(5); this.emit('stack'); }
+  // Ist die Partie vorbei? (Klassisch: Stapel leer, Verschmelzen: kein freies Feld)
+  isOver() { const S = this.S; return S.mode === MERGE_MODE ? !this.slots().length : S.mode === 'klassisch' && !S.stack.length; }
+
+  // ================= Modus „Verschmelzen“ =================
+  // Spielfeld: alle Felder mit Abstand ≤ S.maxR um (0,0); gesetzt wird auf jedes freie Feld.
+  inField(q, r) { return dist(q, r, 0, 0) <= (this.S.maxR ?? MERGE_R); }
+  _field() {
+    const R = this.S.maxR ?? MERGE_R, out = [];
+    for (let q = -R; q <= R; q++) for (let r = Math.max(-R, -q - R); r <= Math.min(R, -q + R); r++) out.push([q, r]);
+    return out;
+  }
+  _newMerge(maxR) {
+    const S = this.S;
+    S.maxR = Math.max(1, maxR | 0); S.hold = null;
+    Object.assign(S.stats, { merges: 0, bestLevel: 1, bestKind: '' });
+    S.unlocked = [...new Set(MERGE_CHAINS.flatMap(c => c.kinds))];        // alles, was im Modus vorkommen kann (Handbuch)
+    // 3–5 Grundteile verstreut, keine fertige Dreiergruppe
+    const base = Object.keys(MERGE_POOL).filter(k => LEVEL[k] === 1);
+    const n = 3 + Math.floor(this.rand() * 3);
+    for (let i = 0, tries = 0; i < n && tries < 200; tries++) {
+      const free = this.slots().filter(([q, r]) => q || r), [q, r] = free[Math.floor(this.rand() * free.length)];
+      const k = this._weighted(base.map(b => [b, MERGE_POOL[b]]));
+      if (this._sameGroup(this._kinds(k, q, r), q, r).length >= MERGE_N) continue;
+      this._put({ k, q, r, o: Math.floor(this.rand() * 6) }); i++;
+    }
+    this._refillMerge();
+  }
+  _weighted(pool) { let tot = 0; for (const [, w] of pool) tot += w; let x = this.rand() * tot; for (const [k, w] of pool) if ((x -= w) < 0) return k; return pool[0][0]; }
+  _drawMerge() { return { k: this._weighted(Object.entries(MERGE_POOL)) }; }
+  _refillMerge() { while (this.S.stack.length < MERGE_HAND) this.S.stack.push(this._drawMerge()); }
+  // Arten auf dem Brett als Map (Schlüssel → Art), optional mit einer gedachten Kachel
+  _kinds(kind, q, r) { const m = new Map(); for (const [k, t] of this.board) m.set(k, t.k); if (kind) m.set(key(q, r), kind); return m; }
+  // zusammenhängende Kacheln exakt gleicher Art um (q,r)
+  _sameGroup(kinds, q, r) {
+    const k0 = key(q, r), kind = kinds.get(k0); if (!kind) return [];
+    const seen = new Set([k0]), todo = [[q, r]];
+    while (todo.length) { const [a, b] = todo.pop(); for (let i = 0; i < 6; i++) { const [c, d] = neighbor(a, b, i), k = key(c, d); if (!seen.has(k) && kinds.get(k) === kind) { seen.add(k); todo.push([c, d]); } } }
+    return [...seen];
+  }
+  // Kettenreaktion durchrechnen (verändert nur die übergebene Map)
+  _mergeSteps(kinds, q, r) {
+    const at = key(q, r), steps = [];
+    for (let step = 0; ; step++) {
+      const from = kinds.get(at), to = MERGE[from]; if (!to) break;
+      const grp = this._sameGroup(kinds, q, r), size = grp.length; if (size < MERGE_N) break;
+      const mult = 1.5 ** step, v = mergeValue(to);
+      const bonus = Math.round(v * (size - MERGE_N) * mult);              // mehr als 3 gleiche: jede weitere zählt doppelt
+      const pts = Math.round(v * size * mult) + bonus;
+      const keys = grp.filter(k => k !== at);
+      for (const k of keys) kinds.delete(k); kinds.set(at, to);
+      steps.push({ from, to, keys, at, pts, bonus, size, level: LEVEL[to], step });
+    }
+    return steps;
+  }
+  // Vorschau: was passiert, wenn Art kind auf (q,r) gesetzt wird? (Zustand bleibt unverändert)
+  previewMerge(kind, q, r) {
+    if (!TILES[kind] || this.at(q, r) || !this.inField(q, r)) return [];
+    return this._mergeSteps(this._kinds(kind, q, r), q, r);
+  }
+  _whyMerge(q, r) { return this.at(q, r) ? 'Hier liegt schon eine Kachel.' : !this.inField(q, r) ? 'Außerhalb des Spielfelds.' : ''; }
+  _evalMerge(kind, q, r) {
+    const why = this._whyMerge(q, r); if (why) return { ok: false, why };
+    let nb = 0; for (let i = 0; i < 6; i++) if (this.at(...neighbor(q, r, i))) nb++;
+    const merges = this.previewMerge(kind, q, r), place = LEVEL[kind] || 1, mergePts = merges.reduce((s, m) => s + m.pts, 0);
+    return { ok: true, parts: [], pts: place + mergePts, place, mergePts, merges, bonus: 0, perfect: false, nb,
+      result: merges.length ? merges.at(-1).to : kind };
+  }
+  _snap() { this.undoStack.push(JSON.stringify(this.S)); if (this.undoStack.length > 10) this.undoStack.shift(); }
+  _placeMerge(q, r, o = 0) {
+    const S = this.S, e = this.current(); if (!e) return { ok: false, why: 'Der Stapel ist leer.' };
+    const ev = this._evalMerge(e.k, q, r); if (!ev.ok) return ev;
+    this._snap();
+    const t = { k: e.k, q, r, o: ((o % 6) + 6) % 6 }; this._put(t);
+    S.stack.splice(S.stack[S.pick] ? S.pick : 0, 1); S.pick = 0;
+    S.stats.placed++;
+    // Verschmelzen Schritt für Schritt: Brett ändern, dann melden (Stand beim Event = nach diesem Schritt)
+    const merges = this._mergeSteps(this._kinds(), q, r);
+    for (const m of merges) {
+      const gone = new Set(m.keys);
+      for (const k of m.keys) this.board.delete(k);
+      S.tiles = S.tiles.filter(x => !gone.has(key(x.q, x.r)));
+      t.k = m.to; S.stats.merges++;
+      this.emit('merge', { ...m });
+    }
+    const lvl = LEVEL[t.k] || 1;
+    if (lvl > S.stats.bestLevel || (lvl === S.stats.bestLevel && !S.stats.bestKind)) { S.stats.bestLevel = lvl; S.stats.bestKind = t.k; }
+    const before = S.score, total = ev.place + merges.reduce((s, m) => s + m.pts, 0);
+    S.score += total;
+    this._refillMerge();
+    const ev2 = { ...ev, tile: t, placed: e.k, merges, total, before, gained: [], quests: [], milestones: [], unlocked: [], extra: 0 };
+    this.emit('place', ev2);
+    if (this.isOver()) this.emit('end', this.mergeStats());
+    return ev2;
+  }
+  // Ablagefach: aktuelle Kachel parken (leeres Fach → Nachschub) oder mit der geparkten tauschen
+  hold() {
+    const S = this.S; if (S.mode !== MERGE_MODE) return false;
+    const i = S.stack[S.pick] ? S.pick : 0, e = S.stack[i]; if (!e) return false;
+    this._snap();
+    const swapped = !!S.hold;
+    if (swapped) { S.stack[i] = S.hold; S.hold = e; }
+    else { S.hold = e; S.stack.splice(i, 1); this._refillMerge(); S.pick = Math.min(i, S.stack.length - 1); }
+    this.emit('hold', { hold: S.hold, swapped });
+    this.emit('stack');
+    return true;
+  }
+  mergeStats() {
+    const S = this.S;
+    return { score: S.score, placed: S.stats.placed, merges: S.stats.merges | 0, bestLevel: S.stats.bestLevel || 1, bestKind: S.stats.bestKind || '',
+      tiles: this.board.size, free: this.slots().length };
+  }
 }

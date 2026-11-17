@@ -16,6 +16,7 @@ const { Game } = await import('../js/game.js');
 const { TILES, edgesOf } = await import('../js/tiles.js');
 const { center, pixelToHex, cornerAt, R } = await import('../js/hex.js');
 const { UI } = await import('../js/ui.js');
+const { Progress, matchKind, WISH_BY } = await import('../js/progress.js');
 const { phrase, tileName } = await import('../js/i18n.js');
 
 const BIOME = { wiese: '#a9d26f', wald: '#4f8a3c', wasser: '#86c3e8', feld: '#e6c55e', dorf: '#dcbf92', berg: '#a3a3a3' };
@@ -73,7 +74,16 @@ const app = {
   loadGame(S) { rot = 0; game.load(S); app.log.push('loadGame'); },
   focusTile(q, r) { const c = center(q, r); cam.x = c.x; cam.z = c.z; },
 };
+// Fortschritt (Erfolge, Tagesaufgaben, Besucher) wie in main.js; ?noprog = ohne
+if (!new URLSearchParams(location.search).has('noprog')) app.progress = new Progress(game, { env: () => ({ time: game.S?.time ?? 12, season: +(app.settings.season === 'auto' ? 1 : app.settings.season) }), visitors: () => app.settings.visitors !== false });
 const ui = new UI(app);
+// Verschmelzen ohne 3D: Treffer je Kettenschritt wie main.js melden (zeitversetzt wie die Animation)
+const { MERGE } = await import('../js/tiles.js'); let mq = [];
+game.on((ty, d) => {
+  if (ty === 'merge') mq.push(d);
+  else if (ty === 'place' && mq.length) { const L = mq; mq = []; L.forEach((m, i) => { const [q, r] = m.at.split(',').map(Number);
+    setTimeout(() => ui.notify('mergeHit', { ...m, q, r, last: i === L.length - 1, top: !MERGE[m.to] }), 800 + i * 620); }); }
+});
 // ---------- Eingaben ----------
 function hexAt(px, py) { const x = (px - W / 2) / cam.s + cam.x, z = (py - H / 2) / (cam.s * TILT) + cam.z; return pixelToHex(x, z); }
 function evalHover() { const cur = game.current(); if (!cur || !hover) return; hover.ev = game.evaluate(cur.k, hover.q, hover.r, rot); ui.notify('hover', { q: hover.q, r: hover.r, ev: hover.ev }); }
@@ -109,9 +119,20 @@ const demo = {
   force(k, quest) { game.S.stack.splice(game.S.pick, 0, quest ? { k, quest } : { k }); game.emit('stack'); },
   hoverBest() { const b = demo.best(); if (!b) return; hover = { q: b.q, r: b.r }; rot = b.o; evalHover(); return b; },
   focus(q, r, s) { app.focusTile(q, r); if (s) cam.s = s; },
+  // Fortschritt: Besuch jetzt, Wunsch erfüllen (a neben b), Tagesaufgabe i als geschafft markieren
+  visit() { const p = app.progress; p.cur.vis.next = game.S.stats.placed; demo.autoPlace(1); return p.wishes(); },
+  fulfil(i = 0) {
+    const w = app.progress?.wishes()[i]; if (!w) return null;
+    const W = WISH_BY[w.tpl], N = [[1, 0], [0, 1], [-1, 1], [-1, 0], [0, -1], [1, -1]];
+    const near = test => (q, r) => N.some(([a, b]) => { const n = game.at(q + a, r + b); return n && test(n); });
+    const ok = W.rel === 'edge' ? (q, r) => game.freeSides(q, r) >= 4 : near(n => matchKind(n.k, W.b));
+    for (const [q, r] of game.slots()) { if (!ok(q, r)) continue; for (let o = 0; o < 6; o++) if (game.evaluate(W.a, q, r, o).ok) { demo.force(W.a); return game.place(q, r, o); } }
+    return null;
+  },
+  doneTask(i) { const p = app.progress; p.tasks(); p._setTask(i, 1e6); p.emit('change'); },
   cam,   // Zoom der Attrappen-Kamera (für den Test: Mausrad über der Bauleiste darf ihn nicht ändern)
 };
-Object.assign(window, { __ui: ui, __game: game, __app: app, __demo: demo });
+Object.assign(window, { __ui: ui, __game: game, __app: app, __demo: demo, __prog: app.progress });
 let last = performance.now();
 function loop(t) { const dt = (t - last) / 1000; last = t; draw(); ui.frame(dt); requestAnimationFrame(loop); }
 requestAnimationFrame(loop);

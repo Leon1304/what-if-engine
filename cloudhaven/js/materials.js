@@ -4,21 +4,39 @@ import * as THREE from 'three';
 
 export const U = {
   uTime: { value: 0 }, uWind: { value: 1 }, uAutumn: { value: 0 }, uSnow: { value: 0 }, uSpring: { value: 0 }, uSummer: { value: 0 },
-  uNight: { value: 0 }, uUpView: { value: new THREE.Vector3(0, 1, 0) }, uRain: { value: 0 },
+  uNight: { value: 0 }, uLate: { value: 0 }, uUpView: { value: new THREE.Vector3(0, 1, 0) }, uRain: { value: 0 },
 };
 
 const HASH = `float hh(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
 float vn(vec2 p){ vec2 i = floor(p), f = fract(p); f = f*f*(3.-2.*f); return mix(mix(hh(i), hh(i+vec2(1,0)), f.x), mix(hh(i+vec2(0,1)), hh(i+vec2(1,1)), f.x), f.y); }`;
 
+// Fenster je Fenster: Wert w (Attribut win, sonst Weltraster; Glas mit Zimmer dahinter trägt win + 1 und leuchtet dezenter). Abends gehen die Fenster nacheinander an (Schwelle gegen uNight),
+// einige bleiben dunkel, spät nachts (uLate) gehen etwa 45 % wieder aus. Lichtfarbe je Fenster: warmweiß, gelb, orange, selten Fernseher.
+const WIN = `
+float winW(float w, vec3 p){ return w > .001 ? w : .02 + .98 * hh(floor(p.xz * .9) + floor(p.y * .8)); }
+float winOn(float w){
+  float th = .1 + .72 * fract(w * 13.71);
+  float on = smoothstep(th, th + .06, uNight) * step(.12, fract(w * 5.37));
+  float lt = .08 + .8 * fract(w * 7.73);
+  return on * (1. - step(fract(w * 31.17), .45) * smoothstep(lt, lt + .05, uLate));
+}
+vec3 winCol(float w){
+  float c = fract(w * 3.13);
+  if (c < .4) return vec3(1., .76, .5);
+  if (c < .72) return vec3(1., .66, .3);
+  if (c < .94) return vec3(1., .52, .22);
+  return vec3(.5, .66, 1.) * (.55 + .45 * abs(sin(uTime * 9. + w * 40.)) * (.75 + .25 * sin(uTime * 2.3 + w * 9.)));
+}`;
+
 function windVertex(shader) {
   shader.vertexShader = shader.vertexShader
     .replace('#include <common>', `#include <common>
-attribute float sway; attribute float tag; varying float vTag; varying vec3 vWP; uniform float uTime; uniform float uWind;`)
+attribute float sway; attribute float tag; attribute float win; varying float vTag; varying float vWin; varying vec3 vWP; uniform float uTime; uniform float uWind;`)
     .replace('#include <begin_vertex>', `#include <begin_vertex>
 vec4 wpp = modelMatrix * vec4(transformed, 1.0);
 float ph = uTime * 1.6 + wpp.x * .23 + wpp.z * .19;
 transformed += vec3(sin(ph) + .4 * sin(ph * 2.3 + 1.7), 0., cos(ph * .8 + .5)) * sway * .07 * uWind;
-vTag = tag; vWP = (modelMatrix * vec4(transformed, 1.0)).xyz;`);
+vTag = tag; vWin = win; vWP = (modelMatrix * vec4(transformed, 1.0)).xyz;`);
 }
 
 // Feste Welt: Flächenfarbe aus Vertex-Farben, Wind, Herbstlaub, Blüte, Schnee auf allem, was nach oben zeigt
@@ -28,8 +46,8 @@ worldMat.onBeforeCompile = shader => {
   windVertex(shader);
   shader.fragmentShader = shader.fragmentShader
     .replace('#include <common>', `#include <common>
-varying float vTag; varying vec3 vWP; uniform float uAutumn, uSnow, uSpring, uSummer, uTime; uniform vec3 uUpView;
-${HASH}`)
+varying float vTag; varying float vWin; varying vec3 vWP; uniform float uAutumn, uSnow, uSpring, uSummer, uTime, uNight, uLate; uniform vec3 uUpView;
+${HASH}${WIN}`)
     .replace('#include <color_fragment>', `#include <color_fragment>
 {
   float t = floor(vTag + .5); float h = vn(vWP.xz * .35);
@@ -48,17 +66,28 @@ ${HASH}`)
     c = mix(c, c * vec3(.85, .95, .85), uAutumn * .4);
   } else if (t == 5.) {                                // Blumen
     c = mix(c, vec3(.55, .45, .2), uAutumn * .7);
+  } else if (t == 8.) {                                // Obst: Frühling Blüten, Sommer teils noch grün, Herbst reif, Winter Schnee
+    float hb = hh(floor(vWP.xz * 9.) + floor(vWP.y * 9.) * 7.);
+    float wi = clamp(1. - uSpring - uSummer - uAutumn, 0., 1.);
+    c = mix(c, mix(c, vec3(.5, .66, .2), .6), uSummer * step(.55, hb));
+    c = mix(c, mix(vec3(1., .96, .97), vec3(1., .7, .83), step(.5, hb)), uSpring);
+    c = mix(c, vec3(.9, .93, .98), wi);
   }
   diffuseColor.rgb = c;
 }`)
     .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
 {
   float up = dot(normal, uUpView); float t = floor(vTag + .5);
-  float s = uSnow * smoothstep(.35, .8, up) * (t == 5. ? 1.4 : 1.) * smoothstep(.2, .5, vn(vWP.xz * 1.3) * .6 + uSnow * .7);
+  float s = uSnow * smoothstep(.35, .8, up) * (t == 5. ? 1.4 : t == 7. ? 0. : 1.) * smoothstep(.2, .5, vn(vWP.xz * 1.3) * .6 + uSnow * .7);
   diffuseColor.rgb = mix(diffuseColor.rgb, vec3(.93, .96, 1.), clamp(s, 0., 1.));
+}`)
+    .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
+if (floor(vTag + .5) == 7.) {                          /* Innenraum: tags aufgehellt, nachts warm wie das eigene Fenster */
+  float w = winW(vWin, vWP);
+  totalEmissiveRadiance += diffuseColor.rgb * (vec3(.5) * (1. - uNight) + winCol(w) * winOn(w) * uNight * .8 + vec3(.02, .03, .05) * uNight);
 }`);
 };
-worldMat.customProgramCacheKey = () => 'world1';
+worldMat.customProgramCacheKey = () => 'world2';
 
 // Fenster und Lampen: tags dunkles Glas mit Himmelsspiegelung, nachts warmes Licht (Bloom)
 export const glowMat = new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: .25, metalness: .3, emissive: 0xffb050, emissiveIntensity: 0 });
@@ -67,17 +96,23 @@ glowMat.onBeforeCompile = shader => {
   windVertex(shader);
   shader.fragmentShader = shader.fragmentShader
     .replace('#include <common>', `#include <common>
-varying float vTag; varying vec3 vWP; uniform float uNight, uTime;
-${HASH}`)
+varying float vTag; varying float vWin; varying vec3 vWP; uniform float uNight, uLate, uTime;
+${HASH}${WIN}`)
     .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
-{ float on = vTag > .5 ? 1. : step(.18, hh(floor(vWP.xz * .9) + floor(vWP.y * .8)));   /* Lampen immer an, Fenster meist */ float fl = .92 + .08 * sin(uTime * 7. + vWP.x * 3.);
-  vec3 warm = vec3(1., .66, .3) * uNight * 2.4 * mix(.25, 1., on) * fl * (vTag > 0.5 ? 2.6 : 1.);
-  totalEmissiveRadiance = vTag > 1.5 ? vColor * (.35 + uNight * 2.2) * fl : warm; }`);
+{ float t = floor(vTag + .5), fl = .92 + .08 * sin(uTime * 7. + vWP.x * 3.);
+  if (t == 1.) totalEmissiveRadiance = vec3(1., .66, .3) * uNight * 6.2 * fl;            /* Lampe: immer an */
+  else if (t > 1.5 && t != 7.) totalEmissiveRadiance = vColor * (.35 + uNight * 2.2) * fl; /* farbiges Leuchten */
+  else {                                                                                  /* Fenster (0) und Zimmerlampe (7): je Fenster an/aus */
+    float w = winW(vWin, vWP), rm = step(1., w); w -= rm;                                   /* win > 1: Zimmer dahinter */
+    float on = winOn(w);
+    totalEmissiveRadiance = winCol(w) * uNight * on * (t == 7. ? 4. : rm > .5 ? .5 : 1.4) * fl + vec3(.025, .04, .075) * uNight * (1. - on);   /* Glas nur leicht: das warme Zimmer dahinter trägt das Licht */
+    if (t == 0.) diffuseColor.a *= mix(.6, 1., uNight);                                    /* tags klarer: man sieht ins Zimmer */
+  } }`);
 };
-glowMat.customProgramCacheKey = () => 'glow1';
+glowMat.customProgramCacheKey = () => 'glow2';
 // Glas: wie glow, aber durchsichtig (man sieht in die Zimmer); nachts deckender
 export const glassMat = glowMat.clone(); glassMat.transparent = true; glassMat.opacity = .5; glassMat.depthWrite = false;
-glassMat.onBeforeCompile = glowMat.onBeforeCompile; glassMat.customProgramCacheKey = () => 'glass1';
+glassMat.onBeforeCompile = glowMat.onBeforeCompile; glassMat.customProgramCacheKey = () => 'glass2';
 
 // Wasser: Wellenmuster, Glitzern, Ufer heller, Regentropfen-Kringel
 export const waterMat = new THREE.MeshStandardMaterial({ color: 0x2f8fb0, roughness: .12, metalness: .15, transparent: true, opacity: .9, flatShading: false });

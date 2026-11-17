@@ -2,11 +2,12 @@
 //   const ui = new UI(app); ui.frame(dt) jedes Bild; ui.notify(type, data) für App-Ereignisse.
 // Alles im DOM über dem 3D-Bild (#ui). Kein window.alert/confirm/prompt. Alle Texte über i18n.js (t, tileName …);
 // ui.setLang(l) schaltet die Sprache um und baut alles Sichtbare neu auf.
-import { TILES, KINDS, UNLOCKS, GROUP, GROUP_NAMES, CATS, affinity } from './tiles.js';
-import { MILESTONES, START_TILES } from './game.js';
+import { TILES, KINDS, UNLOCKS, GROUP, GROUP_NAMES, CATS, affinity, MERGE, MERGE_N, MERGE_CHAINS, LEVEL, MERGE_MAX, mergeValue } from './tiles.js';
+import { MILESTONES, START_TILES, MERGE_MODE, MERGE_R, MERGE_HAND } from './game.js';
 import { neighbor, unkey } from './hex.js';
 import * as store from './storage.js';
 import { t, getLang, setLang, applyDoc, LANGS, LANG_LABEL, phrase, quote, tileName, tileDesc, biomeName, groupName, catName, fmtNum, fmtDate } from './i18n.js';
+import { SECTIONS, DAILY_PTS, DAILY_TILES, WISH_PTS, MAX_VISITORS } from './progress.js';
 
 // ---------- Tabellen (Texte kommen aus i18n.js) ----------
 const GROUP_ICON = { wald: '🌲', feld: '🌾', dorf: '🏘️', wasser: '💧', berg: '⛰️' };
@@ -14,8 +15,10 @@ const SEASON_ICON = ['🌷', '🌻', '🍂', '❄️'], seasonName = i => t('sea
 const FILTERS = ['normal', 'gold', 'film', 'sw', 'miniatur', 'nacht'];
 const WEATHER = ['auto', 'klar', 'gewitter', 'regen', 'schnee', 'nebel'];
 const WEATHER_ICON = { gewitter: '⛈️', regen: '🌧️', schnee: '🌨️', nebel: '🌫️' };
-const MODE_ICON = { klassisch: '🃏', endlos: '♾️', kreativ: '🎨' };
-const modeName = k => t('mode.' + k), modeDesc = k => t('mode.' + k + '.d', { n: START_TILES });
+const MODE_ICON = { klassisch: '🃏', endlos: '♾️', kreativ: '🎨', [MERGE_MODE]: '🔮' };
+const fieldN = R => 3 * R * (R + 1) + 1;                 // Felder im Spielfeld mit Radius R
+const modeName = k => t('mode.' + k), modeDesc = k => t('mode.' + k + '.d', { n: START_TILES, f: fieldN(MERGE_R) });
+const chainName = c => (getLang() === 'en' ? c.en : c.name);
 const EDGE_COL = { g: '#6aa84f', w: '#3f8fd0', r: '#a8743f', l: '#8fcbe8' };
 const EDGE_KEYS = ['g', 'w', 'r', 'l'], edgeName = e => t('edge.' + e);
 const BIOME_COL = { wiese: '#a9d26f', wald: '#4f8a3c', wasser: '#86c3e8', feld: '#e6c55e', dorf: '#dcbf92', berg: '#a3a3a3' };
@@ -160,7 +163,8 @@ export class UI {
     this.mode = 'boot'; this.slot = 0; this.screens = []; this.dialogs = [];
     this.shown = 0; this.lastShown = -1; this.items = []; this.flags = []; this.hov = null; this.tutSeen = new Set();
     this.banners = []; this.bannerBusy = false; this.clockT = 0; this.filter = 'normal'; this.newKinds = new Set();
-    applyDoc(); this._build();
+    this.vbubs = []; this.badgeQ = []; this.dOpen = false;
+    applyDoc(); this._build(); this._hookProg();
     store.onError(k => this.toast(t(k), 'err'));
     const s = store.loadSettings();
     if (s && app.settings) { Object.assign(app.settings, s); try { app.applySettings?.(app.settings); } catch (e) { console.warn(e); } }
@@ -170,6 +174,7 @@ export class UI {
     // Eingaben in Feldern und Klicks/Scrollen in der Oberfläche nicht an Kamera-Steuerung (window) weiterreichen
     for (const ev of ['keydown', 'keyup', 'keypress']) this.root.addEventListener(ev, e => { if (isField(e.target) && e.key !== 'Escape') e.stopPropagation(); });
     for (const ev of ['pointerdown', 'wheel', 'contextmenu', 'touchstart', 'mousedown', 'dblclick']) this.root.addEventListener(ev, e => e.stopPropagation(), { passive: true });
+    document.addEventListener('pointerdown', e => { if (this.dOpen && !e.target.closest?.('.dwrap')) this._toggleDaily(false); }, true);
     const flush = () => { try { this.auto.flush(); } catch { } };
     addEventListener('pagehide', flush); document.addEventListener('visibilitychange', () => { if (document.hidden) flush(); });
     if (this.game.S) this._renderAll();
@@ -180,6 +185,7 @@ export class UI {
   // true, solange Menüs/Dialoge offen sind oder getippt wird → Kamera/Setzen in main.js pausieren
   get blocking() { return this.screens.length > 0 || this.dialogs.length > 0 || this.mode === 'menu' || this.mode === 'boot' || this.typing; }
   get photo() { return this.mode === 'photo'; }
+  get merge() { return this.game.S?.mode === MERGE_MODE; }
 
   notify(type, d = {}) {
     switch (type) {
@@ -189,6 +195,7 @@ export class UI {
       case 'hover': this._hover(d); break;
       case 'buildingClick': this.showInfo(d.name || t('building'), d.text || ''); this._tutEvent('buildingClick', d); break;
       case 'tileInfo': this._tileInfo(d.q, d.r); break;
+      case 'mergeHit': this._mergeHit(d); break;
     }
   }
 
@@ -218,6 +225,7 @@ export class UI {
       it.el.style.transform = `translate(${p.x.toFixed(1)}px,${y.toFixed(1)}px)`;
     }
     for (const f of this.flags) { const p = sp(f.pos); f.el.style.visibility = p.visible ? '' : 'hidden'; if (p.visible) f.el.style.transform = `translate(${p.x.toFixed(1)}px,${p.y.toFixed(1)}px)`; }
+    for (const v of this.vbubs) { const p = sp(v.pos); v.el.style.visibility = p.visible ? '' : 'hidden'; if (p.visible) v.el.style.transform = `translate(${p.x.toFixed(1)}px,${(p.y - v.dy).toFixed(1)}px)`; }
     if (this.hov?.els) for (const e of this.hov.els) { const p = sp(e.pos); e.el.style.visibility = p.visible ? '' : 'hidden'; if (p.visible) e.el.style.transform = `translate(${p.x.toFixed(1)}px,${p.y.toFixed(1)}px)`; }
     if (this.pointer) { const p = sp(this.pointer.pos); this.pointer.el.style.visibility = p.visible ? '' : 'hidden'; if (p.visible) this.pointer.el.style.transform = `translate(${p.x.toFixed(1)}px,${p.y.toFixed(1)}px)`; }
     if ((this.clockT -= dt) <= 0) { this.clockT = .5; this._clock(); }
@@ -262,7 +270,7 @@ export class UI {
     this._closeAll();
     for (const n of names) {
       if (n === 'menu') this._menu(); else if (n === 'settings') this._settings(); else if (n === 'book') this._book(page);
-      else if (n === 'islands') this._islands(); else if (n === 'new') this._newIsland(); else if (n === 'end') this._end();
+      else if (n === 'islands') this._islands(); else if (n === 'new') this._newIsland(); else if (n === 'end') this._end(); else if (n === 'badges') this._badges();
     }
     if (this.mode === 'photo') { this.photoBar?.remove(); this._photoBar(); }
     return true;
@@ -292,8 +300,12 @@ export class UI {
       this._btn('📖', 'icon', () => this._book(), { title: t('hud.bookT'), kbd: 'B', 'aria-label': t('hud.book'), 'data-act': 'book' }),
       this._btn('📷', 'icon', () => this._enterPhoto(), { title: t('hud.photoT'), kbd: 'P', 'aria-label': t('hud.photo'), 'data-act': 'photo' }),
       this._btn('☰', 'icon', () => this._menu(), { title: t('hud.menuT'), kbd: 'Esc', 'aria-label': t('hud.menu'), 'data-act': 'menu' }));
-    el.hud = h('div.hud', {}, el.score, el.clock, h('div.spacer'), btns);
-    if (old) { old.replaceWith(el.hud); this.lastShown = -1; this._hud(); }
+    el.daily = h('button.daily.chip.live', { type: 'button', 'data-act': 'daily', 'aria-expanded': 'false', title: t('dl.chipT') });
+    el.daily.addEventListener('click', () => { this._sfx('click'); this._toggleDaily(); });
+    el.dpanel = h('div.dpanel.panel.live', { hidden: true, role: 'dialog', 'aria-label': t('dl.title') });
+    el.dwrap = h('div.dwrap', { hidden: !this.prog }, el.daily, el.dpanel);
+    el.hud = h('div.hud', {}, el.score, el.clock, el.dwrap, h('div.spacer'), btns);
+    if (old) { old.replaceWith(el.hud); this.lastShown = -1; this._hud(); if (this.dOpen) { this.dOpen = false; this._toggleDaily(true); } }
   }
   _btn(label, cls, fn, a = {}) {
     const { kbd, ...rest } = a;
@@ -311,16 +323,21 @@ export class UI {
   // ================= Spielereignisse =================
   _onGame(type, d) {
     if (type === 'reset') { this._clearFx(); this.shown = this.game.S.score; this.lastShown = -1; this._resetBar(); this._renderAll(); }
-    else if (type === 'place') { this._keepKind(d.tile.k); this._onPlace(d); this._renderStack(); this._renderFlags(); this._hud(); this.auto.touch(); this._tutEvent('place', d); }
+    else if (type === 'place') { this._lastMerges = d.merges?.length || 0; this._keepKind(d.tile.k); this._onPlace(d); this._renderStack(); this._renderFlags(); this._hud(); this._renderProg(); this.auto.touch(); this._tutEvent('place', d); }
     else if (type === 'stack') { this._renderStack(); }
+    else if (type === 'hold') { this._renderStack(); this._hud(); this.toast(t(d.swapped ? 'mb.swapped' : 'mb.parked', { tile: tl(d.hold.k) })); }
     else if (type === 'unlock') { this._sfx('unlock'); for (const k of d.kinds || []) this.newKinds.add(k); this._unlockCard(d.kinds || []); this._renderStack(); this._pulseCats(d.kinds || []); }
     else if (type === 'undo') { this._renderAll(); this.auto.touch(); this.toast(t('undo.done')); }
-    else if (type === 'end') { clearTimeout(this._endT); this._endT = setTimeout(() => { if (this.mode === 'play' && !this.game.S.stack.length) this._end(); }, 1800); }
+    else if (type === 'end') {   // Verschmelzen: erst nach der Animation (je Kettenschritt ~0,6 s)
+      const wait = 1800 + (this._lastMerges | 0) * 650;
+      clearTimeout(this._endT); this._endT = setTimeout(() => { if (this.mode === 'play' && this.game.isOver()) this._end(); }, wait);
+    }
   }
   // neue/geladene Insel: Zähler ohne Hüpfen übernehmen; bei einer anderen Insel die Kategorie der Auswahl aufklappen
   _resetBar() {
     const S = this.game.S; if (this.bar) this.bar.prev = null;
     if (!S || this._barFor === S.created) return;
+    if (this.merge || this.bar?.merge) { if (this._barFor != null) this.newKinds.clear(); this._barFor = S.created; return; }
     if (this._barFor != null) this.newKinds.clear();
     this._barFor = S.created;
     if (!this.bar) { this.openCats = null; return; }
@@ -329,14 +346,20 @@ export class UI {
     if (c) this._setGroup(c, true);
     this.activeCat = c;
   }
-  _renderAll() { this._hud(); this._renderStack(); this._renderFlags(); this._renderTut(); this._progress(); this._clock(); }
+  _renderAll() { this._hookProg(); this._hud(); this._renderStack(); this._renderFlags(); this._renderTut(); this._progress(); this._clock(); this._renderProg(); }
   _hud() {
     const S = this.game.S; if (!S) return;
     this.el.name.textContent = S.name || ''; this.el.undo.disabled = !this.game.canUndo();
-    this.root.classList.toggle('kreativ', S.mode === 'kreativ');
+    this.root.classList.toggle('kreativ', S.mode === 'kreativ'); this.root.classList.toggle('merge', S.mode === MERGE_MODE);
   }
   _progress() {
     const S = this.game.S; if (!S) return;
+    if (S.mode === MERGE_MODE) {   // Verschmelzen: Balken = belegte Felder, darunter freie Felder und beste Stufe
+      const all = fieldN(S.maxR ?? MERGE_R), free = this.game.slots().length, b = S.stats.bestKind;
+      this.el.bar.style.width = ((all - free) / all * 100).toFixed(1) + '%';
+      this.el.next.textContent = t('hud.mFree', { n: free, all }) + (b && LEVEL[b] > 1 ? t('hud.mBest', { tile: `${TILES[b].icon} ${tileName(b)}`, n: LEVEL[b] }) : '');
+      return;
+    }
     const nu = this.game.nextUnlock(), v = Math.round(this.shown);
     if (!nu) { this.el.bar.style.width = '100%'; this.el.next.textContent = S.mode === 'kreativ' ? t('hud.allFreeKre') : t('hud.allUnlocked'); return; }
     const prev = Math.max(0, ...UNLOCKS.filter(u => u.at <= v && u.at !== Infinity).map(u => u.at));
@@ -357,7 +380,8 @@ export class UI {
   // ---------- Bauleiste: Kategorien zum Aufklappen, Karten, seitliches Scrollen ----------
   _catOf(k) { return this.cats?.find(c => c.kinds.includes(k))?.id || null; }
   _buildBar() {
-    const S = this.game.S, old = this.bar, keepX = old ? old.track.scrollLeft : 0;
+    if (this.merge) return this._buildMergeBar();
+    const S = this.game.S, old = this.bar?.merge ? null : this.bar, keepX = old ? old.track.scrollLeft : 0;
     if (old) { old.sc.stop(); old.ro?.disconnect(); }
     const box = this.el.stack; box.textContent = '';
     const cats = this.cats = barCats(), B = this.bar = { tabs: {}, groups: {}, cards: {}, prev: null, curK: undefined };
@@ -407,19 +431,19 @@ export class UI {
     B.sc.jump(keepX); requestAnimationFrame(edges);
   }
   _barCard(k, i, keys) {
-    const T = TILES[k], src = this._thumb(k), n = h('span.n'), qf = h('span.qf', { hidden: true }), lk = h('span');
+    const T = TILES[k], src = this._thumb(k), n = h('span.n'), qf = h('span.qf', { hidden: true }), lk = h('span'), wh = h('span.wh', { hidden: true, title: t('vis.wantT') }, '❤️');
     const el = h('div.tc', { role: 'button', tabindex: '0', 'data-kind': k, 'aria-pressed': 'false', title: `${tileName(k)}: ${tileDesc(k)}` },
       h('div.im', {}, src ? h('img', { src, alt: '', draggable: 'false' }) : h('span.em', {}, T.icon)), src && h('div.ic', {}, T.icon),
-      h('div.nm', {}, tileName(k)), n, qf, h('div.lock', {}, h('i', {}, '🔒'), lk), h('span.nw', {}, t('bar.new')), keys && i < 9 && h('kbd.key', {}, i + 1));
+      h('div.nm', {}, tileName(k)), n, qf, wh, h('div.lock', {}, h('i', {}, '🔒'), lk), h('span.nw', {}, t('bar.new')), keys && i < 9 && h('kbd.key', {}, i + 1));
     el.style.setProperty('--i', i);
     el.addEventListener('click', e => this._choose(k, !!e.target.closest('.qf')));
     el.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); this._choose(k); } });
-    this.bar.cards[k] = { el, n, qf, lk };
+    this.bar.cards[k] = { el, n, qf, lk, wh };
     return el;
   }
   // Kategorie auf-/zuklappen. only: alle anderen zu (Tab-Taste)
   _toggleCat(id, { only = false, open } = {}) {
-    if (!this.bar?.groups[id]) return;
+    if (!this.bar?.groups?.[id]) return;
     const want = open ?? (only || !this.openCats.has(id));
     if (only) for (const c of [...this.openCats]) if (c !== id) this._setGroup(c, false);
     this._setGroup(id, want);
@@ -429,7 +453,7 @@ export class UI {
     const tb = this.bar.tabs[this.activeCat]; if (tb) this.bar.tabSc.show(tb);
   }
   _setGroup(id, on) {
-    const B = this.bar, g = B.groups[id]; if (!g) return;
+    const B = this.bar, g = B?.groups?.[id]; if (!g) return;
     if (on) this.openCats.add(id); else this.openCats.delete(id);
     if (g.classList.contains('open') === on && !g._t) return;
     clearTimeout(g._t); g._t = 0;
@@ -449,12 +473,12 @@ export class UI {
   }
   // aufgeklappte Kategorie ins Bild scrollen (mit der Breite, die sie nach dem Aufklappen hat)
   _revealGroup(id) {
-    const B = this.bar; if (!B || !this.openCats.has(id)) return;
+    const B = this.bar; if (!B || B.merge || !this.openCats.has(id)) return;
     let x = parseFloat(getComputedStyle(B.track).paddingLeft) || 0;
     for (const c of this.cats) { const g = B.groups[c.id], w = this.openCats.has(c.id) ? g.firstChild.offsetWidth : 0; if (c.id === id) { B.sc.ensure(x, x + w); return; } x += w; }
   }
   _barEdges() {
-    const B = this.bar; if (!B) return;
+    const B = this.bar; if (!B || B.merge) return;
     for (const [el, w] of [[B.track, B.wrap], [B.tabRow, B.tabRow]]) {
       const m = el.scrollWidth - el.clientWidth;
       w.classList.toggle('l', el.scrollLeft > 2); w.classList.toggle('r', el.scrollLeft < m - 2);
@@ -463,6 +487,7 @@ export class UI {
   // Bauteil wählen (Klick, Taste). quest: lieber eine Kachel mit Aufgaben-Flagge
   _choose(k, quest = false) {
     const S = this.game.S, T = TILES[k]; if (!S || !T) return;
+    if (S.mode === MERGE_MODE) { const i = S.stack.findIndex(e => e.k === k); if (i >= 0) this._mergePick(i); return; }
     if (S.mode === 'kreativ') this.game.setKind(k);
     else {
       const bad = msg => { this._sfx('invalid'); this.toast(msg); const c = this.bar?.cards[k]?.el; if (c) { c.classList.remove('no'); void c.offsetWidth; c.classList.add('no'); } };
@@ -481,19 +506,21 @@ export class UI {
   }
   // Nach dem Setzen dieselbe Art behalten (oder eine aus derselben Kategorie), statt zufällig weiterzuspringen
   _keepKind(k) {
-    const S = this.game.S; if (!S || S.mode === 'kreativ' || !S.stack.length) return;
+    const S = this.game.S; if (!S || S.mode === 'kreativ' || S.mode === MERGE_MODE || !S.stack.length) return;
     const sup = this.game.supply();
     if (sup[k]?.n) { if (this.game.current()?.k !== k) this.game.pickKind(k); return; }
     const alt = this.cats?.find(c => c.kinds.includes(k))?.kinds.find(x => sup[x]?.n);
     if (alt) this.game.pickKind(alt);
   }
   _pickNth(i) {
+    if (this.merge) { if (i < this.game.S.stack.length) this._mergePick(i); return; }
     const cat = this.cats?.find(c => c.id === (this.openCats.has(this.activeCat) ? this.activeCat : this._catOf(this.game.current()?.k))) || this.cats?.[0];
     if (!cat) return;
     if (!this.openCats.has(cat.id)) this._toggleCat(cat.id, { open: true });
     if (i < cat.kinds.length) this._choose(cat.kinds[i]);
   }
   _cycleCat(dir) {
+    if (this.merge) return;
     const ids = this.cats?.map(c => c.id); if (!ids?.length) return;
     const cur = ids.indexOf(this.activeCat ?? this._catOf(this.game.current()?.k));
     this._sfx('click'); this._toggleCat(ids[((cur < 0 ? (dir > 0 ? -1 : 0) : cur) + dir + ids.length) % ids.length], { only: true });
@@ -506,12 +533,14 @@ export class UI {
   }
   _renderStack() {
     const S = this.game.S; if (!S) return;
-    if (!this.bar) return this._buildBar();
+    if (!this.bar || !!this.bar.merge !== this.merge) return this._buildBar();
+    if (this.bar.merge) return this._renderMergeBar();
     const B = this.bar, kre = S.mode === 'kreativ', sup = kre ? {} : this.game.supply(), cur = this.game.current(), ck = cur?.k;
     if (ck) this.newKinds.delete(ck);
     B.root.classList.toggle('kre', kre); B.root.classList.toggle('empty', !ck); B.root.classList.toggle('none', !this.openCats.size);
-    const prev = B.prev, now = {};
+    const prev = B.prev, now = {}, wish = this._wished();
     for (const [k, c] of Object.entries(B.cards)) {
+      c.wh.hidden = !wish.has(k);
       const lock = !kre && !S.unlocked.includes(k), n = kre ? 0 : sup[k]?.n || 0, q = kre ? 0 : sup[k]?.quest || 0, sel = k === ck;
       now[k] = n;
       c.el.classList.toggle('lock', lock); c.el.classList.toggle('zero', !kre && !lock && !n); c.el.classList.toggle('sel', sel); c.el.classList.toggle('new', this.newKinds.has(k));
@@ -529,7 +558,7 @@ export class UI {
       const tb = B.tabs[c.id], g = B.groups[c.id], open = this.openCats.has(c.id), act = c.id === this.activeCat && open;
       const sum = c.kinds.reduce((a, k) => a + (sup[k]?.n || 0), 0), qs = c.kinds.some(k => sup[k]?.quest);
       tb.classList.toggle('open', open); tb.classList.toggle('act', act); tb.classList.toggle('has', c.kinds.includes(ck)); tb.setAttribute('aria-expanded', open ? 'true' : 'false');
-      tb.lastChild.previousSibling.textContent = kre ? '∞' : sum; tb.classList.toggle('q', !kre && qs); tb.classList.toggle('z', !kre && !sum);
+      tb.lastChild.previousSibling.textContent = kre ? '∞' : sum; tb.classList.toggle('q', !kre && qs); tb.classList.toggle('z', !kre && !sum); tb.classList.toggle('w', c.kinds.some(k => wish.has(k)));
       tb.title = t('bar.tabT', { c: c.name, s: kre ? t('bar.allFree') : t('bar.inStock', { n: sum, q: qs }), open });
       g.classList.toggle('act', act); g.classList.remove('last'); if (open) last = g;
     }
@@ -546,6 +575,72 @@ export class UI {
     B.curFlag.hidden = !cur?.quest; if (cur?.quest) { B.curFlag.textContent = `🚩 +${cur.quest}`; B.curFlag.title = t('bar.quest', { g: GROUP[ck] ? groupName(GROUP[ck]) : t('bar.group'), n: cur.quest }); }
     B.tot.textContent = ''; B.tot.append(h('span', {}, kre ? t('bar.kre') : S.mode === 'endlos' ? t('bar.endless') : t('bar.supply')), h('b', {}, kre || S.mode === 'endlos' ? '∞' : S.stack.length));
     this._barEdges();
+  }
+  // ---------- Verschmelzen: Vorrat (3 große Karten) + Ablagefach + freie Felder ----------
+  _buildMergeBar() {
+    const box = this.el.stack; box.textContent = '';
+    const keys = matchMedia('(hover: hover)').matches, B = this.bar = { merge: true, cards: [] };
+    const card = (i, extra) => {
+      const im = h('div.im'), lv = h('span.lv'), nm = h('b.nm'), nx = h('small.nx');
+      const el = h('div.mc', { tabindex: '0', ...extra }, h('div.imw', {}, im, lv), nm, nx, keys && h('kbd.key', {}, i));
+      return { el, im, lv, nm, nx, k: undefined };
+    };
+    B.row = h('div.mb-row', { role: 'radiogroup', 'aria-label': t('mb.supply') });
+    for (let i = 0; i < MERGE_HAND; i++) {
+      const c = card(i + 1, { role: 'radio', 'aria-checked': 'false', 'data-i': i });
+      c.el.addEventListener('click', () => this._mergePick(i));
+      c.el.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); this._mergePick(i); } });
+      B.cards.push(c); B.row.append(c.el);
+    }
+    B.hold = card('H', { role: 'button', 'data-act': 'hold', title: t('mb.holdT') }); B.hold.el.classList.add('mh');
+    B.hold.el.addEventListener('click', () => this._hold());
+    B.hold.el.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); this._hold(); } });
+    B.free = h('b'); B.freeBox = h('div.mb-free', {}, B.free, h('span', {}, t('mb.free')));
+    B.res = this._btn(t('bar.results'), 'main small', () => this._end(), { 'data-act': 'results', hidden: true });
+    B.root = h('div.mb.chip.live', {},
+      h('div.mb-grp', {}, h('div.mb-lbl', {}, t('mb.supply')), B.row), h('div.mb-sep'),
+      h('div.mb-grp', {}, h('div.mb-lbl', {}, t('mb.hold')), B.hold.el), h('div.mb-sep'),
+      h('div.mb-side', {}, B.freeBox, h('div.rot', {}, this._btn('↺', 'small', () => this.app.rotate?.(-1), { title: t('bar.rotL'), 'aria-label': t('bar.rotLa') }),
+        this._btn('↻', 'small', () => this.app.rotate?.(1), { title: t('bar.rotR'), 'aria-label': t('bar.rotRa') })), B.res));
+    const hint = keys ? h('div.hint.chip', {}, h('kbd', {}, '1'), '–', h('kbd', {}, String(MERGE_HAND)), t('mb.kPick'), h('kbd', {}, 'H'), t('mb.kHold'), h('kbd', {}, 'R'), t('bar.kRot'), h('kbd', {}, t('kbd.ctrlz')), t('bar.kUndo')) : null;
+    box.append(...[hint, B.root].filter(Boolean));
+    this._renderMergeBar();
+  }
+  _mergeCard(c, k, hold) {
+    if (c.k === k) return; c.k = k; c.im.textContent = '';
+    c.el.classList.toggle('empty', !k);
+    if (!k) { c.im.append(h('span.em', {}, '＋')); c.nm.textContent = t('mb.empty'); c.nx.textContent = t('mb.put'); c.lv.hidden = true; return; }
+    const src = this._thumb(k), L = LEVEL[k] || 1;
+    c.im.append(src ? h('img', { src, alt: '', draggable: 'false' }) : h('span.em', {}, TILES[k].icon));
+    c.nm.textContent = tileName(k); c.lv.hidden = false; c.lv.textContent = L; c.lv.className = 'lv l' + L; c.lv.title = t('mb.lvT', { n: L, m: MERGE_MAX });
+    c.nx.textContent = hold ? t('mb.swap') : MERGE[k] ? t('mb.next', { tile: tileName(MERGE[k]) }) : t('mb.top');
+    if (!hold) c.el.title = t('mb.pickT', { tile: tileName(k), n: +c.el.dataset.i + 1 });
+    c.im.classList.remove('swap'); void c.im.offsetWidth; c.im.classList.add('swap');
+  }
+  _renderMergeBar() {
+    const S = this.game.S, B = this.bar, sel = S.stack[S.pick] ? S.pick : 0;
+    B.cards.forEach((c, i) => {
+      const e = S.stack[i]; c.el.hidden = !e; this._mergeCard(c, e?.k || null, false);
+      c.el.classList.toggle('sel', i === sel); c.el.setAttribute('aria-checked', i === sel ? 'true' : 'false');
+    });
+    this._mergeCard(B.hold, S.hold?.k || null, true);
+    const all = fieldN(S.maxR ?? MERGE_R), free = this.game.slots().length;
+    B.free.textContent = free; B.freeBox.title = t('mb.freeT', { n: free, all }); B.freeBox.classList.toggle('low', free <= 4);
+    B.res.hidden = !this.game.isOver();
+  }
+  _mergePick(i) { if (!this.merge || this.mode !== 'play') return; this._sfx('click'); this.game.pick(i); }
+  _hold() {
+    if (!this.merge || this.mode !== 'play' || this.screens.length) return;
+    if (this.game.hold()) this._sfx('rotate');
+  }
+  // Treffer eines Kettenschritts (main.js, zeitgleich mit dem Lichtblitz): Punkte-Schild, bei hohen Stufen ein Band
+  _mergeHit(d) {
+    if (!this.game.S || this.mode === 'menu') return;
+    const p = this.app.tilePos(d.q, d.r); p[1] = Math.max(0, p[1]);
+    const base = up(p, 2.2 + d.step * .9);
+    this._pop(base, '+' + fmtNum(d.pts), `${TILES[d.to].icon} ${tileName(d.to)}${d.step ? ' · ' + t('fx.chain', { n: d.step + 1 }) : ''}`, { cls: d.step ? 'quest big' : 'gold big' });
+    if (d.last && (d.level >= 4 || d.top)) this._banner(t('fx.mlv', { icon: TILES[d.to].icon, tile: tileName(d.to) }), t('fx.mlvS', { n: d.level, p: fmtNum(d.pts) }));
+    this._renderStack(); this._progress();
   }
   _undo() {
     if (this.mode !== 'play' || !this.game.canUndo()) { if (this.mode === 'play') this.toast(t('undo.none')); return; }
@@ -636,6 +731,7 @@ export class UI {
     this.hov = null;
     if (!d || !d.ev || this.mode !== 'play' || !this.game.S) return;
     const { q, r, ev } = d, cur = this.game.current(), kind = d.kind || cur?.k; if (!kind) return;
+    if (this.merge) return this._hoverMerge(q, r, ev, kind);
     const base = this.app.tilePos(q, r), els = [];
     const card = h('div.hover.chip');
     if (!ev.ok) card.append(h('div.why', {}, '✋ ' + (ev.why ? phrase(ev.why) : t('hov.nofit'))));
@@ -655,6 +751,28 @@ export class UI {
     for (const e of els) { e.el.style.visibility = 'hidden'; this.el.fx.append(e.el); }
     this.hov = { q, r, els };
   }
+  _mini(k) { const src = this._thumb(k); return h('span.mi', { title: tileName(k) }, src ? h('img', { src, alt: '', draggable: 'false' }) : TILES[k].icon); }
+  _hoverMerge(q, r, ev, kind) {
+    const card = h('div.hover.mhov.chip');
+    if (!ev.ok) card.append(h('div.why', {}, '✋ ' + (ev.why ? phrase(ev.why) : t('hov.nofit'))));
+    else {
+      card.append(h('div.big', {}, `+${fmtNum(ev.pts)}`, h('span', { style: { font: '800 13px var(--font)', color: 'var(--ink2)', marginLeft: '6px' } }, t('points', { c: ev.pts }))));
+      if (ev.merges.length) {
+        for (const m of ev.merges) card.append(h('div.mrow' + (m.step ? '.ch' : ''), {}, this._mini(m.from), h('span.ar', {}, '→'), this._mini(m.to),
+          h('span.tx', {}, t('mh.merge', { n: m.size, a: tileName(m.from), b: tileName(m.to) })), h('b', {}, '+' + fmtNum(m.pts))));
+        if (ev.merges.length > 1) card.append(h('div.q', {}, t('mh.chain', { n: ev.merges.length })));
+        card.append(h('div.ln', {}, h('span', {}, t('mh.result', { tile: `${TILES[ev.result].icon} ${tileName(ev.result)}` })), h('span.lv.l' + LEVEL[ev.result], {}, LEVEL[ev.result])));
+      } else {
+        card.append(h('div.ln', {}, h('span', {}, t('mh.place', { tile: tileName(kind) })), h('b', {}, '+' + ev.place)));
+        // wie viele gleiche wären beisammen? (Logik-Hilfe aus game.js, ändert nichts)
+        const n = this.game._sameGroup?.(this.game._kinds(kind, q, r), q, r).length || 1;
+        card.append(h('div.ln', {}, h('span', {}, MERGE[kind] ? t('mh.need', { n, m: MERGE_N, tile: tileName(MERGE[kind]) }) : t('mh.top'))));
+      }
+    }
+    const el = h('div', {}, card), p = this.app.tilePos(q, r); p[1] = Math.max(0, p[1]);   // freies Feld: kein Boden (groundAt −60)
+    el.style.visibility = 'hidden'; this.el.fx.append(el);
+    this.hov = { q, r, els: [{ el, pos: up(p, 1.5) }] };
+  }
   _tileInfo(q, r) {
     const t0 = this.game.at(q, r); if (!t0) return; const g = this.game.group(q, r);
     let txt = tileDesc(t0.k); if (g.g) txt += t('info.group', { g: groupName(g.g), n: g.keys.length });
@@ -663,7 +781,7 @@ export class UI {
   }
 
   // ---------- Anleitung ----------
-  _tutStep() { const S = this.game.S; return S && this.mode === 'play' && (S.tut | 0) < TUT.length ? S.tut | 0 : -1; }
+  _tutStep() { const S = this.game.S; return S && this.mode === 'play' && S.mode !== MERGE_MODE && (S.tut | 0) < TUT.length ? S.tut | 0 : -1; }
   _renderTut() {
     const box = this.el.tut; box.textContent = ''; box.className = 'tut';
     if (this.pointer) { this.pointer.el.remove(); this.pointer = null; }
@@ -701,6 +819,139 @@ export class UI {
     this._renderTut();
   }
   _tutSkip() { const S = this.game.S; if (!S) return; S.tut = TUT.length; store.setFlag('tutDone', true); this.auto.touch(); this._renderTut(); this.toast(t('tut.skipped')); }
+
+  // ================= Fortschritt: Erfolge, Tagesaufgaben, Besucher (app.progress, optional) =================
+  get prog() { return this.app.progress || null; }
+  _hookProg() {
+    const p = this.prog; if (!p || this._progHooked === p) return;
+    this._progHooked = p; p.on((type, d) => this._onProg(type, d));
+    if (this.el?.dwrap) this.el.dwrap.hidden = false;
+  }
+  _wished() { try { return this.prog?.visitorsHere() ? this.prog.wishedKinds() : new Set(); } catch { return new Set(); } }
+  _onProg(type, d) {
+    const live = this.mode === 'play' && !this.screens.length && !this.dialogs.length;
+    if (type === 'badge') this._badgeCard(d.b);
+    else if (type === 'daily' && live && !this.dOpen) { this.toast(t('dl.doneT', { x: this._taskText(d.task) })); this._sfx('quest'); }
+    else if (type === 'dailyAll' && live) this._banner(t('dl.allT'), t('dl.allS'));
+    else if (type === 'visitor' && live) { this._sfx('pop'); this.toast(t('vis.arrive', { name: d.w.who, face: d.w.face })); }
+    else if (type === 'wishDone') this._wishThanks(d);
+    else if (type === 'wishGone') this._wishBye(d.w);
+    else if (type === 'claim') { this._sfx('unlock'); if (live) this.toast(t('dl.got', { p: d.pts, n: d.kinds.length })); }
+    if (type !== 'badge') this._renderProg();
+  }
+  _renderProg() { if (!this.prog || !this.game.S) return; this._renderDaily(); this._renderVisitors(); if (this.bar) this._renderStack(); }
+  _taskText(x) {
+    if (x.type === 'row') return t('dt.row.' + x.k, { n: x.goal });
+    if (x.type === 'next') return t('dt.next.' + x.id);
+    return t('dt.' + x.type, { n: x.type === 'score' ? fmtNum(x.goal) : x.goal });
+  }
+  // ---------- Tagesaufgaben: Knopf im HUD, Liste zum Aufklappen ----------
+  _toggleDaily(on = !this.dOpen) {
+    const el = this.el; if (!el?.dpanel || (on && !this.prog)) return;
+    this.dOpen = on; el.dpanel.hidden = !on; el.daily.setAttribute('aria-expanded', on ? 'true' : 'false'); el.daily.classList.toggle('open', on);
+    if (on) { this._hover(null); this._renderDaily(); }
+  }
+  _renderDaily() {
+    const p = this.prog, el = this.el, S = this.game.S; if (!p || !el?.daily || !S) return;
+    const D = p.daily(), sum = p.summary(), ws = p.visitorsHere() ? p.wishes() : [];
+    const add = (box, ...kids) => box.append(...kids.flat(4).filter(x => x != null && x !== false));
+    el.daily.textContent = '';
+    add(el.daily, h('span', {}, `📅 ${D.done}/${D.tasks.length}`), ws.length > 0 && h('span', {}, `💌 ${ws.length}`), h('span.st', {}, `⭐ ${fmtNum(sum.stars)}`), D.claimable > 0 && h('i.dot', { 'aria-hidden': 'true' }));
+    el.daily.classList.toggle('claim', D.claimable > 0);
+    if (!this.dOpen) return;
+    const kre = S.mode === 'kreativ', kl = S.mode === 'klassisch', box = el.dpanel; box.textContent = '';
+    add(box, h('h4', {}, t('dl.title'), h('small', {}, fmtDate(Date.now()))),
+      h('div.x', {}, this._btn('✕', 'ghost small', () => this._toggleDaily(false), { 'aria-label': t('close') })),
+      kre && h('p.kre', {}, t('bd.kre')),
+      D.tasks.map(x => h('div.dt' + (x.done ? '.done' : '') + (x.claimed ? '.claimed' : ''), { 'data-task': x.i },
+        h('span.ck', {}, x.claimed ? '✓' : x.done ? '🎁' : ''),
+        h('div', {}, h('div.tx', {}, this._taskText(x)), !x.done && h('div.bar', {}, h('i', { style: { width: (x.val / x.goal * 100).toFixed(0) + '%' } })),
+          h('small', {}, x.done ? (x.claimed ? t('dl.claimed') : '') : `${fmtNum(x.val)} / ${fmtNum(x.goal)}`)),
+        x.done && !x.claimed ? this._btn(t('dl.claim'), 'main small', () => this.prog.claimDaily(x.i), { 'data-act': 'claim' }) : h('span'))),
+      h('div.rw', {}, t('dl.reward', { p: DAILY_PTS, n: DAILY_TILES, kl })),
+      h('div.sec', {}, t('dl.vis')),
+      !p.visitorsHere() ? h('div.none', {}, t('dl.visMode')) : (this.app.settings?.visitors === false) ? h('div.none', {}, t('dl.visOff'))
+        : ws.length ? ws.map(w => { const r = h('div.dv', { role: 'button', tabindex: '0', title: t('vis.pick', { tile: tileName(w.a) }) }, h('span.face', {}, w.face), h('div', {}, h('b', {}, w.who), h('span', {}, t('w.' + w.tpl)), h('small', {}, `${tl(w.a)} · ${t('vis.leftT', { n: w.left })}`)));
+          r.addEventListener('click', () => { this._choose(w.a); const [q, rr] = unkey(w.home); this.app.focusTile?.(q, rr); }); return r; })
+          : h('div.none', {}, t('dl.noVis')),
+      h('div.row.foot', {}, h('small', {}, t('dl.new')), h('div.grow'), this._btn(`🏆 ${sum.got}/${sum.total}`, 'small', () => { this._toggleDaily(false); this._badges(); }, { 'data-act': 'badges', title: t('bd.all') })));
+  }
+  // ---------- Besucher: Sprechblasen über ihrem Haus ----------
+  _renderVisitors() {
+    for (const v of this.vbubs) v.el.remove(); this.vbubs = [];
+    const p = this.prog; if (!p || !this.game.S || !p.visitorsHere()) return;
+    const n = {};
+    for (const w of p.wishes()) {
+      const [q, r] = unkey(w.home); if (!this.game.at(q, r)) continue;
+      const i = n[w.home] = (n[w.home] || 0) + 1;
+      const el = h('div.vis.live', { 'data-wish': w.id }, h('div.in', { title: t('vis.pick', { tile: tileName(w.a) }) },
+        h('div.face', {}, w.face),
+        h('div.say', {}, h('b', {}, w.who), h('span', {}, t('w.' + w.tpl)),
+          h('div.want', {}, h('span', {}, tl(w.a)), h('em', { title: t('vis.leftT', { n: w.left }) }, t('vis.left', { n: w.left }))))));
+      el.addEventListener('click', () => { this._sfx('click'); this._choose(w.a); });
+      el.style.visibility = 'hidden'; this.el.fx.append(el);
+      this.vbubs.push({ el, pos: up(this.app.tilePos(q, r), 4.5), dy: (i - 1) * 96, w });
+    }
+  }
+  _wishThanks(d) {
+    // kurz nach den Punkte-Schildern des Zugs, damit der Dank obenauf liegt
+    setTimeout(() => {
+      const [q, r] = unkey(d.key); if (!this.game.at(q, r)) return;
+      const base = up(this.app.tilePos(q, r), 5), lines = t('vis.thx');
+      const it = this._add('vthx', base, h('div.in', {}, h('div.face', {}, d.w.face),
+        h('div.say', {}, h('b', {}, d.w.who), h('span', {}, lines[d.w.line % lines.length]), d.pts > 0 && h('strong', {}, `+${d.pts} ❤️`))), 3400);
+      for (let i = 0; i < 9; i++) {
+        const hs = h('i.heart', {}, ['❤️', '💛', '💖'][i % 3]);
+        hs.style.setProperty('--x', ((i - 4) * 16 + Math.random() * 10) + 'px'); hs.style.setProperty('--r', ((i - 4) * 9) + 'deg'); hs.style.animationDelay = (150 + i * 80) + 'ms';
+        it.el.firstChild.append(hs);
+      }
+      this._sfx('quest'); setTimeout(() => this._sfx('sparkle'), 320);
+    }, 650);
+  }
+  _wishBye(w) {
+    const [q, r] = unkey(w.home); if (!this.game.at(q, r)) return;
+    const lines = t('vis.bye');
+    this._add('vthx.bye', up(this.app.tilePos(q, r), 4.5), h('div.in', {}, h('div.face', {}, w.face), h('div.say', {}, h('b', {}, w.who), h('span', {}, lines[w.line % lines.length]))), 3000);
+  }
+  // ---------- Erfolg freigeschaltet: Karte mit Abzeichen ----------
+  _medal(b, cls = '') { return h('div.medal.t' + b.tier + (cls ? '.' + cls : ''), { 'aria-hidden': 'true' }, h('span', {}, b.icon), h('i.shine')); }
+  _bdText(b) { return t('bd.' + b.id + '.d', { n: b.goal, p: fmtNum(b.goal) }); }
+  _badgeCard(b) { this.badgeQ.push(b); if (!this._bcard) this._nextBadge(); }
+  _nextBadge() {
+    const b = this.badgeQ.shift(); if (!b) { this._bcard = null; return; }
+    this._sfx('milestone');
+    const close = () => { if (!card.isConnected) return; clearTimeout(card._t); card.classList.add('out'); setTimeout(() => { card.remove(); if (this._bcard === card) this._nextBadge(); }, 350); };
+    const card = this._bcard = h('div.bcard.panel.live', { 'data-badge': b.id }, this._medal(b, 'pop'),
+      h('div.bt', {}, h('small', {}, t('bd.unlocked')), h('b', {}, t('bd.' + b.id)), h('p', {}, this._bdText(b)), h('div.bs', {}, `${t('tier.' + b.tier)} · +${b.tier} ⭐`)),
+      h('div.row.end', {}, this._btn(t('bd.all'), 'ghost small', () => { close(); this._badges(); }), this._btn(t('bd.yay'), 'main small', () => close(), { 'data-act': 'ok' })));
+    for (let i = 0; i < 12; i++) {
+      const a = i / 12 * Math.PI * 2, s = h('i.spark', { style: { position: 'absolute', left: '56px', top: '56px', animationDelay: (300 + Math.random() * 200) + 'ms' } });
+      s.style.setProperty('--x0', Math.cos(a) * 10 + 'px'); s.style.setProperty('--y0', Math.sin(a) * 10 + 'px');
+      s.style.setProperty('--x1', Math.cos(a) * 30 + 'px'); s.style.setProperty('--y1', Math.sin(a) * 30 + 'px'); card.append(s);
+    }
+    this.el.cards.prepend(card); card._t = setTimeout(close, 7000);
+  }
+  _badgeRow(b, compact = false) {
+    const got = !!b.got, pct = Math.round(b.best / b.goal * 100);
+    return h('div.bd' + (got ? '.got' : '.no') + (compact ? '.c' : ''), { 'data-badge': b.id, title: `${t('tier.' + b.tier)} · ${b.stars} ⭐` }, this._medal(b),
+      h('div', {}, h('b', {}, t('bd.' + b.id)), h('p', {}, this._bdText(b)),
+        got ? h('small', {}, t('bd.got', { d: fmtDate(b.got) })) : b.goal > 1 ? [h('div.bar', {}, h('i', { style: { width: pct + '%' } })), h('small', {}, `${fmtNum(b.best)} / ${fmtNum(b.goal)}`)] : null));
+  }
+  _badges() {
+    const p = this.prog; if (!p || this._find('badges')) return;
+    if (this.mode === 'photo') this._exitPhoto();
+    const m = p.summary(), all = p.badges(), isl = this.game.S && p.island(), kre = this.game.S?.mode === 'kreativ';
+    const st = (n, l) => h('div.stat', {}, h('b', {}, n), h('span', {}, l));
+    const s = this._screen(this._modal(t('bd.title'), this._closeX(() => this._close(s)),
+      h('div.bsum', {}, h('span.big', {}, t('bd.sum', { got: m.got, n: m.total })), h('span', {}, `⭐ ${t('stars', { n: m.stars })}`),
+        h('span', {}, `🥉 ${m.tiers[1]}`), h('span', {}, `🥈 ${m.tiers[2]}`), h('span', {}, `🥇 ${m.tiers[3]}`)),
+      h('p.note', {}, kre ? t('bd.kre') : t('bd.global')),
+      SECTIONS.map(sec => [h('div.sec', {}, t('bsec.' + sec)), h('div.bgrid', {}, all.filter(b => b.sec === sec).map(b => this._badgeRow(b)))]),
+      isl && [h('div.sec', {}, `${t('bd.island')} · ${this.game.S.name || ''}`), h('div.stats.isl', {}, st(fmtNum(isl.tiles), t('bd.iTiles')), st(fmtNum(isl.score), t('bd.iScore')),
+        st(isl.served, t('bd.iWishes')), st(isl.badges, t('bd.iBadges')), st(isl.daily, t('bd.iDaily')))],
+      h('div.row.end', { style: { marginTop: '12px' } }, this._btn(t('done'), 'main', () => this._close(s), { 'data-act': 'done' }))), { name: 'badges' });
+    s.scr.firstChild.style.width = 'min(760px, 100%)';
+  }
 
   // ================= Bildschirme =================
   _screen(content, { dim = true, closable = true, name = '', onClose } = {}) {
@@ -740,7 +991,7 @@ export class UI {
   }
   _menu() {
     if (this.mode === 'photo') this._exitPhoto();
-    this._closeAll(); this.mode = 'menu'; this.root.classList.add('menu'); this._hover(null); this.auto.flush();
+    this._closeAll(); this._toggleDaily(false); this.mode = 'menu'; this.root.classList.add('menu'); this._hover(null); this.auto.flush();
     const active = this.slot && this.game.S, cur = store.current(), cd = !active && cur && store.load(cur);
     const items = [];
     const A = act => ({ 'data-act': act });
@@ -750,16 +1001,17 @@ export class UI {
       this._btn([h('span.e', {}, '🗂️'), t('menu.islands'), h('span.d', {}, `${store.list().filter(s => !s.empty).length} / ${store.SLOTS}`)], '', () => this._islands(), A('islands')),
       this._btn([h('span.e', {}, '🐦'), t('menu.tut')], '', () => this._restartTut(), A('tutorial')),
       this._btn([h('span.e', {}, '📖'), t('menu.book')], '', () => this._book(), A('book')),
+      this.prog && (() => { const m = this.prog.summary(); return this._btn([h('span.e', {}, '🏆'), t('menu.badges'), h('span.d', {}, `${m.got} / ${m.total} · ⭐ ${m.stars}`)], '', () => this._badges(), A('badges')); })(),
       this._btn([h('span.e', {}, '⚙️'), t('menu.settings')], '', () => this._settings(), A('settings')));
     const foot = h('div.foot', {}, active ? t('menu.saved', { n: this.slot }) : t('menu.cozy'));
-    const wrap = h('div.title-wrap', {}, h('div.title', {}, h('h1', {}, t('game.title')), h('div.sub', {}, t('game.sub'))), this._langSwitch('langs'), h('div.mmenu.panel', {}, items, foot));
+    const wrap = h('div.title-wrap', {}, h('div.title', {}, h('h1', {}, t('game.title')), h('div.sub', {}, t('game.sub'))), this._langSwitch('langs'), h('div.mmenu.panel', {}, items.filter(Boolean), foot));
     const s = this._screen(wrap, { dim: false, closable: !!active, name: 'menu' });
     s.scr.style.background = 'radial-gradient(ellipse at center, rgba(255,246,228,.25), rgba(60,40,20,.28))';
     setTimeout(() => items[0]?.focus(), 50);
   }
   _play() {
     this._closeAll(); this.mode = 'play'; this.root.classList.remove('menu'); this._renderAll();
-    const S = this.game.S; if (S && S.mode === 'klassisch' && !S.stack.length) setTimeout(() => this._end(), 400);
+    const S = this.game.S; if (S && this.game.isOver()) setTimeout(() => this._end(), 400);
   }
   async _loadSlot(n) {
     const d = store.load(n); if (!d) { this.toast(t('slot.emptyErr'), 'err'); return; }
@@ -780,19 +1032,19 @@ export class UI {
     const inp = h('input', { type: 'text', value: name, maxlength: 40, spellcheck: 'false' });
     const modeEls = Object.keys(MODE_ICON).map(k => {
       const el = h('div.mode' + (k === mode ? '.on' : ''), { role: 'radio', tabindex: '0', 'aria-checked': k === mode ? 'true' : 'false', 'data-mode': k }, h('div.e', {}, MODE_ICON[k]), h('b', {}, modeName(k)), h('small', {}, modeDesc(k)));
-      const sel = () => { mode = k; modeEls.forEach(e => { e.classList.toggle('on', e === el); e.setAttribute('aria-checked', e === el); }); this._sfx('click'); };
+      const sel = () => { mode = k; modeEls.forEach(e => { e.classList.toggle('on', e === el); e.setAttribute('aria-checked', e === el); }); tutLbl.hidden = k === MERGE_MODE; this._sfx('click'); };
       el.addEventListener('click', sel); el.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); sel(); } });
       return el;
     });
     const slots = store.list(), firstFree = slots.find(s => s.empty)?.n || [...slots].sort((a, b) => a.meta.updated - b.meta.updated)[0].n;
     const slotSel = h('select', {}, slots.map(s => h('option', { value: s.n, selected: s.n === firstFree }, t('new.slotOpt', { n: s.n, x: s.empty ? t('new.free') : t('new.replace', { name: s.meta.name }) }))));
-    const tutCb = h('input', { type: 'checkbox', checked: tut ?? !store.getFlag('tutDone') });
+    const tutCb = h('input', { type: 'checkbox', checked: tut ?? !store.getFlag('tutDone') }), tutLbl = h('label.check', {}, tutCb, t('new.tut'));   // Anleitung nur für die Bau-Modi
     const s = this._screen(this._modal(t('menu.new'),
       this._closeX(() => this._close(s)),
       h('label.f', {}, h('span', {}, t('new.name')), inp),
       h('div.sec', {}, t('new.mode')), h('div.modes', { role: 'radiogroup' }, modeEls),
       h('label.f', {}, h('span', {}, t('new.slot')), slotSel),
-      h('label.check', {}, tutCb, t('new.tut')),
+      tutLbl,
       h('div.row.end', {}, this._btn(t('cancel'), 'ghost', () => this._close(s)), this._btn(t('new.create'), 'main', () => go(), { 'data-act': 'create' }))), { name: 'new' });
     inp.addEventListener('keydown', e => { if (e.key === 'Enter') go(); });
     setTimeout(() => { inp.focus(); inp.select(); }, 60);
@@ -803,6 +1055,7 @@ export class UI {
       const S = this.game.S; S.name = nm; S.tut = tutCb.checked ? 0 : TUT.length; this.tutSeen.clear();
       this.slot = n; store.save(n, this.game, null); store.setCurrent(n);
       this._play(); this.toast(t('welcome', { name: nm }));
+      if (mode === MERGE_MODE) this.showInfo(t('mi.t'), t('mi.x'), 16000);
       setTimeout(() => this.auto.now(), 1500);
     };
   }
@@ -860,7 +1113,7 @@ export class UI {
   // ---------- Einstellungen ----------
   _settings() {
     const st = this.app.settings || (this.app.settings = {});
-    const D = { quality: 'mittel', music: .6, sfx: .8, dayCycle: true, time: 12, season: 'auto', weather: 'auto' };
+    const D = { quality: 'mittel', music: .6, sfx: .8, dayCycle: true, time: 12, season: 'auto', weather: 'auto', visitors: true };
     for (const k in D) if (st[k] === undefined) st[k] = D[k];
     const apply = () => { try { this.app.applySettings?.(st); } catch (e) { console.warn(e); } store.saveSettings(st); this._clock(); };
     const seg = (key, opts) => { const box = h('div.seg', { role: 'radiogroup' }); for (const [v, l] of opts) { const b = h('button', { type: 'button', class: String(st[key]) === String(v) ? 'on' : '' }, l); b.addEventListener('click', () => { st[key] = v; [...box.children].forEach(c => c.classList.toggle('on', c === b)); this._sfx('click'); apply(); }); box.append(b); } return box; };
@@ -874,6 +1127,8 @@ export class UI {
     const cyc = h('input', { type: 'checkbox', checked: st.dayCycle !== false });
     const sync = () => { tim.disabled = cyc.checked; tim.style.opacity = cyc.checked ? .4 : 1; };
     cyc.addEventListener('change', () => { st.dayCycle = cyc.checked; if (!cyc.checked && st.time == null) st.time = 12; sync(); apply(); }); sync();
+    const visCb = h('input', { type: 'checkbox', checked: st.visitors !== false, 'data-set': 'visitors' });
+    visCb.addEventListener('change', () => { st.visitors = visCb.checked; apply(); this.prog?.setVisitors(visCb.checked); this._renderProg(); this._renderStack(); });
     const sel = (key, opts) => { const s = h('select', { 'aria-label': key }, opts.map(([v, l]) => h('option', { value: v, selected: String(st[key]) === String(v) }, l))); s.addEventListener('change', () => { st[key] = s.value === 'auto' ? 'auto' : isNaN(+s.value) ? s.value : +s.value; apply(); }); return s; };
     const s = this._screen(this._modal(t('set.title'), this._closeX(() => this._close(s)),
       h('div.set', {}, h('span', {}, t('set.lang')), this._langSwitch('seg')),
@@ -883,6 +1138,7 @@ export class UI {
       h('label.check', {}, cyc, t('set.cycle')), h('div.set', {}, h('span', {}, t('set.time')), tim, timV),
       h('div.set', {}, h('span', {}, t('set.season')), h('div', { style: { gridColumn: 'span 2' } }, sel('season', [['auto', t('weather.auto')], ...SEASON_ICON.map((ic, i) => [i, `${ic} ${seasonName(i)}`])]))),
       h('div.set', {}, h('span', {}, t('set.weather')), h('div', { style: { gridColumn: 'span 2' } }, sel('weather', WEATHER.map(w => [w, t('weather.' + w)])))),
+      this.prog && h('div.sec', {}, t('set.play')), this.prog && h('label.check', {}, visCb, t('set.visitors')),
       h('div.row.end', { style: { marginTop: '8px' } }, this._btn(t('done'), 'main', () => this._close(s), { 'data-act': 'done' }))), { name: 'settings' });
   }
   // Sprachwahl: kind 'langs' = kleine Flaggen im Startmenü, 'seg' = Umschalter in den Einstellungen
@@ -951,6 +1207,25 @@ export class UI {
       tbl(t('b.uHead'), UNLOCKS.filter(u => u.at !== Infinity).map(u => [u.at ? fmtNum(u.at) : t('b.uStart'), u.kinds.map(tl).join(', ')]))] });
     // Aufgaben
     P.push({ ch: t('ch.quests'), el: [h('h3', {}, t('b.questT')), h('p', {}, t('b.q1')), h('p', {}, t('b.q2')), h('p', { html: t('b.q3') }), h('p', {}, t('b.q4'))] });
+    // Verschmelzen: Regeln + Punkte, Ketten als Bildreihen, Tipps
+    const chM = t('ch.merge'), stoneChain = MERGE_CHAINS[0].kinds;
+    P.push({ ch: chM, el: [h('h3', {}, t('bm.t')), h('p', {}, t('bm.1', { f: fieldN(MERGE_R) })), h('ul', {}, t('bm.rules').map(li)),
+      h('h4', {}, t('bm.ptsT')), h('p', {}, t('bm.pts')),
+      tbl(t('bm.pHead'), stoneChain.map((k, i) => [h('span', {}, h('span.lv.l' + (i + 1), {}, i + 1), ' ', tileName(k)), fmtNum(mergeValue(k)), i ? '+' + fmtNum(mergeValue(k) * MERGE_N) : '–']))] });
+    P.push({ ch: chM, el: [h('h3', {}, t('bm.chainsT')), h('p', {}, t('bm.chains')),
+      MERGE_CHAINS.map(c => h('div.mchain', { 'data-chain': c.id }, h('h4', {}, `${c.icon} ${chainName(c)}`),
+        h('div.mks', {}, c.kinds.map((k, i) => [i > 0 && h('span.ar', { 'aria-hidden': 'true' }, '→'),
+          h('div.mk', { 'data-kind': k }, this._im(k), h('span.lv.l' + (i + 1), {}, i + 1), h('b', {}, tileName(k)))]))))] });
+    P.push({ ch: chM, el: [h('h3', {}, t('bm.tipsT')), h('ul', {}, t('bm.tips').map(x => h('li', {}, x)))] });
+    // Erfolge, Tagesaufgaben, Besucher
+    if (this.prog) {
+      const chB = t('ch.badges'), byS = SECTIONS.map(sec => [sec, this.prog.badges().filter(b => b.sec === sec)]);
+      P.push({ ch: chB, el: [h('h3', {}, t('b.bdT')), h('p', {}, t('b.bd1')), h('p', {}, t('b.bd2')),
+        byS.map(([sec, bs]) => [h('h4', {}, t('bsec.' + sec)), h('div.blist', {}, bs.map(b => this._badgeRow(b, true)))])] });
+      P.push({ ch: chB, el: [h('h3', {}, t('b.dlT')), h('p', {}, t('b.dl1')), h('p', {}, t('b.dl2', { p: DAILY_PTS, n: DAILY_TILES })),
+        h('h4', {}, `${t('b.today')} · ${fmtDate(Date.now())}`), h('ul', {}, this.prog.daily().tasks.map(x => h('li', {}, (x.done ? '✓ ' : '') + this._taskText(x)))),
+        h('h3', { style: { marginTop: '18px' } }, t('b.visT')), h('p', {}, t('b.vis1', { m: MAX_VISITORS })), h('p', {}, t('b.vis2', { p: WISH_PTS })), h('p', {}, t('b.vis3'))] });
+    }
     // Tipps
     P.push({ ch: t('ch.tips'), el: [h('h3', {}, t('b.tipsT')), h('ul', {}, t('b.tips').map(x => h('li', {}, x))),
       h('h4', {}, t('b.modes')), h('ul', {}, Object.keys(MODE_ICON).map(k => h('li', {}, h('b', {}, `${MODE_ICON[k]} ${modeName(k)}: `), modeDesc(k))))] });
@@ -1023,17 +1298,45 @@ export class UI {
     const S = this.game.S; if (!S || this._find('end')) return;
     if (this.mode === 'photo') this._exitPhoto();
     this._closeAll(); this.mode = 'play'; this.root.classList.remove('menu'); this.auto.flush();
+    if (S.mode === MERGE_MODE) return this._endMerge();
     const best = Object.entries(S.best || {}).filter(([, n]) => n > 1).sort((a, b) => b[1] - a[1]);
     const st = (n, l, cls = '') => h('div.stat' + cls, {}, h('b', {}, n), h('span', {}, l));
     const s = this._screen(this._modal(t('end.title'), this._closeX(() => this._close(s)),
       h('p', {}, t('end.text', { name: S.name })),
       h('div.stats', {}, st(fmtNum(S.score), t('end.points'), '.big'), st(fmtNum(Math.max(0, S.tiles.length - 1)), t('end.tiles')), st(S.stats.perfect || 0, t('end.perfect')),
-        st(S.stats.quests || 0, t('end.quests')), st(fmtDur(S.stats.playtime), t('end.time'))),
+        st(S.stats.quests || 0, t('end.quests')), st(fmtDur(S.stats.playtime), t('end.time')),
+        this.prog?.island() && st(this.prog.island().served, t('end.wishes')), this.prog?.island() && st(this.prog.island().badges, t('end.badges'))),
       best.length > 0 && h('div.sec', {}, t('end.best')), best.length > 0 && h('div.groups', {}, best.map(([g, n]) => h('span', {}, `${GROUP_ICON[g] || ''} ${groupName(g)}: ${n}`))),
       h('div.row', {}, this._btn(t('end.photo'), 'grow', () => this._enterPhoto(), { 'data-act': 'photo' }), this._btn(t('ph.tl'), 'grow', () => this._timelapse(false), { 'data-act': 'timelapse' })),
       h('div.row', { style: { marginTop: '10px' } }, this._btn(t('end.endless'), 'wood grow', () => { this._close(s); this.game.endless(); this.auto.touch(); this.toast(t('end.endlessT')); }, { 'data-act': 'endless' }),
         this._btn(t('end.new'), 'main grow', () => this._newIsland(), { 'data-act': 'new' }))), { name: 'end' });
     this._sfx('milestone');
+  }
+
+  // Ende im Modus Verschmelzen: Punkte, Verschmelzungen, höchste Stufe mit Bild; Nochmal / Foto / Zeitraffer
+  _endMerge() {
+    const S = this.game.S, M = this.game.mergeStats(), b = M.bestKind && TILES[M.bestKind] ? M.bestKind : null;
+    const st = (n, l, cls = '') => h('div.stat' + cls, {}, h('b', {}, n), h('span', {}, l));
+    const s = this._screen(this._modal(t('mend.title'), this._closeX(() => this._close(s)),
+      h('p', {}, t('mend.text', { name: S.name })),
+      h('div.stats', {}, st(fmtNum(M.score), t('end.points'), '.big'), st(fmtNum(M.merges), t('mend.merges')), st(fmtNum(M.placed), t('mend.placed')),
+        st(fmtDur(S.stats.playtime), t('end.time')), this.prog?.island() && st(this.prog.island().badges, t('end.badges'))),
+      h('div.mbest', {}, b ? this._im(b) : h('div.im', {}, '🔮'), h('div', {}, h('small', {}, t('mend.best')), h('b', {}, b ? tl(b) : '–'),
+        h('span', {}, h('span.lv.l' + M.bestLevel, {}, M.bestLevel), ' ', t('mb.lvT', { n: M.bestLevel, m: MERGE_MAX })))),
+      h('div.row', {}, this._btn(t('mend.again'), 'main grow', () => this._again(), { 'data-act': 'again' })),
+      h('div.row', { style: { marginTop: '10px' } }, this._btn(t('end.photo'), 'grow', () => this._enterPhoto(), { 'data-act': 'photo' }),
+        this._btn(t('ph.tl'), 'grow', () => this._timelapse(false), { 'data-act': 'timelapse' })),
+      h('div.row', { style: { marginTop: '10px' } }, this.game.canUndo() && this._btn(t('mend.undo'), 'ghost grow', () => { this._close(s); this._undo(); }, { 'data-act': 'undo' }),
+        this._btn(t('end.new'), 'wood grow', () => this._newIsland(), { 'data-act': 'new' }))), { name: 'end' });
+    this._sfx('milestone');
+  }
+  // Nochmal: neue Runde Verschmelzen auf demselben Platz und unter demselben Namen
+  async _again() {
+    const S = this.game.S, n = this.slot; if (!S) return;
+    if (!n) { this._newIsland(); return; }
+    try { await this.app.newGame({ mode: S.mode, name: S.name, maxR: S.maxR }); } catch (e) { console.error(e); this.toast(t('err.create'), 'err'); return; }
+    this.game.S.tut = TUT.length; store.save(n, this.game, null); store.setCurrent(n);
+    this._play(); this.toast(t('mend.againT', { name: this.game.S.name }));
   }
 
   // ---------- Tasten ----------
@@ -1043,6 +1346,7 @@ export class UI {
     const k = e.key, top = this.screens[this.screens.length - 1];
     if (k === 'Escape') {
       e.preventDefault();
+      if (this.dOpen && !top) { this._toggleDaily(false); return; }
       if (top) { if (top.closable) this._close(top); return; }
       if (this.mode === 'photo') { if (!this._tl) this._exitPhoto(); return; }
       if (this.mode === 'play') this._menu();
@@ -1055,6 +1359,7 @@ export class UI {
     if (k === 'p' || k === 'P') { if (top || this._tl) return; if (this.mode === 'photo') this._exitPhoto(); else if (this.mode === 'play') this._enterPhoto(); return; }
     if (top || this.mode !== 'play' || !this.game.S) return;
     if (/^[1-9]$/.test(k)) { e.preventDefault(); this._pickNth(+k - 1); }
+    else if ((k === 'h' || k === 'H') && this.merge) { e.preventDefault(); this._hold(); }
     else if (k === 'Tab') { e.preventDefault(); this._cycleCat(e.shiftKey ? -1 : 1); }
   }
 }

@@ -102,6 +102,6 @@ export function buildTile(t, E, nb, cx, cz, opts = {}) {
       break;
     }
   }
-  const out = k.build();
+  const out = k.buildLod();
   return { geo: out, parts: k.parts || [], spots: k.spots || [], F, info };
 }

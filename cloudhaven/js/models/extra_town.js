@@ -210,7 +210,8 @@ function win(k, S, r, u, v0, W, H, t, o = {}) {
   const fw = .055, fr = o.frame ?? S.frame, x0 = u - W / 2, x1 = u + W / 2, y1 = v0 + H, z0 = -.13, z1 = -.05;
   B(k, fr, x0 - .01, x0 + fw, v0 - .01, y1 + .01, z0, z1); B(k, fr, x1 - fw, x1 + .01, v0 - .01, y1 + .01, z0, z1);
   B(k, fr, x0 + fw - .005, x1 - fw + .005, y1 - fw, y1 + .01, z0, z1 - .004); B(k, fr, x0 + fw - .005, x1 - fw + .005, v0 - .01, v0 + fw, z0, z1 - .004);
-  PL(k, o.glass ?? GLAS, [u, v0 + H / 2, -.1], W - 2 * fw + .012, H - 2 * fw + .012, [0, 0, 0], { layer: 'glass', jit: 0 });
+  const wv = k.winVal();                                                                          // eigener Zufallswert je Fenster
+  PL(k, o.glass ?? GLAS, [u, v0 + H / 2, -.1], W - 2 * fw + .012, H - 2 * fw + .012, [0, 0, 0], { layer: 'glass', jit: 0, win: o.room ? wv + 1 : wv });   // +1: Zimmer dahinter
   if (o.bars !== false) {
     if (W > .55) B(k, fr, u - .018, u + .018, v0 + fw, y1 - fw, -.125, -.064);
     const rows = o.rows ?? 1; for (let i = 1; i <= rows; i++) { const vk = v0 + H * (rows === 1 ? .64 : i / (rows + 1)); B(k, fr, x0 + fw, x1 - fw, vk - .016, vk + .016, -.125, -.066); }
@@ -219,7 +220,7 @@ function win(k, S, r, u, v0, W, H, t, o = {}) {
   if (o.shutters) { const sw = W / 2 + .015, h = o.hinge ?? .03; shutter(k, S.laden, r, x0 - h, v0 - .01, H + .02, sw, -1, r.R(.06, .45)); shutter(k, S.laden, r, x1 + h, v0 - .01, H + .02, sw, 1, r.R(.06, .45)); }
   if (o.box) flowerBox(k, r, u, v0 - .3, W, o.boxC ?? S.kasten ?? HOLZ);
   if (o.curtain !== false) curtains(k, S.gardine ?? r.pick(GARDINE), u, v0, W, H, t);
-  if (o.room) room(k, r, u, W, t, o.room.vF, o.room.vC, o.room.depth ?? .8, o.room);
+  if (o.room) k.mark({ win: wv, tag: TAG.room }, () => room(k, r, u, W, t, o.room.vF, o.room.vC, o.room.depth ?? .8, o.room));
 }
 // Brettertür im Wandrahmen (geschlossen). S.tuer, S.zarge
 function door(k, S, r, u, v0, W, H, t, o = {}) {
@@ -236,7 +237,7 @@ function door(k, S, r, u, v0, W, H, t, o = {}) {
   for (const y of lY) { B(k, EISEN, x0 + .05, x0 + .5, y - .022, y + .022, -.074, -.064); k.ball(EISEN, [x0 + .44, y, -.064], .012); }
   const hx = x1 - .15, hy = v0 + 1.02;
   B(k, MESSING, hx - .026, hx + .026, hy - .15, hy + .06, -.097, -.084); B(k, MESSING, hx - .014, hx + .014, hy - .014, hy + .014, -.084, -.045); B(k, MESSING, hx - .13, hx + .012, hy - .016, hy + .012, -.055, -.033);
-  if (o.glass) { const gy = y1 - .5; B(k, C(tc, .7), u - .2, u + .2, gy - .02, gy + .3, -.094, -.08); PL(k, GLAS, [u, gy + .14, -.078], .32, .26, [0, 0, 0], { layer: 'glass', jit: 0 }); }
+  if (o.glass) { const gy = y1 - .5; B(k, C(tc, .7), u - .2, u + .2, gy - .02, gy + .3, -.094, -.08); PL(k, GLAS, [u, gy + .14, -.078], .32, .26, [0, 0, 0], { layer: 'glass', jit: 0, win: k.winVal() }); }
 }
 // Laterne am Wandarm (Wandrahmen), setzt spot 'light'
 function wallLamp(k, u, v, out = .27) {
@@ -489,7 +490,7 @@ function choppingBlock(k, r, p, axe = true) {
   k.add(TORUS(8, .06, 3), 0xa8865a, [p[0], p[1] + .455, p[2]], [.12, .12, .12], { r: [PI / 2, 0, 0], ao: false });
   if (axe) { k.beam(0x9a7a4a, [p[0] + .05, p[1] + .46, p[2]], [p[0] + .45, p[1] + .8, p[2] + .1], .035); k.box(0x6a6e72, [p[0] + .05, p[1] + .43, p[2]], [.16, .1, .025], { r: [0, -.24, -.65] }); k.box(0xb8bcc0, [p[0] - .02, p[1] + .43, p[2] + .02], [.03, .09, .026], { r: [0, -.24, -.65], ao: false }); }
   for (let i = 0; i < 5; i++) k.add(SCHEIT(), C(0xc89a62, r.R(.9, 1.1)), [p[0] + r.R(-.55, .45), p[1] + .06, p[2] + r.R(-.2, .35)], [.075, .075, .36], { r: [0, r.R(0, 6), r.R(0, 6)] });
-  for (let i = 0; i < 8; i++) k.box(0xd8b888, [p[0] + r.R(-.6, .6), p[1] + .005, p[2] + r.R(-.5, .5)], [.06, .01, .03], { r: [0, r.R(0, 3), 0], ao: false });   // Späne
+  k.detail(() => { for (let i = 0; i < 8; i++) k.box(0xd8b888, [p[0] + r.R(-.6, .6), p[1] + .005, p[2] + r.R(-.5, .5)], [.06, .01, .03], { r: [0, r.R(0, 3), 0], ao: false }); });   // Späne (Kleinkram)
 }
 function bucket(k, p, s = 1, water = false) {
   const [x, y, z] = p;
@@ -774,13 +775,13 @@ function litfass(k, r, p) {
     k.cyl(GUSS, [0, H + .72, 0], .03, .12, 6); k.ball(MESSING, [0, H + .88, 0], .06, NO);
   });
 }
-function pigeon(k, p, ry, c = 0x8a8c94) {
+function pigeon(k, p, ry, c = 0x8a8c94) { k.detail(() => {
   k.in(p, ry, () => {
     k.ball(c, [0, .07, 0], [.09, .055, .055], NO); k.ball(C(c, .85), [.08, .12, 0], [.035, .035, .035], NO); k.ball(0x6a8a7a, [.06, .095, 0], [.03, .03, .045], NO);
     k.cone(0x3a3030, [.115, .12, 0], .01, .03, 4, { r: [0, 0, -PI / 2], ao: false }); k.box(C(c, .7), [-.1, .06, 0], [.06, .015, .05], { r: [0, 0, .3], ao: false });
     for (const s of [-1, 1]) B(k, 0xc86a5a, -.005, .005, 0, .03, s * .02 - .004, s * .02 + .004, NO);
   });
-}
+  }); }
 export function tile_platz(k, F, ctx) {
   const r = RNG(ctx.seed, 'platz'), RP = 3.6;
   paving(k, r, F, .95, RP);
@@ -1009,19 +1010,20 @@ function townHouse(k, r, P) {
     const wx0 = Math.min(winU - shopW / 2, winU + shopW / 2), wx1 = wx0 + shopW;
     B(k, C(fc, .85), wx0, wx1, FL, sv0, -.06, .03); B(k, C(fc, 1.1), wx0 + .08, wx1 - .08, FL + .08, sv0 - .08, .03, .045, NO); B(k, C(fc, 1.05), wx0 - .02, wx1 + .02, sv0 - .04, sv0, -.12, .08, NO);
     B(k, fc, wx0, wx1, y1 - .42, y1 - .38, -.1, -.03); if (shopW > .7) B(k, fc, winU - .022, winU + .022, sv0, y1 - .4, -.1, -.03);
-    PL(k, GLAS, [winU, (sv0 + y1) / 2, -.07], shopW, y1 - sv0, [0, 0, 0], { layer: 'glass', jit: 0 });
+    const shopWin = k.winVal();                                                                    // Laden: Schaufenster, Tür und Raum gemeinsam
+    PL(k, GLAS, [winU, (sv0 + y1) / 2, -.07], shopW, y1 - sv0, [0, 0, 0], { layer: 'glass', jit: 0, win: shopWin + 1 });
     // Glastür (leicht zurückgesetzt) mit Oberlicht
     const dx0 = doorU - doorW / 2 + .03, dx1 = doorU + doorW / 2 - .03, dy1 = y1 - .45;
     B(k, C(P.tuerC, .5), dx0, dx1, FL, y1, -.2, -.19, NO);
     for (const xx of [dx0, dx1 - .09]) B(k, P.tuerC, xx, xx + .09, FL, dy1, -.17, -.12); B(k, P.tuerC, dx0, dx1, FL, FL + .35, -.17, -.12); B(k, P.tuerC, dx0, dx1, dy1 - .09, dy1, -.17, -.12);
     B(k, P.tuerC, dx0, dx1, dy1, dy1 + .05, -.15, -.08);
-    PL(k, GLAS, [doorU, (FL + .35 + dy1 - .09) / 2, -.145], dx1 - dx0 - .18, dy1 - .09 - FL - .35, [0, 0, 0], { layer: 'glass', jit: 0 });
-    PL(k, GLAS, [doorU, (dy1 + .05 + y1) / 2, -.1], dx1 - dx0, y1 - dy1 - .05, [0, 0, 0], { layer: 'glass', jit: 0 });
+    PL(k, GLAS, [doorU, (FL + .35 + dy1 - .09) / 2, -.145], dx1 - dx0 - .18, dy1 - .09 - FL - .35, [0, 0, 0], { layer: 'glass', jit: 0, win: shopWin + 1 });
+    PL(k, GLAS, [doorU, (dy1 + .05 + y1) / 2, -.1], dx1 - dx0, y1 - dy1 - .05, [0, 0, 0], { layer: 'glass', jit: 0, win: shopWin + 1 });
     B(k, MESSING, doorU + dL * -.0 - .01 + (dx1 - dx0) * .3 * -dL, doorU + .01 + (dx1 - dx0) * .3 * -dL, FL + .8, FL + 1.25, -.12, -.1, NO);   // Griffstange
     B(k, MESSING, dx0 + .1, dx1 - .1, FL + .18, FL + .22, -.12, -.115, NO);
     k.add(TORUS(6, .25, 3), MESSING, [doorU, y1 - .2, -.06], [.05, .05, .05], NO); B(k, MESSING, doorU - .003, doorU + .003, y1 - .17, y1 + .02, -.07, -.05, NO);   // Ladenglocke
     B(k, 0x9a958c, x0 - .1, x1 + .1, FL - .16, FL - .01, -.02, .32, { jit: .05 });                                                      // Stufe
-    room(k, r, 0, sfW - .5, t, FL + .03, G0 - .1, 1.25, { fill: shopFill(P.shop, r), tap: MIX(P.putz, 0xffffff, .3), floor: 0x7a5a3a });
+    k.mark({ win: shopWin, tag: TAG.room }, () => room(k, r, 0, sfW - .5, t, FL + .03, G0 - .1, 1.25, { fill: shopFill(P.shop, r), tap: MIX(P.putz, 0xffffff, .3), floor: 0x7a5a3a }));
     // Ladenschild und Markise
     const sy = y1 + .17; B(k, C(P.schildC, .8), x0 - .02, x1 + .02, sy, sy + .36, 0, .06); B(k, P.schildC, x0 + .03, x1 - .03, sy + .03, sy + .33, .06, .075, NO);
     let lx = x0 + .14; const lc = P.schildC === 0xf2ead8 ? 0x2a2a2a : 0xe8c050; while (lx < x1 - .22) { const lw = r.R(.07, .13); B(k, lc, lx, lx + lw, sy + .1, sy + .26, .075, .085, NO); lx += lw + (r.p(.2) ? .12 : .04); }
@@ -1288,10 +1290,10 @@ export function tile_baecker(k, F, ctx) {
 // =====================================================================================================
 // Schmiede: offene Werkstatt mit Esse (Glut), Amboss, Wassertrog, Hufeisen, Werkzeug, Blasebalg
 // =====================================================================================================
-function horseshoe(k, p, rx = 0, ry = 0, rz = 0, s = 1, c = 0x6a6a6e) {
+function horseshoe(k, p, rx = 0, ry = 0, rz = 0, s = 1, c = 0x6a6a6e) { k.detail(() => {
   k.add(ARC(10, .14, PI * 1.3), c, p, [.07 * s, .07 * s, .07 * s], { r: [rx, ry, rz - PI * .15], ao: false });
   for (let i = 0; i < 3; i++) { const aa = i / 2 * PI * 1.2 - PI * .1 + rz; k.ball(0x3a3a3a, [p[0] + Math.cos(aa) * .07 * s * Math.cos(ry), p[1] + Math.sin(aa) * .07 * s, p[2] - Math.cos(aa) * .07 * s * Math.sin(ry)], .007, NO); }
-}
+  }); }
 function anvil(k, p, ry) {
   k.in(p, ry, () => {
     k.cyl(0x6a4a30, [0, -.2, 0], .3, .72, 9, { top: .9 }); k.add(DISC(9), 0xb89a6a, [0, .521, 0], [.27, 1, .27], NO);
@@ -1456,7 +1458,7 @@ export function tile_gasthaus(k, F, ctx) {
         if (s === 'F') {
           // Doppeltür mit Rundbogen-Oberlicht, Stufen, zwei Laternen, Speisekarte
           door(k, S, r, doorU - .3, FL, .6, 2.0, t, { sill: false }); door(k, S, r, doorU + .3, FL, .6, 2.0, t, { sill: false });
-          B(k, S.zarge, doorU - .65, doorU + .65, FL + 2.0, FL + 2.08, -t + .02, .04); PL(k, GLAS, [doorU, FL + 2.2, -.1], 1.1, .22, [0, 0, 0], { layer: 'glass', jit: 0 });
+          B(k, S.zarge, doorU - .65, doorU + .65, FL + 2.0, FL + 2.08, -t + .02, .04); PL(k, GLAS, [doorU, FL + 2.2, -.1], 1.1, .22, [0, 0, 0], { layer: 'glass', jit: 0, win: k.winVal() });
           B(k, S.zarge, doorU - .03, doorU + .03, FL + 2.08, FL + 2.35, -.12, -.04); B(k, S.zarge, doorU - .65, doorU + .65, FL + 2.3, FL + 2.4, -t + .02, .05);
           for (const sx of [-1, 1]) wallLamp(k, doorU + sx * .9, 2.35, .28);
           B(k, 0x3a2a20, doorU + 1.0, doorU + 1.45, 1.05, 1.65, 0, .04); B(k, 0x2a2a2a, doorU + 1.03, doorU + 1.42, 1.08, 1.62, .04, .045, NO); for (let i = 0; i < 5; i++) B(k, 0xe8e4dc, doorU + 1.08, doorU + 1.08 + r.R(.12, .3), 1.5 - i * .09, 1.53 - i * .09, .045, .05, NO);
@@ -1521,7 +1523,7 @@ export function tile_saege(k, F, ctx) {
     // Bühne (Bretterboden auf Steinen)
     for (let x = -a - .1; x < a + .1; x += .5) for (const z of [-b, 0, b]) k.box(0x8f8b84, [x + .25, -.3, z], [.25, .38, .25], { jit: .06 });
     for (let z = -b - .1, i = 0; z < b + .1; z += .2, i++) B(k, C(0x9a7a52, r.R(.82, 1.08)), -a - .15, a + .15 + r.R(-.03, .03), .02, .08, z, z + .19, { jit: .06 });
-    for (let i = 0; i < 30; i++) k.box(0xe0c890, [r.R(-a, a), .085, r.R(-b, b)], [r.R(.05, .15), .01, r.R(.03, .08)], { r: [0, r.R(0, 3), 0], ao: false });   // Späne
+    k.detail(() => { for (let i = 0; i < 30; i++) k.box(0xe0c890, [r.R(-a, a), .085, r.R(-b, b)], [r.R(.05, .15), .01, r.R(.03, .08)], { r: [0, r.R(0, 3), 0], ao: false }); });   // Späne (Kleinkram)
     // Pfosten, Pfetten, Kopfbänder, Dach
     for (const x of [-a, a]) for (const z of [-b, -b / 3, b / 3, b]) { k.box(C(0x5a4030, r.R(.9, 1.05)), [x, .05, z], [.18, Ye - .05, .18], { jit: .05 }); for (const sg of [-1, 1]) if (Math.abs(z + sg * .5) < b) k.beam(0x5a4030, [x, Ye - .7, z], [x, Ye - .15, z + sg * .5], .09); }
     for (const x of [-a, a]) B(k, 0x5a4030, x - .1, x + .1, Ye - .2, Ye, -b - .1, b + .1, { jit: .04 });

@@ -31,7 +31,9 @@ Konzept und Regeln: `DESIGN.md`.
   - Aufgaben-Flaggen auf einzelnen Kacheln.
   - Freischaltungen bei 100–1400 Punkten.
   - Häuser wachsen mit dem Dorf: ab 3 Häusern zweistöckig, ab 6 mit Anbau und Garten.
-- **Modi:** Klassisch (Stapel mit 30 Kacheln, Nachschub durch gutes Spiel, Ende mit Auswertung), Endlos und Kreativ (alle Kacheln frei).
+- **Modi:** Klassisch (Vorrat mit 30 Kacheln, Nachschub durch gutes Spiel, Ende mit Auswertung), Endlos, Kreativ (alle Kacheln frei) und **Verschmelzen**
+  (begrenzte Insel mit 37 Feldern: 3 gleiche Teile verschmelzen zur nächsten Stufe, z. B. Felsen → Blockhütte → Haus → Häuserzeile → Gasthaus → Burgturm; Ketten in `MERGE_CHAINS`, Ablagefach, Ende bei vollem Feld).
+- **Erfolge, Tagesaufgaben, Besucher** (`js/progress.js`): 36 Abzeichen über alle Inseln, jeden Tag 3 neue Aufgaben, Besucher mit Wünschen („Bäckerei neben dem Markt“).
 - **Welt:** Tag und Nacht (ein Spieltag dauert 8 Minuten), Jahreszeiten (alle 2 Spieltage), Wetter (Regen mit Regenbogen, Gewitter, Nebel, Schnee; Seen frieren zu).
 - **Leben:** Bewohner mit Namen und Sätzen, Tiere, Vogelschwärme, Ballon und Luftschiff, Rauch, Glühwürmchen, Leuchtturmstrahl, Feuerwerk.
 - **Anleitung, Handbuch, Speichern:**
@@ -62,6 +64,10 @@ node cloudhaven/tools/play.mjs <ordner> --shots # PLAY OK   (ganzes Spiel im Bro
 node cloudhaven/tools/ui-demo.mjs <ordner>      # UI OK     (alle Bildschirme, Handy, Speicherplätze, Export/Import; Englisch ohne deutsche Reste, Sprache bleibt)
 node cloudhaven/tools/stage-shots.mjs <ordner>  # STAGE OK  (Kamera-Tests, Tageszeiten, Wetter, Filter)
 node cloudhaven/tools/life-logic.mjs            # LIFE LOGIC OK
+node cloudhaven/tools/merge.mjs                 # MERGE OK  (Verschmelzen-Logik, Ketten, Ablagefach, Rückgängig, Probepartien: --games 100)
+node cloudhaven/tools/progress.mjs              # PROGRESS OK (Erfolge, Tagesaufgaben, Besucher)
+node cloudhaven/tools/camfeel.mjs <ordner>      # CAM OK    (Ziehen/Zoomen ohne Sprünge und Hänger)
+node cloudhaven/tools/perf.mjs <ordner>         # PERF OK   (300 Kacheln: fps, Draw Calls, längstes Bild)
 ```
 Modelle einzeln ansehen: `node cloudhaven/tools/preview.mjs <ordner> name='m=../js/models/house.js&fn=house&a={"stage":3}&cam=11,7,11&look=0,2.5,0'`, ganze Testinsel: `name='../tools/world-demo.html?n=40'`.
 Spielstände bleiben über Updates ladbar: gespeichert wird nur über Ids (Kachelart, q, r, Drehung), Unbekanntes wird übersprungen.

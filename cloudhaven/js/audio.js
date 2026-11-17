@@ -19,12 +19,28 @@ export class Sound {
   constructor(opts = {}) {
     this.ctx = null; this.vol = { music: .55, sfx: .8 }; this.ready = false;
     this.env = { night: 0, season: 1, rain: 0, camDist: 30, near: { water: 0, forest: 0, village: 0, fall: 0 } };
-    this.ks = new Map(); this._last = 0;
-    if (opts.context) { this.ctx = opts.context; this.offline = true; this._build(); }
+    this.ks = new Map(); this._last = 0; this.unlocked = false;
+    if (opts.context) { this.ctx = opts.context; this.offline = true; this.unlocked = true; this._build(); }
+    // Vorbereiten in einer ruhigen Lücke nach dem Laden (AudioContext anlegen kostet beim ersten Mal bis ~100 ms):
+    // der erste Klick muss dann nur noch fortsetzen (resume).
+    else if (opts.prepare !== false && typeof window !== 'undefined') {
+      const idle = window.requestIdleCallback || (f => setTimeout(f, 200));
+      idle(() => this.prepare(), { timeout: 1500 });
+    }
+  }
+  // AudioContext (angehalten) und Klang-Netz bauen; Hall und Zupf-Klänge folgen stückweise in den nächsten Lücken
+  prepare() {
+    if (this.ctx) return;
+    try {
+      const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return;
+      this.ctx = new AC({ latencyHint: 'playback' }); this._build();
+    } catch (e) { console.warn('Ton nicht verfügbar', e); this.ctx = null; }
   }
   unlock() {
     try {
-      if (!this.ctx) { const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return; this.ctx = new AC({ latencyHint: 'playback' }); this._build(); }
+      if (!this.ctx) this.prepare();
+      if (!this.ctx) return;
+      this.unlocked = true;
       if (this.ctx.state === 'suspended') this.ctx.resume();
     } catch (e) { console.warn('Ton nicht verfügbar', e); }
   }
@@ -40,7 +56,7 @@ export class Sound {
     const comp = c.createDynamicsCompressor(); comp.threshold.value = -14; comp.knee.value = 10; comp.ratio.value = 3.5; comp.attack.value = .005; comp.release.value = .25;
     this.master.connect(comp); comp.connect(c.destination);
     // Hall (erzeugte Impulsantwort) und Echo
-    this.rev = c.createConvolver(); this.rev.buffer = this._impulse(3.2, 2.6); const revOut = c.createGain(); revOut.gain.value = .55; this.rev.connect(revOut); revOut.connect(this.master);
+    this.rev = c.createConvolver(); this._impulseLater(3.2, 2.6); const revOut = c.createGain(); revOut.gain.value = .55; this.rev.connect(revOut); revOut.connect(this.master);
     this.musicVol = c.createGain(); this.musicVol.gain.value = this.vol.music; this.musicTone = c.createBiquadFilter(); this.musicTone.type = 'lowpass'; this.musicTone.frequency.value = 12000;
     this.music = c.createGain(); this.music.gain.value = .5; this.music.connect(this.musicTone); this.musicTone.connect(this.musicVol); this.musicVol.connect(this.master);
     this.musicRev = c.createGain(); this.musicRev.gain.value = .5; this.musicRev.connect(this.rev); this.musicTone.connect(this.musicRev);
@@ -77,6 +93,27 @@ export class Sound {
     this.ready = true;
     if (!this.offline && typeof setInterval !== 'undefined') this._timer = setInterval(() => this._tick(), 120);
     this.update(this.env);
+  }
+  // Hall-Impulsantwort stückweise (je ~0,4 s Audio pro Schritt) erzeugen und erst fertig dem Hall geben (bis dahin trocken).
+  // Offline (Video-Ton) sofort, damit das Ergebnis gleich bleibt.
+  _impulseLater(sec, decay) {
+    if (this.offline || typeof setTimeout === 'undefined') { this.rev.buffer = this._impulse(sec, decay); return; }
+    const c = this.ctx, sr = c.sampleRate, n = Math.floor(sr * sec), b = c.createBuffer(2, n, sr), d = [b.getChannelData(0), b.getChannelData(1)], step = Math.floor(sr * .4);
+    let i0 = 0;
+    const work = () => {
+      if (this._gone) return;
+      const i1 = Math.min(n, i0 + step);
+      for (let ch = 0; ch < 2; ch++) { const D = d[ch]; for (let i = i0; i < i1; i++) { const t = i / sr; D[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / n, decay) * (t < .012 ? t / .012 : 1); } }
+      i0 = i1;
+      if (i0 < n) setTimeout(work, 0); else { this.rev.buffer = b; this._warmKs(); }
+    };
+    setTimeout(work, 0);
+  }
+  // Zupf-Klänge der aktuellen Tonart vorab (sonst baut der erste Effekt mit Punkten bis zu 8 Puffer auf einmal)
+  _warmKs() {
+    const K = this._key(), notes = []; for (let d = 0; d <= 10; d++) { notes.push(this._degMidi(K, d), this._degMidi(K, d) + 12); }
+    const next = () => { if (this._gone) return; const m = notes.shift(); if (m === undefined) return; this._ksBuffer(m); setTimeout(next, 0); };
+    setTimeout(next, 0);
   }
   _impulse(sec, decay) {
     const c = this.ctx, sr = c.sampleRate, n = Math.floor(sr * sec), b = c.createBuffer(2, n, sr);
@@ -239,7 +276,7 @@ export class Sound {
   // ---------------------------------------------------------------- Effekte
   // play(name, { vol, pan, pts }) – pts: Punkte, ergeben aufsteigende Töne nach dem Setzen
   play(name, o = {}) {
-    if (!this.ready) return;
+    if (!this.ready || !this.unlocked) return;
     const c = this.ctx, t = c.currentTime + .005, D = this.sfxBus, v = o.vol ?? 1, pan = o.pan ?? 0, K = this._key();
     const deg = d => this._degMidi(K, d) + 12;
     switch (name) {
@@ -289,7 +326,7 @@ export class Sound {
     }
   }
 
-  dispose() { if (this._timer) clearInterval(this._timer); try { this.ctx?.close?.(); } catch (e) { /* schon zu */ } this.ready = false; }
+  dispose() { this._gone = true; if (this._timer) clearInterval(this._timer); try { this.ctx?.close?.(); } catch (e) { /* schon zu */ } this.ready = false; }
 
   // Selbsttest ohne Lautsprecher: rendert Atmo, Musik und alle Effekte offline und misst Pegel
   static async selfTest(sec = 16) {

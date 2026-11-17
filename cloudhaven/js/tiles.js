@@ -122,3 +122,35 @@ export const ROAD_OK = new Set(['weg', 'wegk', 'kreuzung', 'platz', 'markt', 'st
 // Freischaltungen in Reihenfolge
 export const UNLOCKS = [...new Set(KINDS.map(k => TILES[k].unlock))].sort((a, b) => a - b)
   .map(at => ({ at, kinds: KINDS.filter(k => TILES[k].unlock === at) }));
+
+// ---- Modus „Verschmelzen“: MERGE_N gleiche, zusammenhängende Kacheln werden zur nächsten Stufe ----
+export const MERGE = { felsen: 'huette', huette: 'haus', haus: 'reihe', reihe: 'gasthaus', gasthaus: 'burg',
+  wiese: 'schafe', schafe: 'imker', imker: 'obst', obst: 'wein',
+  feld: 'muehle', muehle: 'hof', hof: 'baecker',
+  wald: 'nadelwald', nadelwald: 'saege', saege: 'schmiede',
+  weg: 'kreuzung', kreuzung: 'platz', platz: 'markt', markt: 'kapelle',
+  teich: 'see' };
+export const MERGE_N = 3;
+// Ketten fürs Handbuch (Name deutsch, en für die Oberfläche)
+export const MERGE_CHAINS = [
+  { id: 'burg', name: 'Vom Stein zur Burg', en: 'From stone to castle', icon: '🏰' },
+  { id: 'wiese', name: 'Von der Wiese zum Weinberg', en: 'From meadow to vineyard', icon: '🍇' },
+  { id: 'feld', name: 'Vom Feld zur Bäckerei', en: 'From field to bakery', icon: '🥨' },
+  { id: 'wald', name: 'Vom Wald zur Schmiede', en: 'From forest to forge', icon: '⚒️' },
+  { id: 'weg', name: 'Vom Weg zur Kapelle', en: 'From path to chapel', icon: '⛪' },
+  { id: 'teich', name: 'Vom Teich zum See', en: 'From pond to lake', icon: '🏞️' },
+].map(c => {
+  const root = { burg: 'felsen', wiese: 'wiese', feld: 'feld', wald: 'wald', weg: 'weg', teich: 'teich' }[c.id], kinds = [root];
+  while (MERGE[kinds.at(-1)]) kinds.push(MERGE[kinds.at(-1)]);
+  return { ...c, kinds };
+});
+// Stufe je Art in ihrer Kette (ab 1, Endstufen inklusive)
+export const LEVEL = Object.fromEntries(MERGE_CHAINS.flatMap(c => c.kinds.map((k, i) => [k, i + 1])));
+export const MERGE_MAX = Math.max(...Object.values(LEVEL));
+export const chainOf = kind => (MERGE_CHAINS.find(c => c.kinds.includes(kind)) || { kinds: [] }).kinds.slice();
+// Wert einer Stufe (wächst stark): 5 · 3^(Stufe−1)
+export const mergeValue = kind => 5 * 3 ** ((LEVEL[kind] || 1) - 1);
+// Nachschub: Grundstufen häufig, Stufe 2 selten (≈ 13 %), ab Stufe 3 nie. Die Steinkette ist die Hauptkette (≈ 40 %),
+// sonst verteilt sich der Vorrat zu breit und kaum jemand kommt über Stufe 3 (tools/merge.mjs: Probepartien).
+export const MERGE_POOL = { felsen: 12, wiese: 4, feld: 3.5, wald: 3.5, weg: 2.5, teich: 1.5,
+  huette: 2.5, schafe: .6, muehle: .4, nadelwald: .4, kreuzung: .3 };

@@ -92,20 +92,20 @@ function flatAt(hit, p, n, r, tol) {             // liegt der Fleck ganz auf der
   return true;
 }
 function spatch(k, hit, col, p, n, r, th, tag) { if (flatAt(hit, p, n, r, th * .45)) patch(k, col, p, n, r, th, tag); }
-function patch(k, col, p, n, r, th, tag = TAG.none) { k.ball(col, p, [r, th, r * k.R(.6, 1)], { r: alignY(n, [n[2], 0, -n[0]]), tag, ao: false, jit: .12 }); }
+function patch(k, col, p, n, r, th, tag = TAG.none) { k.detail(() => { k.ball(col, p, [r, th, r * k.R(.6, 1)], { r: alignY(n, [n[2], 0, -n[0]]), tag, ao: false, jit: .12 }); }); }
 function boulder(k, p, s, c, o = {}) { return put(k, ROCK(Math.floor(k.rand() * 6)), c ?? k.pick(STONE), p, s, { r: [k.R(-.25, .25), k.R(0, TAU), k.R(-.25, .25)], jit: .07, ...o }); }
 
-// ---------- kleine Natur ----------
-function moss(k, p, r, c) { k.ball(c ?? k.pick(MOSS), p, [r, r * .26, r * k.R(.7, 1)], { r: [0, k.R(0, 3), 0], tag: TAG.grass, ao: false, jit: .12 }); }
+// ---------- kleine Natur ---------- (Flecken, Moos, Blüten, Klee, Kiesel, Farne, Pilze, Beeren, Zapfen: Ebene 'detail', von weit aus)
+function moss(k, p, r, c) { k.detail(() => { k.ball(c ?? k.pick(MOSS), p, [r, r * .26, r * k.R(.7, 1)], { r: [0, k.R(0, 3), 0], tag: TAG.grass, ao: false, jit: .12 }); }); }
 // flaches Polster dem Hang folgend (Moos, Nadelstreu)
 function gpatch(k, F, x, z, col, r, th, tag = TAG.grass) { const n = gN(F, x, z); k.ball(col, [x, F.h(x, z) - th * .25, z], [r, th, r * k.R(.65, 1)], { r: alignY(n, [Math.cos(k.R(0, 6)), 0, Math.sin(k.R(0, 6))]), tag, ao: false, jit: .1 }); }
-function bloom(k, p, c, h) { h ??= k.R(.18, .38); k.cyl(0x4f8a3a, p, .012, h, 3, { sway: { k: 1.2 }, swayBase: p[1], ao: false, tag: TAG.grass }); k.ball(c, [p[0], p[1] + h, p[2]], [.055, .035, .055], { sway: { k: 1.2 }, swayBase: p[1], tag: TAG.flower, ao: false }); }
-function clover(k, p, c) {             // Kleeblätter + Blütenköpfchen
+function bloom(k, p, c, h) { k.detail(() => { h ??= k.R(.18, .38); k.cyl(0x4f8a3a, p, .012, h, 3, { sway: { k: 1.2 }, swayBase: p[1], ao: false, tag: TAG.grass }); k.ball(c, [p[0], p[1] + h, p[2]], [.055, .035, .055], { sway: { k: 1.2 }, swayBase: p[1], tag: TAG.flower, ao: false }); }); }
+function clover(k, p, c) { k.detail(() => {             // Kleeblätter + Blütenköpfchen
   for (let i = 0; i < 3; i++) { const a = i / 3 * TAU + k.R(0, 1), d = k.R(.03, .07); k.ball(0x4f8a3a, [p[0] + Math.cos(a) * d, p[1] + .03 + i * .005, p[2] + Math.sin(a) * d], [.04, .006, .035], { r: [0, -a, 0], ao: false, tag: TAG.grass }); }
   k.cyl(0x5a8a3a, p, .006, .07, 3, { ao: false, tag: TAG.grass }); k.ball(c, [p[0], p[1] + .08, p[2]], [.026, .024, .026], { ao: false, tag: TAG.flower });
-}
-function pebble(k, p, s, c) { k.ball(c ?? k.pick(STONE), [p[0], p[1] + s * .2, p[2]], [s, s * k.R(.45, .7), s * k.R(.6, .9)], { dod: true, r: [k.R(-.3, .3), k.R(0, 6), 0], jit: .1 }); }
-function fernF(k, p, s = 1) {
+  }); }
+function pebble(k, p, s, c) { const f = () => k.ball(c ?? k.pick(STONE), [p[0], p[1] + s * .2, p[2]], [s, s * k.R(.45, .7), s * k.R(.6, .9)], { dod: true, r: [k.R(-.3, .3), k.R(0, 6), 0], jit: .1 }); s <= .3 ? k.detail(f) : f(); }   // kleine Kiesel: Kleinkram
+function fernF(k, p, s = 1) { k.detail(() => {
   const n = 6 + Math.floor(k.R(0, 3)), c0 = k.pick([0x4a8a3a, 0x569440, 0x3f7a34]);
   for (let i = 0; i < n; i++) {
     const a = i / n * TAU + k.R(-.25, .25), L = k.R(.38, .6) * s, ca = Math.cos(a), sa = Math.sin(a), c = shade(c0, k.R(.9, 1.1));
@@ -114,16 +114,16 @@ function fernF(k, p, s = 1) {
     strip(k, c, P0, P1, .1 * s, .012, o); strip(k, c, P1, P2, .14 * s, .012, o); strip(k, c, P2, P3, .07 * s, .012, o);
   }
   if (k.rand() < .5) for (let i = 0; i < 2; i++) { const a = k.R(0, TAU); k.cyl(0x6a8a3a, [p[0] + Math.cos(a) * .06, p[1], p[2] + Math.sin(a) * .06], .012, .18 * s, 3, { ao: false, tag: TAG.grass }); k.ball(0x6a8a3a, [p[0] + Math.cos(a) * .06, p[1] + .19 * s, p[2] + Math.sin(a) * .06], .025, { ao: false }); }  // eingerollte Triebe
-}
-function bolete(k, p, s = 1) {        // Steinpilz
+  }); }
+function bolete(k, p, s = 1) { k.detail(() => {        // Steinpilz
   k.cyl(0xe8dcc0, p, .045 * s, .1 * s, 6, { top: .75, ao: false });
   k.ball(k.pick([0x7a4a2a, 0x8a5a32, 0x6a3e24]), [p[0], p[1] + .11 * s, p[2]], [.085 * s, .05 * s, .085 * s], { ao: false });
-}
-function blueberry(k, p) {
+  }); }
+function blueberry(k, p) { k.detail(() => {
   for (let i = 0; i < 3; i++) k.ball(k.pick([0x3a6a3a, 0x416f3c, 0x355f36]), [p[0] + k.R(-.15, .15), p[1] + .1, p[2] + k.R(-.15, .15)], [.17, .12, .17], { tag: TAG.leaf, sway: .3, jit: .15 });
   for (let i = 0; i < 7; i++) k.ball(0x3a3a8a, [p[0] + k.R(-.2, .2), p[1] + k.R(.08, .2), p[2] + k.R(-.2, .2)], .022, { ao: false, tag: TAG.flower });
-}
-function cone_(k, p, ry) { k.ball(k.pick([0x6a4a2a, 0x7a5432]), [p[0], p[1] + .025, p[2]], [.025, .025, .06], { r: [0, ry, 0], ao: false, jit: .15 }); }
+  }); }
+function cone_(k, p, ry) { k.detail(() => { k.ball(k.pick([0x6a4a2a, 0x7a5432]), [p[0], p[1] + .025, p[2]], [.025, .025, .06], { r: [0, ry, 0], ao: false, jit: .15 }); }); }
 
 // ---------- Bäume ----------
 function spruce(k, p, s = 1, fir = false) {
@@ -204,7 +204,7 @@ function fruitTree(k, p, s, kind, young) {
     const a = i / 7 * TAU + k.R(-.3, .3), e = k.R(-.25, .55), rr = Rc * k.R(.42, .58);
     geos.push(put(k, ICO(0), k.pick(lc), [C[0] + Math.cos(a) * Math.cos(e) * Rc * .72, C[1] + Math.sin(e) * Rc * sy * .7, C[2] + Math.sin(a) * Math.cos(e) * Rc * .72], [rr, rr * .9, rr], { ...leaf, r: [k.R(0, 3), k.R(0, 3), 0] }));
   }
-  const hit = hitter(geos), fsw = { sway: { k: .05 / s }, swayBase: y, ao: false };
+  const hit = hitter(geos), fsw = { sway: { k: .05 / s }, swayBase: y, ao: false, tag: TAG.fruit };   // Früchte: Shader zeigt je Jahreszeit Blüte/Frucht/Schnee
   const fruitC = kind === 'kirsche' ? [0xa0102a, 0xb81830, 0x8a0c24] : kind === 'birne' ? [0xd8c84a, 0xc8c040, 0xe0b848] : k.rand() < .6 ? [0xd8302a, 0xc82a24, 0xe04a2a, 0xe8a02a] : [0xc8d040, 0xd8c040, 0xe8b02a];
   dress(k, hit, C, young ? 6 : kind === 'kirsche' ? 34 : 24, (q, n) => {
     const c = k.pick(fruitC), out = kind === 'kirsche' ? .02 : .045;
@@ -444,13 +444,13 @@ function cattail(k, p, h) {                     // Rohrkolben: Blätter + Kolben
   k.cyl(0x7a9a4a, p, .012, h, 3, o); k.cyl(0x5a3a22, [tx, p[1] + h * .72, tz], .035, h * .17, 6, { ...o, tag: 0 }); k.cyl(0x7a9a4a, [tx, p[1] + h * .89, tz], .008, h * .1, 3, o);
   return [tx, p[1] + h * .99, tz];
 }
-function dragonfly(k, p, ry, c = 0x2a7ae8) {
+function dragonfly(k, p, ry, c = 0x2a7ae8) { k.detail(() => {
   k.in(p, ry, () => {
     k.beam(c, [-.06, .012, 0], [.04, .012, 0], .009, { ao: false }); k.ball(c, [.05, .014, 0], .012, { ao: false }); k.ball(DARK, [.058, .02, 0], [.007, .006, .013], { ao: false });
     for (const sx of [.015, -.005]) for (const sz of [-1, 1]) k.boxc(0xdfeef5, [sx, .02, sz * .04], [.018, .002, .07], { r: [0, sz * .15 + (sx < 0 ? -.25 * sz : 0), 0], ao: false });
   });
-}
-function frog(k, p, ry) {
+  }); }
+function frog(k, p, ry) { k.detail(() => {
   const g = 0x5a9a3a, b = 0xc8d88a;
   k.in(p, ry, () => {
     k.ball(g, [0, .04, 0], [.06, .04, .05], { ao: false }); k.ball(b, [.01, .025, 0], [.05, .02, .04], { ao: false });
@@ -462,7 +462,7 @@ function frog(k, p, ry) {
     }
     k.box(0x3a6a2a, [-.02, .078, 0], [.03, .004, .03], { ao: false });   // Fleck
   });
-}
+  }); }
 // Seerosenblatt mit Kerbe (flache Scheibe)
 function lilyPad(k, p, r, a0) {
   const seg = 11, gap = .5, pos = [], col = [], c = new THREE.Color(k.pick([0x4f9a3a, 0x45903a, 0x5aa040])), y = p[1];
@@ -475,13 +475,13 @@ function lilyPad(k, p, r, a0) {
   const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
   g.computeVertexNormals(); k.raw(g);
 }
-function waterLily(k, p, c) {
+function waterLily(k, p, c) { k.detail(() => {
   for (let ring = 0; ring < 2; ring++) for (let i = 0; i < 7; i++) {
     const a = i / 7 * TAU + ring * .45, r = ring ? .045 : .075, tilt = ring ? .9 : .5;
     k.boxc(ring ? c : 0xffffff, [p[0] + Math.cos(a) * r, p[1] + .025 + ring * .02, p[2] + Math.sin(a) * r], [.075, .012, .032], { r: [0, -a, tilt], order: 'YXZ', ao: false });
   }
   k.ball(0xf2d84a, [p[0], p[1] + .045, p[2]], .022, { ao: false });
-}
+  }); }
 // Steg: local +x vom Ufer ins Wasser, Deck auf Höhe dy (absolut)
 function jetty(k, F, x0, z0, ry, L, dy, W_ = .95) {
   const cr = Math.cos(ry), sr = Math.sin(ry), wx = (lx, lz) => [x0 + cr * lx + sr * lz, z0 - sr * lx + cr * lz];
@@ -639,7 +639,7 @@ export function tile_obst(k, F, ctx) {
   for (const t of trees) for (let i = 0; i < 9; i++) {
     const a = k.R(0, TAU), d = k.R(.3, t.Rc * .95), x = t.x + Math.cos(a) * d, z = t.z + Math.sin(a) * d;
     if (!F.free(x, z, .05)) continue; const rot = k.rand() < .25;
-    k.ball(rot ? 0x7a5a2a : k.pick([0xd8302a, 0xc82a24, 0xe8a02a, 0xc8c040]), [x, F.h(x, z) + .04, z], [.06, .05, .06], { ao: false, jit: .1 });
+    k.ball(rot ? 0x7a5a2a : k.pick([0xd8302a, 0xc82a24, 0xe8a02a, 0xc8c040]), [x, F.h(x, z) + .04, z], [.06, .05, .06], { ao: false, jit: .1, tag: TAG.fruit });
   }
   // Leitern, Körbe, Kisten, Schubkarre
   const fruit = [0xd8302a, 0xc82a24, 0xe04a2a, 0xe8a02a];
@@ -747,7 +747,7 @@ function winzerhaus(k) {                     // Weinberghäuschen aus Bruchstein
   k.boxc(k.pick(LIME), [w / 2 + .03, 1.62, 0], [.08, .16, 1.0], { jit: .06 });
   k.box(0x9a8e78, [w / 2 + .1, -.02, 0], [.3, .08, 1.0]);                          // Schwelle
   // Fensterchen mit Laden an der Seite
-  k.box(0x2a2a30, [0, 1.0, d / 2 + .005], [.35, .38, .02], { layer: 'glow' });
+  k.box(0x2a2a30, [0, 1.0, d / 2 + .005], [.35, .38, .02], { layer: 'glow', win: k.winVal() });
   k.box(W.dark, [0, .98, d / 2 + .02], [.45, .04, .05]); k.box(W.dark, [0, 1.38, d / 2 + .02], [.45, .04, .04]);
   k.box(0x3a6a4a, [.36, 1.0, d / 2 + .04], [.22, .38, .025], { r: [0, -.5, 0] });
   // Satteldach mit Biberschwanzziegeln
@@ -873,7 +873,7 @@ function smoker(k, p) {
   k.cyl(0xb8bcc0, p, .055, .17, 9, { ao: false }); k.cone(0xb8bcc0, [p[0], p[1] + .17, p[2]], .055, .07, 9, { ao: false }); k.beam(0xb8bcc0, [p[0], p[1] + .23, p[2]], [p[0] + .05, p[1] + .27, p[2]], .018, { ao: false });
   k.box(W.light, [p[0] - .085, p[1] + .02, p[2]], [.03, .14, .07], { r: [0, 0, .25], ao: false }); k.box(0x6a3a2a, [p[0] - .1, p[1] + .05, p[2]], [.02, .09, .072], { r: [0, 0, .35], ao: false });
 }
-function honeyJar(k, p) { k.cyl(0xd88a18, p, .035, .08, 7, { ao: false }); k.cyl(0xe8a028, [p[0], p[1] + .07, p[2]], .033, .005, 7, { ao: false }); k.cyl(k.pick([0xd83a3a, 0xe8e4dc, 0x3a7ad8]), [p[0], p[1] + .08, p[2]], .038, .02, 7, { ao: false }); }
+function honeyJar(k, p) { k.detail(() => { k.cyl(0xd88a18, p, .035, .08, 7, { ao: false }); k.cyl(0xe8a028, [p[0], p[1] + .07, p[2]], .033, .005, 7, { ao: false }); k.cyl(k.pick([0xd83a3a, 0xe8e4dc, 0x3a7ad8]), [p[0], p[1] + .08, p[2]], .038, .02, 7, { ao: false }); }); }
 function beeShed(k) {                       // Bienenhaus/Schuppen, Front +x
   const w = 1.5, d = 2.1, hf = 2.0, hb = 1.65;
   k.box(0x8a8a84, [0, -.15, 0], [w + .1, .2, d + .1], { jit: .05 });
@@ -889,7 +889,7 @@ function beeShed(k) {                       // Bienenhaus/Schuppen, Front +x
   for (const yy of [.3, 1.45]) k.box(0x6a4a2a, [w / 2 + .055, yy, 0], [.02, .1, .7]);
   k.beam(0x6a4a2a, [w / 2 + .055, .35, -.28], [w / 2 + .055, 1.45, .28], .07, { w: .07, d: .02 });
   k.box(IRON, [w / 2 + .07, .9, .27], [.02, .04, .04], { ao: false });
-  k.box(0x2a2a30, [w / 2 + .01, 1.0, .7], [.02, .5, .4], { layer: 'glow' }); k.box(W.light, [w / 2 + .03, .98, .7], [.04, .04, .48]); k.box(W.light, [w / 2 + .03, 1.5, .7], [.04, .04, .48]); k.box(W.light, [w / 2 + .03, .98, .7], [.04, .54, .04]);
+  k.box(0x2a2a30, [w / 2 + .01, 1.0, .7], [.02, .5, .4], { layer: 'glow', win: k.winVal() }); k.box(W.light, [w / 2 + .03, .98, .7], [.04, .04, .48]); k.box(W.light, [w / 2 + .03, 1.5, .7], [.04, .04, .48]); k.box(W.light, [w / 2 + .03, .98, .7], [.04, .54, .04]);
   k.box(W.light, [w / 2 + .08, .96, .7], [.14, .03, .5]);                                   // Fensterbank mit Honig
   for (let i = 0; i < 3; i++) honeyJar(k, [w / 2 + .08, .99, .55 + i * .14]);
   k.box(0xe8d8a0, [w / 2 + .06, 1.62, -.0], [.02, .16, .5]); for (let i = 0; i < 4; i++) k.box(0x6a4a2a, [w / 2 + .072, 1.66, -.15 + i * .1], [.005, .08, .05], { ao: false });   // Schild

@@ -98,13 +98,13 @@ function gable(k, len, d, y0, a, o = {}) {
 // ---------- Fenster, Türen ----------
 // Fenster im Wandrahmen (Fläche x = 0): Mitte z, Unterkante y, Breite w, Höhe h. o.arch: 'round' | 'point', o.stained, o.shutters, o.box
 function windowAt(k, z, y, w, h, o = {}) {
-  const fc = o.frame ?? 0xe8e0d0, fd = o.fd ?? .07, ft = o.ft ?? .07;
+  const fc = o.frame ?? 0xe8e0d0, fd = o.fd ?? .07, ft = o.ft ?? .07, wv = o.win ?? k.winVal();   // wv: eigener Wert je Fenster (an/aus, Farbe)
   k.box(DARK, [.012, y, z], [.03, h, w], { ao: false });                                   // dunkle Laibung
   if (o.stained) {                                                                          // Bleiglas: bunte Felder
     const cols = o.stained, nx = 2, ny = Math.max(2, Math.round(h / .28));
     for (let i = 0; i < nx; i++) for (let j = 0; j < ny; j++)
       k.box(cols[(i + j * 3 + Math.floor(k.rand() * 2)) % cols.length], [.03, y + j * h / ny, z - w / 2 + (i + .5) * w / nx], [.02, h / ny - .025, w / nx - .025], { layer: 'glass', tag: 2, ao: false, jit: .12 });
-  } else k.box(0x9ab8c8, [.03, y, z], [.02, h, w], { layer: 'glass', ao: false, jit: 0 });
+  } else k.box(0x9ab8c8, [.03, y, z], [.02, h, w], { layer: 'glass', ao: false, jit: 0, win: wv });
   // Rahmen
   k.box(fc, [fd / 2, y - ft, z], [fd, ft, w + 2 * ft], { ao: false });
   if (!o.arch) k.box(fc, [fd / 2, y + h, z], [fd, ft, w + 2 * ft], { ao: false });
@@ -115,12 +115,12 @@ function windowAt(k, z, y, w, h, o = {}) {
   if (o.arch === 'round') {
     const r = w / 2 + ft;
     k.add(HALF(10), DARK, [.012, y + h, z], [w / 2, .03, w / 2], { r: [0, 0, -PI / 2], ao: false });
-    k.add(HALF(10), o.stained ? o.stained[1] : 0x9ab8c8, [.03, y + h, z], [w / 2 - .02, .02, w / 2 - .02], { r: [0, 0, -PI / 2], layer: 'glass', tag: o.stained ? 2 : 0, ao: false });
+    k.add(HALF(10), o.stained ? o.stained[1] : 0x9ab8c8, [.03, y + h, z], [w / 2 - .02, .02, w / 2 - .02], { r: [0, 0, -PI / 2], layer: 'glass', tag: o.stained ? 2 : 0, ao: false, win: wv });
     for (let i = 0; i <= 6; i++) { const t = i / 6 * PI; k.boxc(fc, [fd / 2, y + h + Math.sin(t) * (r - ft / 2), z + Math.cos(t) * (r - ft / 2)], [fd, ft, r * PI / 6 + .02], { r: [PI / 2 - t, 0, 0], ao: false }); }
   } else if (o.arch === 'point') {
     const ah = w * .75;
     k.prism(DARK, [.012, y + h, z], w, ah, .03, { r: [0, PI / 2, 0], ao: false });
-    k.prism(o.stained ? o.stained[2 % o.stained.length] : 0x9ab8c8, [.03, y + h + .02, z], w - .06, ah - .06, .02, { r: [0, PI / 2, 0], layer: 'glass', tag: o.stained ? 2 : 0, ao: false });
+    k.prism(o.stained ? o.stained[2 % o.stained.length] : 0x9ab8c8, [.03, y + h + .02, z], w - .06, ah - .06, .02, { r: [0, PI / 2, 0], layer: 'glass', tag: o.stained ? 2 : 0, ao: false, win: wv });
     for (const s of [-1, 1]) k.beam(fc, [fd / 2, y + h - ft / 2, z + s * (w / 2 + ft / 2)], [fd / 2, y + h + ah + ft * .3, z], ft, { w: ft, d: fd, ao: false });
   }
   if (o.sill !== false) k.box(o.sillC ?? 0xb8b0a0, [.08, y - ft - .06, z], [.18, .06, w + 2 * ft + .1]);
@@ -340,6 +340,8 @@ export function windmill(k, opts = {}) {
   // --- Kappe ---
   k.cyl(W.tar, [0, yt - .05, 0], R1 + .14, .22, 8, { r: [0, PI / 8, 0] });            // Drehkranz
   for (let i = 0; i < 16; i++) { const a = i / 16 * TAU; k.box(IRON, [Math.cos(a) * (R1 + .15), yt + .02, Math.sin(a) * (R1 + .15)], [.04, .06, .04], { ao: false }); }
+  // Kappe mit Steert und Flügeln dreht sich langsam in den Wind (Teil um die Hochachse, Flügel als Kind-Teil darin)
+  k.part('cap', [0, yt, 0], k => { k.push([0, -yt, 0]);
   const yc = yt + .17, Rc = 1.45, Lc = 3.2;
   k.cyl(0x8a3a2a, [0, yc - .02, 0], R1 + .2, .3, 8, { r: [0, PI / 8, 0] });
   k.add(HALF(12), 0x7a3226, [-Lc / 2, yc + .28, 0], [Rc, Lc, Rc], { r: [0, 0, -PI / 2], jit: .04 });
@@ -395,6 +397,7 @@ export function windmill(k, opts = {}) {
       });
     }
   }, { spin: [1, 0, 0], speed: .6 });
+  k.pop(); }, { swing: [0, 1, 0], amp: .44, speed: TAU / 40 });
   // --- Vorplatz: Mehlsäcke, Karren, Mühlstein, Fass, Laterne ---
   wallLantern(k, [Rb * C8 + .02, 1.85, -.75], 0);
   sack(k, [2.9, 0, .95], .3, 1); sack(k, [3.25, 0, 1.25], 1.2, .95); sack(k, [2.85, .0, 1.45], 2.2, .9, true); sack(k, [3.1, .46, 1.05], .8, .85, true);
@@ -1030,16 +1033,17 @@ export function lighthouse(k, opts = {}) {
   // --- Laternenraum ---
   const yl = y1 + .12, hl = 1.15, Rl = .66;
   k.cyl(0xc8302a, [0, yl, 0], Rl + .04, .35, 8, { r: [0, PI / 8, 0] });
+  const lw = k.winVal();                                                                    // alle Scheiben gemeinsam
   for (let i = 0; i < 8; i++) { const a = i * PI / 4;
-    face(k, [Math.cos(a) * Rl * Math.cos(PI / 8) * .97, 0, Math.sin(a) * Rl * Math.cos(PI / 8) * .97], a, () => k.box(0xcfe8f2, [0, yl + .35, 0], [.02, hl - .4, 2 * Rl * Math.sin(PI / 8)], { layer: 'glass', ao: false, jit: 0 }));
+    face(k, [Math.cos(a) * Rl * Math.cos(PI / 8) * .97, 0, Math.sin(a) * Rl * Math.cos(PI / 8) * .97], a, () => k.box(0xcfe8f2, [0, yl + .35, 0], [.02, hl - .4, 2 * Rl * Math.sin(PI / 8)], { layer: 'glass', ao: false, jit: 0, win: lw }));
     const b = a + PI / 8; k.box(IRON, [Math.cos(b) * Rl, yl + .33, Math.sin(b) * Rl], [.06, hl - .33, .06]);
   }
   k.add(RING(8, .9), IRON, [0, yl + .7, 0], [Rl + .01, .04, Rl + .01], { r: [0, PI / 8, 0], ao: false });
   // Lampe + Linse
   k.cyl(IRON, [0, yl + .2, 0], .1, .3, 6);
   k.ball(0xfff2b0, [0, yl + .72, 0], .2, { layer: 'glow', tag: 2, ao: false, detail: 1 });
-  k.cyl(0xe8f4ff, [0, yl + .45, 0], .32, .55, 10, { layer: 'glass', tag: 0, ao: false, top: .85 });
-  for (let i = 0; i < 4; i++) k.cyl(0xb8d0d8, [0, yl + .5 + i * .12, 0], .335 - i * .01, .02, 10, { layer: 'glass', ao: false });
+  k.cyl(0xe8f4ff, [0, yl + .45, 0], .32, .55, 10, { layer: 'glass', tag: 1, ao: false, top: .85 });
+  for (let i = 0; i < 4; i++) k.cyl(0xb8d0d8, [0, yl + .5 + i * .12, 0], .335 - i * .01, .02, 10, { layer: 'glass', tag: 1, ao: false });
   k.spot('beam', [0, yl + .72, 0]);
   // Dach
   k.cyl(0xa82a24, [0, yl + hl, 0], Rl + .16, .1, 16);
@@ -1278,7 +1282,7 @@ export function mine(k, opts = {}) {
   minecart(k, [.95, .12, 0], 0);
   for (const z of [-.3, .3]) { k.box(W.dark, [2.05, .0, z], [.14, .42, .14]); k.beam(W.dark, [1.8, .1, z], [2.0, .38, z], .08); }
   k.box(W.mid, [2.0, .3, 0], [.12, .16, .9]); k.box(0xc8b830, [2.07, .32, 0], [.01, .1, .86], { ao: false });
-  for (let i = 0; i < 6; i++) k.ball(k.pick([0x5a5650, 0x4a4844, 0x6a645c]), [1.85 + k.R(-.15, .1), k.R(0, .05), k.R(-.6, .6)], k.R(.08, .14), { dod: true });  // verschüttetes Erz
+  k.detail(() => { for (let i = 0; i < 6; i++) k.ball(k.pick([0x5a5650, 0x4a4844, 0x6a645c]), [1.85 + k.R(-.15, .1), k.R(0, .05), k.R(-.6, .6)], k.R(.08, .14), { dod: true }); });  // verschüttetes Erz (Kleinkram)
   // Werkzeug und Kram
   pickaxe(k, [.3, 0, ow / 2 + .25], -1.4);
   k.in([.35, 0, -ow / 2 - .35], 0, () => { k.beam(W.pale, [0, 0, 0], [0, 1.1, .12], .04); k.box(IRON, [0, -.05, 0], [.22, .28, .03], { r: [-.12, 0, 0] }); });  // Schaufel

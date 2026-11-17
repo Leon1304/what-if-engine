@@ -133,9 +133,10 @@ await page.waitForTimeout(100);
 ok(zeroK && await page.locator(`.bb .tc[data-kind=${zeroK}] .n`).textContent() === '0', `leeres Bauteil ${zeroK} gedimmt mit „0“`);
 // Setzen: Zahl zählt runter und hüpft, Art bleibt gewählt
 const n0 = await page.evaluate(k => __game.supply()[k].n, pickK);
-await page.evaluate(() => __demo.autoPlace(1)); await page.waitForTimeout(60);
+// Bonus-Kacheln (Meilenstein/Perfekt) können zufällig dieselbe Art bringen → mitzählen
+const add = await page.evaluate(k => { const c0 = __game.S.stack.filter(e => e.k === k).length, r = __demo.autoPlace(1); return __game.S.stack.filter(e => e.k === k).length - (c0 - (r?.tile?.k === k ? 1 : 0)); }, pickK); await page.waitForTimeout(60);
 const after1 = await page.evaluate(k => ({ n: __game.supply()[k]?.n || 0, cls: document.querySelector(`.bb .tc[data-kind=${k}]`).className, cur: __game.current()?.k }), pickK);
-ok(after1.n === n0 - 1 && /down/.test(after1.cls), `nach dem Setzen ${n0} → ${after1.n}, Zahl hüpft`);
+ok(after1.n === n0 - 1 + add && (add ? true : /down/.test(after1.cls)), `nach dem Setzen ${n0} → ${after1.n}${add ? ` (+${add} Bonus gleicher Art)` : ''}, Zahl hüpft`);
 ok(after1.n === 0 || after1.cur === pickK, 'gleiche Art bleibt gewählt, solange Vorrat da ist');
 await page.waitForTimeout(800);
 // Tasten: Tab wechselt Kategorie, Ziffer wählt
@@ -198,7 +199,7 @@ console.log('Einstellungen');
 await page.keyboard.press('Escape'); await page.waitForTimeout(400);
 ok(await page.locator('.mmenu').isVisible(), 'Esc öffnet das Menü');
 await clickText(page, '.mmenu .btn', 'Einstellungen'); await page.waitForTimeout(300);
-await clickText(page, '.seg button', 'Hoch'); await page.locator('.modal input[type=checkbox]').uncheck();
+await clickText(page, '.seg button', 'Hoch'); await page.locator('.modal input[type=checkbox]').first().uncheck();
 await page.waitForTimeout(150); await shot(page, '15-einstellungen');
 ok(await page.evaluate(() => JSON.parse(localStorage.getItem('insel.settings')).quality === 'hoch'), 'Einstellungen gespeichert');
 await clickText(page, '.modal .btn', 'Fertig'); await page.waitForTimeout(300);
@@ -272,6 +273,32 @@ ok(await page.evaluate(() => __game.current().k === 'muehle'), 'Kreativ: Klick w
 ok(await page.locator('.bb .tc[data-kind=muehle] .n').textContent() === '∞' && await page.locator('.bb .tc.lock, .bb .tc.zero').count() === 0 && await page.locator('.bb-cur .cn').textContent() === '∞', 'Kreativ: alles frei, Badge ∞');
 await page.evaluate(() => __demo.autoPlace(1)); await page.waitForTimeout(200);
 ok(await page.evaluate(() => __game.current().k === 'muehle'), 'Kreativ: Auswahl bleibt nach dem Setzen'); await shot(page, '24-kreativ');
+
+console.log('Verschmelzen');
+await page.keyboard.press('Escape'); await page.waitForTimeout(300); await clickText(page, '.mmenu .btn', 'Neue Insel'); await page.waitForTimeout(300);
+await page.locator('.mode[data-mode=verschmelzen]').click(); await page.waitForTimeout(150);
+ok(await page.locator('.modal label.check').isHidden(), 'Verschmelzen: keine Bau-Anleitung zur Wahl');
+await clickText(page, '.modal .btn', 'Insel erschaffen'); await page.waitForTimeout(400);
+await page.locator('.dlg .btn', { hasText: 'Überschreiben' }).click({ timeout: 1000 }).catch(() => {}); await page.waitForTimeout(600);
+ok(await page.evaluate(() => __game.S.mode === 'verschmelzen') && await page.locator('.mb .mc[data-i]').count() === 3 && await page.locator('.bb-tabs').count() === 0, 'Verschmelzen: eigene Bauleiste (3 Karten + Ablagefach)');
+ok(await page.locator('.mb .mc .lv').first().isVisible() && await page.locator('.tut .bub').count() === 0, 'Stufen-Abzeichen, keine Bau-Anleitung');
+await page.evaluate(() => { const S = __game.serialize(); __app.loadGame({ ...S, tiles: [{ k: 'start', q: 0, r: 0, o: 0 }, { k: 'felsen', q: 2, r: 0, o: 0 }, { k: 'felsen', q: 2, r: -1, o: 0 }, { k: 'huette', q: 1, r: 1, o: 0 }, { k: 'huette', q: 0, r: 1, o: 0 }], stack: [{ k: 'felsen' }, { k: 'wiese' }, { k: 'feld' }], pick: 0, hold: null }); __ui.hideInfo(); __demo.focus(0, 0, 9); });
+await page.waitForTimeout(300);
+await page.evaluate(() => __demo.hoverBest()); await page.waitForTimeout(300);
+ok(await page.locator('.mhov .mrow').count() === 2 && (await page.locator('.mhov').textContent()).includes('Kettenreaktion'), 'Vorschau: Kette mit 2 Schritten'); await shot(page, '25-verschmelzen-vorschau');
+await page.evaluate(() => __game.place(1, 0, 0)); await page.waitForTimeout(1700);
+ok(await page.evaluate(() => __game.at(1, 0)?.k === 'haus' && !__game.at(2, 0)) && await page.locator('.fx .pop', { hasText: 'Fachwerkhaus' }).count() > 0, 'Kette: Fachwerkhaus, Punkte-Schild je Schritt');
+await page.keyboard.press('h'); await page.waitForTimeout(300);
+ok(await page.evaluate(() => !!__game.S.hold) && await page.locator('.mc[data-act=hold]:not(.empty)').count() === 1, 'Ablagefach mit H');
+await page.keyboard.press('2'); await page.waitForTimeout(150);
+ok(await page.evaluate(() => __game.S.pick === 1) && await page.locator('.mc[data-i="1"].sel').count() === 1, 'Taste 2 wählt die zweite Karte');
+await shot(page, '26-verschmelzen');
+await page.setViewportSize({ width: 390, height: 844 }); await page.waitForTimeout(400);
+const mbb = await page.locator('.mb').boundingBox();
+ok(mbb.x >= 0 && mbb.x + mbb.width <= 390 && mbb.y + mbb.height <= 844, `Handy: Verschmelz-Leiste ${Math.round(mbb.width)}×${Math.round(mbb.height)} im Bild`); await shot(page, '27-verschmelzen-handy');
+await page.setViewportSize({ width: 1280, height: 800 }); await page.waitForTimeout(300);
+await page.evaluate(() => __ui._end()); await page.waitForTimeout(400);
+ok(await page.locator('.modal .btn[data-act=again]').isVisible() && await page.locator('.modal .mbest').isVisible(), 'Ende: Nochmal + höchste Stufe'); await shot(page, '28-verschmelzen-ende');
 await ctx.close();
 
 // ================= Handy =================
@@ -402,6 +429,116 @@ await emp.locator('.hud .btn[data-act=book]').tap(); await emp.waitForTimeout(40
 const wideEn = await emp.evaluate(() => [...document.querySelectorAll('#ui *')].filter(e => { const r = e.getBoundingClientRect(); return !(r.width === 0 || (r.left > -2 && r.right < innerWidth + 2) || getComputedStyle(e).visibility === 'hidden' || e.closest('.bb-track,.bb-tabs,.filters,.fx,nav')); }).map(e => e.className || e.tagName).slice(0, 8));
 ok(!wideEn.length, 'Handy EN: nichts ragt über den Rand ' + wideEn.join(' | '));
 await em.close();
+
+// ================= Fortschritt: Erfolge, Tagesaufgaben, Besucher =================
+const FUN = process.env.FUN_SHOTS || out;   // Screenshots dieser Prüfung
+const fshot = async (pg, name) => { await pg.screenshot({ path: path.join(FUN, name + '.png') }); console.log('  📷 ' + name); };
+const overflow = pg => pg.evaluate(() => [...document.querySelectorAll('#ui *')].filter(e => { const r = e.getBoundingClientRect(); return !(r.width === 0 || (r.left > -2 && r.right < innerWidth + 2) || getComputedStyle(e).visibility === 'hidden' || e.closest('.bb-track,.bb-tabs,.filters,.fx,nav')); }).map(e => e.className || e.tagName).slice(0, 8));
+async function newIsland(pg, tap = false) {
+  const go = (sel) => tap ? pg.locator(sel).first().tap() : pg.locator(sel).first().click();
+  await go('.mmenu .btn[data-act=new]'); await pg.waitForTimeout(350);
+  await pg.locator('.modal label.check input').uncheck();
+  await go('.modal .btn[data-act=create]'); await pg.waitForTimeout(700);
+}
+console.log('Fortschritt');
+{
+  const pc = await browser.newContext({ viewport: { width: 1280, height: 800 }, locale: 'de-DE' }), pp = await pc.newPage(); watch(pp, 'fortschritt');
+  await pp.goto(URL0); await ready(pp);
+  ok(await pp.locator('.mmenu .btn[data-act=badges]').textContent().then(x => /0 \/ 36/.test(x)), 'Menü: Erfolge 0 / 36');
+  await newIsland(pp);
+  ok(await pp.locator('.hud .daily').isVisible() && /📅 0\/3/.test(await pp.locator('.hud .daily').textContent()), 'HUD: Knopf Tagesaufgaben 📅 0/3');
+  await pp.evaluate(() => __demo.autoPlace(1)); await pp.waitForTimeout(900);
+  ok(await pp.locator('.bcard[data-badge=first]').isVisible(), 'Erfolg-Karte „Erste Kachel“ mit Abzeichen');
+  ok(await pp.evaluate(() => __app.log.includes('audio:milestone')), 'Ton milestone beim Freischalten');
+  await fshot(pp, 'p1-erfolg-karte');
+  // Besucher
+  const ws = await pp.evaluate(() => __demo.visit().map(w => w.tpl)); await pp.waitForTimeout(900);
+  ok(ws.length >= 1 && await pp.locator('.fx .vis').count() === ws.length, `Besucher-Blase über einem Haus (${ws})`);
+  ok(await pp.locator('.bb .tc .wh:not([hidden])').count() >= 1, 'gewünschtes Bauteil trägt ein Herz in der Bauleiste');
+  ok(await pp.evaluate(() => { const b = document.querySelector('.fx .vis .say').getBoundingClientRect(); return b.width > 80 && b.width < 230 && b.top > 0; }), 'Blase gut lesbar im Bild');
+  await fshot(pp, 'p2-besucher');
+  await pp.locator('.fx .vis .in').first().click(); await pp.waitForTimeout(200);
+  ok(await pp.evaluate(() => __game.current()?.k === __prog.wishes()[0].a || !__game.supply()[__prog.wishes()[0].a]), 'Klick auf die Blase wählt das gewünschte Bauteil');
+  const s0 = await pp.evaluate(() => __game.S.score);
+  const tot = await pp.evaluate(() => __demo.fulfil()?.total); await pp.waitForTimeout(1100);
+  ok(tot != null && await pp.evaluate(([a, b]) => __game.S.score === a + b + 30, [s0, tot]) && await pp.locator('.fx .vthx').count() === 1 && await pp.locator('.fx .heart').count() > 3, 'Wunsch erfüllt: Dank-Blase mit Herzen, +30 Punkte');
+  await fshot(pp, 'p3-danke');
+  await pp.keyboard.press('Control+z'); await pp.waitForTimeout(300);
+  ok(await pp.evaluate(a => __game.S.score === a + 30 && __prog.island().served === 1, s0), 'Strg+Z: Wunsch bleibt erfüllt, +30 bleibt (nicht doppelt)');
+  // Tagesaufgaben
+  await pp.evaluate(() => __demo.doneTask(0)); await pp.waitForTimeout(250);
+  ok(await pp.locator('.hud .daily.claim .dot').count() === 1, 'Knopf zeigt: Belohnung wartet');
+  await pp.locator('.hud .daily').click(); await pp.waitForTimeout(450);
+  // je nach Datum kann eine Tagesaufgabe beim Spielen schon von selbst erfüllt sein (z. B. „Haus an einen Weg“)
+  ok(await pp.locator('.dpanel .dt').count() === 3 && await pp.locator('.dpanel .btn[data-act=claim]').count() >= 1, `Tagespanel: 3 Aufgaben, ${await pp.locator('.dpanel .btn[data-act=claim]').count()} zum Abholen`);
+  await fshot(pp, 'p4-tagesaufgaben');
+  const b0 = await pp.evaluate(() => ({ s: __game.S.score, n: __game.S.stack.length, st: __prog.P.stars }));
+  await pp.locator('.dpanel .btn[data-act=claim]').first().click(); await pp.waitForTimeout(400);
+  const b1 = await pp.evaluate(() => ({ s: __game.S.score, n: __game.S.stack.length, st: __prog.P.stars }));
+  ok(b1.s === b0.s + 25 && b1.n === b0.n + 2 && b1.st >= b0.st + 1 && await pp.locator('.dpanel .dt.claimed').count() === 1, `Abholen: +25 Punkte, +2 Kacheln, +1 ⭐ (${JSON.stringify(b0)} → ${JSON.stringify(b1)})`);
+  await fshot(pp, 'p5-abgeholt');
+  await pp.keyboard.press('Escape'); await pp.waitForTimeout(200);
+  ok(await pp.locator('.dpanel').isHidden() && await pp.locator('.mmenu').count() === 0, 'Esc klappt nur das Tagespanel zu');
+  // Erfolge-Übersicht aus dem Panel
+  await pp.locator('.hud .daily').click(); await pp.waitForTimeout(300); await pp.locator('.dpanel .btn[data-act=badges]').click(); await pp.waitForTimeout(450);
+  ok(await pp.locator('.modal .bd').count() === 36 && await pp.locator('.modal .bd.got').count() >= 3 && await pp.locator('.modal .stats.isl .stat').count() === 5, 'Erfolge-Übersicht: 36 Abzeichen, Statistik dieser Insel');
+  await fshot(pp, 'p6-erfolge');
+  await pp.locator('.modal .stats.isl').scrollIntoViewIfNeeded(); await pp.waitForTimeout(150); await fshot(pp, 'p6b-erfolge-insel');
+  await pp.keyboard.press('Escape'); await pp.waitForTimeout(300);
+  // Handbuch-Kapitel
+  await pp.keyboard.press('b'); await pp.waitForTimeout(300); await clickText(pp, '.book nav button', 'Erfolge'); await pp.waitForTimeout(250);
+  ok(await pp.locator('.book .body .bd').count() === 36, 'Handbuch: Kapitel Erfolge mit allen Abzeichen'); await fshot(pp, 'p7-handbuch-erfolge');
+  await pp.keyboard.press('ArrowRight'); await pp.waitForTimeout(200);
+  ok(await pp.locator('.book .body h3', { hasText: 'Tagesaufgaben' }).count() === 1 && await pp.locator('.book .body h3', { hasText: 'Besucher' }).count() === 1, 'Handbuch: Tagesaufgaben und Besucher erklärt'); await fshot(pp, 'p8-handbuch-tage');
+  await pp.keyboard.press('Escape'); await pp.waitForTimeout(300);
+  // Menü und Einstellungen: Besucher aus
+  await pp.keyboard.press('Escape'); await pp.waitForTimeout(400);
+  ok(/\d+ \/ 36 · ⭐ \d+/.test(await pp.locator('.mmenu .btn[data-act=badges]').textContent()), 'Menü: Erfolge mit Zähler und Sternen'); await fshot(pp, 'p9-menue');
+  await pp.locator('.mmenu .btn[data-act=settings]').click(); await pp.waitForTimeout(300);
+  await pp.locator('.modal input[data-set=visitors]').uncheck(); await pp.waitForTimeout(150); await fshot(pp, 'p10-einstellungen');
+  ok(await pp.evaluate(() => JSON.parse(localStorage.getItem('insel.settings')).visitors === false), 'Einstellung Besucher aus gespeichert');
+  await pp.locator('.modal .btn[data-act=done]').click(); await pp.waitForTimeout(250); await pp.locator('.mmenu .btn[data-act=continue]').click(); await pp.waitForTimeout(300);
+  await pp.evaluate(() => { __prog.cur.vis.next = 0; __demo.autoPlace(3); }); await pp.waitForTimeout(300);
+  ok(await pp.locator('.fx .vis').count() === 0 && await pp.evaluate(() => __prog.wishes().length === 0), 'Besucher aus: keine Blasen');
+  // Neuladen: Erfolge bleiben (eigener Schlüssel insel.progress)
+  const got = await pp.evaluate(() => __prog.summary().got); await pp.reload(); await ready(pp);
+  ok(await pp.evaluate(n => __prog.summary().got === n && !!localStorage.getItem('insel.progress'), got), `nach Neuladen: ${got} Erfolge bleiben`);
+  await pc.close();
+}
+// Englisch
+{
+  const pc = await browser.newContext({ viewport: { width: 1280, height: 800 }, locale: 'en-US' }), pp = await pc.newPage(); watch(pp, 'fortschritt-en');
+  await pp.goto(URL0); await ready(pp); await newIsland(pp);
+  await pp.evaluate(() => __demo.autoPlace(1)); await pp.waitForTimeout(700);
+  await pp.evaluate(() => { __demo.visit(); __prog.cur.vis.next = 0; __demo.autoPlace(1); }); await pp.waitForTimeout(800);
+  await noGerman(pp, 'Erfolg-Karte + Besucher'); await fshot(pp, 'pe1-besucher-en');
+  await pp.evaluate(() => __demo.fulfil()); await pp.waitForTimeout(1000); await noGerman(pp, 'Dank-Blase');
+  await pp.evaluate(() => __demo.doneTask(1)); await pp.locator('.hud .daily').click(); await pp.waitForTimeout(400);
+  await noGerman(pp, 'Tagespanel'); await fshot(pp, 'pe2-tagesaufgaben-en');
+  await pp.locator('.dpanel .btn[data-act=badges]').click(); await pp.waitForTimeout(400);
+  await noGerman(pp, 'Erfolge-Übersicht'); await fshot(pp, 'pe3-erfolge-en');
+  await pp.keyboard.press('Escape'); await pp.waitForTimeout(250); await pp.keyboard.press('Escape'); await pp.waitForTimeout(350);
+  await noGerman(pp, 'Menü mit Erfolgen');
+  await pp.locator('.mmenu .btn[data-act=settings]').click(); await pp.waitForTimeout(300); await noGerman(pp, 'Einstellungen mit Besuchern');
+  await pc.close();
+}
+// Handy
+{
+  const pc = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true, locale: 'de-DE' }), pp = await pc.newPage(); watch(pp, 'fortschritt-handy');
+  await pp.goto(URL0); await ready(pp); await newIsland(pp, true);
+  await pp.evaluate(() => { for (let i = 0; i < 4; i++) { __demo.force('wald'); __demo.autoPlace(1); } }); await pp.waitForTimeout(800);
+  ok(await pp.locator('.bcard').count() >= 1, 'Handy: Erfolg-Karte'); await fshot(pp, 'pm1-erfolg-handy');
+  let wide = await overflow(pp); ok(!wide.length, 'Handy: Erfolg-Karte ragt nicht über den Rand ' + wide.join(' | '));
+  await pp.evaluate(() => { __demo.visit(); __prog.cur.vis.next = 0; __demo.autoPlace(1); __demo.focus(0, 0, 9); }); await pp.waitForTimeout(900);
+  ok(await pp.locator('.fx .vis').count() >= 1, 'Handy: Besucher-Blase'); await fshot(pp, 'pm2-besucher-handy');
+  await pp.evaluate(() => __demo.doneTask(2)); await pp.locator('.hud .daily').tap(); await pp.waitForTimeout(450);
+  const db = await pp.locator('.dpanel').boundingBox();
+  ok(db && db.x >= 0 && db.x + db.width <= 390 && db.y + db.height <= 844, `Handy: Tagespanel im Bild (${db && Math.round(db.width)}×${db && Math.round(db.height)})`);
+  wide = await overflow(pp); ok(!wide.length, 'Handy: Tagespanel ragt nicht über den Rand ' + wide.join(' | ')); await fshot(pp, 'pm3-tagesaufgaben-handy');
+  await pp.locator('.dpanel .btn[data-act=badges]').tap(); await pp.waitForTimeout(450);
+  wide = await overflow(pp); ok(!wide.length, 'Handy: Erfolge-Übersicht ragt nicht über den Rand ' + wide.join(' | ')); await fshot(pp, 'pm4-erfolge-handy');
+  await pc.close();
+}
 
 await browser.close(); srv.close();
 console.log(fails ? `UI FEHLER: ${fails}` : 'UI OK');

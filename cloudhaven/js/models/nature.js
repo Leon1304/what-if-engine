@@ -1,4 +1,5 @@
 // Natur-Bausteine. Alle Funktionen zeichnen in einen Kit an Position p = [x, y, z] (y = Boden).
+// Kleinkram (Gras, Blumen, Pilze, Farne) landet in der Ebene 'detail' (ohne Schatten, mit Abstand ausgeblendet).
 import { TAG } from '../kit.js';
 
 const TRUNK = [0x6b4a32, 0x5e412c, 0x74523a];
@@ -43,18 +44,22 @@ export function bush(k, p, s = 1, berries) {
   if (berries) for (let i = 0; i < 8; i++) k.ball(berries, [p[0] + k.R(-.5, .5) * s, p[1] + k.R(.3, .8) * s, p[2] + k.R(-.5, .5) * s], .06, { ao: false, tag: TAG.flower });
 }
 export function grass(k, p, s = 1, c = 0x5f9a3e) {
-  for (let i = 0; i < 5; i++) {
-    const a = k.R(0, 6.28), d = k.R(0, .14) * s, h = k.R(.25, .5) * s;
-    k.cone(c, [p[0] + Math.cos(a) * d, p[1] - .02, p[2] + Math.sin(a) * d], .05 * s, h, 3, { tag: TAG.grass, sway: { k: .9 }, swayBase: p[1], r: [k.R(-.25, .25), k.R(0, 3), k.R(-.25, .25)], ao: false });
-  }
+  k.detail(() => {
+    for (let i = 0; i < 5; i++) {
+      const a = k.R(0, 6.28), d = k.R(0, .14) * s, h = k.R(.25, .5) * s;
+      k.cone(c, [p[0] + Math.cos(a) * d, p[1] - .02, p[2] + Math.sin(a) * d], .05 * s, h, 3, { tag: TAG.grass, sway: { k: .9 }, swayBase: p[1], r: [k.R(-.25, .25), k.R(0, 3), k.R(-.25, .25)], ao: false });
+    }
+  });
 }
 const FLOWERS = [0xf2e14a, 0xffffff, 0xe85a8a, 0x8a6ae8, 0xf28a3a, 0xe84a4a, 0x6aa8f2];
 export function flower(k, p, c) {
-  c ??= k.pick(FLOWERS); const h = k.R(.2, .4);
-  k.cyl(0x4f8a3a, p, .015, h, 3, { sway: { k: 1.2 }, swayBase: p[1], ao: false, tag: TAG.grass });
-  k.ball(c, [p[0], p[1] + h, p[2]], [.07, .04, .07], { sway: { k: 1.2 }, swayBase: p[1], tag: TAG.flower, ao: false });
-  k.ball(0xf2c43a, [p[0], p[1] + h + .02, p[2]], .025, { sway: { k: 1.2 }, swayBase: p[1], tag: TAG.flower, ao: false });
-  k.box(0x4f8a3a, [p[0] + .04, p[1] + h * .4, p[2]], [.08, .015, .04], { r: [0, k.R(0, 3), .4], sway: { k: 1.2 }, swayBase: p[1], ao: false, tag: TAG.grass });
+  k.detail(() => {
+    c ??= k.pick(FLOWERS); const h = k.R(.2, .4);
+    k.cyl(0x4f8a3a, p, .015, h, 3, { sway: { k: 1.2 }, swayBase: p[1], ao: false, tag: TAG.grass });
+    k.ball(c, [p[0], p[1] + h, p[2]], [.07, .04, .07], { sway: { k: 1.2 }, swayBase: p[1], tag: TAG.flower, ao: false });
+    k.ball(0xf2c43a, [p[0], p[1] + h + .02, p[2]], .025, { sway: { k: 1.2 }, swayBase: p[1], tag: TAG.flower, ao: false });
+    k.box(0x4f8a3a, [p[0] + .04, p[1] + h * .4, p[2]], [.08, .015, .04], { r: [0, k.R(0, 3), .4], sway: { k: 1.2 }, swayBase: p[1], ao: false, tag: TAG.grass });
+  });
 }
 export function rock(k, p, s = 1, c) {
   c ??= k.pick([0x8f8b84, 0x7d7a74, 0x9a958c]);
@@ -62,13 +67,17 @@ export function rock(k, p, s = 1, c) {
   if (k.rand() < .6) k.ball(0x6a9a40, [p[0] + .1 * s, p[1] + .45 * s, p[2]], [.3 * s, .08 * s, .3 * s], { tag: TAG.grass, ao: false });    // Moos
 }
 export function mushroom(k, p, red = true) {
-  const s = k.R(.7, 1.2);
-  k.cyl(0xf2ead8, p, .035 * s, .14 * s, 5, { ao: false });
-  k.ball(red ? 0xd8302a : 0x9a6a3a, [p[0], p[1] + .15 * s, p[2]], [.1 * s, .06 * s, .1 * s], { ao: false });
-  if (red) for (let i = 0; i < 4; i++) k.ball(0xffffff, [p[0] + k.R(-.06, .06) * s, p[1] + .2 * s, p[2] + k.R(-.06, .06) * s], .014, { ao: false });
+  k.detail(() => {
+    const s = k.R(.7, 1.2);
+    k.cyl(0xf2ead8, p, .035 * s, .14 * s, 5, { ao: false });
+    k.ball(red ? 0xd8302a : 0x9a6a3a, [p[0], p[1] + .15 * s, p[2]], [.1 * s, .06 * s, .1 * s], { ao: false });
+    if (red) for (let i = 0; i < 4; i++) k.ball(0xffffff, [p[0] + k.R(-.06, .06) * s, p[1] + .2 * s, p[2] + k.R(-.06, .06) * s], .014, { ao: false });
+  });
 }
 export function fern(k, p, s = 1) {
-  for (let i = 0; i < 6; i++) { const a = i / 6 * 6.28 + k.R(0, .4); k.box(0x4f8a3a, [p[0] + Math.cos(a) * .22 * s, p[1] + .12 * s, p[2] + Math.sin(a) * .22 * s], [.5 * s, .02, .13 * s], { r: [0, -a, .45], tag: TAG.grass, sway: .6, ao: false }); }
+  k.detail(() => {
+    for (let i = 0; i < 6; i++) { const a = i / 6 * 6.28 + k.R(0, .4); k.box(0x4f8a3a, [p[0] + Math.cos(a) * .22 * s, p[1] + .12 * s, p[2] + Math.sin(a) * .22 * s], [.5 * s, .02, .13 * s], { r: [0, -a, .45], tag: TAG.grass, sway: .6, ao: false }); }
+  });
 }
 export function stump(k, p, s = 1) {
   k.cyl(0x6b4a32, p, .28 * s, .35 * s, 7, { top: .9 });

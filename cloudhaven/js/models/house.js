@@ -277,7 +277,8 @@ function windowAt(k, S, r, u, v0, W, H, t, o = {}) {
   const fw = .06, fr = S.rahmen, x0 = u - W / 2, x1 = u + W / 2, y1 = v0 + H;
   B(k, fr, x0 - .01, x0 + fw, v0 - .01, y1 + .01, -.13, -.05); B(k, fr, x1 - fw, x1 + .01, v0 - .01, y1 + .01, -.13, -.05);
   B(k, fr, x0 + fw - .005, x1 - fw + .005, y1 - fw, y1 + .01, -.13, -.054); B(k, fr, x0 + fw - .005, x1 - fw + .005, v0 - .01, v0 + fw, -.13, -.054);
-  PL(k, GLAS, [u, v0 + H / 2, -.1], W - 2 * fw + .012, H - 2 * fw + .012, [0, 0, 0], { layer: 'glass', jit: 0 });          // Glas (nur von außen sichtbar)
+  const wv = k.winVal();                                                                          // eigener Zufallswert: an/aus, Lichtfarbe
+  PL(k, GLAS, [u, v0 + H / 2, -.1], W - 2 * fw + .012, H - 2 * fw + .012, [0, 0, 0], { layer: 'glass', jit: 0, win: o.room ? wv + 1 : wv });   // Glas (nur von außen sichtbar)
   if (W > .6) B(k, fr, u - .02, u + .02, v0 + fw, y1 - fw, -.125, -.062);                         // Mittelpfosten
   const vk = v0 + H * .64; B(k, fr, x0 + fw, x1 - fw, vk - .018, vk + .018, -.125, -.067);       // Kämpfer
   k.box(S.bank, [u, v0 - .05, -.02], [W + .14, .05, .22], { r: [.07, 0, 0] });                       // Fensterbank
@@ -286,7 +287,7 @@ function windowAt(k, S, r, u, v0, W, H, t, o = {}) {
   if (o.shutters) { const h = o.hinge ?? (o.faschen ? .1 : .02), sw = W / 2 + .015; shutter(k, S, r, x0 - h, v0 - .01, H + .02, sw, -1, r.R(.06, .45)); shutter(k, S, r, x1 + h, v0 - .01, H + .02, sw, 1, r.R(.06, .45)); }
   if (o.box) flowerBox(k, S, r, u, v0 - .3, W);
   if (o.curtain !== false) curtains(k, S, r, u, v0, W, H, t);
-  if (o.room) room(k, S, r, u, W, t, o.room.vF, o.room.vC, o.room.depth ?? .88, o.room);
+  if (o.room) k.mark({ win: wv, tag: TAG.room }, () => room(k, S, r, u, W, t, o.room.vF, o.room.vC, o.room.depth ?? .88, o.room));
   if (o.cat) cat(k, r, [u + W * .25, v0, .06], PI / 2 + r.R(-.3, .3));
 }
 
@@ -317,7 +318,7 @@ function lantern(k, u, v) {
   B(k, EISEN, u - .006, u + .006, y - .05, y + .02, w - .006, w + .006);
   k.cone(EISEN, [u, y - .07, w], .105, .09, 4, { r: [0, PI / 4, 0] });
   B(k, EISEN, u - .08, u + .08, y - .09, y - .07, w - .08, w + .08);
-  B(k, 0xffe2a8, u - .06, u + .06, y - .3, y - .09, w - .06, w + .06, { layer: 'glow', ao: false, jit: 0 });
+  B(k, 0xffe2a8, u - .06, u + .06, y - .3, y - .09, w - .06, w + .06, { layer: 'glow', tag: 1, ao: false, jit: 0 });
   for (const sx of [-1, 1]) for (const sz of [-1, 1]) B(k, EISEN, u + sx * .062 - .008, u + sx * .062 + .008, y - .3, y - .09, w + sz * .062 - .008, w + sz * .062 + .008);
   B(k, EISEN, u - .075, u + .075, y - .33, y - .3, w - .075, w + .075);
   k.ball(EISEN, [u, y - .35, w], .02);
@@ -602,7 +603,7 @@ function boards(k, S, r, U0, U1, v0, vTop, holes) {
 // ---------------------------------------------------------------- Haus
 export function house(k, { stage = 1, seed = 0 } = {}) {
   stage = Math.max(1, Math.min(3, stage | 0));
-  const L0 = Object.fromEntries(Object.entries(k.L).map(([n, l]) => [n, l.length])), inv = k.M.clone().invert(), _p = new THREE.Vector3();
+  const L0 = k.snap(), inv = k.M.clone().invert(), _p = new THREE.Vector3();
   const V = RNG(seed, 'variante');
   const putz = V.pick(PUTZ), dach = V.pick(DACH), laden = V.pick(LADEN), balken = V.p(.12) ? BALKEN[3] : V.pick(BALKEN.slice(0, 3));
   const S = {
@@ -765,7 +766,7 @@ export function house(k, { stage = 1, seed = 0 } = {}) {
     downpipe(k, [[xa0 + .05, gyA - .1, gzA], [xa0 + .05, gyA - .25, gzA], [xa0 + .1, gyA - .45, zb - .1], [xa0 + .1, .2, zb - .1], [xa0 + .1, .08, zb - .3]], [0, -1]);
     // Kleinkram am Anbau
     pot(k, rA, [xa1 + .35, 0, zb + .25], .8); pot(k, rA, [xa1 + .62, 0, zb + .1], .6, false);
-    k.cyl(0x3a6a5a, [xa1 + .3, 0, -2.95], .1, .22, 8, { top: .85 }); tube(k, 0x3a6a5a, [xa1 + .35, .15, -2.95], [xa1 + .6, .3, -2.95], .015, 4);   // Gießkanne
+    k.detail(() => { k.cyl(0x3a6a5a, [xa1 + .3, 0, -2.95], .1, .22, 8, { top: .85 }); tube(k, 0x3a6a5a, [xa1 + .35, .15, -2.95], [xa1 + .6, .3, -2.95], .015, 4); });   // Gießkanne (Kleinkram)
 
     // Garten hinten
     const P = [[-2.25, 2.98], [-3.55, 3.05], [-4.45, 1.55], [-4.45, -1.55], [-3.55, -3.05], [-2.25, -2.98]];
@@ -779,7 +780,7 @@ export function house(k, { stage = 1, seed = 0 } = {}) {
 
   // Belegter Radius aus der Geometrie
   let rad = 0;
-  for (const [n, list] of Object.entries(k.L)) for (const g of list.slice(L0[n] || 0)) { const p = g.attributes.position.array; for (let i = 0; i < p.length; i += 3) { _p.set(p[i], p[i + 1], p[i + 2]).applyMatrix4(inv); rad = Math.max(rad, Math.hypot(_p.x, _p.z)); } }
+  k.eachPos(L0, (x, y, z) => { _p.set(x, y, z).applyMatrix4(inv); rad = Math.max(rad, Math.hypot(_p.x, _p.z)); });
   return { radius: Math.ceil(rad * 10) / 10, door: [a1 + .05, 0, dz] };
 }
 

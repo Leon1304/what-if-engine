@@ -45,19 +45,22 @@ function rng(seed) { let s = seed >>> 0 || 1; return () => { s = (s + 0x6D2B79F5
 
 export const QUALITY = {
   // MSAA kostet unter ANGLE/Metal bei Retina ~5 ms → im Spiel FXAA, beim Foto (capture) 4× MSAA
-  hoch:    { dpr: 2,   msaa: 0, shadow: 4096, shadowEvery: 2, clouds: 1600, rain: 7000, snow: 4500, bloom: true },
-  mittel:  { dpr: 1.5, msaa: 0, shadow: 2048, shadowEvery: 2, clouds: 1100, rain: 4500, snow: 3000, bloom: true },
-  niedrig: { dpr: 1,   msaa: 0, shadow: 1024, shadowEvery: 3, clouds: 650,  rain: 2500, snow: 1600, bloom: true },
+  // shadowFar: Schattenkarte in der Gesamtansicht (Fokus-Abstand > FAR_IN): deckt dort ±150 m ab, feinere Texel sieht man nicht;
+  // weniger Schattenwerfer (world.js shadowLod nach Texelgröße) und weniger Speicher-Bandbreite. Nah bleibt shadow.
+  hoch:    { dpr: 2,   msaa: 0, shadow: 4096, shadowFar: 2048, shadowEvery: 2, clouds: 1600, rain: 7000, snow: 4500, bloom: true },
+  mittel:  { dpr: 1.5, msaa: 0, shadow: 2048, shadowFar: 1024, shadowEvery: 2, clouds: 1100, rain: 4500, snow: 3000, bloom: true },
+  niedrig: { dpr: 1,   msaa: 0, shadow: 1024, shadowFar: 1024, shadowEvery: 3, clouds: 650,  rain: 2500, snow: 1600, bloom: true },
 };
+const FAR_IN = 90, FAR_OUT = 80;          // Gesamtansicht ab Fokus-Abstand 90 m, zurück unter 80 m (Hysterese wie main.js dyn.far)
 
 // Himmelsfarben nach Sonnenhöhe (Grad): Zenit, Horizont, Glühen zur Sonne, Sonnenlicht, Stärke, Himmelslicht, Dunst
 const SKY_KEYS = [
-  [-90, 0x040818, 0x0b1430, 0x0b1430, 0x000000, 0,   0x3048a0, .62, 0x0e1830],
-  [-16, 0x050b20, 0x101d40, 0x14183a, 0x000000, 0,   0x3048a0, .62, 0x111c3a],
-  [-8,  0x101c48, 0x2e3364, 0x5a3c6c, 0x000000, 0,   0x3e4e90, .6,  0x283058],
-  [-3,  0x1e3270, 0x7a5a86, 0xd46a58, 0xff5a30, .3,  0x6a6aa8, .78, 0x6a5e80],
-  [1,   0x34559a, 0xe48e72, 0xff7a3c, 0xff7a40, 1.3, 0x9a90b8, .88, 0xc08a80],
-  [6,   0x4470b8, 0xf2b088, 0xff9a48, 0xff9850, 2.2, 0xa8b4d4, .9,  0xe8b498],
+  [-90, 0x040818, 0x0b1430, 0x0b1430, 0x000000, 0,   0x5468a8, .8,  0x0e1830],   // Nacht: kühles, helleres Mondblau
+  [-16, 0x050b20, 0x101d40, 0x14183a, 0x000000, 0,   0x5468a8, .8,  0x111c3a],
+  [-8,  0x101c48, 0x2e3364, 0x5a3c6c, 0x000000, 0,   0x6670a4, .8,  0x283058],
+  [-3,  0x1e3270, 0x7a5a86, 0xd46a58, 0xff7a40, .45, 0xa08aa0, .9,  0x6a5e80],   // Dämmerung: warm statt lila
+  [1,   0x34559a, 0xe48e72, 0xff7a3c, 0xff9a50, 1.5, 0xcaa894, .95, 0xc08a80],
+  [6,   0x4470b8, 0xf2b088, 0xff9a48, 0xffae62, 2.3, 0xd2c2b2, .95, 0xe8b498],
   [14,  0x4a80c8, 0xd8d4c8, 0xffc890, 0xffc488, 2.7, 0xbccde6, 1.0, 0xd8dcd8],
   [28,  0x3f82d4, 0xb8d8ee, 0xffe8c8, 0xfff0dc, 3.0, 0xc8dcf2, 1.05, 0xc4dcee],
   [70,  0x2d70d0, 0xb4d8f4, 0xfff4e0, 0xfff8ee, 3.2, 0xcfe2f6, 1.1, 0xc2dcf0],
@@ -169,6 +172,7 @@ class GradePass extends Pass {
       uTime: { value: 0 }, uPx: { value: 1 }, uAspect: { value: 1 }, uFlash: { value: 0 }, uFxaa: { value: 1 }, uTexel: { value: new THREE.Vector2() },
       t1: { value: null }, t2: { value: null }, t3: { value: null }, uTilt: { value: 0 }, uBand: { value: .12 }, uRamp: { value: .34 }, uCenter: { value: .5 },
       b1: { value: null }, b2: { value: null }, b3: { value: null }, uBloom: { value: 0 }, uBloomW: { value: new THREE.Vector3(.6, .8, 1) },
+      uGreen: { value: 0 },
     };
     this.material = new THREE.RawShaderMaterial({
       uniforms: this.uniforms, depthTest: false, depthWrite: false,
@@ -176,7 +180,7 @@ class GradePass extends Pass {
       vertexShader: `precision highp float; attribute vec3 position; attribute vec2 uv; varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 0., 1.); }`,
       fragmentShader: `precision highp float;
 uniform sampler2D tDiffuse, t1, t2, t3, b1, b2, b3; uniform vec2 uTexel; uniform vec3 uTint, uLift, uBloomW;
-uniform float uGain, uSat, uCon, uMono, uVig, uGrain, uTime, uPx, uAspect, uFlash, uFxaa, uTilt, uBand, uRamp, uCenter, uBloom;
+uniform float uGain, uSat, uCon, uMono, uVig, uGrain, uTime, uPx, uAspect, uFlash, uFxaa, uTilt, uBand, uRamp, uCenter, uBloom, uGreen;
 #include <tonemapping_pars_fragment>
 #include <colorspace_pars_fragment>
 varying vec2 vUv;
@@ -208,6 +212,7 @@ void main(){
   c *= uGain * uTint * (1. + uFlash);
   c = ACESFilmicToneMapping(c);
   c = sRGBTransferOETF(vec4(c, 1.)).rgb;
+  float gx = max(0., c.g - max(c.r, c.b)); c.g -= gx * uGreen; c.b += gx * uGreen * .25;   /* Grünüberschuss dämpfen, leicht ins Blaue */
   float l = dot(c, vec3(.2126, .7152, .0722));
   c = mix(vec3(l), c, uSat);
   c = mix(c, vec3(l), uMono);
@@ -470,7 +475,8 @@ export class Stage {
     this.season = { w: [0, 1, 0, 0], snow: 0 }; this.seasonT = { w: [0, 1, 0, 0], snow: 0 };
     this.fx = structuredClone(FILTERS.normal); this.fxT = FILTERS.normal;
     this.bowAge = 1e9; this.flash = 0; this._frame = 0; this.bloomScale = 1; this._lastBolt = -1; this.t = 0; this._first = true;
-    this._shadowKey = '';
+    this._shadowKey = ''; this._shMaps = {};
+    this._prWant = null; this._se = null; this.far = false;    // setPixelRatio(), shadowEvery, Gesamtansicht (setFocus)
 
     this.setTime(this.time); this.setSeason(this.seasonS, true); this.setWeather('klar', true);
     this.setQuality(this.qName);
@@ -481,16 +487,24 @@ export class Stage {
   // ---------------- Qualität / Größe ----------------
   setQuality(name) {
     if (!QUALITY[name]) return; this.qName = name; const q = this.q = QUALITY[name];
-    if (this.sun.shadow.mapSize.x !== q.shadow) { this.sun.shadow.mapSize.set(q.shadow, q.shadow); this.sun.shadow.map?.dispose(); this.sun.shadow.map = null; }
+    const sh = this.sun.shadow, keep = new Set([q.shadow, q.shadowFar || q.shadow]), maps = {};      // Karten anderer Größen freigeben
+    for (const m of [...Object.values(this._shMaps), sh.map]) if (m) { if (keep.has(m.width) && m !== sh.map) maps[m.width] = m; else if (!keep.has(m.width)) { m.dispose(); if (m === sh.map) sh.map = null; } }
+    this._shMaps = maps; this._shadowSize(this._wantShadow());
     this.scenePass.setSamples(q.msaa);
     this.fxPass.bloom = q.bloom;
     this.clouds.mesh.count = Math.min(this.clouds.mesh.userData.max, q.clouds);
     this.rain.mesh.geometry.setDrawRange(0, q.rain * 2); this.snow.mesh.geometry.setDrawRange(0, q.snow);
     this._shadowKey = ''; this.resize();
   }
+  // Pixel-Verhältnis von außen (dynamische Auflösung): r > 0 fest, null/0 = aus der Qualitätsstufe (q.dpr, Bildschirm).
+  // Kompatibel: wer stage.q als Kopie mit anderem dpr setzt und resize() ruft, bekommt weiter dieses dpr.
+  setPixelRatio(r) { this._prWant = r > 0 ? r : null; this.resize(); }
+  // Schatten nur jedes n-te Bild neu rendern (null = aus der Qualitätsstufe bzw. stage.q.shadowEvery)
+  get shadowEvery() { return this._se ?? this.q.shadowEvery ?? 1; }
+  set shadowEvery(n) { this._se = n > 0 ? Math.round(n) : null; }
   resize() {
     const w = Math.max(1, this.canvas.clientWidth || innerWidth), h = Math.max(1, this.canvas.clientHeight || innerHeight);
-    const pr = Math.min(window.devicePixelRatio || 1, this.q.dpr);
+    const pr = this._prWant ?? Math.min(window.devicePixelRatio || 1, this.q.dpr);
     if (w === this.width && h === this.height && pr === this.pr) return;
     this.width = w; this.height = h; this.pr = pr; this._applySize(pr);
   }
@@ -550,8 +564,17 @@ export class Stage {
   setFocus(target, distance) {
     this.focus.copy(target); this.focusDist = Math.max(.3, distance);
     this._autoTilt = sstep(15, 70, distance);
+    if (this.far ? distance < FAR_OUT : distance > FAR_IN) this.far = !this.far;
+  }
+  _wantShadow() { return this.far && !this._capturing ? (this.q.shadowFar || this.q.shadow) : this.q.shadow; }
+  // Schattenkarten-Größe wechseln, ohne neu anzulegen: jede Größe behält ihre eigene Karte (three legt sie beim ersten Mal an)
+  _shadowSize(size) {
+    const sh = this.sun.shadow; if (sh.mapSize.x === size && (!sh.map || sh.map.width === size)) return;
+    if (sh.map) this._shMaps[sh.map.width] = sh.map;
+    sh.mapSize.set(size, size); sh.map = this._shMaps[size] || null; this._shadowKey = ''; this._shadowJump = true;
   }
   _updateShadow() {
+    this._shadowSize(this._wantShadow());
     const s = this.sun.shadow, cam = s.camera, size = s.mapSize.x;
     let half = clamp(this.focusDist * .8, 5, 150); half = Math.pow(1.12, Math.ceil(Math.log(half) / Math.log(1.12)));   // Stufen → kein Flimmern beim Zoomen
     const L = this.lightDir, right = this._r ||= new THREE.Vector3(), up = this._u ||= new THREE.Vector3();
@@ -618,6 +641,7 @@ export class Stage {
     for (let i = 0; i < 4; i++) { const L = SEASON_LOOK[i]; for (let j = 0; j < 3; j++) { sc[j] += L.sun[j] * sw[i]; hc[j] += L.hemi[j] * sw[i]; } si += L.si * sw[i]; ss += L.sky * sw[i]; }
     const over = clamp(wx.over, 0, 1), fogW = clamp(wx.fog, 0, 1), night = sstep(4, -7, K.e);
     U.uNight.value = night;
+    const hx = ((this.time - 22) % 24 + 24) % 24; U.uLate.value = sstep(1, 3.5, hx) * sstep(8.5, 6.5, hx);   // spät nachts (≈ 0–5 Uhr): Fenster gehen aus
     const grey = (this._grey ||= new THREE.Color());
     // Himmel
     const desat = (c, a) => { const l = c.r * .3 + c.g * .55 + c.b * .15; c.r = lerp(l, c.r, a); c.g = lerp(l, c.g, a); c.b = lerp(l, c.b, a); return c; };
@@ -647,8 +671,8 @@ export class Stage {
       this.sun.color.copy(K.sunC).multiply(grey.setRGB(sc[0], sc[1], sc[2]));
       this.sun.intensity = K.sunI * si * dim * sstep(-4.5, 0, K.e);
     } else {
-      this.sun.color.setRGB(.55, .68, 1);
-      this.sun.intensity = .75 * sstep(-4, -11, K.e) * sstep(.02, .2, this.moonDir.y) * (1 - over * .8);
+      this.sun.color.setRGB(.6, .7, 1);                                              // Mondlicht: kühl, hell genug für Formen
+      this.sun.intensity = 1.1 * sstep(-4, -7.5, K.e) * lerp(.55, 1, sstep(.02, .2, this.moonDir.y)) * (1 - over * .8);
     }
     const hemiStorm = (1 - wx.storm * .42) * (1 - over * .12);
     this.hemi.color.copy(K.hemiC).multiply(grey.setRGB(hc[0], hc[1], hc[2])); this.hemi.color.lerp(fogC, Math.max(over, fogW) * .5);
@@ -670,11 +694,12 @@ export class Stage {
     this.bow.uniforms.uAmt.value = bow; this.bow.mesh.visible = bow > .003;
     // Belichtung, Bloom, Grading
     const g = this.gradePass.uniforms, fx = this.fx;
-    this.renderer.toneMappingExposure = lerp(1, 1.35, night) * (1 - over * .1) * (1 - wx.storm * .22);
+    this.renderer.toneMappingExposure = lerp(1, 1.5, night) * (1 - over * .1) * (1 - wx.storm * .22);
     g.uGain.value = fx.gain;
     const gold = sstep(22, 6, K.e) * sstep(-4, 2, K.e) * (1 - over);                     // Gold-Stunde: wärmer
-    g.uTint.value.set(fx.tint[0] * lerp(1, .84, night) * (1 + .07 * gold), fx.tint[1] * lerp(1, .96, night), fx.tint[2] * lerp(1, 1.16, night) * (1 - .1 * gold));
-    g.uLift.value.set(...fx.lift); g.uSat.value = fx.sat * (1 - over * .22) * lerp(1, .6, night); g.uCon.value = fx.con; g.uMono.value = fx.mono;
+    g.uTint.value.set(fx.tint[0] * lerp(1, .86, night) * (1 + .09 * gold), fx.tint[1] * lerp(1, .95, night) * (1 + .04 * gold), fx.tint[2] * lerp(1, 1.18, night) * (1 - .12 * gold));
+    g.uGreen.value = Math.max(night * .6, gold * .3);                                   // Grünstich dämpfen (Dämmerung, Nacht)
+    g.uLift.value.set(...fx.lift); g.uSat.value = fx.sat * (1 - over * .22) * lerp(1, .72, night) * (1 - .1 * gold); g.uCon.value = fx.con; g.uMono.value = fx.mono;
     g.uVig.value = fx.vig; g.uGrain.value = fx.grain; g.uTime.value = this.t; g.uFlash.value = this.flash * .25;
     g.uBloom.value = this.fxPass.bloom ? lerp(.1, .6, night) * fx.bloom * this.bloomScale : 0; this.fxPass.threshold = lerp(1.5, .85, night);
     g.uBloomW.value.set(.55, .8, lerp(.8, 1.2, night));
@@ -697,7 +722,7 @@ export class Stage {
     g.uFxaa.value = this.scenePass.samples > 0 ? 0 : 1;
     // Schatten: nur jedes n-te Bild neu (bewegt sich langsam), sofort bei Sprung von Fokus/Licht
     const sm = this.renderer.shadowMap; sm.autoUpdate = false;
-    if (++this._frame % (this.q.shadowEvery || 1) === 0 || this._shadowJump) { sm.needsUpdate = true; this._shadowJump = false; }
+    if (++this._frame % this.shadowEvery === 0 || this._shadowJump) { sm.needsUpdate = true; this._shadowJump = false; }
     this.renderer.info.reset(); this.composer.render();
   }
 
@@ -705,12 +730,13 @@ export class Stage {
   capture(scale = 1, type = 'image/png') {
     const max = Math.min(this.renderer.capabilities.maxTextureSize, 8192);
     const pr = Math.min(this.pr * scale, max / this.width, max / this.height);
-    const ms = this.scenePass.samples; this.scenePass.setSamples(4); this._shadowJump = true;
+    const ms = this.scenePass.samples; this.scenePass.setSamples(4); this._shadowJump = true; this._capturing = true;   // Foto: volle Schattenkarte
     this._applySize(pr); this.render();
     const url = this.renderer.domElement.toDataURL(type);
+    this._capturing = false; this._shadowJump = true;
     this.scenePass.setSamples(ms); this._applySize(this.pr); this.render();
     return url;
   }
 
-  dispose() { this._ro?.disconnect(); this.composer.dispose?.(); this.renderer.dispose(); }
+  dispose() { this._ro?.disconnect(); for (const m of Object.values(this._shMaps)) m.dispose(); this.composer.dispose?.(); this.renderer.dispose(); }
 }
