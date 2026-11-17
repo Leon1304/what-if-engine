@@ -18160,7 +18160,7 @@ ground({ color: '#6E8A4E', flat: 200, hills: 0 });
   faceTo(you, [1.45, 1, -1.05], 15.8, 23.6);
   walk(you, [[2.2, -2.25], [2.0, -1.7], [2.3, -1.2], [3.0, -0.95], [4.1, -0.2], [4.2, 1.3], [4.0, 1.9]], { t0: 24.3, speed: 1.35 });
   walk(you, [[62.9, -1.7], [63.6, -1.3], [64.0, -0.65]], { t0: 29.7, speed: 1.1, ramp: 0.45 });
-  walk(you, [[3.0, -3.45], [3.55, -3.62]], { t0: 36.1, speed: 0.8 }); faceTo(you, [3.55, 1, 0.5], 38.0, 1e9);
+  late(t => { if (t >= 36.1) { you.root.position.set(3.55, 0, -3.62); you.root.rotation.y = 0; } });   // back at the close stool (on the cut at 36.1)
   const drape = courtProp(world, 'drape', 3.55, 1.0, -3.4);
   holdItem(you, drape, -1, 1e9, { side: 'L', reach: false, off: [0, -0.18, 0.08] }); late(t => { drape.visible = t < 3.3 || t >= 36.1; });
   holdItem(you, ewer, 12.0, 18.6, { side: 'R', reach: false }); holdItem(you, basin, 12.0, 18.6, { side: 'L', reach: false, off: [0, -0.35, 0.12] });
@@ -18173,7 +18173,7 @@ ground({ color: '#6E8A4E', flat: 200, hills: 0 });
   // the king (privy chamber): by the screen in the hook, to the close stool behind the screen, sits, walks out with you
   const king = figure({ costume: 'tudorKing', seed: 8, skin: '#E8B892', expr: t => t < 3.3 ? 'smug' : t < 23.0 ? 'calm' : 'happy' }); world.add(king.root); king.root.position.set(5.0, 0, 0.8); track('king', king);
   gesture(king, 1.3, 'point', { at: [3.55, 0.5, -2.95] });
-  walk(king, [[5.0, 0.8], [5.05, -0.9], [5.05, -2.45], [4.2, -2.5], [3.55, -2.5], [3.55, -2.42]], { t0: 10.3, speed: 1.15 });
+  walk(king, [[5.0, 0.8], [5.05, -1.0], [4.95, -2.35], [4.2, -2.6], [3.6, -2.6], [3.55, -2.42]], { t0: 10.3, speed: 1.05 });
   late(t => { if (t < 10.3) king.root.rotation.y = 3.11; });
   sit(king, 17.0, { seat: S1.seat(), t1: 23.0 }); noHit(king, S1);
   walk(king, [[3.55, -2.42], [4.2, -2.55], [4.8, -2.3], [5.05, -1.6], [5.05, -0.6], [4.9, 1.9]], { t0: 24.0, speed: 1.2 });
