@@ -39,7 +39,8 @@ function findGames() {
     if (g.status && !STATUS.has(g.status)) err(`„status“ muss eines von ${[...STATUS].join(', ')} sein`);
     const coverFile = g.cover;
     if (g.cover && !fs.existsSync(path.join(ROOT, d.name, g.cover))) { console.warn(`⚠ ${d.name}: Cover ${g.cover} fehlt – die Übersicht zeigt ein Ersatzbild (node tools/site/covers.mjs ${d.name})`); g.cover = null; }
-    for (const f of g.files || []) if (f !== coverFile && !fs.existsSync(path.join(ROOT, d.name, f))) err(`Datei/Ordner „${f}“ aus „files“ fehlt`);
+    // „bald“: Dateien gehen nicht online → fehlende (z. B. erst lokal gebaute) nur melden, Build nicht abbrechen
+    for (const f of g.files || []) if (f !== coverFile && !fs.existsSync(path.join(ROOT, d.name, f))) { if (g.status === 'bald') console.warn(`⚠ ${d.name}: „${f}“ aus „files“ fehlt (Status „bald“, wird nicht veröffentlicht)`); else err(`Datei/Ordner „${f}“ aus „files“ fehlt`); }
     const updated = git('log', '-1', '--format=%cs', '--', d.name) || g.updated || null;
     const added = g.added || git('log', '--reverse', '--format=%cs', '--', d.name).split('\n')[0] || updated;
     games.push({
