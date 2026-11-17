@@ -1120,6 +1120,28 @@ check('Laden robust gegen kaputte neue Felder (mk, link, dr, wonder, hist, xdep,
   let mixed = null;
   for (let yy = 30; yy < 75 && !mixed; yy++) for (let xx = 30; xx < 75 && !mixed; xx++) { const cs = Q.map(([i, jj]) => k2.canPlace('bohrer', xx + i, yy + jj, 0)); if (cs.every(c => c.ok) && new Set(cs.map(c => c.item)).size > 1) mixed = [xx, yy]; }
   if (mixed) { for (const [i, jj] of Q) k2.place('bohrer', mixed[0] + i, mixed[1] + jj, 0); ok(!k2.count.grossbohrer && k2.count.bohrer === 4, 'verschiedene Rohstoffe: kein Großbohrer'); }
+  // Durchsatz: Großbohrer → 4 Bänder → 1 Ofen staut sich; Diagnose nennt, wie viele Öfen fehlen
+  {
+    const d = land(new Factory({ seed: 3 })); const [fx, fy] = sp;
+    for (const [i, jj] of Q) d.place('bohrer', fx + i, fy + jj, 0);
+    const gb = d.at(fx, fy), [ox, oy] = outCell(fx, fy, 4, 4, 0);
+    for (let i = 0; i < 4; i++) d.place('band', ox + i, oy, 0);
+    const of = d.place('ofen', ox + 4, oy - 1, 0); secs(d, 120);
+    const fl = d.flow(gb), dg = d.diagnose(gb);
+    ok(fl && fl.main === 'ofen' && fl.cons.length === 1 && Math.abs(fl.demand - fl.per) < 1e-9 && fl.per === 0.5 * d.M.mach && fl.belt === 4 * d.M.belt && fl.need === Math.ceil((fl.supply - fl.per) / fl.per - 1e-9) && fl.limit === 'cons',
+      `flow: liefert ${Math.round(fl.supply * 60)}/min, Ofen schafft ${Math.round(fl.per * 60)}/min, Band ${Math.round(fl.belt * 60)}/min → noch ${fl.need} Öfen`);
+    ok(dg.key === 'diag.flowCons' && dg.vars.k === fl.need && dg.vars.b === 'ofen' && dg.vars.n === Math.round(fl.supply * 60), 'Diagnose des gestauten Großbohrers: diag.flowCons mit Zahlen');
+    ok(/\d+ more/.test(t('diag.flowCons', dg.vars)), 'Text: ' + t('diag.flowCons', dg.vars));
+    // Ofen mit festem Rezept, das das Erz nicht nimmt
+    const it = fl.item, other = ['ziegel', 'eisenbarren', 'kupferbarren', 'glas'].find(r => RECIPES[r].in[0][0] !== it);
+    d.setRecipe(of, other); const fw = d.flow(gb);
+    ok(fw.wrong.length === 1 && !fw.cons.some(c => c.rate > 0) && d.diagnose(gb).key === 'diag.flowWrong', `festes Rezept ${other} nimmt kein ${it} → diag.flowWrong`);
+    d.setRecipe(of, null);
+    // Verkauf direkt dahinter: nimmt alles, kein Engpass
+    const e2 = land(new Factory({ seed: 3 })); for (const [i, jj] of Q) e2.place('bohrer', fx + i, fy + jj, 0);
+    for (let i = 0; i < 4; i++) e2.place('band', ox + i, oy, 0); e2.place('verkauf', ox + 4, oy - 1, 0);
+    const fs = e2.flow(e2.at(fx, fy)); ok(fs && !Number.isFinite(fs.demand) && fs.limit === null && fs.need === 0, 'Verkauf dahinter: Abnehmer unbegrenzt, kein Engpass');
+  }
 }
 
 // =====================================================================================

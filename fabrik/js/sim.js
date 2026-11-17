@@ -1410,9 +1410,66 @@ export class Factory {
       case 'wonder': { const w = this.wonder(); set(w.done ? 'done' : 'wonder', w.done ? 'diag.wonderDone' : 'diag.wonder', 0, { stage: w.stage }); break; }
       case 'mast': case 'solar': if (n.net >= 0 && this.nets[n.net].demand > this.nets[n.net].supply) set('lowpower', 'diag.lowpower', 1.5, { pct: Math.round(100 * this.nets[n.net].supply / this.nets[n.net].demand) }); break;
     }
+    if (o.blocked && n.tgt && (n.kind === 'drill' || n.kind === 'machine')) {
+      const fl = this.flow(id), pm = v => Math.round(v * 60);
+      if (fl && fl.wrong.length && !fl.cons.some(c => c.rate > 0)) set('blocked', 'diag.flowWrong', 2.5, { item: fl.item, b: this.N.get(fl.wrong[0]).e.type });
+      else if (fl && fl.limit === 'cons') set('blocked', 'diag.flowCons', 2.5, { item: fl.item, n: pm(fl.supply), m: pm(fl.demand), k: fl.need, b: fl.main });
+      else if (fl && fl.limit === 'belt') set('blocked', 'diag.flowBelt', 2.5, { item: fl.item, n: pm(fl.supply), m: pm(fl.belt) });
+      if (fl) o.flow = fl;
+    }
     if (o.state === 'ok' && n.use > 0 && n.pw < 1) set('lowpower', 'diag.lowpower', 1.5, { pct: Math.round(n.pw * 100) });
     if (o.state === 'ok' && o.util < 0.25 && n.un >= 10 && (n.kind === 'machine' || n.kind === 'drill')) set('slow', 'diag.slow', 0.8, o.vars);
     return o;
+  }
+  // Fluss hinter einem Erzeuger (Bohrer, Maschine): was er liefert, was das Band davor schafft, was die Abnehmer schaffen (Teile/s).
+  // Folgt Bändern, Tunneln, Verteilern (alle Ausgänge), Sortierern (passend links, sonst geradeaus) und Lagern bis zu den Abnehmern.
+  // → { item, supply, belt, demand, cons: [{id, type, rate}], wrong: [ids], main, per, need, limit: 'belt' | 'cons' | null } oder null
+  flow(id) {
+    this._ensurePower();
+    const n = this.N.get(id); if (!n) return null;
+    const e = n.e, M = this.M; let item = -1, supply = 0;
+    if (n.kind === 'drill') { if (n.res < 0) return null; item = n.res; supply = M.drill * this.starMul(e) * n.cov * (n.d.bonus || 1) * n.sp / BUILDINGS.bohrer.time; }
+    else if (n.kind === 'machine') { const r = e.recipe ? RT[e.recipe] : null; if (!r) return null; item = r.out; supply = r.n * M.mach * this.starMul(e) * n.sp / r.time; }
+    else return null;
+    const cons = [], wrong = [], seen = new Set(), q = [[n.tgt, true]];
+    let belt = Infinity, steps = 0;
+    while (q.length && steps++ < 400) {
+      const [t, trunk] = q.pop(); if (!t || seen.has(t.id)) continue; seen.add(t.id);
+      if (BELTLIKE[t.kind]) {
+        if (trunk) belt = Math.min(belt, M.belt * t.sl / SP);
+        if (t.kind === 'belt' || t.kind === 'tunnel') q.push([t.tgt, trunk]);
+        else if (t.kind === 'split') for (const o of t.outN) { if (o) q.push([o, false]); }
+        else { const r = t.e.rot, hit = t.e.filter === ITEM_IDS[item]; q.push([t.outN[hit ? LEFT(r) : r], trunk]); }
+        continue;
+      }
+      if (t.kind === 'store') { q.push([t.tgt, false]); continue; }
+      const te = t.e, sp = t.sp;
+      let rate = Infinity;
+      switch (t.kind) {
+        case 'machine': {
+          let r = te.recipe ? RT[te.recipe] : null;
+          if (!r || r.ins.indexOf(item) < 0) {
+            r = te.auto ? RECIPE_IDS.map(k => RT[k]).find(x => x.b === te.type && x.ins.includes(item) && this.recipeAvailable(x.id)) : null;
+            if (!r) { wrong.push(t.id); rate = 0; break; }
+          }
+          rate = r.need[r.ins.indexOf(item)] * M.mach * this.starMul(te) * sp / r.time; break;
+        }
+        case 'lab': rate = M.mach * this.starMul(te) * sp / BUILDINGS.labor.time; break;
+        case 'exp': rate = 2 * M.mach * this.starMul(te) * sp / BUILDINGS.experiment.time; break;
+        case 'power': rate = BUILDINGS.kraftwerk.fuel.includes(ITEM_IDS[item]) ? 1 / BUILDINGS.kraftwerk.burn : 0; if (!rate) wrong.push(t.id); break;
+        case 'drill': case 'solar': case 'mast': case 'heater': rate = 0; break;
+      }
+      cons.push({ id: t.id, type: te.type, rate });
+    }
+    const demand = cons.reduce((a, c) => a + c.rate, 0);
+    // Hauptabnehmer = häufigster Maschinentyp mit endlicher Leistung; need = so viele fehlen noch (begrenzt durch das Band)
+    const by = {}; for (const c of cons) if (c.rate > 0 && Number.isFinite(c.rate)) (by[c.type] ||= []).push(c.rate);
+    const main = Object.keys(by).sort((a, b) => by[b].length - by[a].length)[0] || null;
+    const per = main ? by[main].reduce((a, b) => a + b, 0) / by[main].length : 0;
+    const want = Math.min(supply, belt);
+    const need = per > 0 && Number.isFinite(demand) && demand < want * 0.97 ? Math.ceil((want - demand) / per - 1e-9) : 0;
+    const limit = belt < supply * 0.97 ? 'belt' : need > 0 ? 'cons' : null;
+    return { item: ITEM_IDS[item], supply, belt, demand, cons, wrong, main, per, need, limit };
   }
   bottlenecks(n = 5) {
     const out = [];

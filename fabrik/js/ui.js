@@ -618,6 +618,21 @@ export class UI {
       }
       default: body = `<div class="kv"><span>${esc(t('ui.parts'))}</span><b>${e.count ?? 0} / 4</b></div>${e.blocked ? `<p class="warn">🛋️ ${esc(t('gerald.sit'))}</p>` : ''}`;
     }
+    // Durchsatz: liefert / Band / Abnehmer (Bohrer und Maschinen mit Ausgang)
+    const fl = (e.kind === 'drill' || e.kind === 'machine') && sim.flow ? sim.flow(e.id) : null;
+    const dg0 = fl && sim.diagnose ? sim.diagnose(e.id) : null;
+    if (fl && fl.cons.length) {
+      const pm = v => t('unit.perMin', { n: fmtRate(v * 60) });
+      const take = Number.isFinite(fl.demand) ? pm(fl.demand) : '∞ ' + t('ui.flowAll');
+      const cls = v => v < fl.supply * 0.97 ? 'fl-bad' : 'fl-ok';
+      body += `<div class="lbl">${esc(t('ui.flow'))}</div>` + kv('⬆ ' + t('ui.flowOut'), `${this.iIcon(fl.item, false, 'sm')}${esc(pm(fl.supply))}`)
+        + (Number.isFinite(fl.belt) ? kv('➡️ ' + t('ui.flowBelt'), `<span class="${cls(fl.belt)}">${esc(pm(fl.belt))}</span>`) : '')
+        + kv('⬇ ' + t('ui.flowTake') + (fl.main ? ` (${fl.cons.filter(c => c.type === fl.main).length}× ${name('building', fl.main)})` : ''), `<span class="${Number.isFinite(fl.demand) ? cls(fl.demand) : 'fl-ok'}">${esc(take)}</span>`);
+      const shown = dg0 && /^diag\.flow/.test(dg0.key);
+      if (!shown && fl.wrong.length && !fl.cons.some(c => c.rate > 0)) body += `<p class="warn">${esc(t('diag.flowWrong', { item: fl.item, b: sim.N.get(fl.wrong[0])?.e.type }))}</p>`;
+      else if (!shown && fl.limit === 'cons') body += `<p class="warn">${esc(t('diag.flowCons', { item: fl.item, n: Math.round(fl.supply * 60), m: Math.round(fl.demand * 60), k: fl.need, b: fl.main }))}</p>`;
+      else if (!shown && fl.limit === 'belt') body += `<p class="warn">${esc(t('diag.flowBelt', { item: fl.item, n: Math.round(fl.supply * 60), m: Math.round(fl.belt * 60) }))}</p>`;
+    }
     // Strom (Verbraucher)
     let power = '';
     if (e.use > 0 && (e.power ?? 1) > 0) {

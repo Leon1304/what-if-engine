@@ -335,7 +335,7 @@ ok(await page.evaluate(n => __fabrik.storage.info('backup')?.buildings === n, pr
     await page.evaluate(() => { for (const id of window.__leak) __fabrik.sim.remove(id); }); await W(90);
   };
   await build(); await build();
-  const m0 = await memo(); for (let i = 0; i < 20; i++) await build(); const m1 = await memo();
+  await W(2000); const m0 = await memo(); for (let i = 0; i < 20; i++) await build(); await W(2000); const m1 = await memo();   // erst messen, wenn kurzlebige Effekt-Texte (popText) weg sind
   ok(m1.geo - m0.geo <= 2 && m1.tex - m0.tex <= 1, `20× Bauen+Ausbau+Abriss (auch Kraftwerk, Solar, Mast, Heizer, Drohnenhafen): Geometrien ${m0.geo} → ${m1.geo}, Texturen ${m0.tex} → ${m1.tex}`);
   const cyc = async () => {
     await page.evaluate(() => __fabrik.app.newGame()); await W(250);
@@ -710,6 +710,12 @@ await ctx.close();
     ok(/Merged from/.test(info) && /4 drills/.test(info) && /\/ 16/.test(info), 'Info-Panel: verschmolzen aus 4 Bohrern, Puffer 16');
     await shot('41b-grossbohrer-info', g);
     const sold = await E(() => __fabrik.sim.S.stats.earned); ok(sold > 0, `Großbohrer liefert über das eine Band an den Verkauf (${Math.round(sold)} Münzen)`);
+    ok(/Throughput/i.test(info) && /Delivers/.test(info) && /sells everything/.test(info), 'Info-Panel: Durchsatz (liefert, Band, Verkauf nimmt alles)');
+    // Ofen statt Verkauf: Stau, Info-Panel sagt, wie viele Öfen fehlen
+    await E(([x, y]) => { const s = __fabrik.sim; s.remove(s.at(x + 10, y + 1)); s.place('ofen', x + 10, y + 1, 0); s.tick(20 * 90); __fabrik.app.select(0); __fabrik.app.select(s.at(x, y)); }, sp); await G(600);
+    const info2 = await g.locator('.info').innerText().catch(() => '');
+    ok(/Needs \d+ more \(Smelter\)/.test(info2), 'Stau vor dem Ofen: „Needs N more (Smelter)“ im Info-Panel: ' + (info2.match(/Delivers[^\n]*min, but[^\n]*/) || [''])[0].slice(0, 120));
+    await shot('41c-grossbohrer-engpass', g);
     await E(() => __fabrik.ui.act('lang', { l: 'de' })); await G(300);
     ok(/Großbohrer|Verschmolzen/.test(await g.locator('.info').innerText().catch(() => '')), 'Deutsch: Großbohrer im Info-Panel');
   }

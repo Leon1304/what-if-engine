@@ -209,3 +209,8 @@ Leons Wunsch: „Wenn ich auf einer Ressource 4 Fabriken habe, soll daraus eine 
 - Blaupausen speichern ihn als 4 Bohrer; Pipette (C) wählt den Bohrer. Ereignis `merge {id, b, from, parts, item, x, z, rot, mk}` → Staub, Funken, „×4“, Meldung, Hinweis `merge`; ab 3 Bohrern Tipp `mergeTip`.
 - Modell `MACH.grossbohrer` (buildings.js): Bohrturm mit Kronenrad und stampfendem Bohrkopf, vier Eckbohrer mit Sammelrohren in einen Erztrichter über der Rutsche, Leitstand mit Fenstern und Schüssel, Tanks, Leiter, Geländer; Mk II/III in upgrades.js.
 - Tests: `rules.mjs` Abschnitt 28, `play.mjs` (vierter Bohrer per Klick, Bild `41-grossbohrer`).
+
+## Durchsatz-Anzeige (17.11.2026)
+`f.flow(id)` (Bohrer, Maschine) → `{ item, supply, belt, demand, cons, wrong, main, per, need, limit }` in Teilen/s: folgt Bändern, Tunneln, Verteilern, Sortierern und Lagern bis zu den Abnehmern.
+`belt` = was das Band bis zum ersten Verteiler trägt (Tempo ÷ Teileabstand), `demand` = was die Abnehmer schaffen (Verkauf = unbegrenzt), `need` = wie viele Abnehmer vom häufigsten Typ noch fehlen.
+Ein gestauter Bohrer/eine gestaute Maschine bekommt in `diagnose` die Schlüssel `diag.flowCons` („noch 4× Schmelzofen nötig“), `diag.flowBelt` (Band zu langsam) oder `diag.flowWrong` (festes Rezept nimmt das Teil nicht). Das Info-Panel zeigt den Block „Durchsatz“ (liefert / Band trägt / Abnehmer schaffen) mit der Warnung, auch bevor sich etwas staut.
