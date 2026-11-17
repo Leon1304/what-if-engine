@@ -459,8 +459,8 @@ const SKY = [[0, 'day']];
 const PHASES = t => 'Hampton Court, 1530s';
 const STATS = [
   { label: 'Shift ends in', type: 'timer', until: 'end', scale: 1400, show: 'b1+0.5', big: true, final: 0 },
-  { label: 'Royal favour', type: 'bar', keys: [[0, 12], ['b2+4.2', 12], ['b2+5.0', 24], ['b3+2.0', 24], ['b3+2.6', 38], ['b4+4.2', 38], ['b4+5.0', 62], ['b5+2.6', 62], ['b5+3.4', 81], ['b5+5.0', 81], ['b5+5.8', 100]],
-    show: 'b2+4.0', up: 'good', why: [['b2+5.0', 'brought the bowl'], ['b3+2.6', 'reported the results'], ['b4+5.0', 'closest to the king'], ['b5+3.4', 'holds the purse'], ['b5+5.8', 'lords beg you']] }
+  { label: 'Royal favour', type: 'bar', keys: [[0, 12], ['b2+4.2', 12], ['b2+5.0', 24], ['b3+2.0', 24], ['b3+2.6', 38], ['b4+4.5', 38], ['b4+5.3', 62], ['b5+2.6', 62], ['b5+3.4', 81], ['b5+5.0', 81], ['b5+5.8', 100]],
+    show: 'b2+4.0', up: 'good', why: [['b2+5.0', 'brought the bowl'], ['b3+2.6', 'reported the results'], ['b4+5.3', 'closest to the king'], ['b5+3.4', 'holds the purse'], ['b5+5.8', 'lords beg you']] }
 ];
 const FACTS = [{ t: 38.7, dur: 2.6, big: '1901', text: 'the year the Groom of the Stool was finally *abolished*', src: 'Historic UK · Wikipedia' }];
 const TEASE = [{ t: 24.5, dur: 0.6, at: 34.6, label: 'By sunset' }];
@@ -18159,15 +18159,16 @@ ground({ color: '#6E8A4E', flat: 200, hills: 0 });
   walk(you, [[1.0, -2.75], [1.6, -2.45], [2.2, -2.25]], { t0: 12.9, speed: 0.9 });
   faceTo(you, [1.45, 1, -1.05], 15.8, 23.6);
   walk(you, [[2.2, -2.25], [2.0, -1.7], [2.3, -1.2], [3.0, -0.95], [4.1, -0.2], [4.2, 1.3], [4.0, 1.9]], { t0: 24.3, speed: 1.35 });
-  walk(you, [[64.0, -1.4], [64.0, -0.65]], { t0: 29.7, speed: 0.9 });
-  walk(you, [[3.0, -3.45], [3.55, -3.62]], { t0: 36.1, speed: 0.8 }); faceTo(you, [3.55, 1, 0.5], 37.4, 1e9);
+  walk(you, [[62.9, -1.7], [63.6, -1.3], [64.0, -0.65]], { t0: 29.7, speed: 1.1, ramp: 0.45 });
+  walk(you, [[3.0, -3.45], [3.55, -3.62]], { t0: 36.1, speed: 0.8 }); faceTo(you, [3.55, 1, 0.5], 38.0, 1e9);
   const drape = courtProp(world, 'drape', 3.55, 1.0, -3.4);
   holdItem(you, drape, -1, 1e9, { side: 'L', reach: false, off: [0, -0.18, 0.08] }); late(t => { drape.visible = t < 3.3 || t >= 36.1; });
-  holdItem(you, ewer, 12.0, 18.6, { side: 'R', reach: false, after: 'hide' }); holdItem(you, basin, 12.0, 18.6, { side: 'L', reach: false, after: 'hide', off: [0, -0.35, 0.12] });
+  holdItem(you, ewer, 12.0, 18.6, { side: 'R', reach: false }); holdItem(you, basin, 12.0, 18.6, { side: 'L', reach: false, off: [0, -0.35, 0.12] });
+  late(t => { ewer.visible = basin.visible = t < 18.6; });
   react(you, 2.4, 'bow', { dur: 1.1, amp: 0.5 }); react(you, 17.1, 'sigh'); you.talk = [[18.8, 20.4]]; tick(t => { you.look = t > 20.9 && t < 23.6 ? 'cam' : null; });
   gesture(you, 30.6, 'stop');
   const CB = coffer(world, 64.0, 0.0, { open: 31.8 }); track('coffer', CB.g, 0.4);
-  const purse = courtProp(world, 'purse', 64.0, 0.5, 0.0); holdItem(you, purse, 33.6, 36.1, { side: 'R', reach: false, after: 'hide' });
+  const purse = courtProp(world, 'purse', 64.0, 0.5, 0.0); holdItem(you, purse, 33.6, 36.1, { side: 'R', reach: false }); late(t => { purse.visible = t >= 33.6 && t < 36.1; });
 
   // the king (privy chamber): by the screen in the hook, to the close stool behind the screen, sits, walks out with you
   const king = figure({ costume: 'tudorKing', seed: 8, skin: '#E8B892', expr: t => t < 3.3 ? 'smug' : t < 23.0 ? 'calm' : 'happy' }); world.add(king.root); king.root.position.set(5.0, 0, 0.8); track('king', king);
@@ -18175,7 +18176,7 @@ ground({ color: '#6E8A4E', flat: 200, hills: 0 });
   walk(king, [[5.0, 0.8], [5.05, -0.9], [5.05, -2.45], [4.2, -2.5], [3.55, -2.5], [3.55, -2.42]], { t0: 10.3, speed: 1.15 });
   late(t => { if (t < 10.3) king.root.rotation.y = 3.11; });
   sit(king, 17.0, { seat: S1.seat(), t1: 23.0 }); noHit(king, S1);
-  walk(king, [[3.55, -2.42], [4.3, -2.5], [4.95, -2.0], [5.05, -0.8], [4.9, 1.9]], { t0: 24.0, speed: 1.3 });
+  walk(king, [[3.55, -2.42], [4.2, -2.55], [4.8, -2.3], [5.05, -1.6], [5.05, -0.6], [4.9, 1.9]], { t0: 24.0, speed: 1.2 });
   king.talk = [[26.0, 27.4]]; react(king, 26.8, 'nod');
 
   // physician (black gown) receives the report; two jealous courtiers by the door; one more watching at the end
