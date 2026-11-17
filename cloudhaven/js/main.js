@@ -15,10 +15,11 @@ import { t as tr, phrase, tileName, tileDesc } from './i18n.js';
 import { U } from './materials.js';
 import { Progress } from './progress.js';
 import { Lamps } from './lamps.js';
+import { camButtons } from './camui.js';
 
 const Q = new URLSearchParams(location.search);
 const canvas = document.getElementById('c');
-const DEF = { quality: 'hoch', music: .6, sfx: .8, dayCycle: true, time: 10, season: 'auto', weather: 'auto', visitors: true };
+const DEF = { quality: 'hoch', music: .6, sfx: .8, dayCycle: true, time: 10, season: 'auto', weather: 'auto', visitors: true, merge: true };
 const settings = { ...DEF, ...(Store.loadSettings() || {}) };
 // Grafik automatisch, solange der Spieler sie nicht selbst eingestellt hat (qualityAuto !== false):
 // Handy → niedrig, Tablet/schwaches Gerät → mittel, sonst hoch. Dazu passt sich die Auflösung der Bildrate an (dynRes).
@@ -68,8 +69,9 @@ const app = {
     sound.setVolumes(settings.music, settings.sfx);
   },
   env: () => game.S ? { time: game.S.time, season: Math.floor(seasonNow()) % 4, weather } : { time: 10, season: 1, weather: 'klar' },
-  newGame(opts) { game.newGame(opts); afterLoad(); },
-  loadGame(S) { game.load(S); afterLoad(); },
+  // Verschmelzen (Einstellung) gilt für jede Insel: der Inselstand trägt den Schalter (S.merge) für Logik, Rückgängig und Export
+  newGame(opts) { game.newGame({ ...opts, merge: settings.merge !== false }); afterLoad(); },
+  loadGame(S) { game.load(S); game.S.merge = settings.merge !== false; afterLoad(); },
   focusTile(q, r) { const c = center(q, r); rig.flyTo(new THREE.Vector3(c.x, 0, c.z), 22); },
 };
 // Detailstufen je Qualität: minPx = kleinste gezeichnete Körpergröße in Bildpunkten, detailFar = Kleinkram bis hier
@@ -103,6 +105,7 @@ const dyn = {
 app.progress = new Progress(game, { env: () => app.env(), visitors: () => settings.visitors !== false });
 app.progress.on((type, d) => { if (type === 'wishDone') { const [q, r] = unkey(d.key), c = center(q, r); setTimeout(() => life.celebrate('quest', new THREE.Vector3(c.x, 1, c.z), 1), 650); } });
 const ui = new UI(app);
+const camUI = camButtons(rig, { visible: () => ui.mode === 'play' && !ui.blocking });
 booting = false;
 window.__insel = { app, game, world, stage, rig, life, sound, ui, THREE, dyn, LOD, lamps, prog: app.progress };
 
@@ -110,9 +113,7 @@ window.__insel = { app, game, world, stage, rig, life, sound, ui, THREE, dyn, LO
 function afterLoad() {
   rotO = 0; world.clear(); world.sync(); life.setTiles(world.lifeList()); lampSpots();
   const r = world.bounds(); rig.setBounds(new THREE.Vector3(0, 0, 0), r + 8);
-  // Verschmelzen: ganzes Spielfeld im Bild, Ziel etwas zur Kamera hin (unten liegt die Bauleiste)
-  const M = game.S.mode === 'verschmelzen', y0 = rig.g.yaw, off = M ? 9 : 0;
-  if (!Q.has('cam')) rig.flyTo(new THREE.Vector3(Math.sin(y0) * off, 0, Math.cos(y0) * off), Math.max(38, r * (M ? 3 : 2.1)));
+  if (!Q.has('cam')) rig.flyTo(new THREE.Vector3(0, 0, 0), Math.max(38, r * 2.1));
   requestAnimationFrame(() => warmup(false));                // neue Insel: Varianten/Schatten einmal vorab (Start, nicht beim ersten Zoom)
 }
 // Nachbarn werden nach dem Setzen in den folgenden Bildern neu gebaut (world.queue) → Leben/Laternen nachziehen
@@ -183,8 +184,9 @@ rig.onTap = (nx, ny, e) => {
 function describe(t) {
   const g = game.group(t.q, t.r), n = g.keys.length, st = game.stageOf(t);
   const parts = [tileDesc(t.k)];
-  if (game.S.mode === 'verschmelzen' && LEVEL[t.k]) { parts.push(tr('desc.lvl', { n: LEVEL[t.k], m: MERGE_MAX })); if (MERGE[t.k]) parts.push(tr('desc.next', { tile: tileName(MERGE[t.k]) })); return parts.join(' '); }
-  if (g.g) parts.push(tr('desc.group', { n }));
+  if (g.g) parts.push(tr('desc.group', { n: g.size }));
+  if (t.n > 1) parts.push(tr('info.merged', { n: t.n }));
+  if (game.S.merge !== false && LEVEL[t.k]) { parts.push(tr('desc.lvl', { n: LEVEL[t.k], m: MERGE_MAX })); if (MERGE[t.k]) parts.push(tr('desc.next', { tile: tileName(MERGE[t.k]) })); }
   if (t.k === 'haus') parts.push(tr('desc.st' + st));
   return parts.join(' ');
 }
@@ -273,7 +275,7 @@ function frame(now) {
     sound.update({ night: U.uNight.value, season, rain: U.uRain.value, camDist: d, near });
     if (timelapse && world.reveal?.done) timelapse.done();
   }
-  ui.frame(dt);
+  ui.frame(dt); camUI.frame();
   stage.render();
   dyn.frame(now);
 }

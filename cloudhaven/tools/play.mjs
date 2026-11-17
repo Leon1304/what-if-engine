@@ -41,10 +41,10 @@ const clickPlace = async () => page.evaluate(() => {
 let clicked = 0, tried = 0;
 for (let i = 0; i < 6; i++) {
   const b = await clickPlace(); if (!b) continue; tried++;
-  const n0 = await page.evaluate(() => __insel.game.board.size);
+  const n0 = await page.evaluate(() => __insel.game.S.stats.placed);   // Verschmelzen kann das Brett verkleinern → gesetzte zählen
   for (let k = 0; k < 6 && await page.evaluate(() => __insel.app._rot()) !== b.o; k++) await page.keyboard.press('r');
   await page.mouse.move(b.sx, b.sy); await W(150); await page.mouse.down(); await page.mouse.up(); await W(800);
-  if (await page.evaluate(() => __insel.game.board.size) > n0) clicked++;
+  if (await page.evaluate(() => __insel.game.S.stats.placed) > n0) clicked++;
   else console.log('  Klick ohne Wirkung:', JSON.stringify({ q: b.q, r: b.r, o: b.o, rot: await page.evaluate(() => __insel.app._rot()), x: Math.round(b.sx), y: Math.round(b.sy), el: await page.evaluate(([x, y]) => document.elementFromPoint(x, y)?.className, [b.sx, b.sy]) }));
 }
 ok(tried >= 3 && clicked === tried, `Kacheln per Mausklick gesetzt: ${clicked}/${tried}`);
@@ -118,7 +118,7 @@ await page.waitForFunction(() => window.__insel && window.__insel.ui.mode === 'm
 const after = await page.evaluate(() => JSON.stringify(__insel.game.S.tiles));
 ok(before === after, 'Speichern → Neuladen ergibt dieselbe Insel');
 await page.locator('.mmenu .btn[data-act=continue]').first().click(); await W(800);
-const u = await page.evaluate(() => { const g = __insel.game; if (!g.S.stack.length) g.endless(); const n = g.board.size, c = g.current(); for (const [q, r] of g.slots()) for (let o = 0; o < 6; o++) if (g.evaluate(c.k, q, r, o).ok) { g.place(q, r, o); const m = g.board.size; g.undo(); return [n, m, g.board.size, __insel.world.T.size]; } return null; });
+const u = await page.evaluate(() => { const g = __insel.game; if (!g.S.stack.length) g.endless(); const n = g.board.size, c = g.current(); for (const [q, r] of g.slots()) for (let o = 0; o < 6; o++) { const e = g.evaluate(c.k, q, r, o); if (e.ok && !e.merges.length) { g.place(q, r, o); const m = g.board.size; g.undo(); return [n, m, g.board.size, __insel.world.T.size]; } } return null; });
 ok(u && u[1] === u[0] + 1 && u[2] === u[0] && u[3] === u[0], 'Rückgängig entfernt die Kachel auch aus der Welt');
 
 // Zeitraffer kurz anspielen

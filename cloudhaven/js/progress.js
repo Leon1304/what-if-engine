@@ -5,8 +5,9 @@
 // Global über alle Inseln: localStorage 'insel.progress' (try/catch). Je Insel: game.S.prog (wird mit der Insel gespeichert).
 // Rückgängig: Erfolge, erfüllte Wünsche und abgeholte Belohnungen bleiben; Belohnungen, die der alte Stand nicht kennt,
 // werden wieder gutgeschrieben (nie doppelt), Zähler (Kacheln, perfekte Züge, Verschmelzungen) zählen zurück.
-// Im Kreativ-Modus ruht alles. Besucher nur in Klassisch und Endlos.
-import { TILES, KINDS, GROUP, CATS, edgesOf } from './tiles.js';
+// Im Kreativ-Modus ruht alles. Besucher nur in Klassisch und Endlos. Verschmelzen zählt in Klassisch und Endlos (Grundregel).
+// Größen zählen Gewichte (game.js weight: verschmolzene Kacheln zählen so oft, wie Teile in ihnen stecken).
+import { TILES, KINDS, GROUP, CATS, MERGE, edgesOf } from './tiles.js';
 import { neighbor, key, hash, rng } from './hex.js';
 
 export const PROGRESS_KEY = 'insel.progress';
@@ -68,12 +69,15 @@ export function pairAt(game, t, a, b) {
   const n = nbs(game, t);
   return (t.k === a && n.some(x => matchKind(x.k, b))) || (matchKind(t.k, b) && n.some(x => x.k === a));
 }
-// zusammenhängende Kacheln aus der Menge set um (q, r)
+const wt = t => (t && t.n > 1 ? t.n : 1);
+// zusammenhängende Kacheln aus der Menge set um (q, r), nach Gewicht. Verschmolzene Stufen einer Art aus set zählen mit
+// (z. B. Schafweide aus 3 Wiesen = 3 Wiesen), aber nur, wenn sie wirklich verschmolzen sind (t.n > 1)
 function kindGroup(game, q, r, set) {
-  const t0 = game.at(q, r); if (!t0 || !set.has(t0.k)) return 0;
-  const seen = new Set([key(q, r)]), todo = [[q, r]];
-  while (todo.length) { const [a, b] = todo.pop(); for (let i = 0; i < 6; i++) { const [c, d] = neighbor(a, b, i), k = key(c, d), n = game.board.get(k); if (n && !seen.has(k) && set.has(n.k)) { seen.add(k); todo.push([c, d]); } } }
-  return seen.size;
+  const res = new Set([...set].map(k => MERGE[k]).filter(Boolean)), inSet = t => t && (set.has(t.k) || (res.has(t.k) && t.n > 1));
+  const t0 = game.at(q, r); if (!inSet(t0)) return 0;
+  const seen = new Set([key(q, r)]), todo = [[q, r]]; let n0 = wt(t0);
+  while (todo.length) { const [a, b] = todo.pop(); for (let i = 0; i < 6; i++) { const [c, d] = neighbor(a, b, i), k = key(c, d), n = game.board.get(k); if (n && !seen.has(k) && inSet(n)) { seen.add(k); todo.push([c, d]); n0 += wt(n); } } }
+  return n0;
 }
 
 // ---------- Tagesaufgaben ----------
@@ -295,6 +299,7 @@ export class Progress {
     if (d.to === 'burg') T.castle++;
     if (TILES[d.to]) this.P.kinds[d.to] = 1;
     this._dailyAdd('merge', 1);
+    for (const w of this.cur?.vis.list || []) if (d.keys?.includes(w.home)) w.home = d.at;     // Zuhause verschmolzen → zieht mit
   }
   _place(d) {
     const S = this.game.S, P = this.P, T = P.tot, t = d.tile, st = this.cur.st, env = this.env(), g = this.game;
@@ -305,9 +310,9 @@ export class Progress {
     for (const k of [d.placed || t.k, t.k]) if (TILES[k] && k !== 'start') { P.kinds[k] = 1; if (!P.daily.kinds.includes(k)) P.daily.kinds.push(k); }
     // je Insel: Häuser im Dorf, Winterdorf, Wasserfall, Leuchtturm am Rand
     if (GROUP[t.k] === 'dorf') {
-      const grp = g.group(t.q, t.r).keys;
-      st.houses = Math.max(st.houses, grp.filter(k => HOUSING.has(g.board.get(k)?.k)).length);
-      if ((env.season | 0) === 3) st.winter = Math.max(st.winter, grp.length);
+      const grp = g.group(t.q, t.r);
+      st.houses = Math.max(st.houses, grp.keys.reduce((n, k) => { const x = g.board.get(k); return n + (HOUSING.has(x?.k) ? wt(x) : 0); }, 0));
+      if ((env.season | 0) === 3) st.winter = Math.max(st.winter, grp.size ?? grp.keys.length);
     }
     if (edgesOf(t.k, t.o).some((e, i) => e === 'w' && !g.at(...neighbor(t.q, t.r, i)))) st.fall = 1;
     if (t.k === 'turm' && 6 - (d.nb | 0) >= 4) st.light = 1;
@@ -321,7 +326,7 @@ export class Progress {
     const g = this.game, S = g.S, t = d.tile, D = this.P.daily;
     this.tasks().forEach((T, i) => {
       let v = D.n[i] || 0;
-      if (T.type === 'row') { if (ROW_KINDS[T.k]?.includes(t.k)) v = Math.max(v, kindGroup(g, t.q, t.r, new Set(ROW_KINDS[T.k]))); }
+      if (T.type === 'row') { const set = new Set(ROW_KINDS[T.k] || []); if (set.has(d.placed || t.k)) v = Math.max(v, kindGroup(g, t.q, t.r, set)); }
       else if (T.type === 'next') { if (pairAt(g, t, T.a, T.b)) v = 1; }
       else if (T.type === 'score') v = Math.max(v, S.score);
       else if (T.type === 'count') v++;

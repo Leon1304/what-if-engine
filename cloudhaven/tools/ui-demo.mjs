@@ -1,7 +1,8 @@
 // Prüft die Oberfläche mit tools/ui-demo.html (echte Spiellogik, Attrappe statt 3D) in headless Chromium.
 //   node cloudhaven/tools/ui-demo.mjs [ausgabeordner]
 // Screenshots aller Bildschirme (Desktop + Handy 390×844), Speichern → Neuladen → Laden, Datei sichern/laden, Löschen mit Rückfrage.
-// Deutsch (Browser de-DE) wie gehabt, danach Englisch (Browser en-US): keine deutschen Reste, Umschalten, Sprache bleibt nach Neuladen.
+// Standard ist Englisch, auch bei Browser de-DE (nur die gespeicherte Wahl insel.lang zählt). Der deutsche Teil schaltet erst auf 🇩🇪,
+// danach Englisch (Browser en-US): keine deutschen Reste, Umschalten, Sprache bleibt nach Neuladen.
 // Endet mit "UI OK" oder "UI FEHLER: n".
 import http from 'http'; import fs from 'fs'; import path from 'path'; import { chromium } from 'playwright';
 const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..');
@@ -21,13 +22,18 @@ const watch = (page, tag) => {
 const shot = async (page, name) => { await page.screenshot({ path: path.join(out, name + '.png') }); console.log('  📷 ' + name); };
 const ready = async page => { await page.waitForFunction(() => window.__ready, null, { timeout: 30000 }); await page.waitForTimeout(900); };
 const clickText = (page, sel, text) => page.locator(sel, { hasText: text }).first().click();
+const toDe = async page => { await page.evaluate(() => localStorage.setItem('insel.lang', 'de')); await page.reload(); await ready(page); };
 
 // ================= Desktop =================
 const ctx = await browser.newContext({ viewport: { width: 1280, height: 800 }, acceptDownloads: true, locale: 'de-DE' });
 const page = await ctx.newPage(); watch(page, 'desktop');
 console.log('Startmenü'); await page.goto(URL0); await ready(page);
 ok(await page.locator('.title h1').isVisible() && await page.locator('.title h1').textContent() === 'Cloudhaven', 'Titel Cloudhaven sichtbar'); await shot(page, '01-start');
-ok(await page.evaluate(() => document.documentElement.lang === 'de' && document.title === 'Cloudhaven'), 'Browser de-DE → Deutsch, <html lang=de>');
+ok(await page.evaluate(() => document.documentElement.lang === 'en' && document.title === 'Cloudhaven') && await page.locator('.mmenu .btn[data-act=new]').textContent().then(x => x.includes('New Island')), 'Browser de-DE ohne gespeicherte Wahl → Englisch (Standard)');
+await page.locator('.langs [data-lang=de]').click(); await page.waitForTimeout(300);
+ok(await page.evaluate(() => document.documentElement.lang === 'de' && localStorage.getItem('insel.lang') === 'de'), '🇩🇪 → Deutsch, gespeichert');
+await page.reload(); await ready(page);
+ok(await page.evaluate(() => document.documentElement.lang === 'de'), 'Deutsch bleibt nach Neuladen');
 
 console.log('Neue Insel');
 await clickText(page, '.mmenu .btn', 'Neue Insel'); await page.waitForTimeout(400); await shot(page, '02-neue-insel');
@@ -67,7 +73,7 @@ await page.evaluate(() => { for (let i = 0; i < 4; i++) { __demo.force('wald'); 
 ok(await page.evaluate(() => (__game.S.ms.wald || 0) >= 1), 'Wald-Meilenstein erreicht');
 await shot(page, '07-meilenstein');
 await page.waitForTimeout(1200);
-ok(await page.evaluate(() => __game.S.tut >= 8), 'Anleitung abgeschlossen');
+ok(await page.evaluate(() => __game.S.tut >= 9 && __game.S.stats.merges > 0), 'Anleitung abgeschlossen (inkl. Schritt Verschmelzen)');
 
 console.log('Freischaltung');
 await page.evaluate(() => { __game.S.score = __game.nextUnlock().at - 2; __demo.force('wiese'); __demo.autoPlace(1); }); await page.waitForTimeout(800);
@@ -134,7 +140,7 @@ ok(zeroK && await page.locator(`.bb .tc[data-kind=${zeroK}] .n`).textContent() =
 // Setzen: Zahl zählt runter und hüpft, Art bleibt gewählt
 const n0 = await page.evaluate(k => __game.supply()[k].n, pickK);
 // Bonus-Kacheln (Meilenstein/Perfekt) können zufällig dieselbe Art bringen → mitzählen
-const add = await page.evaluate(k => { const c0 = __game.S.stack.filter(e => e.k === k).length, r = __demo.autoPlace(1); return __game.S.stack.filter(e => e.k === k).length - (c0 - (r?.tile?.k === k ? 1 : 0)); }, pickK); await page.waitForTimeout(60);
+const add = await page.evaluate(k => { const c0 = __game.S.stack.filter(e => e.k === k).length, r = __demo.autoPlace(1); return __game.S.stack.filter(e => e.k === k).length - (c0 - ((r?.placed ?? r?.tile?.k) === k ? 1 : 0)); }, pickK); await page.waitForTimeout(60);
 const after1 = await page.evaluate(k => ({ n: __game.supply()[k]?.n || 0, cls: document.querySelector(`.bb .tc[data-kind=${k}]`).className, cur: __game.current()?.k }), pickK);
 ok(after1.n === n0 - 1 + add && (add ? true : /down/.test(after1.cls)), `nach dem Setzen ${n0} → ${after1.n}${add ? ` (+${add} Bonus gleicher Art)` : ''}, Zahl hüpft`);
 ok(after1.n === 0 || after1.cur === pickK, 'gleiche Art bleibt gewählt, solange Vorrat da ist');
@@ -274,37 +280,66 @@ ok(await page.locator('.bb .tc[data-kind=muehle] .n').textContent() === '∞' &&
 await page.evaluate(() => __demo.autoPlace(1)); await page.waitForTimeout(200);
 ok(await page.evaluate(() => __game.current().k === 'muehle'), 'Kreativ: Auswahl bleibt nach dem Setzen'); await shot(page, '24-kreativ');
 
-console.log('Verschmelzen');
+console.log('Verschmelzen (Grundregel)');
 await page.keyboard.press('Escape'); await page.waitForTimeout(300); await clickText(page, '.mmenu .btn', 'Neue Insel'); await page.waitForTimeout(300);
-await page.locator('.mode[data-mode=verschmelzen]').click(); await page.waitForTimeout(150);
-ok(await page.locator('.modal label.check').isHidden(), 'Verschmelzen: keine Bau-Anleitung zur Wahl');
-await clickText(page, '.modal .btn', 'Insel erschaffen'); await page.waitForTimeout(400);
+ok(await page.locator('.mode').count() === 3 && await page.locator('.mode[data-mode=verschmelzen]').count() === 0 && /verschmelzen/.test(await page.locator('.modal .mnote').textContent()), 'Neue Insel: 3 Spielarten, Verschmelzen nur als Hinweis (kein eigener Modus)');
+await shot(page, '25-neue-insel-ohne-modus');
+await clickText(page, '.mode', 'Klassisch'); await clickText(page, '.modal .btn', 'Insel erschaffen'); await page.waitForTimeout(400);
 await page.locator('.dlg .btn', { hasText: 'Überschreiben' }).click({ timeout: 1000 }).catch(() => {}); await page.waitForTimeout(600);
-ok(await page.evaluate(() => __game.S.mode === 'verschmelzen') && await page.locator('.mb .mc[data-i]').count() === 3 && await page.locator('.bb-tabs').count() === 0, 'Verschmelzen: eigene Bauleiste (3 Karten + Ablagefach)');
-ok(await page.locator('.mb .mc .lv').first().isVisible() && await page.locator('.tut .bub').count() === 0, 'Stufen-Abzeichen, keine Bau-Anleitung');
-await page.evaluate(() => { const S = __game.serialize(); __app.loadGame({ ...S, tiles: [{ k: 'start', q: 0, r: 0, o: 0 }, { k: 'felsen', q: 2, r: 0, o: 0 }, { k: 'felsen', q: 2, r: -1, o: 0 }, { k: 'huette', q: 1, r: 1, o: 0 }, { k: 'huette', q: 0, r: 1, o: 0 }], stack: [{ k: 'felsen' }, { k: 'wiese' }, { k: 'feld' }], pick: 0, hold: null }); __ui.hideInfo(); __demo.focus(0, 0, 9); });
-await page.waitForTimeout(300);
-await page.evaluate(() => __demo.hoverBest()); await page.waitForTimeout(300);
-ok(await page.locator('.mhov .mrow').count() === 2 && (await page.locator('.mhov').textContent()).includes('Kettenreaktion'), 'Vorschau: Kette mit 2 Schritten'); await shot(page, '25-verschmelzen-vorschau');
-await page.evaluate(() => __game.place(1, 0, 0)); await page.waitForTimeout(1700);
-ok(await page.evaluate(() => __game.at(1, 0)?.k === 'haus' && !__game.at(2, 0)) && await page.locator('.fx .pop', { hasText: 'Fachwerkhaus' }).count() > 0, 'Kette: Fachwerkhaus, Punkte-Schild je Schritt');
+ok(await page.evaluate(() => __game.S.mode === 'klassisch' && __game.S.merge === true), 'Klassisch-Insel mit Verschmelzen');
+const chainSetup = pg => pg.evaluate(() => { const S = __game.serialize(); __app.loadGame({ ...S, score: 500, tut: 99, tiles: [{ k: 'start', q: 0, r: 0, o: 0 }, { k: 'felsen', q: 1, r: 0, o: 0 }, { k: 'felsen', q: 2, r: 0, o: 0 }, { k: 'huette', q: 1, r: 1, o: 0 }, { k: 'huette', q: 0, r: 1, o: 0 }], stack: ['felsen', 'wiese', 'feld', 'wald', 'haus'].map(k => ({ k })), pick: 0, hold: null }); __ui.hideInfo(); __demo.focus(1, 1, 16);
+  __ui.notify('hover', { q: 2, r: 1, ev: __game.evaluate('felsen', 2, 1, 0) }); });
+await chainSetup(page); await page.waitForTimeout(400);
+const mh = await page.evaluate(() => ({ rows: document.querySelectorAll('.mhov .mrow').length, txt: document.querySelector('.mhov')?.innerText || '' }));
+ok(mh.rows === 2 && /Kettenreaktion/.test(mh.txt) && /3× Felsen → Blockhütte/.test(mh.txt) && /Fachwerkhaus/.test(mh.txt) && /Stein an Stein|Gebirge|\+6/.test(mh.txt), `Vorschau (Klassisch): Nachbarpunkte + 2 Verschmelz-Schritte „${mh.txt.replace(/\n/g, ' · ').slice(0, 90)}“`);
+await page.evaluate(() => __ui._toggleCat('natur', { open: true })); await page.waitForTimeout(500);
+ok(await page.locator('.tc[data-kind=felsen] .lv').isVisible() && await page.locator('.tc[data-kind=weg] .lv').count() === 0 && /3× → Blockhütte/.test(await page.locator('.bb-cur .nx').textContent()), 'Bauleiste: Stufen-Abzeichen auf Ketten-Teilen, Auswahl zeigt „3× → Blockhütte“');
+await page.evaluate(() => __ui.notify('hover', { q: 2, r: 1, ev: __game.evaluate('felsen', 2, 1, 0) })); await page.waitForTimeout(200);
+ok(await page.locator('.bb-hold.empty').isVisible(), 'Ablagefach neben der Auswahl');
+await shot(page, '26-vorschau-klassisch');
+await page.evaluate(() => { const r = __game.place(2, 1, 0); __ui.notify('hover', null); return r.ok; }); await page.waitForTimeout(500); await shot(page, '27a-verschmelzen-treffer');
+await page.waitForTimeout(1400);
+ok(await page.evaluate(() => __game.at(2, 1)?.k === 'haus' && !__game.at(1, 1) && !__game.at(2, 0) && __game.at(2, 1).n === 5) && await page.locator('.fx .pop', { hasText: 'Fachwerkhaus' }).count() > 0, 'Kette im Klassisch-Modus: Fachwerkhaus (zählt 5 = 3 Felsen + 2 Hütten), Punkte-Schild je Schritt');
+await shot(page, '27-verschmolzen');
 await page.keyboard.press('h'); await page.waitForTimeout(300);
-ok(await page.evaluate(() => !!__game.S.hold) && await page.locator('.mc[data-act=hold]:not(.empty)').count() === 1, 'Ablagefach mit H');
-await page.keyboard.press('2'); await page.waitForTimeout(150);
-ok(await page.evaluate(() => __game.S.pick === 1) && await page.locator('.mc[data-i="1"].sel').count() === 1, 'Taste 2 wählt die zweite Karte');
-await shot(page, '26-verschmelzen');
+ok(await page.evaluate(() => !!__game.S.hold) && await page.locator('.bb-hold:not(.empty)').count() === 1 && (await page.locator('.toasts').textContent()).includes('Ablagefach'), 'Ablagefach mit H (Toast)');
+const hk = await page.evaluate(() => [__game.S.hold.k, __game.current().k]);
+await page.locator('.bb-hold').click(); await page.waitForTimeout(300);
+ok(await page.evaluate(([a, b]) => __game.S.hold.k === b && __game.current().k === a, hk), 'Klick aufs Fach tauscht'); await shot(page, '28-ablagefach');
+for (let i = 0; i < 3; i++) { await page.keyboard.press('Control+z'); await page.waitForTimeout(250); }
+ok(await page.evaluate(() => !__game.at(2, 1) && __game.at(1, 1)?.k === 'huette' && __game.at(1, 0)?.k === 'felsen' && !__game.S.hold), 'Rückgängig: Fach und Kettenreaktion zurück');
+// Einstellung aus → keine Vorschau-Zeilen, dann wieder an
+await page.keyboard.press('Escape'); await page.waitForTimeout(300); await clickText(page, '.mmenu .btn', 'Einstellungen'); await page.waitForTimeout(300);
+await page.locator('.modal input[data-set=merge]').uncheck(); await page.waitForTimeout(150); await shot(page, '29-einstellungen-verschmelzen');
+ok(await page.evaluate(() => JSON.parse(localStorage.getItem('insel.settings')).merge === false && __game.S.merge === false), 'Einstellung Verschmelzen aus: gespeichert, Insel übernimmt');
+await clickText(page, '.modal .btn', 'Fertig'); await page.waitForTimeout(250); await clickText(page, '.mmenu .btn', 'Weiterspielen'); await page.waitForTimeout(300);
+await page.evaluate(() => __ui.notify('hover', { q: 2, r: 1, ev: __game.evaluate(__game.current().k, 2, 1, 0) })); await page.waitForTimeout(200);
+ok(await page.locator('.hover .mrow').count() === 0 && await page.locator('.tc[data-kind=felsen] .lv').isHidden(), 'aus: keine Verschmelz-Vorschau, keine Abzeichen');
+await page.keyboard.press('Escape'); await page.waitForTimeout(300); await clickText(page, '.mmenu .btn', 'Einstellungen'); await page.waitForTimeout(300);
+await page.locator('.modal input[data-set=merge]').check(); await clickText(page, '.modal .btn', 'Fertig'); await page.waitForTimeout(250); await clickText(page, '.mmenu .btn', 'Weiterspielen'); await page.waitForTimeout(300);
+ok(await page.evaluate(() => __game.S.merge === true), 'wieder an');
+// Handbuch: Kapitel Verschmelzen als Grundregel
+await page.keyboard.press('b'); await page.waitForTimeout(300); await clickText(page, '.book nav button', 'Verschmelzen'); await page.waitForTimeout(250);
+const bm = await page.locator('.book .body').textContent();
+ok(/Grundregel in jeder Spielart/.test(bm) && /Kettenreaktion/.test(bm) && !/eigener Spielmodus|Spielfeld mit/.test(bm), 'Handbuch: Verschmelzen als Grundregel (kein Modus)'); await shot(page, '30-handbuch-verschmelzen');
+await page.locator('.book .foot .btn[data-act=next]').click(); await page.waitForTimeout(300);
+ok(await page.locator('.book .mchain').count() === 6, 'Handbuch: 6 Ketten als Bildreihen'); await shot(page, '31-handbuch-ketten');
+await page.keyboard.press('Escape'); await page.waitForTimeout(300);
+// Handy: Ablagefach und Leiste im Bild
 await page.setViewportSize({ width: 390, height: 844 }); await page.waitForTimeout(400);
-const mbb = await page.locator('.mb').boundingBox();
-ok(mbb.x >= 0 && mbb.x + mbb.width <= 390 && mbb.y + mbb.height <= 844, `Handy: Verschmelz-Leiste ${Math.round(mbb.width)}×${Math.round(mbb.height)} im Bild`); await shot(page, '27-verschmelzen-handy');
+await chainSetup(page); await page.waitForTimeout(400);
+const hb = await page.locator('.bb-hold').boundingBox(), bb2 = await page.locator('.bb').boundingBox();
+ok(hb && hb.x >= 0 && bb2.x + bb2.width <= 390 && bb2.y + bb2.height <= 844, `Handy: Ablagefach ${Math.round(hb?.width)}×${Math.round(hb?.height)} und Leiste im Bild`); await shot(page, '32-verschmelzen-handy');
 await page.setViewportSize({ width: 1280, height: 800 }); await page.waitForTimeout(300);
-await page.evaluate(() => __ui._end()); await page.waitForTimeout(400);
-ok(await page.locator('.modal .btn[data-act=again]').isVisible() && await page.locator('.modal .mbest').isVisible(), 'Ende: Nochmal + höchste Stufe'); await shot(page, '28-verschmelzen-ende');
+await page.evaluate(() => { __game.place(2, 1, 0); __ui._end(); }); await page.waitForTimeout(500);
+const et = await page.locator('.modal').textContent();
+ok(await page.locator('.modal .mbest').isVisible() && /Verschmelzungen/.test(et) && /Höchste Stufe/.test(et), 'Ende: Verschmelzungen und höchste Stufe zusätzlich'); await shot(page, '33-ende-verschmelzen');
 await ctx.close();
 
 // ================= Handy =================
 const m = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true, locale: 'de-DE' });
 const mp = await m.newPage(); watch(mp, 'handy');
-await mp.goto(URL0); await ready(mp); await shot(mp, 'm1-start');
+await mp.goto(URL0); await ready(mp); await toDe(mp); await shot(mp, 'm1-start');
 await clickText(mp, '.mmenu .btn', 'Neue Insel'); await mp.waitForTimeout(300); await shot(mp, 'm2-neue-insel');
 await clickText(mp, '.modal .btn', 'Insel erschaffen'); await mp.waitForTimeout(600); await shot(mp, 'm3-hud');
 await mp.evaluate(() => { __ui.notify('camRotate'); __ui.notify('zoom'); }); await mp.waitForTimeout(900);
@@ -365,6 +400,14 @@ await noGerman(ep, 'HUD + Anleitung'); await shot(ep, 'e3-hud-en');
 await ep.evaluate(() => { __ui.notify('camRotate'); __ui.notify('zoom', { distance: 20 }); }); await ep.waitForTimeout(900);
 await ep.evaluate(() => __demo.autoPlace(1)); await ep.waitForTimeout(500);
 await ep.evaluate(() => __demo.hoverBest()); await ep.waitForTimeout(300); await noGerman(ep, 'Vorschau'); await shot(ep, 'e4-vorschau-en');
+{ const keep = await ep.evaluate(() => __game.serialize());
+  await ep.evaluate(() => { const S = __game.serialize(); __app.loadGame({ ...S, score: 500, tiles: [{ k: 'start', q: 0, r: 0, o: 0 }, { k: 'felsen', q: 1, r: 0, o: 0 }, { k: 'felsen', q: 2, r: 0, o: 0 }, { k: 'huette', q: 1, r: 1, o: 0 }, { k: 'huette', q: 0, r: 1, o: 0 }], stack: ['felsen', 'wiese', 'feld'].map(k => ({ k })), pick: 0, hold: null }); __ui.hideInfo(); __demo.focus(1, 1, 16);
+    __ui.notify('hover', { q: 2, r: 1, ev: __game.evaluate('felsen', 2, 1, 0) }); }); await ep.waitForTimeout(300);
+  ok(/Chain reaction/.test(await ep.locator('.mhov').textContent()) && /3× → Log Cabin/.test(await ep.locator('.bb-cur .nx').textContent()), 'EN: Verschmelz-Vorschau und Hinweis „3× → Log Cabin“');
+  await noGerman(ep, 'Verschmelz-Vorschau'); await shot(ep, 'e4b-verschmelzen-en');
+  await ep.evaluate(() => { __game.place(2, 1, 0); __ui.notify('hover', null); }); await ep.waitForTimeout(1900); await ep.keyboard.press('h'); await ep.waitForTimeout(300);
+  await noGerman(ep, 'nach der Kette + Ablagefach'); await shot(ep, 'e4c-ablagefach-en');
+  await ep.evaluate(S => __app.loadGame(S), keep); await ep.waitForTimeout(300); }
 await ep.evaluate(() => { for (let i = 0; i < 6; i++) { __demo.force('wald'); __demo.autoPlace(1); } }); await ep.waitForTimeout(700);
 await noGerman(ep, 'Popups + Meilenstein'); await shot(ep, 'e5-meilenstein-en');
 await ep.evaluate(() => { __game.S.score = __game.nextUnlock().at - 2; __demo.force('wiese'); __demo.autoPlace(1); __demo.force('wald', 3); __demo.autoPlace(1); __demo.force('wald', 2); }); await ep.waitForTimeout(900);
@@ -443,7 +486,7 @@ async function newIsland(pg, tap = false) {
 console.log('Fortschritt');
 {
   const pc = await browser.newContext({ viewport: { width: 1280, height: 800 }, locale: 'de-DE' }), pp = await pc.newPage(); watch(pp, 'fortschritt');
-  await pp.goto(URL0); await ready(pp);
+  await pp.goto(URL0); await ready(pp); await toDe(pp);
   ok(await pp.locator('.mmenu .btn[data-act=badges]').textContent().then(x => /0 \/ 36/.test(x)), 'Menü: Erfolge 0 / 36');
   await newIsland(pp);
   ok(await pp.locator('.hud .daily').isVisible() && /📅 0\/3/.test(await pp.locator('.hud .daily').textContent()), 'HUD: Knopf Tagesaufgaben 📅 0/3');
@@ -525,7 +568,7 @@ console.log('Fortschritt');
 // Handy
 {
   const pc = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true, locale: 'de-DE' }), pp = await pc.newPage(); watch(pp, 'fortschritt-handy');
-  await pp.goto(URL0); await ready(pp); await newIsland(pp, true);
+  await pp.goto(URL0); await ready(pp); await toDe(pp); await newIsland(pp, true);
   await pp.evaluate(() => { for (let i = 0; i < 4; i++) { __demo.force('wald'); __demo.autoPlace(1); } }); await pp.waitForTimeout(800);
   ok(await pp.locator('.bcard').count() >= 1, 'Handy: Erfolg-Karte'); await fshot(pp, 'pm1-erfolg-handy');
   let wide = await overflow(pp); ok(!wide.length, 'Handy: Erfolg-Karte ragt nicht über den Rand ' + wide.join(' | '));

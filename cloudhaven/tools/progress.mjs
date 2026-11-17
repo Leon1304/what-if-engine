@@ -2,7 +2,7 @@
 // Erfolge (auch über Neuladen), Tagesaufgaben je Datum deterministisch und erfüllbar, Besucher-Wünsche erfüllt/abgelaufen,
 // Belohnungen, Rückgängig (Erfolge bleiben, Belohnungen nie doppelt), Kreativ ruht, kaputter Speicher stürzt nicht ab.
 import { Game } from '../js/game.js';
-import { TILES, KINDS } from '../js/tiles.js';
+import { TILES, KINDS, GROUP, MERGE } from '../js/tiles.js';
 import { neighbor, key } from '../js/hex.js';
 import { Progress, BADGES, BADGE_BY, TASK_TYPES, WISHES, WISH_BY, tasksFor, dayKey, matchKind, wishFits, PROGRESS_KEY,
   DAILY_PTS, DAILY_TILES, WISH_PTS, MAX_VISITORS, ROW_KINDS } from '../js/progress.js';
@@ -54,7 +54,7 @@ function perfectMove(g) {
   }
   return null;
 }
-// Verschmelzen-Feld leeren (nur Brunnen) und Kacheln direkt hinlegen
+// Brett leeren (nur Brunnen) und Kacheln direkt hinlegen (Verschmelzen ist eine Grundregel in jedem Modus)
 function mergeBoard(g, tiles) {
   g.S.tiles = g.S.tiles.filter(t => t.k === 'start'); g.board.clear(); for (const t of g.S.tiles) g.board.set(key(t.q, t.r), t);
   for (const [k, q, r] of tiles) g._put({ k, q, r, o: 0 });
@@ -84,9 +84,9 @@ for (const type of Object.keys(TASK_TYPES)) {
   for (const v of variants) {
     const f = dayWith(type, x => v == null || x.id === v || x.k === v); if (!f) { ok(false, `kein Tag mit ${type} ${v || ''}`); continue; }
     const T = f.T, night = type === 'night';
-    const E = mk({ mode: type === 'merge' ? 'verschmelzen' : 'endlos', seed: 31, now: f.now, env: () => ({ time: night ? 23 : 12, season: 1 }) }), { g, p } = E;
+    const E = mk({ mode: 'endlos', seed: 31, now: f.now, env: () => ({ time: night ? 23 : 12, season: 1 }) }), { g, p } = E;
     if (type === 'merge') for (let i = 0; i < T.goal; i++) { mergeBoard(g, [['felsen', 1, 0], ['felsen', 2, 0]]); mergeAt(g, 'felsen', 3, 0); }
-    else if (type === 'row') { const set = new Set(ROW_KINDS[T.k]); put(g, T.k); for (let i = 1; i < T.goal; i++) put(g, T.k, adjTo(g, n => set.has(n.k))); }
+    else if (type === 'row') { const set = new Set(ROW_KINDS[T.k]); put(g, T.k); for (let i = 1; i < T.goal; i++) put(g, T.k, adjTo(g, n => set.has(n.k) || (n.n > 1 && ROW_KINDS[T.k].some(k => MERGE[k] === n.k)))); }
     else if (type === 'next') { put(g, kindOf(T.b), adjTo(g, () => true)); put(g, T.a, adjTo(g, n => matchKind(n.k, T.b))); }
     else if (type === 'score') { for (let i = 0; i < 400 && g.S.score < T.goal; i++) bestMove(g); }
     else if (type === 'count') { for (let i = 0; i < T.goal; i++) put(g, 'wiese'); }
@@ -171,8 +171,8 @@ console.log('Erfolge');
   ok(p.P.badges.winter && p.P.badges.village5, `Winterdorf (Dorf ${p.cur.st.winter} im Winter), Weiler (${p.cur.st.houses} Häuser)`);
   put(g, 'bach'); ok(p.P.badges.waterfall, 'Wasserfall: Bach endet am Rand');
   put(g, 'turm', (q, r) => g.freeSides(q, r) >= 4); ok(p.P.badges.lighthouse, 'Leuchtfeuer: Leuchtturm am Rand');
-  env = { time: 12, season: 1 }; put(g, 'wald'); for (let i = 1; i < 10; i++) put(g, 'wald', adjTo(g, n => n.k === 'wald'));
-  ok(p.P.badges.forest10 && !p.P.badges.forest25, `Wald mit ${g.S.best.wald} Kacheln`);
+  env = { time: 12, season: 1 }; put(g, 'wald'); for (let i = 1; i < 10; i++) put(g, 'wald', adjTo(g, n => GROUP[n.k] === 'wald'));
+  ok(p.P.badges.forest10 && !p.P.badges.forest25 && g.S.stats.merges > 0, `Wald mit ${g.S.best.wald} Kacheln (verschmolzene zählen mehrfach, ${g.S.stats.merges} Verschmelzungen)`);
 }
 { // Kategorien und alle Bauteile (über zwei Inseln hinweg)
   const st = mem(), A = mk({ seed: 8, storage: st });
@@ -181,8 +181,8 @@ console.log('Erfolge');
   ok(Bb.p.P.badges.allCats && Bb.p.P.badges.allKinds && Bb.p.P.badges.islands3 === undefined, 'alle 7 Kategorien und jedes Bauteil – über zwei Inseln');
   const C = mk({ seed: 10, storage: st }); put(C.g, 'wiese'); ok(C.p.P.badges.islands3 && C.p.P.islands.length === 3, '3 Inseln gegründet');
 }
-{ // Verschmelzen: erste Verschmelzung, Kettenreaktion, Burg
-  const E = mk({ mode: 'verschmelzen', seed: 3 }), { g, p } = E;
+{ // Verschmelzen (Grundregel, hier Endlos): erste Verschmelzung, Kettenreaktion, Burg
+  const E = mk({ mode: 'endlos', seed: 3 }), { g, p } = E; g.S.unlocked = [...KINDS];
   mergeBoard(g, [['felsen', 1, 0], ['felsen', 2, 0]]); mergeAt(g, 'felsen', 3, 0);
   ok(p.P.badges.merge1 && p.P.tot.merges === 1 && g.at(3, 0).k === 'huette', 'erste Verschmelzung (Felsen → Blockhütte)');
   g.undo(); ok(p.P.tot.merges === 0 && p.P.badges.merge1, 'Rückgängig: Verschmelzung zählt zurück, Erfolg bleibt');
@@ -190,7 +190,14 @@ console.log('Erfolge');
   ok(r.merges.length === 2 && p.P.badges.chain, 'Kettenreaktion: zwei Verschmelzungen in einem Zug');
   mergeBoard(g, [['gasthaus', -2, 0], ['gasthaus', -2, -1]]); mergeAt(g, 'gasthaus', -1, -1);
   ok(g.at(-1, -1).k === 'burg' && p.P.badges.castle, 'Burgherr: bis zum Burgturm verschmolzen');
-  ok(p.wishes().length === 0 && !E.count('visitor'), 'Verschmelzen: keine Besucher');
+  // Zuhause eines Besuchers wird verschmolzen → der Wunsch zieht mit zur neuen Stufe
+  mergeBoard(g, [['haus', 3, -1], ['haus', 3, -2]]); p.cur.vis.list = [{ id: 50, tpl: 'turmRand', a: 'turm', who: 'Ida', face: '👵', home: '3,-1', from: g.S.stats.placed, turns: 10, line: 0 }]; p.cur.vis.next = 1e9;
+  mergeAt(g, 'haus', 4, -2);
+  ok(g.at(4, -2).k === 'reihe' && p.wishes()[0]?.home === '4,-2', 'Zuhause verschmolzen: Wunsch zieht zur Häuserzeile');
+  // Klassisch: Verschmelzungen zählen ebenso
+  const C = mk({ mode: 'klassisch', seed: 4 }); const m0 = C.p.P.tot.merges;
+  mergeBoard(C.g, [['wiese', 1, 0], ['wiese', 2, 0]]); C.g.S.stack.unshift({ k: 'wiese' }); C.g.S.pick = 0; C.g.place(3, 0, 0);
+  ok(C.g.at(3, 0).k === 'schafe' && C.p.P.tot.merges === m0 + 1, 'Klassisch: Verschmelzung zählt für Erfolge/Tagesaufgaben');
 }
 { // Kreativ ruht
   const E = mk({ mode: 'kreativ', seed: 6 }); for (let i = 0; i < 20; i++) put(E.g, 'wald');

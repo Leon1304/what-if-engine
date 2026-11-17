@@ -16,6 +16,7 @@ Konzept und Regeln: `DESIGN.md`.
 | Linksziehen · Rechtsziehen · Mausrad | Insel schieben · drehen/kippen · zoomen (zum Mauszeiger, bis ganz nah) |
 | WASD · Q/E · +/− | schieben · drehen · zoomen |
 | Klick auf Gebäude/Bewohner · Doppelklick | Infos · heranfliegen |
+| H · Klick aufs Fach | Ablagefach: Kachel beiseitelegen oder tauschen (nicht im Kreativ-Modus) |
 | Strg+Z · B · P · Esc | Rückgängig (10 Züge) · Handbuch · Fotomodus · Menü |
 | Touch | ein Finger schieben, zwei Finger zoomen/drehen, tippen = setzen, lange drücken = Kachel-Info |
 
@@ -26,21 +27,28 @@ Konzept und Regeln: `DESIGN.md`.
   - Gleiche Gebiete nebeneinander geben Punkte, Bach und Weg verbunden geben extra.
   - Eine perfekt eingepasste Kachel bringt +10 Punkte und +1 Kachel.
   - Der Leuchtturm gehört an den Rand.
+  - **Verschmelzen (Grundregel in jedem Modus, Einstellung „🔮 Verschmelzen“, Standard an):** Liegen nach dem Setzen 3 oder mehr gleiche
+    Kacheln zusammen, werden sie zur nächsten Stufe – an der gesetzten Stelle, die anderen Felder werden frei (Lücken sind wieder bebaubar).
+    Kettenreaktion möglich. Punkte: Nachbarpunkte der gesetzten Kachel + 5 · Stufe je verschmolzener Kachel (über 3 doppelt, Kette ×1,5).
+    Ketten (`MERGE`/`MERGE_CHAINS` in `js/tiles.js`): Felsen → Blockhütte → Fachwerkhaus → Häuserzeile → Gasthaus → Burgturm ·
+    Wiese → Schafweide → Imkerei → Obstwiese → Weinberg · Feld → Windmühle → Bauernhof · Wald → Nadelwald · Kreuzung → Dorfplatz → Marktplatz → Kapelle · Teich → See.
+    Wege und Bäche verschmelzen nie. Verschmolzene Kacheln tragen ihr Gewicht (`t.n`, so viele Teile stecken darin) und zählen
+    in Gruppen, Aufgaben und Hausstufen entsprechend oft – große Wälder, Felder und Dörfer bleiben möglich. Der Schalter steckt im Inselstand (`S.merge`).
 - **Fortschritt:**
   - Meilensteine bei 5/10/20/35/50/75 zusammenhängenden Kacheln eines Gebiets.
   - Aufgaben-Flaggen auf einzelnen Kacheln.
   - Freischaltungen bei 100–1400 Punkten.
-  - Häuser wachsen mit dem Dorf: ab 3 Häusern zweistöckig, ab 6 mit Anbau und Garten.
-- **Modi:** Klassisch (Vorrat mit 30 Kacheln, Nachschub durch gutes Spiel, Ende mit Auswertung), Endlos, Kreativ (alle Kacheln frei) und **Verschmelzen**
-  (begrenzte Insel mit 37 Feldern: 3 gleiche Teile verschmelzen zur nächsten Stufe, z. B. Felsen → Blockhütte → Haus → Häuserzeile → Gasthaus → Burgturm; Ketten in `MERGE_CHAINS`, Ablagefach, Ende bei vollem Feld).
+  - Häuser wachsen mit dem Dorf: ab 3 Wohnhäusern (Haus, Hütte, Häuserzeile, nach Gewicht) zweistöckig, ab 6 mit Anbau und Garten.
+- **Modi:** Klassisch (Vorrat mit 30 Kacheln, Nachschub durch gutes Spiel, Ende mit Auswertung inkl. Verschmelzungen und höchster Stufe), Endlos, Kreativ (alle Kacheln frei).
+  Der frühere Modus „Verschmelzen“ (begrenztes Feld) ist entfallen; alte Stände laden als Endlos-Insel mit allem Gebauten.
 - **Erfolge, Tagesaufgaben, Besucher** (`js/progress.js`): 36 Abzeichen über alle Inseln, jeden Tag 3 neue Aufgaben, Besucher mit Wünschen („Bäckerei neben dem Markt“).
 - **Welt:** Tag und Nacht (ein Spieltag dauert 8 Minuten), Jahreszeiten (alle 2 Spieltage), Wetter (Regen mit Regenbogen, Gewitter, Nebel, Schnee; Seen frieren zu).
 - **Leben:** Bewohner mit Namen und Sätzen, Tiere, Vogelschwärme, Ballon und Luftschiff, Rauch, Glühwürmchen, Leuchtturmstrahl, Feuerwerk.
 - **Anleitung, Handbuch, Speichern:**
-  - Geführter Einstieg in 8 Schritten.
+  - Geführter Einstieg in 9 Schritten (inkl. „3 gleiche verschmelzen“).
   - Handbuch, automatisch aus den Kachel-Daten erzeugt.
   - 5 Speicherplätze mit Vorschaubild, automatisches Speichern, Export und Import als `.insel.json`.
-- **Sprachen:** Deutsch und Englisch, umschaltbar im Startmenü (🇩🇪/🇬🇧) und in den Einstellungen, wirkt sofort. Erste Wahl: gespeicherte Sprache, sonst Browsersprache.
+- **Sprachen:** Deutsch und Englisch, umschaltbar im Startmenü (🇩🇪/🇬🇧) und in den Einstellungen, wirkt sofort. Standard ist Englisch; die gewählte Sprache wird gespeichert.
 - **Fotomodus** mit Filtern und PNG-Export; **Zeitraffer** des Inselaufbaus, auch als Video (MP4 oder WebM).
 
 ## Aufbau
@@ -64,7 +72,8 @@ node cloudhaven/tools/play.mjs <ordner> --shots # PLAY OK   (ganzes Spiel im Bro
 node cloudhaven/tools/ui-demo.mjs <ordner>      # UI OK     (alle Bildschirme, Handy, Speicherplätze, Export/Import; Englisch ohne deutsche Reste, Sprache bleibt)
 node cloudhaven/tools/stage-shots.mjs <ordner>  # STAGE OK  (Kamera-Tests, Tageszeiten, Wetter, Filter)
 node cloudhaven/tools/life-logic.mjs            # LIFE LOGIC OK
-node cloudhaven/tools/merge.mjs                 # MERGE OK  (Verschmelzen-Logik, Ketten, Ablagefach, Rückgängig, Probepartien: --games 100)
+node cloudhaven/tools/merge.mjs                 # MERGE OK  (Verschmelzen als Grundregel: Punkte = Vorschau, Gewichte, Kette, Rückgängig, Ablagefach, Schalter aus, alte Stände, Probepartien an/aus: --games 20)
+node cloudhaven/tools/mergeplay.mjs <ordner>    # MERGEPLAY OK (Verschmelzen im echten Spiel: Mausklicks, Animation flüssig, Kette, Fach, Ende, Einstellung, Englisch)
 node cloudhaven/tools/progress.mjs              # PROGRESS OK (Erfolge, Tagesaufgaben, Besucher)
 node cloudhaven/tools/camfeel.mjs <ordner>      # CAM OK    (Ziehen/Zoomen ohne Sprünge und Hänger)
 node cloudhaven/tools/perf.mjs <ordner>         # PERF OK   (300 Kacheln: fps, Draw Calls, längstes Bild)

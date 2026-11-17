@@ -15,6 +15,20 @@ Läuft im Browser (Three.js), mit Maus oder Touch. Eine Runde dauert 20–40 Min
 5. **Leben:** Jede gesetzte Kachel wird lebendig: Bäume wiegen sich, Bewohner laufen, Rauch steigt, Boote fahren.
 6. **Ende:** Ist der Stapel leer, endet die Runde mit Punktzahl und Fotomodus. Im Endlosmodus gibt es immer Nachschub.
 
+## Verschmelzen (Grundregel, in jedem Modus)
+Leons Bild: „Stein → Haus → Burg“, und: „Verschmelzen soll kein eigener Modus sein, sondern immer stattfinden.“
+- Liegen nach dem Setzen 3 oder mehr gleiche Kacheln zusammen, verschmelzen sie zur nächsten Stufe – an der gesetzten Stelle.
+  Die Partner-Felder werden frei; Lücken in der Insel sind erlaubt und wieder bebaubar (ideal für „Perfekt“-Züge). Kettenreaktion möglich.
+- Punkte: Nachbarpunkte der gesetzten Kachel wie immer, dazu je verschmolzener Kachel 5 · neue Stufe (über drei doppelt, jeder Kettenschritt ×1,5).
+  Linear statt steil, weil mittlere Stufen (Haus, Gasthaus, Markt) auch direkt aus dem Vorrat kommen.
+- Ketten bleiben in ihrer Gruppe und enden in Kacheln, die große Flächen bilden dürfen: Wald → Nadelwald, Feld → Windmühle → Bauernhof,
+  Wiese → … → Weinberg, Kreuzung → … → Kapelle, Teich → See. Nur die Steinkette wechselt die Gruppe (Felsen → Hütte → … → Burgturm).
+  Wege verschmelzen nicht, damit Straßen nicht zerfallen.
+- Gewicht: Eine verschmolzene Kachel zählt in Gruppen (Meilensteine, Aufgaben, Hausstufen, Erfolge) so oft, wie Teile in ihr stecken.
+  So schrumpfen Wälder, Felder und Dörfer durch Verschmelzen nicht (Probepartien in `tools/merge.mjs`: Gruppen 85–110 % von ohne, Punkte +15–25 %).
+- Ablagefach (H) in Klassisch und Endlos, Vorschau mit Ringen/Bögen und Verschmelz-Zeilen, Animation, Stufen-Abzeichen in der Bauleiste.
+- Einstellung „🔮 Verschmelzen“ (Standard an) schaltet die Regel für alle Inseln ab; ausgeschaltet spielt es sich wie vorher.
+
 ## Kacheln (Sechseck-Raster)
 | Kachel | Kanten | passt gut zu | lebt durch |
 |---|---|---|---|

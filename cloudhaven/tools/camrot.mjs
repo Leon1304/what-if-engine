@@ -1,0 +1,45 @@
+// Seitlich drehen: Trackpad-Wischen (deltaX), Alt/Option + Rad, Alt + Ziehen, Rechtsziehen, Q/E, Knöpfe ⟲ ⟳ (halten, Doppelklick = 90°).
+//   node cloudhaven/tools/camrot.mjs [ausgabeordner] → CAMROT OK
+import http from 'http'; import fs from 'fs'; import path from 'path'; import { chromium } from 'playwright';
+const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..');
+const out = path.resolve(process.argv[2] || 'work/cloudhaven-camrot'); fs.mkdirSync(out, { recursive: true });
+const types = { '.html': 'text/html', '.js': 'text/javascript', '.json': 'application/json' };
+const srv = http.createServer((q, r) => { const f = path.join(ROOT, decodeURIComponent(q.url.split('?')[0])); const p = fs.existsSync(f) && fs.statSync(f).isDirectory() ? path.join(f, 'index.html') : f;
+  if (!fs.existsSync(p)) { r.writeHead(404); return r.end(); } r.writeHead(200, { 'content-type': types[path.extname(p)] || 'application/octet-stream' }); fs.createReadStream(p).pipe(r); }).listen(0);
+const browser = await chromium.launch({ args: ['--use-angle=metal', '--enable-gpu', '--ignore-gpu-blocklist'] });
+const page = await (await browser.newContext({ viewport: { width: 1280, height: 800 } })).newPage();
+let fails = 0; const ok = (c, m) => { console.log((c ? '✓ ' : '✗ ') + m); if (!c) fails++; };
+page.on('pageerror', e => { console.log('PAGE ERROR ' + e.message); fails++; });
+await page.goto(`http://localhost:${srv.address().port}/index.html?neu`);
+await page.waitForFunction(() => window.__insel && __insel.ui.mode === 'menu', null, { timeout: 90000 });
+await page.locator('[data-act="new"]').first().click(); await page.waitForTimeout(400);
+await page.locator('[data-act="create"]').first().click(); await page.waitForTimeout(1500);
+await page.evaluate(() => { __insel.ui._closeAll?.(); __insel.game.S.tut = 99; });
+const yaw = () => page.evaluate(() => __insel.rig.goal.yaw);
+const dist = () => page.evaluate(() => __insel.rig.goal.d);
+await page.mouse.move(640, 380);
+let y0 = await yaw(), d0 = await dist();
+for (let i = 0; i < 10; i++) { await page.mouse.wheel(40, 0); await page.waitForTimeout(20); }
+let y1 = await yaw(), d1 = await dist();
+ok(Math.abs(y1 - y0) > .5 && Math.abs(d1 - d0) < .01, `seitlich wischen dreht (Δyaw ${(y1 - y0).toFixed(2)}), zoomt nicht`);
+await page.keyboard.down('Alt'); for (let i = 0; i < 6; i++) { await page.mouse.wheel(0, 60); await page.waitForTimeout(20); } await page.keyboard.up('Alt');
+let y2 = await yaw(); ok(Math.abs(y2 - y1) > .5 && Math.abs(await dist() - d1) < .01, `Alt + Rad dreht (Δyaw ${(y2 - y1).toFixed(2)})`);
+await page.keyboard.down('Alt'); await page.mouse.move(500, 400); await page.mouse.down(); for (let i = 1; i <= 20; i++) { await page.mouse.move(500 + i * 10, 400); await page.waitForTimeout(16); } await page.mouse.up(); await page.keyboard.up('Alt');
+let y3 = await yaw(); ok(Math.abs(y3 - y2) > .5, `Alt + Ziehen dreht (Δyaw ${(y3 - y2).toFixed(2)})`);
+await page.mouse.move(500, 400); await page.mouse.down({ button: 'right' }); for (let i = 1; i <= 20; i++) { await page.mouse.move(500 - i * 10, 400); await page.waitForTimeout(16); } await page.mouse.up({ button: 'right' });
+let y4 = await yaw(); ok(Math.abs(y4 - y3) > .5, `Rechtsziehen dreht (Δyaw ${(y4 - y3).toFixed(2)})`);
+await page.keyboard.down('KeyE'); await page.waitForTimeout(500); await page.keyboard.up('KeyE');
+let y5 = await yaw(); ok(Math.abs(y5 - y4) > .3, `Taste E dreht (Δyaw ${(y5 - y4).toFixed(2)})`);
+const btn = page.locator('[data-act="camRight"]');
+ok(await btn.isVisible(), 'Knopf ⟳ sichtbar');
+const bb = await btn.boundingBox();
+await page.mouse.move(bb.x + bb.width / 2, bb.y + bb.height / 2); await page.mouse.down(); await page.waitForTimeout(700); await page.mouse.up();
+let y6 = await yaw(); ok(y6 - y5 > .6, `Knopf halten dreht weiter (Δyaw ${(y6 - y5).toFixed(2)})`);
+await page.locator('[data-act="camLeft"]').dblclick(); await page.waitForTimeout(100);
+let y7 = await yaw(); ok(y7 - y6 < -1.4, `Doppelklick ⟲ dreht um ~90° (Δyaw ${(y7 - y6).toFixed(2)})`);
+ok((await page.evaluate(() => __insel.game.board.size)) === 1, 'Drehen setzt keine Kachel');
+await page.waitForTimeout(800); await page.screenshot({ path: path.join(out, 'camrot.png') });
+await page.keyboard.press('Escape'); await page.waitForTimeout(400);
+ok(!(await btn.isVisible()) || await page.evaluate(() => getComputedStyle(document.querySelector('.camrot')).opacity === '0'), 'Knöpfe im Menü ausgeblendet');
+await browser.close(); srv.close();
+console.log(fails ? `CAMROT FEHLER: ${fails}` : 'CAMROT OK'); process.exit(fails ? 1 : 0);

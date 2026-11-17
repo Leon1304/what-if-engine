@@ -70,8 +70,8 @@ const app = {
   timelapse({ record } = {}) { app.log.push('timelapse:' + !!record); return new Promise(r => setTimeout(r, 1200)); },
   applySettings(s) { app.log.push('settings:' + JSON.stringify(s)); },
   audio: { play(n) { app.log.push('audio:' + n); } },
-  newGame(o) { rot = 0; game.newGame(o); app.log.push('newGame:' + o.mode); },
-  loadGame(S) { rot = 0; game.load(S); app.log.push('loadGame'); },
+  newGame(o) { rot = 0; game.newGame({ ...o, merge: app.settings.merge !== false }); app.log.push('newGame:' + o.mode); },
+  loadGame(S) { rot = 0; game.load(S); game.S.merge = app.settings.merge !== false; app.log.push('loadGame'); },
   focusTile(q, r) { const c = center(q, r); cam.x = c.x; cam.z = c.z; },
 };
 // Fortschritt (Erfolge, Tagesaufgaben, Besucher) wie in main.js; ?noprog = ohne
@@ -126,7 +126,8 @@ const demo = {
     const W = WISH_BY[w.tpl], N = [[1, 0], [0, 1], [-1, 1], [-1, 0], [0, -1], [1, -1]];
     const near = test => (q, r) => N.some(([a, b]) => { const n = game.at(q + a, r + b); return n && test(n); });
     const ok = W.rel === 'edge' ? (q, r) => game.freeSides(q, r) >= 4 : near(n => matchKind(n.k, W.b));
-    for (const [q, r] of game.slots()) { if (!ok(q, r)) continue; for (let o = 0; o < 6; o++) if (game.evaluate(W.a, q, r, o).ok) { demo.force(W.a); return game.place(q, r, o); } }
+    // Platz ohne Verschmelzung wählen (sonst würde das gewünschte Teil zur nächsten Stufe und der Wunsch bliebe offen)
+    for (const [q, r] of game.slots()) { if (!ok(q, r) || game.previewMerge?.(W.a, q, r)?.length) continue; for (let o = 0; o < 6; o++) if (game.evaluate(W.a, q, r, o).ok) { demo.force(W.a); return game.place(q, r, o); } }
     return null;
   },
   doneTask(i) { const p = app.progress; p.tasks(); p._setTask(i, 1e6); p.emit('change'); },

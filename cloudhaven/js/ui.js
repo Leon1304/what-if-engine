@@ -3,7 +3,7 @@
 // Alles im DOM über dem 3D-Bild (#ui). Kein window.alert/confirm/prompt. Alle Texte über i18n.js (t, tileName …);
 // ui.setLang(l) schaltet die Sprache um und baut alles Sichtbare neu auf.
 import { TILES, KINDS, UNLOCKS, GROUP, GROUP_NAMES, CATS, affinity, MERGE, MERGE_N, MERGE_CHAINS, LEVEL, MERGE_MAX, mergeValue } from './tiles.js';
-import { MILESTONES, START_TILES, MERGE_MODE, MERGE_R, MERGE_HAND } from './game.js';
+import { MILESTONES, START_TILES, LEGACY_MERGE_MODE } from './game.js';
 import { neighbor, unkey } from './hex.js';
 import * as store from './storage.js';
 import { t, getLang, setLang, applyDoc, LANGS, LANG_LABEL, phrase, quote, tileName, tileDesc, biomeName, groupName, catName, fmtNum, fmtDate } from './i18n.js';
@@ -15,10 +15,12 @@ const SEASON_ICON = ['🌷', '🌻', '🍂', '❄️'], seasonName = i => t('sea
 const FILTERS = ['normal', 'gold', 'film', 'sw', 'miniatur', 'nacht'];
 const WEATHER = ['auto', 'klar', 'gewitter', 'regen', 'schnee', 'nebel'];
 const WEATHER_ICON = { gewitter: '⛈️', regen: '🌧️', schnee: '🌨️', nebel: '🌫️' };
-const MODE_ICON = { klassisch: '🃏', endlos: '♾️', kreativ: '🎨', [MERGE_MODE]: '🔮' };
-const fieldN = R => 3 * R * (R + 1) + 1;                 // Felder im Spielfeld mit Radius R
-const modeName = k => t('mode.' + k), modeDesc = k => t('mode.' + k + '.d', { n: START_TILES, f: fieldN(MERGE_R) });
+const MODE_ICON = { klassisch: '🃏', endlos: '♾️', kreativ: '🎨' };
+const modeKey = k => (k === LEGACY_MERGE_MODE ? 'endlos' : k);    // früherer Modus „Verschmelzen“ ist jetzt eine Endlos-Insel
+const modeName = k => t('mode.' + modeKey(k)), modeDesc = k => t('mode.' + k + '.d', { n: START_TILES });
 const chainName = c => (getLang() === 'en' ? c.en : c.name);
+const keysHint = () => matchMedia('(hover: hover)').matches;
+const mergeHint = k => (MERGE[k] ? t('mb.next', { tile: tileName(MERGE[k]) }) : t('mb.top'));   // „3× → Blockhütte“ / „Endstufe“
 const EDGE_COL = { g: '#6aa84f', w: '#3f8fd0', r: '#a8743f', l: '#8fcbe8' };
 const EDGE_KEYS = ['g', 'w', 'r', 'l'], edgeName = e => t('edge.' + e);
 const BIOME_COL = { wiese: '#a9d26f', wald: '#4f8a3c', wasser: '#86c3e8', feld: '#e6c55e', dorf: '#dcbf92', berg: '#a3a3a3' };
@@ -32,8 +34,10 @@ const TUT = [
   { cat: 'wasser', on: 'place', test: d => d.parts?.some(p => /Bach/.test(p.label || '')), btn: 'later' },
   { cat: 'wohnen', on: 'place', test: d => d.parts?.some(p => p.label === 'Weg verbunden'), btn: 'later' },
   { on: 'buildingClick', point: true, btn: 'later' },
+  { on: 'place', test: d => d.merges?.length > 0, btn: 'later', merge: true },
   { on: 'place', test: d => d.milestones?.length > 0 },
 ];
+const TUT_MS = TUT.length - 1;                         // letzter Schritt: erster Meilenstein
 
 // ---------- kleine Helfer ----------
 function h(tag, a, ...kids) {
@@ -185,7 +189,7 @@ export class UI {
   // true, solange Menüs/Dialoge offen sind oder getippt wird → Kamera/Setzen in main.js pausieren
   get blocking() { return this.screens.length > 0 || this.dialogs.length > 0 || this.mode === 'menu' || this.mode === 'boot' || this.typing; }
   get photo() { return this.mode === 'photo'; }
-  get merge() { return this.game.S?.mode === MERGE_MODE; }
+  get merging() { return !!this.game.S && this.game.S.merge !== false; }
 
   notify(type, d = {}) {
     switch (type) {
@@ -323,12 +327,12 @@ export class UI {
   // ================= Spielereignisse =================
   _onGame(type, d) {
     if (type === 'reset') { this._clearFx(); this.shown = this.game.S.score; this.lastShown = -1; this._resetBar(); this._renderAll(); }
-    else if (type === 'place') { this._lastMerges = d.merges?.length || 0; this._keepKind(d.tile.k); this._onPlace(d); this._renderStack(); this._renderFlags(); this._hud(); this._renderProg(); this.auto.touch(); this._tutEvent('place', d); }
+    else if (type === 'place') { this._lastMerges = d.merges?.length || 0; this._keepKind(d.placed || d.tile.k); this._onPlace(d); this._renderStack(); this._renderFlags(); this._hud(); this._renderProg(); this.auto.touch(); this._tutEvent('place', d); }
     else if (type === 'stack') { this._renderStack(); }
-    else if (type === 'hold') { this._renderStack(); this._hud(); this.toast(t(d.swapped ? 'mb.swapped' : 'mb.parked', { tile: tl(d.hold.k) })); }
+    else if (type === 'hold') { this._renderStack(); this._hud(); this.toast(t(d.back ? 'mb.back' : d.swapped ? 'mb.swapped' : 'mb.parked', { tile: tl(d.hold.k) })); }
     else if (type === 'unlock') { this._sfx('unlock'); for (const k of d.kinds || []) this.newKinds.add(k); this._unlockCard(d.kinds || []); this._renderStack(); this._pulseCats(d.kinds || []); }
     else if (type === 'undo') { this._renderAll(); this.auto.touch(); this.toast(t('undo.done')); }
-    else if (type === 'end') {   // Verschmelzen: erst nach der Animation (je Kettenschritt ~0,6 s)
+    else if (type === 'end') {   // erst nach der Animation (je Kettenschritt ~0,6 s)
       const wait = 1800 + (this._lastMerges | 0) * 650;
       clearTimeout(this._endT); this._endT = setTimeout(() => { if (this.mode === 'play' && this.game.isOver()) this._end(); }, wait);
     }
@@ -337,7 +341,6 @@ export class UI {
   _resetBar() {
     const S = this.game.S; if (this.bar) this.bar.prev = null;
     if (!S || this._barFor === S.created) return;
-    if (this.merge || this.bar?.merge) { if (this._barFor != null) this.newKinds.clear(); this._barFor = S.created; return; }
     if (this._barFor != null) this.newKinds.clear();
     this._barFor = S.created;
     if (!this.bar) { this.openCats = null; return; }
@@ -350,16 +353,10 @@ export class UI {
   _hud() {
     const S = this.game.S; if (!S) return;
     this.el.name.textContent = S.name || ''; this.el.undo.disabled = !this.game.canUndo();
-    this.root.classList.toggle('kreativ', S.mode === 'kreativ'); this.root.classList.toggle('merge', S.mode === MERGE_MODE);
+    this.root.classList.toggle('kreativ', S.mode === 'kreativ'); this.root.classList.toggle('nomerge', !this.merging);
   }
   _progress() {
     const S = this.game.S; if (!S) return;
-    if (S.mode === MERGE_MODE) {   // Verschmelzen: Balken = belegte Felder, darunter freie Felder und beste Stufe
-      const all = fieldN(S.maxR ?? MERGE_R), free = this.game.slots().length, b = S.stats.bestKind;
-      this.el.bar.style.width = ((all - free) / all * 100).toFixed(1) + '%';
-      this.el.next.textContent = t('hud.mFree', { n: free, all }) + (b && LEVEL[b] > 1 ? t('hud.mBest', { tile: `${TILES[b].icon} ${tileName(b)}`, n: LEVEL[b] }) : '');
-      return;
-    }
     const nu = this.game.nextUnlock(), v = Math.round(this.shown);
     if (!nu) { this.el.bar.style.width = '100%'; this.el.next.textContent = S.mode === 'kreativ' ? t('hud.allFreeKre') : t('hud.allUnlocked'); return; }
     const prev = Math.max(0, ...UNLOCKS.filter(u => u.at <= v && u.at !== Infinity).map(u => u.at));
@@ -380,18 +377,23 @@ export class UI {
   // ---------- Bauleiste: Kategorien zum Aufklappen, Karten, seitliches Scrollen ----------
   _catOf(k) { return this.cats?.find(c => c.kinds.includes(k))?.id || null; }
   _buildBar() {
-    if (this.merge) return this._buildMergeBar();
-    const S = this.game.S, old = this.bar?.merge ? null : this.bar, keepX = old ? old.track.scrollLeft : 0;
+    const S = this.game.S, old = this.bar, keepX = old ? old.track.scrollLeft : 0;
     if (old) { old.sc.stop(); old.ro?.disconnect(); }
     const box = this.el.stack; box.textContent = '';
     const cats = this.cats = barCats(), B = this.bar = { tabs: {}, groups: {}, cards: {}, prev: null, curK: undefined };
     if (!this.openCats) { const c = this._catOf(this.game.current()?.k) || cats[0]?.id; this.openCats = new Set(c ? [c] : []); this.activeCat = c; }
     // aktuelle Auswahl (immer sichtbar, links fest)
     B.curIm = h('div.im'); B.curN = h('span.cn'); B.curFlag = h('span.qf', { hidden: true }); B.curName = h('b'); B.curSub = h('small'); B.tot = h('div.tot');
-    B.cur = h('div.bb-cur', { 'aria-live': 'polite' }, h('div.cim', {}, B.curIm, B.curN, B.curFlag), h('div.ctx', {}, B.curName, B.curSub),
+    B.curLv = h('span.lv', { hidden: true }); B.curNx = h('small.nx', { hidden: true });
+    B.cur = h('div.bb-cur', { 'aria-live': 'polite' }, h('div.cim', {}, B.curIm, B.curN, B.curFlag, B.curLv), h('div.ctx', {}, B.curName, B.curSub, B.curNx),
       h('div.rot', {}, this._btn('↺', 'small', () => this.app.rotate?.(-1), { title: t('bar.rotL'), 'aria-label': t('bar.rotLa') }),
         this._btn('↻', 'small', () => this.app.rotate?.(1), { title: t('bar.rotR'), 'aria-label': t('bar.rotRa') })), B.tot);
     B.none = h('div.bb-none', {}, h('b', {}, t('bar.empty')), this._btn(t('bar.results'), 'main small', () => this._end(), { 'data-act': 'results' }));
+    // Ablagefach (nicht im Kreativ-Modus): Klick/H legt die Auswahl beiseite oder tauscht
+    B.holdIm = h('div.im'); B.holdNm = h('small.hn');
+    B.hold = h('div.bb-hold', { role: 'button', tabindex: '0', 'data-act': 'hold', title: t('mb.holdT') }, h('span.hl', {}, t('mb.hold')), B.holdIm, B.holdNm, keysHint() && h('kbd', {}, 'H'));
+    B.hold.addEventListener('click', () => this._hold());
+    B.hold.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); this._hold(); } });
     // Reiter
     B.tabRow = h('div.bb-tabs', { role: 'toolbar', 'aria-label': t('bar.cats') });
     for (const c of cats) {
@@ -412,7 +414,7 @@ export class UI {
     B.left = h('button.bb-arr.l', { type: 'button', 'aria-label': t('bar.leftA'), title: t('bar.left') }, '‹');
     B.right = h('button.bb-arr.r', { type: 'button', 'aria-label': t('bar.rightA'), title: t('bar.right') }, '›');
     B.wrap = h('div.bb-wrap', {}, B.track, B.left, B.right);
-    B.root = h('div.bb.chip.live', {}, B.cur, B.none, B.tabRow, B.wrap);
+    B.root = h('div.bb.chip.live', {}, B.cur, B.none, B.hold, B.tabRow, B.wrap);
     const edges = () => this._barEdges();
     B.sc = hscroll(B.track, { pad: 30, snap: () => B.track.querySelectorAll('.bb-grp.open .gh, .bb-grp.open .tc'), onMove: edges });
     B.tabSc = hscroll(B.tabRow, { pad: 20, snap: () => B.tabRow.children, onMove: edges });
@@ -425,15 +427,16 @@ export class UI {
     }, { passive: false });
     B.ro = typeof ResizeObserver === 'function' ? new ResizeObserver(edges) : null;
     if (B.ro) { B.ro.observe(B.track); B.ro.observe(B.tabRow); for (const g of Object.values(B.groups)) B.ro.observe(g); }
-    const hint = keys ? h('div.hint.chip', {}, h('kbd', {}, 'R'), t('bar.kRot'), h('kbd', {}, '1'), '–', h('kbd', {}, '9'), t('bar.kPick'), h('kbd', {}, 'Tab'), t('bar.kCat'), h('kbd', {}, t('kbd.ctrlz')), t('bar.kUndo')) : null;
+    const hint = keys ? h('div.hint.chip', {}, h('kbd', {}, 'R'), t('bar.kRot'), h('kbd', {}, '1'), '–', h('kbd', {}, '9'), t('bar.kPick'), h('kbd', {}, 'Tab'), t('bar.kCat'), h('kbd.kh', {}, 'H'), h('span.kh', {}, t('mb.kHold')), h('kbd', {}, t('kbd.ctrlz')), t('bar.kUndo')) : null;
     box.append(...[hint, B.root].filter(Boolean));
     if (S) this._renderStack();
     B.sc.jump(keepX); requestAnimationFrame(edges);
   }
   _barCard(k, i, keys) {
     const T = TILES[k], src = this._thumb(k), n = h('span.n'), qf = h('span.qf', { hidden: true }), lk = h('span'), wh = h('span.wh', { hidden: true, title: t('vis.wantT') }, '❤️');
-    const el = h('div.tc', { role: 'button', tabindex: '0', 'data-kind': k, 'aria-pressed': 'false', title: `${tileName(k)}: ${tileDesc(k)}` },
-      h('div.im', {}, src ? h('img', { src, alt: '', draggable: 'false' }) : h('span.em', {}, T.icon)), src && h('div.ic', {}, T.icon),
+    const L = LEVEL[k], lv = L ? h('span.lv.l' + L + (MERGE[k] ? '' : '.top'), { title: mergeHint(k) }, L) : null;
+    const el = h('div.tc', { role: 'button', tabindex: '0', 'data-kind': k, 'aria-pressed': 'false', title: `${tileName(k)}: ${tileDesc(k)}` + (L ? ` · ${mergeHint(k)}` : '') },
+      h('div.im', {}, src ? h('img', { src, alt: '', draggable: 'false' }) : h('span.em', {}, T.icon)), src && h('div.ic', {}, T.icon), lv,
       h('div.nm', {}, tileName(k)), n, qf, wh, h('div.lock', {}, h('i', {}, '🔒'), lk), h('span.nw', {}, t('bar.new')), keys && i < 9 && h('kbd.key', {}, i + 1));
     el.style.setProperty('--i', i);
     el.addEventListener('click', e => this._choose(k, !!e.target.closest('.qf')));
@@ -473,12 +476,12 @@ export class UI {
   }
   // aufgeklappte Kategorie ins Bild scrollen (mit der Breite, die sie nach dem Aufklappen hat)
   _revealGroup(id) {
-    const B = this.bar; if (!B || B.merge || !this.openCats.has(id)) return;
+    const B = this.bar; if (!B || !this.openCats.has(id)) return;
     let x = parseFloat(getComputedStyle(B.track).paddingLeft) || 0;
     for (const c of this.cats) { const g = B.groups[c.id], w = this.openCats.has(c.id) ? g.firstChild.offsetWidth : 0; if (c.id === id) { B.sc.ensure(x, x + w); return; } x += w; }
   }
   _barEdges() {
-    const B = this.bar; if (!B || B.merge) return;
+    const B = this.bar; if (!B) return;
     for (const [el, w] of [[B.track, B.wrap], [B.tabRow, B.tabRow]]) {
       const m = el.scrollWidth - el.clientWidth;
       w.classList.toggle('l', el.scrollLeft > 2); w.classList.toggle('r', el.scrollLeft < m - 2);
@@ -487,7 +490,6 @@ export class UI {
   // Bauteil wählen (Klick, Taste). quest: lieber eine Kachel mit Aufgaben-Flagge
   _choose(k, quest = false) {
     const S = this.game.S, T = TILES[k]; if (!S || !T) return;
-    if (S.mode === MERGE_MODE) { const i = S.stack.findIndex(e => e.k === k); if (i >= 0) this._mergePick(i); return; }
     if (S.mode === 'kreativ') this.game.setKind(k);
     else {
       const bad = msg => { this._sfx('invalid'); this.toast(msg); const c = this.bar?.cards[k]?.el; if (c) { c.classList.remove('no'); void c.offsetWidth; c.classList.add('no'); } };
@@ -506,21 +508,19 @@ export class UI {
   }
   // Nach dem Setzen dieselbe Art behalten (oder eine aus derselben Kategorie), statt zufällig weiterzuspringen
   _keepKind(k) {
-    const S = this.game.S; if (!S || S.mode === 'kreativ' || S.mode === MERGE_MODE || !S.stack.length) return;
+    const S = this.game.S; if (!S || S.mode === 'kreativ' || !S.stack.length) return;
     const sup = this.game.supply();
     if (sup[k]?.n) { if (this.game.current()?.k !== k) this.game.pickKind(k); return; }
     const alt = this.cats?.find(c => c.kinds.includes(k))?.kinds.find(x => sup[x]?.n);
     if (alt) this.game.pickKind(alt);
   }
   _pickNth(i) {
-    if (this.merge) { if (i < this.game.S.stack.length) this._mergePick(i); return; }
     const cat = this.cats?.find(c => c.id === (this.openCats.has(this.activeCat) ? this.activeCat : this._catOf(this.game.current()?.k))) || this.cats?.[0];
     if (!cat) return;
     if (!this.openCats.has(cat.id)) this._toggleCat(cat.id, { open: true });
     if (i < cat.kinds.length) this._choose(cat.kinds[i]);
   }
   _cycleCat(dir) {
-    if (this.merge) return;
     const ids = this.cats?.map(c => c.id); if (!ids?.length) return;
     const cur = ids.indexOf(this.activeCat ?? this._catOf(this.game.current()?.k));
     this._sfx('click'); this._toggleCat(ids[((cur < 0 ? (dir > 0 ? -1 : 0) : cur) + dir + ids.length) % ids.length], { only: true });
@@ -533,8 +533,7 @@ export class UI {
   }
   _renderStack() {
     const S = this.game.S; if (!S) return;
-    if (!this.bar || !!this.bar.merge !== this.merge) return this._buildBar();
-    if (this.bar.merge) return this._renderMergeBar();
+    if (!this.bar) return this._buildBar();
     const B = this.bar, kre = S.mode === 'kreativ', sup = kre ? {} : this.game.supply(), cur = this.game.current(), ck = cur?.k;
     if (ck) this.newKinds.delete(ck);
     B.root.classList.toggle('kre', kre); B.root.classList.toggle('empty', !ck); B.root.classList.toggle('none', !this.openCats.size);
@@ -572,66 +571,20 @@ export class UI {
     const n = ck ? sup[ck]?.n || 0 : 0;
     B.curN.textContent = kre ? '∞' : n; B.curN.classList.toggle('inf', kre);
     B.curSub.textContent = kre ? t('bar.free') : S.mode === 'endlos' ? t('bar.endlessN', { n }) : t('bar.stockN', { n });
+    const L = ck && this.merging ? LEVEL[ck] : 0;
+    B.curLv.hidden = !L; if (L) { B.curLv.textContent = L; B.curLv.className = 'lv l' + L + (MERGE[ck] ? '' : ' top'); B.curLv.title = t('mb.lvT', { n: L, m: MERGE_MAX }); }
+    B.curNx.hidden = !L; if (L) B.curNx.textContent = MERGE[ck] ? t('mb.next', { tile: tileName(MERGE[ck]) }) : t('mb.top');
+    // Ablagefach
+    const hk = S.hold?.k; B.hold.hidden = kre; B.hold.classList.toggle('empty', !hk);
+    if (B.holdK !== hk) { B.holdK = hk; B.holdIm.textContent = ''; const src = hk && this._thumb(hk); B.holdIm.append(hk ? (src ? h('img', { src, alt: '', draggable: 'false' }) : h('span.em', {}, TILES[hk].icon)) : h('span.em', {}, '＋')); B.holdIm.classList.remove('swap'); void B.holdIm.offsetWidth; if (hk) B.holdIm.classList.add('swap'); }
+    B.holdNm.textContent = hk ? tileName(hk) : t('mb.put');
     B.curFlag.hidden = !cur?.quest; if (cur?.quest) { B.curFlag.textContent = `🚩 +${cur.quest}`; B.curFlag.title = t('bar.quest', { g: GROUP[ck] ? groupName(GROUP[ck]) : t('bar.group'), n: cur.quest }); }
     B.tot.textContent = ''; B.tot.append(h('span', {}, kre ? t('bar.kre') : S.mode === 'endlos' ? t('bar.endless') : t('bar.supply')), h('b', {}, kre || S.mode === 'endlos' ? '∞' : S.stack.length));
     this._barEdges();
   }
-  // ---------- Verschmelzen: Vorrat (3 große Karten) + Ablagefach + freie Felder ----------
-  _buildMergeBar() {
-    const box = this.el.stack; box.textContent = '';
-    const keys = matchMedia('(hover: hover)').matches, B = this.bar = { merge: true, cards: [] };
-    const card = (i, extra) => {
-      const im = h('div.im'), lv = h('span.lv'), nm = h('b.nm'), nx = h('small.nx');
-      const el = h('div.mc', { tabindex: '0', ...extra }, h('div.imw', {}, im, lv), nm, nx, keys && h('kbd.key', {}, i));
-      return { el, im, lv, nm, nx, k: undefined };
-    };
-    B.row = h('div.mb-row', { role: 'radiogroup', 'aria-label': t('mb.supply') });
-    for (let i = 0; i < MERGE_HAND; i++) {
-      const c = card(i + 1, { role: 'radio', 'aria-checked': 'false', 'data-i': i });
-      c.el.addEventListener('click', () => this._mergePick(i));
-      c.el.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); this._mergePick(i); } });
-      B.cards.push(c); B.row.append(c.el);
-    }
-    B.hold = card('H', { role: 'button', 'data-act': 'hold', title: t('mb.holdT') }); B.hold.el.classList.add('mh');
-    B.hold.el.addEventListener('click', () => this._hold());
-    B.hold.el.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); this._hold(); } });
-    B.free = h('b'); B.freeBox = h('div.mb-free', {}, B.free, h('span', {}, t('mb.free')));
-    B.res = this._btn(t('bar.results'), 'main small', () => this._end(), { 'data-act': 'results', hidden: true });
-    B.root = h('div.mb.chip.live', {},
-      h('div.mb-grp', {}, h('div.mb-lbl', {}, t('mb.supply')), B.row), h('div.mb-sep'),
-      h('div.mb-grp', {}, h('div.mb-lbl', {}, t('mb.hold')), B.hold.el), h('div.mb-sep'),
-      h('div.mb-side', {}, B.freeBox, h('div.rot', {}, this._btn('↺', 'small', () => this.app.rotate?.(-1), { title: t('bar.rotL'), 'aria-label': t('bar.rotLa') }),
-        this._btn('↻', 'small', () => this.app.rotate?.(1), { title: t('bar.rotR'), 'aria-label': t('bar.rotRa') })), B.res));
-    const hint = keys ? h('div.hint.chip', {}, h('kbd', {}, '1'), '–', h('kbd', {}, String(MERGE_HAND)), t('mb.kPick'), h('kbd', {}, 'H'), t('mb.kHold'), h('kbd', {}, 'R'), t('bar.kRot'), h('kbd', {}, t('kbd.ctrlz')), t('bar.kUndo')) : null;
-    box.append(...[hint, B.root].filter(Boolean));
-    this._renderMergeBar();
-  }
-  _mergeCard(c, k, hold) {
-    if (c.k === k) return; c.k = k; c.im.textContent = '';
-    c.el.classList.toggle('empty', !k);
-    if (!k) { c.im.append(h('span.em', {}, '＋')); c.nm.textContent = t('mb.empty'); c.nx.textContent = t('mb.put'); c.lv.hidden = true; return; }
-    const src = this._thumb(k), L = LEVEL[k] || 1;
-    c.im.append(src ? h('img', { src, alt: '', draggable: 'false' }) : h('span.em', {}, TILES[k].icon));
-    c.nm.textContent = tileName(k); c.lv.hidden = false; c.lv.textContent = L; c.lv.className = 'lv l' + L; c.lv.title = t('mb.lvT', { n: L, m: MERGE_MAX });
-    c.nx.textContent = hold ? t('mb.swap') : MERGE[k] ? t('mb.next', { tile: tileName(MERGE[k]) }) : t('mb.top');
-    if (!hold) c.el.title = t('mb.pickT', { tile: tileName(k), n: +c.el.dataset.i + 1 });
-    c.im.classList.remove('swap'); void c.im.offsetWidth; c.im.classList.add('swap');
-  }
-  _renderMergeBar() {
-    const S = this.game.S, B = this.bar, sel = S.stack[S.pick] ? S.pick : 0;
-    B.cards.forEach((c, i) => {
-      const e = S.stack[i]; c.el.hidden = !e; this._mergeCard(c, e?.k || null, false);
-      c.el.classList.toggle('sel', i === sel); c.el.setAttribute('aria-checked', i === sel ? 'true' : 'false');
-    });
-    this._mergeCard(B.hold, S.hold?.k || null, true);
-    const all = fieldN(S.maxR ?? MERGE_R), free = this.game.slots().length;
-    B.free.textContent = free; B.freeBox.title = t('mb.freeT', { n: free, all }); B.freeBox.classList.toggle('low', free <= 4);
-    B.res.hidden = !this.game.isOver();
-  }
-  _mergePick(i) { if (!this.merge || this.mode !== 'play') return; this._sfx('click'); this.game.pick(i); }
   _hold() {
-    if (!this.merge || this.mode !== 'play' || this.screens.length) return;
-    if (this.game.hold()) this._sfx('rotate');
+    const S = this.game.S; if (!S || this.mode !== 'play' || this.screens.length || S.mode === 'kreativ') return;
+    if (this.game.hold()) this._sfx('rotate'); else { this._sfx('invalid'); this.toast(t('mb.noHold')); }
   }
   // Treffer eines Kettenschritts (main.js, zeitgleich mit dem Lichtblitz): Punkte-Schild, bei hohen Stufen ein Band
   _mergeHit(d) {
@@ -718,7 +671,7 @@ export class UI {
     const S = this.game.S; if (!S) return;
     for (const [k, Qs] of Object.entries(S.quests || {})) {
       if (Qs.done || !this.game.board.has(k)) continue;
-      const [q, r] = unkey(k), rest = Math.max(0, Qs.n - this.game.group(q, r).keys.length);
+      const [q, r] = unkey(k), rest = Math.max(0, Qs.n - this.game.group(q, r).size);
       const el = h('div.flag', {}, h('div.in', {}, h('span', {}, `🚩 ${rest}`), h('i')));
       el.title = t('flag.title', { n: rest, g: groupName(Qs.g) || '' });
       this.el.fx.append(el); this.flags.push({ el, pos: up(this.app.tilePos(q, r), 2.6), key: k, rest, g: Qs.g });
@@ -731,7 +684,6 @@ export class UI {
     this.hov = null;
     if (!d || !d.ev || this.mode !== 'play' || !this.game.S) return;
     const { q, r, ev } = d, cur = this.game.current(), kind = d.kind || cur?.k; if (!kind) return;
-    if (this.merge) return this._hoverMerge(q, r, ev, kind);
     const base = this.app.tilePos(q, r), els = [];
     const card = h('div.hover.chip');
     if (!ev.ok) card.append(h('div.why', {}, '✋ ' + (ev.why ? phrase(ev.why) : t('hov.nofit'))));
@@ -743,6 +695,7 @@ export class UI {
       if (ev.perfect) card.append(h('div.ln', {}, h('span', {}, t('hov.perfect')), h('b', {}, '+10')));
       const eb = (ev.bonus || 0) - (ev.perfect ? 10 : 0); if (eb > 0) card.append(h('div.ln', {}, h('span', {}, t('hov.edge')), h('b', {}, '+' + eb)));
       if (!ev.pts) card.append(h('div.ln', {}, h('span', {}, t('hov.zero'))));
+      this._hoverMerge(card, q, r, ev, kind);
       if (cur?.quest && GROUP[kind]) card.append(h('div.q', {}, t('hov.quest', { g: groupName(GROUP[kind]), n: cur.quest })));
       if (ev.ok) this._tutEvent('hoverOk');
     }
@@ -752,48 +705,45 @@ export class UI {
     this.hov = { q, r, els };
   }
   _mini(k) { const src = this._thumb(k); return h('span.mi', { title: tileName(k) }, src ? h('img', { src, alt: '', draggable: 'false' }) : TILES[k].icon); }
-  _hoverMerge(q, r, ev, kind) {
-    const card = h('div.hover.mhov.chip');
-    if (!ev.ok) card.append(h('div.why', {}, '✋ ' + (ev.why ? phrase(ev.why) : t('hov.nofit'))));
-    else {
-      card.append(h('div.big', {}, `+${fmtNum(ev.pts)}`, h('span', { style: { font: '800 13px var(--font)', color: 'var(--ink2)', marginLeft: '6px' } }, t('points', { c: ev.pts }))));
-      if (ev.merges.length) {
-        for (const m of ev.merges) card.append(h('div.mrow' + (m.step ? '.ch' : ''), {}, this._mini(m.from), h('span.ar', {}, '→'), this._mini(m.to),
-          h('span.tx', {}, t('mh.merge', { n: m.size, a: tileName(m.from), b: tileName(m.to) })), h('b', {}, '+' + fmtNum(m.pts))));
-        if (ev.merges.length > 1) card.append(h('div.q', {}, t('mh.chain', { n: ev.merges.length })));
-        card.append(h('div.ln', {}, h('span', {}, t('mh.result', { tile: `${TILES[ev.result].icon} ${tileName(ev.result)}` })), h('span.lv.l' + LEVEL[ev.result], {}, LEVEL[ev.result])));
-      } else {
-        card.append(h('div.ln', {}, h('span', {}, t('mh.place', { tile: tileName(kind) })), h('b', {}, '+' + ev.place)));
-        // wie viele gleiche wären beisammen? (Logik-Hilfe aus game.js, ändert nichts)
-        const n = this.game._sameGroup?.(this.game._kinds(kind, q, r), q, r).length || 1;
-        card.append(h('div.ln', {}, h('span', {}, MERGE[kind] ? t('mh.need', { n, m: MERGE_N, tile: tileName(MERGE[kind]) }) : t('mh.top'))));
-      }
+  // Verschmelz-Zeilen in der Vorschau-Karte: je Schritt „3× Felsen → Blockhütte +30“, Kette, Ergebnis; sonst „2 von 3 beisammen“
+  _hoverMerge(card, q, r, ev, kind) {
+    if (!this.merging) return;
+    if (ev.merges?.length) {
+      card.classList.add('mhov');
+      for (const m of ev.merges) card.append(h('div.mrow' + (m.step ? '.ch' : ''), {}, this._mini(m.from), h('span.ar', {}, '→'), this._mini(m.to),
+        h('span.tx', {}, t('mh.merge', { n: m.size, a: tileName(m.from), b: tileName(m.to) })), h('b', {}, '+' + fmtNum(m.pts))));
+      if (ev.merges.length > 1) card.append(h('div.q', {}, t('mh.chain', { n: ev.merges.length })));
+      card.append(h('div.ln', {}, h('span', {}, t('mh.result', { tile: `${TILES[ev.result].icon} ${tileName(ev.result)}` })), h('span.lv.l' + LEVEL[ev.result], {}, LEVEL[ev.result])));
+    } else if (MERGE[kind]) {
+      const n = this.game.sameCount(kind, q, r);
+      if (n === MERGE_N - 1) card.append(h('div.ln.mneed', {}, h('span', {}, t('mh.need', { n, m: MERGE_N, tile: tileName(MERGE[kind]) }))));
     }
-    const el = h('div', {}, card), p = this.app.tilePos(q, r); p[1] = Math.max(0, p[1]);   // freies Feld: kein Boden (groundAt −60)
-    el.style.visibility = 'hidden'; this.el.fx.append(el);
-    this.hov = { q, r, els: [{ el, pos: up(p, 1.5) }] };
   }
   _tileInfo(q, r) {
     const t0 = this.game.at(q, r); if (!t0) return; const g = this.game.group(q, r);
-    let txt = tileDesc(t0.k); if (g.g) txt += t('info.group', { g: groupName(g.g), n: g.keys.length });
-    const Qs = this.game.S.quests[`${q},${r}`]; if (Qs && !Qs.done) txt += t('info.quest', { n: Math.max(0, Qs.n - g.keys.length) });
+    let txt = tileDesc(t0.k); if (g.g) txt += t('info.group', { g: groupName(g.g), n: g.size });
+    if (t0.n > 1) txt += ' ' + t('info.merged', { n: t0.n });
+    if (LEVEL[t0.k] && this.merging) txt += ' ' + t('desc.lvl', { n: LEVEL[t0.k], m: MERGE_MAX }) + (MERGE[t0.k] ? ' ' + t('desc.next', { tile: tileName(MERGE[t0.k]) }) : '');
+    const Qs = this.game.S.quests[`${q},${r}`]; if (Qs && !Qs.done) txt += t('info.quest', { n: Math.max(0, Qs.n - g.size) });
     this.showInfo(tl(t0.k), txt);
   }
 
   // ---------- Anleitung ----------
-  _tutStep() { const S = this.game.S; return S && this.mode === 'play' && S.mode !== MERGE_MODE && (S.tut | 0) < TUT.length ? S.tut | 0 : -1; }
+  _tutStep() { const S = this.game.S; return S && this.mode === 'play' && (S.tut | 0) < TUT.length ? S.tut | 0 : -1; }
   _renderTut() {
     const box = this.el.tut; box.textContent = ''; box.className = 'tut';
     if (this.pointer) { this.pointer.el.remove(); this.pointer = null; }
     for (const tb of Object.values(this.bar?.tabs || {})) tb.classList.remove('hint');
     const i = this._tutStep(); if (i < 0) return;
     const st = TUT[i], S = this.game.S;
-    if (i === 7 && Object.values(S.ms || {}).some(v => v > 0)) { this._tutNext(); return; }
+    if (i === TUT_MS && Object.values(S.ms || {}).some(v => v > 0)) { this._tutNext(); return; }
+    if (st.merge && (S.merge === false || (S.stats.merges | 0) > 0)) { this._tutNext(); return; }   // schon verschmolzen oder abgeschaltet
     if (st.at === 'stack') box.classList.add('at-stack');
     let x = t(`tut.${i}.x`);
     const has = re => S.mode === 'kreativ' || S.stack.some(e => re.test(e.k));
     if (i === 4) x += has(/^(bach|bachk|bachg|quelle|see)$/) ? t('tut.4.has', { cat: '💧 ' + catName('wasser') }) : t('tut.4.no');
     if (i === 5) x += has(/^haus$/) ? t('tut.5.has', { cat: '🏠 ' + catName('wohnen') }) : t('tut.5.no');
+    if (st.merge) x += has(/^wiese$/) ? t('tut.7.has', { cat: '🌲 ' + catName('natur') }) : '';
     for (const tb of Object.values(this.bar?.tabs || {})) tb.classList.toggle('hint', tb.dataset.cat === st.cat);
     const bub = h('div.bub.panel.live', {}, h('div.st', {}, h('span', {}, t('tut.step', { i: i + 1, n: TUT.length })), h('div.dots', {}, TUT.map((_, j) => h('i' + (j <= i ? '.on' : ''))))),
       h('h4', {}, t(`tut.${i}.t`)), h('p', {}, x),
@@ -1032,17 +982,18 @@ export class UI {
     const inp = h('input', { type: 'text', value: name, maxlength: 40, spellcheck: 'false' });
     const modeEls = Object.keys(MODE_ICON).map(k => {
       const el = h('div.mode' + (k === mode ? '.on' : ''), { role: 'radio', tabindex: '0', 'aria-checked': k === mode ? 'true' : 'false', 'data-mode': k }, h('div.e', {}, MODE_ICON[k]), h('b', {}, modeName(k)), h('small', {}, modeDesc(k)));
-      const sel = () => { mode = k; modeEls.forEach(e => { e.classList.toggle('on', e === el); e.setAttribute('aria-checked', e === el); }); tutLbl.hidden = k === MERGE_MODE; this._sfx('click'); };
+      const sel = () => { mode = k; modeEls.forEach(e => { e.classList.toggle('on', e === el); e.setAttribute('aria-checked', e === el); }); this._sfx('click'); };
       el.addEventListener('click', sel); el.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); sel(); } });
       return el;
     });
     const slots = store.list(), firstFree = slots.find(s => s.empty)?.n || [...slots].sort((a, b) => a.meta.updated - b.meta.updated)[0].n;
     const slotSel = h('select', {}, slots.map(s => h('option', { value: s.n, selected: s.n === firstFree }, t('new.slotOpt', { n: s.n, x: s.empty ? t('new.free') : t('new.replace', { name: s.meta.name }) }))));
-    const tutCb = h('input', { type: 'checkbox', checked: tut ?? !store.getFlag('tutDone') }), tutLbl = h('label.check', {}, tutCb, t('new.tut'));   // Anleitung nur für die Bau-Modi
+    const tutCb = h('input', { type: 'checkbox', checked: tut ?? !store.getFlag('tutDone') }), tutLbl = h('label.check', {}, tutCb, t('new.tut'));
     const s = this._screen(this._modal(t('menu.new'),
       this._closeX(() => this._close(s)),
       h('label.f', {}, h('span', {}, t('new.name')), inp),
       h('div.sec', {}, t('new.mode')), h('div.modes', { role: 'radiogroup' }, modeEls),
+      h('p.mnote', {}, '🔮 ', t(this.merging || this.app.settings?.merge !== false ? 'new.mergeOn' : 'new.mergeOff')),
       h('label.f', {}, h('span', {}, t('new.slot')), slotSel),
       tutLbl,
       h('div.row.end', {}, this._btn(t('cancel'), 'ghost', () => this._close(s)), this._btn(t('new.create'), 'main', () => go(), { 'data-act': 'create' }))), { name: 'new' });
@@ -1055,7 +1006,6 @@ export class UI {
       const S = this.game.S; S.name = nm; S.tut = tutCb.checked ? 0 : TUT.length; this.tutSeen.clear();
       this.slot = n; store.save(n, this.game, null); store.setCurrent(n);
       this._play(); this.toast(t('welcome', { name: nm }));
-      if (mode === MERGE_MODE) this.showInfo(t('mi.t'), t('mi.x'), 16000);
       setTimeout(() => this.auto.now(), 1500);
     };
   }
@@ -1075,7 +1025,7 @@ export class UI {
         const m = sl.meta, cur = this.slot === sl.n;
         list.append(h('div.slot' + (cur ? '.cur' : ''), { 'data-slot': sl.n },
           h('div.th', {}, m.thumb ? h('img', { src: m.thumb, alt: '' }) : '🏝️'),
-          h('div.tx', {}, h('b', {}, m.name, cur && h('span.tag', {}, t('isl.active'))), h('small', {}, t('isl.meta', { p: fmtNum(m.score), t: fmtNum(m.tiles), mode: MODE_ICON[m.mode] ? modeName(m.mode) : m.mode })), h('small', {}, t('isl.slot', { n: sl.n, ago: ago(m.updated) }))),
+          h('div.tx', {}, h('b', {}, m.name, cur && h('span.tag', {}, t('isl.active'))), h('small', {}, t('isl.meta', { p: fmtNum(m.score), t: fmtNum(m.tiles), mode: MODE_ICON[modeKey(m.mode)] ? modeName(m.mode) : m.mode })), h('small', {}, t('isl.slot', { n: sl.n, ago: ago(m.updated) }))),
           h('div.acts', {},
             this._btn(t('isl.play'), 'main small', () => this._loadSlot(sl.n), { 'data-act': 'play' }),
             this._btn('✏️', 'small', () => this._rename(sl.n, render), { title: t('isl.rename'), 'aria-label': t('isl.rename'), 'data-act': 'rename' }),
@@ -1113,7 +1063,7 @@ export class UI {
   // ---------- Einstellungen ----------
   _settings() {
     const st = this.app.settings || (this.app.settings = {});
-    const D = { quality: 'mittel', music: .6, sfx: .8, dayCycle: true, time: 12, season: 'auto', weather: 'auto', visitors: true };
+    const D = { quality: 'mittel', music: .6, sfx: .8, dayCycle: true, time: 12, season: 'auto', weather: 'auto', visitors: true, merge: true };
     for (const k in D) if (st[k] === undefined) st[k] = D[k];
     const apply = () => { try { this.app.applySettings?.(st); } catch (e) { console.warn(e); } store.saveSettings(st); this._clock(); };
     const seg = (key, opts) => { const box = h('div.seg', { role: 'radiogroup' }); for (const [v, l] of opts) { const b = h('button', { type: 'button', class: String(st[key]) === String(v) ? 'on' : '' }, l); b.addEventListener('click', () => { st[key] = v; [...box.children].forEach(c => c.classList.toggle('on', c === b)); this._sfx('click'); apply(); }); box.append(b); } return box; };
@@ -1127,6 +1077,8 @@ export class UI {
     const cyc = h('input', { type: 'checkbox', checked: st.dayCycle !== false });
     const sync = () => { tim.disabled = cyc.checked; tim.style.opacity = cyc.checked ? .4 : 1; };
     cyc.addEventListener('change', () => { st.dayCycle = cyc.checked; if (!cyc.checked && st.time == null) st.time = 12; sync(); apply(); }); sync();
+    const mergeCb = h('input', { type: 'checkbox', checked: st.merge !== false, 'data-set': 'merge' });
+    mergeCb.addEventListener('change', () => { st.merge = mergeCb.checked; apply(); this.game.setMerge?.(mergeCb.checked); this.auto.touch(); this._hud(); this._renderStack(); this._renderTut(); });
     const visCb = h('input', { type: 'checkbox', checked: st.visitors !== false, 'data-set': 'visitors' });
     visCb.addEventListener('change', () => { st.visitors = visCb.checked; apply(); this.prog?.setVisitors(visCb.checked); this._renderProg(); this._renderStack(); });
     const sel = (key, opts) => { const s = h('select', { 'aria-label': key }, opts.map(([v, l]) => h('option', { value: v, selected: String(st[key]) === String(v) }, l))); s.addEventListener('change', () => { st[key] = s.value === 'auto' ? 'auto' : isNaN(+s.value) ? s.value : +s.value; apply(); }); return s; };
@@ -1138,7 +1090,8 @@ export class UI {
       h('label.check', {}, cyc, t('set.cycle')), h('div.set', {}, h('span', {}, t('set.time')), tim, timV),
       h('div.set', {}, h('span', {}, t('set.season')), h('div', { style: { gridColumn: 'span 2' } }, sel('season', [['auto', t('weather.auto')], ...SEASON_ICON.map((ic, i) => [i, `${ic} ${seasonName(i)}`])]))),
       h('div.set', {}, h('span', {}, t('set.weather')), h('div', { style: { gridColumn: 'span 2' } }, sel('weather', WEATHER.map(w => [w, t('weather.' + w)])))),
-      this.prog && h('div.sec', {}, t('set.play')), this.prog && h('label.check', {}, visCb, t('set.visitors')),
+      h('div.sec', {}, t('set.play')), h('label.check', {}, mergeCb, t('set.merge')), h('p.sethint', {}, t('set.mergeX')),
+      this.prog && h('label.check', {}, visCb, t('set.visitors')),
       h('div.row.end', { style: { marginTop: '8px' } }, this._btn(t('done'), 'main', () => this._close(s), { 'data-act': 'done' }))), { name: 'settings' });
   }
   // Sprachwahl: kind 'langs' = kleine Flaggen im Startmenü, 'seg' = Umschalter in den Einstellungen
@@ -1193,9 +1146,20 @@ export class UI {
     P.push({ ch: chR, el: [h('h3', {}, t('b.rulesT')), h('ul', {},
       li(t('r.streams')), li(t('r.paths')), li(t('r.perfect')),
       KINDS.filter(k => TILES[k].edgeBonus).map(k => li(t('r.edge', { tile: tileName(k), n: TILES[k].edgeBonus }))),
-      li(t('r.connect')),
+      li(t('r.connect')), li(t('r.merge')),
       li(t('r.likes', { list: KINDS.filter(k => TILES[k].likes).map(k => `${tileName(k)} (${Object.entries(TILES[k].likes).map(([b, p]) => `${biomeName(b)} ${p}`).join(', ')})`).join(' · ') })),
       li(t('r.undo')))] });
+    // Verschmelzen (Grundregel): Regeln + Punkte, Ketten als Bildreihen, Tipps
+    const chM = t('ch.merge'), stoneChain = MERGE_CHAINS[0].kinds;
+    P.push({ ch: chM, el: [h('h3', {}, t('bm.t')), h('p', {}, t('bm.1')), h('ul', {}, t('bm.rules').map(li)),
+      h('p.note', {}, this.merging ? t('bm.on') : t('bm.off')),
+      h('h4', {}, t('bm.ptsT')), h('p', {}, t('bm.pts')),
+      tbl(t('bm.pHead'), stoneChain.map((k, i) => [h('span', {}, h('span.lv.l' + (i + 1), {}, i + 1), ' ', tileName(k)), i ? fmtNum(mergeValue(k)) : '–', i ? '+' + fmtNum(mergeValue(k) * MERGE_N) : '–']))] });
+    P.push({ ch: chM, el: [h('h3', {}, t('bm.chainsT')), h('p', {}, t('bm.chains')),
+      MERGE_CHAINS.map(c => h('div.mchain', { 'data-chain': c.id }, h('h4', {}, `${c.icon} ${chainName(c)}`),
+        h('div.mks', {}, c.kinds.map((k, i) => [i > 0 && h('span.ar', { 'aria-hidden': 'true' }, '→'),
+          h('div.mk', { 'data-kind': k }, this._im(k), h('span.lv.l' + (i + 1), {}, i + 1), h('b', {}, tileName(k)))]))))] });
+    P.push({ ch: chM, el: [h('h3', {}, t('bm.tipsT')), h('ul', {}, t('bm.tips').map(x => h('li', {}, x)))] });
     // Gruppen & Meilensteine
     const members = g => ['start', ...KINDS].filter(k => GROUP[k] === g).map(tileName).join(', '), chG = t('ch.groups');
     P.push({ ch: chG, el: [h('h3', {}, t('b.groupsT')), h('p', {}, t('b.groups1')),
@@ -1207,16 +1171,6 @@ export class UI {
       tbl(t('b.uHead'), UNLOCKS.filter(u => u.at !== Infinity).map(u => [u.at ? fmtNum(u.at) : t('b.uStart'), u.kinds.map(tl).join(', ')]))] });
     // Aufgaben
     P.push({ ch: t('ch.quests'), el: [h('h3', {}, t('b.questT')), h('p', {}, t('b.q1')), h('p', {}, t('b.q2')), h('p', { html: t('b.q3') }), h('p', {}, t('b.q4'))] });
-    // Verschmelzen: Regeln + Punkte, Ketten als Bildreihen, Tipps
-    const chM = t('ch.merge'), stoneChain = MERGE_CHAINS[0].kinds;
-    P.push({ ch: chM, el: [h('h3', {}, t('bm.t')), h('p', {}, t('bm.1', { f: fieldN(MERGE_R) })), h('ul', {}, t('bm.rules').map(li)),
-      h('h4', {}, t('bm.ptsT')), h('p', {}, t('bm.pts')),
-      tbl(t('bm.pHead'), stoneChain.map((k, i) => [h('span', {}, h('span.lv.l' + (i + 1), {}, i + 1), ' ', tileName(k)), fmtNum(mergeValue(k)), i ? '+' + fmtNum(mergeValue(k) * MERGE_N) : '–']))] });
-    P.push({ ch: chM, el: [h('h3', {}, t('bm.chainsT')), h('p', {}, t('bm.chains')),
-      MERGE_CHAINS.map(c => h('div.mchain', { 'data-chain': c.id }, h('h4', {}, `${c.icon} ${chainName(c)}`),
-        h('div.mks', {}, c.kinds.map((k, i) => [i > 0 && h('span.ar', { 'aria-hidden': 'true' }, '→'),
-          h('div.mk', { 'data-kind': k }, this._im(k), h('span.lv.l' + (i + 1), {}, i + 1), h('b', {}, tileName(k)))]))))] });
-    P.push({ ch: chM, el: [h('h3', {}, t('bm.tipsT')), h('ul', {}, t('bm.tips').map(x => h('li', {}, x)))] });
     // Erfolge, Tagesaufgaben, Besucher
     if (this.prog) {
       const chB = t('ch.badges'), byS = SECTIONS.map(sec => [sec, this.prog.badges().filter(b => b.sec === sec)]);
@@ -1298,45 +1252,21 @@ export class UI {
     const S = this.game.S; if (!S || this._find('end')) return;
     if (this.mode === 'photo') this._exitPhoto();
     this._closeAll(); this.mode = 'play'; this.root.classList.remove('menu'); this.auto.flush();
-    if (S.mode === MERGE_MODE) return this._endMerge();
     const best = Object.entries(S.best || {}).filter(([, n]) => n > 1).sort((a, b) => b[1] - a[1]);
+    const M = this.game.mergeStats(), bk = M.bestKind && TILES[M.bestKind] ? M.bestKind : null;
     const st = (n, l, cls = '') => h('div.stat' + cls, {}, h('b', {}, n), h('span', {}, l));
     const s = this._screen(this._modal(t('end.title'), this._closeX(() => this._close(s)),
       h('p', {}, t('end.text', { name: S.name })),
       h('div.stats', {}, st(fmtNum(S.score), t('end.points'), '.big'), st(fmtNum(Math.max(0, S.tiles.length - 1)), t('end.tiles')), st(S.stats.perfect || 0, t('end.perfect')),
-        st(S.stats.quests || 0, t('end.quests')), st(fmtDur(S.stats.playtime), t('end.time')),
+        st(S.stats.quests || 0, t('end.quests')), st(fmtNum(M.merges), t('mend.merges')), st(fmtDur(S.stats.playtime), t('end.time')),
         this.prog?.island() && st(this.prog.island().served, t('end.wishes')), this.prog?.island() && st(this.prog.island().badges, t('end.badges'))),
+      bk && M.bestLevel > 1 && h('div.mbest', {}, this._im(bk), h('div', {}, h('small', {}, t('mend.best')), h('b', {}, tl(bk)),
+        h('span', {}, h('span.lv.l' + M.bestLevel, {}, M.bestLevel), ' ', t('mb.lvT', { n: M.bestLevel, m: MERGE_MAX })))),
       best.length > 0 && h('div.sec', {}, t('end.best')), best.length > 0 && h('div.groups', {}, best.map(([g, n]) => h('span', {}, `${GROUP_ICON[g] || ''} ${groupName(g)}: ${n}`))),
       h('div.row', {}, this._btn(t('end.photo'), 'grow', () => this._enterPhoto(), { 'data-act': 'photo' }), this._btn(t('ph.tl'), 'grow', () => this._timelapse(false), { 'data-act': 'timelapse' })),
       h('div.row', { style: { marginTop: '10px' } }, this._btn(t('end.endless'), 'wood grow', () => { this._close(s); this.game.endless(); this.auto.touch(); this.toast(t('end.endlessT')); }, { 'data-act': 'endless' }),
         this._btn(t('end.new'), 'main grow', () => this._newIsland(), { 'data-act': 'new' }))), { name: 'end' });
     this._sfx('milestone');
-  }
-
-  // Ende im Modus Verschmelzen: Punkte, Verschmelzungen, höchste Stufe mit Bild; Nochmal / Foto / Zeitraffer
-  _endMerge() {
-    const S = this.game.S, M = this.game.mergeStats(), b = M.bestKind && TILES[M.bestKind] ? M.bestKind : null;
-    const st = (n, l, cls = '') => h('div.stat' + cls, {}, h('b', {}, n), h('span', {}, l));
-    const s = this._screen(this._modal(t('mend.title'), this._closeX(() => this._close(s)),
-      h('p', {}, t('mend.text', { name: S.name })),
-      h('div.stats', {}, st(fmtNum(M.score), t('end.points'), '.big'), st(fmtNum(M.merges), t('mend.merges')), st(fmtNum(M.placed), t('mend.placed')),
-        st(fmtDur(S.stats.playtime), t('end.time')), this.prog?.island() && st(this.prog.island().badges, t('end.badges'))),
-      h('div.mbest', {}, b ? this._im(b) : h('div.im', {}, '🔮'), h('div', {}, h('small', {}, t('mend.best')), h('b', {}, b ? tl(b) : '–'),
-        h('span', {}, h('span.lv.l' + M.bestLevel, {}, M.bestLevel), ' ', t('mb.lvT', { n: M.bestLevel, m: MERGE_MAX })))),
-      h('div.row', {}, this._btn(t('mend.again'), 'main grow', () => this._again(), { 'data-act': 'again' })),
-      h('div.row', { style: { marginTop: '10px' } }, this._btn(t('end.photo'), 'grow', () => this._enterPhoto(), { 'data-act': 'photo' }),
-        this._btn(t('ph.tl'), 'grow', () => this._timelapse(false), { 'data-act': 'timelapse' })),
-      h('div.row', { style: { marginTop: '10px' } }, this.game.canUndo() && this._btn(t('mend.undo'), 'ghost grow', () => { this._close(s); this._undo(); }, { 'data-act': 'undo' }),
-        this._btn(t('end.new'), 'wood grow', () => this._newIsland(), { 'data-act': 'new' }))), { name: 'end' });
-    this._sfx('milestone');
-  }
-  // Nochmal: neue Runde Verschmelzen auf demselben Platz und unter demselben Namen
-  async _again() {
-    const S = this.game.S, n = this.slot; if (!S) return;
-    if (!n) { this._newIsland(); return; }
-    try { await this.app.newGame({ mode: S.mode, name: S.name, maxR: S.maxR }); } catch (e) { console.error(e); this.toast(t('err.create'), 'err'); return; }
-    this.game.S.tut = TUT.length; store.save(n, this.game, null); store.setCurrent(n);
-    this._play(); this.toast(t('mend.againT', { name: this.game.S.name }));
   }
 
   // ---------- Tasten ----------
@@ -1359,7 +1289,7 @@ export class UI {
     if (k === 'p' || k === 'P') { if (top || this._tl) return; if (this.mode === 'photo') this._exitPhoto(); else if (this.mode === 'play') this._enterPhoto(); return; }
     if (top || this.mode !== 'play' || !this.game.S) return;
     if (/^[1-9]$/.test(k)) { e.preventDefault(); this._pickNth(+k - 1); }
-    else if ((k === 'h' || k === 'H') && this.merge) { e.preventDefault(); this._hold(); }
+    else if ((k === 'h' || k === 'H') && this.game.S.mode !== 'kreativ') { e.preventDefault(); this._hold(); }
     else if (k === 'Tab') { e.preventDefault(); this._cycleCat(e.shiftKey ? -1 : 1); }
   }
 }

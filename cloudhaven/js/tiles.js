@@ -13,7 +13,7 @@ export const TILES = {
   bachk:   { name: 'Bachbiegung', icon: '〰️', biome: 'wasser', edges: 'wgwggg', unlock: 0, w: 3,
              desc: 'Der Bach macht einen Bogen. Bach an Bach: 3 Punkte.' },
   haus:    { name: 'Fachwerkhaus', icon: '🏠', biome: 'dorf', edges: 'rggggg', unlock: 0, w: 5,
-             desc: 'Ein Haus mit Garten. Häuser nebeneinander: 3 Punkte. Ab 3 Häusern im Dorf wird es zweistöckig, ab 6 bekommt es einen Anbau.' },
+             desc: 'Ein Haus mit Garten. Häuser nebeneinander: 3 Punkte. Ab 3 Wohnhäusern im Dorf wird es zweistöckig, ab 6 bekommt es einen Anbau.' },
   weg:     { name: 'Weg', icon: '🛤️', biome: 'dorf', edges: 'rggrgg', unlock: 0, w: 3,
              desc: 'Verbindet Häuser. Weg an Weg: 2 Extrapunkte. Zählt zum Dorf.' },
   feld:    { name: 'Feld', icon: '🌾', biome: 'feld', edges: 'gggggg', unlock: 100, w: 5,
@@ -123,34 +123,33 @@ export const ROAD_OK = new Set(['weg', 'wegk', 'kreuzung', 'platz', 'markt', 'st
 export const UNLOCKS = [...new Set(KINDS.map(k => TILES[k].unlock))].sort((a, b) => a - b)
   .map(at => ({ at, kinds: KINDS.filter(k => TILES[k].unlock === at) }));
 
-// ---- Modus „Verschmelzen“: MERGE_N gleiche, zusammenhängende Kacheln werden zur nächsten Stufe ----
+// ---- Verschmelzen (Grundregel): MERGE_N gleiche, zusammenhängende Kacheln werden zur nächsten Stufe ----
+// Ketten bleiben möglichst in ihrer Gruppe (GROUP), damit große Wälder, Felder und Dörfer wachsen können:
+// Wald endet beim Nadelwald (kein Sägewerk mitten im Wald), Felder beim Bauernhof, Wege verschmelzen nicht (Straßen bleiben ganz).
 export const MERGE = { felsen: 'huette', huette: 'haus', haus: 'reihe', reihe: 'gasthaus', gasthaus: 'burg',
   wiese: 'schafe', schafe: 'imker', imker: 'obst', obst: 'wein',
-  feld: 'muehle', muehle: 'hof', hof: 'baecker',
-  wald: 'nadelwald', nadelwald: 'saege', saege: 'schmiede',
-  weg: 'kreuzung', kreuzung: 'platz', platz: 'markt', markt: 'kapelle',
+  feld: 'muehle', muehle: 'hof',
+  wald: 'nadelwald',
+  kreuzung: 'platz', platz: 'markt', markt: 'kapelle',
   teich: 'see' };
 export const MERGE_N = 3;
 // Ketten fürs Handbuch (Name deutsch, en für die Oberfläche)
 export const MERGE_CHAINS = [
   { id: 'burg', name: 'Vom Stein zur Burg', en: 'From stone to castle', icon: '🏰' },
   { id: 'wiese', name: 'Von der Wiese zum Weinberg', en: 'From meadow to vineyard', icon: '🍇' },
-  { id: 'feld', name: 'Vom Feld zur Bäckerei', en: 'From field to bakery', icon: '🥨' },
-  { id: 'wald', name: 'Vom Wald zur Schmiede', en: 'From forest to forge', icon: '⚒️' },
-  { id: 'weg', name: 'Vom Weg zur Kapelle', en: 'From path to chapel', icon: '⛪' },
+  { id: 'feld', name: 'Vom Feld zum Bauernhof', en: 'From field to farm', icon: '🐄' },
+  { id: 'wald', name: 'Vom Wald zum Nadelwald', en: 'From woodland to pine forest', icon: '🌲' },
+  { id: 'platz', name: 'Von der Kreuzung zur Kapelle', en: 'From crossroads to chapel', icon: '⛪' },
   { id: 'teich', name: 'Vom Teich zum See', en: 'From pond to lake', icon: '🏞️' },
 ].map(c => {
-  const root = { burg: 'felsen', wiese: 'wiese', feld: 'feld', wald: 'wald', weg: 'weg', teich: 'teich' }[c.id], kinds = [root];
+  const root = { burg: 'felsen', wiese: 'wiese', feld: 'feld', wald: 'wald', platz: 'kreuzung', teich: 'teich' }[c.id], kinds = [root];
   while (MERGE[kinds.at(-1)]) kinds.push(MERGE[kinds.at(-1)]);
   return { ...c, kinds };
 });
-// Stufe je Art in ihrer Kette (ab 1, Endstufen inklusive)
+// Stufe je Art in ihrer Kette (ab 1, Endstufen inklusive); Arten ohne Kette haben keine Stufe
 export const LEVEL = Object.fromEntries(MERGE_CHAINS.flatMap(c => c.kinds.map((k, i) => [k, i + 1])));
 export const MERGE_MAX = Math.max(...Object.values(LEVEL));
 export const chainOf = kind => (MERGE_CHAINS.find(c => c.kinds.includes(kind)) || { kinds: [] }).kinds.slice();
-// Wert einer Stufe (wächst stark): 5 · 3^(Stufe−1)
-export const mergeValue = kind => 5 * 3 ** ((LEVEL[kind] || 1) - 1);
-// Nachschub: Grundstufen häufig, Stufe 2 selten (≈ 13 %), ab Stufe 3 nie. Die Steinkette ist die Hauptkette (≈ 40 %),
-// sonst verteilt sich der Vorrat zu breit und kaum jemand kommt über Stufe 3 (tools/merge.mjs: Probepartien).
-export const MERGE_POOL = { felsen: 12, wiese: 4, feld: 3.5, wald: 3.5, weg: 2.5, teich: 1.5,
-  huette: 2.5, schafe: .6, muehle: .4, nadelwald: .4, kreuzung: .3 };
+// Punkte je verschmolzenem Teil für die neue Stufe: 5 · Stufe (Stufe 2 = 10 … Burg = 30). Linear, weil mittlere Stufen
+// (Haus, Gasthaus, Markt …) auch direkt aus dem Vorrat kommen – sonst brächten 3 Gasthäuser mehr als eine ganze Partie.
+export const mergeValue = kind => 5 * (LEVEL[kind] || 1);

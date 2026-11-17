@@ -64,6 +64,8 @@ export class CameraRig {
     this.vel.set(0, 0, 0);
     return new Promise(res => { this.fly?.res(false); this.fly = { s: 0, dur, hop, from: { t: f.t.clone(), d: f.d, yaw: f.yaw, po: f.po }, to, res }; this._emit('fly'); });
   }
+  // Knöpfe/Tasten: um einen Winkel drehen (weich gedämpft)
+  rotateBy(a) { this._cancelFly(); this.g.yaw += a; this._emit('rotate'); }
   setBounds(center, radius) { this.bounds = center ? { c: new THREE.Vector3().copy(center), r: radius } : null; }
   autoOrbit(speed = 0) { this.orbitSpeed = speed; }
   serialize() { const g = this.g; return { x: +g.t.x.toFixed(3), y: +g.t.y.toFixed(3), z: +g.t.z.toFixed(3), yaw: +g.yaw.toFixed(4), po: +g.po.toFixed(4), d: +g.d.toFixed(3) }; }
@@ -211,7 +213,7 @@ export class CameraRig {
     this.ptr.set(e.pointerId, p); this._cancelFly(); this.vel.set(0, 0, 0);
     clearTimeout(this._lp); this._lpFired = false;
     if (this.ptr.size === 1) {
-      const rot = e.pointerType === 'mouse' && (e.button === 1 || e.button === 2 || (e.button === 0 && e.shiftKey));
+      const rot = e.pointerType === 'mouse' && (e.button === 1 || e.button === 2 || (e.button === 0 && (e.shiftKey || e.altKey)));
       this.mode = rot ? 'rotate' : 'pan'; this._startPan(p);
       if (e.pointerType !== 'mouse' && this.onLongPress) this._lp = setTimeout(() => { if (!p.moved && this.ptr.size === 1) { this._lpFired = true; this.onLongPress(...this.ndc(p), e); } }, 550);
     } else if (this.ptr.size === 2) this._startPinch();
@@ -233,7 +235,7 @@ export class CameraRig {
     const p = this.ptr.get(e.pointerId);
     if (!p) { if (e.pointerType === 'mouse' && this.onHover) this.onHover(...this.ndc(e), e); return; }
     const dx = e.clientX - p.x, dy = e.clientY - p.y; p.x = e.clientX; p.y = e.clientY;
-    if (!p.moved && Math.hypot(p.x - p.x0, p.y - p.y0) >= TAP_PX) { p.moved = true; clearTimeout(this._lp); }
+    if (!p.moved && Math.hypot(p.x - p.x0, p.y - p.y0) >= TAP_PX) { p.moved = true; clearTimeout(this._lp); this._grab = null; }   // ab hier greifen – die ersten Tap-Pixel nicht auf einmal nachholen (Ruck)
     if (!p.moved || !this.enabled) return;
     const c = this.c, g = this.g;
     if (this.mode === 'pan' && this.ptr.size === 1) {
@@ -273,7 +275,9 @@ export class CameraRig {
   _wheel(e) {
     e.preventDefault(); if (!this.enabled) return;
     if (this.onWheel?.(e) === true) return;
-    const dy = e.deltaY * (e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? 400 : 1);
+    const unit = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? 400 : 1, dx = e.deltaX * unit, dy = e.deltaY * unit;
+    // seitlich wischen (Trackpad, Neigerad) = Insel drehen; Alt/Option + Rad = drehen statt zoomen
+    if (!e.ctrlKey && (Math.abs(dx) > Math.abs(dy) * 1.2 || e.altKey)) { this._cancelFly(); this.g.yaw += (e.altKey && !dx ? dy : dx) * .0035; this._emit('rotate'); return; }
     const f = clamp(Math.exp(dy * (e.ctrlKey ? .012 : .0018)), .5, 2);
     this.zoomAt(...this.ndc(e), f);
   }

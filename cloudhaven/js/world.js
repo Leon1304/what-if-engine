@@ -3,7 +3,7 @@
 // Leistung: Detailstufen je Kachel nach Abstand (updateLod), Kleinkram-Ebene 'detail' ohne Schatten, die Vorschau-Kachel
 // wird beim Setzen übernommen (kein zweiter Neubau), Nachbarn werden in den folgenden Bildern einzeln neu gebaut.
 import * as THREE from 'three';
-import { key, unkey, center, neighbor, pixelToHex, cornerAt, edgeMid, dist, R, INR } from './hex.js';
+import { key, unkey, center, neighbor, pixelToHex, cornerAt, edgeMid, R, INR } from './hex.js';
 import { edgesOf, GROUP, ROAD_OK, MERGE } from './tiles.js';
 import { MATS, ghostMat } from './materials.js';
 import { buildTile } from './models/tilemodel.js';
@@ -18,15 +18,13 @@ export class World {
     this.ghostOk = ghostMat(0x9fe08a); this.ghostBad = ghostMat(0xe86a5a);
     this.queue = []; this.onRebuilt = null;            // Nachbarn, die in den nächsten Bildern neu gebaut werden
     this.lodOpt = { minPx: 1.2, detailFar: 80, shadowTexel: 0 };
-    // Verschmelzen: Spielfeld (Bodenplatten + Rand), Vorschau (Ringe + Bögen), Animation (Geister fliegen ins Ziel)
-    this.fieldMesh = null; this.mp = null; this.mpKey = ''; this.mAnim = null; this.onMergeFx = null;
+    // Verschmelzen (in jedem Modus): Vorschau (Ringe + Bögen), Animation (Geister fliegen ins Ziel)
+    this.mp = null; this.mpKey = ''; this.mAnim = null; this.onMergeFx = null;
     const basic = (c, o = {}) => new THREE.MeshBasicMaterial({ color: c, transparent: true, depthWrite: false, ...o });
-    this.mMat = { plate: basic(0xffffff, { vertexColors: true, side: THREE.DoubleSide }), rim: basic(0xffcf5a, { opacity: .9, side: THREE.DoubleSide }),
-      flash: basic(0xfff3c8, { blending: THREE.AdditiveBlending, opacity: 0 }),
+    this.mMat = { flash: basic(0xfff3c8, { blending: THREE.AdditiveBlending, opacity: 0 }),
       step: STEP_COL.map(c => ({ ring: basic(c, { opacity: .8, depthTest: false, side: THREE.DoubleSide }), arc: basic(c, { opacity: .9, depthTest: false }) })) };
     this.flash = new THREE.Mesh(new THREE.SphereGeometry(1, 20, 12), this.mMat.flash); this.flash.visible = false; this.flash.renderOrder = 6; scene.add(this.flash);
   }
-  get merge() { return this.game.S?.mode === 'verschmelzen'; }
   nb(q, r) { const out = []; for (let i = 0; i < 6; i++) { const n = this.game.at(...neighbor(q, r, i)); out.push(n ? { k: n.k, E: edgesOf(n.k, n.o) } : null); } return out; }
   // Nur das, was terrain.js makeField von den Nachbarn liest: Bachkante → Nachbar da? (sonst Wasserfall),
   // Seekante → Gegenkante, Wiesenkante einer Weg-Kachel → zeigt ein Weg herein? (Andere Nachbarn lösen keinen Neubau aus.)
@@ -126,14 +124,12 @@ export class World {
     }
     return out;
   }
-  bounds() { let r = 10; for (const o of this.T.values()) r = Math.max(r, Math.hypot(o.cx, o.cz) + R); if (this.merge) r = Math.max(r, R * Math.sqrt(3) * (this.game.S.maxR ?? 3) + R); return r; }
+  bounds() { let r = 10; for (const o of this.T.values()) r = Math.max(r, Math.hypot(o.cx, o.cz) + R); return r; }
 
   // Freie Plätze als weiche Sechseck-Umrisse
   updateSlots(show = true) {
     if (this.slotMesh) { this.scene.remove(this.slotMesh); this.slotMesh.geometry.dispose(); this.slotMesh = null; }
-    if (this.fieldMesh) { this.scene.remove(this.fieldMesh); this.fieldMesh.traverse(m => m.isMesh && m.geometry.dispose()); this.fieldMesh = null; }
     if (!show) return;
-    if (this.merge) this._field();
     const pts = [];
     for (const [q, r] of this.game.slots()) {
       const { x, z } = center(q, r);
@@ -232,7 +228,7 @@ export class World {
     const add = (mat, cast, recv) => { const m = new THREE.Mesh(geo, mat); m.castShadow = cast; m.receiveShadow = recv; m.frustumCulled = false; g.add(m); };
     for (const [layer, mat] of Object.entries(MATS)) for (const cast of [true, false]) for (const recv of [true, false]) add(mat, cast, recv);
     add(MATS.base, false, true); add(this.ghostOk, false, false); add(this.ghostOk, false, true); add(this.ghostBad, false, true);
-    add(this.mMat.plate, false, false); add(this.mMat.rim, false, false); add(this.mMat.flash, false, false);
+    add(this.mMat.flash, false, false);
     for (const m of this.mMat.step) { add(m.ring, false, false); add(m.arc, false, false); }
     g.userData.dispose = () => geo.dispose();
     return g;
@@ -260,43 +256,12 @@ export class World {
       }
     }
     if (this.slotMesh) this.slotMesh.material.opacity = .22 + .14 * Math.sin(now * 2.2);
-    if (this.fieldMesh) this.mMat.rim.opacity = .78 + .17 * Math.sin(now * 1.6);
     if (this.ghost) this.ghost.position.y = .5 + Math.sin(now * 3) * .15;
     if (this.mp) this._previewUpdate(now);
     if (this.mAnim) this._mergeUpdate(now);
   }
 
-  // ================= Modus „Verschmelzen“ =================
-  // Spielfeld: weiche Bodenplatten auf freien Feldern (Mitte fast durchsichtig, Rand heller) und ein goldener Rahmen ums Feld
-  _field() {
-    const G = this.game, R0 = G.S.maxR ?? 3, pos = [], col = [], rim = [], s = .94;
-    for (const [q, r] of G.slots()) {
-      const { x, z } = center(q, r);
-      for (let i = 0; i < 6; i++) {
-        const a = cornerAt(i), b = cornerAt((i + 1) % 6);
-        pos.push(x, PLATE_Y, z, x + a[0] * s, PLATE_Y, z + a[1] * s, x + b[0] * s, PLATE_Y, z + b[1] * s);
-        col.push(1, 1, 1, .05, 1, .98, .9, .34, 1, .98, .9, .34);
-      }
-    }
-    for (let q = -R0; q <= R0; q++) for (let r = -R0; r <= R0; r++) {
-      if (dist(q, r, 0, 0) > R0) continue; const { x, z } = center(q, r);
-      for (let i = 0; i < 6; i++) {
-        const [nq, nr] = neighbor(q, r, i); if (dist(nq, nr, 0, 0) <= R0) continue;
-        const a = cornerAt(i), b = cornerAt((i + 1) % 6), o = 1.03, w = 1.17;   // Kante i liegt zwischen Ecke i und i+1
-        const P = (c, f) => [x + c[0] * f, RIM_Y, z + c[1] * f];
-        rim.push(...P(a, o), ...P(b, o), ...P(b, w), ...P(a, o), ...P(b, w), ...P(a, w));
-      }
-    }
-    const g = new THREE.Group();
-    if (pos.length) {
-      const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); geo.setAttribute('color', new THREE.Float32BufferAttribute(col, 4));
-      const m = new THREE.Mesh(geo, this.mMat.plate); m.renderOrder = 1; g.add(m);
-    }
-    const rg = new THREE.BufferGeometry(); rg.setAttribute('position', new THREE.Float32BufferAttribute(rim, 3));
-    const rm = new THREE.Mesh(rg, this.mMat.rim); rm.renderOrder = 1; g.add(rm);
-    this.fieldMesh = g; this.scene.add(g);
-  }
-
+  // ================= Verschmelzen =================
   // Vorschau: betroffene Kacheln leuchten (Ring je Schritt in eigener Farbe) und heben sich, Bögen mit Pfeilspitze zum Ziel
   setMergePreview(steps, q, r) {
     const k = steps?.length ? q + ',' + r + ':' + steps.map(s => s.to + s.keys.join(';')).join('|') : '';
@@ -423,7 +388,7 @@ export class World {
   get merging() { return !!this.mAnim; }
 }
 const STEP_COL = [0xffd35a, 0xff8fd0, 0x8fd8ff, 0xb6ff8f];               // Ringe/Bögen je Kettenschritt
-const PLATE_Y = .12, RIM_Y = .22, RING_Y = .55, ARC_Y = 1.1;
+const RING_Y = .55, ARC_Y = 1.1;
 const MT = { D0: .38, STEP: .62, FLY: .42, GROW: .34 };                    // Zeiten der Verschmelz-Animation (s)
 const RING_GEO = (() => {                                                  // Sechseck-Ring (Kachelrand), liegt flach
   const p = [], a = .9, b = 1.0;
