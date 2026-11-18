@@ -82,6 +82,7 @@ Wird vom /whatif-Skill vor jedem Video gelesen und danach aktualisiert.
 | leech-collector (WJ5, History, gerendert 18.11.) | pink |
 | powder-monkey (WJ6, History, ernst, gerendert 18.11.) | blue |
 | pyramid-builders (WJ8, History, gerendert 18.11.) | orange |
+| flannan-lighthouse (WJ7, History, ernst, gerendert 18.11.) | yellow |
 | gta6-economy (Erklärvideo zum GTA-6-Launch, gerendert 18.11.) | green |
 
 ## Dr. Steve (nur Serien)
@@ -298,6 +299,7 @@ MB1 Megalodon in your pool ✔ gebaut → Abstimmung: A T. rex in the city · B 
 - leech-collector (WJ5, 18.11.): „The cheapest bait? You.“ · „Each one drinks up to ten milliliters… of you.“ · „The pay? Barely anything.“
 - powder-monkey (WJ6, 18.11., ernst): „One spark down here could sink the ship.“ · „The lid stays shut.“ · „At half past five, the guns fall silent.“
 - pyramid-builders (WJ8, 18.11.): „Your job: drag this up a ramp.“ · „Your pay? Bread and beer.“ · „Die? You get a tomb by the pyramid.“
+- flannan-lighthouse (WJ7, 18.11., ernst): „You are their relief.“ · „Eleven days… no light.“ · „The creepy logbook? Fake.“ · „They were never found.“
 - plague-doctor-1656 (WJ3, 17.11., ernst): „The city pays you to go where nobody will.“ · „Your mask? Built on a mistake.“
 - gta6-economy (Erklärvideo, 18.11.): „No movie was that fast.“ · „That’s a billion dollars.“
 
@@ -354,6 +356,7 @@ MB1 Megalodon in your pool ✔ gebaut → Abstimmung: A T. rex in the city · B 
 - leech-collector: – (kein Slang)
 - powder-monkey: – (kein Slang)
 - pyramid-builders: – (kein Slang)
+- flannan-lighthouse: – (kein Slang)
 - plague-doctor-1656: – (kein Slang)
 - gta6-economy: – (kein Slang)
 
@@ -405,6 +408,7 @@ Die Bewertungskarte ist seit 11.11.2026 abgeschafft; jedes Video endet mit Endca
 - leech-collector: „So doctors ask:“
 - powder-monkey: „Two centuries on:“
 - pyramid-builders: „Next shift:“
+- flannan-lighthouse: „So the island asks:“
 - plague-doctor-1656: „So ask yourself:“ (versehentlich gleich wie gong-farmer; nicht noch einmal verwenden)
 - gta6-economy: „Back to the question:“
 - Archiv der alten Bewertungskarten (Pointen nicht wiederverwenden): ZF1 „Barn: gone. Vibes: immaculate.“ · ZF2 „Great acoustics. Terrible neighbors.“ · ZF3 „Corn every day. Would not recommend.“ · ZF4 „Loud. Smelly. Better than walking.“ · ZF5 „Warm. Way too warm.“ · ZF6 „Great views. Zero fuel.“ · NL1 „Great weather. Zero free will.“ · E19 „Forty-two minutes. No snacks.“ · E24 „Twenty years. Zero lasers.“ · E1 „Perfect landing. Terrible snacks.“ · E6 „Sixty hours, lost to a grandma.“ · Bouncing Betty „Built to jump. Still in the ground.“ · Groundskeeper „Great traps. Cellar smells terrible.“
@@ -465,3 +469,4 @@ Die Bewertungskarte ist seit 11.11.2026 abgeschafft; jedes Video endet mit Endca
 | 2026-11-18 | What if you were a powder monkey at Trafalgar? (powder-monkey, WJ6 Worst Jobs in History, History, 45,0 s, blue, Erzähler Adam, Engine v3.55: gunDeck(), navalGun(), powderMagazine(), cartridgeCase()/cartridge(), ship('firstrate'), Kostüme powderboy + sailor1805, AMB gundeck/hold/seabattle, SFX gunrun/felt; Trafalgar 1805: du bist 13 auf HMS Victory, holst eine Kartusche durch den nassen Filzvorhang der Kupferkammer unter der Wasserlinie, kletterst durchs verrauchte Batteriedeck, übergibst sie am feuernden 32-Pfünder, duckst dich hinter die Bordwand; um 17:30 schweigen die Kanonen; ernst, ohne Blut; Faktenkarte 12 Jahre (Royal Museums Greenwich · Historic UK); Zähler Shift ends in 5h 30m; kein Mythos) | WJ6 | – | Endcard A/B/C · Loop „Two centuries on:“ | nein |
 | 2026-11-18 | What happens to the world economy when GTA 6 drops? (gta6-economy, Erklärvideo zum Launch am 19.11., 39,7 s, green, Erzähler Adam, Engine v3.56: `stockScreen()` (Börsentafel mit Kurslinie, Eilmeldung, Laufband), `pallet({ load: 'cash' })`, `cinema()`, `gameCase()`; Mitternachtsstart vor dem Laden mit Countdown und Geldregen, leeres Kino, Kasse, zehn Geldpaletten = 1 Mrd. $ vor der Bank, Kurssturz „RELEASE DELAYED“, leeres Büro, du auf dem Sofa, Globus mit Bhutan; Rate-Frage Film oder Land → beides; Faktenkarte $3.2B (DFC Intelligence via FT); keine Logos; Thumbnails A/B) | – | – | Endcard Call in sick / Play after work / Skip it · Loop „Back to the question:“ | nein |
 | 2026-11-18 | What if you built the pyramids? (pyramid-builders, WJ8 Worst Jobs in History, History, 44,0 s, orange, Erzähler Adam, Engine v3.57: pyramidSite(), sled({ kind: 'sledge' }) + haul(), mudbrick() house/bakery/gallery/tomb, splint(), food conebread/beerjar, Kostüme egyptworker + egyptoverseer, biome/dress 'giza', backdrop('nile'), AMB worksite, SFX sledge/heave/thud, Musikstil middleeast; Gizeh um 2560 v. Chr.: du ziehst mit deinem Trupp einen 2,5-t-Block auf dem Holzschlitten zur Rampe, ein Mann gießt Wasser auf den Sand, Trupp-Marke „Friends of Khufu“, abends Brot und Bier in der Arbeiterstadt, ein Arzt schient einen Arm, Arbeitergräber am Fuß der Pyramide; Faktenkarte 11 Rinder am Tag (Redding / AERA); Zähler Shift ends in 10h → 0 und Blocks placed / 2.3M; Mythos „von Sklaven gebaut“ → FALSE) | WJ8 | – | Endcard Yes, for the beer / Only as the water guy / No way, too hot · Loop „Next shift:“ | nein |
+| 2026-11-18 | What if you were a lighthouse keeper on the Flannan Isles? (flannan-lighthouse, WJ7 Worst Jobs in History, History, 45 s, yellow, Erzähler Adam, Engine v3.58: rockIsland(), cliffStairs() mit Sturmschaden, cliffWave(), lighthouse kind stone, ship steamer, Kostüme keeper/oilskins, interior keeper, AMB gale/shelter, SFX wavecrash/steamwhistle/gull; Eilean Mòr, Dez. 1900: am 15.12. ist das Licht aus, ein Sturm hält das Ablöseschiff elf Tage fest, am 26.12. findest du Tor zu, Betten ungemacht, Uhr stehengeblieben, ein Ölzeug am Haken, Westanlegestelle verwüstet, Rückblende Riesenwelle in Zeitlupe; Faktenkarte 110 ft (Muirhead-Bericht 1901); Zähler Days without light 0 → 11; Mythos Logbuch-Einträge → FALSE (Ernest Fallon, 1929); ernst, keine Leichen) | WJ7 | – | Endcard A giant wave / Something else / We will never know · Loop „So the island asks:“ | nein |
