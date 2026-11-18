@@ -7277,7 +7277,7 @@ function stockScreen(p, w, h, o = {}) {
   if (o.sound !== false) for (const q of news) sfx(q[0], q[2] === 'good' ? 'ding' : 'alarm', q[2] === 'good' ? 0.45 : 0.22);
   return { ...P, price };
 }
-// cinema(p, x, z, { name: 'CINEMA', lines: ['NOW SHOWING', 'BIG MOVIE'], color, trim, neon, w: 16, h: 9, d: 12, ry, chase: 6 }) → { g, door, booth } — v3.54 movie theater:
+// cinema(p, x, z, { name: 'CINEMA', lines: ['NOW SHOWING', 'BIG MOVIE'], color, trim, neon, w: 16, h: 9, d: 12, ry, chase: 6 }) → { g, door, booth } — v3.56 movie theater:
 //   plaster box with plinth and cornice, marquee canopy (two lit letter boards, chasing bulbs on both edges, soffit lights), vertical neon blade sign, glass doors with push bars,
 //   framed poster cases (generic posters, no real films), ticket booth with window and talk-hole, rope posts. Front at z (+z), body to −z, canopy to z + 2.6. Bulbs chase as a pure function of t
 function cinema(p, x, z, o = {}) {
