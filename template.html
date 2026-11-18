@@ -399,6 +399,7 @@ const CFG = {
   numbers: null,           // 'few' (default in explainer / conspiracy videos: meters without a figure, no +/− pop-ups) | 'all'
   statStagger: 0.45,       // stats appear one after another (s between them); countUp: 0.7 = numbers count up when they appear
   transition: 'auto',      // cuts: auto (whip, whip, zoom …) | whip | zoom | dip | blur | cut — per key: tr, td, dir
+  lively: true,            // v3.59: livelier picture and sound — dress() on every set, QA: SPARSE counts, crowds react in a wave, foreground wipes (docs/API.md „Lebendigkeit“)
   autoCut: true            // v3.44: shots longer than CFG.maxShot (2.5 s; hook 1.5 s) are split on the narration into punch-in / angle / detail / reaction ("you" lines → char('you')); shot(…, { cuts: false }) keeps one whole
 };
 const LIVE = {};           // scene → story bridge (e.g. LIVE.zombies = t => …)
@@ -506,6 +507,13 @@ const AUDIO = {
 // v3.5: every CFG field the engine reads gets its documented default when a story leaves it out (short test stories had NaN sun / shadow box / camera → empty grey frames)
 for (const [k, v] of Object.entries({ dur: 22, seed: 7, filter: 'film', grain: 0.045, vignette: 0.4, saturation: 1.08, contrast: 1.05, shadows: true, area: 36, renderScale: 0.75, msaa: 2, sunAz: -35, handheld: 0.7, coverT: 1.0 })) if (CFG[k] === undefined) CFG[k] = v;
 const TAU = Math.PI * 2, DUR = CFG.dur, EXPORT = !!window.__EXPORT__;
+// v3.59 CFG.lively (new videos: on, set in the example story and the skill): one switch for a fuller, livelier picture and sound — every set gets dress()
+//   (biome(), bare ground() and city() included; the dress kind follows the scene: fields → farm, houses → suburb, sand → desert, snow → alpine / suburb-winter),
+//   QA: SPARSE counts in the gate (CFG.qaSparse true), crowds react in a wave from loud events (crowdWave, CFG.crowdWave) and close / mid shots get a foreground
+//   wipe on sideways camera moves (fgWipe, CFG.fgWipe). Each part can be switched off on its own (CFG.dress: false, qaSparse: 'info', crowdWave: false, fgWipe: false).
+//   Footsteps (CFG.steps) and Doppler pass-bys (CFG.doppler) are on in every video (old renders keep their embedded engine).
+const LIVELY = !!CFG.lively; if (LIVELY) { CFG.dress ??= true; CFG.qaSparse ??= true; }
+const _SETK = { field: 0, house: 0, city: 0 };   // v3.59 what the scene built (dress kind for bare ground / CFG.lively)
 const LAND = CFG.aspect === '16:9' || CFG.aspect === 'landscape', FOVK = CFG.fovScale ?? (LAND ? 0.68 : 1);   // v2.25: landscape 16:9 (normal YouTube video); vertical fov × FOVK keeps shots framed like 9:16
 if (LAND) { document.getElementById('stage').classList.add('land'); document.getElementById('xlsvg').setAttribute('viewBox', '0 0 100 56.25'); }
 // v3.50 live mode (CFG.live = { cam, autoplay, loop, maxW }): the page is a playable world for the game in sandbox/ — fills the window, free orbit camera
@@ -1349,6 +1357,7 @@ function groundRoadFix() {   // bake: rebuild the ground mesh finer when a road 
 
 // --- props (all face +z; ry rotates) ---
 function house(p, x, z, o = {}) {   // farmhouse: stone plinth, corner boards, framed windows with cross bars, shutters and flower boxes, panel door, shingled roof, porch with railing
+  _SETK.house++;
   const w = o.w ?? 4.6, d = o.d ?? 3.8, h = o.h ?? 2.7, g = stat(grp(p, x, 0, z, o.ry ?? 0)), NC = { cast: false };
   const wall = o.wall ?? '#E9DCC4', trim = o.trim ?? '#F4EFE6', roofC = o.roof ?? '#9C3B2E', rh = o.roofH ?? 1.6, D = d + 0.7, doorC = o.door ?? '#5B3A24', shut = o.shutter ?? shade(roofC, -0.08);
   box(g, w + 0.08, 0.2, d + 0.08, o.base ?? '#8C8478', 0, 0, 0, { surf: 'stone' });
@@ -1717,6 +1726,7 @@ function runBiome(kind, o) {
     if (sx > 90 || sz > 90 || B3.max.y - B3.min.y < 0.03 && sx * sz > 2000) return;   // ground, sea, sky
     const pad = m.parent?.userData?.wb ? 0.4 : 0.9; fillBox(B3.min.x - pad, B3.max.x + pad, B3.min.z - pad, B3.max.z + pad);
   });
+  for (const Rd of ROADS) for (const S of Rd.segs ?? []) fillSeg([S.ax, S.az], [S.ax + S.dx * S.L, S.az + S.dz * S.L], Rd.w / 2 + 0.3);   // v3.59: roads longer than 90 m were skipped above as 'ground' → tufts and pebbles on the asphalt
   for (const P of PATHS) for (let i = 1; i < P.p.length; i++) fillSeg(P.p[i - 1], P.p[i], 1.1);
   for (const [a, b, r] of HORDE_LANES) fillSeg(a, b, r * 0.9 + 1.5);
   _clearCams(OG, camSamples(0.25), { lens: 1.0, tall: 3 });   // v3.39: lens box + cone to the subject along every shot (was: 1.6 m strip, 6 m box per key, 8 m box per track)
@@ -1801,6 +1811,8 @@ function autoDress() {
   const s0 = _seed;
   runBiome(kind, { area: A, ring: ringOn ? [R0, R1] : [A, A], maxTrees: 90, backdrop: false, life: false, dry: true, grass, lush: kind === 'plain' && l > 0.25 ? undefined : false, flowers: l > 0.28 });
   _seed = s0;
+  if (CFG.dress && !_DRQ.length) dress(typeof CFG.dress === 'string' ? CFG.dress : _sceneDressKind(kind));   // v3.59: bare ground with CFG.dress / CFG.lively gets the full set dressing too (was: only biome())
+  else if (CFG.dress !== false && CFG.fgFrame !== false && !_DRQ.length && LIVELY) dress(_sceneDressKind(kind), { bg: false, edge: false, ground: false, wall: false, decals: false });
   backdrop(bd, { coast: GROUND.coast, r0: Math.max(150, R1 + 40) });
 }
 
@@ -1874,7 +1886,8 @@ function _clearCams(O, S, o = {}) {
   const lens = o.lens ?? 1.0, tall = o.tall ?? 3;
   for (const s of S) { const [px, , pz] = s.P, [lx, , lz] = s.L, d = Math.hypot(lx - px, lz - pz), rs = s.rs ?? 0.6;
     O.rect(px - lens, px + lens, pz - lens, pz + lens, 1); if (tall) O.rect(px - tall, px + tall, pz - tall, pz + tall, 2);
-    const n = Math.max(1, Math.ceil(d / (O.C * 0.8))); for (let i = 0; i <= n; i++) { const u = i / n, w = lerp(0.45, rs + 0.4, u); O.disk(lerp(px, lx, u), lerp(pz, lz, u), w, 1); }
+    const n = Math.max(1, Math.ceil(d / (O.C * 0.8))); for (let i = 0; i <= n; i++) { const u = i / n, w = lerp(0.45, rs + 0.4, u), x = lerp(px, lx, u), z = lerp(pz, lz, u);
+      O.disk(x, z, w, (o.high ?? LIVELY) && i < n && lerp(s.P[1], s.L[1], u) - groundH(x, z) > 3.5 ? 2 : 1); }   // v3.59 (CFG.lively): where the sight line runs over 3.5 m above the ground (high wide shots) only nothing tall — low props, bushes and rocks below it don't hide the subject (was: the whole cone bare → empty foreground)
     O.disk(lx, lz, rs + 0.35, 1); }
 }
 
@@ -2056,6 +2069,18 @@ dressProp('sack', { where: ['wall', 'edge', 'ground'], r: 0.5, h: 0.75, fn: (p, 
 dressProp('handcart', { where: ['bg', 'edge'], r: 1.5, h: 1.2, tall: true, face: 'wall', y0: true, fn: (p, x, z, ry) => { const C = cart(p, x, z, { kind: 'hand', ry, load: 'empty' }); C.g.userData.dyn = false; stat(C.g); return C.g; }, kinds: { medieval: 0.45, farm: 0.15 } });
 for (const [n, w] of [['woodpile', 0.8], ['haybale', 0.35], ['stump', 0.3]]) if (DRESS.props[n]) dressProp(n, { ...DRESS.props[n], kinds: { medieval: w } });   // v3.47
 const BIOME_DRESS = { giza: 'giza', farm: 'farm', forest: 'alpine', beach: 'beach', desert: 'desert', snow: 'alpine', swamp: 'farm', city: 'city', plain: 'suburb', 'plain-snow': 'suburb-winter', 'plain-sand': 'desert' };
+// v3.59 foreground wipes (band 'wipe', dress(…, { wipe }) / CFG.fgWipe, on with CFG.lively): a tall, thin thing close to the lens — tree trunk, lamp post, street light, sign pole —
+//   that the camera slides past in a sideways move; it crosses the edge of the frame soft (depth of field) and gives the move depth. Placed by _dressWipe() per shot.
+dressProp('wipePole', { where: ['wipe'], r: 0.2, h: 8.5, tall: true, fn: (p, x, z, ry, R) => utilityPole(p, x, z, { ry, h: 7.5 + R() * 2, seed: R() * 100, transformer: R() < 0.2 }).g, kinds: { farm: 1, suburb: 0.8, 'suburb-winter': 0.8, alpine: 0.6 } });
+dressProp('wipePalm', { where: ['wipe'], r: 0.25, h: 8, tall: true, fn: (p, x, z, ry, R) => tree(p, x, z, { kind: 'palm', size: 1.3 + R() * 0.3 }), kinds: { beach: 1 } });
+dressProp('wipeLamp', { where: ['wipe'], r: 0.25, h: 3, tall: true, fn: (p, x, z, ry) => lamp(p, x, z, { h: 2.9, intensity: 0, pool: false }), kinds: { suburb: 0.7, 'suburb-winter': 0.7, city: 0.5, medieval: 0.6 } });
+dressProp('wipeStreetlight', { where: ['wipe'], r: 0.3, h: 6.2, tall: true, fn: (p, x, z, ry) => streetlight(p, x, z, ry), kinds: { city: 1, apron: 0.6 } });
+dressProp('wipeSign', { where: ['wipe'], r: 0.25, h: 3, tall: true, fn: (p, x, z, ry, R) => streetSign(p, x, z, { ry, kind: 'street', seed: _sd(R) }), kinds: { city: 0.6, suburb: 0.3 } });
+dressProp('wipeCactus', { where: ['wipe'], r: 0.4, h: 3, tall: true, fn: (p, x, z) => cactus(p, x, z, { size: 1.3 }), kinds: { desert: 1 } });
+// v3.59 _sceneDressKind(plainKind): the dress kind for bare ground (autoDress) from what the scene built — towers / plazas → city, fields → farm, houses → suburb (snow: suburb-winter),
+//   sand → desert, snow → alpine, else farm (barrels, crates, woodpiles: fits most open land; plain → suburb put mailboxes and parked cars in fields)
+function _sceneDressKind(pk) { const snow = pk === 'plain-snow' || _snowOn({}); if (pk === 'plain-sand') return 'desert'; if (_SETK.city) return 'city'; if (_SETK.field) return 'farm'; if (_SETK.house) return snow ? 'suburb-winter' : 'suburb'; return snow ? 'alpine' : 'farm'; }
+let _cityDQ = false;
 
 // dress(kind, { area, density, keep, wall, ground, fg, bg, edge, seed, assets }): runs after the scene is built (DEFER, like biome()), own random numbers.
 //   area: [x0, z0, x1, z1] or [x, z, r] — only shots whose subject is inside, only props inside (default: every shot that fits the kind: indoor kinds take shots under a roof
@@ -2087,9 +2112,9 @@ function _runDress(kind, o) {
     for (let k = 0; k < 2; k++) { if (Math.abs(d[k]) < 1e-9) { if (Math.abs(a[k]) > h[k]) return false; continue; } let u = (-h[k] - a[k]) / d[k], v = (h[k] - a[k]) / d[k]; if (u > v) [u, v] = [v, u]; t0 = Math.max(t0, u); t1 = Math.min(t1, v); if (t0 > t1) return false; } return true; };
   const floorAt = (x, z, yRef) => { let best = -1e9; for (const B of FLATS) { if (B.y1 > yRef + 0.4 || B.y1 <= best) continue; const dx = x - B.x, dz = z - B.z; if (Math.abs(dx * B.ux + dz * B.uz) <= B.hx && Math.abs(dx * B.vx + dz * B.vz) <= B.hz) best = B.y1; }
     const g = groundH(x, z); return g <= yRef + 0.4 && g > best ? g : best > -1e9 ? best : g; };
-  const indoorAt = s => { const [x, y, z] = s.L; if (FLATS.some(B => B.y0 > y - 0.3 && B.y0 < y + 6 && B.lx * B.lz > 6 && Math.abs((x - B.x) * B.ux + (z - B.z) * B.uz) <= B.hx - 0.8 && Math.abs((x - B.x) * B.vx + (z - B.z) * B.vz) <= B.hz - 0.8)) return true;   // a ceiling over the subject (not an eave)
+  const indoorAt = s => { const [x, y, z] = s.L, fl0 = floorAt(x, z, y); if (FLATS.some(B => B.y0 > y - 0.3 && B.y0 > fl0 + 1.6 && B.y0 < y + 6 && B.lx * B.lz > 6 && Math.abs((x - B.x) * B.ux + (z - B.z) * B.uz) <= B.hx - 0.8 && Math.abs((x - B.x) * B.vx + (z - B.z) * B.vz) <= B.hz - 0.8)) return true;   // a ceiling over the subject (not an eave)
     let n = 0; for (let k = 0; k < 8; k++) { const a = k * Math.PI / 4, dx = Math.sin(a), dz = Math.cos(a); if (WALLS.some(B => B.y1 > y - 0.5 && B.y0 < y + 0.5 && hit2(B, x, z, dx, dz, 7))) n++; } return n >= 5; };
-  const IND = o.indoor !== undefined ? o.indoor : K.indoor;   // o.indoor: null = every shot in the area
+  const IND = o.indoor !== undefined ? o.indoor : K.indoor;   // o.indoor: null = every shot in the area · v3.59: a ceiling is at least 1.6 m over the floor under the subject (a yard plate / paving at the subject's feet made outdoor shots 'indoor' → skipped)
   const shotIn = new Map(); for (const s of S0) { if (!shotIn.has(s.shot)) shotIn.set(s.shot, { n: 0, ok: 0 }); const q = shotIn.get(s.shot); q.n++; if (inA(s.L[0], s.L[2]) && (IND == null || indoorAt(s) === IND)) q.ok++; }
   const S = S0.filter(s => { const q = shotIn.get(s.shot); return q.ok >= q.n / 2 && inA(s.L[0], s.L[2]); }); if (!S.length) { DRESSLOG.push({ kind, shots: 0, props: 0, note: 'no shot fits (area / indoor)' }); return; }
   for (const s of S) s.fl = s.foot ?? floorAt(s.L[0], s.L[2], s.L[1]);
@@ -2136,7 +2161,7 @@ function _runDress(kind, o) {
   const table = band => (K.bands[band] ?? []).filter(([n]) => { const P = DRESS.props[n]; return P && (band !== 'fg' || P.fgOk) && (!P.asset || MODELS[P.asset]) && !(P.dry && snowy) && !(P.snowOnly && !snowy); }).concat((o.assets ?? []).filter(n => MODELS[n] && (band === 'bg' || band === 'edge')).map(n => ['asset:' + n, 1]));
   const choose = L => { let tot = 0; for (const e of L) tot += e[1]; let r = R() * tot; for (const e of L) { r -= e[1]; if (r <= 0) return DRESS.props[e[0]]; } return DRESS.props[L[L.length - 1][0]]; };
   const lensOK = (x, z, y0, P, band, shotId) => { for (const s of S0) { const dd = Math.hypot(x - s.P[0], z - s.P[2]); if (dd > P.r + 3.5) continue; if (dd < P.r + 0.75) return false;
-      if (band === 'fg' && s.shot === shotId) continue; setCam(s); const q = rectOf(x, z, y0, P.r, P.h); if (q.behind) { if (dd < P.r + 1.5) return false; continue; } if (q.off) continue;
+      if ((band === 'fg' || band === 'wipe') && s.shot === shotId) continue; setCam(s); const q = rectOf(x, z, y0, P.r, P.h); if (q.behind) { if (dd < P.r + 1.5) return false; continue; } if (q.off) continue;
       if (area(q) > 0.12 || (q.d + q.b) / 2 > -0.2) return false; } return true; };   // near any lens: small and low in the frame (CAMCLIP), never straddling the lens plane
   const put = (P, x, z, ry, fl, band) => { ctx.floor = fl; ctx.band = band;
     if (P.cover) { const n = 3 + Math.floor(R() * 5), cols = P.colors ?? [shade(ctx.rock, (R() - 0.5) * 0.12)]; for (let i = 0; i < n; i++) { const xx = x + (R() - 0.5) * 2 * P.r, zz = z + (R() - 0.5) * 2 * P.r; (covers[P.cover] ??= []).push([xx, zz, P.cover === 'drift' ? 0.4 + R() * 0.7 : 0.6 + R() * 0.9, R() * TAU, _pk(R, cols)]); if (P.cover === 'bloom') (covers.stem ??= []).push([xx, zz, 0.9, 0, '#4E7A34']); } return true; }
@@ -2167,7 +2192,8 @@ function _runDress(kind, o) {
             if (B.y0 > fl + 0.3 || B.y1 < fl + (P.wallH ?? 1.2)) continue; }   // v3.39 wallH: wall-mounted props need that much wall (awning, lights)
           else {   // a ground point at a distance along the view that suits the band, sideways inside the frame (edge: its outer 55 %)
             const vx = s.L[0] - s.P[0], vz = s.L[2] - s.P[2], vd = Math.hypot(vx, vz) || 1, ux = vx / vd, uz = vz / vd, tw = Math.tan(THREE.MathUtils.degToRad(cam.fov) / 2) * cam.aspect;
-            const dl = band === 'bg' ? vd + 3 + R() * R() * 22 : band === 'edge' ? 2 + R() * (Math.min(16, vd + 6) - 2) : 1.5 + R() * (Math.min(10, vd + 4) - 1.5);
+            const bot = Math.atan2(s.P[1] - s.L[1], vd) + THREE.MathUtils.degToRad(cam.fov) / 2, off = LIVELY && bot > 0.05 ? Math.max(0, (s.P[1] - s.fl) / Math.tan(Math.min(1.5, bot)) - 1) : 0;   // v3.59 (CFG.lively): edge / ground start where the frame's lower edge meets the ground (a camera 30 m up sees the ground from ~25 m on; 2–16 m was all below the frame)
+            const dl = band === 'bg' ? vd + 3 + R() * R() * 22 : band === 'edge' ? off + 2 + R() * (Math.max(4, Math.min(16, vd + 6 - off)) - 2) : off + 1.5 + R() * (Math.max(3, Math.min(10, vd + 4 - off)) - 1.5);
             const k = band === 'edge' ? (R() < 0.5 ? -1 : 1) * (0.5 + R() * 0.5) : R() * 2 - 1, lat = k * tw * dl;
             x = s.P[0] + ux * dl - uz * lat; z = s.P[2] + uz * dl + ux * lat; fl = K.indoor ? s.fl : floorAt(x, z, s.fl + 0.15); if (Math.hypot(x - s.P[0], z - s.P[2]) > 45) { no('band'); continue; } }
           if (P.face === 'cam') ry = Math.atan2(s.P[0] - x, s.P[2] - z) + Math.PI / 2 + (R() - 0.5) * 0.5;
@@ -2178,7 +2204,8 @@ function _runDress(kind, o) {
           const lift = P.lift ?? 0;   // v3.39 lift: a wall-mounted prop starts that high (awning, AC unit, lights) — only that height band must be free
           if (kb) { const D = caps(x, z, P, kb.ax, kb.az); if (D.some(([a, b, w]) => !O.clear(a, b, w + 0.05, 1 | 4 | 128 | (P.tall ? 2 : 0)))) { no('occupied'); continue; } if (D.some(([a, b, w]) => hitsObj(a, b, w + 0.05, fl + 0.12, fl + P.h, null))) { no('touches'); continue; } }
           else { const sm = P.r <= 0.5 && !P.tall, mask = 1 | 64 | (band === 'wall' || sm ? 0 : 8) | (sm ? 0 : 128) | (P.tall && band !== 'fg' ? 2 : 0);   // v3.39: small props may stand right next to a building (the exact footprint test below still applies)
-            if (!O.clear(x, z, band === 'wall' ? Math.max(0.1, P.r - 0.2) : P.r + (P.flat ? 0 : 0.1), P.cover ? 16 | 32 : P.flat ? 16 : mask)) { no('occupied'); continue; }   // ground cover and flat decals may lie on walk paths and in the line of sight
+            if (!O.clear(x, z, band === 'wall' ? Math.max(0.1, P.r - 0.2) : P.r + (P.flat ? 0 : 0.1), P.cover ? ((P.cover === 'reed' || P.h > 0.45) && LIVELY ? 1 | 16 | 32 : 16 | 32) : P.flat ? 16 : mask)) { no('occupied'); continue; }   // v3.59 (CFG.lively): tall cover (reeds) stays out of the sight line
+            if (P.cover && P.cover !== 'drift' && P.on !== 'road' && onRoad(x, z, -0.3)) { no('onroad'); continue; }   // v3.59: grass tufts, reeds, pebbles … never on the asphalt (they stood on roads)   // ground cover and flat decals may lie on walk paths and in the line of sight
           if (!P.flat && !P.cover && hitsObj(x, z, P.r + (band === 'wall' ? 0.02 : 0.15), fl + lift, fl + lift + P.h, wallB)) { no('touches'); continue; } }
           if (!P.flat && FLATS.some(B => B.y0 > fl + 0.2 && B.y0 < fl + P.h + 0.15 && Math.abs((x - B.x) * B.ux + (z - B.z) * B.uz) <= B.hx + P.r && Math.abs((x - B.x) * B.vx + (z - B.z) * B.vz) <= B.hz + P.r)) { no('ceiling'); continue; }   // under a low ceiling / table
           // screen: how much empty frame it fills (all reps of the shot), never over the subject (bg: behind it is fine, a little)
@@ -2204,6 +2231,27 @@ function _runDress(kind, o) {
       }
     }
   }
+  if (!K.indoor && (o.wipe ?? (LIVELY && CFG.fgWipe !== false)) && (K.bands.wipe ?? []).length) {   // v3.59 foreground wipes: one per sideways-moving close / mid shot (max 4 per call)
+    NEAR = [...OBJ, ...WALLS]; curB = 'wipe'; let nw = 0; const WL = table('wipe');
+    for (const sid of shots) { if (nw >= (o.wipeMax ?? 4) || !WL.length) break; const SS = S.filter(s2 => s2.shot === sid); if (SS.length < 3) continue; const a = SS[0], b = SS[SS.length - 1], m = SS[Math.floor(SS.length / 2)];
+      const vx = m.L[0] - m.P[0], vz = m.L[2] - m.P[2], vd = Math.hypot(vx, vz) || 1, rx = vz / vd, rz = -vx / vd, lat = (b.P[0] - a.P[0]) * rx + (b.P[2] - a.P[2]) * rz;
+      const ya = Math.atan2(a.L[0] - a.P[0], a.L[2] - a.P[2]), yb = Math.atan2(b.L[0] - b.P[0], b.L[2] - b.P[2]), turn = Math.abs(Math.atan2(Math.sin(yb - ya), Math.cos(yb - ya)));
+      if (vd > 12 || (Math.abs(lat) < 1.2 && turn < 0.3)) { no('still'); continue; }
+      let best = null;
+      for (let c = 0; c < 60; c++) { const P = choose(WL); if (!P) continue; setCam(m); const tw = Math.tan(THREE.MathUtils.degToRad(cam.fov) / 2) * cam.aspect, dl = 1.6 + R() * Math.min(4.4, vd * 0.55), side = R() < 0.5 ? -1 : 1, kx = side * (0.55 + R() * 0.5), lt = kx * tw * dl;
+        const x = m.P[0] + vx / vd * dl + rx * lt, z = m.P[2] + vz / vd * dl + rz * lt, fl = floorAt(x, z, m.fl + 0.15);
+        if (!inA(x, z) || wet(x, z, fl) || Math.abs(fl - m.fl) > 1.2) { no('area'); continue; }
+        if (!O.clear(x, z, P.r + 0.1, 4 | 8 | 64 | 128)) { no('occupied'); continue; } if (hitsObj(x, z, P.r + 0.15, fl, fl + P.h, null)) { no('touches'); continue; }   // the lens cone (bit 1) may be crossed — the frame test below keeps the subject clear
+        if (PATHS.some(Q => { const w = (Q.kind === 'drive' ? 2.5 : Q.kind === 'sail' ? 3.2 : 1.1) + P.r; for (let i = 1; i < Q.p.length; i++) { const [ax, az] = Q.p[i - 1], [bx, bz] = Q.p[i], ex = bx - ax, ez = bz - az, u = clamp(((x - ax) * ex + (z - az) * ez) / (ex * ex + ez * ez || 1)); if (Math.hypot(x - ax - ex * u, z - az - ez * u) < w) return true; } return false; })) { no('path'); continue; }
+        if (RIGS.some(f2 => f2.root?.parent === world && Math.hypot(f2.root.position.x - x, f2.root.position.z - z) < P.r + 0.9) || (o.keep ?? []).some(([kx2, kz2, kr]) => Math.hypot(x - kx2, z - kz2) < kr + P.r)) { no('figure'); continue; }
+        if (SS.some(s2 => Math.hypot(x - s2.P[0], z - s2.P[2]) < P.r + 0.9)) { no('lens'); continue; }   // never at / through the lens along the move
+        let vis = 0, mid = 0, px = null, dmax = 0; for (const s2 of SS) { setCam(s2); _v.set(x, fl + 1.3, z).project(cam); _w.set(x, fl + 1.3, z).applyMatrix4(cam.matrixWorldInverse); if (_w.z > -0.3) continue; const sx = _v.x, su = _q.set(s2.L[0], s2.L[1], s2.L[2]).project(cam).x; if (Math.abs(sx) < 0.97) vis++; if (Math.abs(sx - su) < 0.4 || Math.abs(sx) < 0.2) mid++; if (px != null) dmax = Math.max(dmax, Math.abs(sx - px)); px = sx; }   // mid: over the subject (its look point) or the middle of the frame
+        const fr = vis / SS.length; if (mid > (P.r <= 0.35 && dmax > 0.8 ? 1 : 0) || fr < 0.15 || fr > 0.85) { no('frame'); continue; }   // it slides across an edge of the frame or wipes through fast (a thin one over the subject only when it rushes past: one 0.25 s sample, > 0.4 frame widths per sample), never the whole shot long
+        if (!lensOK(x, z, fl, P, 'wipe', sid)) { no('lens'); continue; }
+        const sc = 1 - Math.abs(fr - 0.5) + R() * 0.2; if (!best || sc > best.sc) best = { sc, P, x, z, fl }; }
+      if (!best || !put(best.P, best.x, best.z, R() * TAU, best.fl, 'wipe')) continue;
+      O.disk(best.x, best.z, best.P.r + 0.35, 1); O.disk(best.x, best.z, best.P.r, 4); const B = { x: best.x, z: best.z, ux: 1, uz: 0, vx: 0, vz: 1, hx: best.P.r, hz: best.P.r, y0: best.fl, y1: best.fl + best.P.h, lx: 2 * best.P.r, ly: best.P.h, lz: 2 * best.P.r }; OBJ.push(B); NEAR.push(B);
+      placed.push(best.P.name); at.push([best.P.name, 'wipe', +best.x.toFixed(1), +best.z.toFixed(1)]); nw++; nPut++; } }
   // v3.39 traces: footprints behind walkers in snow (they appear as the feet pass), tyre tracks along drive() paths off the asphalt in snow, mud, sand (o.decals: false = none)
   if (!K.indoor && o.decals !== false) { const nearShot = (x, z) => inA(x, z) && S.some(s2 => Math.hypot(x - s2.L[0], z - s2.L[2]) < 30); let nf = 0, nt = 0;
     if (snowy || K.prints) for (const { obj: f } of WALKS) { if (!f?.legL || !f._posAt || f._crowdHero || f.root?.parent !== world || nf >= 12) continue; let a = null, b = null, best = [0, -1];
@@ -2459,6 +2507,7 @@ const _cropG = crop => G('crop3|' + crop, () => {
 });
 const _cropMat = sway => G('cropMat|' + sway, () => { const m = new THREE.MeshStandardMaterial({ color: '#ffffff', vertexColors: true, flatShading: true, roughness: 0.9, side: THREE.DoubleSide }); if (sway) windify(m, 'local'); return m; });
 function field(p, x, z, w, d, o = {}) {   // crop rows (instanced); crop: corn | wheat | cabbage
+  _SETK.field++;
   const g = grp(p, x, 0, z, o.ry ?? 0), crop = o.crop ?? 'wheat';
   box(g, w, 0.08, d, o.soil ?? (crop === 'wheat' ? '#6E5A36' : '#5A4330'), 0, 0, 0, { cast: false, stat: true });   // v3.5: stubble-brown under wheat (gaps don't read as dark soil)
   const rows = o.rows ?? Math.floor(d / (crop === 'wheat' ? 0.55 : 1.1)), cols = Math.floor(w / (crop === 'corn' ? 0.9 : crop === 'wheat' ? 0.45 : 0.7));
@@ -2721,6 +2770,7 @@ function fly(obj, pts, o = {}) {
   const poseC = (m, t) => { const r = m.poseAt(t), i = FL.indexOf(m), u = t - m.t0; if (i > 0 && u < 0.6) { const q = FL[i - 1].poseAt(m.t0), k = sm01(Math.max(0, u) / 0.6); for (const j of [1, 2, 3]) r[j] = q[j] + wrap(r[j] - q[j]) * k; } return r; };   // a segment that sets off in a new direction turns (and pitches, banks) into it — no snap
   node._fly = t => poseC(pick(t), t);   // pure pose at any time (engine trails, follow cams) — over all segments
   if (!o.loop && FL.length === 1) MOVERS.push({ node, kind: 'fly', ok: o.passThrough });
+  if (FL.length === 1 && o.doppler !== false) SOUNDSRC.push({ kind: null, node, fly: true, posAt: t => { const q = node._flys, w = q.reduce((a, b) => b.t0 <= t ? b : a, q[0]), r = w.poseAt(t)[0]; return node.parent && node.parent !== world ? node.parent.localToWorld(new THREE.Vector3(r[0], r[1], r[2])) : new THREE.Vector3(r[0], r[1], r[2]); }, vol: o.doppler ?? 1 });   // v3.59 Doppler (kind: heli / plane / jet, decided in dopplerPass)
   return tick(t => { if (FL.length > 1 && pick(t) !== me) return; const [p, rx, ry, rz] = poseC(me, t); node.position.set(p[0], p[1], p[2]); node.rotation.set(rx, ry, rz); });
 }
 // --- street furniture ---
@@ -2936,6 +2986,24 @@ function cloth(p, o = {}) {   // wall: true = hangs in front of a wall (local +z
   return g;
 }
 // flagpole(p, x, z, { h, colors: [hex…], w, fh }) — pole with a waving flag (horizontal stripes)
+// v3.59 utilityPole(p, x, z, { h: 8.5, ry, lean: 0.02, color, arm: true, transformer: false, flyers: true, seed }) → { g, top }: wooden utility pole — tapered, slightly leaning trunk with
+//   weathered grain bands and a darker foot, crossarm with brace and three glass insulators, metal step bolts from 2.4 m, grounding wire down one side, ID tag, staples and torn
+//   flyers at eye height, optional transformer can. Thin (0.13 m at the top): good as a foreground wipe (dress band 'wipe') and as a street / farm prop.
+function utilityPole(p, x, z, o = {}) {
+  const H = o.h ?? 8.5, sd = o.seed ?? hash(x * 1.7 + z * 3.1), g = stat(grp(p, x, groundH(x, z), z, o.ry ?? 0)), col = o.color ?? shade('#6E5A44', (hash(sd * 7) - 0.5) * 0.1), NC = { cast: false };
+  const tr = grp(g, 0, 0, 0); tr.rotation.z = (o.lean ?? 0.02) * (hash(sd * 3) < 0.5 ? -1 : 1); tr.rotation.x = (o.lean ?? 0.02) * (hash(sd * 5) - 0.5);
+  cyl(tr, 0.13, 0.17, H, col, 0, 0, 0, { seg: 10 }); cyl(tr, 0.172, 0.18, 0.7, shade(col, -0.22), 0, 0, 0, { seg: 10 });   // creosote-dark foot
+  for (let i = 0; i < 4; i++) { const y = 1.2 + i * 1.7 + hash(sd * 11 + i) * 0.6; cyl(tr, 0.166 - y * 0.0045, 0.167 - y * 0.0045, 0.05, shade(col, -0.12 + 0.06 * (i % 2)), 0, y, 0, { seg: 10, ...NC }); }   // weathered grain bands
+  if (o.arm !== false) { box(tr, 1.9, 0.11, 0.11, shade(col, -0.05), 0, H - 0.55, 0.15); box(tr, 0.07, 0.6, 0.06, '#5A5E64', -0.35, H - 1.05, 0.12, NC); box(tr, 0.07, 0.6, 0.06, '#5A5E64', 0.35, H - 1.05, 0.12, NC);
+    for (const ix of [-0.8, 0, 0.8]) { cyl(tr, 0.015, 0.015, 0.1, '#7A7E84', ix, H - 0.44, 0.15, { seg: 6, ...NC }); cyl(tr, 0.045, 0.06, 0.13, '#5FA88A', ix, H - 0.36, 0.15, { seg: 8, ...NC, mat: mat('#5FA88A', { kind: 'glass' }) }); } }
+  for (let y = 2.4; y < H - 1.2; y += 0.45) box(tr, 0.24, 0.022, 0.022, '#6A6E74', 0, y, 0, { ...NC, ry: (Math.round(y / 0.45) % 2) * Math.PI / 2 });   // step bolts, alternating
+  box(tr, 0.012, H - 0.6, 0.012, '#3A3C40', 0.0, 0.1, 0.17, NC);   // grounding wire
+  box(tr, 0.12, 0.08, 0.008, '#C8CCD2', 0, 2.05, 0.168, NC); box(tr, 0.1, 0.012, 0.009, '#2A2C30', 0, 2.08, 0.169, NC);   // ID tag
+  if (o.flyers !== false) for (let i = 0; i < 3; i++) { const a = hash(sd * 13 + i) * TAU, y = 1.35 + hash(sd * 17 + i) * 0.5, c = ['#EDE6D2', '#F2D35E', '#E8A0A0', '#D8E2EA'][Math.floor(hash(sd * 19 + i) * 4)], w = 0.14 + hash(sd * 23 + i) * 0.1, f = grp(tr, Math.sin(a) * 0.16, y, Math.cos(a) * 0.16, a);
+    box(f, w, w * (1.1 + hash(i) * 0.4), 0.004, c, 0, 0, 0, NC); for (const sx of [-1, 1]) box(f, 0.012, 0.004, 0.006, '#8A8E94', sx * w * 0.4, w * 1.05, 0.003, NC); }   // torn flyers with staples
+  if (o.transformer) { cyl(tr, 0.24, 0.24, 0.75, '#8A9096', 0, H - 2.4, -0.38, { seg: 12 }); cyl(tr, 0.25, 0.25, 0.05, '#6A7076', 0, H - 1.66, -0.38, { seg: 12, ...NC }); box(tr, 0.08, 0.3, 0.12, '#6A7076', 0, H - 2.2, -0.16, NC); }
+  return { g, top: [x, groundH(x, z) + H, z] };
+}
 function flagpole(p, x, z, o = {}) { const H = o.h ?? 5, g = stat(grp(p, x, groundH(x, z), z, o.ry ?? 0)); cyl(g, 0.05, 0.06, H, '#D8DCE2', 0, 0, 0, { seg: 8 }); ball(g, 0.08, '#E3B23C', 0, H + 0.05, 0, { detail: 0 });
   cloth(p, { x, y: groundH(x, z) + H - 0.05, z, ry: o.ry ?? 0, w: o.w ?? 1.5, h: o.fh ?? 0.95, stripes: o.colors ?? ['#2E6FD9', '#F2F2F2', '#D94F3D'] }); return g; }
 // laundry(p, [[x,z],[x,z]], { h, items }) — washing line with clothes that flap
@@ -3902,6 +3970,10 @@ function walk(obj, pts, o = {}) {
     im.castShadow = false; im.frustumCulled = false; im.userData.cover = true; world.add(dyn(im)); const life = o.printLife ?? 1e9;
     tick(t => { items.forEach(([x, z, yw, ta], i) => { const u = t - ta, k = u < 0 ? 0 : u > life ? Math.max(0, 1 - (u - life) / 2) : 1; o3.position.set(x, groundH(x, z) + 0.012, z); o3.rotation.set(0, yw, 0); o3.scale.setScalar(k * sc); o3.updateMatrix(); im.setMatrixAt(i, o3.matrix); }); im.instanceMatrix.needsUpdate = true; });
   }
+  if (obj.legL && Clw > 0 && !o.loop && o.steps !== false) {   // v3.59 footsteps: when and where each foot touches down (same step grid as the prints) → stepsPass() turns them into sounds
+    const Sd = (GAIT[mode] ?? GAIT.walk).b * Clw; me.mode = mode; me.stepVol = o.steps ?? 1;
+    me.steps = () => { const R = []; for (let k = 0; k < 800; k++) { const sk = (k / 2 - u0) * Clw; if (sk < 0) continue; if (sk > sE + 1e-6) break; let lo = 0, hi = Math.min(Te, 1e4); for (let i = 0; i < 36; i++) { const m = (lo + hi) / 2; if (dist(m) < sk) lo = m; else hi = m; }
+        const P = path.at(Math.min(sk + Sd / 2, path.len)); R.push([tS + hi, P.x, P.z]); } return R; }; }
   if (SX) { let lo = 0, hi = Math.max(0, Te); for (let i = 0; i < 30; i++) { const m = (lo + hi) / 2; if (dist(m) < Math.min(0.6, sE)) lo = m; else hi = m; } SX.clr = tS + hi; }   // hitboxes back once it walked 0.6 m off the seat
   const T = tick(t => {
     if (WK.length > 1 && pick(t) !== me) return;   // v2.31: several walks on one figure hand over at their t0 (was: the walk written last held the figure at its start the whole time)
@@ -4747,7 +4819,8 @@ function drive(v, pts, o = {}) {   // o.jumps: [[t, h, airtime]] · o.bumpy: 0..
   const g = dyn(v.g ?? v), D = v._drv ??= [], F = o.follow;
   const last = D.length ? D.reduce((a, b) => b.t0 >= a.t0 ? b : a) : null;
   const t0 = (o.t0 ?? (last ? Math.min(last.tE, 1e8) : F ? -1e9 : 0)) + (o.delay ?? 0), prev = o.t0 == null ? last : null, t1 = o.t1 ?? 1e9;   // chained (no t0): sets off from the end of the segment before; with t0 it is planned on its own and hands over at t0
-  if (!D.length) MOVERS.push({ node: g, kind: 'drive', ok: o.passThrough, drift: o.drift, v });   // v3.39 v: camSamples() finds where a tracked v.g will be
+  if (!D.length) MOVERS.push({ node: g, kind: 'drive', ok: o.passThrough, drift: o.drift, v });
+  if (!D.length && o.doppler !== false) SOUNDSRC.push({ kind: g.userData.stand === 'truck' || g.userData.stand === 'bus' || g.userData.stand === 'tractor' ? 'truck' : 'car', node: g, posAt: t => { const P = v._posAt(t); P.y += 0.8; return P; }, vol: o.doppler ?? 1 });   // v3.59 Doppler pass-by (dopplerPass)   // v3.39 v: camSamples() finds where a tracked v.g will be
   const setPos = () => { v._posAt = t => { const m = _drvG(v).pick(t), P = m.pos(m.sAt(t)); return new THREE.Vector3(P.x, groundH(P.x, P.z), P.z); }; v._yawAt = t => { const A = _drvG(v); return A.yawT(A.pick(t), t); }; };
   if (F) {   // convoy: the leader's track, gap m behind, lag s later — speed, braking, corners and stops as the leader
     if (!F._drv?.length) { console.error('drive: follow needs a vehicle that drives (call drive() on the leader first)'); return null; }
@@ -4824,7 +4897,9 @@ function _drvTick(v, me, o) {   // pose of one drive() segment at t — with sev
   };
 }
 // --- crowds: hundreds of figures as instanced meshes, deterministic in t ---
-const hordes = [], MOVERS = [], MBNODES = [];   // v3.46 MBNODES: big moving rigid parts (collapse()) — mbMeasure() follows the corners of their boxes so the motion blur gets enough samples (no ghost copies of a falling facade)
+const hordes = [], MOVERS = [], MBNODES = [], SOUNDSRC = [], LOUDEV = [];   // v3.59 LOUDEV: { t, at: [x, y, z], k, s } loud visible events (explode, asteroidImpact, collapse, loudEvent) — crowds react in a wave (crowdWave)
+//   // v3.59 SOUNDSRC: { kind, node, posAt(t) → world Vector3, vol } — drive() / fly() register, dopplerPass() hears them pass the camera
+//   // v3.46 MBNODES: big moving rigid parts (collapse()) — mbMeasure() follows the corners of their boxes so the motion blur gets enough samples (no ghost copies of a falling facade)
 const mbTrack = (node, nm = 'a falling building') => { MBNODES.push({ node, nm, box: null }); return node; };   // v3.19 MOVERS: { node, kind: 'drive' | 'fly' } for the mover QA (qaMovers)
 // wall(p, line | [[x,z],[x,z], …], { h, thick, kind: 'concrete' | 'brick' | 'stone', color, posts }) → { g, line, h } — free-standing wall along a line
 //   (v3.3: for crowds climbing over it, horde({ wait: { line: W.line, climb: { h: W.h } } })), coping on top, piers every ~3 m, surface pattern; static and solid (hitbox)
@@ -4892,6 +4967,9 @@ function horde(o = {}) {
   const tailIM = MIX ? mk(_boxesG([[0.42, 0.08, 0.42, 0, 0.375, 0], [0.42, 0.18, 0.06, 0, 0.29, -0.185], [0.1, 0.1, 0.1, 0, 0.3, -0.24], [0.085, 0.3, 0.085, 0, 0.12, -0.26]]), n) : null;
   const skirtIM = MIX ? mk(_boxesG([[0.5, 0.12, 0.33, 0, -0.06, 0], [0.58, 0.16, 0.4, 0, -0.19, 0], [0.66, 0.14, 0.47, 0, -0.33, 0]]), n) : null;
   const MIXP = MIX ? [lhairIM, tailIM, skirtIM] : [];
+  const phIM = human ? new THREE.InstancedMesh(_boxesG([[0.08, 0.16, 0.012, 0, 0, 0]]), mat('#16181C', { rough: 0.35 }), n) : null, phS = human ? new THREE.InstancedMesh(boxG(0.07, 0.14, 0.002), new THREE.MeshBasicMaterial({ color: '#CFE4FF', toneMapped: false }), n) : null;   // v3.59 phones (gaze.phone): body + lit screen toward the holder
+  if (phIM) for (const im of [phIM, phS]) { im.castShadow = false; im.frustumCulled = false; im.userData.crowd = true; im.instanceMatrix.setUsage(THREE.DynamicDrawUsage); for (let i = 0; i < n; i++) im.setMatrixAt(i, new THREE.Matrix4().makeScale(0, 0, 0)); world.add(im); }
+  const _phP = new THREE.Vector3(), _phQ = new THREE.Quaternion(), _phS = new THREE.Vector3(), _phM = new THREE.Matrix4(), _phE = new THREE.Euler();
   const PARTS = [torso, head, uarm, farm, thigh, shin, foot, hairIM, capIM, jackIM, ragIM, bloodT, bloodH, trimIM, ...MIXP], ONEP = [torso, head, eyes, mouths, hairIM, capIM, jackIM, ragIM, bloodT, bloodH, trimIM, ...MIXP];
   const col = new THREE.Color(), M = [], shoe = new THREE.Color(human ? '#2B2622' : '#3A3631');
   const target = (x0, z0, cx, cz, stop, pile, around) => { const a = around ? rnd() * TAU : Math.atan2(x0 - cx, z0 - cz) + rr(-0.6, 0.6), st = stop + Math.sqrt(rnd()) * pile; return [cx + Math.sin(a) * st, cz + Math.cos(a) * st]; };
@@ -4958,7 +5036,15 @@ function horde(o = {}) {
     const r = state0(q, t); if (JO && !r[2]) { const J = jos(q, t); r[0] += J[0]; r[1] += J[1]; } return r;
   };
   // v2.27 gaze: { t, at: [x,y,z], spread, turn, tilt, arms: 'down' | 'up', face } — from t (+ up to spread s per member) everyone stops, turns to `at` and looks up at it (fireworks, UFO, eclipse); zombies stop hammering
-  const GZ = o.gaze, gT = q => q.gt ??= GZ.t + hash(q.ph * 7.31 + 2.2) * (GZ.spread ?? 0.8);
+  // v3.59 gaze.wave (m/s): the reaction runs out from `at` — the nearest member at t, the rest (distance − nearest) / wave later (r0: own start distance; spread then only 0.3 s) · gaze.phone: a share holds a phone up and films (lit screen)
+  //   CFG.lively + crowdWave (o.react !== false, CFG.crowdWave !== false): a human crowd without its own gaze / flee reacts to the first loud event within 90 m of it that it sees (LOUDEV:
+  //   explode, asteroidImpact, collapse, loudEvent) — looks round to it in a wave from the blast, some point, gasp, duck or film (o.react: { point, gasp, cover, phone, wave, tilt } overrides)
+  let GZ = o.gaze; const gT = q => q.gt ??= GZ.t + (GZ.wave ? (() => { const r = state1(q, GZ.t), [ax, ay, az] = GZ.at ?? [0, 30, 0]; GZ._r0 ??= GZ.r0 ?? Math.min(...M.map(q2 => { const r2 = state1(q2, GZ.t); return Math.hypot(r2[0] - ax, r2[1] - az); })); return Math.max(0, Math.hypot(r[0] - ax, r[1] - az) - GZ._r0) / GZ.wave; })() : 0) + hash(q.ph * 7.31 + 2.2) * (GZ.spread ?? (GZ.wave ? 0.3 : 0.8));
+  if (!GZ && !o.flee && human && o.react !== false && (CFG.crowdWave ?? LIVELY) !== false && (o.react || LIVELY)) DEFER.push(() => { if (GZ || o.gaze) return;
+    const c = o.to ?? o.from ?? o.spots?.[0] ?? [0, 0], E = LOUDEV.filter(e => e.t > (o.t0 ?? 0) && Math.hypot(e.at[0] - c[0], e.at[2] - c[1]) < 90 * Math.max(1, Math.sqrt(e.s))).sort((a, b) => a.t - b.t)[0]; if (!E) return;
+    const R = typeof o.react === 'object' ? o.react : {}, dd = Math.hypot(E.at[0] - c[0], E.at[2] - c[1]);
+    GZ = o.gaze = { t: E.t + 0.12, at: [E.at[0], E.at[1] + 2, E.at[2]], wave: R.wave ?? 18, r0: R.r0, tilt: R.tilt ?? clamp(Math.atan2(E.at[1] + 2, dd + 1) * 0.6, 0.08, 0.5), turn: R.turn ?? 0.45,
+      point: R.point ?? 0.2, gasp: R.gasp ?? 0.25, cover: R.cover ?? (dd < 25 ? 0.3 : 0.12), phone: R.phone ?? (dd > 15 ? 0.18 : 0.05), auto: E.k }; });
   const stateRaw = (q, t) => { if (!GZ || t <= gT(q)) return state1(q, t); const r = state1(q, gT(q)); r[2] = false;
     if (GZ.face !== false) { const [gx, , gz] = GZ.at ?? [0, 30, 0], ty = Math.atan2(gx - r[0], gz - r[1]), d = ((ty - r[3] + Math.PI) % TAU + TAU) % TAU - Math.PI; r[3] += d * sm01((t - gT(q)) / (GZ.turn ?? 0.7)); }
     return r; };
@@ -5179,7 +5265,7 @@ function horde(o = {}) {
       }
       for (let i = 0; i < n; i++) {
         const q = M[i]; if (q.lose) for (const kk in q.lose) q.lose[kk].vis = false;
-        if (t < q.b || (q.hero && !(q.down && t >= q.down.t))) { for (const im of ONEP) im.setMatrixAt(i, Z); for (const im of [uarm, farm, thigh, shin, foot]) { im.setMatrixAt(2 * i, Z); im.setMatrixAt(2 * i + 1, Z); } continue; }
+        if (t < q.b || (q.hero && !(q.down && t >= q.down.t))) { if (phIM) { phIM.setMatrixAt(i, Z); phS.setMatrixAt(i, Z); } for (const im of ONEP) im.setMatrixAt(i, Z); for (const im of [uarm, farm, thigh, shin, foot]) { im.setMatrixAt(2 * i, Z); im.setMatrixAt(2 * i + 1, Z); } continue; }
         const dn = q.down && t >= q.down.t ? q.down : null;   // knocked down by h.hit(): stays where it was hit, topples, lies (zombies sink back into the ground)
         if (dn && ((dn.sink && t - dn.t > 5.4) || (dn.drop && !dn.keep && t - dn.t > 0.9))) { for (const im of ONEP) im.setMatrixAt(i, Z); for (const im of [uarm, farm, thigh, shin, foot]) { im.setMatrixAt(2 * i, Z); im.setMatrixAt(2 * i + 1, Z); } continue; }
         let [x, z, moving, yaw0, walked, yp = 0] = state(q, dn ? dn.t : t); const u = q.ph / TAU + walked / q.cl; if (dn) moving = false;
@@ -5219,12 +5305,13 @@ function horde(o = {}) {
         if (up) { const s = Math.sin(t * 8 + q.ph); S.las = -2.75 + 0.25 * s; S.ras = -2.75 - 0.25 * s; S.lae = S.rae = -0.35; S.laz = -0.25; S.raz = 0.25; }
         if (gk > 0) { S.nrx = lerp(S.nrx, -(GZ.tilt ?? 0.55), gk); S.nry = lerp(S.nry, 0, gk); S.crx = lerp(S.crx, -0.08, gk);   // v2.27 gaze: head back, mouth-breathing awe
           if (GZ.arms !== 'up') { S.las = lerp(S.las, -0.3 - 0.06 * Math.sin(t * 1.3 + q.ph), gk); S.ras = lerp(S.ras, -0.25, gk); S.lae = lerp(S.lae, -0.3, gk); S.rae = lerp(S.rae, -0.3, gk); } }
-        if (gk > 0 && human && !moving && !dn && (GZ.point || GZ.gasp || GZ.cover)) {   // v3.44 gaze roles: a share points at `at`, a share gasps (hands to the mouth), a share ducks — each a moment after it looked up
+        q.phk = 0; if (gk > 0 && human && !moving && !dn && (GZ.point || GZ.gasp || GZ.cover || GZ.phone)) {   // v3.44 gaze roles: a share points at `at`, a share gasps (hands to the mouth), a share ducks — each a moment after it looked up
           const r = hash(q.ph * 3.7 + 5.1), g2 = gk * sm01((t - gT(q) - 0.3 - 0.6 * hash(q.ph * 1.9 + 0.4)) / 0.4), pS = GZ.point ?? 0, gS = pS + (GZ.gasp ?? 0), cS = gS + (GZ.cover ?? 0);
           if (g2 > 0 && r < pS) { const [ax, ay, az] = GZ.at ?? [0, 30, 0], dx = ax - x, dz = az - z, cy = Math.cos(yaw), sy = Math.sin(yaw), lx = (dx * cy - dz * sy) / q.sc - 0.34, lz = (dx * sy + dz * cy) / q.sc, ly = (ay - y) / q.sc - HIP - 0.58, l = Math.hypot(lx, ly, lz) || 1;
             const jab = 1 + 0.05 * Math.sin(Math.PI * clamp((t - gT(q) - 0.3) / 0.5)); S.ras = lerp(S.ras, clamp(Math.atan2(-lz / l, -ly / l) * jab, -3, 0.4), g2); S.raz = lerp(S.raz, clamp(Math.asin(clamp(lx / l, -1, 1)), -0.5, 1.4), g2); S.rae = lerp(S.rae, -0.05, g2); }
           else if (g2 > 0 && r < gS) { S.las = lerp(S.las, -1.2, g2); S.ras = lerp(S.ras, -1.22, g2); S.lae = lerp(S.lae, -1.75, g2); S.rae = lerp(S.rae, -1.72, g2); S.laz = lerp(S.laz, 0.42, g2); S.raz = lerp(S.raz, -0.42, g2); S.nrx += 0.12 * g2; }
-          else if (g2 > 0 && r < cS) { _crouch(S, 0.34 * g2); S.crx += 0.6 * g2; S.nrx = lerp(S.nrx, 0.35, g2); S.las = lerp(S.las, -2.75, g2); S.ras = lerp(S.ras, -2.7, g2); S.lae = lerp(S.lae, -1.95, g2); S.rae = lerp(S.rae, -2.0, g2); } }
+          else if (g2 > 0 && r < cS) { _crouch(S, 0.34 * g2); S.crx += 0.6 * g2; S.nrx = lerp(S.nrx, 0.35, g2); S.las = lerp(S.las, -2.75, g2); S.ras = lerp(S.ras, -2.7, g2); S.lae = lerp(S.lae, -1.95, g2); S.rae = lerp(S.rae, -2.0, g2); }
+          else if (g2 > 0 && r < cS + (GZ.phone ?? 0)) { const h2 = sm01((t - gT(q) - 0.45 - 0.5 * hash(q.ph * 4.3)) / 0.45) * gk; S.ras = lerp(S.ras, -2.55, h2); S.rae = lerp(S.rae, -0.45, h2); S.raz = lerp(S.raz, 0.1, h2); S.nrx = lerp(S.nrx, -0.12, h2); q.phk = h2; } }   // v3.59 phone held up over the heads, filming (a little later than the others: it had to get it out)
         if (rise && em < 1) { S.las = lerp(-2.6, S.las, em); S.ras = lerp(-2.4, S.ras, em); }   // claw out of the ground
         if (q.stoop && !dn) { S.crx += q.stoop; S.nrx += q.neck ?? 0; if (q.knee && ta < 0) _crouch(S, q.knee); }   // v3.26 mix: the old stoop, knees soft
         let JQ = null;   // v3.8 mocap: walk / jog / sprint / zombie walk by the distance walked (feet planted), idle clips offset per member; fades out for falls, trips, climbing, rising
@@ -5253,9 +5340,12 @@ function horde(o = {}) {
             if (R) { R.M.copy(Me); R.vis = true; if (t >= R.t && !gth) farm.setMatrixAt(idx, Z); }
             if (G2) { G2.M.copy(Mk); G2.vis = true; if (t >= G2.t && !gth) { shin.setMatrixAt(idx, Z); foot.setMatrixAt(idx, Z); } } }
         }
+        if (phIM) { if (q.phk > 0.35 && !far && !dn) { const k = sm01((q.phk - 0.35) / 0.4); _phP.set(0, -0.47, 0.035).applyMatrix4(Me); base.decompose(_phS, _phQ, _phS); _phQ.multiply(Q.setFromEuler(_phE.set(-0.12, 0, 0)));   // v3.59 the phone in the right hand, upright, screen toward the holder
+            _phM.compose(_phP, _phQ, _phS.setScalar(q.sc * k)); phIM.setMatrixAt(i, _phM); phS.setMatrixAt(i, out.multiplyMatrices(_phM, T.makeTranslation(0, 0.004, -0.0065))); } else { phIM.setMatrixAt(i, Z); phS.setMatrixAt(i, Z); } }
       }
-      for (const im of [...PARTS, eyes, mouths]) im.instanceMatrix.needsUpdate = true;
+      for (const im of [...PARTS, eyes, mouths]) im.instanceMatrix.needsUpdate = true; if (phIM) { phIM.instanceMatrix.needsUpdate = true; phS.instanceMatrix.needsUpdate = true; }
     },
+    _gaze() { return GZ ?? null; }, _gt(i) { return GZ ? gT(M[i]) : null; }, _pos(i, t) { const r = state(M[i], t); return [r[0], r[1]]; },   // v3.59 test probes (crowdWave)
     _qaMove(view) {   // v3.3 QA: members that stop dead or whip round in one go (15 Hz) → { n, t, i, kind, off } · v3.24 view (see _qa): only moves the viewer sees count, off = how many were off screen only
       if (!SIM) return null; const dt = 1 / 15; let worst = null, cnt = 0, off = 0;
       const seen = (q, r, t) => { if (!view) return 0.05; const on = view(t); return on ? on(r[0], groundH(r[0], r[1]) + (r[5] ?? 0) + 0.9 * q.sc, r[1], 0.9 * q.sc) : 0; }, ev = [];
@@ -5944,6 +6034,7 @@ function _drapeDisc(x, z, R, dy = 0.03, n = 12) {   // a square patch 2R × 2R t
 }
 const _blastEnv = (t0, t1, tau, tail = 0.22) => t => t < t0 ? 0 : Math.min(1, (t - t0) / 0.03) * (tail + (1 - tail) * Math.exp(-(t - t0) / tau)) * (1 - sm01((t - t1 + 0.6) / 0.6));   // v3.44 blast light: short peak, low tail, gone by t1
 function explode(x, y, z, t0, o = {}) {   // fireball, debris, smoke, light, scorch mark, shock ring, sparks
+  if (o.loud !== false) LOUDEV.push({ t: t0, at: [x, y, z], k: 'explode', s: o.size ?? 1 });   // v3.59 crowds react (crowdWave)
   const s = o.size ?? 1, gy = groundH(x, z), low = y <= gy + 0.5, near = y <= gy + 1.5 * s;
   if (VFXON()) {   // v3.44: rolling fireball of lit puffs (white-hot core → orange → soot), a smoke column lit from below, sparks as streaks, floating embers, heat shimmer
     fireball(x, Math.max(y, gy + 0.3 * s) + 0.35 * s, z, t0, { r: 1.55 * s });
@@ -6002,6 +6093,7 @@ function _impGrad(kind) {   // 'wall': dust wall (dense at the ground, thin at t
 }
 function asteroidImpact(o = {}) {
   const [ix, iz] = o.at ?? [0, 0], gy = groundH(ix, iz), t1 = o.t1 ?? 3, t0 = o.t0 ?? t1 - 3, s = o.size ?? 8, R = o.radius ?? 120, v = o.speed ?? 60, sd = hash(ix * 0.37 + iz * 0.71 + 3);
+  LOUDEV.push({ t: t1, at: [ix, gy + s, iz], k: 'impact', s: 4 });   // v3.59 crowdWave
   const dir = new THREE.Vector3(...(o.from ?? [-0.55, 0.7, -0.45])).normalize(), L = o.dist ?? 900, A = [ix + dir.x * L, gy + dir.y * L, iz + dir.z * L];
   const pos = t => { const k = clamp((t - t0) / (t1 - t0)); return [lerp(A[0], ix, k), lerp(A[1], gy + s * 0.4, k), lerp(A[2], iz, k)]; };
   const front = t => t < t1 ? 0 : Math.min(R * 1.15, v * (t - t1) * (1 + 0.6 * Math.exp(-(t - t1) * 1.5)));   // starts faster, settles to `speed`
@@ -6206,6 +6298,7 @@ const _pwGlow = (m, x, z) => { if (!m.userData.nightEi) return m; const c = m.cl
 const _spandrel = c => mat(new THREE.Color(c).lerp(new THREE.Color('#1E2836'), 0.75).getHexString().replace(/^/, '#'), { rough: 0.45, metal: 0.1 });
 const _shopMs = new Map(), _shopM = share => { const k = share > 0 ? 1 : 0; if (!_shopMs.has(k)) { const m = mat('#33465C', { em: '#FFE3A8', ei: k ? 0.9 : 0, rough: 0.25, own: true, kind: 'glass' }); if (k) { m.userData.nightEi = 0.9; m.userData.dayEi = 0.2; NIGHTMATS.push(m); } _shopMs.set(k, m); } return _shopMs.get(k); };
 function tower(p, x, z, o = {}) {   // city building with depth: style glass | brick | deco (default: varies by position); lit 0..2 = share of lit windows at night
+  _SETK.city++;   // v3.59 dress kind (CFG.lively)
   const w = o.w ?? 6, d = o.d ?? 6, h = o.h ?? 24, g = stat(grp(p, x, 0, z, o.ry ?? 0)), c0 = o.color ?? pick(['#8A94A6', '#A7B0BE', '#6F7A8C', '#C9C1B3', '#5E6B7D', '#B5A48C']), NC = { cast: false };
   const hv = k => hash(x * 13.1 + z * 7.7 + k * 1.9), style = o.style ?? (h < 18 && hv(5) < 0.55 ? 'brick' : ['glass', 'deco', 'brick', 'glass', 'deco'][Math.floor(hv(4) * 5)]);
   const c = style === 'brick' && !o.color ? pick2(['#9C4A36', '#A8583E', '#8A3E30', '#B7704E', '#7E5A48'], hv(6)) : c0, trim = style === 'brick' ? '#D9D2C4' : shade(c, 0.08), deep = shade(c, -0.1);
@@ -7945,6 +8038,7 @@ function busstop(p, x, z, ry = 0) {   // shelter (glass back and sides, roof, be
 function city(o = {}) {   // nx × nz blocks of towers (taller in the centre), roads between, street furniture on the sidewalks; returns { loops } for traffic()
   const nx = o.nx ?? 3, nz = o.nz ?? 3, B = o.block ?? 14, S = o.street ?? 6, P = B + S, [cx, cz] = o.at ?? [0, 0];
   const x0 = cx - (nx * P) / 2, z0 = cz - (nz * P) / 2, loops = [], towers = []; _dressed = true;   // v3.5: a city is dressed → ground() adds no autoDress
+  if (LIVELY && CFG.dress !== false && !_cityDQ) { _cityDQ = true; DEFER.push(() => { if (!_DRQ.includes('city')) dress('city'); }); }   // v3.59 CFG.lively: the streets get their props
   const RV = [], RH = [];   // v3.39: markings stop at the junctions and before the zebras (xing)
   for (let i = 0; i <= nx; i++) RV.push(road(world, [[x0 + i * P, z0], [x0 + i * P, z0 + nz * P]], { w: S, xing: 2.7 }).userData.road);
   for (let j = 0; j <= nz; j++) RH.push(road(world, [[x0, z0 + j * P], [x0 + nx * P, z0 + j * P]], { w: S, xing: 2.7 }).userData.road);
@@ -8947,6 +9041,7 @@ function breakApart(obj, t, o = {}) {
 function collapse(obj, t, o = {}) {
   const node = dyn(obj.g ?? obj.root ?? obj); node.userData.stat = false; node.userData._tpBld = true; node.updateWorldMatrix(true, true);
   const bb = _solidBox(node), sz = bb.getSize(new THREE.Vector3()), c = bb.getCenter(new THREE.Vector3()), H = sz.y, Wd = Math.max(sz.x, sz.z), gy = bb.min.y, mats = _dcols(node), cols = _dhex(mats);
+  if (o.loud !== false) LOUDEV.push({ t, at: [c.x, gy + H * 0.6, c.z], k: 'collapse', s: clamp(H / 8, 0.5, 3) });   // v3.59 crowdWave
   const style = CFG.destruction === false ? 'crumble' : o.style ?? (H > Wd * 1.25 ? 'pancake' : 'crumble'), sd = hash(c.x * 3.1 + c.z * 1.7 + 0.5), p0 = node.position.clone(), q0 = node.quaternion.clone(), big = clamp(Wd * 0.08 + H * 0.03, 0.25, 1);
   const dust = (t0, t1, k = 1) => { emit('dust', { at: [c.x, gy + 0.6, c.z], t0, t1, rate: 26 * k, size: clamp(Wd * 0.3, 0.6, 5), jitter: Wd * 0.5, speed: 1.8, life: 3.2, colors: ['#A89E8A', '#8A806E', '#C4BBA8'] }); emit('smoke', { at: [c.x, gy + 1, c.z], t0: t1 - 0.2, t1: t1 + (o.linger ?? 6), rate: 4, size: clamp(Wd * 0.28, 0.6, 4), jitter: Wd * 0.35, colors: ['#8E8778', '#A8A090', '#C8C0B0'], opacity: 0.4 }); };
   const mound = (t0, t1) => { if (o.rubble === false) return null; const rg = dyn(grp(world, c.x, gy, c.z)), n = clamp(Math.round(sz.x * sz.z / 2.4), 14, 44), hm = clamp(H * 0.13, 0.5, 4.5);   // what is left: a heap of chunks in the building's own materials, slabs and bent beams
@@ -12079,6 +12174,7 @@ const PLAZA = {   // paving · border band · inlays · curb · gutter · bollar
 //   bollards with gaps at the entrances, benches round the centre and along the long sides, bins, lamps (lamp(), real lights only with lights: n), trees in planters.
 //   P.top = paving height · P.at('center' | 'n' | 's' | 'e' | 'w' | 'fountain') · P.seat(i) (bench places for sit) · P.toWorld(lx, lz, ly) · P.lamps · P.benches · P.fountain
 function plaza(p, x, z, o = {}) {
+  _SETK.city++;   // v3.59 dress kind (CFG.lively)
   const w = o.w ?? 24, d = o.d ?? 18, ry = o.ry ?? 0, sty = o.style ?? 'classic', S = { ...(PLAZA[sty] ?? PLAZA.classic), ...(o.colors ?? {}) }, P0 = p ?? world, T = 0.12, NC = { cast: false }, FL = { cast: false, recv: true };
   const g = stat(grp(P0, x, (P0 === world ? groundH(x, z) : 0) + (o.y ?? 0), z, ry)), P = { g, root: g, w, d, style: sty, top: T, anchors: {}, seats: [], benches: [], lamps: [], bins: [], bollards: [] };
   const tg = grp(g, 0, T, 0), props = o.props !== false, hasF = props && (o.fountain ?? Math.min(w, d) >= 12), rF = clamp(Math.min(w, d) * 0.12, 1.4, 3.2), ent = o.entrance ?? 2.4;
@@ -13558,6 +13654,66 @@ DEFER.push(() => {   // hoof beats for trotting / galloping hoofed animals (a fe
     for (let t = 0; t <= DUR + 0.1; t += 0.1) { const p0 = a._posAt(t - 0.05), p1 = a._posAt(t + 0.05), v = Math.hypot(p1.x - p0.x, p1.z - p0.z) / 0.1, on = v * v / (9.81 * lhW) > 0.45;
       if (on && st == null) st = t; if ((!on || t > DUR) && st != null) { if (t - st > 0.4) { sfx(st, 'hooves', vol); AUDIO.hits[AUDIO.hits.length - 1].dur = t - st; AUDIO.hits[AUDIO.hits.length - 1].p = v > 7 ? 2 : 1; } st = null; } } }
 });
+
+// ---------------- v3.59 footsteps and Doppler pass-bys (planned once at bake from walk() / drive() / fly() and the camera; sounds are AUDIO.hits → every frame stays a function of t) ----------------
+// _camPosV(tv): camera position at video time tv from the CAM keys (null in POV keys) — what the viewer hears from
+function _camPosV(tv) { let i = 0; for (let k = 0; k < CAM.length; k++) if (CAM[k].t <= tv + 1e-6) i = k; const a = CAM[i], b = CAM[i + 1]; if (!a || a.pov) return null; const c = _camAt(a, b, tv); return c ? c.P : null; }
+// footSurf(x, y, z, t): what a foot steps on — 'splash' (water over the ground) · 'snow' · 'sand' · 'grass' (bare ground) · 'dirt' (plain boxes, tracks) · 'hard' (stone, concrete,
+//   tile, paving, asphalt, brick) · 'wood' (planks, boards, decks) · 'metal' · 'carpet' — from the material under the foot (mat({ surf })) or the ground colour
+const _fsRay = new THREE.Raycaster(), _fsDn = new THREE.Vector3(0, -1, 0), _fsO = new THREE.Vector3();
+let _fsSkip = null;
+function footSurf(x, y, z, t = 0) {
+  const skip = _fsSkip ??= new Set([...RIGS.map(f => f.root), ...BEAST_ALL.map(a => a.root ?? a.g)].filter(Boolean));
+  if (typeof waterH === 'function' && waterH(x, z, t) > y + 0.03) return 'splash';
+  const snow = _snowOn({}) && (CFG.snowCover ?? 0) + SNOWWIN.length > 0;
+  _fsRay.set(_fsO.set(x, y + 0.6, z), _fsDn); _fsRay.far = 1.2; let hit = null;
+  for (const h of _fsRay.intersectObjects(world.children, true)) { const m = h.object; if (!m.isMesh || m.isInstancedMesh || m.isSkinnedMesh || !m.visible || m.userData.crowd || m.userData.cover || m.userData.noHit) continue;
+    let r = m, rig = false; while (r) { if (skip.has(r)) { rig = true; break; } r = r.parent; } if (rig) continue; hit = h; break; }
+  const sandy = () => { const hx = String(GROUND.color ?? '#5F7F3B').replace('#', ''), [r, g, b] = [0, 2, 4].map(i => parseInt(hx.slice(i, i + 2), 16) / 255); return r > g && g > b && r - b > 0.18 && (r + g + b) / 3 > 0.42; };
+  if (!hit || hit.point.y < groundH(x, z) + 0.015 && (hit.object.geometry?.boundingSphere?.radius ?? 0) > 40) return snow ? 'snow' : sandy() ? 'sand' : 'grass';
+  const M = Array.isArray(hit.object.material) ? hit.object.material[hit.face?.materialIndex ?? 0] : hit.object.material, sf = M?.userData?.surf ?? hit.object.userData.surf;
+  if (snow && hit.point.y < groundH(x, z) + 0.4 && !M?.userData?.surfIn) return 'snow';
+  if (sf === 'plank' || sf === 'boards' || sf === 'wood' || sf === 'deck') return 'wood';
+  if (sf === 'carpet') return 'carpet'; if (sf === 'metal' || (M?.metalness ?? 0) > 0.6) return 'metal';
+  if (sf) return 'hard';
+  return 'dirt';
+}
+// stepsPass (DEFER, CFG.steps: false = off; walk(…, { steps: false | 0..2 }) per walker): every touchdown of a figure that walks (walk(), procedural legs) close to the camera
+//   becomes a footstep on the right surface — louder near the lens (silent beyond ~11 m), running louder than walking, sneaking / shambling softer. At most 2 steps per 0.1 s and
+//   CFG.stepsMax (260) in all: the nearest win. Surfaces are classified every ~0.5 m of path, not per step (one ray down each).
+function stepsPass() {
+  if (CFG.steps === false) return; world.updateMatrixWorld(true); _fsSkip = null; const C = [], MV = { run: 1.25, panic: 1.3, walk: 1, shamble: 0.55, sneak: 0.45, tiptoe: 0.35, limp: 0.8 };
+  for (const { obj: f } of WALKS) { const WK = (f.root ?? f)._walks; if (!f?.legL || !WK) continue;
+    WK.forEach((me, i) => { if (!me.steps) return; const nx = WK[i + 1]?.t0 ?? 1e9; let last = null, ls = null;
+      for (const [t, x, z] of me.steps()) { if (t >= nx || t < 0 || t > DUR) continue; const tv = VT(t), P = _camPosV(tv); if (!P) continue; const y = me.pos(t).y, d = Math.hypot(P[0] - x, P[1] - y - 0.1, P[2] - z); if (d > 11) continue;
+        if (!last || Math.hypot(x - last[0], z - last[1]) > 0.5) { ls = footSurf(x, y, z, t); last = [x, z]; }
+        const v = (MV[me.mode] ?? 1) * (me.stepVol ?? 1) * Math.pow(clamp((11 - d) / 8.5), 1.4); if (v > 0.06) C.push({ t, v, s: ls }); } }); }
+  C.sort((a, b) => a.t - b.t); const keep = []; for (const c of C) { const near = keep.filter(k => c.t - k.t < 0.1); if (near.length >= 2) { const w = near.reduce((a, b) => a.v < b.v ? a : b); if (w.v < c.v) { keep.splice(keep.indexOf(w), 1); keep.push(c); } } else keep.push(c); }
+  keep.sort((a, b) => b.v - a.v).slice(0, CFG.stepsMax ?? 260).forEach(c => { sfx(c.t, 'step', +c.v.toFixed(3)); const h = AUDIO.hits[AUDIO.hits.length - 1]; if (h && h.k === 'step') h.p = c.s; });
+  STEPLOG.n = keep.length; STEPLOG.by = keep.reduce((m, c) => (m[c.s] = (m[c.s] ?? 0) + 1, m), {});
+}
+const STEPLOG = {};
+// dopplerPass (DEFER, CFG.doppler: false = off; drive() / fly() { doppler: false | 0..2 }): a car, truck, helicopter, plane or jet that rushes past the camera (closest approach
+//   under 14 / 16 / 45 / 70 / 90 m, much nearer than 1.2 s before and after, fast enough) gets a pass-by sound: engine / tyres / rotor slap / jet roar whose pitch follows the real
+//   Doppler shift (exaggerated × CFG.dopplerK, 1.8) and whose level follows the distance — the "neeee-owww". At most 3 per source and 14 per video. Planned in video time.
+function dopplerPass() {
+  if (CFG.doppler === false || !SOUNDSRC.length) return; world.updateMatrixWorld(true); const K = CFG.dopplerK ?? 1.8, out = [], dt = 0.05;
+  const SPEC = { car: { R: 14, d0: 4, vmin: 6 }, truck: { R: 16, d0: 5, vmin: 5 }, heli: { R: 45, d0: 18, vmin: 7 }, plane: { R: 70, d0: 20, vmin: 18 }, jet: { R: 90, d0: 25, vmin: 60 } };
+  for (const S of SOUNDSRC) { const n = Math.floor(DUR / dt) + 1, D = new Float32Array(n), V = new Float32Array(n); let vmax = 0;
+    for (let i = 0; i < n; i++) { const tv = i * dt, P = _camPosV(tv), Q = S.posAt(ST(tv)); D[i] = P && Q ? Math.hypot(Q.x - P[0], Q.y - P[1], Q.z - P[2]) : 1e9; if (i) { const Q0 = S.posAt(ST(tv - dt)); V[i] = Q0 ? Q.distanceTo(Q0) / dt : 0; vmax = Math.max(vmax, V[i]); } }
+    const kind = S.kind ?? (MOVERS.some(m => m.kind === 'heli' && m.node === S.node) ? 'heli' : vmax > 75 ? 'jet' : 'plane'), sp = SPEC[kind]; let nPass = 0;
+    for (let i = 1; i < n - 1 && nPass < 3; i++) { if (!(D[i] <= D[i - 1] && D[i] < D[i + 1] && D[i] < sp.R && V[i] > sp.vmin)) continue; const w = Math.round(1.2 / dt), a = D[Math.max(0, i - w)], b = D[Math.min(n - 1, i + w)];
+      if (Math.min(a, b) < D[i] * 1.6 + 2) continue;   // no real pass (the camera follows it, or it only brushes by)
+      const i0 = Math.max(1, i - Math.round(1.7 / dt)), i1 = Math.min(n - 2, i + Math.round(1.5 / dt)), g = [], f = [];
+      for (let j = i0; j <= i1; j++) { const vr = (D[j + 1] - D[j - 1]) / (2 * dt); g.push(+(1 / (1 + (D[j] / sp.d0) ** 2)).toFixed(4)); f.push(+clamp(343 / (343 + K * clamp(vr, -150, 150)), 0.55, 1.7).toFixed(4)); }
+      out.push({ t: i0 * dt, k: 'passby', v: S.vol ?? 1, dur: (i1 - i0) * dt, p: { kind, g, f, dt }, d: D[i] }); nPass++; i += w; } }
+  out.sort((a, b) => a.d - b.d).slice(0, 14).forEach(h => { delete h.d; (AUDIO.hits ??= []).push(h); });
+  DOPPLERLOG.push(...out.map(h => [h.p.kind, +h.t.toFixed(2)]));
+}
+const DOPPLERLOG = [];
+// loudEvent(t, [x, z] | [x, y, z], { kind, size }): a loud, visible moment the script makes itself (UFO lands, car crash, a shout) — human crowds near it react in a wave (crowdWave, CFG.lively)
+function loudEvent(t, at, o = {}) { LOUDEV.push({ t, at: at.length === 2 ? [at[0], groundH(at[0], at[1]) + 2, at[1]] : at, k: o.kind ?? 'event', s: o.size ?? 1 }); }
+DEFER.push(() => DEFER.push(() => { stepsPass(); dopplerPass(); }));   // second round: after the scene's own DEFERs (crowds, dress) made their walks
 
 // ---------------- birds ----------------
 const BIRDS = {
@@ -23162,6 +23318,28 @@ const SND = (() => {
       servo: (t, v, d = 1) => tone('sawtooth', 95, t, 0.06, Math.max(0, d - 0.16), 0.1, 0.05 * v, fx, { to: 130, glide: d, lp: 700 }),
       tread: (t, v, d = 3) => { for (let k = 0; k < d * 9; k++) nz(t + k / 9 + ar() * 0.02, 0.001, 0.01, 0.05, 0.12 * v, fx, 'bandpass', 700 + ar() * 500, 0, 2); SFX.engine(t, v * 0.8, d); },
       daze: (t, v) => { for (let k = 0; k < 4; k++) tone('sine', 2200 + 400 * (k % 2), t + k * 0.13, 0.005, 0.02, 0.08, 0.05 * v, fx, { to: 2900 - 300 * (k % 2), glide: 0.08 }); }
+    });
+    // v3.59 footsteps by surface (p) and Doppler pass-bys (p: { kind, g: gains, f: pitch factors, dt }) — planned by stepsPass() / dopplerPass()
+    const curve = (prm, arr, t, d, k = 1) => { const c = new Float32Array(arr.length); for (let i = 0; i < arr.length; i++) c[i] = Math.max(1e-4, arr[i] * k); prm.setValueAtTime(c[0], t); prm.setValueCurveAtTime(c, t + 1e-3, Math.max(0.02, d)); };
+    Object.assign(SFX, {
+      step: (t, v, d, p) => { const j = 0.85 + ar() * 0.3, s = p ?? 'grass'; v *= AUDIO.steps ?? 0.55;   // AUDIO.steps: footstep level (0.55)
+        if (s === 'hard') { nz(t, 0.001, 0.004, 0.035, 0.22 * v, fx, 'bandpass', 2300 * j, 0, 1.6); tone('sine', 115 * j, t, 0.001, 0.008, 0.05, 0.16 * v, fx, { to: 70, glide: 0.05 }); nz(t + 0.045 + ar() * 0.02, 0.001, 0.002, 0.025, 0.09 * v, fx, 'bandpass', 3200 * j, 0, 2); }
+        else if (s === 'wood') { tone('sine', 165 * j, t, 0.001, 0.01, 0.09, 0.2 * v, fx, { to: 105, glide: 0.08 }); nz(t, 0.001, 0.006, 0.06, 0.12 * v, fx, 'bandpass', 650 * j, 0, 3); if (ar() < 0.25) tone('triangle', 380 + ar() * 120, t + 0.03, 0.02, 0.05, 0.12, 0.018 * v, fx, { to: 300, glide: 0.15 }); }
+        else if (s === 'metal') { nz(t, 0.001, 0.004, 0.04, 0.16 * v, fx, 'bandpass', 1800 * j, 0, 2); for (const [f, a] of [[640, 0.05], [1730, 0.03]]) tone('sine', f * j, t, 0.001, 0, 0.22, a * v, fx); }
+        else if (s === 'snow') { for (let k = 0; k < 7; k++) nz(t + k * 0.016 + ar() * 0.01, 0.001, 0.003, 0.02, (0.07 + ar() * 0.06) * v, fx, 'bandpass', 2600 + ar() * 2200, 0, 2.5); nz(t, 0.01, 0.04, 0.06, 0.08 * v, fx, 'lowpass', 500); }
+        else if (s === 'sand') { nz(t, 0.012, 0.03, 0.08, 0.1 * v, fx, 'highpass', 1600 * j); nz(t, 0.005, 0.01, 0.05, 0.06 * v, fx, 'lowpass', 300); }
+        else if (s === 'splash') { nz(t, 0.004, 0.05, 0.16, 0.2 * v, fx, 'bandpass', 1100 * j, 0, 0.9); for (let k = 0; k < 3; k++) tone('sine', 500 + ar() * 700, t + 0.04 + ar() * 0.12, 0.002, 0, 0.04, 0.03 * v, fx, { to: 1300 + ar() * 600, glide: 0.04 }); }
+        else if (s === 'carpet') { nz(t, 0.004, 0.01, 0.05, 0.07 * v, fx, 'lowpass', 420); }
+        else if (s === 'dirt') { nz(t, 0.002, 0.01, 0.06, 0.14 * v, fx, 'bandpass', 1300 * j, 0, 0.9); tone('sine', 95 * j, t, 0.001, 0.01, 0.06, 0.13 * v, fx, { to: 60, glide: 0.06 }); for (let k = 0; k < 2; k++) nz(t + 0.02 + ar() * 0.04, 0.001, 0, 0.015, 0.05 * v, fx, 'highpass', 4000); }
+        else { nz(t, 0.006, 0.02, 0.07, 0.12 * v, fx, 'lowpass', 1100 * j); nz(t + 0.01, 0.004, 0.01, 0.05, 0.05 * v, fx, 'highpass', 3500); tone('sine', 85 * j, t, 0.002, 0.01, 0.06, 0.1 * v, fx, { to: 55, glide: 0.06 }); } },   // grass / soft ground
+      passby: (t, v, d, p) => { if (!p?.g?.length) return; const n = p.g.length, D = (n - 1) * p.dt, k = p.kind, G = p.g.map(x => x * v);
+        const bus = ctx.createGain(); curve(bus.gain, G, t, D); bus.connect(fx); bus.gain.setValueAtTime(0, t + D + 0.03);
+        const osc = (type, f0, amp, lp) => { const o2 = ctx.createOscillator(), g2 = ctx.createGain(); o2.type = type; curve(o2.frequency, p.f, t, D, f0); g2.gain.value = amp; let nd = o2; if (lp) { const fl = ctx.createBiquadFilter(); fl.type = 'lowpass'; fl.frequency.value = lp; o2.connect(fl); nd = fl; } nd.connect(g2); g2.connect(bus); o2.start(t); o2.stop(t + D + 0.05); };
+        const nzc = (type, f0, q, amp) => { const src = ctx.createBufferSource(); src.buffer = noise; src.loop = true; const fl = ctx.createBiquadFilter(); fl.type = type; curve(fl.frequency, p.f, t, D, f0); fl.Q.value = q; const g2 = ctx.createGain(); g2.gain.value = amp; src.connect(fl); fl.connect(g2); g2.connect(bus); src.start(t, ar() * 1.5); src.stop(t + D + 0.05); };
+        if (k === 'car' || k === 'truck') { const tr = k === 'truck'; osc('sawtooth', tr ? 58 : 92, tr ? 0.2 : 0.14, tr ? 380 : 520); osc('square', tr ? 116 : 184, 0.035, 900); nzc('bandpass', tr ? 520 : 780, 0.7, tr ? 0.5 : 0.42); nzc('highpass', 2600, 0.7, 0.16); }
+        else if (k === 'heli') { nzc('lowpass', 420, 0.8, 0.8); const ts = []; let ph = 0; for (let i = 0; i < n - 1; i++) { const r = 17 * p.f[i]; for (ph += r * p.dt; ph >= 1; ph -= 1) ts.push(t + i * p.dt + (1 - ph) / r); }
+          pulses(ts, 0.045, i => 1.1 * v * (p.g[Math.min(n - 1, Math.round((ts[i] - t) / p.dt))] ?? 0), fx, 'bandpass', 260, 1.2); osc('sawtooth', 70, 0.06, 300); }
+        else { const jet = k === 'jet'; nzc('bandpass', jet ? 1500 : 900, 0.6, jet ? 0.55 : 0.45); nzc('lowpass', jet ? 380 : 260, 0.7, 0.6); osc('sawtooth', jet ? 1150 : 140, jet ? 0.03 : 0.08, jet ? 4000 : 700); } }
     });
     Object.assign(SFX, {   // traps & machines (v2.11)
       snap: (t, v) => { nz(t, 0.001, 0.004, 0.05, 0.9 * v, fx, 'highpass', 2500); SFX.clang(t + 0.005, 0.6 * v); tone('sine', 180, t, 0.001, 0.01, 0.1, 0.5 * v, fx, { to: 70, glide: 0.08 }); },
