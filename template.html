@@ -11223,6 +11223,20 @@ FURN.wardrobe = (p, x, z, ry = 0, o = {}) => { const g = fg(p, x, z, ry), w = o.
   box(g, 0.012, 1.9, 0.01, shade(c, -0.2), 0, 0.1, 0.295, NCs); for (const sx of [-1, 1]) box(g, 0.02, 0.22, 0.03, '#C9A64A', sx * 0.06, 1.0, 0.3, NCs); box(g, 0.4, 0.3, 0.3, '#C9A06A', -0.2, 2.11, 0.0); return g; };
 FURN.dresser = (p, x, z, ry = 0, o = {}) => { const g = fg(p, x, z, ry), w = o.w ?? 1.1, c = o.color ?? '#9A7A58'; box(g, w, 0.85, 0.48, c, 0, 0, 0); for (let i = 0; i < 3; i++) { box(g, w - 0.06, 0.24, 0.01, shade(c, 0.05), 0, 0.06 + i * 0.27, 0.24, NCs); for (const sx of [-1, 1]) box(g, 0.08, 0.02, 0.02, '#C9A64A', sx * w * 0.25, 0.17 + i * 0.27, 0.25, NCs); }
   box(g, 0.6, 0.8, 0.03, '#C9A64A', 0, 0.95, -0.2); box(g, 0.52, 0.72, 0.01, '', 0, 0.99, -0.18, { mat: mat('#CFE4EE', { rough: 0.05, metal: 0.6 }), ...NCs }); cyl(g, 0.04, 0.04, 0.14, '#E87AA0', w / 2 - 0.15, 0.85, 0.05, { seg: 8, ...NCs }); box(g, 0.18, 0.06, 0.12, '#3E6A8A', -w / 2 + 0.18, 0.85, 0.05, NCs); return g; };
+// v3.54 treatment room: examBed (padded couch, raised head end, paper roll), trolley (stainless instrument cart: tray, bowls, gauze, a covered jar), examLamp (arm lamp on a wheeled stand)
+FURN.examBed = (p, x, z, ry = 0, o = {}) => { const g = fg(p, x, z, ry), L = o.l ?? 1.9, W = o.w ?? 0.68, c = o.color ?? '#3E8A8E', St = '#C9CED4';
+  for (const sx of [-1, 1]) for (const sz of [-1, 1]) { cyl(g, 0.025, 0.025, 0.6, St, sx * (W / 2 - 0.06), 0.02, sz * (L / 2 - 0.08), { seg: 8, metal: 0.6, rough: 0.3 }); cyl(g, 0.035, 0.035, 0.03, '#2A2D33', sx * (W / 2 - 0.06), 0, sz * (L / 2 - 0.08), { seg: 8, ...NCs }); }
+  box(g, W - 0.08, 0.04, L - 0.12, St, 0, 0.6, 0, { metal: 0.5, rough: 0.35 }); box(g, W - 0.12, 0.02, L - 0.2, shade(St, -0.1), 0, 0.2, 0, { metal: 0.5, ...NCs });   // frame, lower shelf
+  rbox(g, W, 0.1, L * 0.68, c, 0, 0.64, L * 0.14, { rf: 0.35 }); const hd = grp(g, 0, 0.66, -L * 0.2); hd.rotation.x = -0.45; rbox(hd, W, 0.1, L * 0.34, c, 0, 0, -L * 0.17, { rf: 0.35 });   // cushion + raised head section
+  box(g, W * 0.8, 0.004, L * 0.66, '#F4F2EC', 0, 0.742, L * 0.14, NCs); cyl(g, 0.05, 0.05, W * 0.84, '#F4F2EC', 0, 0.55, L / 2 - 0.02, { rz: Math.PI / 2, seg: 10, ...NCs }); return g; };
+FURN.trolley = (p, x, z, ry = 0, o = {}) => { const g = fg(p, x, z, ry), St = '#C9CED4', w = o.w ?? 0.6, d = o.d ?? 0.42;
+  for (const sx of [-1, 1]) for (const sz of [-1, 1]) { cyl(g, 0.012, 0.012, 0.86, St, sx * (w / 2 - 0.02), 0.05, sz * (d / 2 - 0.02), { seg: 6, metal: 0.7, rough: 0.3 }); ball(g, 0.03, '#2A2D33', sx * (w / 2 - 0.02), 0.03, sz * (d / 2 - 0.02), { detail: 0, ...NCs }); }
+  for (const y of [0.3, 0.9]) { box(g, w, 0.015, d, St, 0, y, 0, { metal: 0.7, rough: 0.25 }); for (const sz of [-1, 1]) box(g, w, 0.03, 0.008, St, 0, y + 0.015, sz * d / 2, { metal: 0.7, ...NCs }); }
+  if (o.items !== false) { cyl(g, 0.08, 0.05, 0.04, '#DDE2E6', -0.14, 0.915, 0.05, { seg: 14, metal: 0.8, rough: 0.2 }); box(g, 0.26, 0.012, 0.16, '#DDE2E6', 0.1, 0.915, -0.06, { metal: 0.8, rough: 0.2, ...NCs });
+    box(g, 0.1, 0.02, 0.08, '#F6F6F2', 0.06, 0.93, -0.06, NCs); box(g, 0.12, 0.004, 0.01, '#9AA0A8', 0.15, 0.93, -0.02, { metal: 0.8, ...NCs }); box(g, 0.2, 0.08, 0.14, '#3E6A9A', 0.05, 0.315, 0, NCs); } return g; };
+FURN.examLamp = (p, x, z, ry = 0, o = {}) => { const g = fg(p, x, z, ry), St = '#D8DCE0'; for (let i = 0; i < 5; i++) { const a = i / 5 * TAU; box(g, 0.03, 0.02, 0.24, '#3A3D44', Math.sin(a) * 0.12, 0.02, Math.cos(a) * 0.12, { ry: a }); }
+  cyl(g, 0.016, 0.016, 1.2, St, 0, 0.04, 0, { seg: 8, metal: 0.6 }); const arm = grp(g, 0, 1.24, 0); arm.rotation.x = 0.5; cyl(arm, 0.012, 0.012, 0.5, St, 0, 0, 0, { seg: 6, rx: Math.PI / 2, metal: 0.6 });
+  const hd = grp(arm, 0, 0, 0.5); hd.userData.float = true; arm.userData.float = true; cone(hd, 0.09, 0.1, St, 0, -0.06, 0, { seg: 14 }); cyl(hd, 0.075, 0.075, 0.01, '', 0, -0.065, 0, { seg: 14, mat: mat('#FFF6E0', { basic: true, glow: o.on === false ? 0 : 1.6 }), ...NCs }); return g; };
 FURN.desk = (p, x, z, ry = 0, o = {}) => { const g = fg(p, x, z, ry), w = o.w ?? 1.4, c = o.color ?? '#E8E4DC'; box(g, w, 0.04, 0.7, c, 0, 0.72, 0); for (const sx of [-1, 1]) box(g, 0.04, 0.72, 0.66, '#3A3D44', sx * (w / 2 - 0.04), 0, 0);
   box(g, 0.4, 0.55, 0.6, shade(c, -0.05), w / 2 - 0.28, 0.12, 0); for (let i = 0; i < 3; i++) box(g, 0.08, 0.02, 0.02, '#9AA4AE', w / 2 - 0.28, 0.25 + i * 0.17, 0.31, NCs);
   if (o.pc !== false) { box(g, 0.2, 0.02, 0.15, '#2A2D33', -0.1, 0.76, -0.15); box(g, 0.04, 0.3, 0.04, '#2A2D33', -0.1, 0.77, -0.2); box(g, 0.72, 0.42, 0.04, '#1A1A1A', -0.1, 0.95, -0.2); const sm = mat('#2A5A9A', { em: '#4A8AE0', ei: 0.85 }); box(g, 0.68, 0.38, 0.01, '', -0.1, 0.97, -0.175, { mat: sm, ...NCs });
@@ -11342,6 +11356,9 @@ const ROOMS = {
     R.put('table', 0.2, 0.7, 0, { w: 1.1, d: 0.7, chairs: false }); R.wallPut('board', 1.9, 1.5, { w: 1.0, h: 0.7, kind: 'map' }); R.beams('#4A504A'); R.bulb(0, 0); R.pipes(); } },
   classroom: { wall: '#E8E0C8', floor: 'wood', items: R => { R.wallPut('board', 0, 1.45, { w: 2.6, h: 1.1, kind: 'chalk' }); R.put('desk', R.w / 2 - 1.2, -R.d / 2 + 1.0, 0, { pc: false, color: '#9A7448' }); for (let i = 0; i < 3; i++) for (let j = 0; j < 2; j++) R.put('schoolDesk', -1.5 + i * 1.5, 0 + j * 1.3); R.ceil(-1, 0); R.ceil(1, 0); } },
   shop:     { wall: '#F2EEE6', floor: 'tiles', items: R => { for (let i = 0; i < 2; i++) R.put('shelf', -1.6 + i * 2.2, -0.6, 0, { kind: 'supplies', w: 1.8 }); R.put('counterShop', R.w / 2 - 1.4, R.d / 2 - 1.0, Math.PI); R.put('fridge', R.w / 2 - 0.45, -R.d / 2 + 0.45, 0, { color: '#DDEFF2' }); R.put('plant', -R.w / 2 + 0.4, R.d / 2 - 0.5); R.ceil(-1, 0); R.ceil(1, 0); } },
+  // v3.54 clinic: a modern treatment room (pale walls, tiled floor): exam couch, instrument trolley, arm lamp, a sink with a cabinet, a shelf of supplies, a desk; strip lights
+  clinic:   { wall: '#E4ECEE', floor: 'tiles', floorColor: '#D8DEE0', ceil: '#F2F4F4', items: R => { R.put('examBed', -0.4, -0.6, Math.PI / 2); R.put('trolley', 1.2, -R.d / 2 + 0.6); R.put('examLamp', -1.6, -R.d / 2 + 0.6);
+    R.put('basin', R.w / 2 - 0.3, 0.2, -Math.PI / 2); R.put('shelf', -R.w / 2 + 0.3, 0.6, Math.PI / 2, { kind: 'supplies', w: 1.4, color: '#E8ECEE' }); R.put('desk', R.w / 2 - 0.6, R.d / 2 - 1.2, -Math.PI / 2, { pc: true }); R.ceil(-1, 0); R.ceil(1, 0); } },
   // v3.5 museum (alias gallery): high walls, spot-lit paintings with light pools, vitrines on plinths behind rope barriers, a bench, a sculpture, a wide doorway into the next room
   museum:   { wall: '#7E3530', floor: 'wood', floorColor: '#8C5E36', wallSurf: 'plaster', w: 11, d: 8, h: 4.6, window: false, pics: false, skylight: true, ceil: '#ECE7DC',
     door: { w: 1.8, h: 3.1, open: true, frame: '#C9A24A', hall: { d: 3.4, len: 5.4, style: 'museum' } }, items: R => _museumItems(R) }
@@ -17789,6 +17806,181 @@ function coin(p, x = 0, y = 0, z = 0, o = {}) {
   if (o.glint !== false) { const ph = hash(x * 3.1 + z * 7.7) * 4; tick(t => { const u = ((t + ph) % 2.6) / 2.6; m.emissiveIntensity = 1.4 * Math.exp(-(((u - 0.5) / 0.05) ** 2)); }); }
   return g;
 }
+// ---- v3.54 marsh and leeches: pond() (a shallow marsh pond you wade in), leech() (swims, latches onto a shin, swells while it feeds, is peeled off into a jar), jar() ----
+// pond(p, x, z, { r: 6, rx, rz, ry, depth: 0.42, level: 0.03, color, mud, opacity, reeds: 0.8, cattails: 0.6, lilies: 0.5, duckweed: 0.6, open: [[a0, a1], …], waders: [rig …],
+//   sound: true, seed }) → P = { x, z, y (water surface), depth, bedAt(x, z), depthAt(x, z), inside(x, z), edge(a, k), wade(rig), keep: [x, z, r] }
+//   Irregular shoreline (ellipse rx × rz with soft lobes), a wet mud bank that fades into the ground, murky water (waterSurfaceMat: fresnel sky, ripples, glint), reed clumps and
+//   cattails round the shore (they sway; `open` = local angle ranges in radians kept free, e.g. where someone walks in), lily pads with a few flowers, duckweed in the shallows.
+//   The pond bed slopes down to `depth`: from bake time groundH() follows it, so walk() takes a figure in and out (the legs vanish under the murky water, the body goes down);
+//   every wader (o.waders, P.wade(rig)) pushes rings across the surface where it walks (stronger while moving, pure in t: emitted where _posAt was) and gets wading splashes.
+const PONDS = [];
+function pond(p, x = 0, z = 0, o = {}) {
+  const sx = o.rx ?? o.r ?? 6, sz = o.rz ?? (o.r ?? 6) * 0.72, ry = o.ry ?? 0, dep = o.depth ?? 0.42, sd = o.seed ?? 1, y0 = groundH(x, z), lv = o.level ?? 0.03, Y = y0 + lv, NC = { cast: false };
+  const ph = [hash(sd * 1.3) * TAU, hash(sd * 2.7) * TAU, hash(sd * 4.1) * TAU, hash(sd * 5.9) * TAU], Rf = a => 1 + 0.09 * Math.sin(2 * a + ph[0]) + 0.06 * Math.sin(3 * a + ph[1]) + 0.035 * Math.sin(5 * a + ph[2]);
+  const c = Math.cos(ry), s = Math.sin(ry), loc = (X, Z) => { const dx = X - x, dz = Z - z; return [dx * c - dz * s, dx * s + dz * c]; }, wld = (lx, lz) => [x + lx * c + lz * s, z - lx * s + lz * c];
+  const uv = (X, Z) => { const [lx, lz] = loc(X, Z), a = Math.atan2(lz / sz, lx / sx); return [Math.hypot(lx / sx, lz / sz) / Rf(a), a]; };
+  const bedAt = (X, Z) => { const u = uv(X, Z)[0]; return u >= 1 ? null : y0 - dep * sm01((1 - u) / 0.42); };
+  const lp = (a, k) => [Math.cos(a) * sx * Rf(a) * k, Math.sin(a) * sz * Rf(a) * k];
+  const open = o.open ?? [], isOpen = a => open.some(([a0, a1]) => { const d = v => ((v % TAU) + TAU) % TAU, A = d(a - a0), B = d(a1 - a0); return A <= B; });
+  const P = { x, z, y: Y, y0, level: lv, depth: dep, rx: sx, rz: sz, ry, bedAt, inside: (X, Z) => uv(X, Z)[0] < 1, depthAt: (X, Z) => { const b = bedAt(X, Z); return b == null ? 0 : Math.max(0, Y - b); },
+    edge: (a, k = 1) => wld(...lp(a, k)), waders: [], keep: [x, z, Math.max(sx, sz) * 1.2] };
+  PONDS.push(P); if (PONDS.length === 1) DEFER.unshift(() => { const g0 = groundH; groundH = (X, Z) => { let h = g0(X, Z); for (const Q of PONDS) { const b = Q.bedAt(X, Z); if (b != null && b < h) h = b; } return h; }; });
+  const g = stat(grp(p ?? world, x, y0, z, ry)), N = 72;
+  // mud bank: polar mesh, wet and dark under and along the water, drier outwards, the outer rim fades into the ground colour (no hard edge)
+  { const K = [0.995, 1.03, 1.07, 1.12, 1.18], pos = [], col = [], idx = [], cW = new THREE.Color(o.mud ?? '#3A3024'), cD = new THREE.Color(o.bank ?? '#76664A'), cG = new THREE.Color(GROUND.color ?? '#5F7F3B'), q = new THREE.Color();
+    for (let j = 0; j < K.length; j++) for (let i = 0; i < N; i++) { const a = i / N * TAU, k = K[j] * (j === K.length - 1 ? 1 + 0.05 * Math.sin(7 * a + ph[3]) : 1), [lx, lz] = lp(a, k);
+      pos.push(lx, j === K.length - 1 ? 0.004 : 0.012, lz); const n = noise2(lx * 0.9 + sd, lz * 0.9);
+      q.copy(cW).lerp(cD, clamp((K[j] - 1.01) / 0.06 + n * 0.3)).lerp(cG, j >= K.length - 1 ? 0.85 : j === K.length - 2 ? 0.35 : 0); col.push(q.r, q.g, q.b); }
+    for (let j = 0; j < K.length - 1; j++) for (let i = 0; i < N; i++) { const a = j * N + i, b = j * N + (i + 1) % N, cc = a + N, d = b + N; idx.push(a, b, cc, b, d, cc); }
+    const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); geo.setAttribute('color', new THREE.Float32BufferAttribute(col, 3)); geo.setIndex(idx); geo.computeVertexNormals();
+    const m = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.62, metalness: 0, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 }));   // only round the water: under it the ground stays (the legs go down behind it)
+    m.receiveShadow = true; m.castShadow = false; m.userData.noHit = true; m.userData.qsurf = true; m.name = 'pondMud'; g.add(dyn(m)); }   // dyn: bake() would merge away its vertex colours
+  // water surface
+  { const sh = new THREE.Shape(); for (let i = 0; i <= N; i++) { const a = i / N * TAU, [lx, lz] = lp(a, 1); i ? sh.lineTo(lx, -lz) : sh.moveTo(lx, -lz); }
+    const geo = new THREE.ShapeGeometry(sh, 4); geo.rotateX(-Math.PI / 2);
+    { const I = geo.index, Pq = geo.attributes.position, A = v3().fromBufferAttribute(Pq, I.getX(0)), B = v3().fromBufferAttribute(Pq, I.getX(1)), C = v3().fromBufferAttribute(Pq, I.getX(2));   // wind every triangle so it faces up (gl_FrontFacing from above)
+      if (B.sub(A).cross(C.sub(A)).y > 0) for (let i = 0; i < I.count; i += 3) { const t0 = I.getX(i + 1); I.setX(i + 1, I.getX(i + 2)); I.setX(i + 2, t0); } }
+    const wm = waterSurfaceMat({ color: o.color ?? '#56603A', under: o.under ?? '#2E3620', opacity: o.opacity ?? 0.92, reflect: o.reflect ?? 0.3, ripples: o.ripples ?? 0.55, scale: 0.5, glint: 0.5, rough: o.rough ?? 0.34 });
+    const wg = dyn(grp(g)), m = mesh(wg, geo, wm, 0, lv, 0, { cast: false }); m.receiveShadow = false; m.renderOrder = 2; m.userData.noHit = true; m.userData.qsurf = true; m.name = 'pondWater'; P.water = m; }
+  // shore: reed clumps, cattails, pebbles; open arcs stay free
+  const reeds = [], tails = [], rc = ['#6E8A44', '#7E9A4A', '#8A8A50', '#5E7A3A', '#9A8A5A'];
+  const M = Math.round((sx + sz) * Math.PI / 1.3 * (o.reeds ?? 0.8));
+  for (let i = 0; i < M; i++) { const a = (i + hash(sd * 3 + i * 1.7) * 0.8) / M * TAU; if (isOpen(a) || hash(sd + i * 4.3) > 0.85) continue; const u = 0.86 + hash(sd * 7 + i * 2.1) * 0.3, n = 5 + Math.floor(hash(i * 5.3 + sd) * 5);
+    for (let k = 0; k < n; k++) { const [lx, lz] = lp(a + (hash(i * 9 + k) - 0.5) * 0.12, u + (hash(i * 3 + k * 7) - 0.5) * 0.1), [wx, wz] = wld(lx, lz); reeds.push([wx, wz, 0.75 + hash(i + k * 7) * 0.8, hash(i * 3 + k) * TAU, rc[(i + k) % rc.length]]); }
+    if (hash(i * 6.1 + sd) < (o.cattails ?? 0.6)) for (let k = 0; k < 2 + Math.floor(hash(i * 2.9) * 3); k++) { const [lx, lz] = lp(a + (hash(i * 4 + k) - 0.5) * 0.1, u + (hash(i * 8 + k) - 0.5) * 0.08); tails.push([...wld(lx, lz), 1.3 + hash(i * 5 + k) * 0.6, (hash(i + k) - 0.5) * 0.25]); } }
+  cover('reed', reeds);
+  if (tails.length) { const stG = G('ctStalk', () => new THREE.BoxGeometry(0.014, 1, 0.014).translate(0, 0.5, 0)), hdG = G('ctHead', () => { const h = new THREE.CylinderGeometry(0.022, 0.02, 0.16, 7).translate(0, 0.86, 0); return h; }), spG = G('ctSpike', () => new THREE.CylinderGeometry(0.003, 0.005, 0.12, 4).translate(0, 1.0, 0));
+    const mk = (geo, cl, rough) => { const mm = new THREE.MeshStandardMaterial({ color: cl, roughness: rough, flatShading: true }); if (CFG.wind !== 0) windify(mm, 'local'); const im = new THREE.InstancedMesh(geo, mm, tails.length); im.castShadow = false; im.receiveShadow = true; im.userData.cover = true; im.userData.noHit = true; return im; };
+    const S = mk(stG, '#6E8048', 0.9), H = mk(hdG, '#5A3A22', 0.95), Sp = mk(spG, '#8A7A50', 0.9), o3 = new THREE.Object3D();
+    tails.forEach(([tx, tz, h, lean], i) => { o3.position.set(tx, y0 - 0.01, tz); o3.rotation.set(lean, hash(i * 3.3) * TAU, lean * 0.6); o3.scale.set(1, h, 1); o3.updateMatrix(); for (const im of [S, H, Sp]) im.setMatrixAt(i, o3.matrix); });
+    for (const im of [S, H, Sp]) world.add(im); }
+  for (let i = 0; i < Math.round(M * 0.5); i++) { const a = hash(sd * 11 + i * 3.1) * TAU; if (isOpen(a)) continue; const [lx, lz] = lp(a, 1.02 + hash(i * 1.9) * 0.14); _ell(g, shade('#6A6458', (hash(i * 2.3) - 0.5) * 0.2), lx, 0.012, lz, 0.05 + hash(i) * 0.08, 0.025, 0.04 + hash(i * 3) * 0.06, { detail: 0, ...NC }); }
+  // lily pads (notched discs, in loose clusters) with a few flowers; duckweed in the shallows
+  { const L = []; for (let i = 0; i < Math.round((sx + sz) * 1.6 * (o.lilies ?? 0.5)); i++) { const a = hash(sd * 13 + i * 2.7) * TAU, u = 0.3 + hash(i * 3.9 + sd) * 0.52; for (let k = 0; k < 3; k++) { const [lx, lz] = lp(a + (hash(i * 7 + k) - 0.5) * 0.2, u + (hash(i + k * 5) - 0.5) * 0.08); L.push([lx, lz, 0.12 + hash(i * 2 + k) * 0.1, hash(i * 5 + k) * TAU, k]); } }
+    if (L.length) { const lg = G('lilyPad', () => new THREE.CircleGeometry(1, 14, 0.35, TAU - 0.35).rotateX(-Math.PI / 2)), lm = new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 0.45, flatShading: true, side: THREE.DoubleSide });
+      const im = new THREE.InstancedMesh(lg, lm, L.length), o3 = new THREE.Object3D(), cl = new THREE.Color(), cs = ['#4E8A44', '#5E9A4E', '#3F7A3C', '#6A9A48'];
+      L.forEach(([lx, lz, r, a, k], i) => { o3.position.set(lx, lv + 0.004 + k * 0.001, lz); o3.rotation.set(0, a, 0); o3.scale.set(r, 1, r); o3.updateMatrix(); im.setMatrixAt(i, o3.matrix); im.setColorAt(i, cl.set(cs[i % 4])); });
+      im.castShadow = false; im.receiveShadow = true; im.userData.noHit = true; g.add(im);
+      L.forEach(([lx, lz, r], i) => { if (hash(i * 8.1 + sd) > 0.12) return; const fl = grp(g, lx + r * 0.3, lv + 0.01, lz); for (let k = 0; k < 6; k++) cone(fl, 0.025, 0.05, k % 2 ? '#F6D6E6' : '#FBEFF4', Math.sin(k * 1.05) * 0.03, 0, Math.cos(k * 1.05) * 0.03, { seg: 4, rx: Math.cos(k * 1.05) * 0.5, rz: -Math.sin(k * 1.05) * 0.5, ...NC }); ball(fl, 0.014, '#E8C840', 0, 0.02, 0, { detail: 0, ...NC }); }); } }
+  { const D = []; for (let i = 0; i < Math.round((sx + sz) * 30 * (o.duckweed ?? 0.6)); i++) { const a = hash(sd * 17 + i * 1.3) * TAU, pa = Math.floor(a / TAU * 9); if (hash(pa * 3.7 + sd) < 0.35) continue; const u = 0.74 + hash(i * 2.2 + sd) * 0.24, [lx, lz] = lp(a, u); D.push([lx, lz, 0.012 + hash(i * 4.7) * 0.018]); }
+    if (D.length) { const dg = G('duckweed', () => new THREE.CircleGeometry(1, 6).rotateX(-Math.PI / 2)), im = new THREE.InstancedMesh(dg, new THREE.MeshStandardMaterial({ color: '#7EA83A', roughness: 0.6, flatShading: true }), D.length), o3 = new THREE.Object3D();
+      D.forEach(([lx, lz, r], i) => { o3.position.set(lx, lv + 0.003, lz); o3.scale.set(r, 1, r); o3.updateMatrix(); im.setMatrixAt(i, o3.matrix); }); im.castShadow = false; im.userData.noHit = true; g.add(im); } }
+  // waders: rings across the surface where they walk (emitted at the wader's position at the time of the ring, so a ring stays where it was born), wading splashes
+  const RINGS = [], ringG = G('pondRing', () => new THREE.RingGeometry(0.9, 1, 40).rotateX(-Math.PI / 2));
+  P.wade = f => { if (!f || P.waders.includes(f)) return P; P.waders.push(f); for (let k = 0; k < 3; k++) { const m = new THREE.Mesh(ringG, mat('#E6ECDC', { basic: true, opacity: 0.4, own: true })); m.material.depthWrite = false; m.renderOrder = 3; m.visible = false; m.userData.noHit = true; m.frustumCulled = false; dyn(m); world.add(m); RINGS.push([f, k, m]); } return P; };
+  const posOf = (f, tt) => f._posAt ? f._posAt(tt) : f.root.getWorldPosition(v3());
+  late(t => { for (const [f, k, m] of RINGS) { const per = 1.5, q = (t + k * per / 3) % per, te = t - q, A = posOf(f, te), B = posOf(f, te - 0.3), d = P.depthAt(A.x, A.z);
+    if (d < 0.08 || !f.root.visible) { m.visible = false; continue; } const act = 0.35 + 0.65 * clamp(Math.hypot(A.x - B.x, A.z - B.z) / 0.3 / 1.0), u = q / per;
+    m.visible = true; m.position.set(A.x, Y + 0.004, A.z); m.scale.setScalar(0.24 + u * (0.7 + 0.6 * act)); m.material.opacity = 0.42 * act * (1 - u) ** 1.6 * sm01(d / 0.15); } });
+  for (const f of o.waders ?? []) P.wade(f);
+  if (o.sound !== false) DEFER.push(() => { const D = CFG.dur ?? 40; for (const f of P.waders) { let acc = 0, wasIn = false;
+    for (let t = 0; t < D; t += 0.1) { const A = posOf(f, t), B = posOf(f, t - 0.1), v = Math.hypot(A.x - B.x, A.z - B.z) / 0.1, inW = P.depthAt(A.x, A.z) > 0.1;
+      if (inW && !wasIn && t > 0.05) sfx(t, 'wade', 0.55); wasIn = inW; if (!inW || v < 0.25) { acc = 0.45; continue; } acc += 0.1; if (acc >= 0.6) { acc = 0; sfx(t, 'wade', 0.3 + 0.25 * clamp(v)); } } } });
+  return P;
+}
+// jar(p, x, y, z, { kind: 'glass' | 'crock', h: 0.26, r: 0.085, water: 0.6, waterColor, lid: false | 'cloth' | 'cork', leeches: n | t => n, cap: 14, color, ry }) → J = { g, h, r, mouth, count(t), add(t) }
+//   Glass jar (thick base, shoulder, neck, rolled rim) or salt-glazed stoneware crock (bulging, two-tone glaze, lug handles), pond water inside; `leeches` live in it (glass:
+//   dark striped leeches that drift and wriggle, as many as count(t)); leech({ peel: { to: J } }) adds one when it drops in. Origin = bottom centre; J.mouth = the rim (local).
+function jar(p, x = 0, y = 0, z = 0, o = {}) {
+  const h = o.h ?? 0.26, r = o.r ?? 0.085, gl = (o.kind ?? 'glass') === 'glass', g = dyn(grp(p ?? world, x, y, z, o.ry ?? 0)), NC = { cast: false }, wl = o.water ?? 0.6, adds = [];
+  g.name = 'jar'; Object.assign(g.userData, { prop: 'jar', foot: [r * 2, r * 2] });
+  if (gl) { const gm = mat('#D6E8DE', { opacity: 0.3, rough: 0.05, own: true }); gm.depthWrite = false;
+    const prof = [[0.001, 0], [r * 0.92, 0], [r, 0.02], [r, h * 0.72], [r * 0.9, h * 0.84], [r * 0.74, h * 0.9], [r * 0.74, h * 0.97], [r * 0.8, h]].map(([a, b]) => new THREE.Vector2(a, b));
+    const body = mesh(g, G(`jarG${h}|${r}`, () => new THREE.LatheGeometry(prof, 20)), gm, 0, 0, 0, NC); body.renderOrder = 3; body.userData.noHit = false;
+    cyl(g, r * 0.93, r * 0.95, 0.012, '', 0, 0.002, 0, { seg: 20, mat: mat('#B8D2C4', { opacity: 0.55, rough: 0.1 }), ...NC });
+    mesh(g, G(`jarRim${r}`, () => new THREE.TorusGeometry(r * 0.8, r * 0.07, 6, 20).rotateX(Math.PI / 2)), mat('#C8DED2', { opacity: 0.5, rough: 0.05 }), 0, h, 0, NC);
+    if (wl > 0) { const wm = mat(o.waterColor ?? '#7A8A52', { opacity: 0.5, rough: 0.1 }); wm.depthWrite = false; const w = cyl(g, r * 0.95, r * 0.93, h * 0.72 * wl, '', 0, 0.014, 0, { seg: 20, mat: wm, ...NC }); w.renderOrder = 2; } }
+  else { const C = o.color ?? '#D8C8A4', Br = '#6A4428', prof = [[0.001, 0], [r * 0.8, 0], [r * 0.95, h * 0.12], [r * 1.05, h * 0.45], [r * 0.95, h * 0.78], [r * 0.78, h * 0.9], [r * 0.8, h]].map(([a, b]) => new THREE.Vector2(a, b));
+    mesh(g, G(`crockG${h}|${r}`, () => new THREE.LatheGeometry(prof, 18)), mat(C, { rough: 0.35 }), 0, 0, 0, {}); mesh(g, G(`crockT${h}|${r}`, () => new THREE.LatheGeometry(prof.slice(4).map(v => new THREE.Vector2(v.x * 1.01, v.y)), 18)), mat(Br, { rough: 0.3 }), 0, 0, 0, NC);
+    for (const sx of [-1, 1]) mesh(g, G(`crockLug${r}`, () => new THREE.TorusGeometry(r * 0.22, r * 0.07, 5, 10, Math.PI)), mat(Br, { rough: 0.35 }), sx * r * 1.0, h * 0.72, 0, { rz: -sx * Math.PI / 2, ry: Math.PI / 2, ...NC });
+    if (wl > 0 && !o.lid) cyl(g, r * 0.74, r * 0.74, 0.004, o.waterColor ?? '#4A5430', 0, h * 0.86, 0, { seg: 16, rough: 0.1, ...NC }); }
+  if (o.lid === 'cloth') { const cl = o.cloth ?? '#D8CCB0'; cyl(g, r * 1.02, r * 0.9, 0.012, cl, 0, h - 0.004, 0, { seg: 16, ...NC }); cyl(g, r * 0.9, r * 1.02, h * 0.16, cl, 0, h * 0.84, 0, { seg: 16, ...NC }); cyl(g, r * 0.83, r * 0.83, 0.012, '#8A6A44', 0, h * 0.9, 0, { seg: 16, ...NC }); }
+  else if (o.lid === 'cork') cyl(g, r * 0.7, r * 0.66, 0.05, '#A8784A', 0, h - 0.02, 0, { seg: 12, ...NC });
+  const base = typeof o.leeches === 'function' ? o.leeches : () => o.leeches ?? 0, count = t => Math.round(base(t)) + adds.filter(a => a <= t).length;
+  if (gl && (o.leeches != null || o.cap)) { const LG = G('jarLeech', () => { const cv = new THREE.CatmullRomCurve3([v3(-0.03, 0, 0), v3(-0.01, 0.006, 0.008), v3(0.012, -0.004, -0.006), v3(0.03, 0.003, 0.004)]); return new THREE.TubeGeometry(cv, 8, 0.0065, 5, false).scale(1, 0.7, 1); });
+    const lm = mat('#2C3020', { rough: 0.35 }), cap = o.cap ?? 14, L = [];
+    for (let i = 0; i < cap; i++) { const m = mesh(g, LG, lm, 0, 0, 0, NC); dyn(m); m.visible = false; L.push(m); }
+    tick(t => { const n = Math.min(cap, count(t)), wh = h * 0.72 * wl; L.forEach((m, i) => { m.visible = i < n; if (!m.visible) return; const a = hash(i * 3.1) * TAU + 0.25 * Math.sin(t * 0.4 + i), rr = r * (0.25 + 0.5 * hash(i * 5.7));
+      m.position.set(Math.cos(a) * rr, 0.03 + (wh - 0.05) * (0.2 + 0.7 * hash(i * 2.3)) + 0.01 * Math.sin(t * 0.9 + i * 1.7), Math.sin(a) * rr); m.rotation.set(0.3 * Math.sin(t * 1.3 + i), a + 0.6 * Math.sin(t * 0.7 + i * 2.1), 0.35 * Math.sin(t * 1.9 + i * 1.3)); m.scale.set(1 + 0.15 * Math.sin(t * 2.6 + i), 1, 1); }); }); }
+  return { g, h, r, mouth: [0, h + 0.02, 0], count, add: tt => adds.push(tt), kind: gl ? 'glass' : 'crock' };
+}
+// leech({ at: [x, z] | [x, y, z], pond: P, size: 1, color, stripe, seed, swim: [[x, z], …], t0, speed: 0.11, latch: { rig, t, leg: 'L' | 'R', u: 0.5, a: 0 }, feed: 8, swell: 1.8,
+//   peel: { t, by: rig, side: 'R', to: jar | [x, y, z], dur: 1.6 }, show: [t0, t1] }) → L = { mesh, at(t), mode(t), tPeel, tDone }
+//   Medicinal leech (Hirudo: olive-brown, flattened, two orange stripes along the back, small front sucker, bigger tail sucker), one deforming mesh, a pure function of t:
+//   swim = along `swim` at the pond surface with an up-and-down wave · latch = mouth on the shin of `rig` (u: 0 knee … 1 ankle, a: around the leg, 0 = front), the body hangs
+//   along the skin, pulses while it sucks and swells over `feed` s (swell = final thickness factor) · peel = the hand of `by` pinches the front end (it stretches, the tail lets
+//   go), it dangles from the fingers and drops into `to` (a jar() counts it) · after the peel a small Y-shaped bite mark stays on the shin. Under the pond's water it is hidden.
+function leech(o = {}) {
+  const sz = o.size ?? 1, len0 = 0.13 * sz, sd = o.seed ?? hash((o.at?.[0] ?? 0) * 3.7 + (o.at?.[2] ?? o.at?.[1] ?? 0) * 1.3) * 100, NS = 14, NK = 8, Pd = o.pond;
+  const at0 = o.at ?? [0, 0], y0 = at0.length > 2 ? at0[1] : (Pd ? Pd.y + 0.003 : groundH(at0[0], at0[1]) + 0.01), sx0 = at0[0], sz0 = at0.length > 2 ? at0[2] : at0[1];
+  const path = o.swim?.length > 1 ? new Path(o.swim) : null, t0 = o.t0 ?? 0, v = o.speed ?? 0.11, LA = o.latch, PE = o.peel, feed = o.feed ?? 8, sw = o.swell ?? 1.8;
+  const pos = new Float32Array(NS * NK * 3 + 6), col = [], idx = [], cB = new THREE.Color(o.color ?? '#2A3220'), cS = new THREE.Color(o.stripe ?? '#C8642A'), cV = new THREE.Color(o.belly ?? '#5E5C34'), q = new THREE.Color();
+  for (let i = 0; i < NS; i++) for (let k = 0; k < NK; k++) { const th = k / NK * TAU, up = Math.sin(th), sideA = Math.abs(Math.cos(th)), st = Math.exp(-(((Math.abs(th - Math.PI / 2) - 0.55) / 0.13) ** 2)), sp = hash(i * 7.1 + k * 3.3 + sd) < 0.12 && up > 0.4;
+    q.copy(cB).lerp(cV, clamp(-up * 1.2)).lerp(cS, up > 0 ? st * 0.85 : 0); if (sp) q.multiplyScalar(0.4); q.multiplyScalar(0.92 + 0.12 * (i % 2)); col.push(q.r, q.g, q.b); void sideA; }
+  col.push(cB.r, cB.g, cB.b, cB.r * 0.8, cB.g * 0.8, cB.b * 0.8);
+  for (let i = 0; i < NS - 1; i++) for (let k = 0; k < NK; k++) { const a = i * NK + k, b = i * NK + (k + 1) % NK, c = a + NK, d = b + NK; idx.push(a, c, b, b, c, d); }
+  const hC = NS * NK, tC = hC + 1; for (let k = 0; k < NK; k++) { idx.push(hC, k, (k + 1) % NK); const a = (NS - 1) * NK; idx.push(tC, a + (k + 1) % NK, a + k); }
+  const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.BufferAttribute(pos, 3)); geo.setAttribute('color', new THREE.Float32BufferAttribute(col, 3)); geo.setIndex(idx);
+  const me = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.28, metalness: 0.05 })); me.castShadow = false; me.receiveShadow = true; me.frustumCulled = false; me.userData.noHit = true; me.name = 'leech'; dyn(me); (o.p ?? world).add(me);
+  // timing
+  const tL = LA?.t ?? 1e9, pd = PE?.dur ?? 1.6, tP = PE?.t ?? 1e9, tPop = tP + pd * 0.4, tDone = tP + pd, tArrive = path ? t0 + path.len / v : t0;
+  if (PE?.to?.add) PE.to.add(tDone);
+  if (PE?.by && PE.t != null && o.sound !== false) { sfx(tP + pd * 0.38, 'squelch', 0.35); if (PE.to?.add) sfx(tDone - 0.05, 'plop', 0.45); }
+  // shin frame of the latched rig
+  const leg = () => (LA.leg ?? 'L') === 'R' ? LA.rig.shinR : LA.rig.shinL; let SB = null;
+  const shinBox = () => { if (SB) return SB; const sh = leg(), m = sh.children.find(n => n.isMesh && !n.userData.tailor); if (!m) return SB = { cx: 0, cz: 0, hx: 0.09, hz: 0.095, y1: -0.42 }; sh.updateWorldMatrix(true, true); const b = _skinBox(m, sh); return SB = { cx: (b.min.x + b.max.x) / 2, cz: (b.min.z + b.max.z) / 2, hx: (b.max.x - b.min.x) / 2, hz: (b.max.z - b.min.z) / 2, y1: b.min.y }; };
+  // bite mark on the shin (three tiny dark-red cuts in a Y, a faint pink halo), shown once the leech is off
+  let bite = null; if (LA?.rig && PE?.t != null) { const sh = leg(), a = LA.a ?? 0, B0 = { cx: 0, cz: 0, hx: 0.092, hz: 0.096 }; bite = grp(sh, 0, -(LA.u ?? 0.35) * 0.4, 0); bite.userData.noHit = true; bite.visible = false;
+    DEFER.push(() => { const B = shinBox(), ax = Math.sin(a), az = Math.cos(a); bite.position.set(B.cx + ax * B.hx * 1.01, -(LA.u ?? 0.35) * Math.abs(B.y1) * 0.92, B.cz + az * B.hz * 1.01); bite.rotation.y = a; });
+    void B0; _ell(bite, '#D88A80', 0, 0, 0.001, 0.011, 0.011, 0.0015, { detail: 1, cast: false }); for (let k = 0; k < 3; k++) { const th = k / 3 * TAU + Math.PI / 2; _ell(bite, '#6A1216', Math.cos(th) * 0.0035, Math.sin(th) * 0.0035, 0.0025, 0.0018 + 0.001 * Math.abs(Math.cos(th)), 0.0018 + 0.001 * Math.abs(Math.sin(th)), 0.0012, { detail: 0, cast: false }); }
+    tick(t => { bite.visible = t >= tPop; }); }
+  if (PE?.by && LA?.rig && PE.t != null && PE.reach !== false) {   // the hand goes down to the leech (leans / crouches for it) and pinches it; the target = the bite point on the standing pose at the peel
+    let tgt = null; DEFER.push(() => { const B = shinBox(), a = LA.a ?? 0, R = LA.rig.root, tg = tP + pd * 0.25; R.updateWorldMatrix(true, true);   // the shin's rest pose relative to the root, placed where walk() has the rig then
+      const loc = v3(B.cx + Math.sin(a) * (B.hx + 0.02), -(LA.u ?? 0.35) * Math.abs(B.y1) * 0.92 - 0.02, B.cz + Math.cos(a) * (B.hz + 0.02)).applyMatrix4(R.matrixWorld.clone().invert().multiply(leg().matrixWorld));
+      const P0 = LA.rig._posAt ? LA.rig._posAt(tg) : R.position.clone(), yw = LA.rig._yawAt ? LA.rig._yawAt(tg) : R.rotation.y; tgt = loc.applyMatrix4(new THREE.Matrix4().compose(P0, new THREE.Quaternion().setFromEuler(new THREE.Euler(0, yw, 0)), R.scale)); });
+    _reach(PE.by, PE.side ?? 'R', () => tgt, tP + pd * 0.25, null, { pre: pd * 0.25 + 0.3, post: pd * 0.35 }); hands(PE.by, 'grip', tP + pd * 0.15, tP + pd, { side: PE.side ?? 'R', fade: 0.12 }); }
+  const hand = () => { const f = PE.by, sx = (PE.side ?? 'R') === 'L' ? -1 : 1; return f.hands?.find(h => h.sx === sx)?.hd ?? (sx < 0 ? f.foreL : f.foreR); };
+  const C = Array.from({ length: NS }, () => v3()), T = Array.from({ length: NS }, () => v3()), U = Array.from({ length: NS }, () => v3()), Wd = new Float32Array(NS), Th = new Float32Array(NS), tmp = v3(), tmp2 = v3(), M4 = new THREE.Matrix4();
+  const prof = s => { const b = Math.pow(Math.sin(Math.PI * Math.pow(0.04 + 0.92 * s, 0.75)), 0.75), tail = Math.exp(-(((s - 0.93) / 0.045) ** 2)) * 0.45; return 0.18 + 0.82 * b + tail; };   // narrow head, widest behind the middle, a round tail sucker
+  const mode = t => t >= tDone ? 'done' : t >= tP ? 'peel' : t >= tL ? 'latched' : 'swim';
+  const build = (feedK, len, t) => { const w0 = len * 0.13; for (let i = 0; i < NS; i++) { const s = i / (NS - 1), pr = prof(s) * (1 + 0.06 * Math.sin(TAU * (s * 2 - t * 1.1)) * (feedK > 0 ? 1 : 0)); Wd[i] = w0 * pr * (1 + 0.45 * feedK); Th[i] = w0 * 0.5 * pr * (1 + 1.4 * feedK); } };
+  const write = () => { let j = 0; for (let i = 0; i < NS; i++) { const Ti = T[i].normalize(), Ui = U[i], Bi = tmp.crossVectors(Ti, Ui).normalize(), Ui2 = tmp2.crossVectors(Bi, Ti).normalize();
+      for (let k = 0; k < NK; k++) { const th = k / NK * TAU, cx = Math.cos(th) * Wd[i], cy = Math.sin(th) * Th[i]; pos[j++] = C[i].x + Bi.x * cx + Ui2.x * cy; pos[j++] = C[i].y + Bi.y * cx + Ui2.y * cy; pos[j++] = C[i].z + Bi.z * cx + Ui2.z * cy; } }
+    const h0 = T[0], hN = T[NS - 1]; pos[j++] = C[0].x + h0.x * Wd[0] * 0.6; pos[j++] = C[0].y + h0.y * Wd[0] * 0.6; pos[j++] = C[0].z + h0.z * Wd[0] * 0.6; pos[j++] = C[NS - 1].x - hN.x * Wd[NS - 1] * 0.5; pos[j++] = C[NS - 1].y - hN.y * Wd[NS - 1] * 0.5; pos[j++] = C[NS - 1].z - hN.z * Wd[NS - 1] * 0.5;
+    geo.attributes.position.needsUpdate = true; geo.computeVertexNormals(); geo.computeBoundingSphere(); };
+  // the spine on the shin in the shin's frame → world (k = how far the front end has been pulled toward P, [0..1])
+  const onShin = (t, feedK, len, pullTo, pk, tailOff) => { const sh = leg(); sh.updateWorldMatrix(true, false); const B = shinBox(), a = LA.a ?? 0, ax = Math.sin(a), az = Math.cos(a), uy = -(LA.u ?? 0.35) * Math.abs(B.y1) * 0.92;
+    M4.copy(sh.matrixWorld); const surf = (y, out) => { const r = 1.0 + 0.0; return out.set(B.cx + ax * B.hx * r, y, B.cz + az * B.hz * r); };
+    for (let i = 0; i < NS; i++) { const s = i / (NS - 1), lift = Th[i] * 0.9 + 0.002 + 0.004 * Math.sin(Math.PI * s), yy = uy - s * len * 0.82;
+      surf(yy, C[i]); C[i].x += ax * lift; C[i].z += az * lift; C[i].x += Math.cos(a) * 0.004 * s * Math.sin(t * 1.7 + sd); C[i].z -= Math.sin(a) * 0.004 * s * Math.sin(t * 1.7 + sd); C[i].applyMatrix4(M4); }
+    if (pullTo && pk > 0) { const A = C[0].clone(), Z = C[NS - 1].clone(); for (let i = 0; i < NS; i++) { const s = i / (NS - 1), w = tailOff ? 1 : Math.pow(1 - s, 1.3); C[i].lerp(tmp.copy(pullTo).add(tmp2.set(0, -s * len * 0.95, 0)), pk * w); } void A; void Z; }
+    for (let i = 0; i < NS; i++) { T[i].subVectors(C[Math.min(NS - 1, i + 1)], C[Math.max(0, i - 1)]); if (T[i].lengthSq() < 1e-10) T[i].set(0, -1, 0); U[i].set(ax, 0, az).transformDirection(M4); } };
+  const L = { mesh: me, mode, tPeel: tP, tDone, tPop };
+  late(t => { const md = mode(t), sh = o.show; let vis = !sh || (t >= sh[0] && t < (sh[1] ?? 1e9));
+    if (md === 'done') { me.visible = false; return; }
+    if (md === 'swim') { build(0, len0, t); const d = path ? clamp((t - t0) * v, 0, path.len) : 0, mv = path && t > t0 && t < tArrive ? 1 : 0.25;
+      if (LA && t >= tArrive + 0.05 && path) vis = false;   // dived after its swim (it latches on under the water)
+      for (let i = 0; i < NS; i++) { const s = i / (NS - 1), back = s * len0; let px, pz, dx, dz;
+        if (path) { const P0 = path.at(d - back), D0 = path.dir(Math.max(0.09, d - back)), dl = Math.hypot(D0.x, D0.z) || 1; dx = D0.x / dl; dz = D0.z / dl; px = P0.x; pz = P0.z; if (d - back < 0) { px -= dx * (back - d); pz -= dz * (back - d); } }
+        else { const a = hash(sd) * TAU; dx = Math.sin(a); dz = Math.cos(a); px = sx0 - dx * back; pz = sz0 - dz * back; }
+        const lat = 0.006 * mv * Math.sin(TAU * (s * 0.9 - t * 1.3)); C[i].set(px - dz * lat, y0 + 0.006 * mv * Math.sin(TAU * (s * 1.1 - t * 1.6)) + 0.002 * Math.sin(t * 2 + sd), pz + dx * lat); T[i].set(-dx, 0, -dz); U[i].set(0, 1, 0); }
+      me.visible = vis; write(); return; }
+    const fk = clamp((Math.min(t, tP) - tL) / feed) * (sw - 1) / 0.8, len = len0 * (1 + 0.22 * clamp(fk));
+    if (md === 'latched') { build(clamp(fk), len, t); onShin(t, fk, len); me.visible = vis; write(); return; }
+    // peel: 0 … 0.4 pinch and stretch (front end to the fingers), the tail lets go; then it dangles from the fingers and moves to the jar, drops in
+    build(clamp(fk) * 0.9, len, t); const u = (t - tP) / pd, hd = hand(); hd.updateWorldMatrix(true, false); const HP = v3().setFromMatrixPosition(hd.matrixWorld);
+    { const sh0 = leg(); sh0.updateWorldMatrix(true, false); }
+    if (u < 0.4) { onShin(t, fk, len * (1 + 0.4 * sm01(u / 0.4)), HP, 0, false); const A0 = C[0].clone(), dv = HP.clone().sub(A0), dl = dv.length(), cap = len * 0.9; const HPc = dl > cap ? A0.clone().add(dv.multiplyScalar(cap / dl)) : HP; onShin(t, fk, len * (1 + 0.4 * sm01(u / 0.4)), HPc, sm01(u / 0.4), false); }
+    else { const k = sm01((u - 0.5) / 0.4), to = PE.to, TP = to?.g ? worldAt(to.g, to.mouth ?? [0, 0.3, 0], t) : Array.isArray(to) ? v3(...to) : HP, top = HP.clone().lerp(TP, k), drop = u > 0.92 ? (u - 0.92) / 0.08 : 0;
+      top.y -= drop * 0.12; const swing = 0.02 * Math.sin(t * 5 + sd) * (1 - k);
+      for (let i = 0; i < NS; i++) { const s = i / (NS - 1); C[i].set(top.x + swing * s, top.y - s * len * 0.9 - drop * 0.02, top.z + swing * 0.5 * s); T[i].set(0, -1, 0); U[i].set(0, 0, 1); }
+      if (u < 0.52) { const Dg = C.map(c => c.clone()), b = sm01((u - 0.4) / 0.12); onShin(t, fk, len * 1.4, HP, 0, false); const A0 = C[0].clone(), dv = HP.clone().sub(A0), dl = dv.length(), cap = len * 0.9; onShin(t, fk, len * 1.4, dl > cap ? A0.clone().add(dv.multiplyScalar(cap / dl)) : HP, 1, false);
+        for (let i = 0; i < NS; i++) { C[i].lerp(Dg[i], b); U[i].lerp(tmp.set(0, 0, 1), b).normalize(); }
+        for (let i = 0; i < NS; i++) { T[i].subVectors(C[Math.min(NS - 1, i + 1)], C[Math.max(0, i - 1)]); if (T[i].lengthSq() < 1e-10) T[i].set(0, -1, 0); } }
+      if (drop >= 0.999) { me.visible = false; return; } }
+    me.visible = vis; write(); });
+  L.at = t => v3().fromArray(pos, 0); return L;
+}
 // warehouse(p, x, z, { w: 12, d: 10, h: 13, floors: 4, ry, y, color, roof: 'gable' | 'flat', hoist: true, doorsOpen: [floor …], seed }) → { g, hook(t) }
 //   A Victorian riverside brick warehouse (front +z): stone plinth, brick walls with pilasters per bay and stone string courses per floor, sash windows with frames, sills,
 //   segmental arch lintels and dark panes, a middle bay of stacked loading doors (some open onto the dark inside), a gable roof (slate, brick gable to the front), chimney
@@ -18805,6 +18997,7 @@ const COSTUME_BASE = {
   tudorKing: { shirt: '#7A1A26', pants: '#EEE8DA', shoes: '#D8CBA8', coat: true, coatLen: 0.42, build: 'tudorKing', beard: 'full', hair: '#B5622A', beardColor: '#A8562A', hairStyle: 'short', sleeves: 'long' },
   tosher: { shirt: '#4E3D2E', pants: '#B5AA8E', shoes: '#2A2018', coat: true, coatLen: 0.44, beard: 'stubble', hair: '#3A2A1E', belt: '#3A2A1C' },
   plaguedoctor: { shirt: '#23201C', pants: '#23201C', dress: '#23201C', skirtLen: 0.8, legs: '#1E1B18', shoes: '#1A1410', hair: '#2A2420', soles: false },
+  peasant: { shirt: '#E2D8BE', pants: '#6A5238', shoes: '#C99A78', soles: false, beard: 'stubble', hair: '#4A3426', sleeves: 'long' },
 };
 for (const k in COSTUME_BASE) { const { skin, ...rest } = COSTUME_BASE[k]; OUTFITS[k] ??= { costume: k, ...rest }; }   // char('you', { outfit: 'santa' }) keeps the character's skin
 
@@ -19100,6 +19293,39 @@ const COSTUMES = (() => {
       hide(f); const h = hat(f, 0.33), Fe = '#3A322A'; cyl(h, 0.29, 0.3, 0.025, Fe, 0, -0.03, 0.01, { seg: 14, rz: 0.08, rx: -0.05 }); cyl(h, 0.19, 0.21, 0.15, Fe, 0, -0.01, 0, { seg: 12 });
       cyl(h, 0.212, 0.212, 0.04, '#241E1A', 0, 0.0, 0, { seg: 12, ...NC }); box(h, 0.12, 0.03, 0.16, shade(Fe, -0.12), 0, 0.12, 0, { rz: 0.2, ...NC });
       if (K.lamp !== false) { const lo = typeof K.lamp === 'object' ? K.lamp : {}; DEFER.push(() => glow(0, 0, 0, { at: tt => { const P = worldAt(lens, [0, 0, 0.35], tt); return [P.x, P.y, P.z]; }, intensity: lo.intensity ?? 6.5, dist: lo.dist ?? 8, color: lo.color ?? '#FFC883', flicker: lo.flicker ?? 0.15, rampIn: 0.01 })); }
+    },
+    peasant(f, K) {   // v3.54 rural labourer c. 1800–1850 (England / France), dressed for wading: coarse linen shirt with an open neck and the sleeves rolled up, neckerchief,
+      // brown waistcoat with horn buttons (men; K.waistcoat: false = none), patched trousers rolled above the knee, a rope belt, bare shins and feet with mud to the ankles,
+      // battered straw hat. Women (build 'woman' or a skirt / dress): the skirt hitched up into a roll at the waist, a sacking apron, a crossed shawl, a linen mob cap.
+      // K.hat: 'straw' | 'mob' | 'cap' | false · K.rolled: false = trousers and sleeves down (shoes stay off) · K.mud: 0..1
+      const z = fz(f), sk = f.FC?.skull ? _hexOf(f.FC.skull) : '#E8B892', Ln = '#E2D8BE', pants = K.pants ?? '#6A5238', woman = f.build === 'woman' || !!(K.skirt || K.dress), rolled = K.rolled !== false, Mud = '#4A3A28';
+      box(f.chest, 0.12, 0.14, 0.01, sk, 0, 0.45, z + 0.004, NC); for (const sx of [-1, 1]) box(f.chest, 0.06, 0.13, 0.014, Ln, sx * 0.07, 0.47, z + 0.006, { rz: sx * 0.35, ...NC });   // open shirt neck
+      const Nk = K.neck ?? (woman ? '#7A4A3A' : '#8A3A2A');
+      if (!woman) { box(f.chest, 0.26, 0.06, 0.05, Nk, 0, 0.55, z - 0.02, NC); cone(f.chest, 0.045, 0.09, Nk, 0.04, 0.46, z + 0.012, { seg: 4, rx: Math.PI, ...NC }); box(f.chest, 0.03, 0.04, 0.02, shade(Nk, -0.15), 0.035, 0.515, z + 0.012, NC); }
+      if (!woman && K.waistcoat !== false) { const V = K.waistcoat ?? '#5A4632';
+        for (const sx of [-1, 1]) box(f.chest, 0.17, 0.48, 0.014, V, sx * 0.13, 0.02, z + 0.003, { rz: sx * -0.05, ...NC }); box(f.chest, 0.5, 0.48, 0.014, V, 0, 0.02, -z - 0.003, NC);
+        buttons(f, '#C8B08A', 5, 0.36, 0.075, 0.035, 0.012); box(f.chest, 0.08, 0.05, 0.012, shade(V, -0.08), -0.14, 0.12, z + 0.012, NC);   // pocket welt
+        box(f.chest, 0.06, 0.07, 0.012, shade(V, 0.1), 0.13, 0.22, z + 0.011, { rz: 0.2, ...NC }); }   // a patch
+      if (woman) { const Sw = K.shawl ?? '#7A4A3A'; for (const sx of [-1, 1]) box(f.chest, 0.12, 0.5, 0.02, Sw, sx * 0.06, 0.22, z + 0.012, { rz: sx * 0.45, ...NC });   // crossed shawl, tied at the back
+        box(f.chest, 0.48, 0.24, 0.02, Sw, 0, 0.36, -z - 0.012, NC); cone(f.chest, 0.2, 0.22, Sw, 0, 0.12, -z - 0.012, { seg: 3, rx: Math.PI, ...NC }); box(f.chest, 0.5, 0.06, 0.32, shade(Sw, -0.1), 0, 0.57, 0, NC);
+        if (f.flaps) { const ap = hipFlap(f.hips, f.flaps, 0, 1, { gain: 0.5 }), Ap = K.apron ?? '#B8AA88'; box(ap.in, 0.3, 0.36, 0.012, Ap, 0, -0.4, 0.17, NC); box(ap.in, 0.3, 0.05, 0.013, shade(Ap, -0.18), 0, -0.24, 0.171, NC); }
+        if (rolled) { const Sk = _hexOf(f.hips.children.find(n => n.isMesh)) ?? '#7A5A44'; rbox(f.hips, 0.52, 0.09, 0.34, shade(Sk, -0.06), 0, -0.04, 0, { rf: 0.5 }); _ell(f.hips, shade(Sk, -0.1), -0.22, -0.06, 0.08, 0.06, 0.06, 0.05, { detail: 1, ...NC }); } }   // skirt hitched into a roll + knot
+      box(f.hips, 0.47, 0.03, 0.31, '#A8906A', 0, 0.06, 0, NC); _ell(f.hips, '#A8906A', 0.12, 0.05, 0.155, 0.03, 0.025, 0.02, { detail: 0, ...NC }); box(f.hips, 0.015, 0.12, 0.012, '#A8906A', 0.13, -0.02, 0.16, { rz: 0.15, ...NC });   // rope belt
+      if (rolled) { for (const ua of [f.armL, f.armR]) { box(ua, 0.19, 0.08, 0.19, shade(Ln, -0.06), 0, -0.29, 0, NC); box(ua, 0.185, 0.03, 0.185, shade(Ln, 0.04), 0, -0.25, 0, NC); }
+        for (const fa of [f.foreL, f.foreR]) { const m = fa.children.find(n => n.isMesh); if (m) m.material = mat(sk, { flat: false }); } }
+      if (!woman) { if (rolled) for (const sh of [f.shinL, f.shinR]) recol(sh, sk);
+        if (rolled) for (const lg of [f.legL, f.legR]) { rbox(lg, 0.215, 0.075, 0.225, shade(pants, 0.04), 0, -0.43, 0, { rf: 0.5 }); box(lg, 0.21, 0.025, 0.22, shade(pants, 0.14), 0, -0.392, 0, NC); }
+        box(f.legL, 0.09, 0.1, 0.01, shade(pants, 0.14), 0.03, -0.2, 0.112, { rz: 0.1, ...NC }); box(f.legR, 0.07, 0.08, 0.01, shade(pants, -0.12), -0.04, -0.1, 0.112, NC); }   // patches
+      const mk = K.mud ?? 0.8; for (const sh of [f.shinL, f.shinR]) if (mk > 0) box(sh, 0.19, 0.08 * mk + 0.02, 0.2, Mud, 0, -0.42, 0.003, NC);   // mud to the ankles
+      for (const ft of [f.footL, f.footR]) { recol(ft, mk > 0 ? shade(sk, -0.18) : sk); for (let i = 0; i < 4; i++) box(ft, 0.03, 0.03, 0.03, shade(sk, -0.12), -0.06 + i * 0.04, -ANK, 0.19, NC); }
+      const H = K.hat ?? (woman ? 'mob' : 'straw');
+      if (H === 'straw') { hide(f); const h = hat(f, 0.31), St = '#C8A65A'; cyl(h, 0.33, 0.34, 0.02, St, 0, -0.01, 0.01, { seg: 16, rz: 0.07, rx: -0.05 }); cyl(h, 0.17, 0.205, 0.15, shade(St, -0.04), 0, 0.0, 0, { seg: 12 });
+        cyl(h, 0.208, 0.208, 0.035, '#5A3A22', 0, 0.01, 0, { seg: 12, ...NC }); box(h, 0.14, 0.03, 0.16, shade(St, -0.14), 0, 0.15, 0, { rz: 0.15, ...NC });   // band, dented crown
+        for (let i = 0; i < 9; i++) { const a = i / 9 * TAU + 0.3; box(h, 0.012, 0.008, 0.04 + hash(i * 3.1) * 0.03, shade(St, -0.1), Math.sin(a) * 0.34, -0.01, Math.cos(a) * 0.34, { ry: a, ...NC }); }   // frayed brim
+        for (const [a, rr] of [[1.2, 0.27], [3.6, 0.25]]) cyl(h, 0.022, 0.022, 0.024, '#3A2A1A', Math.sin(a) * rr, -0.012, Math.cos(a) * rr, { seg: 6, ...NC }); }   // holes
+      else if (H === 'mob') { hide(f); const h = hat(f, 0.2); ball(h, 0.24, '#ECE6D6', 0, 0.07, -0.03, { detail: 2 }).scale.set(1, 0.8, 1.05); mesh(h, G('mobRuffle', () => new THREE.TorusGeometry(0.235, 0.025, 5, 18).rotateX(Math.PI / 2 - 0.25)), mat('#F2EEE2'), 0, 0.05, 0.02, NC);
+        box(h, 0.3, 0.025, 0.02, '#8A5A44', 0, 0.06, 0.2, { rx: -0.3, ...NC }); }
+      else if (H === 'cap') { hide(f); const h = hat(f, 0.32); rbox(h, 0.42, 0.08, 0.44, '#4A4238', 0, -0.02, 0.02, { rf: 0.45 }); box(h, 0.32, 0.025, 0.12, '#3E372E', 0, -0.03, 0.23, { rx: 0.15 }); }
     },
     smock1911(f, K) {   // museum workman 1911: white work smock (coat key) over a dark shirt, flat cap, moustache
       const z = fz(f); box(f.chest, 0.14, 0.12, 0.01, '#3A3530', 0, 0.48, z + 0.004, NC);
@@ -21534,9 +21760,10 @@ const SND = (() => {
     industrial: { lead: 'saw',     drums: 'gated',   bass: 'octave',  bpmX: 1.0, min: [0, 1, 3, 5, 6, 8, 10], pad: 0.9, drone: true },
     circus:     { lead: 'marimba', lead2: 'whistle', drums: 'bounce', bass: 'upright', bpmX: 1.12, pad: 0.4 },
     victorian:  { lead: 'concertina', lead2: 'whistle', drums: 'bounce', bass: 'upright', bpmX: 0.98, pad: 0.25, maj: [0, 2, 4, 5, 7, 9, 11], min: [0, 2, 3, 5, 7, 8, 11] },   // v3.49 music hall / street: concertina oom-pah, penny whistle, upright bass
-    baroque:    { lead: 'harpsi',  lead2: 'strings', drums: 'none',   bass: 'upright', bpmX: 0.92, min: [0, 2, 3, 5, 7, 8, 11], maj: [0, 2, 4, 5, 7, 9, 11], pad: 0.55, drone: true }   // v3.53 17th-century Italy: harpsichord broken chords, viol / string line, continuo bass, organ drone
+    baroque:    { lead: 'harpsi',  lead2: 'strings', drums: 'none',   bass: 'upright', bpmX: 0.92, min: [0, 2, 3, 5, 7, 8, 11], maj: [0, 2, 4, 5, 7, 9, 11], pad: 0.55, drone: true },   // v3.53 17th-century Italy: harpsichord broken chords, viol / string line, continuo bass, organ drone
+    folk:       { lead: 'hurdy', lead2: 'fiddle', drums: 'tabor', bass: 'upright', bpmX: 1.0, min: [0, 2, 3, 5, 7, 8, 10], maj: [0, 2, 4, 5, 7, 9, 10], pad: 0.3, drone: true }   // v3.54 rural folk (Europe 1700–1900: village, fields, marsh): hurdy-gurdy with its buzzing trompette, fiddle, tabor, drone
   };
-  const STYLE_WORDS = [[/victorian|music hall|barrel organ|concertina|accordion|dickens/i, 'victorian'], [/bluegrass|banjo|country|hillbilly|appalach/i, 'bluegrass'], [/western|cowboy|spaghetti|frontier|desert town|saloon/i, 'western'],
+  const STYLE_WORDS = [[/victorian|music hall|barrel organ|concertina|accordion|dickens/i, 'victorian'], [/folk|hurdy|peasant|rural|village|countryside|marsh/i, 'folk'], [/bluegrass|banjo|country|hillbilly|appalach/i, 'bluegrass'], [/western|cowboy|spaghetti|frontier|desert town|saloon/i, 'western'],
     [/military|war film|march|snare|army|battlefield|wartime/i, 'military'], [/synthwave|retro ?wave|80s|neon|outrun/i, 'synthwave'],
     [/techno|edm|electro|club|house music|dubstep|trap/i, 'electronic'], [/lo-?fi|chillhop/i, 'lofi'], [/jazz|swing|noir|saxophone|big band/i, 'jazz'],
     [/arab|middle east|oud|egypt|persian|desert|bazaar/i, 'middleeast'], [/japan|chinese|asia|koto|shamisen|erhu|guzheng|samurai|kung fu/i, 'asian'],
@@ -21611,11 +21838,12 @@ const SND = (() => {
     const vib = (os, t, rate, depth, delay = 0.15) => { const l = ctx.createOscillator(), lg = ctx.createGain(); l.frequency.value = rate; lg.gain.setValueAtTime(0, t); lg.gain.linearRampToValueAtTime(depth, t + delay + 0.2); l.connect(lg); lg.connect(os.detune); l.start(t); return l; };
     const voice2 = (t, f, d, v, kind) => {   // the melody voice of a style
       const R = Math.max(0.08, d * 0.25), H = Math.max(0, d - R), cfg = { fiddle: ['sawtooth', 0.045, 0.06, 2600, 5.6, 22], whistle: ['sine', 0.07, 0.04, 0, 5.2, 18], flute: ['triangle', 0.075, 0.07, 0, 4.8, 14],
-        horn: ['sawtooth', 0.04, 0.09, 1100, 4.5, 8], strings: ['sawtooth', 0.03, 0.16, 1800, 5, 12], saw: ['sawtooth', 0.04, 0.01, 2800, 0, 0] }[kind] ?? ['triangle', 0.06, 0.05, 0, 5, 10];
+        horn: ['sawtooth', 0.04, 0.09, 1100, 4.5, 8], hurdy: ['sawtooth', 0.035, 0.03, 1700, 5.8, 7], strings: ['sawtooth', 0.03, 0.16, 1800, 5, 12], saw: ['sawtooth', 0.04, 0.01, 2800, 0, 0] }[kind] ?? ['triangle', 0.06, 0.05, 0, 5, 10];
       const [type, pk, at, lp, vr, vd] = cfg;
       for (const dt of kind === 'strings' || kind === 'saw' ? [-8, 8] : [0]) { const os = tone(type, f, t, at, H, R, pk * v, music, { detune: dt, ...(lp ? { lp, q: 0.9 } : {}) }); if (vr) vib(os, t, vr, vd).stop(t + d + R + 0.1); }
       if (kind === 'flute' || kind === 'whistle') nz(t, 0.03, H * 0.6, R, 0.025 * v, music, 'bandpass', f * 2, 0, 2);
-      if (kind === 'fiddle') nz(t, 0.02, H, R, 0.012 * v, music, 'bandpass', 3200, 0, 1.5); };
+      if (kind === 'fiddle') nz(t, 0.02, H, R, 0.012 * v, music, 'bandpass', 3200, 0, 1.5);
+      if (kind === 'hurdy') { tone('square', f, t, 0.02, H, R, 0.011 * v, music, { lp: 2400, q: 1.5 }); nz(t, 0.02, H, R, 0.008 * v, music, 'bandpass', Math.min(6000, f * 4), 0, 4); } };   // v3.54 wheel-bowed strings: a nasal second voice and rosin noise
     const timp = (t, f, v = 1) => { tone('sine', f, t, 0.004, 0.05, 1.2, 0.6 * v, music, { to: f * 0.93, glide: 0.6 }); nz(t, 0.002, 0.01, 0.25, 0.12 * v, music, 'lowpass', 500); };
     const brush = (t, v = 1, d = 0.12) => nz(t, 0.02, d * 0.4, d, 0.09 * v, music, 'bandpass', 4200, 2600, 0.6);
     const shaker = (t, v = 1) => nz(t, 0.004, 0, 0.05, 0.07 * v, music, 'highpass', 6500);
@@ -21689,6 +21917,8 @@ const SND = (() => {
         if (L === 'keys' && lq >= 1 && q % 2 === 0) keys(t, ch[q % ch.length] * 2);
         if (L === 'concertina' && lq >= 1) { if (q % 2) ch.forEach(f => reed(t, f * 2, beat * 0.42, 0.75)); if (lq >= 2) { const dg = d + [0, 2, 4, 2, 5, 4, 2, 1][(n * 4 + q) % 8]; reed(t, mtof(deg(dg, 2)), beat * (q % 2 ? 0.45 : 0.9), 1); } }   // oom-pah chords on 2 and 4, a tune on top
         if (L === 'brass' && lq >= 2 && q === 0) brass(t, ch, beat * 1.5, 1);
+        if (L === 'hurdy' && lq >= 1) { const dg = d + [0, 2, 4, 2, 1, 3, 2, 0][(n * 4 + q) % 8]; voice2(t, mtof(deg(dg, 2)), beat * (lq >= 2 ? 0.48 : 0.95), 0.85, 'hurdy'); if (lq >= 2) voice2(t + beat / 2, mtof(deg(dg + (q % 2 ? -1 : 1), 2)), beat * 0.45, 0.7, 'hurdy');   // v3.54 hurdy-gurdy tune, the trompette buzzes on the beat
+          for (const k of lq >= 2 ? [0, 0.5] : [0]) nz(t + k * beat, 0.004, 0.03, 0.07, 0.045, music, 'bandpass', 1300, 0, 7); }
         if (L === 'banjo' && lq >= 1) { const pat = [0, 2, 1, 2]; for (let e = 0; e < (lq >= 2 ? 4 : 2); e++) ks(t + e * beat / (lq >= 2 ? 4 : 2), ch[pat[(q + e) % 4] % ch.length] * 2, e ? 0.75 : 1, 'banjo'); }   // forward rolls
         if (L === 'guitar' && lq >= 1) { if (q % 2 === 0) ch.forEach((f, k) => ks(t + k * 0.014, f, 0.7, 'guitar')); else if (lq >= 2) { ks(t, ch[0] * 2, 0.6, 'guitar'); ks(t + beat / 2, ch[2 % ch.length] * 2, 0.5, 'guitar'); } }   // strum + picking
         if (L === 'lute' && lq >= 1) { const pat = [0, 2, 1, 2, 0, 1, 2, 1]; for (let e = 0; e < (lq >= 2 ? 4 : 2); e++) ks(t + e * beat / (lq >= 2 ? 4 : 2), ch[pat[(q * 2 + e) % 8] % ch.length] * (e % 2 ? 2 : 1), e ? 0.65 : 0.95, 'lute'); if (q === 0 && lq >= 2) ch.forEach((f, k) => ks(t + k * 0.02, f, 0.45, 'lute')); }   // v3.48 lute: arpeggiated broken chords, a strum on the bar
@@ -21822,6 +22052,9 @@ const SND = (() => {
       squeak: (t, v) => { for (let k = 0; k < 2 + Math.floor(ar() * 2); k++) { const f = 3200 + ar() * 1800; tone('sine', f, t + k * 0.09, 0.004, 0.025, 0.03, 0.07 * v, fx, { to: f * 1.25, glide: 0.035 }); tone('triangle', f * 0.5, t + k * 0.09, 0.004, 0.02, 0.03, 0.02 * v, fx); } },   // v3.49 rat
       scurry: (t, v, d = 1.5) => { for (let x = 0; x < d * 40; x++) nz(t + ar() * d, 0.001, 0, 0.012, (0.03 + ar() * 0.05) * v, fx, 'bandpass', 2400 + ar() * 3000, 0, 2.5); },   // many small claws on brick
       slosh: (t, v) => { nz(t, 0.03, 0.08, 0.35, 0.22 * v, fx, 'bandpass', 700, 1500, 0.9); nz(t + 0.05, 0.01, 0.02, 0.2, 0.08 * v, fx, 'highpass', 2600); },   // wading step in water
+      wade: (t, v) => { nz(t, 0.06, 0.12, 0.42, 0.2 * v, fx, 'bandpass', 520, 1100, 0.8); nz(t + 0.04, 0.03, 0.06, 0.3, 0.07 * v, fx, 'highpass', 2200); for (let k = 0; k < 4; k++) { const f = 300 + ar() * 500; tone('sine', f, t + 0.12 + k * 0.07 + ar() * 0.04, 0.004, 0.01, 0.05, 0.035 * v, fx, { to: f * 1.8, glide: 0.04 }); } },   // v3.54 a leg pushing through pond water: swish, drips, a few bubbles
+      squelch: (t, v) => { nz(t, 0.01, 0.05, 0.16, 0.2 * v, fx, 'bandpass', 380, 900, 2.2); tone('sine', 180, t + 0.03, 0.005, 0.03, 0.08, 0.1 * v, fx, { to: 420, glide: 0.08 }); nz(t + 0.1, 0.005, 0, 0.05, 0.06 * v, fx, 'bandpass', 2400, 0, 3); },   // v3.54 wet suction let go (mud, a leech pulled off)
+      plop: (t, v) => { tone('sine', 520, t, 0.002, 0.01, 0.09, 0.16 * v, fx, { to: 1150, glide: 0.06 }); nz(t, 0.002, 0.01, 0.06, 0.06 * v, fx, 'bandpass', 1800, 0, 2); tone('sine', 900, t + 0.11, 0.002, 0, 0.05, 0.04 * v, fx, { to: 1500, glide: 0.04 }); },   // v3.54 small thing dropped into water (jar, puddle)
       clink: (t, v) => { tone('sine', 2900, t, 0.001, 0, 0.18, 0.06 * v, fx); tone('sine', 4310, t, 0.001, 0, 0.1, 0.035 * v, fx); tone('sine', 3400, t + 0.07, 0.001, 0, 0.12, 0.03 * v, fx); },   // coin on coin
       scrape: (t, v, d = 0.6) => { nz(t, 0.03, Math.max(0, d - 0.1), 0.08, 0.12 * v, fx, 'bandpass', 900, 1600, 1.6); for (let x = 0; x < d * 18; x++) nz(t + ar() * d, 0.001, 0, 0.01, 0.06 * v, fx, 'highpass', 3000); },   // iron hoe in grit
       tweet: (t, v) => { for (let k = 0; k < 6; k++) tone('sine', 3000 + ar() * 1600, t + k * 0.085, 0.004, 0.03, 0.02, 0.05 * v, fx, { to: 4300, glide: 0.04 }); },
@@ -21930,6 +22163,12 @@ const SND = (() => {
       river: (a, b, v) => { bed(a, b, 0.05 * v, 'lowpass', 500); every(a, b, 1.3, 1.4, t => nz(t, 0.25, 0.1, 0.6, 0.05 * v, amb, 'bandpass', 700 + ar() * 500, 0, 0.8));   // v3.49 tidal river bank: lapping water, gulls, a far bell
         every(a, b, 4.5, 5, t => { const f = 1500 + ar() * 500; for (let k = 0; k < 2 + Math.floor(ar() * 2); k++) tone('sawtooth', f, t + k * 0.22, 0.01, 0.06, 0.12, 0.016 * v, amb, { to: f * 0.7, glide: 0.15, lp: 2600 }); });
         every(a, b, 11, 9, t => tone('sine', 392, t, 0.002, 0, 2.2, 0.018 * v, amb)); },
+      marsh: (a, b, v) => { bed(a, b, 0.04 * v, 'lowpass', 520); bed(a, b, 0.012 * v, 'bandpass', 2600, 0.7);   // v3.54 marsh by day: reed rustle, frogs croaking in bursts, insects, a curlew and a reed warbler
+        every(a, b, 2.2, 3.5, t => { const n = 3 + Math.floor(ar() * 4), f = 110 + ar() * 70; for (let k = 0; k < n; k++) { const tk = t + k * (0.16 + ar() * 0.05); tone('sawtooth', f, tk, 0.01, 0.05, 0.06, 0.03 * v, amb, { lp: 700, q: 4, to: f * 0.8, glide: 0.08 }); nz(tk, 0.005, 0.04, 0.05, 0.02 * v, amb, 'bandpass', 420, 0, 5); } });
+        tone('sawtooth', 4400, a, 0.8, Math.max(0, b - a - 1.6), 0.8, 0.0035 * v, amb, { lp: 6000, q: 5 });
+        every(a, b, 3, 2.5, t => nz(t, 0.7, 0.3, 1.0, 0.03 * v, amb, 'bandpass', 3000, 4600, 0.7));
+        every(a, b, 8, 7, t => { tone('sine', 1500, t, 0.08, 0.25, 0.15, 0.022 * v, amb, { to: 2300, glide: 0.35 }); tone('sine', 2200, t + 0.5, 0.05, 0.2, 0.2, 0.018 * v, amb, { to: 2600, glide: 0.25 }); });
+        every(a, b, 5, 6, t => { for (let k = 0; k < 6; k++) { const f = 2800 + ar() * 1600; tone('square', f, t + k * 0.09, 0.003, 0.02, 0.03, 0.006 * v, amb, { lp: 5000 }); } }); },
       cave: (a, b, v) => { tone('sine', 45, a, 0.6, Math.max(0, b - a - 1.2), 0.6, 0.035 * v, amb); bed(a, b, 0.02 * v, 'lowpass', 160);   // deep room, drips with echoes, distant rumble
         every(a, b, 1.6, 2.2, t => { const f = 1500 + ar() * 600; for (let e = 0; e < 3; e++) tone('sine', f, t + e * 0.19, 0.002, 0, 0.14, 0.035 * v * 0.45 ** e, amb, { to: f * 0.6, glide: 0.07 }); });
         every(a, b, 8, 8, t => nz(t, 0.8, 0.6, 1.8, 0.06 * v, amb, 'lowpass', 140, 70)); }
