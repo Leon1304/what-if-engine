@@ -90,7 +90,7 @@ Du stehst als Maßstab im Bild, die Kamera fährt hoch/runter, ein Zähler (METE
 - WJ3 What if you were a plague doctor in 1656? – Rom/Neapel, Schnabelmaske mit Kräutern, Mythos „Maske schützte“ → FALSE (Wachsmantel half eher); Maske erst im 17. Jh. ✅ auf GitHub (plague-doctor-1656, 17.11.)
 - WJ4 What if you were a Victorian sewer hunter? – Londoner „Toshers“, suchen Münzen im Kanal, Ratten, Gasblasen; Mythos Riesen-Kanalschweine → FALSE. ✅ auf GitHub (sewer-hunter, 18.11.)
 - WJ5 What if you were a leech collector? – Watet in Sümpfen, Blutegel beißen ins Bein; 1800er, Ärzte brauchten Millionen. ✅ auf GitHub (leech-collector, 18.11.)
-- WJ6 What if you were a powder monkey at Trafalgar? – 1805, Junge trägt Schießpulver zu den Kanonen; ernst, ohne Blut.
+- WJ6 What if you were a powder monkey at Trafalgar? – 1805, Junge trägt Schießpulver zu den Kanonen; ernst, ohne Blut. ✅ auf GitHub (powder-monkey, 18.11.)
 - WJ7 What if you were a lighthouse keeper on the Flannan Isles? – Dezember 1900, drei Wärter verschwinden; ungelöstes Rätsel, Grenze zu Horror; Jahrestag 15.12.
 - WJ8 What if you built the pyramids? – Mythos „Sklaven“ → FALSE (bezahlte Arbeiter, Brot und Bier, Arbeitersiedlung Gizeh); Steinblock-Zähler. Nicht mit pyramids-aliens verwechseln.
 - Reserve: Knocker-upper (weckt Menschen mit Blasrohr und Erbsen), Vomitorium-Mythos (Ausgänge im Amphitheater, kein Brechraum).
