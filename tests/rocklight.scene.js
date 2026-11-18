@@ -1,0 +1,11 @@
+  water({ size: 3000, seg: 160, color: '#2A4A52', shallow: '#36606A', waves: 1.3 });
+  const I = rockIsland(world, 0, 0, { rx: 70, rz: 42, h: 24, seed: 4, landings: [{ a: Math.PI, w: 6 }, { a: 0, w: 6 }] });
+  const L = lighthouse(world, 0, 0, { kind: 'stone', lit: t => t < 4.5 ? 1 : 0, home: t => t < 4.5 ? 1 : 0 });
+  const W = cliffStairs(world, I, 0, { wreck: { t: 7.0, k: 1 } }), E = cliffStairs(world, I, 1, { crane: false, box: false, tram: 0 });
+  cliffWave({ island: I, a: Math.PI, t: 7.0, h: 26, w: 18, swell: 7 });
+  const S = ship('steamer', 104, -40, { ry: 0 }); sail(S, [[104, -40], [104, 80]], { t0: 0, speed: 3.5, len: S.len }); S.whistle(10.0, 1.5);
+  const K = figure({ costume: 'keeper', seed: 3, expr: 'calm' }); world.add(K.root); K.root.position.set(-1.5, L.yard, 4.0); K.root.rotation.y = 0.4;
+  const you = char('you', { outfit: 'oilskins', expr: 'scared' }); world.add(you.root); track('you', you);
+  walk(you, W.path(6, 0.1, 0.5).reverse(), { t0: 6.0, speed: 0.6 });
+  interior(world, 400, 0, { kind: 'keeper', made: false, clock: { at: '2:40', run: false }, fire: 0, lamp: 0 });
+  sfx(10.5, 'gull', 0.5);

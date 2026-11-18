@@ -613,7 +613,8 @@ const AMB_EL = {
   stadium: 'Stadium crowd ambience, cheering, whistles, excited crowd swells', underwater: 'Underwater ambience, muffled pressure, bubbles rising, deep low rumble',
   forest: 'Forest daytime ambience, rustling leaves, songbirds, insects, a distant woodpecker', battle: 'Distant battlefield ambience, artillery thumps, rifle and machine gun fire far away',
   planes: 'Drone of many propeller aircraft engines flying overhead, steady', hq: 'Wartime command room ambience, ticking clock, distant typewriter, murmured room tone',
-  surf: 'Beach ambience, surf, wind, a distant seagull', cave: 'Cave ambience, water drips echoing, a deep distant rumble'
+  surf: 'Beach ambience, surf, wind, a distant seagull', cave: 'Cave ambience, water drips echoing, a deep distant rumble',
+  gale: 'Winter gale on a rocky island, howling wind gusts, heavy surf booming against cliffs, spray, distant gulls', shelter: 'Inside a stone cottage during a storm, wind muffled through thick walls, gusts, creaking, a deep distant surf thud'
 };
 const ambPrompt = ([, , k, , p]) => AUDIO.el === false ? null : p ?? ((AUDIO.el ?? {}).amb === false ? null : AMB_EL[k] ?? null);
 function elPlan() {   // what elaudio.py asks ElevenLabs for (whatif.events().el): the score as sections + every sound, deduplicated by key
@@ -8489,7 +8490,8 @@ function boat(p, x, z, o = {}) {   // kind: boat | ship | yacht — then bob(b.g
   }
   return { g };
 }
-function lighthouse(p, x, z, o = {}) {   // striped tower with a rotating light beam
+function lighthouse(p, x, z, o = {}) {   // striped tower with a rotating light beam · v3.58 kind: 'stone' = rock lighthouse with lantern, optic, shore station, wall (see _stoneLighthouse)
+  if (o.kind === 'stone') return _stoneLighthouse(p, x, z, o);
   const h = o.h ?? 14, g = stat(grp(p, x, groundH(x, z), z));
   for (let i = 0; i < 5; i++) cyl(g, 1.6 - i * 0.18, 1.8 - i * 0.18, h / 5, i % 2 ? '#D94F3D' : '#F2F2F2', 0, i * h / 5, 0, { seg: 12, surf: 'plaster' });
   { const NC = { cast: false }; cyl(g, 2.3, 2.6, 0.5, '#8A8478', 0, -0.1, 0, { seg: 12, surf: 'stone' });   // v2.34: stone base, door, windows up the tower, gallery with railing
@@ -11449,7 +11451,7 @@ FURN.treePlanter = (p, x, z, ry = 0, o = {}) => { const g = fg(p, x, z, ry), s =
   cyl(g, 0.08 * s, 0.12 * s, 2.0 * s, '#5A4030', 0, 0.6, 0, { seg: 7 }); const cc = o.leaf ?? ['#4C7A3A', '#5A8A40', '#3F6E35'][Math.floor(hv(1) * 3) % 3];
   for (let i = 0; i < 5; i++) { const a = i / 5 * TAU + hv(2) * 3, r = i ? 0.45 * s : 0; ball(g, (i ? 0.62 : 0.85) * s, shade(cc, (hv(i + 3) - 0.5) * 0.08), Math.cos(a) * r, (2.6 + (i ? 0.25 * hv(i + 9) : 0.35)) * s, Math.sin(a) * r, { detail: 1 }); }
   g.userData.seats = [[0, 0.62, L / 2 + 0.02]]; return g; };
-function furnish(p, name, x, z, ry = 0, o = {}) { const f = FURN[name]; if (!f) { console.warn('furnish: unknown piece ' + name); return null; } return ['picture', 'window', 'towels', 'board', 'ceilingLamp', 'bulb'].includes(name) ? f(p, x, o.y ?? 1.5, z, ry, o) : f(p, x, z, ry, o); }
+function furnish(p, name, x, z, ry = 0, o = {}) { const f = FURN[name]; if (!f) { console.warn('furnish: unknown piece ' + name); return null; } return ['picture', 'window', 'towels', 'board', 'ceilingLamp', 'bulb', 'wallClock', 'coatPegs'].includes(name) ? f(p, x, o.y ?? 1.5, z, ry, o) : f(p, x, z, ry, o); }
 
 // interior(p, x, z, { kind, w, d, h, ry, wall, floor, ceiling, front, door: 'left'|'right'|false, window: 'back'|'left'|'right'|false, night, lamp, clutter })
 const ROOMS = {
@@ -11477,6 +11479,94 @@ const ROOMS = {
     door: { w: 1.8, h: 3.1, open: true, frame: '#C9A24A', hall: { d: 3.4, len: 5.4, style: 'museum' } }, items: R => _museumItems(R) }
 };
 ROOMS.gallery = { ...ROOMS.museum, wall: '#ECEAE4', floorColor: '#B89870', door: { ...ROOMS.museum.door, frame: '#F4F2EE' }, style: 'modern' };
+// ---- v3.58 lighthouse keepers' room c. 1900 (interior kind 'keeper'): cast-iron range, wall clock (runs or has stopped), coat pegs with oilskins, box beds (made or
+//   left unmade), a dresser with plates, a scrubbed table with chairs, a paraffin lamp ----
+// range: black-leaded kitchen range in a whitewashed chimney breast: oven + boiler doors with brass knobs, hob with rings, fire grate (glows with o.fire: 0..1 | t => …),
+//   fender rail, a kettle and a pan on the hob, mantel shelf with a tea caddy and a candlestick
+FURN.range = (p, x, z, ry = 0, o = {}) => { const g = fg(p, x, z, ry), Ir = '#1E1F22', IM = { metal: 0.55, rough: 0.42 }, Br = '#C9A24A', BM = { metal: 0.8, rough: 0.3 }, NC = NCs;
+  box(g, 1.9, 2.6, 0.55, '#E4E0D4', 0, 0, -0.3, { surf: 'plaster' }); box(g, 2.0, 0.08, 0.32, '#5A4030', 0, 1.55, -0.02, NC);   // chimney breast, mantel
+  box(g, 1.3, 0.82, 0.52, Ir, 0, 0, 0.02, IM); box(g, 1.36, 0.05, 0.58, '#2A2B2E', 0, 0.82, 0.02, IM);
+  for (const [dx, w] of [[-0.38, 0.42], [0.38, 0.42]]) { box(g, w, 0.4, 0.03, '#2A2B2E', dx, 0.12, 0.29, IM); ball(g, 0.025, Br, dx + w * 0.38, 0.32, 0.31, { detail: 0, ...BM, ...NC }); for (let k = 0; k < 3; k++) box(g, w - 0.08, 0.012, 0.01, '#3A3B3E', dx, 0.2 + k * 0.1, 0.305, NC); }
+  const fm = mat('#2A1A12', { em: '#FF6A1A', ei: 0, own: true }); box(g, 0.34, 0.26, 0.03, '', 0, 0.5, 0.29, { mat: fm, ...NC }); for (let k = 0; k < 5; k++) box(g, 0.02, 0.26, 0.02, Ir, -0.14 + k * 0.07, 0.5, 0.31, { ...IM, ...NC });
+  if (o.fire != null) { const fF = typeof o.fire === 'function' ? o.fire : () => o.fire; tick(t => { fm.emissiveIntensity = 1.8 * clamp(fF(t)) * (0.85 + 0.15 * Math.sin(t * 9.3) * Math.sin(t * 4.1)); }); }
+  for (const dx of [-0.32, 0.32]) mesh(g, G('hobRing', () => new THREE.TorusGeometry(0.11, 0.015, 4, 14).rotateX(Math.PI / 2)), mat('#3A3B3E', IM), dx, 0.875, 0.04, { cast: false });
+  _seg(g, [-0.7, 0.62, 0.36], [0.7, 0.62, 0.36], 0.012, 0.012, Br, { ...BM, ...NC }); for (const sx of [-1, 1]) _seg(g, [sx * 0.7, 0.62, 0.36], [sx * 0.7, 0.62, 0.05], 0.012, 0.012, Br, { ...BM, ...NC });
+  { const k = grp(g, -0.32, 0.875, 0.04); cyl(k, 0.1, 0.13, 0.17, '#2E2F32', 0, 0, 0, { seg: 12, ...IM }); ball(k, 0.1, '#2E2F32', 0, 0.17, 0, { detail: 1, ...IM }).scale.set(1, 0.35, 1); _seg(k, [0.1, 0.06, 0], [0.2, 0.15, 0], 0.02, 0.012, '#2E2F32', NC); _seg(k, [-0.07, 0.22, 0], [0.07, 0.22, 0], 0.012, 0.012, '#2E2F32', NC); for (const sx of [-1, 1]) _seg(k, [sx * 0.07, 0.22, 0], [sx * 0.08, 0.17, 0], 0.01, 0.01, '#2E2F32', NC); }
+  { const pn = grp(g, 0.32, 0.875, 0.04); cyl(pn, 0.13, 0.12, 0.09, '#5A5E62', 0, 0, 0, { seg: 12, ...IM }); _seg(pn, [0.13, 0.07, 0], [0.38, 0.08, 0], 0.012, 0.012, '#5A5E62', NC); }
+  box(g, 0.12, 0.16, 0.1, '#7A2A22', -0.6, 1.63, -0.04, NC); cyl(g, 0.035, 0.05, 0.03, Br, 0.6, 1.63, -0.04, { seg: 8, ...BM, ...NC }); cyl(g, 0.01, 0.01, 0.14, '#F2EEE0', 0.6, 1.66, -0.04, { seg: 5, ...NC });
+  return g; };
+// wallClock(p, x, y, z, ry, { at: '9:20', run: true | false | t => bool, stop: t, tick, color, kind: 'drop' }) — drop-dial wall clock (as in 1900 kitchens): round dial with hour marks and
+//   numerals, brass bezel, hour and minute hands, a box below with a glass window and a swinging pendulum. While it runs the minute hand moves with the video time and the
+//   pendulum swings (1 s beat); once it has stopped (run false, or from t = stop) both stand still where they were: pure in t. y = centre of the dial.
+FURN.wallClock = (p, x, y, z, ry = 0, o = {}) => { const g = stat(grp(p, x, y, z, ry)), Wd = o.color ?? '#5A3A22', Br = '#C9A24A', BM = { metal: 0.8, rough: 0.3 }, NC = NCs, R = 0.2;
+  cyl(g, R + 0.05, R + 0.05, 0.06, Wd, 0, 0, 0.0, { rx: Math.PI / 2, seg: 24 }); mesh(g, G('clkBezel', () => new THREE.TorusGeometry(R + 0.005, 0.014, 5, 28)), mat(Br, BM), 0, 0, 0.034, { cast: false });
+  const dial = canvasTex(256, 256, (c, W, H) => { c.fillStyle = '#F2ECDC'; c.beginPath(); c.arc(W / 2, H / 2, W / 2, 0, TAU); c.fill(); c.fillStyle = '#1A1612'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.font = 'bold 34px Georgia, serif';
+    const RN = ['XII', 'I', 'II', 'III', 'IIII', 'V', 'VI', 'VII', 'VIII', 'IX', 'X', 'XI']; for (let i = 0; i < 12; i++) { const a = i / 12 * TAU; c.save(); c.translate(W / 2 + Math.sin(a) * W * 0.36, H / 2 - Math.cos(a) * H * 0.36); c.rotate(a); c.fillText(RN[i], 0, 0); c.restore(); }
+    for (let i = 0; i < 60; i++) { const a = i / 60 * TAU, r0 = W * (i % 5 ? 0.47 : 0.445); c.lineWidth = i % 5 ? 2 : 4; c.beginPath(); c.moveTo(W / 2 + Math.sin(a) * r0, H / 2 - Math.cos(a) * r0); c.lineTo(W / 2 + Math.sin(a) * W * 0.49, H / 2 - Math.cos(a) * H * 0.49); c.stroke(); } });
+  _texPlane(g, R * 2, R * 2, dial, 0, 0, 0.032, { alphaTest: 0.5, ei: 0.05 });
+  const hand = (L, w) => { const hg = dyn(grp(g, 0, 0, 0.04)); box(hg, w, L, 0.006, '#14110E', 0, -0.02, 0, NC); cone(hg, w * 1.1, w * 2.2, '#14110E', 0, L - 0.02, 0, { seg: 4, ...NC }); return hg; };
+  const hH = hand(R * 0.5, 0.016), hM = hand(R * 0.78, 0.011); ball(g, 0.012, Br, 0, 0, 0.05, { detail: 0, ...BM, ...NC });
+  box(g, 0.26, 0.42, 0.07, Wd, 0, -R - 0.44, 0); box(g, 0.14, 0.24, 0.01, '#20262C', 0, -R - 0.38, 0.036, { opacity: 0.6, ...NC }); cone(g, 0.04, 0.06, Wd, 0, -R - 0.5, 0, { rx: Math.PI, seg: 4, ...NC });
+  const pend = dyn(grp(g, 0, -R - 0.05, 0.022)); box(pend, 0.008, 0.26, 0.006, Br, 0, -0.27, 0, { ...BM, ...NC }); cyl(pend, 0.03, 0.03, 0.008, Br, 0, -0.29, 0, { rx: Math.PI / 2, seg: 12, ...BM, ...NC });
+  const [h0, m0] = String(o.at ?? '9:20').split(':').map(Number), runF = typeof o.run === 'function' ? o.run : o.stop != null ? (t => t < o.stop) : () => o.run !== false;
+  const tStop = o.stop ?? (typeof o.run === 'function' ? null : o.run === false ? 0 : 1e9);
+  tick(t => { const on = runF(t), te = on ? t : (tStop ?? 0), mins = h0 * 60 + m0 + te / 60 * (o.speed ?? 1); hM.rotation.z = -mins / 60 * TAU; hH.rotation.z = -mins / 720 * TAU; pend.rotation.z = on ? 0.16 * Math.sin(t * Math.PI) : 0; });
+  g.userData.clock = { hM, hH, pend }; return g; };
+// coatPegs(p, x, y, z, ry, { n: 4, items: ['oilskin', 'sou', null, 'jacket'], color }) — peg rail on the wall (y = rail height) with what hangs on it: 'oilskin' (long glossy
+//   oilskin coat, yellow ochre or o.oil), 'sou' (sou'wester), 'jacket' (navy reefer jacket), 'cap', null = empty peg
+FURN.coatPegs = (p, x, y, z, ry = 0, o = {}) => { const g = stat(grp(p, x, y, z, ry)), n = o.n ?? 4, sp = o.gap ?? 0.42, W = (n - 1) * sp + 0.3, Wd = o.color ?? '#6A4A30', NC = NCs, Oc = o.oil ?? '#C9A23C', OG = { rough: 0.3, metal: 0.05 };
+  box(g, W, 0.12, 0.03, Wd, 0, -0.06, 0.015); const items = o.items ?? ['oilskin', 'sou', null, 'jacket'];
+  for (let i = 0; i < n; i++) { const px = -W / 2 + 0.15 + i * sp; cyl(g, 0.016, 0.02, 0.1, shade(Wd, -0.15), px, 0, 0.07, { rx: Math.PI / 2 - 0.3, seg: 6, ...NC }); ball(g, 0.022, shade(Wd, -0.15), px, 0.02, 0.12, { detail: 0, ...NC });
+    const it = items[i]; if (!it) continue; const hg = grp(g, px, 0.0, 0.1);
+    if (it === 'oilskin' || it === 'jacket') { const c = it === 'oilskin' ? Oc : '#1E2638', M = it === 'oilskin' ? OG : {}, L = it === 'oilskin' ? 1.15 : 0.72;
+      tbox(hg, 0.18, 0.44, 0.08, 0.14, L, c, 0, -L - 0.04, 0.02, { ...M }); _ell(hg, shade(c, -0.05), 0, -0.06, 0.02, 0.14, 0.06, 0.06, { detail: 1, ...M, ...NC });   // body hangs from the collar loop
+      for (const sx of [-1, 1]) { const sl = grp(hg, sx * 0.17, -0.12, 0.03); sl.rotation.z = sx * 0.12; tbox(sl, 0.09, 0.12, 0.09, 0.12, 0.62, shade(c, -0.06), 0, -0.64, 0, { ...M, cast: false }); }
+      if (it === 'oilskin') { for (let k = 0; k < 4; k++) box(hg, 0.04, 0.02, 0.025, '#3A2A1A', 0.02, -0.25 - k * 0.2, 0.09, NC); box(hg, 0.012, L - 0.1, 0.012, shade(c, -0.16), 0, -L, 0.085, NC); }
+      else for (let k = 0; k < 3; k++) for (const sx of [-0.06, 0.06]) ball(hg, 0.014, '#D8B44A', sx, -0.24 - k * 0.12, 0.085, { detail: 0, ...NC }); }
+    else if (it === 'sou') { const h = grp(hg, 0, -0.14, 0.05); h.rotation.x = 1.2; cyl(h, 0.16, 0.19, 0.12, Oc, 0, 0, 0, { seg: 12, ...OG }); const br = mesh(h, G('souBrim', () => { const s = new THREE.CircleGeometry(1, 20); s.rotateX(-Math.PI / 2); return s; }), mat(Oc, { ...OG, side: THREE.DoubleSide }), 0, 0.005, -0.06, { cast: false }); br.scale.set(0.2, 1, 0.26); }
+    else if (it === 'cap') { const h = grp(hg, 0, -0.08, 0.04); h.rotation.x = 1.3; cyl(h, 0.2, 0.18, 0.09, '#1A1E2A', 0, 0, 0, { seg: 12 }); box(h, 0.24, 0.015, 0.11, '#111111', 0, 0, 0.18, NC); } }
+  return g; };
+// boxBed(p, x, z, ry, { w: 0.95, l: 2.0, made: false, blanket, wood, curtain }) — built-in wooden box bed (panelled sides, a high head end, a canopy board), straw mattress,
+//   bolster pillow; made: false = the blanket thrown back in folds, the pillow dented and pushed aside (someone got up and never came back)
+FURN.boxBed = (p, x, z, ry = 0, o = {}) => { const g = fg(p, x, z, ry), W = o.w ?? 0.95, L = o.l ?? 2.0, Wd = o.wood ?? '#6A4A30', NC = NCs, B = o.blanket ?? '#7A2E2A', made = o.made !== false;
+  box(g, W + 0.1, 0.42, L + 0.1, Wd, 0, 0, 0, { surf: 'plank' }); for (const sz of [-1, 1]) box(g, W + 0.12, sz < 0 ? 1.7 : 0.75, 0.06, shade(Wd, -0.06), 0, 0, sz * (L / 2 + 0.03), { surf: 'plank' });
+  box(g, 0.06, 1.7, L + 0.12, shade(Wd, -0.04), -W / 2 - 0.03, 0, 0, { surf: 'plank' }); box(g, W + 0.14, 0.05, L + 0.16, shade(Wd, -0.1), 0, 1.7, 0, NC);
+  for (let k = 0; k < 3; k++) box(g, 0.04, 0.05, 0.05, shade(Wd, -0.18), W / 2 + 0.06, 0.18 + k * 0.08, -L / 2 + 0.3 + k * 0.6, NC);
+  box(g, W - 0.04, 0.16, L - 0.04, '#D8CCA8', 0, 0.42, 0, NC); const pl = rbox(g, W * 0.8, 0.13, 0.32, '#F0ECE0', made ? 0 : 0.12, 0.58, -L / 2 + 0.24, { rf: 0.5 }); if (!made) pl.rotation.set(0.1, 0.35, -0.1);
+  if (made) { box(g, W - 0.02, 0.06, L * 0.72, B, 0, 0.58, L * 0.13, NC); box(g, W - 0.01, 0.05, 0.16, '#F0ECE0', 0, 0.62, -L * 0.22, NC); }
+  else { box(g, W - 0.1, 0.03, L * 0.42, '#EDE8DA', 0, 0.58, -L * 0.1, NC);   // sheet showing where the blanket was thrown back
+    for (let k = 0; k < 4; k++) _ell(g, shade(B, (hash(k * 3.1 + x) - 0.5) * 0.1), (hash(k * 1.7 + z) - 0.5) * W * 0.5, 0.64 + 0.03 * k, L * (0.14 + k * 0.08), W * 0.42, 0.06, 0.14, { detail: 1, ...NC });
+    const hang = grp(g, W / 2 + 0.03, 0.62, L * 0.3); hang.rotation.z = -1.2; box(hang, 0.04, 0.45, L * 0.38, B, 0, -0.45, 0, NC); }
+  if (o.curtain) for (const s of [-1, 1]) { const c = grp(g, W / 2 + 0.06, 1.68, s * (L / 2 - 0.25)); box(c, 0.02, 1.15, 0.5, o.curtain, 0, -1.15, 0, NC); }
+  g.userData.seats = [[0.1, 0.6, 0.2]]; return g; };
+// welshDresser(p, x, z, ry, { w: 1.3, color }) — cupboard below (two doors, drawers), open plate rack above with plates on edge, cups on hooks, a jug
+FURN.welshDresser = (p, x, z, ry = 0, o = {}) => { const g = fg(p, x, z, ry), w = o.w ?? 1.3, Wd = o.color ?? '#7A5236', NC = NCs, Pc = ['#F2EEE4', '#E6EEF4', '#F2EEE4', '#D8E4EE'];
+  box(g, w, 0.82, 0.46, Wd, 0, 0, 0, { surf: 'plank' }); box(g, w + 0.06, 0.04, 0.5, shade(Wd, -0.1), 0, 0.82, 0.01, NC); for (const sx of [-1, 1]) { box(g, w / 2 - 0.08, 0.42, 0.02, shade(Wd, 0.06), sx * w / 4, 0.08, 0.23, NC); ball(g, 0.018, '#C9A24A', sx * 0.08, 0.3, 0.25, { detail: 0, ...NC }); }
+  for (const sx of [-1, 1]) box(g, w / 2 - 0.08, 0.16, 0.02, shade(Wd, 0.04), sx * w / 4, 0.6, 0.23, NC);
+  box(g, w, 1.05, 0.04, shade(Wd, -0.05), 0, 0.86, -0.2, { surf: 'plank' }); for (const sx of [-1, 1]) box(g, 0.04, 1.05, 0.26, Wd, sx * (w / 2 - 0.02), 0.86, -0.08, NC); box(g, w + 0.06, 0.06, 0.3, Wd, 0, 1.9, -0.07, NC);
+  for (let s = 0; s < 2; s++) { const sy = 1.2 + s * 0.36; box(g, w - 0.08, 0.025, 0.22, Wd, 0, sy, -0.08, NC); box(g, w - 0.08, 0.02, 0.012, shade(Wd, -0.1), 0, sy + 0.06, 0.02, NC);
+    for (let i = 0; i < 5; i++) cyl(g, 0.11, 0.11, 0.015, Pc[(i + s) % 4], -w / 2 + 0.2 + i * (w - 0.4) / 4, sy + 0.13, -0.11, { rx: Math.PI / 2 - 0.18, seg: 14, kind: 'ceramic', ...NC }); }
+  for (let i = 0; i < 4; i++) { const cx = -w / 2 + 0.2 + i * 0.3; cyl(g, 0.04, 0.032, 0.07, Pc[i % 4], cx, 1.04, 0.0, { seg: 10, kind: 'ceramic', ...NC }); }
+  cyl(g, 0.06, 0.08, 0.2, '#E8DCC0', w / 2 - 0.2, 0.86, 0.06, { seg: 10, kind: 'ceramic', ...NC }); return g; };
+// oilLamp(p, x, z, ry, { y: table height, lit: 0..1 | t => …, light }) — paraffin table lamp: brass foot and font, burner, glass chimney, frosted globe; the flame glows with lit
+FURN.oilLamp = (p, x, z, ry = 0, o = {}) => { const y = o.y ?? 0.78, g = stat(grp(p, x, y, z, ry)), Br = '#C9A24A', BM = { metal: 0.8, rough: 0.3 }, NC = NCs;
+  cyl(g, 0.07, 0.09, 0.03, Br, 0, 0, 0, { seg: 12, ...BM }); cyl(g, 0.025, 0.04, 0.16, Br, 0, 0.03, 0, { seg: 10, ...BM }); ball(g, 0.075, '#B8D0C8', 0, 0.24, 0, { detail: 2, opacity: 0.7, kind: 'glass' }).scale.set(1, 0.8, 1);
+  cyl(g, 0.04, 0.045, 0.04, Br, 0, 0.3, 0, { seg: 10, ...BM }); cyl(g, 0.025, 0.035, 0.2, '#E8F2F0', 0, 0.34, 0, { seg: 10, opacity: 0.35, kind: 'glass', ...NC });
+  const fl = mat('#FFE2A0', { em: '#FFB44A', ei: 0, own: true }); ball(g, 0.016, '', 0, 0.38, 0, { mat: fl, detail: 1, ...NC }).scale.set(1, 1.8, 1);
+  const lit = typeof o.lit === 'function' ? o.lit : () => o.lit ?? 0; tick(t => { fl.emissiveIntensity = 4 * clamp(lit(t)) * (0.9 + 0.1 * Math.sin(t * 11.3)); });
+  if (o.light) DEFER.push(() => { g.updateWorldMatrix(true, false); const P = v3(0, 0.4, 0).applyMatrix4(g.matrixWorld); glow(P.x, P.y, P.z, { intensity: 2.2, dist: 6, color: '#FFC870', flicker: 0.05, env: t => clamp(lit(t)) }); });
+  return g; };
+// interior(…, { kind: 'keeper' }): the keepers' living room / kitchen of a rock lighthouse c. 1900 — whitewashed walls, boarded floor, range in a chimney breast on the back wall,
+//   drop-dial clock above the table, dresser, scrubbed table with three chairs and a paraffin lamp, two box beds on the right wall, coat pegs with oilskins by the door.
+//   Options through interior(): clock: { at, run, stop }, made: false (beds left unmade), fire: 0..1 | t => …, lamp: 0..1 | t => …, pegs: [...] (coatPegs items)
+ROOMS.keeper = { wall: '#E8E4D6', floor: 'wood', floorColor: '#6E5640', w: 7.2, d: 5.6, h: 2.9, pics: false, window: 'back', ceil: '#D8D2C2',
+  items: R => { const o = R.o, w = R.w, d = R.d; R.put('range', -w / 2 + 1.35, -d / 2 + 0.6, 0, { fire: o.fire ?? 0 }); R.put('welshDresser', 0.85, -d / 2 + 0.26, 0);
+    R.put('joinedTable', -0.3, 0.1, 0, { w: 1.5, d: 0.8, color: '#A8865A' }); for (const [cx, cz, a] of [[-0.85, 0.75, Math.PI], [0.25, 0.75, Math.PI], [-1.35, 0.1, Math.PI / 2]]) R.put('chair', cx, cz, a, { color: '#7A5A3A' });
+    R.put('oilLamp', -0.15, 0.2, 0, { lit: o.lamp ?? 0, light: o.lampLight });
+    R.put('boxBed', w / 2 - 0.58, -d / 2 + 1.25, Math.PI, { made: o.made !== false, blanket: '#7A2E2A' }); R.put('boxBed', w / 2 - 0.58, d / 2 - 1.25, Math.PI, { made: o.made !== false, blanket: '#3A4A6A' });
+    R.clock = R.wallPut('wallClock', -0.55, 1.95, { ...(o.clock ?? {}) }); R.anchors.clock = [-0.55, 1.95, -d / 2 + 0.1];
+    if (R.leftW) { R.pegs = FURN.coatPegs(R.leftW, -0.3, 1.72, 0.08, 0, { items: o.pegs ?? ['oilskin', 'sou', null, null] }); R.anchors.pegs = [-w / 2 + 0.1, 1.72, 0.3]; }
+    R.ceil(0, 0); } };
 function _museumItems(R) {
   const { w, d, h } = R, mod = (R.o.style ?? R.K.style) === 'modern', ds = R.ds, sd = ds === 'left' ? -1 : 1, L = (u, oo) => ({ lit: 0.3, spot: true, ...oo });
   const bw = Math.min(2.7, w * 0.25), bh = Math.min(2.0, h * 0.42);
@@ -14129,6 +14219,7 @@ const SHIPS = {
   sailboat:   { L: 10, B: 3.4, D: 1.7, T: 0.6, bow: 'sharp', stern: 'transom', sheer: 0.35, rake: 0.6, top: '#F4F4F2', bot: '#1E3A6A', boot: '#2E6FD9', deck: '#D8C8A8', rail: 0.6 },
   fishing:    { L: 22, B: 6.5, D: 4.0, T: 2.4, bow: 'sharp', stern: 'transom', sheer: 1.3, rake: 0.35, top: '#2E5E9E', bot: '#A8322A', boot: '#F2F2F2', deck: '#7E8288', band: [0.5, '#F2F2F2'], rail: 1.0 },
   tug:        { L: 28, B: 10, D: 5, T: 3.6, bow: 'round', stern: 'round', sheer: 1.0, rake: 0.1, top: '#C0392B', bot: '#2A2A2A', boot: '#F2F2F2', deck: '#5A5E64', rail: 1.0 },
+  steamer:    { L: 52, B: 8.4, D: 4.6, T: 3.0, bow: 'sharp', stern: 'round', sheer: 1.1, rake: 0.15, top: '#1C1C1E', bot: '#6A2622', boot: '#1C1C1E', deck: '#B89A6A', band: [0.3, '#C8A040'] },   // v3.58 coastal steamer / lighthouse tender c. 1900
   landing:    { L: 11, B: 3.3, D: 2.0, T: 0.9, bow: 'flat', stern: 'transom', sheer: 0, rake: 0, fb: 0.9, open: 1, deck: false, top: '#59654A', bot: '#3E4636', boot: '#2A2E26', deck: '#4A5040', flat: 1 },
   viking:     { L: 22, B: 5, D: 2.0, T: 0.8, bow: 'viking', stern: 'viking', sheer: 1.6, sheerAft: 1.6, fb: 0.6, fs: 0.4, rake: 0.4, top: '#7A5434', bot: '#5A3A22', boot: '#5A3A22', deck: '#9A7A50', planks: 0.28 },
   galleon:    { L: 38, B: 10, D: 6.5, T: 3.5, bow: 'round', stern: 'transom', sheer: 2.4, sheerAft: 3.0, rake: 0.5, fs: 0.12, top: '#6A4428', bot: '#3E2A1A', boot: '#2A1A10', deck: '#A88A5A', planks: 0.45, band: [1.2, '#C8A040'] },
@@ -14199,6 +14290,43 @@ function ship(p, kind = 'fishing', x = 0, z = 0, o = {}) {   // kind: see SHIPS 
         const fp = [0.84, 0.89, 0.93, 0.965, 0.99].map(uu => { const e = H.edge(uu); return e; }); for (const sx of [-1, 1]) for (let i = 1; i < fp.length; i++) _seg(b, [sx * (fp[i - 1][0] + 0.05), fp[i - 1][1] - 0.7, fp[i - 1][2]], [sx * (fp[i][0] + 0.05), fp[i][1] - 0.7, fp[i][2]], 0.42, 0.42, '#1E1E1E', { seg: 6 }); { const e = fp[fp.length - 1]; _seg(b, [-(e[0] + 0.05), e[1] - 0.7, e[2]], [e[0] + 0.05, e[1] - 0.7, e[2]], 0.42, 0.42, '#1E1E1E', { seg: 6 }); }
         for (const sx of [-1, 1]) cyl(b, 0.28, 0.3, 1.0, '#2A2D33', sx * 1.2, dk(0.1), zz(0.1), { seg: 8 }); box(b, 2.8, 0.25, 0.3, '#2A2D33', 0, dk(0.1) + 0.7, zz(0.1), NC);
         cyl(b, 0.93, 0.93, 0.5, '#F2F2F2', 0, dk(u) + 4.6, zz(u) - 3.2, { seg: 12, ...NC }); }
+      break; }
+    case 'steamer': {   // v3.58 coastal steamer c. 1900 (lighthouse tender, coaster): midship deckhouse with portholes, open bridge with wings, dodger and a small wheelhouse, tall raked
+      // buff funnel with a black top and steam pipe + whistle, two raked masts with derrick booms and shrouds, four lifeboats in davits, cowl vents, skylight, hatches, windlass, anchors
+      const Wd = '#E8E2D2', Te = '#8A6A44', Bf = o.funnel ?? '#C9A257', Dk2 = '#1E1E20', FE = { metal: 0.45, rough: 0.5 }, u = 0.5, hy = dk(u), hz = zz(u), hw = Bm * 0.56, hl = L * 0.26;
+      box(b, hw, 2.3, hl, Wd, 0, hy, hz); box(b, hw + 0.3, 0.14, hl + 0.3, Te, 0, hy + 2.3, hz, NC);
+      _wins(b, [...[-1, 1].flatMap(s => _winRow(s * (hw / 2 + 0.02), hy + 1.4, hz - hl / 2 + 1, hz + hl / 2 - 1, 7, 0.42, 0.42, true))], '#26324A');
+      for (const s of [-1, 1]) for (let i = 0; i < 7; i++) mesh(b, G('porthole', () => new THREE.TorusGeometry(0.26, 0.05, 4, 12)), mat('#B89A5A', FE), s * (hw / 2 + 0.04), hy + 1.4, lerp(hz - hl / 2 + 1, hz + hl / 2 - 1, i / 6), { ry: Math.PI / 2, cast: false });
+      for (const s of [-1, 1]) box(b, 0.06, 2.0, 0.9, '#7A5A3A', s * (hw / 2 + 0.02), hy, hz + hl / 2 - 0.9, NC);   // doors
+      const by = hy + 2.44, bz = hz + hl / 2 - 1.6; box(b, Bm * 0.98, 0.14, 2.4, Te, 0, by, bz, { surf: 'plank' });   // bridge deck with wings
+      box(b, Bm * 0.98, 1.0, 0.06, '#F2EEE4', 0, by + 0.14, bz + 1.17, NC); for (const s of [-1, 1]) box(b, 0.06, 1.0, 2.3, '#F2EEE4', s * Bm * 0.49, by + 0.14, bz, NC);
+      box(b, 2.6, 2.1, 1.8, Wd, 0, by + 0.14, bz - 0.2); box(b, 2.8, 0.12, 2.0, Te, 0, by + 2.24, bz - 0.2, NC); _wins(b, [[0, by + 1.5, bz + 0.71, 2.2, 0.7, 0.04], ...[-1, 1].flatMap(s => _winRow(s * 1.31, by + 1.5, bz - 0.7, bz + 0.3, 2, 0.6, 0.55, true))], '#26324A');
+      { const wh = grp(b, 0, by + 1.15, bz + 0.85); mesh(wh, G('shipWheel', () => new THREE.TorusGeometry(0.36, 0.04, 4, 14)), mat(Te), 0, 0, 0, { cast: false }); for (let k = 0; k < 8; k++) { const a = k / 8 * TAU; _seg(wh, [0, 0, 0], [Math.cos(a) * 0.46, Math.sin(a) * 0.46, 0], 0.02, 0.02, Te, NC); } }
+      for (const s of [-1, 1]) cyl(b, 0.18, 0.18, 0.3, s > 0 ? '#2E9A4A' : '#C0392B', s * Bm * 0.49, by + 1.2, bz, { seg: 8, ...NC });   // side lights
+      const fz2 = hz - 1.2, fy = hy + 2.3, Hf = 7.2; { const fg2 = grp(b, 0, fy, fz2); fg2.rotation.x = -0.1; cyl(fg2, 1.05, 1.15, Hf, Bf, 0, 0, 0, { seg: 16 }); cyl(fg2, 1.08, 1.06, 1.1, Dk2, 0, Hf - 1.1, 0, { seg: 16 });
+        for (const yy of [1.2, 3.0]) cyl(fg2, 1.18, 1.18, 0.1, shade(Bf, -0.18), 0, yy, 0, { seg: 16, ...NC }); cyl(fg2, 0.12, 0.12, Hf + 0.8, '#A88A4A', 0, 0, 1.25, { seg: 6, ...FE }); cyl(fg2, 0.16, 0.12, 0.45, '#C8A050', 0, Hf + 0.3, 1.25, { seg: 8, ...FE });
+        for (const s of [-1, 1]) _seg(fg2, [0, Hf - 1.6, 0], [s * Bm * 0.4, -fy + dk(u) + 0.8 - hy, 0], 0.02, 0.02, '#2A2A2A', NC); S.whistleAt = [0, fy + Hf + 0.5, fz2 + 1.25 - 0.1 * (Hf + 0.5)]; S.funnelTop = [0, fy + Hf, fz2 - 0.1 * Hf]; }
+      for (const [uu, Hm2] of [[0.8, 17], [0.2, 14]]) { const mz = zz(uu), my = dk(uu), mg = grp(b, 0, my - 0.3, mz); mg.rotation.x = -0.08; cyl(mg, 0.13, 0.2, Hm2, '#C9A87A', 0, 0, 0, { seg: 8 }); cyl(mg, 0.24, 0.24, 0.3, '#3A3A3A', 0, Hm2 * 0.62, 0, { seg: 8, ...NC });
+        _seg(mg, [0, 1.6, 0], [0, 6.5, (uu > 0.5 ? -1 : 1) * 5.5], 0.09, 0.07, '#C9A87A');   // derrick boom
+        box(mg, 3.4, 0.12, 0.12, '#C9A87A', 0, Hm2 * 0.74, 0, NC); S.lights.push(ball(mg, 0.13, '', 0, Hm2 - 0.15, 0.2, { mat: glow, detail: 0, ...NC }));
+        for (const s of [-1, 1]) for (let k = 0; k < 3; k++) _seg(b, [s * Bm * 0.48, dk(uu) + 0.9, mz - 1.4 + k * 1.3], [s * 0.15, my - 0.3 + Hm2 * 0.72, mz + 0.4], 0.018, 0.018, '#2A2A2A', NC); }
+      _seg(b, [0, dk(0.8) - 0.3 + 15.5, zz(0.8) - 1.2], [0, dk(0.985) + 0.6, zz(0.985)], 0.018, 0.018, '#2A2A2A', NC); _seg(b, [0, dk(0.2) - 0.3 + 13.5, zz(0.2) - 1.1], [0, fy + 6.6, fz2 - 0.6], 0.016, 0.016, '#2A2A2A', NC);
+      for (const s of [-1, 1]) for (const uu of [0.33, 0.43]) { const zb = zz(uu), xb = s * (hw / 2 + 0.9), yb = hy + 2.6;   // lifeboats in davits
+        const lb = grp(b, xb, yb, zb); _ell(lb, '#F4F2EC', 0, 0, 0, 0.75, 0.42, 2.6, { detail: 1 }); box(lb, 1.3, 0.08, 4.6, '#8A6A44', 0, 0.3, 0, NC); box(lb, 1.46, 0.1, 5.0, '#2A3A5A', 0, 0.2, 0, NC);
+        for (const dz2 of [-2.1, 2.1]) { _seg(b, [s * (hw / 2 + 0.15), hy + 2.3, zb + dz2], [s * (hw / 2 + 0.3), yb + 1.6, zb + dz2], 0.06, 0.06, '#E8E4D8', NC); _seg(b, [s * (hw / 2 + 0.3), yb + 1.6, zb + dz2], [xb, yb + 1.3, zb + dz2], 0.06, 0.05, '#E8E4D8', NC); _seg(b, [xb, yb + 1.3, zb + dz2], [xb, yb + 0.35, zb + dz2], 0.012, 0.012, '#8A7A5A', NC); } }
+      for (const [vx, vz, a] of [[-1.5, fz2 + 2.3, 0], [1.5, fz2 + 2.3, 0], [-1.2, fz2 - 3.8, Math.PI], [1.2, fz2 - 3.8, Math.PI]]) { const vg = grp(b, vx, hy + 2.3, vz, a); cyl(vg, 0.2, 0.2, 1.3, Bf, 0, 0, 0, { seg: 8 }); _seg(vg, [0, 1.3, 0], [0, 1.65, 0.3], 0.3, 0.38, Bf, { seg: 8 }); cyl(vg, 0.3, 0.3, 0.05, '#B8322A', 0, 1.62, 0.36, { seg: 8, rx: Math.PI / 2 - 0.3, ...NC }); }
+      box(b, 1.6, 0.5, 1.2, Te, 0, hy + 2.3, hz - hl / 2 + 1.2); for (const s of [-1, 1]) box(b, 0.7, 0.04, 1.1, '#8AB0C0', s * 0.42, hy + 2.82, hz - hl / 2 + 1.2, { rz: s * 0.4, opacity: 0.5, ...NC });   // skylight
+      for (const uu of [0.68, 0.27]) { box(b, 3.0, 0.7, 3.4, '#5A4A36', 0, dk(uu), zz(uu), { surf: 'plank' }); box(b, 3.1, 0.06, 3.5, '#4A5A4A', 0, dk(uu) + 0.7, zz(uu), NC); }   // hatches with tarpaulin
+      { const e = H.edge(0.93); cyl(b, 0.28, 0.28, 1.6, '#2A2A2A', 0, dk(0.93) + 0.45 - 0.8, zz(0.93) - 0.6, { rz: Math.PI / 2, seg: 10, ...FE }); for (const s of [-1, 1]) { box(b, 0.12, 0.7, 0.4, '#2A2A2A', s * 0.85, dk(0.93), zz(0.93) - 0.6, FE); const an = grp(b, s * (e[0] + 0.04), e[1] - 1.1, e[2] - 0.6, 0); box(an, 0.08, 1.2, 0.18, '#1E1E1E', 0, -0.6, 0, FE); box(an, 0.08, 0.16, 1.0, '#1E1E1E', 0, -0.7, 0, FE); } }
+      for (const s of [-1, 1]) { for (let i = 0; i < 18; i++) { const uu = 0.06 + i * 0.05, e = H.edge(uu); cyl(b, 0.025, 0.025, 0.95, '#E8E4D8', s * (e[0] - 0.08), e[1], e[2], { seg: 4, ...NC }); }
+        const pts = [...Array(18).keys()].map(i => { const e = H.edge(0.06 + i * 0.05); return [s * (e[0] - 0.08), e[1] + 0.95, e[2]]; }); for (let i = 1; i < pts.length; i++) _seg(b, pts[i - 1], pts[i], 0.025, 0.025, '#E8E4D8', NC); }
+      for (const [x2, uu] of [[3.2, 0.45], [-3.2, 0.45], [3.2, 0.56], [-3.2, 0.56], [0, 0.74], [-1.6, 0.78], [1.6, 0.78], [0, 0.18]]) S.seats.push([x2, dk(uu), zz(uu), 0]);   // side decks beside the deckhouse, foredeck, after deck
+      S.bridgeSeat = [Bm * 0.32, by + 0.14, bz + 0.5];
+      // funnel smoke (o.smoke: false = none) and S.whistle(t, dur): the steam whistle blows (white plume at the whistle, 'steamwhistle')
+      const ft = S.funnelTop, wa = S.whistleAt;
+      if (o.smoke !== false) emit('smoke', { at: tt => { const P = worldAt(b, ft, tt); return [P.x, P.y + 0.4, P.z]; }, t0: 0, rate: 4, size: 0.9, grow: 2.0, life: 4.2, speed: 1.8, spread: 0.18, colors: ['#4A4846', '#6E6A66', '#8E8A86'], opacity: 0.5, wind: [1.4, 0], volK: 0.7 });
+      S.whistle = (t, d = 1.6) => { sfx(t, 'steamwhistle', 0.9); const h = AUDIO.hits[AUDIO.hits.length - 1]; if (h) h.dur = d;
+        emit('steam', { at: tt => { const P = worldAt(b, wa, tt); return [P.x, P.y + 0.15, P.z]; }, t0: t, t1: t + d, rate: 16, size: 0.22, grow: 2.4, speed: 2.4, spread: 0.2, life: 1.5, opacity: 0.55 }); return S; };
       break; }
     case 'landing': { box(b, Bm * 0.86, 0.1, L * 0.86, '#4A5040', 0, -D.T + 0.2, zz(0.5)); const zf = zz(1), ramp = dyn(grp(b, 0, -D.T + 0.3, zf)); box(ramp, Bm * 0.88, D.D + 0.1, 0.12, D.top, 0, 0, 0); for (let i = 0; i < 5; i++) box(ramp, Bm * 0.8, 0.05, 0.05, shade(D.top, -0.12), 0, 0.3 + i * 0.35, 0.07, NC); ramp.rotation.x = -0.06; S.ramp = ramp;
       for (const s of [-1, 1]) box(b, 0.12, 0.9, L * 0.75, D.top, s * Bm * 0.47, dk(0.5), zz(0.5));
@@ -18143,6 +18271,279 @@ function leech(o = {}) {
     me.visible = vis; write(); });
   L.at = t => v3().fromArray(pos, 0); return L;
 }
+// ---- v3.58 rock lighthouse kit (Flannan Isles 1900): rockIsland() (a cliffed island in the open sea with landing gullies), cliffStairs() (landing stage, steps up the gully,
+//   iron railings, crane platform with a hand crane, tramway, store box; storm damage as a function of t), cliffWave() (a big sea runs in, bursts up the cliff, pours off, foam),
+//   lighthouse({ kind: 'stone' }) (see _stoneLighthouse) ----
+// rockIsland(p, x, z, { rx: 60, rz, h: 26, dome, ry, seed, seg: 128, landings: [a | { a, w: 6, slope: 46, base: 1.6, sh: 5 }], stacks: 3, surf: 6, foam: true, grass, rock })
+//   → I = { g, x, z, h, topAt(x, z), edge(a, k), foot(a, k), out(a), landings: [{ a, kTop, yTop, base, top: [x, y, z], bottom: [x, y, z], dir: [dx, dz], w }], keep }
+//   Plateau with a low dome and soft turf (colour patches, thin turf and bare rock at the rim), steep cliffs all round with ledges and overhangs (jagged in plan and
+//   height), banded grey rock with lichen and white guano streaks, a dark wet band and weed at the waterline; foam that surges round the foot (follows the waves, pure in t),
+//   spray at a few points, sea stacks offshore. `landings` = angles (island-local radians, 0 = +x, π/2 = +z) where a straight gully runs from the plateau down to a landing
+//   (cliffStairs() builds the steps in it). From the call on, groundH() follows the plateau and the gullies (figures, buildings, walk()); call it after ground() if any.
+const ISLANDS = [];
+function rockIsland(p, x = 0, z = 0, o = {}) {
+  const rx = o.rx ?? o.r ?? 60, rz = o.rz ?? (o.r ?? 60) * 0.62, H = o.h ?? 26, ry = o.ry ?? 0, sd = o.seed ?? 3, dome = o.dome ?? H * 0.14, N = o.seg ?? 128, NC = { cast: false };
+  const ph = [0, 1, 2, 3, 4].map(k => hash(sd * 1.7 + k * 3.1) * TAU);
+  const Rf = a => 1 + 0.08 * Math.sin(2 * a + ph[0]) + 0.05 * Math.sin(3 * a + ph[1]) + 0.025 * Math.sin(7 * a + ph[2]) + 0.012 * Math.sin(13 * a + ph[3]);
+  const cR = Math.cos(ry), sR = Math.sin(ry), loc = (X, Z) => { const dx = X - x, dz = Z - z; return [dx * cR - dz * sR, dx * sR + dz * cR]; }, wld = (lx, lz) => [x + lx * cR + lz * sR, z - lx * sR + lz * cR];
+  const lp = (a, k) => [Math.cos(a) * rx * Rf(a) * k, Math.sin(a) * rz * Rf(a) * k];
+  const dA = (a, b) => { let d = (a - b) % TAU; if (d > Math.PI) d -= TAU; if (d < -Math.PI) d += TAU; return d; };
+  const plat = (a, k) => { const [lx, lz] = lp(a, k); return H + dome * (1 - k * k) + 1.2 * (noise2(lx * 0.04 + sd, lz * 0.04) - 0.5) + 0.3 * (noise2(lx * 0.09, lz * 0.09 + sd) - 0.5) - 1.5 * sm01((k - 0.9) / 0.1); };
+  const LND = (o.landings ?? []).map(L => typeof L === 'number' ? { a: L } : L).map(L => { const a = L.a, R = Math.hypot(Math.cos(a) * rx, Math.sin(a) * rz) * Rf(a), sl = (L.slope ?? 46) * Math.PI / 180, base = L.base ?? 1.6;
+    const kTop = clamp(1 - (H - base) / Math.tan(sl) / R, 0.35, 0.9); return { ...L, a, w: L.w ?? 6, R, sh: (L.sh ?? 5) / R, hw: (L.w ?? 6) / 2 / R, kTop, base, yTop: plat(a, kTop) }; });
+  const notch = a => { let wb = 0, bL = null; for (const L of LND) { const w = sm01((L.hw + L.sh - Math.abs(dA(a, L.a))) / L.sh); if (w > wb) { wb = w; bL = L; } } return [wb, bL]; };
+  const gully = (L, k) => lerp(L.yTop, L.base, clamp((k - L.kTop) / (1 - L.kTop)));
+  const topY = (a, k) => { const y = plat(a, k), [w, L] = notch(a); return w > 0 && k > L.kTop - 0.08 ? lerp(y, Math.min(y, gully(L, k)), w * sm01((k - L.kTop + 0.08) / 0.08)) : y; };
+  const jag = (a, c) => 0.006 + 0.02 * c * c + 0.024 * (noise2(a * 7 + sd, c * 4.5) - 0.5) + 0.01 * (noise2(a * 23, c * 11 + sd) - 0.5);
+  const K = [0.04, 0.14, 0.26, 0.38, 0.48, 0.56, 0.62, 0.67, 0.72, 0.77, 0.82, 0.86, 0.9, 0.93, 0.955, 0.975, 0.99, 1.0], C = [0.06, 0.16, 0.28, 0.42, 0.56, 0.7, 0.82, 0.92, 1.0];
+  const NK = K.length, J = NK + C.length, pos = new Float32Array(J * N * 3), col = new Float32Array(J * N * 3), TY = new Float32Array(NK * N), q = new THREE.Color();
+  const cG = [new THREE.Color(o.grass ?? '#56733A'), new THREE.Color('#6E8646'), new THREE.Color('#7E7A60')], cRk = new THREE.Color(o.rock ?? '#6E6A62'), cGu = new THREE.Color('#DAD6CA'), cLi = new THREE.Color('#9A8C5A'), cWet = new THREE.Color('#2C2926'), cWeed = new THREE.Color('#3A4A2A'), cFl = new THREE.Color('#6A665E');
+  for (let i = 0; i < N; i++) { const a = i / N * TAU, [w, L] = notch(a), yE = topY(a, 1);
+    for (let j = 0; j < J; j++) { let k, y, top = j < NK;
+      if (top) { k = K[j]; y = topY(a, k); TY[j * N + i] = y; }
+      else { const c = C[j - NK]; k = 1 + jag(a, c) * (1 - 0.8 * w); y = lerp(yE, -7, Math.pow(c, 0.85)); if (w > 0) y = lerp(y, lerp(L.base, -7, sm01(c * 2.5)), w); }
+      const [lx, lz] = lp(a, k), v = (j * N + i) * 3; pos[v] = lx; pos[v + 1] = y; pos[v + 2] = lz;
+      if (top) { const n = noise2(lx * 0.06 + sd, lz * 0.06); q.copy(cG[0]).lerp(cG[1], clamp(n * 1.4 - 0.2)).lerp(cG[2], sm01((k - 0.92) / 0.08) * 0.8 + clamp((noise2(lx * 0.3, lz * 0.3) - 0.72) * 3) * 0.5);
+        if (w > 0.3 && k > L.kTop - 0.02) q.lerp(cFl, w); }
+      else { const nb = noise2(a * 5 + sd, y * 0.2); q.copy(cRk).offsetHSL(0, 0, 0.07 * Math.sin(y * 0.75 + nb * 4) + (hash(i * 7.1 + j) - 0.5) * 0.03);
+        if (noise2(a * 9 + 2, y * 0.3) > 0.7 && y > 3) q.lerp(cLi, 0.35);
+        if (y > 4 && noise2(a * 60 + 3, y * 0.12) > 0.73) q.lerp(cGu, 0.75 * sm01((y - 4) / 3));
+        if (y < 2.6) q.lerp(cWet, sm01((2.6 - y) / 1.5)); if (y > -0.6 && y < 1.2) q.lerp(cWeed, 0.35); }
+      col[v] = q.r; col[v + 1] = q.g; col[v + 2] = q.b; } }
+  const idx = []; for (let j = 0; j < J - 1; j++) for (let i = 0; i < N; i++) { const a = j * N + i, b = j * N + (i + 1) % N, c = a + N, d = b + N; idx.push(a, b, c, b, d, c); }
+  for (let i = 1; i < N - 1; i++) idx.push(0, i + 1, i);   // cap the centre ring
+  const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.BufferAttribute(pos, 3)); geo.setAttribute('color', new THREE.BufferAttribute(col, 3)); geo.setIndex(idx); geo.computeVertexNormals();
+  { const nm = geo.attributes.normal.array; for (let v = 0; v < NK * N; v++) { const st = 1 - Math.abs(nm[v * 3 + 1]), k = sm01((st - 0.3) / 0.3); if (k <= 0) continue; const y = pos[v * 3 + 1];   // steep turf (gully sides, the rim) is bare rock
+      q.setRGB(col[v * 3], col[v * 3 + 1], col[v * 3 + 2]).lerp(cRk.clone().offsetHSL(0, 0, 0.05 * Math.sin(y * 0.75) + 0.03), k); col[v * 3] = q.r; col[v * 3 + 1] = q.g; col[v * 3 + 2] = q.b; } }
+  const g = stat(grp(p ?? world, x, 0, z, ry)), me = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.94, metalness: 0, side: THREE.DoubleSide }));
+  me.castShadow = true; me.receiveShadow = true; me.name = 'rockIsland'; g.add(me);
+  // groundH: the plateau and the gullies, interpolated on the mesh's own triangles (figures stand exactly on it)
+  const topAt = (X, Z) => { const [lx, lz] = loc(X, Z), a = ((Math.atan2(lz / rz, lx / rx) % TAU) + TAU) % TAU, k = Math.hypot(lx / rx, lz / rz) / Rf(a); if (k > 1) return null;
+    const fi = a / TAU * N, i0 = Math.floor(fi) % N, i1 = (i0 + 1) % N, u = fi - Math.floor(fi); let j = 0; while (j < NK - 2 && K[j + 1] < k) j++; const v = clamp((k - K[j]) / (K[j + 1] - K[j]));
+    const ya = TY[j * N + i0], yb = TY[j * N + i1], yc = TY[(j + 1) * N + i0], yd = TY[(j + 1) * N + i1]; return u + v <= 1 ? ya + u * (yb - ya) + v * (yc - ya) : yd + (1 - u) * (yc - yd) + (1 - v) * (yb - yd); };
+  const I = { g, x, z, h: H, rx, rz, ry, topAt, kAt: (X, Z) => { const [lx, lz] = loc(X, Z), a = Math.atan2(lz / rz, lx / rx); return Math.hypot(lx / rx, lz / rz) / Rf(a); },
+    edge: (a, k = 0.97) => { const [lx, lz] = lp(a, k), [X, Z] = wld(lx, lz); return [X, topY(a, k), Z]; },
+    foot: (a, k = 1.06) => { const [lx, lz] = lp(a, k + jag(a, 0.85)), [X, Z] = wld(lx, lz); return [X, Z]; },
+    out: a => { const nx = Math.cos(a) / rx, nz = Math.sin(a) / rz, l = Math.hypot(nx, nz), lx = nx / l, lz = nz / l; return [lx * cR + lz * sR, -lx * sR + lz * cR]; },
+    keep: [x, z, Math.max(rx, rz) * 1.12], wld, lp };
+  I.landings = LND.map(L => { const [tx, tz] = wld(...lp(L.a, L.kTop)), [bx, bz] = wld(...lp(L.a, 1)), d = Math.hypot(bx - tx, bz - tz); return { a: L.a, w: L.w, kTop: L.kTop, yTop: L.yTop, base: L.base, top: [tx, L.yTop, tz], bottom: [bx, L.base, bz], dir: [(bx - tx) / d, (bz - tz) / d], len: d }; });
+  ISLANDS.push(I); if (ISLANDS.length === 1) { const g0 = groundH; groundH = (X, Z) => { let h = g0(X, Z); for (const Q of ISLANDS) { const y = Q.topAt(X, Z); if (y != null && y > h) h = y; } return h; }; }
+  // foam round the foot: 4 rings on the water, surging (alpha moves round the island), heights follow waterH — pure in t
+  if (o.foam !== false) { const FK = [-0.006, 0.008, 0.02, 0.045], NF = N, fp = new Float32Array(FK.length * NF * 3), fu = new Float32Array(FK.length * NF * 2), fi = [];
+    for (let j = 0; j < FK.length; j++) for (let i = 0; i < NF; i++) { const a = i / NF * TAU, [w] = notch(a), [lx, lz] = lp(a, 1 + jag(a, 0.86) * (1 - 0.8 * w) + FK[j] * (1 + 0.6 * noise2(a * 6, j))), n = j * NF + i; fp[n * 3] = lx; fp[n * 3 + 2] = lz; fu[n * 2] = i / NF; fu[n * 2 + 1] = j / (FK.length - 1); }
+    for (let j = 0; j < FK.length - 1; j++) for (let i = 0; i < NF; i++) { const a = j * NF + i, b = j * NF + (i + 1) % NF, c = a + NF, d = b + NF; fi.push(a, b, c, b, d, c); }
+    const fg2 = new THREE.BufferGeometry(); fg2.setAttribute('position', new THREE.BufferAttribute(fp, 3)); fg2.setAttribute('uv', new THREE.BufferAttribute(fu, 2)); fg2.setIndex(fi);
+    const FU = { uSpK: { value: 0 }, uSpS: { value: 1 }, uSpSd: { value: sd * 7.3 } };   // uSpK = t: the surge runs round the island, lace foam fades outward
+    const fm = new THREE.Mesh(fg2, _splashMat(FU, `{ if (hullMask(vSpP)) discard; float n = spn(vSpP.xz * 0.32 + uSpSd), n2 = spn(vSpP.xz * 1.15 - uSpSd + uSpK * 0.25), n3 = spn(vSpP.xz * 3.1 + uSpK * 0.4);
+      float surge = 0.5 + 0.5 * sin(uSpK * 1.05 + vSpU.x * 31.4159 + n * 6.0), edge = 1.0 - smoothstep(0.05 + 0.25 * surge, 1.0, vSpU.y);
+      float f = edge * smoothstep(0.3, 0.72, n * 0.35 + n2 * 0.35 + n3 * 0.3 + 0.22 * surge + 0.25 * (1.0 - vSpU.y)); diffuseColor.rgb *= 0.82; diffuseColor.a *= clamp(f * (0.35 + 0.45 * surge), 0.0, 0.8); }`, 'islefoam'));
+    fm.castShadow = false; fm.receiveShadow = false; fm.renderOrder = 1; fm.frustumCulled = false; fm.userData.noHit = true; fm.userData.qsurf = true; fm.name = 'islandFoam'; const fgp = dyn(grp(p ?? world, x, 0, z, ry)); fgp.add(dyn(fm));
+    tick(t => { FU.uSpK.value = t; const P = fg2.attributes.position.array, wh = typeof waterH === 'function';
+      for (let n = 0; n < FK.length * NF; n++) { const v = n * 3, [X, Z] = wld(P[v], P[v + 2]), yw = wh ? waterH(X, Z, t) : 0; P[v + 1] = (yw < -100 ? 0 : yw) + 0.06 + Math.floor(n / NF) * 0.012; }
+      fg2.attributes.position.needsUpdate = true; }); }
+  // spray where the swell meets the rock (a few spots), sea stacks offshore
+  for (let i = 0; i < (o.surf ?? 6); i++) { const a = hash(sd * 5.1 + i * 2.3) * TAU, [X, Z] = I.foot(a, 1.0); if (notch(a)[0] > 0.2) continue;
+    emit('spray', { at: [X, 0.4, Z], t0: 0, rate: 14, size: 0.55, grow: 1.4, speed: 5.5, spread: 0.45, g: -9.8, life: 1.5, soft: true, jitter: 3.5, opacity: 0.5, colors: ['#FFFFFF', '#E6F0F2'], lensOk: true }); }
+  for (let i = 0; i < (o.stacks ?? 3); i++) { const a = hash(sd * 3.3 + i * 4.1) * TAU, k = 1.22 + hash(i * 2.9 + sd) * 0.35; if (notch(a)[0] > 0) continue; const [lx, lz] = lp(a, k), h = 4 + hash(i * 6.1 + sd) * 10, r = 2.2 + hash(i * 1.3) * 2.5;
+    const st = grp(g, lx, -6, lz, hash(i) * TAU); cyl(st, r * 0.55, r, h + 6, '#57534D', 0, 0, 0, { seg: 7 }); cyl(st, r * 0.32, r * 0.56, 1.6, '#5E5A54', r * 0.1, h + 6, 0, { seg: 6 }); cyl(st, r * 0.58, r * 0.6, 0.25, '#D6D2C6', 0, h + 5.2, 0, { seg: 7, ...NC }); cyl(st, r * 1.05, r * 1.1, 6.6, '#2C2926', 0, 0, 0, { seg: 7, ...NC }); }
+  // turf dressing once everything stands (skips the gullies, yards, steps — wherever groundH is no longer the plateau): tussocks, thrift (sea pinks) near the rim, pebbles, outcrops
+  if (o.dress !== false) DEFER.push(() => { const T = [], B = [], Pb = [], tc = ['#5E7A3A', '#6E8846', '#7A8A4A', '#8A8A58', '#55703A'], rn = k => hash(sd * 13.1 + k * 0.731);
+    const ok = (X, Z) => { const y = topAt(X, Z); return y != null && Math.abs(groundH(X, Z) - y) < 0.05; }, at = (i, k0, k1) => { const a = rn(i) * TAU, k = k0 + Math.sqrt(rn(i + 9e3)) * (k1 - k0); return notch(a)[0] > 0.02 && k > 0.45 ? null : wld(...lp(a, k)); };
+    for (let i = 0; i < (o.tufts ?? 1800); i++) { const P = at(i, 0, 0.95); if (P && ok(...P)) T.push([P[0], P[1], 0.8 + rn(i + 3e3) * 1.0, rn(i + 5e3) * TAU, tc[i % 5]]); }
+    for (let i = 0; i < 220; i++) { const P = at(i + 2e4, 0.78, 0.97); if (P && ok(...P)) B.push([P[0], P[1], 0.8 + rn(i + 7e3) * 0.6, rn(i + 8e3) * TAU, i % 3 ? '#E89AB8' : '#F2C2D4']); }
+    for (let i = 0; i < 260; i++) { const P = at(i + 4e4, 0.1, 0.96); if (P && ok(...P)) Pb.push([P[0], P[1], 0.8 + rn(i + 6e3) * 2.2, rn(i + 1e3) * TAU, i % 2 ? '#8A867C' : '#6E6A62']); }
+    cover('tuft', T); cover('bloom', B); cover('pebble', Pb);
+    for (let i = 0; i < (o.outcrops ?? 16); i++) { const P = at(i + 6e4, 0.2, 0.9); if (P && ok(...P)) rock(world, P[0], P[1], 0.6 + rn(i + 2e3) * 1.1, '#77736A'); } });
+  return I;
+}
+
+// cliffStairs(p, I, i, { w: 1.6, rise: 0.19, rail: true, stage: 6, crane: true, craneSide: 1, tram: 26, box: true, wreck: { t, k: 1, upto: 0.45 }, color })
+//   → St = { g, top, bottom, at(u), path(n), stage: [x, z], crane, box, rails }
+//   Steps in landing gully i of rockIsland I: concrete flights on the gully floor (nosings, a low parapet each side with iron railing posts and two rails), a landing stage at
+//   the bottom (bollards, mooring rings, rungs down its face), a crane platform at the top beside the steps (cast-iron hand crane: post, jib, tie rod, winch with handle, chain
+//   and hook; railing round it), a tramway inland (rails on sleepers following the ground) and a wooden store box with rope coils on the platform. `wreck` = storm damage at t:
+//   the railing round the crane platform and the upper railings (`upto` of the flight from the top) are bent seaward and twisted (spring and settle), the box is torn off and
+//   tumbles into the gully, a big stone block is shoved over — all from t (k = strength); wreck.state: t => 0..1 | null shows the damage as already done (1) or not yet (0) in
+//   stretches of the video that are not in time order (aftermath first, flashback later), null = the timeline. From the call on groundH() follows the treads and the stage (walk() climbs them).
+const _STAIRW = [];
+function cliffStairs(p, I, li = 0, o = {}) {
+  const L = I.landings[li]; if (!L) { console.warn('cliffStairs: no landing ' + li); return null; }
+  const W = o.w ?? 1.6, rise = o.rise ?? 0.19, [X0, Y0, Z0] = L.top, [dx, dz] = L.dir, ry = Math.atan2(dx, dz), Ls = L.len, Hs = Y0 - L.base, n = Math.max(4, Math.round(Hs / rise)), rs = Hs / n, run = Ls / n, NC = { cast: false };
+  const cc = o.color ?? '#9A968C', g = stat(grp(p ?? world, X0, Y0, Z0, ry)), Fe = '#2A2C2E', FE = { metal: 0.5, rough: 0.55 };
+  const wk = o.wreck, tw = wk?.t ?? 1e9, kw = wk?.k ?? 1, upto = wk?.upto ?? 0.45, WS = t => wk?.state ? wk.state(t) : null;   // state(t) → 0..1 shows that much damage (no motion), null = the timeline from wreck.t
+  // treads (each a block resting into the gully floor), nosings, parapets
+  for (let i = 0; i < n; i++) { const yT = -i * rs, yB = -(i + 1) * rs - 0.45; box(g, W, yT - yB, run + 0.02, shade(cc, (hash(i * 3.7) - 0.5) * 0.05), 0, yB, (i + 0.5) * run, { surf: 'concrete' });
+    box(g, W + 0.01, 0.025, 0.05, shade(cc, 0.12), 0, yT - 0.02, i * run + 0.03, NC); }
+  const parH = 0.42, PAR = []; for (const sx of [-1, 1]) for (let i = 0; i < n; i += 4) { const i1 = Math.min(n, i + 4), z0 = i * run, z1 = i1 * run, y0 = -i * rs, y1 = -i1 * rs, len = Math.hypot(z1 - z0, y1 - y0);
+    const pg = grp(g, sx * (W / 2 + 0.17), (y0 + y1) / 2, (z0 + z1) / 2); pg.rotation.x = Math.atan2(y0 - y1, z1 - z0); box(pg, 0.34, parH + 0.5, len + 0.02, shade(cc, -0.06), 0, -0.5, 0, { surf: 'concrete' }); PAR.push([sx, z0, z1, y0, y1]); }
+  // railings: posts every ~1.8 m on both parapets, top + mid rail per bay; bays near the top are their own groups (they can be bent by the sea)
+  const rails = [], bayL = 1.8, nb = Math.ceil(Ls / bayL), ry0 = parH;
+  const yAt = zq => -Math.min(n, Math.floor(zq / run)) * rs;
+  if (o.rail !== false) for (const sx of [-1, 1]) for (let b = 0; b < nb; b++) { const z0 = b * Ls / nb, z1 = (b + 1) * Ls / nb, y0 = -z0 / Ls * Hs + parH, y1 = -z1 / Ls * Hs + parH, xr = sx * (W / 2 + 0.17);
+    const hit = wk && z0 / Ls < upto, bg = hit ? dyn(grp(g, xr, y0, z0)) : grp(g, xr, y0, z0);
+    cyl(bg, 0.028, 0.032, 1.0, Fe, 0, 0, 0, { seg: 6, ...FE }); ball(bg, 0.04, Fe, 0, 1.02, 0, { detail: 0, ...FE, ...NC });
+    for (const hy of [0.98, 0.52]) _seg(bg, [0, hy, 0], [0, hy + (y1 - y0), z1 - z0], 0.018, 0.018, Fe, { ...FE, ...NC });
+    if (b === nb - 1) cyl(bg, 0.028, 0.032, 1.0, Fe, 0, y1 - y0, z1 - z0, { seg: 6, ...FE });
+    if (hit) rails.push({ g: bg, sx, u: z0 / Ls, ph: hash(b * 3.1 + sx * 7) }); }
+  // landing stage at the bottom: concrete pier out over the water, bollards, rings, rungs
+  const SL = o.stage ?? 4.5, zs = Ls, ys = -Hs; if (SL > 0) { box(g, W + 1.8, 6.2, SL, shade(cc, -0.16), 0, ys - 6.2, zs + SL / 2 - 0.2, { surf: 'concrete' }); box(g, W + 1.9, 0.06, SL + 0.05, shade(cc, -0.04), 0, ys - 0.04, zs + SL / 2 - 0.2, NC);
+    for (const sx of [-1, 1]) { const bx = sx * (W / 2 + 0.75), bz = zs + SL - 1.0; cyl(g, 0.17, 0.2, 0.45, '#26282A', bx, ys, bz, { seg: 10, ...FE }); cyl(g, 0.24, 0.24, 0.07, '#26282A', bx, ys + 0.45, bz, { seg: 10, ...FE });
+      mesh(g, G('mringI', () => new THREE.TorusGeometry(0.12, 0.022, 5, 12)), mat(Fe, FE), sx * (W / 2 + 0.93), ys - 0.35, zs + SL * 0.5, { ry: Math.PI / 2, cast: false }); }
+    for (let r = 0; r < 7; r++) box(g, 0.5, 0.04, 0.04, Fe, -W / 2 - 0.6, ys - 0.4 - r * 0.42, zs + SL - 0.18, { ...FE, ...NC }); }
+  // crane platform beside the top flight, hand crane, railing round it, store box, a stone block, tramway inland
+  const cs = o.craneSide ?? 1, pw = 3.6, pd = 3.4, px = cs * (W / 2 + 0.34 + pw / 2), pz = -1.4, pyT = 0.06, out = {};
+  box(g, pw, 4, pd, shade(cc, -0.02), px, pyT - 4, pz, { surf: 'concrete' });
+  if (o.crane !== false) { const cg = grp(g, px - cs * 0.6, pyT, pz + 0.9); cyl(cg, 0.42, 0.5, 0.35, '#3A3C3E', 0, 0, 0, { seg: 10, ...FE }); cyl(cg, 0.15, 0.19, 2.7, '#2E3236', 0, 0.35, 0, { seg: 10, ...FE });
+    const jy = 2.85, jx = -cs * 0.2, jz = 3.4; _seg(cg, [0, jy, 0], [jx, jy + 0.55, jz], 0.09, 0.07, '#2E3236', FE); _seg(cg, [0, 1.45, 0], [jx * 0.7, jy + 0.45, jz * 0.75], 0.04, 0.04, '#2E3236', FE);
+    box(cg, 0.5, 0.42, 0.34, '#3A3C3E', cs * 0.32, 1.0, 0, FE); cyl(cg, 0.13, 0.13, 0.46, '#5A4A3A', cs * 0.32, 1.21, 0, { rz: Math.PI / 2, seg: 10 }); _seg(cg, [cs * 0.58, 1.21, 0], [cs * 0.66, 1.21, 0.24], 0.02, 0.02, Fe, NC);
+    _seg(cg, [jx, jy + 0.55, jz], [jx, jy - 0.9, jz], 0.012, 0.012, '#3A3A38', NC); mesh(cg, G('chook', () => new THREE.TorusGeometry(0.07, 0.018, 4, 10, Math.PI * 1.4)), mat(Fe, FE), jx, jy - 0.98, jz, { cast: false });
+    out.crane = cg; }
+  { const rr = [[px - pw / 2, pz - pd / 2], [px + pw / 2, pz - pd / 2], [px + pw / 2, pz + pd / 2], [px - pw / 2, pz + pd / 2]].map(([a, b]) => [a + Math.sign(a - px) * -0.08, b + Math.sign(b - pz) * -0.08]);
+    for (let s = 0; s < 4; s++) { if (s === (cs > 0 ? 3 : 1)) continue; const [ax, az] = rr[s], [bx, bz] = rr[(s + 1) % 4], hit = !!wk, sg = hit ? dyn(grp(g, ax, pyT, az)) : grp(g, ax, pyT, az), dX = bx - ax, dZ = bz - az;
+      for (let k = 0; k <= 2; k++) cyl(sg, 0.026, 0.03, 1.0, Fe, dX * k / 2, 0, dZ * k / 2, { seg: 6, ...FE }); for (const hy of [0.98, 0.52]) _seg(sg, [0, hy, 0], [dX, hy, dZ], 0.018, 0.018, Fe, { ...FE, ...NC });
+      if (hit) rails.push({ g: sg, sx: cs, u: 0, ph: hash(s * 5.7 + 2), plat: true }); } }
+  if (o.box !== false) { const bxg = dyn(grp(g, px + cs * 0.5, pyT, pz - 0.7)), BW = '#6A5034'; box(bxg, 1.2, 0.72, 0.8, BW, 0, 0, 0, { surf: 'plank' }); box(bxg, 1.26, 0.08, 0.86, shade(BW, -0.1), 0, 0.72, 0);
+    for (const sx of [-1, 1]) box(bxg, 0.06, 0.74, 0.82, '#3A3A38', sx * 0.45, 0, 0, { ...FE, ...NC }); mesh(bxg, G('ropeCoil', () => new THREE.TorusGeometry(0.42, 0.12, 6, 14)), mat('#8A7550'), 0.05, 0.86, 0.02, { rx: Math.PI / 2, cast: false });
+    out.box = bxg; if (wk) { const T = tw + 0.12, dir = cs; tick(t => { const sv = WS(t); if (sv != null) { bxg.position.set(px + cs * 0.5, pyT, pz - 0.7); bxg.rotation.set(0, 0, 0); bxg.visible = sv < 0.5; return; } const e = t - T; if (e <= 0) { bxg.position.set(px + cs * 0.5, pyT, pz - 0.7); bxg.rotation.set(0, 0, 0); bxg.visible = true; return; }
+      bxg.position.set(px + cs * 0.5 - dir * e * 3.2, pyT + e * 4.2 - 4.9 * e * e, pz - 0.7 + e * 5.5); bxg.rotation.set(e * 3.1, e * 1.3, -dir * e * 2.2); bxg.visible = e < 1.15; }); } }
+  { const blk = wk ? dyn(grp(g, px - cs * 1.2, pyT, pz - 1.1)) : grp(g, px - cs * 1.2, pyT, pz - 1.1); box(blk, 0.95, 0.62, 0.8, '#7A766C', 0, 0, 0, { surf: 'stone' });
+    if (wk) tick(t => { const sv = WS(t), e = (sv != null ? sv : sm01((t - tw - 0.05) / 0.5)) * kw; blk.position.set(px - cs * 1.2 + cs * 0.35 * e, pyT, pz - 1.1 + 0.9 * e); blk.rotation.set(0.12 * e, 0.5 * e, -cs * 0.16 * e); }); }
+  if ((o.tram ?? 26) > 0) { const TL = o.tram ?? 26, steps = Math.ceil(TL / 2), wp = u => { const lz = pz - pd / 2 - u, P = v3(px, 0, lz).applyAxisAngle(v3(0, 1, 0), ry); return [X0 + P.x, Z0 + P.z]; };
+    const tg = grp(world); for (let k = 0; k < steps; k++) { const [ax, az] = wp(k * 2), [bx, bz] = wp(k * 2 + 2), ya = groundH(ax, az) + 0.12, yb = groundH(bx, bz) + 0.12;
+      for (const sx of [-0.45, 0.45]) { const ox = Math.cos(ry) * sx, oz = -Math.sin(ry) * sx; _seg(tg, [ax + ox, ya, az + oz], [bx + ox, yb, bz + oz], 0.035, 0.035, '#3A3634', { ...FE, ...NC }); }
+      box(tg, 1.25, 0.1, 0.22, '#5A4A3A', (ax + bx) / 2, (ya + yb) / 2 - 0.14, (az + bz) / 2, { ry, ...NC }); } stat(tg); }
+  // storm damage on the railings: bent seaward, twisted, a spring and settle (pure in t)
+  if (wk) tick(t => { const sv = WS(t); for (const R of rails) { const d = sv != null ? 9 : t - tw - (R.plat ? 0 : R.u * 0.5) - R.ph * 0.12, e = (sv != null ? sv : sm01(d / 0.45)) * kw * (R.plat ? 1 : 1 - sm01((R.u - upto * 0.6) / (upto * 0.5))), wob = d > 0 && d < 8 ? Math.sin(d * 13) * Math.exp(-d * 4) * 0.14 : 0;
+    R.g.rotation.set((0.55 + 0.35 * R.ph) * (e + wob * e), (R.ph - 0.5) * 0.6 * e, -R.sx * (0.25 + 0.3 * R.ph) * e); } });
+  // walk surface: treads, stage, platform
+  const c = Math.cos(ry), s = Math.sin(ry), S0 = { X0, Y0, Z0, c, s, W, run, rs, n, Ls, SL, ys, px, pw, pz, pd };
+  _STAIRW.push(S0); if (_STAIRW.length === 1) { const g0 = groundH; groundH = (X, Z) => { let h = g0(X, Z); for (const q of _STAIRW) { const dx2 = X - q.X0, dz2 = Z - q.Z0, lx = dx2 * q.c - dz2 * q.s, lz = dx2 * q.s + dz2 * q.c;
+    if (Math.abs(lx) <= q.W / 2 + 0.02 && lz >= 0 && lz <= q.Ls) h = Math.max(h, q.Y0 - clamp(lz / q.run - 0.5, 0, q.n) * q.rs);   // a smooth line over the nosings (steep flights: the feet don't snap step by step)
+    else if (Math.abs(lx) <= q.W / 2 + 1.2 && lz > q.Ls && lz <= q.Ls + q.SL - 0.2) h = Math.max(h, q.Y0 + q.ys);
+    else if (Math.abs(lx - q.px) <= q.pw / 2 && Math.abs(lz - q.pz) <= q.pd / 2) h = Math.max(h, q.Y0 + 0.06); } return h; }; }
+  const at = u => { const lz = clamp(u) * Ls, P = v3(0, 0, lz).applyAxisAngle(v3(0, 1, 0), ry); return [X0 + P.x, Y0 - Math.min(n, Math.floor(lz / run)) * rs, Z0 + P.z]; };
+  const stg = (() => { const P = v3(0, 0, Ls + SL * 0.6).applyAxisAngle(v3(0, 1, 0), ry); return [X0 + P.x, Z0 + P.z]; })();
+  return { g, top: L.top, bottom: [L.bottom[0], L.base, L.bottom[2]], at, path: (m = 6, u0 = 0, u1 = 1) => [...Array(m + 1)].map((_, k) => { const q = at(lerp(u0, u1, k / m)); return [q[0], q[2]]; }), stage: stg, rails, ry, ...out,
+    platform: (() => { const P = v3(px, 0, pz).applyAxisAngle(v3(0, 1, 0), ry); return [X0 + P.x, Y0 + 0.06, Z0 + P.z]; })() };
+}
+
+// cliffWave({ at: [x, z] | island + a, dir, t, swell: 6, h: 24, w: 16, lead: 2.6, speed: 11, color, sound: true, vol: 1 }) → { t, at, top }
+//   A big sea: a swell (one deforming mesh, steepening, a white crest that leans forward) runs in toward the cliff foot `at` along heading `dir` (radians, atan2(dx, dz);
+//   with { island: I, a } it comes straight in at angle a of rockIsland I), hits at t: water bursts up the face in white columns to about `h` m, a mist veil hangs and drifts,
+//   water pours back down the rock, a foam patch spreads on the sea; 'wavecrash' sound. Pure in t (the swell is visible from t − lead to t + 0.4).
+function cliffWave(o = {}) {
+  let at = o.at, dir = o.dir ?? 0; if (o.island) { const I = o.island; at = I.foot(o.a ?? 0, 1.02); const [ox, oz] = I.out(o.a ?? 0); dir = Math.atan2(-ox, -oz); }
+  const [X, Z] = at ?? [0, 0], ti = o.t ?? 2, Wd = o.w ?? 16, Hc = o.swell ?? 6, Hs = o.h ?? 24, lead = o.lead ?? 2.6, spd = o.speed ?? 11, dx = Math.sin(dir), dz = Math.cos(dir), ax = dz, az = -dx;
+  const NX = 30, NU = 26, nV = (NX + 1) * (NU + 1), pos = new Float32Array(nV * 3), col = new Float32Array(nV * 3), idx = [];
+  for (let i = 0; i < NX; i++) for (let j = 0; j < NU; j++) { const a = i * (NU + 1) + j, b = a + NU + 1; idx.push(a, a + 1, b, b, a + 1, b + 1); }
+  const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.BufferAttribute(pos, 3)); geo.setAttribute('color', new THREE.BufferAttribute(col, 3)); geo.setIndex(idx);
+  const me = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.55, metalness: 0.02, side: THREE.DoubleSide, envMapIntensity: 0.35 })); me.frustumCulled = false; me.castShadow = false; me.receiveShadow = true; me.userData.noHit = true;
+  const g = dyn(grp(world)); g.add(dyn(me)); const cD = new THREE.Color(o.color ?? '#152A30'), cM = new THREE.Color('#1D3A42'), cL = new THREE.Color('#33626A'), cF = new THREE.Color('#E8EEEC'), q = new THREE.Color();
+  const sB = 2.4 * Hc, sF = 0.75 * Hc, wh = (x2, z2, t) => { const y = waterH(x2, z2, t); return y < -100 ? 0 : y; };
+  tick(t => { const on = t >= ti - lead && t <= ti + 0.4; g.visible = on; if (!on) return; const s = (ti - t) * spd + 0.6, A = t <= ti ? Hc * (0.45 + 0.55 * sm01(1 - (ti - t) / lead)) : Hc * (1 - sm01((t - ti) / 0.38)), lean = sm01(1 - (ti - t) / lead) * 0.55;
+    const cx = X - dx * s, cz = Z - dz * s, w0 = wh(cx, cz, t);
+    for (let i = 0; i <= NX; i++) { const u = i / NX * 2 - 1, e = sm01((1 - Math.abs(u)) / 0.4), lu = u * Wd * 0.75;
+      for (let j = 0; j <= NU; j++) { const v = -3.2 + j / NU * 4.2, d = v * Hc, pr = v < 0 ? Math.exp(-((d / sB) ** 2)) : Math.exp(-((d / sF) ** 2)), y = A * e * pr * (1 + 0.08 * Math.sin(lu * 0.5 + t * 1.7)), k = (i * (NU + 1) + j) * 3;
+        const fwd = d + lean * (y / Math.max(0.01, A)) ** 2 * Hc * 0.6; pos[k] = cx + dx * fwd + ax * lu; pos[k + 2] = cz + dz * fwd + az * lu; pos[k + 1] = w0 + y - 0.5 * (1 - e * pr) - 0.15;
+        const hv = A > 0.01 ? y / A : 0; q.copy(cD).lerp(cM, sm01(hv / 0.5)).lerp(cL, sm01((hv - 0.55) / 0.35) * 0.7).lerp(cF, clamp(sm01((hv - 0.82) / 0.14) * lean * 1.6 + (v > 0 && hv > 0.3 ? 0.35 * lean * noise2(lu * 0.6, t * 2 + v) : 0)));
+        col[k] = q.r; col[k + 1] = q.g; col[k + 2] = q.b; } }
+    geo.attributes.position.needsUpdate = true; geo.attributes.color.needsUpdate = true; geo.computeVertexNormals(); });
+  // the burst: white columns up the face, a mist veil, water pouring off the rock, foam on the sea
+  const v0 = Math.sqrt(2 * 9.8 * Hs) * 1.05, W3 = ['#FFFFFF', '#E8F2F4'];
+  for (let k = 0; k < 7; k++) { const u = (k / 6 - 0.5) * Wd * 0.85, bx = X + ax * u - dx * 0.8, bz = Z + az * u - dz * 0.8, kk = 0.7 + 0.4 * hash(k * 3.3 + ti);   // white columns up the face: fine drops + a dense core
+    emit('spray', { at: [bx, 0.6, bz], t0: ti + k * 0.025, t1: ti + 0.4 + k * 0.025, rate: 340, size: 0.26, grow: 1.1, speed: v0 * kk, spread: 0.16, g: -9.8, life: 2.6, soft: true, jitter: 1.1, opacity: 0.7, colors: W3, vel: [-dx * 2.2, 0, -dz * 2.2] });
+    emit('spray', { at: [bx, 0.6, bz], t0: ti + 0.05 + k * 0.025, t1: ti + 0.3 + k * 0.025, rate: 90, size: 0.7, grow: 1.4, speed: v0 * kk * 0.8, spread: 0.1, g: -9.8, life: 2.2, soft: true, jitter: 0.6, opacity: 0.55, colors: W3, vel: [-dx * 1.6, 0, -dz * 1.6] }); }
+  emit('spray', { at: [X - dx * 2, Hs * 0.45, Z - dz * 2], t0: ti + 0.35, t1: ti + 1.0, rate: 70, size: 1.1, grow: 1.5, speed: v0 * 0.25, spread: 0.7, g: -2.5, life: 3.0, soft: true, jitter: Wd * 0.35, opacity: 0.2, colors: W3, vel: [-dx * 1.4, 0, -dz * 1.4] });
+  emit('spray', { at: [X + dx * 0.6, Hs * 0.55, Z + dz * 0.6], t0: ti + 0.9, t1: ti + 3.4, rate: 90, size: 0.2, grow: 0.4, speed: 0.6, spread: 1.0, g: -9.8, life: 1.8, soft: true, jitter: Wd * 0.3, opacity: 0.6, colors: W3 });
+  { const FU = { uSpK: { value: 0 }, uSpS: { value: 1 }, uSpSd: { value: ti * 3.7 } }, TF = 6;   // white water spreading on the sea after the burst: lace, dissolves outward
+    const fm = new THREE.Mesh(G('cwFoam', () => new THREE.PlaneGeometry(2, 2).rotateX(-Math.PI / 2)), _splashMat(FU, `{ if (hullMask(vSpP)) discard; vec2 q = vSpU * 2.0 - 1.0; float r = length(q), n = spn(vSpP.xz * 0.45 + uSpSd), n2 = spn(vSpP.xz * 1.4 - uSpSd), n3 = spn(vSpP.xz * 3.6 + uSpSd);
+      float f = (1.0 - smoothstep(0.45 + 0.4 * uSpK, 1.0, r)) * smoothstep(0.32, 0.7, n * 0.4 + n2 * 0.35 + n3 * 0.25 + 0.3 * (1.0 - uSpK)); diffuseColor.rgb *= 0.9; diffuseColor.a *= clamp(f * (1.0 - uSpK) * 0.95, 0.0, 0.92); }`, 'cwfoam'));
+    fm.frustumCulled = false; fm.castShadow = false; fm.renderOrder = 1; fm.userData.noHit = true; world.add(dyn(fm)); const fx0 = X - dx * (Wd * 0.3), fz0 = Z - dz * (Wd * 0.3);
+    tick(t => { const kf = (t - ti) / TF; fm.visible = kf > 0 && kf < 1; if (!fm.visible) return; FU.uSpK.value = kf; fm.position.set(fx0, wh(fx0, fz0, t) + 0.07, fz0); fm.rotation.y = dir; fm.scale.set(Wd * (0.45 + 0.45 * Math.sqrt(kf)), 1, Wd * (0.35 + 0.5 * Math.sqrt(kf))); }); }
+  if (o.sound !== false) sfx(ti - 0.04, 'wavecrash', o.vol ?? 1);
+  return { t: ti, at: [X, Z], top: [X, Hs, Z] };
+}
+
+// lighthouse(p, x, z, { kind: 'stone', h: 20, ry, lit: 1 | t => 0..1, rot: 0.42, beams: 2, beam: 0.12, home: 0 | t => 0..1, station: true, wall: true, glow: false, phase })
+//   → L = { g, top, gallery, lit(t), gate: { door }, door: { door }, yard, keep, tower: [x, z], station: [x, z], gatePos, doorPos }
+//   Rock lighthouse of the Northern Lighthouse Board type (Flannan Isles 1899): tapered white tower with plinth, string courses, small windows, a corbelled gallery with
+//   an iron railing, a lantern (dark pedestal, glazing with astragals, copper dome, ventilator ball, vane) and inside it a rotating optic (four bull's-eye panels with
+//   prism rings round a paraffin lamp; turns at `rot` rad/s, beams sweep through the dark when lit — `lit` 0 = the light is out, the lantern stays dark). Beside it the
+//   single-storey shore station (harled walls, stone quoins, slate roof, three chimneys, sash windows lit by `home`, a front door for openDoor), a paved yard with a
+//   flagged path, oil store, rain barrel and coal bunker, all inside a rubble wall with a wooden gate between two piers (openDoor(L.gate, t) swings it inward). The yard is
+//   levelled on its own foundation; from the call on groundH() is flat inside the wall.
+function _stoneLighthouse(p, x, z, o = {}) {
+  const ry = o.ry ?? 0, Wc = o.yardW ?? 24, Dc = o.yardD ?? 19, NC = { cast: false }, cR = Math.cos(ry), sR = Math.sin(ry), w2 = (lx, lz) => [x + lx * cR + lz * sR, z - lx * sR + lz * cR];
+  let y0 = -1e9; for (const [a, b] of [[-1, -1], [1, -1], [1, 1], [-1, 1], [0, 0], [0, 1], [0, -1], [1, 0], [-1, 0]]) { const [X, Z] = w2(a * Wc / 2, b * Dc / 2); y0 = Math.max(y0, groundH(X, Z)); }
+  const Y = y0 + 0.08, g = stat(grp(p ?? world, x, Y, z, ry)), litF = typeof o.lit === 'function' ? o.lit : () => o.lit ?? 1, homeF = typeof o.home === 'function' ? o.home : () => o.home ?? 0;
+  const Wh = '#ECE9E0', Qn = '#B8B2A4', Sl = '#3A3E44', Dk = '#2A2826', FE = { metal: 0.5, rough: 0.5 };
+  let gateLeaf = null, doorLeaf = null;
+  // yard: levelled pad on a foundation, flagged path gate → door, wall with coping, gate piers + wooden gate
+  box(g, Wc + 0.6, 3.2, Dc + 0.6, '#77736A', 0, -3.25, 0, { surf: 'stone' }); box(g, Wc - 0.4, 0.04, Dc - 0.4, '#8C887C', 0, -0.03, 0, { surf: 'paving', ...NC });
+  const wh = o.wallH ?? 1.7, wt = 0.5, gx = -2.3, gw = 1.5;
+  for (let i = 0; i < 7; i++) box(g, 1.3, 0.05, 1.1, shade('#9A968A', (hash(i * 2.3) - 0.5) * 0.1), gx + (i % 2) * 0.1, 0, Dc / 2 - 0.9 - i * 1.15, { surf: 'stone', ...NC });
+  if (o.wall !== false) { const seg = (x0, z0, x1, z1) => { const L = Math.hypot(x1 - x0, z1 - z0); if (L < 0.05) return; const a = Math.atan2(x1 - x0, z1 - z0);
+      box(g, wt, wh + 3.2, L + wt, '#8A857A', (x0 + x1) / 2, -3.2, (z0 + z1) / 2, { ry: a, surf: 'stone' }); box(g, wt + 0.12, 0.12, L + wt + 0.12, '#A8A396', (x0 + x1) / 2, wh, (z0 + z1) / 2, { ry: a, ...NC }); };
+    const hw = Wc / 2, hd = Dc / 2; seg(-hw, -hd, hw, -hd); seg(hw, -hd, hw, hd); seg(-hw, -hd, -hw, hd); seg(-hw, hd, gx - gw / 2 - 0.35, hd); seg(gx + gw / 2 + 0.35, hd, hw, hd);
+    for (const sx of [-1, 1]) { box(g, 0.7, wh + 0.5, 0.7, Qn, gx + sx * (gw / 2 + 0.35), 0, hd, { surf: 'stone' }); cone(g, 0.5, 0.35, Qn, gx + sx * (gw / 2 + 0.35), wh + 0.5, hd, { seg: 4, ry: Math.PI / 4, ...NC }); }
+    const leaf = dyn(grp(g, gx - gw / 2, 0.05, hd)); leaf.userData.angle = 1.55; const Gc = '#4E5A4A';
+    for (let i = 0; i < 6; i++) box(leaf, gw / 6 - 0.02, 1.55, 0.06, shade(Gc, (hash(i * 4.1) - 0.5) * 0.06), (i + 0.5) * gw / 6, 0, 0, NC);
+    for (const yy of [0.25, 1.2]) box(leaf, gw - 0.04, 0.12, 0.05, shade(Gc, -0.12), gw / 2, yy, -0.05, NC);
+    _seg(leaf, [0.08, 0.35, -0.06], [gw - 0.1, 1.25, -0.06], 0.035, 0.035, shade(Gc, -0.12), NC); box(leaf, 0.08, 0.14, 0.04, '#26221E', gw - 0.15, 0.85, 0.05, { ...FE, ...NC }); gateLeaf = leaf; }
+  // shore station: single storey, harled, quoins, slate roof, chimneys, sash windows (lit by `home`), front door; link to the tower
+  const sx0 = -9.5, sx1 = 4.5, sz0 = -7.8, sz1 = -1.6, sH = 3.3, sW = sx1 - sx0, sD = sz1 - sz0, scx = (sx0 + sx1) / 2, scz = (sz0 + sz1) / 2;
+  if (o.station !== false) { box(g, sW + 0.3, 0.45, sD + 0.3, Qn, scx, 0, scz, { surf: 'stone' }); box(g, sW, sH, sD, Wh, scx, 0.4, scz, { surf: 'plaster' });
+    for (const qx of [sx0, sx1]) for (const qz of [sz0, sz1]) for (let k = 0; k < 6; k++) box(g, k % 2 ? 0.42 : 0.28, 0.5, k % 2 ? 0.28 : 0.42, Qn, qx + (qx < scx ? 1 : -1) * 0.1, 0.45 + k * 0.52, qz + (qz < scz ? 1 : -1) * 0.1, { surf: 'stone', ...NC });
+    box(g, sW + 0.5, 0.16, sD + 0.5, Qn, scx, sH + 0.36, scz, NC); prism(g, sW + 0.6, 1.7, sD + 0.9, Sl, scx, sH + 0.5, scz, { surf: 'tile' }); box(g, sW + 0.65, 0.14, 0.24, '#5A5E62', scx, sH + 2.14, scz, NC);
+    for (const cx of [sx0 + 1.2, scx - 0.6, sx1 - 1.6]) { box(g, 0.95, 1.6, 0.6, Wh, cx, sH + 1.1, scz, { surf: 'plaster' }); box(g, 1.05, 0.12, 0.7, Qn, cx, sH + 2.7, scz, NC); for (const px of [-0.2, 0.2]) cyl(g, 0.11, 0.13, 0.42, '#9A5A3E', cx + px, sH + 2.82, scz, { seg: 8 }); }
+    const winM = mat('#2A3038', { em: '#FFB85A', ei: 0, own: true, rough: 0.2 });
+    for (const wx of [sx0 + 1.3, sx0 + 3.6, scx + 0.9, sx1 - 1.2, sx1 - 3.2]) { box(g, 1.05, 1.5, 0.12, Qn, wx, 0.6, sz1 + 0.04, NC); box(g, 0.84, 1.3, 0.05, '#E8E4DC', wx, 0.7, sz1 + 0.1, NC);
+      box(g, 0.74, 1.2, 0.03, '', wx, 0.75, sz1 + 0.12, { mat: winM, ...NC }); box(g, 0.8, 0.05, 0.035, '#F2F0EA', wx, 1.33, sz1 + 0.14, NC); box(g, 0.04, 1.2, 0.035, '#F2F0EA', wx, 0.75, sz1 + 0.14, NC);
+      box(g, 1.15, 0.1, 0.24, Qn, wx, 0.55, sz1 + 0.12, NC); }
+    for (const wx of [sx0 + 2.2, sx1 - 2.2]) { box(g, 0.95, 1.38, 0.08, Qn, wx, 0.66, sz0 - 0.06, NC); box(g, 0.8, 1.2, 0.03, '', wx, 0.75, sz0 - 0.11, { mat: winM, ...NC }); }
+    const dX = gx; box(g, 1.3, 2.35, 0.14, Qn, dX, 0.4, sz1 + 0.05, NC); const dl = dyn(grp(g, dX - 0.5, 0.42, sz1 + 0.13)); dl.userData.angle = -1.45; box(dl, 1.0, 2.1, 0.07, '#3E4E5A', 0.5, 0, 0);
+    for (const yy of [0.35, 1.25]) box(dl, 0.8, 0.6, 0.02, shade('#3E4E5A', -0.1), 0.5, yy, 0.045, NC); ball(dl, 0.035, '#C9A24A', 0.88, 1.05, 0.07, { detail: 0, ...FE, ...NC }); box(g, 1.6, 0.3, 0.7, Qn, dX, 0.1, sz1 + 0.45, { surf: 'stone' });
+    doorLeaf = dl; tick(t => { winM.emissiveIntensity = 1.6 * clamp(homeF(t)); });
+    box(g, 2.4, 2.6, 2.6, Wh, sx1 + 1.1, 0.4, -4.6, { surf: 'plaster' }); box(g, 2.6, 0.16, 2.8, Qn, sx1 + 1.1, 3.0, -4.6, NC);   // link to the tower
+    { const ox = 8.4, oz = 4.6; box(g, 2.6, 2.3, 2.2, Wh, ox, 0, oz, { surf: 'plaster' }); box(g, 2.8, 0.18, 2.4, Sl, ox, 2.3, oz, NC); box(g, 0.9, 1.8, 0.06, '#5A4A3A', ox - 0.4, 0, oz + 1.12, NC);   // oil store, rain barrel, coal bunker
+      cyl(g, 0.38, 0.36, 0.95, '#4A5A62', ox - 1.8, 0, oz + 1.4, { seg: 12 }); for (const yy of [0.18, 0.75]) cyl(g, 0.39, 0.39, 0.05, '#2A2C2E', ox - 1.8, yy, oz + 1.4, { seg: 12, ...NC });
+      box(g, 1.8, 0.9, 1.0, '#5E5A52', -8.6, 0, 3.6, { surf: 'stone' }); box(g, 1.9, 0.08, 1.1, '#3A3632', -8.6, 0.9, 3.6, NC); } }
+  // tower
+  const tx = o.towerX ?? 8.6, tz = o.towerZ ?? -4.6, Ht = o.h ?? 20, r0 = 2.5, r1 = 1.95, tw = grp(g, tx, 0, tz);
+  cyl(tw, r0 + 0.35, r0 + 0.45, 0.8, Qn, 0, 0, 0, { seg: 20, surf: 'stone' }); cyl(tw, r1, r0, Ht, Wh, 0, 0.8, 0, { seg: 20, surf: 'plaster' });
+  for (const u of [0.33, 0.66]) { const rr = lerp(r0, r1, u) + 0.06; cyl(tw, rr, rr, 0.16, Qn, 0, 0.8 + Ht * u, 0, { seg: 20, ...NC }); }
+  for (let i = 0; i < 4; i++) { const u = 0.2 + i * 0.19, rr = lerp(r0, r1, u), a = i % 2 ? 0.35 : Math.PI + 0.35; box(tw, 0.42, 0.75, 0.16, Qn, Math.sin(a) * rr, 0.8 + Ht * u, Math.cos(a) * rr, { ry: a, ...NC }); box(tw, 0.3, 0.6, 0.06, '#1E2630', Math.sin(a) * (rr + 0.06), 0.87 + Ht * u, Math.cos(a) * (rr + 0.06), { ry: a, ...NC }); }
+  const gy = 0.8 + Ht; for (let i = 0; i < 20; i++) { const a = i / 20 * TAU; box(tw, 0.28, 0.5, 0.42, Qn, Math.sin(a) * (r1 + 0.18), gy - 0.5, Math.cos(a) * (r1 + 0.18), { ry: a, ...NC }); }
+  cyl(tw, r1 + 0.65, r1 + 0.55, 0.22, Qn, 0, gy, 0, { seg: 20 }); for (let i = 0; i < 24; i++) { const a = i / 24 * TAU; cyl(tw, 0.025, 0.03, 0.95, Dk, Math.sin(a) * (r1 + 0.55), gy + 0.22, Math.cos(a) * (r1 + 0.55), { seg: 5, ...FE, ...NC }); }
+  for (const hy of [1.15, 0.65]) mesh(tw, G(`lhRail${r1}`, () => new THREE.TorusGeometry(r1 + 0.55, 0.025, 4, 40).rotateX(Math.PI / 2)), mat(Dk, FE), 0, gy + hy, 0, { cast: false });
+  const lr = 1.45, ly = gy + 0.22; cyl(tw, lr + 0.05, lr + 0.1, 0.95, '#3A2E26', 0, ly, 0, { seg: 12 }); box(tw, 0.6, 0.8, 0.06, '#2A221C', 0, ly + 0.06, lr + 0.11, NC);
+  const glassH = 2.1, gm = mat('#B8D4DC', { kind: 'glass', opacity: 0.22 }); mesh(tw, G('lhGlass', () => new THREE.CylinderGeometry(lr, lr, glassH, 12, 1, true)), gm, 0, ly + 0.95 + glassH / 2, 0, { cast: false });
+  for (let i = 0; i < 12; i++) { const a = (i + 0.5) / 12 * TAU, rr = lr * Math.cos(Math.PI / 12); box(tw, 0.06, glassH, 0.06, Dk, Math.sin(a) * rr, ly + 0.95, Math.cos(a) * rr, { ry: a, ...FE, ...NC }); }
+  for (const hy of [0.95, 0.95 + glassH * 0.5, 0.95 + glassH]) mesh(tw, G('lhAstr', () => new THREE.TorusGeometry(lr, 0.035, 4, 24).rotateX(Math.PI / 2)), mat(Dk, FE), 0, ly + hy, 0, { cast: false });
+  const dy = ly + 0.95 + glassH; mesh(tw, G('lhDome', () => new THREE.SphereGeometry(lr + 0.12, 16, 6, 0, TAU, 0, Math.PI / 2)), mat('#2E3A32', { rough: 0.45, metal: 0.4 }), 0, dy, 0, {}).scale.set(1, 0.62, 1);
+  cyl(tw, 0.14, 0.2, 0.4, '#2E3A32', 0, dy + 0.85, 0, { seg: 8 }); ball(tw, 0.24, '#2E3A32', 0, dy + 1.4, 0, { detail: 1, metal: 0.4, rough: 0.45 }); _seg(tw, [0, dy + 1.6, 0], [0, dy + 2.6, 0], 0.02, 0.015, Dk, NC);
+  { const vn = dyn(grp(tw, 0, dy + 2.3, 0)); finPlate(vn, [[0, 0], [0.5, 0.12], [0.5, -0.12]], 0.02, Dk, 0, 0, 0, NC); tick(t => { vn.rotation.y = 0.4 + 0.25 * Math.sin(t * 0.7); }); }
+  // optic: pedestal, rotating bull's-eye panels + prism rings round the lamp; beams
+  const oy = ly + 0.95 + 0.25; cyl(tw, 0.3, 0.42, 0.25, '#4A3A2A', 0, ly + 0.95 - 0.02, 0, { seg: 10, ...FE }); cyl(tw, 0.12, 0.16, 0.25, '#7A6A4A', 0, oy - 0.02, 0, { seg: 8, ...FE });
+  const lens = dyn(grp(tw, 0, oy + 0.75, 0)), lensM = mat('#F4E6B4', { em: '#FFD27A', ei: 0, own: true, opacity: 0.8, rough: 0.08, metal: 0.1 }), lampM = mat('#FFF2C8', { em: '#FFE2A0', ei: 0, own: true });
+  ball(lens, 0.16, '', 0, 0, 0, { mat: lampM, detail: 2, cast: false }); const Br = '#9A7A3A';
+  for (let i = 0; i < 4; i++) { const a = i / 4 * TAU, pg = grp(lens, Math.sin(a) * 0.62, 0, Math.cos(a) * 0.62); pg.rotation.y = a;
+    box(pg, 1.0, 0.06, 0.05, Br, 0, 0.7, -0.02, { ...FE, cast: false }); box(pg, 1.0, 0.06, 0.05, Br, 0, -0.76, -0.02, { ...FE, cast: false }); for (const sx of [-1, 1]) box(pg, 0.06, 1.5, 0.05, Br, sx * 0.5, -0.76, -0.02, { ...FE, cast: false });
+    ball(pg, 0.18, '', 0, 0, 0.04, { mat: lensM, detail: 2, cast: false }).scale.set(1, 1, 0.35);
+    for (let r = 1; r <= 4; r++) mesh(pg, G(`lensRing${r}`, () => new THREE.TorusGeometry(0.12 + r * 0.085, 0.028, 4, 22)), lensM, 0, 0, 0.03, { cast: false }); }
+  for (const s of [-1, 1]) for (let r = 0; r < 3; r++) mesh(lens, G(`prRing${r}`, () => new THREE.TorusGeometry(0.66 - r * 0.07, 0.035, 4, 24).rotateX(Math.PI / 2)), lensM, 0, s * (0.78 + r * 0.1), 0, { cast: false });
+  const nB = o.beams ?? 2, bK = o.beam ?? 0.12, bms = []; for (let i = 0; i < nB; i++) { const a = i / nB * TAU, bm = new THREE.Mesh(G('lhbeamS', () => new THREE.CylinderGeometry(0.5, 3.4, 60, 24, 1, true)), beamMat({ color: '#FFE9A8', k: bK * 2.6, dustScale: 0.25, len: 1.1 }));
+    bm.rotation.z = Math.PI / 2; const bg = grp(lens, 0, 0, 0); bg.rotation.y = a + Math.PI / 2; bm.position.x = 30.6; bg.add(bm); bm.userData.noHit = true; bm.castShadow = false; bms.push(bm); }
+  const rot = o.rot ?? 0.42, ph0 = o.phase ?? 0;
+  tick(t => { const Lk = clamp(litF(t)); lens.rotation.y = ph0 + rot * t; lensM.emissiveIntensity = 0.9 * Lk; lampM.emissiveIntensity = 3.2 * Lk; for (const bm of bms) { bm.visible = Lk > 0.01; bm.material.uniforms.uK.value = bK * 2.6 * Lk; } });
+  const [TX, TZ] = w2(tx, tz), [SX, SZ] = w2(scx, scz), topY = Y + oy + 0.75;
+  if (o.glow) glow(TX, topY, TZ, { intensity: 4, dist: 22, color: '#FFD890', flicker: 0, env: t => clamp(litF(t)) });
+  if (gateLeaf) doorReg(gateLeaf); if (doorLeaf) doorReg(doorLeaf);
+  // the yard is level: groundH follows the pad inside the wall
+  { const g0 = groundH, hw = Wc / 2 - 0.3, hd = Dc / 2 - 0.3; groundH = (X2, Z2) => { const dx = X2 - x, dz = Z2 - z, lx = dx * cR - dz * sR, lz = dx * sR + dz * cR; return Math.abs(lx) <= hw && Math.abs(lz) <= hd ? Y : g0(X2, Z2); }; }
+  return { g, top: [TX, topY, TZ], gallery: [TX, Y + gy + 0.22, TZ], lit: litF, gate: gateLeaf ? { door: gateLeaf } : null, door: doorLeaf ? { door: doorLeaf } : null, yard: Y, tower: [TX, TZ], station: [SX, SZ],
+    keep: [x, z, Math.hypot(Wc, Dc) / 2 + 1], gatePos: w2(gx, Dc / 2), doorPos: w2(gx, sz1 + 0.8), lens, w2 };
+}
 // warehouse(p, x, z, { w: 12, d: 10, h: 13, floors: 4, ry, y, color, roof: 'gable' | 'flat', hoist: true, doorsOpen: [floor …], seed }) → { g, hook(t) }
 //   A Victorian riverside brick warehouse (front +z): stone plinth, brick walls with pilasters per bay and stone string courses per floor, sash windows with frames, sills,
 //   segmental arch lintels and dark panes, a middle bay of stacked loading doors (some open onto the dark inside), a gable roof (slate, brick gable to the front), chimney
@@ -19661,6 +20062,8 @@ const COSTUME_BASE = {
   peasant: { shirt: '#E2D8BE', pants: '#6A5238', shoes: '#C99A78', soles: false, beard: 'stubble', hair: '#4A3426', sleeves: 'long' },
   egyptworker: { bare: 'all', skirt: '#ECE4CE', skirtLen: 0.26, shoes: '#9A6A44', hair: '#141210', hairStyle: 'buzz', soles: false },
   egyptoverseer: { bare: 'all', skirt: '#F2EEE2', skirtLen: 0.5, shoes: '#C9A060', hair: '#141210', hairStyle: 'buzz', soles: false },
+  keeper: { shirt: '#1E2638', pants: '#1E2230', shoes: '#141210', coat: true, coatLen: 0.12, beard: 'full', hair: '#4A3426', sleeves: 'long' },
+  oilskins: { shirt: '#C9A23C', pants: '#2A2C30', shoes: '#151515', coat: true, coatLen: 0.42, beard: 'full', hair: '#4A3426', sleeves: 'long' },
 };
 for (const k in COSTUME_BASE) { const { skin, ...rest } = COSTUME_BASE[k]; OUTFITS[k] ??= { costume: k, ...rest }; }   // char('you', { outfit: 'santa' }) keeps the character's skin
 
@@ -20011,6 +20414,31 @@ const COSTUMES = (() => {
         box(h, 0.3, 0.025, 0.02, '#8A5A44', 0, 0.06, 0.2, { rx: -0.3, ...NC }); }
       else if (H === 'cap') { hide(f); const h = hat(f, 0.32); rbox(h, 0.42, 0.08, 0.44, '#4A4238', 0, -0.02, 0.02, { rf: 0.45 }); box(h, 0.32, 0.025, 0.12, '#3E372E', 0, -0.03, 0.23, { rx: 0.15 }); }
     },
+    keeper(f, K) {   // v3.58 lighthouse keeper c. 1900 (Northern Lighthouse Board): navy double-breasted reefer jacket with two rows of brass buttons, lapels and collar, white shirt
+      // collar and black tie, cuff rings, peaked cap with a gilt badge, dark trousers, black boots; full beard by default. K.oilskin: true (= costume 'oilskins') puts on the
+      // foul-weather gear instead: a long glossy oilskin coat (yellow ochre, or K.oil = '#hex', e.g. black) buttoned with toggles, a sou'wester with the long back brim and a
+      // chin strap, black sea boots to the knee.
+      const z = fz(f), Au = '#D8B44A', Nv = K.shirt ?? '#1E2638', oil = !!K.oilskin;
+      if (!oil) { peakCap(f, '#1A1E2A', '#101010', Au);
+        for (const sx of [-1, 1]) { box(f.chest, 0.1, 0.24, 0.016, shade(Nv, -0.08), sx * 0.085, 0.3, z + 0.006, { rz: sx * 0.42, ...NC }); box(f.chest, 0.08, 0.05, 0.02, shade(Nv, -0.1), sx * 0.1, 0.56, z - 0.01, { rz: sx * 0.3, ...NC }); }   // lapels, collar
+        box(f.chest, 0.11, 0.1, 0.012, '#F2F0E8', 0, 0.45, z + 0.004, NC); tie(f, '#111111', 0.04);
+        for (const sx of [-0.075, 0.075]) buttons(f, Au, 4, 0.33, 0.085, sx, 0.016);
+        for (const fa of [f.foreL, f.foreR]) box(fa, 0.165, 0.025, 0.165, Au, 0, -0.27, 0, NC);
+        box(f.chest, 0.1, 0.03, 0.012, shade(Nv, -0.12), -0.14, 0.1, z + 0.008, NC); box(f.chest, 0.1, 0.03, 0.012, shade(Nv, -0.12), 0.14, 0.1, z + 0.008, NC); return; }
+      // oilskins
+      const Oc = K.oil ?? K.shirt ?? '#C9A23C', OG = { rough: 0.3, metal: 0.05, flat: false }, Bt = '#151515';
+      const gloss = n => { if (n.isMesh && n.material?.color && !n.userData.hand && n.material.color.getHexString() === new THREE.Color(Oc).getHexString()) n.material = mat(Oc, OG); };
+      for (const part of [f.chest, f.hips, f.armL, f.armR, f.foreL, f.foreR, f.coat].filter(Boolean)) part.traverse(gloss);
+      for (let i = 0; i < 4; i++) { box(f.chest, 0.05, 0.022, 0.03, '#3A2A1A', 0.03, 0.42 - i * 0.12, z + 0.012, NC); _seg(f.chest, [-0.01, 0.42 - i * 0.12, z + 0.014], [0.03, 0.42 - i * 0.12, z + 0.014], 0.006, 0.006, '#2A2018', NC); }   // toggles
+      box(f.chest, 0.015, 0.5, 0.012, shade(Oc, -0.16), 0.0, -0.02, z + 0.01, NC); for (const sx of [-1, 1]) box(f.chest, 0.11, 0.07, 0.03, shade(Oc, -0.08), sx * 0.08, 0.56, z - 0.02, { rz: sx * 0.25, ...NC });   // front seam, turned-up collar
+      for (const fa of [f.foreL, f.foreR]) box(fa, 0.17, 0.05, 0.17, shade(Oc, -0.1), 0, -0.27, 0, { ...OG, cast: false });
+      hide(f, true); const h = hat(f, 0.3); cyl(h, 0.18, 0.215, 0.14, Oc, 0, 0.0, 0, { seg: 14, ...OG }); ball(h, 0.18, Oc, 0, 0.14, 0, { detail: 1, ...OG }).scale.set(1, 0.4, 1);
+      const br = cyl(h, 1, 1, 0.016, Oc, 0, -0.005, -0.075, { seg: 22, ...OG, cast: false }); br.scale.set(0.26, 1, 0.3); br.rotation.x = 0.24;   // brim: a thin solid disc, longer at the back
+      for (const sx of [-1, 1]) _seg(h, [sx * 0.2, 0.02, 0.0], [sx * 0.15, -0.3, 0.06], 0.008, 0.008, '#3A2A1A', NC);
+      for (const sh of [f.shinL, f.shinR]) { recol(sh, Bt); sh.traverse(n => { if (n.isMesh && n.material?.color?.getHexString() === '151515') n.material = mat(Bt, { rough: 0.25, flat: false }); }); box(sh, 0.21, 0.06, 0.22, '#222222', 0, -0.06, 0, NC); }
+      for (const ft of [f.footL, f.footR]) recol(ft, Bt);
+    },
+    oilskins(f, K) { COSTUMES.keeper(f, { ...K, oilskin: true }); },
     smock1911(f, K) {   // museum workman 1911: white work smock (coat key) over a dark shirt, flat cap, moustache
       const z = fz(f); box(f.chest, 0.14, 0.12, 0.01, '#3A3530', 0, 0.48, z + 0.004, NC);
       hide(f); const h = hat(f, 0.32); rbox(h, 0.44, 0.08, 0.46, '#5A5248', 0, -0.02, 0.02, { rf: 0.45 }); box(h, 0.34, 0.025, 0.12, '#4A4238', 0, -0.03, 0.24, { rx: 0.15 });
@@ -22778,6 +23206,13 @@ const SND = (() => {
       click: (t, v) => { for (let k = 0; k < 16; k++) nz(t + k * 0.028, 0.001, 0.002, 0.01, 0.3 * v, fx, 'highpass', 3200); tone('sine', 6200, t + 0.5, 0.05, 0.3, 0.1, 0.04 * v, fx, { to: 9200, glide: 0.4 }); },
       song: (t, v, d = 4) => { tone('sine', 180, t, 0.6, Math.max(0.2, d - 1.2), 0.6, 0.13 * v, fx, { to: 330, glide: d * 0.6 }); tone('triangle', 92, t + 0.3, 0.8, Math.max(0.2, d - 1.6), 0.8, 0.08 * v, fx, { to: 70, glide: d * 0.7, lp: 600 }); },
       blow: (t, v) => { nz(t, 0.05, 0.45, 0.7, 0.42 * v, fx, 'bandpass', 900, 380, 0.8); nz(t, 0.02, 0.2, 0.4, 0.2 * v, fx, 'highpass', 2500); },
+      wavecrash: (t, v) => { tone('sine', 62, t, 0.005, 0.15, 1.8, 0.32 * v, fx, { to: 26, glide: 1.4 }); nz(t, 0.01, 0.12, 1.1, 0.34 * v, fx, 'lowpass', 900, 160, 0.7);   // v3.58 a big sea bursts on rock: thump, roar, a long hiss of spray falling back, trickles
+        nz(t + 0.05, 0.08, 0.7, 2.6, 0.2 * v, fx, 'highpass', 1600); nz(t + 0.25, 0.3, 0.8, 2.2, 0.12 * v, fx, 'bandpass', 700, 380, 0.6);
+        for (let k = 0; k < 10; k++) { const tk = t + 1.0 + k * 0.17 + ar() * 0.1; nz(tk, 0.002, 0.02, 0.12, 0.04 * v, fx, 'bandpass', 1800 + ar() * 1800, 0, 3); } ducks.push(t); },
+      steamwhistle: (t, v, d = 1.6) => { if (!(d > 0) || !isFinite(d)) d = 1.6; for (const f of [262, 330, 392]) tone('sawtooth', f, t, 0.09, Math.max(0.2, d - 0.35), 0.3, 0.035 * v, fx, { lp: 2200, q: 1.2 });   // v3.58 ship's steam whistle: a breathy chord
+        nz(t, 0.06, Math.max(0.2, d - 0.3), 0.3, 0.06 * v, fx, 'bandpass', 1300, 1300, 1.1); nz(t, 0.01, 0.05, 0.12, 0.05 * v, fx, 'highpass', 3000); ducks.push(t); },
+      gull: (t, v) => { for (let k = 0; k < 3; k++) { const tk = t + k * 0.3 + ar() * 0.05, f = 1450 + ar() * 200; tone('sawtooth', f, tk, 0.01, 0.12, 0.12, 0.035 * v, fx, { to: f * 0.68, glide: 0.2, lp: 3600, q: 2 }); }   // v3.58 herring gull: "kee-ow" calls
+        tone('sawtooth', 1900, t + 1.0, 0.01, 0.06, 0.08, 0.02 * v, fx, { to: 1500, glide: 0.1, lp: 3800 }); },
       creak: (t, v, d = 0.6) => { if (!(d > 0) || !isFinite(d)) d = 0.6; for (let k = 0; k < 3; k++) { const tk = t + k * d / 3 + ar() * 0.03; tone('sawtooth', 140 + ar() * 60, tk, 0.02, d / 4, 0.08, 0.05 * v, fx, { to: 220 + ar() * 90, glide: d / 3, lp: 900 }); } nz(t, 0.02, d * 0.6, 0.1, 0.06 * v, fx, 'bandpass', 700, 1100, 6); },   // v3.47 wooden board / door creak
       shovel: (t, v) => { nz(t, 0.01, 0.12, 0.12, 0.22 * v, fx, 'bandpass', 2400, 900, 1.4); nz(t + 0.25, 0.005, 0.03, 0.18, 0.3 * v, fx, 'lowpass', 700, 200); tone('sine', 180, t + 0.26, 0.002, 0.02, 0.12, 0.2 * v, fx, { to: 70, glide: 0.1 }); },   // v3.47 spade scrape + wet slop
       slosh: (t, v, d = 0.8) => { if (!(d > 0) || !isFinite(d)) d = 0.8; for (let k = 0; k < 3; k++) nz(t + k * d / 3, 0.05, d / 5, d / 4, 0.16 * v, fx, 'lowpass', 900 - k * 150, 300 + ar() * 100, 2); },   // v3.47 liquid sloshing in a bucket / barrel
@@ -22901,6 +23336,15 @@ const SND = (() => {
         every(a, b, 1.4, 1.8, t => nz(t, 0.005, 0.03, 0.15, 0.03 * v, amb, 'lowpass', 300, 120, 0.8));
         every(a, b, 4, 4, t => { for (let k = 0; k < 6; k++) { const f0 = 100 + ar() * 50; tone('sawtooth', f0, t + ar() * 0.1, 0.05, 0.2, 0.2, 0.012 * v, amb, { to: f0 * 0.85, glide: 0.3, lp: 600 }); } });
         every(a, b, 9, 8, t => tone('sine', 2400, t, 0.05, 0.35, 0.3, 0.01 * v, amb, { to: 1900, glide: 0.6 })); },
+      gale: (a, b, v) => { AMB.wind(a, b, 0.9 * v); AMB.ocean(a, b, 0.8 * v); bed(a, b, 0.05 * v, 'bandpass', 950, 0.9);   // v3.58 winter gale on an exposed rock: wind with howling gusts, heavy surf booming on the cliffs, spray, a few gulls
+        every(a, b, 2.4, 2.6, t => { nz(t, 0.9, 0.5, 1.4, 0.1 * v, amb, 'bandpass', 360, 1300, 1.3); const f = 480 + ar() * 260; tone('sine', f, t + 0.3, 0.7, 0.5, 1.2, 0.01 * v, amb, { to: f * 1.35, glide: 1.1 }); });
+        every(a, b, 3.2, 3.0, t => { tone('sine', 46 + ar() * 12, t, 0.02, 0.2, 1.7, 0.13 * v, amb, { to: 28, glide: 1.3 }); nz(t + 0.06, 0.15, 0.5, 2.0, 0.09 * v, amb, 'lowpass', 1100, 260, 0.7); nz(t + 0.3, 0.2, 0.3, 1.4, 0.03 * v, amb, 'highpass', 2200); });
+        every(a, b, 7, 8, t => { const f = 1500 + ar() * 250; for (let k = 0; k < 2 + Math.floor(ar() * 2); k++) tone('sawtooth', f, t + k * 0.3, 0.01, 0.1, 0.12, 0.012 * v, amb, { to: f * 0.68, glide: 0.2, lp: 3400 }); }); },
+      shelter: (a, b, v) => { bed(a, b, 0.07 * v, 'lowpass', 200); bed(a, b, 0.02 * v, 'bandpass', 520, 0.8);   // v3.58 indoors on a rock in a storm: the gale muffled through thick walls, gusts against the window, a deep surf thud, creaks, room tone
+        every(a, b, 2.6, 2.8, t => nz(t, 0.8, 0.5, 1.3, 0.06 * v, amb, 'lowpass', 260, 520, 1.1));
+        every(a, b, 4.2, 3.5, t => { tone('sine', 40 + ar() * 10, t, 0.03, 0.15, 1.4, 0.08 * v, amb, { to: 26, glide: 1.2 }); nz(t, 0.1, 0.3, 1.2, 0.03 * v, amb, 'lowpass', 220, 90); });
+        every(a, b, 5.5, 5, t => { for (let k = 0; k < 3; k++) { const tk = t + k * 0.15 + ar() * 0.05; tone('sawtooth', 150 + ar() * 60, tk, 0.02, 0.08, 0.08, 0.012 * v, amb, { to: 230 + ar() * 80, glide: 0.15, lp: 900 }); } });
+        every(a, b, 3.6, 4, t => { for (let k = 0; k < 4; k++) nz(t + k * 0.05, 0.001, 0.005, 0.03, 0.02 * v, amb, 'bandpass', 3200, 0, 3); }); },
       cave: (a, b, v) => { tone('sine', 45, a, 0.6, Math.max(0, b - a - 1.2), 0.6, 0.035 * v, amb); bed(a, b, 0.02 * v, 'lowpass', 160);   // deep room, drips with echoes, distant rumble
         every(a, b, 1.6, 2.2, t => { const f = 1500 + ar() * 600; for (let e = 0; e < 3; e++) tone('sine', f, t + e * 0.19, 0.002, 0, 0.14, 0.035 * v * 0.45 ** e, amb, { to: f * 0.6, glide: 0.07 }); });
         every(a, b, 8, 8, t => nz(t, 0.8, 0.6, 1.8, 0.06 * v, amb, 'lowpass', 140, 70)); }
