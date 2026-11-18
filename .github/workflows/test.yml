@@ -1,5 +1,7 @@
 # Smoke test: every engine change builds the example story and the scenes in tests/ and renders a few frames.
 # Fails on page errors (syntax, missing functions, broken scenes). Contact sheets are attached as an artifact.
+# Since 18.11.2026 the scenes are split over SHARDS parallel runners (one runner for all 125+ scenes took ~85 min and hit the timeout on every push);
+# 'example' runs in every shard (the render-plan check needs it). A newer push to the same branch cancels the running test.
 name: test
 
 on:
@@ -17,13 +19,41 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: test-${{ github.ref }}
+  cancel-in-progress: true
+
 env:
   PW_VERSION: 1.65.0
+  SHARDS: 6
 
 jobs:
-  smoke:
+  plan:
     runs-on: ubuntu-latest
-    timeout-minutes: 40
+    outputs:
+      shards: ${{ steps.split.outputs.shards }}
+    steps:
+      - uses: actions/checkout@v7
+      - id: split
+        name: split the test scenes into shards (round robin over the sorted names)
+        run: |
+          python3 - <<'PY' >> "$GITHUB_OUTPUT"
+          import glob, json, os
+          n = int(os.environ['SHARDS'])
+          names = sorted(os.path.basename(f)[:-len('.story.js')] for f in glob.glob('tests/*.story.js'))
+          parts = [['example'] + names[i::n] for i in range(n)]
+          print('shards=' + json.dumps([{'i': i + 1, 'names': ' '.join(p)} for i, p in enumerate(parts) if len(p) > 1]))
+          PY
+
+  smoke:
+    needs: plan
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: ${{ fromJSON(needs.plan.outputs.shards) }}
+    name: smoke (${{ matrix.shard.i }})
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
@@ -39,21 +69,41 @@ jobs:
           python3 -m pip install -q numpy
           command -v ffmpeg >/dev/null || { sudo apt-get update -qq && sudo apt-get install -y -qq --no-install-recommends ffmpeg >/dev/null; }
       - name: smoke test
-        run: SMOKE_DIR="$RUNNER_TEMP/smoke" bash tests/run.sh
+        run: SMOKE_DIR="$RUNNER_TEMP/smoke" bash tests/run.sh ${{ matrix.shard.names }}
       - name: reference frames (v3.0)
-        if: always()
+        if: always() && inputs.update_golden != true
         run: |
-          if [ "${{ inputs.update_golden }}" = "true" ]; then
-            python3 tests/golden.py "$RUNNER_TEMP/smoke" --update
-            git config user.name "github-actions[bot]"; git config user.email "41898283+github-actions[bot]@users.noreply.github.com"
-            git add tests/golden && git commit -m "tests: update reference frames" && git push || echo "nothing to commit"
-          else
-            python3 tests/golden.py "$RUNNER_TEMP/smoke" | tee "$RUNNER_TEMP/golden.txt"
-            { echo "### Reference frames"; grep -E '^(CHANGED|NEW|golden):' "$RUNNER_TEMP/golden.txt" | head -60 | sed 's/^/- /'; } >> "$GITHUB_STEP_SUMMARY"
-          fi
+          python3 tests/golden.py "$RUNNER_TEMP/smoke" | tee "$RUNNER_TEMP/golden.txt"
+          { echo "### Reference frames (shard ${{ matrix.shard.i }})"; grep -E '^(CHANGED|NEW|golden):' "$RUNNER_TEMP/golden.txt" | head -60 | sed 's/^/- /'; } >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@v7
         if: always()
         with:
-          name: smoke-sheets
+          name: smoke-sheets-${{ matrix.shard.i }}
           path: ${{ runner.temp }}/smoke/shots_*/sheet.jpg
           retention-days: 7
+      - uses: actions/upload-artifact@v7
+        if: inputs.update_golden == true
+        with:
+          name: golden-shots-${{ matrix.shard.i }}
+          path: ${{ runner.temp }}/smoke/shots_*/s*.png
+          retention-days: 1
+
+  golden:
+    # update_golden: all shards' shots in one place, then one commit (six shards committing at once would collide)
+    needs: smoke
+    if: inputs.update_golden == true
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: golden-shots-*
+          path: ${{ runner.temp }}/smoke
+          merge-multiple: true
+      - name: write and commit the reference frames
+        run: |
+          python3 -m pip install -q numpy
+          command -v ffmpeg >/dev/null || { sudo apt-get update -qq && sudo apt-get install -y -qq --no-install-recommends ffmpeg >/dev/null; }
+          python3 tests/golden.py "$RUNNER_TEMP/smoke" --update
+          git config user.name "github-actions[bot]"; git config user.email "41898283+github-actions[bot]@users.noreply.github.com"
+          git add tests/golden && git commit -m "tests: update reference frames" && git push || echo "nothing to commit"
