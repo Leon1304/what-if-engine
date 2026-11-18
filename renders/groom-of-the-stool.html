@@ -403,14 +403,14 @@ const CAM = [
   { t: 1.2, p: [2.3, 1.4, -2.2], l: [3.55, 1.1, -3.2], fov: 52, e: 'out' },
   { t: 1.2, cut: true, tr: 'whip', p: [4.55, 1.05, -1.35], l: [5.0, 1.3, 0.8], fov: 50 },
   { t: 2.4, p: [4.6, 1.0, -1.1], l: [5.0, 1.32, 0.8], fov: 50, e: 'inOut' },
-  { t: 2.4, cut: true, tr: 'zoom', p: [3.3, 1.55, -2.35], l: [3.55, 1.2, -3.62], fov: 50 },
-  { t: 3.3, p: [3.35, 1.55, -2.5], l: [3.55, 1.2, -3.62], fov: 50, e: 'inOut' },
+  { t: 2.4, cut: true, tr: 'zoom', p: [3.35, 1.9, -2.3], l: [3.55, 1.25, -3.62], fov: 62 },
+  { t: 3.3, p: [3.4, 1.88, -2.45], l: [3.55, 1.25, -3.62], fov: 62, e: 'inOut' },
   // 1530s, presence chamber: the king walks, the court bows, you carry his toilet behind him
   { t: 3.3, cut: true, tr: 'dip', p: [56.6, 1.75, 2.6], l: [64.5, 1.2, 0.0], fov: 52 },
   { t: 5.6, p: [57.0, 1.65, 2.4], l: [63.0, 1.2, 0.2], fov: 50, e: 'inOut' },
   ...shot('mid', 5.6, 2.3, 'youB', { az: -55, dist: 4.2, h: 1.2 }),
-  { t: 7.9, cut: true, p: [58.2, 1.5, 1.5], l: [59.9, 1.45, 0.5], fov: 40 },
-  { t: 10.0, p: [58.4, 1.5, 1.35], l: [59.8, 1.45, 0.5], fov: 40, e: 'inOut' },
+  { t: 7.9, cut: true, p: [59.9, 1.55, 3.0], l: [60.3, 1.2, 0.75], fov: 46 },
+  { t: 10.0, p: [59.6, 1.5, 2.9], l: [59.9, 1.2, 0.75], fov: 46, e: 'inOut' },
   // privy chamber: the close stool opens, you fetch water, towels and a bowl
   { t: 10.0, cut: true, tr: 'whip', p: [2.55, 0.95, -2.35], l: [3.55, 0.4, -2.95], fov: 42 },
   { t: 12.0, p: [2.7, 0.9, -2.45], l: [3.55, 0.4, -2.95], fov: 42, e: 'inOut' },
@@ -459,13 +459,14 @@ const SKY = [[0, 'day']];
 const PHASES = t => 'Hampton Court, 1530s';
 const STATS = [
   { label: 'Shift ends in', type: 'timer', until: 'end', scale: 1400, show: 'b1+0.5', big: true, final: 0 },
-  { label: 'Royal favour', type: 'bar', keys: [[0, 12], ['b2+4.2', 12], ['b2+5.0', 24], ['b3+2.0', 24], ['b3+2.6', 38], ['b4+5.1', 38], ['b4+5.4', 62], ['b5+2.6', 62], ['b5+3.4', 81], ['b5+5.0', 81], ['b5+5.8', 100]],
-    show: 'b2+4.0', up: 'good', why: [['b2+5.0', 'brought the bowl'], ['b3+2.6', 'reported the results'], ['b4+5.4', 'closest to the king'], ['b5+3.4', 'holds the purse'], ['b5+5.8', 'lords beg you']] }
+  { label: 'Royal favour', type: 'bar', keys: [[0, 12], ['b2+3.0', 12], ['b2+3.6', 24], ['b3+2.0', 24], ['b3+2.6', 38], ['b4+5.1', 38], ['b4+5.4', 62], ['b5+2.6', 62], ['b5+3.4', 81], ['b5+5.0', 81], ['b5+5.8', 100]],
+    show: 'b2+2.8', up: 'good', why: [['b2+3.6', 'brought the bowl'], ['b3+2.6', 'reported the results'], ['b4+5.4', 'closest to the king'], ['b5+3.4', 'holds the purse'], ['b5+5.8', 'lords beg you']] }
 ];
 const FACTS = [{ t: 38.7, dur: 2.6, big: '1901', text: 'the year the Groom of the Stool was finally *abolished*', src: 'Historic UK · Wikipedia' }];
 const TEASE = [{ t: 24.5, dur: 0.6, at: 34.6, label: 'By sunset' }];
 const END = { t: 41.85, q: 'Would *you* take this job?', opts: ['Yes. Power is power', 'Never. Not for a crown', 'Only for the purse'], cta: 'Comment A, B or C',
   loop: 'So every lord asked:' };
+const QA_OK = [["'you' #0: the left foot slides 63", 'not a slide: on the cut at 3.3 s the hook (flash-forward at the close stool) hands over to the presence chamber 60 m away; the check measures the planted foot across that cut'], ['figure #1: the right foot slides', 'the king plants his foot on the tight turn round the screen as he walks out (about 14 cm over 4 frames, at walking speed in a medium shot)']];
 const AUDIO = {
   style: 'tudor',
   score: [[0, 'funny'], [10.0, 'chill'], [16.6, 'funny'], [23.8, 'tense'], [29.7, 'triumph']],
@@ -18150,17 +18151,17 @@ ground({ color: '#6E8A4E', flat: 200, hills: 0 });
   //   walks the king out · guards the door and the purse, the lords bow (B, 29.7) · back at the stool (A, 36.1); every jump between the rooms sits on a cut
   const you = char('you', { outfit: 'courtier', expr: t => t < 3.3 ? 'deadpan' : t < 10 ? 'annoyed' : t < 16.6 ? 'disgust' : t < 20.7 ? 'nervous' : t < 23.8 ? 'deadpan' : t < 29.7 ? 'smug' : t < 31.4 ? 'determined' : 'smug' });
   world.add(you.root); you.root.position.set(3.55, 0, -3.62); track('you', you);
-  faceTo(you, [3.55, 1, 0.5], -1, 3.25);
+  
   const S2 = closeStool(world, 66.75, 1.2, { solid: false, sound: false });
-  walk(you, [[66.6, 0.8], [59.9, 0.75]], { t0: 3.3, speed: 1.3 });
+  walk(you, [[66.6, 0.8], [59.9, 0.75]], { t0: 3.3, speed: 1.15, ramp: 0.6 });
   carry(you, S2, { pick: 3.3, both: true, drop: 9.9 });
   walk(you, [[1.05, -2.5], [1.0, -2.75]], { t0: 10.0, speed: 0.6 });
   faceTo(you, [0.66, 1, -3.6], 10.6, 12.8);
-  walk(you, [[1.0, -2.75], [1.6, -2.45], [2.2, -2.25]], { t0: 12.9, speed: 0.9 });
+  walk(you, [[1.0, -2.75], [1.6, -2.55], [2.3, -2.5], [2.2, -2.25]], { t0: 12.9, speed: 0.9 });
   faceTo(you, [1.45, 1, -1.05], 15.8, 24.4);
   walk(you, [[2.2, -2.25], [2.0, -1.7], [2.3, -1.2], [3.0, -0.95], [4.1, -0.2], [4.2, 1.3], [4.0, 1.9]], { t0: 24.3, speed: 1.35 });
   walk(you, [[62.9, -1.7], [63.6, -1.3], [64.0, -0.65]], { t0: 29.7, speed: 1.1, ramp: 0.45 });
-  late(t => { if (t >= 36.1) { you.root.position.set(3.55, 0, -3.62); you.root.rotation.y = 0; } });   // back at the close stool (on the cut at 36.1)
+  late(t => { if (t < 3.3 || t >= 36.1) { you.root.position.set(3.55, 0, -3.62); you.root.rotation.y = 0; } });   // at the close stool in the hook and again from the cut at 36.1
   const drape = courtProp(world, 'drape', 3.55, 1.0, -3.4);
   holdItem(you, drape, -1, 1e9, { side: 'L', reach: false, off: [0, -0.18, 0.08] }); late(t => { drape.visible = t < 3.3 || t >= 36.1; });
   holdItem(you, ewer, 12.0, 18.6, { side: 'R', reach: false }); holdItem(you, basin, 12.0, 18.6, { side: 'L', reach: false, off: [0, -0.35, 0.12] });
