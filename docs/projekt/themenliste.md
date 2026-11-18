@@ -93,7 +93,7 @@ Du stehst als Maßstab im Bild, die Kamera fährt hoch/runter, ein Zähler (METE
 - WJ5 What if you were a leech collector? – Watet in Sümpfen, Blutegel beißen ins Bein; 1800er, Ärzte brauchten Millionen. ✅ auf GitHub (leech-collector, 18.11.)
 - WJ6 What if you were a powder monkey at Trafalgar? – 1805, Junge trägt Schießpulver zu den Kanonen; ernst, ohne Blut. ✅ auf GitHub (powder-monkey, 18.11.)
 - WJ7 What if you were a lighthouse keeper on the Flannan Isles? – Dezember 1900, drei Wärter verschwinden; ungelöstes Rätsel, Grenze zu Horror; Jahrestag 15.12.
-- WJ8 What if you built the pyramids? – Mythos „Sklaven“ → FALSE (bezahlte Arbeiter, Brot und Bier, Arbeitersiedlung Gizeh); Steinblock-Zähler. Nicht mit pyramids-aliens verwechseln.
+- WJ8 What if you built the pyramids? – Mythos „Sklaven“ → FALSE (bezahlte Arbeiter, Brot und Bier, Arbeitersiedlung Gizeh); Steinblock-Zähler. Nicht mit pyramids-aliens verwechseln. ✅ auf GitHub (pyramid-builders, 18.11.)
 - Reserve: Knocker-upper (weckt Menschen mit Blasrohr und Erbsen), Vomitorium-Mythos (Ausgänge im Amphitheater, kein Brechraum).
 
 ### Katastrophen-Simulation am echten Ort KS1–KS8 (Kategorie Story/Erklärung, 40–55 s)

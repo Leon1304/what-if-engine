@@ -81,6 +81,7 @@ Wird vom /whatif-Skill vor jedem Video gelesen und danach aktualisiert.
 | sewer-hunter (WJ4, History, gerendert 18.11.) | cyan |
 | leech-collector (WJ5, History, gerendert 18.11.) | pink |
 | powder-monkey (WJ6, History, ernst, gerendert 18.11.) | blue |
+| pyramid-builders (WJ8, History, gerendert 18.11.) | orange |
 | gta6-economy (Erklärvideo zum GTA-6-Launch, gerendert 18.11.) | green |
 
 ## Dr. Steve (nur Serien)
@@ -296,6 +297,7 @@ MB1 Megalodon in your pool ✔ gebaut → Abstimmung: A T. rex in the city · B 
 - sewer-hunter (WJ4, 18.11.): „The catch? The tide.“ · „Toshers worked in gangs — so the rats bit someone else.“ · „Find a grate. Now.“
 - leech-collector (WJ5, 18.11.): „The cheapest bait? You.“ · „Each one drinks up to ten milliliters… of you.“ · „The pay? Barely anything.“
 - powder-monkey (WJ6, 18.11., ernst): „One spark down here could sink the ship.“ · „The lid stays shut.“ · „At half past five, the guns fall silent.“
+- pyramid-builders (WJ8, 18.11.): „Your job: drag this up a ramp.“ · „Your pay? Bread and beer.“ · „Die? You get a tomb by the pyramid.“
 - plague-doctor-1656 (WJ3, 17.11., ernst): „The city pays you to go where nobody will.“ · „Your mask? Built on a mistake.“
 - gta6-economy (Erklärvideo, 18.11.): „No movie was that fast.“ · „That’s a billion dollars.“
 
@@ -351,6 +353,7 @@ MB1 Megalodon in your pool ✔ gebaut → Abstimmung: A T. rex in the city · B 
 - sewer-hunter: – (kein Slang)
 - leech-collector: – (kein Slang)
 - powder-monkey: – (kein Slang)
+- pyramid-builders: – (kein Slang)
 - plague-doctor-1656: – (kein Slang)
 - gta6-economy: – (kein Slang)
 
@@ -401,6 +404,7 @@ Die Bewertungskarte ist seit 11.11.2026 abgeschafft; jedes Video endet mit Endca
 - sewer-hunter: „Next tide:“
 - leech-collector: „So doctors ask:“
 - powder-monkey: „Two centuries on:“
+- pyramid-builders: „Next shift:“
 - plague-doctor-1656: „So ask yourself:“ (versehentlich gleich wie gong-farmer; nicht noch einmal verwenden)
 - gta6-economy: „Back to the question:“
 - Archiv der alten Bewertungskarten (Pointen nicht wiederverwenden): ZF1 „Barn: gone. Vibes: immaculate.“ · ZF2 „Great acoustics. Terrible neighbors.“ · ZF3 „Corn every day. Would not recommend.“ · ZF4 „Loud. Smelly. Better than walking.“ · ZF5 „Warm. Way too warm.“ · ZF6 „Great views. Zero fuel.“ · NL1 „Great weather. Zero free will.“ · E19 „Forty-two minutes. No snacks.“ · E24 „Twenty years. Zero lasers.“ · E1 „Perfect landing. Terrible snacks.“ · E6 „Sixty hours, lost to a grandma.“ · Bouncing Betty „Built to jump. Still in the ground.“ · Groundskeeper „Great traps. Cellar smells terrible.“
@@ -460,3 +464,4 @@ Die Bewertungskarte ist seit 11.11.2026 abgeschafft; jedes Video endet mit Endca
 | 2026-11-18 | What if you were a leech collector for one day? (leech-collector, WJ5 Worst Jobs in History, History, 42 s, pink, Erzähler Adam, Engine v3.54: pond(), leech(), jar(), Kostüm peasant, interior clinic, AMB marsh, SFX wade/squelch/plop, Musikstil folk; Moorteich 1832: du stehst barfuß als Köder im Wasser, Egel saugen sich fest und schwellen an, am Ufer ziehst du sie ab ins Glas, bei Sonnenuntergang kauft ein Händler, Lohn kaum etwas, Twist 200 Jahre später: Klinik mit medizinischen Egeln; Faktenkarte 57.5M Egel-Import Frankreichs 1832 (Arabacı, Medical History 2023); Zähler Shift ends in 12:00 → 0:00 und Leeches 3 → 5; kein Mythos) | WJ5 | – | Endcard Sure, not squeamish / Only in boots / Absolutely not · Loop „So doctors ask:“ | nein |
 | 2026-11-18 | What if you were a powder monkey at Trafalgar? (powder-monkey, WJ6 Worst Jobs in History, History, 45,0 s, blue, Erzähler Adam, Engine v3.55: gunDeck(), navalGun(), powderMagazine(), cartridgeCase()/cartridge(), ship('firstrate'), Kostüme powderboy + sailor1805, AMB gundeck/hold/seabattle, SFX gunrun/felt; Trafalgar 1805: du bist 13 auf HMS Victory, holst eine Kartusche durch den nassen Filzvorhang der Kupferkammer unter der Wasserlinie, kletterst durchs verrauchte Batteriedeck, übergibst sie am feuernden 32-Pfünder, duckst dich hinter die Bordwand; um 17:30 schweigen die Kanonen; ernst, ohne Blut; Faktenkarte 12 Jahre (Royal Museums Greenwich · Historic UK); Zähler Shift ends in 5h 30m; kein Mythos) | WJ6 | – | Endcard A/B/C · Loop „Two centuries on:“ | nein |
 | 2026-11-18 | What happens to the world economy when GTA 6 drops? (gta6-economy, Erklärvideo zum Launch am 19.11., 39,7 s, green, Erzähler Adam, Engine v3.56: `stockScreen()` (Börsentafel mit Kurslinie, Eilmeldung, Laufband), `pallet({ load: 'cash' })`, `cinema()`, `gameCase()`; Mitternachtsstart vor dem Laden mit Countdown und Geldregen, leeres Kino, Kasse, zehn Geldpaletten = 1 Mrd. $ vor der Bank, Kurssturz „RELEASE DELAYED“, leeres Büro, du auf dem Sofa, Globus mit Bhutan; Rate-Frage Film oder Land → beides; Faktenkarte $3.2B (DFC Intelligence via FT); keine Logos; Thumbnails A/B) | – | – | Endcard Call in sick / Play after work / Skip it · Loop „Back to the question:“ | nein |
+| 2026-11-18 | What if you built the pyramids? (pyramid-builders, WJ8 Worst Jobs in History, History, 44,0 s, orange, Erzähler Adam, Engine v3.57: pyramidSite(), sled({ kind: 'sledge' }) + haul(), mudbrick() house/bakery/gallery/tomb, splint(), food conebread/beerjar, Kostüme egyptworker + egyptoverseer, biome/dress 'giza', backdrop('nile'), AMB worksite, SFX sledge/heave/thud, Musikstil middleeast; Gizeh um 2560 v. Chr.: du ziehst mit deinem Trupp einen 2,5-t-Block auf dem Holzschlitten zur Rampe, ein Mann gießt Wasser auf den Sand, Trupp-Marke „Friends of Khufu“, abends Brot und Bier in der Arbeiterstadt, ein Arzt schient einen Arm, Arbeitergräber am Fuß der Pyramide; Faktenkarte 11 Rinder am Tag (Redding / AERA); Zähler Shift ends in 10h → 0 und Blocks placed / 2.3M; Mythos „von Sklaven gebaut“ → FALSE) | WJ8 | – | Endcard Yes, for the beer / Only as the water guy / No way, too hot · Loop „Next shift:“ | nein |
