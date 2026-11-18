@@ -6513,6 +6513,12 @@ function pallet(p, x, z, o = {}) {
   const top = n * T; let lh = 0;
   if (o.load === 'boxes') { for (let r = 0; r < 2; r++) for (let i = 0; i < 3; i++) for (let j = 0; j < 2; j++) { const c = shade('#B08A5A', (hv(40 + r * 6 + i * 2 + j) - 0.5) * 0.08); box(g, 0.39, 0.34, 0.39, c, -0.4 + i * 0.4, top + r * 0.34, -0.2 + j * 0.4); box(g, 0.39, 0.004, 0.06, '#C8A878', -0.4 + i * 0.4, top + r * 0.34 + 0.34, -0.2 + j * 0.4, NC); } lh = 0.68; }
   else if (o.load === 'bags') { for (let r = 0; r < 4; r++) for (let i = 0; i < 2; i++) { const b = bbox(g, r % 2 ? 0.75 : 0.55, 0.13, r % 2 ? 0.38 : 0.7, 0.06, shade('#E4DCC8', (hv(50 + r * 2 + i) - 0.5) * 0.06), r % 2 ? 0 : (i - 0.5) * 0.6, top + r * 0.13, r % 2 ? (i - 0.5) * 0.4 : 0, { kind: 'fabric' }); void b; } lh = 0.52; }
+  else if (o.load === 'cash') { const L = o.layers ?? 5, bh = 0.11;   // v3.54 banded bricks of bills (seven straps per row), top faces with portrait panels
+    for (let r = 0; r < L; r++) { const y = top + r * bh; box(g, 1.1, bh, 0.72, shade('#5E9A4C', (hv(70 + r) - 0.5) * 0.08), 0, y, 0);
+      for (let i = 0; i < 7; i++) box(g, 0.03, bh + 0.002, 0.722, '#F1EDE0', -0.47 + i * 0.157, y, 0, NC);
+      for (let j = 1; j < 5; j++) box(g, 1.102, bh * 0.92, 0.004, '#3E6E34', 0, y + bh * 0.04, -0.36 + j * 0.144, NC); }
+    for (let i = 0; i < 7; i++) for (let j = 0; j < 5; j++) { const xx = -0.47 + i * 0.157 + 0.06, zz = -0.29 + j * 0.144; box(g, 0.05, 0.002, 0.034, '#D9E8C8', xx, top + L * bh, zz, NC); }
+    lh = L * bh; }
   else if (o.load === 'bricks') { for (let r = 0; r < 6; r++) box(g, 1.1, 0.075, 0.72, shade('#A65A42', (hv(60 + r) - 0.5) * 0.08), 0, top + r * 0.077, 0, { surf: 'brick' }); lh = 0.46; }
   if (lh) { const wm = mat('#DDE6EC', { opacity: 0.3, rough: 0.15 }); box(g, 1.24, lh + 0.02, 0.84, '', 0, top, 0, { mat: wm, cast: false }); }   // stretch wrap
   _snowCap(g, [[1.1, 0.72, 0, top + lh, 0]], o); return g;
@@ -7227,6 +7233,99 @@ function countdownScreen(p, w, h, o = {}) {   // big LED screen: label + countdo
   }, { fps: 20, glow: 0.25, ...o });
   if (o.sound !== false) { for (const tt of o.ticks ?? []) sfx(tt, 'tick', 0.6); for (const q of segs) sfx(q.at + 0.15, 'glitch', 0.8); }
   return P;
+}
+// ---- v3.54 market kit: stockScreen() (stock-market board: price line, change, breaking news, ticker tape); pallet({ load: 'cash' }) ----
+// stockScreen(p, w, h, { keys: [[t, price]], base, span, label, sym, news: [[t, text, 'bad' | 'good']], ticker: [[sym, pct]], accent, up, down, jitter, sound, … screenPanel options })
+function stockScreen(p, w, h, o = {}) {
+  const keys = o.keys ?? [[0, 100], [10, 120]], span = o.span ?? 8, base = o.base ?? keys[0][1], jit = o.jitter ?? 0.006, fps = o.fps ?? 20;
+  const UP = o.up ?? '#3BE07A', DN = o.down ?? '#FF4040', acc = o.accent ?? '#F2C531', news = (o.news ?? []).slice().sort((a, b) => a[0] - b[0]);
+  const tk = o.ticker ?? [['ARCD', 2.4], ['PXLS', -1.1], ['CNSL', 3.8], ['CHIP', 0.9], ['PIZA', 5.2], ['NRGY', 1.6], ['STRM', -0.7], ['BLDG', 0.3]];
+  const raw = t => { if (t <= keys[0][0]) return keys[0][1]; const L = keys[keys.length - 1]; if (t >= L[0]) return L[1];
+    for (let i = 1; i < keys.length; i++) if (t < keys[i][0]) { const [a, va] = keys[i - 1], [b, vb] = keys[i]; return lerp(va, vb, sm01((t - a) / Math.max(1e-3, b - a))); } return L[1]; };
+  const price = t => raw(t) * (1 + jit * (noise1(t * 2.3 + 1.7) + 0.5 * noise1(t * 9.1 + 4.2)));   // pure function of t: smooth path + small market wiggle
+  const vs = keys.map(k => k[1]), lo = Math.min(...vs) * (1 - 4 * jit) - 1e-6, hi = Math.max(...vs) * (1 + 4 * jit) + 1e-6, money = v => (o.unit ?? '$') + v.toFixed(2);
+  const P = screenPanel(p, w, h, (c, W, H, t) => {
+    c.fillStyle = '#060A12'; c.fillRect(0, 0, W, H);
+    const x0 = W * 0.05, x1 = W * 0.95, y0 = H * 0.27, y1 = H * 0.78, v = price(t), ch = (v / base - 1) * 100, col = ch >= 0 ? UP : DN;
+    c.strokeStyle = 'rgba(120,150,190,0.16)'; c.lineWidth = Math.max(1, H * 0.003);
+    for (let i = 0; i <= 4; i++) { const y = y0 + (y1 - y0) * i / 4; c.beginPath(); c.moveTo(x0, y); c.lineTo(x1, y); c.stroke(); }
+    for (let i = 0; i <= 6; i++) { const x = x0 + (x1 - x0) * i / 6; c.beginPath(); c.moveTo(x, y0); c.lineTo(x, y1); c.stroke(); }
+    c.textBaseline = 'middle'; c.textAlign = 'left'; c.fillStyle = '#C8D2E0'; c.font = signFont(H * 0.07, 'sans', { weight: 700 }); c.fillText(o.label ?? 'MARKET LIVE', x0, H * 0.075);
+    c.fillStyle = '#FFFFFF'; c.font = signFont(H * 0.12); c.fillText(o.sym ?? 'GAME', x0, H * 0.18);
+    c.textAlign = 'right'; c.font = signFont(H * 0.12, 'mono', { weight: 700 }); c.fillText(money(v), x1, H * 0.18);
+    c.fillStyle = col; c.font = signFont(H * 0.075, 'mono', { weight: 700 }); c.fillText((ch >= 0 ? '▲ +' : '▼ ') + ch.toFixed(1) + '%', x1, H * 0.075);
+    const N = 90, yy = q => y1 - (y1 - y0) * clamp((q - lo) / (hi - lo)), pts = [];
+    for (let i = 0; i <= N; i++) { const tt = t - span + span * i / N; pts.push([x0 + (x1 - x0) * i / N, yy(price(tt))]); }
+    const by = yy(base); c.setLineDash([W * 0.012, W * 0.01]); c.strokeStyle = 'rgba(220,226,236,0.35)'; c.lineWidth = Math.max(1, H * 0.004); c.beginPath(); c.moveTo(x0, by); c.lineTo(x1, by); c.stroke(); c.setLineDash([]);
+    for (const [cy0, cy1, cc] of [[0, by, UP], [by, H, DN]]) {   // above the base price green, below red (clipped halves)
+      c.save(); c.beginPath(); c.rect(0, cy0, W, cy1 - cy0); c.clip();
+      const gr = c.createLinearGradient(0, y0, 0, y1); gr.addColorStop(0, cc + '66'); gr.addColorStop(1, cc + '00');
+      c.beginPath(); c.moveTo(pts[0][0], by); for (const [x, y] of pts) c.lineTo(x, y); c.lineTo(x1, by); c.closePath(); c.fillStyle = gr; c.fill();
+      c.beginPath(); pts.forEach(([x, y], i) => i ? c.lineTo(x, y) : c.moveTo(x, y)); c.strokeStyle = cc; c.lineWidth = H * 0.012; c.lineJoin = 'round'; c.shadowColor = cc; c.shadowBlur = H * 0.03; c.stroke(); c.restore(); }
+    const [ex, ey] = pts[N], pu = 0.5 + 0.5 * Math.sin(t * 8); c.fillStyle = col; c.globalAlpha = 0.35 * pu; c.beginPath(); c.arc(ex, ey, H * (0.025 + 0.02 * pu), 0, TAU); c.fill(); c.globalAlpha = 1; c.beginPath(); c.arc(ex, ey, H * 0.018, 0, TAU); c.fill();
+    const nw = [...news].reverse().find(q => t >= q[0]);
+    if (nw) { const age = t - nw[0], bad = nw[2] !== 'good', bc = bad ? DN : UP, on = age > 0.6 || Math.floor(age * 8) % 2 === 0;
+      if (age < 0.25) c.translate((hash(Math.floor(t * 30)) - 0.5) * W * 0.02, 0);
+      c.fillStyle = on ? bc : '#2A0E10'; c.fillRect(0, H * 0.8, W * 0.26, H * 0.1); c.fillStyle = 'rgba(10,12,18,0.92)'; c.fillRect(W * 0.26, H * 0.8, W * 0.74, H * 0.1);
+      c.textAlign = 'center'; c.fillStyle = '#FFFFFF'; c.font = signFont(H * 0.055); c.fillText(bad ? 'BREAKING' : 'UPDATE', W * 0.13, H * 0.85, W * 0.24);
+      c.textAlign = 'left'; c.fillStyle = bad ? '#FFD9D9' : '#E2FFE9'; c.font = signFont(H * 0.06, 'sans', { weight: 800 }); c.fillText(nw[1], W * 0.28, H * 0.85, W * 0.7); c.setTransform(1, 0, 0, 1, 0, 0); }
+    c.fillStyle = '#0B111C'; c.fillRect(0, H * 0.91, W, H * 0.09); c.font = signFont(H * 0.05, 'mono', { weight: 700 }); c.textAlign = 'left';
+    const item = ([s, q]) => s + ' ' + (q >= 0 ? '▲' : '▼') + Math.abs(q).toFixed(1) + '%   ', full = tk.map(item).join(''), tw = c.measureText(full).width || 1;
+    let x = -((t * W * 0.12) % tw); for (let rep = 0; rep < 3 && x < W; rep++) { for (const q of tk) { c.fillStyle = q[1] >= 0 ? UP : DN; const s = item(q); c.fillText(s, x, H * 0.955); x += c.measureText(s).width; } }
+    c.fillStyle = acc; c.fillRect(0, H * 0.905, W, H * 0.006);
+  }, { fps, glow: 0.2, ...o });
+  if (o.sound !== false) for (const q of news) sfx(q[0], q[2] === 'good' ? 'ding' : 'alarm', q[2] === 'good' ? 0.45 : 0.22);
+  return { ...P, price };
+}
+// cinema(p, x, z, { name: 'CINEMA', lines: ['NOW SHOWING', 'BIG MOVIE'], color, trim, neon, w: 16, h: 9, d: 12, ry, chase: 6 }) → { g, door, booth } — v3.54 movie theater:
+//   plaster box with plinth and cornice, marquee canopy (two lit letter boards, chasing bulbs on both edges, soffit lights), vertical neon blade sign, glass doors with push bars,
+//   framed poster cases (generic posters, no real films), ticket booth with window and talk-hole, rope posts. Front at z (+z), body to −z, canopy to z + 2.6. Bulbs chase as a pure function of t
+function cinema(p, x, z, o = {}) {
+  const g = stat(grp(p ?? world, x, groundH(x, z), z, o.ry ?? 0)), W = o.w ?? 16, H = o.h ?? 9, D = o.d ?? 12, c = o.color ?? '#7A2E3A', tr = o.trim ?? '#E9D9B8', nc = o.neon ?? '#FF4F6A', NC = { cast: false };
+  box(g, W, H, D, c, 0, 0, -D / 2, { surf: 'plaster' }); box(g, W + 0.3, 0.6, D + 0.3, shade(c, -0.15), 0, 0, -D / 2, { surf: 'concrete' }); box(g, W + 0.5, 0.45, D + 0.5, tr, 0, H, -D / 2); box(g, W + 0.2, 0.2, 0.25, tr, 0, H - 2.2, 0.08);
+  for (let i = 0; i < 4; i++) box(g, 0.5, H - 0.6, 0.18, shade(c, 0.08), -W / 2 + 0.6 + i * (W - 1.2) / 3, 0.6, 0.06, NC);   // pilasters
+  const cy = 3.5, cd = 2.6, ch = 1.6, cw = W * 0.82;   // marquee canopy
+  box(g, cw, 0.3, cd, '#2A2026', 0, cy, cd / 2); box(g, cw, ch, 0.22, tr, 0, cy + 0.3, cd - 0.05);
+  const L = o.lines ?? ['NOW SHOWING', 'BIG MOVIE'];
+  textSign(g, L.join('\n'), { w: cw - 0.8, h: ch - 0.45, bg: '#FFF8EA', color: '#1E1A1C', x: 0, y: cy + 0.3 + ch / 2, z: cd + 0.08, board: 0.02, lit: true, font: 'sans', weight: 900 });
+  for (const s of [-1, 1]) textSign(g, L.join('\n'), { w: cd - 0.6, h: ch - 0.45, bg: '#FFF8EA', color: '#1E1A1C', x: s * (cw / 2 + 0.12), y: cy + 0.3 + ch / 2, z: cd / 2, ry: s * Math.PI / 2, board: 0.02, lit: true, font: 'sans', weight: 900 });
+  const bA = mat('#FFE8A0', { basic: true, glow: 2.2, own: true }), bB = mat('#FFE8A0', { basic: true, glow: 2.2, own: true }), nb = Math.max(10, Math.round(cw / 0.42)), ch2 = o.chase ?? 6;
+  const bulbs = dyn(grp(g)); for (const yy of [cy + 0.18, cy + 0.3 + ch + 0.1]) for (let i = 0; i < nb; i++) ball(bulbs, 0.07, '', -cw / 2 + 0.2 + i * (cw - 0.4) / (nb - 1), yy, cd + 0.05, { mat: i % 2 ? bA : bB, cast: false, detail: 0 });
+  tick(t => { const k = Math.floor(t * ch2) % 2; bA.color.setScalar(k ? 2.4 : 0.35); bB.color.setScalar(k ? 0.35 : 2.4); });
+  for (let i = 0; i < 6; i++) box(g, 0.5, 0.04, 0.5, '', -cw / 2 + 1.2 + i * (cw - 2.4) / 5, cy - 0.02, cd * 0.55, { mat: mat('#FFF2CC', { basic: true, glow: 1.6 }), cast: false });   // soffit lights
+  textSign(g, o.name ?? 'CINEMA', { neon: nc, w: 1.0, h: Math.min(5.5, H - cy - 2.6), x: W * 0.28, y: cy + ch + 3.4 - (H > 9 ? 0 : 0.4), z: 0.9, rz: 0, flicker: 0.02 });
+  box(g, 1.3, Math.min(5.8, H - cy - 2.4), 0.5, '#1E1A1C', W * 0.28, cy + ch + 0.55, 0.4);   // blade backing
+  for (const s of [-1, 1]) { box(g, 1.15, 2.7, 0.05, '', s * 0.62, 0.6, 0.06, { mat: mat('#CFE6F2', { opacity: 0.5, kind: 'glass' }), cast: false }); box(g, 1.2, 0.08, 0.1, '#C9A44A', s * 0.62, 0.6 + 2.7, 0.08, NC); box(g, 0.7, 0.05, 0.08, '#C9A44A', s * 0.62, 1.55, 0.12, { metal: 0.8, ...NC }); }
+  box(g, 2.6, 0.12, 0.14, '#C9A44A', 0, 3.3, 0.08, NC);
+  const posters = [['#1A2A5A', '#F2A93B', 'ACTION'], ['#4A1A3A', '#FF6A9A', 'ROMANCE'], ['#0E3A2E', '#7AE8B0', 'SPACE'], ['#3A2A0E', '#F2D23B', 'COMEDY']];
+  posters.forEach(([bg, fg, ttl], i) => { const px = (i < 2 ? -1 : 1) * (2.6 + (i % 2) * 1.7);
+    box(g, 1.3, 1.9, 0.1, '#C9A44A', px, 0.95, 0.06, { metal: 0.6 });
+    const tx = canvasTex(256, 384, (cc, w2, h2) => { const gr = cc.createLinearGradient(0, 0, 0, h2); gr.addColorStop(0, bg); gr.addColorStop(1, '#05060A'); cc.fillStyle = gr; cc.fillRect(0, 0, w2, h2);
+      cc.fillStyle = fg; cc.globalAlpha = 0.9; cc.beginPath(); cc.arc(w2 / 2, h2 * 0.4, w2 * 0.28, 0, TAU); cc.fill(); cc.globalAlpha = 1; cc.fillStyle = '#05060A'; cc.fillRect(w2 * 0.42, h2 * 0.36, w2 * 0.16, h2 * 0.34); cc.beginPath(); cc.arc(w2 / 2, h2 * 0.33, w2 * 0.09, 0, TAU); cc.fill();
+      cc.fillStyle = '#FFFFFF'; cc.textAlign = 'center'; cc.font = signFont(h2 * 0.09); cc.fillText(ttl, w2 / 2, h2 * 0.82, w2 * 0.9); cc.font = signFont(h2 * 0.04, 'sans'); cc.fillText('COMING SOON', w2 / 2, h2 * 0.9); });
+    { const pm = new THREE.Mesh(new THREE.PlaneGeometry(1.14, 1.74), new THREE.MeshBasicMaterial({ map: tx })); pm.position.set(px, 1.03 + 0.87, 0.115); g.add(pm); } });
+  const bx = -W * 0.32, bz = 1.6, booth = grp(g, bx, 0, bz);   // ticket booth
+  box(booth, 1.6, 1.0, 1.3, tr, 0, 0, 0); box(booth, 1.6, 1.3, 1.3, '', 0, 1.0, 0, { mat: mat('#CFE6F2', { opacity: 0.35, kind: 'glass' }), cast: false }); box(booth, 1.8, 0.25, 1.5, c, 0, 2.3, 0); cone(booth, 1.1, 0.6, '#C9A44A', 0, 2.55, 0, { seg: 4, ry: Math.PI / 4 });
+  box(booth, 0.5, 0.04, 0.3, '#C9A44A', 0, 1.0, 0.7, { metal: 0.7 }); cyl(booth, 0.07, 0.07, 0.01, '#3A3A3A', 0, 1.35, 0.66, { rx: Math.PI / 2, seg: 10, ...NC });
+  textSign(booth, 'TICKETS', { w: 1.2, h: 0.24, bg: '#1E1A1C', color: '#FFE8A0', x: 0, y: 2.12, z: 0.66, board: 0.02, lit: true });
+  for (let i = 0; i < 4; i++) { const sx = 1.8 + i * 1.1; cyl(g, 0.04, 0.12, 0.95, '#C9A44A', sx, 0, 3.5, { metal: 0.8, seg: 10 }); ball(g, 0.06, '#C9A44A', sx, 1.0, 3.5, { metal: 0.8 }); if (i < 3) box(g, 1.05, 0.06, 0.06, '#9A1E2A', sx + 0.55, 0.78, 3.5, { kind: 'fabric', ...NC }); }
+  box(g, cw, 0.02, cd + 1.6, '#3A2E30', 0, 0.002, cd / 2 + 0.4, { kind: 'fabric', ...NC });   // carpet under the canopy
+  const W2 = (lx, ly, lz) => { const v = new THREE.Vector3(lx, ly, lz); g.updateWorldMatrix(true, false); return g.localToWorld(v).toArray(); };
+  return { g, door: W2(0, 0, 1.6), booth: W2(bx, 0, bz + 1.1) };
+}
+// gameCase(p, x, y, z, { color, accent, title: 'OPEN WORLD', ry, rx, rz, s }) → g — v3.54 generic boxed video game (no brand): plastic case, cover art (sunset, skyline, palm), spine stripe; hold with holdItem(f, g, t0, t1)
+function gameCase(p, x = 0, y = 0, z = 0, o = {}) {
+  const g = grp(p ?? world, x, y, z, o.ry ?? 0), s = o.s ?? 1, col = o.color ?? '#1E3A8A', acc = o.accent ?? '#FF4FB0', NC = { cast: false }; g.rotation.x = o.rx ?? 0; g.rotation.z = o.rz ?? 0;
+  const key = 'gc' + col + acc + (o.title ?? ''); const tx = (gameCase.tx ??= {})[key] ??= canvasTex(256, 320, (c, w, h) => {
+    const gr = c.createLinearGradient(0, 0, 0, h); gr.addColorStop(0, '#2A1A5A'); gr.addColorStop(0.55, acc); gr.addColorStop(1, '#FFB04A'); c.fillStyle = gr; c.fillRect(0, 0, w, h);
+    c.fillStyle = '#FFE08A'; c.beginPath(); c.arc(w * 0.5, h * 0.62, w * 0.2, 0, TAU); c.fill(); c.fillStyle = '#140A24';
+    for (let i = 0; i < 9; i++) { const bw = w * (0.07 + hash(i) * 0.06), bh = h * (0.12 + hash(i * 3) * 0.3); c.fillRect(i * w / 9, h * 0.78 - bh, bw, bh + h); }
+    c.fillRect(w * 0.8, h * 0.3, w * 0.025, h); for (let k = 0; k < 5; k++) { c.save(); c.translate(w * 0.81, h * 0.3); c.rotate(-1.2 + k * 0.6); c.fillRect(0, -3, w * 0.16, 6); c.restore(); }
+    c.fillStyle = '#FFFFFF'; c.textAlign = 'center'; c.font = signFont(h * 0.085); c.shadowColor = '#000'; c.shadowBlur = 8; c.fillText(o.title ?? 'OPEN WORLD', w / 2, h * 0.16, w * 0.9); c.shadowBlur = 0;
+    c.fillStyle = col; c.fillRect(0, 0, w, h * 0.05); c.fillStyle = '#F2F2F2'; c.fillRect(w * 0.06, h * 0.9, w * 0.14, h * 0.07); });
+  box(g, 0.135 * s, 0.17 * s, 0.014 * s, '#1A1C22', 0, 0, 0, { rough: 0.35 }); { const cmat = (gameCase.mt ??= {})[key] ??= new THREE.MeshStandardMaterial({ map: tx, roughness: 0.3, emissive: '#ffffff', emissiveMap: tx, emissiveIntensity: 0.12 }), cm = new THREE.Mesh(new THREE.PlaneGeometry(0.13 * s, 0.165 * s), cmat); cm.position.set(0, 0.0025 * s + 0.0825 * s, 0.0072 * s); g.add(cm); }
+  box(g, 0.004 * s, 0.168 * s, 0.0145 * s, col, -0.0675 * s, 0.001, 0, NC);
+  return g;
 }
 // ---- v3.32 beach-city kit: decoHotel() (pastel art-deco hotel with neon name, eyebrows, fin, porthole windows, porch), coldFall() (a cold-stunned animal drops stiff from a tree) ----
 function decoHotel(p, x, z, o = {}) {   // front +z; color (pastel), trim, neon ('#FF4FB0'), name ('PALMS' — fictional), floors (3), w, d, ry, corner: 'round' | false. Neon and windows glow at dusk / night
