@@ -79,6 +79,7 @@ Wird vom /whatif-Skill vor jedem Video gelesen und danach aktualisiert.
 | groom-of-the-stool (WJ2, History, gerendert 18.11.) | purple |
 | plague-doctor-1656 (WJ3, History, ernst, gerendert 17.11.) | green |
 | sewer-hunter (WJ4, History, gerendert 18.11.) | cyan |
+| leech-collector (WJ5, History, gerendert 18.11.) | pink |
 
 ## Dr. Steve (nur Serien)
 - **Fake-Titel (`CFG.steveTitle`, nie wiederholen):** benutzt: „Scientist (online certificate)“ (ZF1–ZF6) · „Expert (10k hours in GTA 5)“ (NL1) · „Gravity Expert (fell off a bike once)“ (EG1) · „Zombie Expert (PhD from a cereal box)“ (ZC1) · „Ocean Expert (went to an aquarium once)“ (SA1) · „Shark Expert (owns a shark-tooth necklace)“ (MB1). Ideen: Expert (watched 1 video) · Scientist (self-declared) · Professor (YouTube comments) · Genius (says his mom) · Doctor (of vibes) · Researcher (Wikipedia, 4 min)
@@ -291,6 +292,7 @@ MB1 Megalodon in your pool ✔ gebaut → Abstimmung: A T. rex in the city · B 
 - gong-farmer (WJ1, 16.11.): „Nobody wants to smell you.“ · „Two years of waste. And the smell is the safe part.“ · „Worst job in London — and well paid.“
 - groom-of-the-stool (WJ2, 18.11.): „Carried by you.“ · „You report every… result to his doctors. Living the dream.“ · „Everyone envies you.“
 - sewer-hunter (WJ4, 18.11.): „The catch? The tide.“ · „Toshers worked in gangs — so the rats bit someone else.“ · „Find a grate. Now.“
+- leech-collector (WJ5, 18.11.): „The cheapest bait? You.“ · „Each one drinks up to ten milliliters… of you.“ · „The pay? Barely anything.“
 - plague-doctor-1656 (WJ3, 17.11., ernst): „The city pays you to go where nobody will.“ · „Your mask? Built on a mistake.“
 
 ## Benutzte Dr.-Steve-Tipps
@@ -343,6 +345,7 @@ MB1 Megalodon in your pool ✔ gebaut → Abstimmung: A T. rex in the city · B 
 - gong-farmer: – (kein Slang)
 - groom-of-the-stool: – (kein Slang)
 - sewer-hunter: – (kein Slang)
+- leech-collector: – (kein Slang)
 - plague-doctor-1656: – (kein Slang)
 
 ## Gerald-Momente
@@ -390,6 +393,7 @@ Die Bewertungskarte ist seit 11.11.2026 abgeschafft; jedes Video endet mit Endca
 - gong-farmer: „So ask yourself:“
 - groom-of-the-stool: „So every lord asked:“
 - sewer-hunter: „Next tide:“
+- leech-collector: „So doctors ask:“
 - plague-doctor-1656: „So ask yourself:“ (versehentlich gleich wie gong-farmer; nicht noch einmal verwenden)
 - Archiv der alten Bewertungskarten (Pointen nicht wiederverwenden): ZF1 „Barn: gone. Vibes: immaculate.“ · ZF2 „Great acoustics. Terrible neighbors.“ · ZF3 „Corn every day. Would not recommend.“ · ZF4 „Loud. Smelly. Better than walking.“ · ZF5 „Warm. Way too warm.“ · ZF6 „Great views. Zero fuel.“ · NL1 „Great weather. Zero free will.“ · E19 „Forty-two minutes. No snacks.“ · E24 „Twenty years. Zero lasers.“ · E1 „Perfect landing. Terrible snacks.“ · E6 „Sixty hours, lost to a grandma.“ · Bouncing Betty „Built to jump. Still in the ground.“ · Groundskeeper „Great traps. Cellar smells terrible.“
 
@@ -445,3 +449,4 @@ Die Bewertungskarte ist seit 11.11.2026 abgeschafft; jedes Video endet mit Endca
 | 2026-11-17 | What if you were a plague doctor in 1656? (plague-doctor-1656, WJ3 Worst Jobs in History, History, 44,7 s, green, Erzähler Adam, Engine v3.53: townhouse()/alley() (italienische Altstadt, Sampietrini `surf: 'setts'`, Bogen), doorMark() (versiegelte Tür), herbs(), belltower() (SFX `toll`), Kostüm plaguedoctor, Musikstil baroque; Rom bei Nacht: Pestarzt mit Schnabelmaske in verrauchter Gasse, Kräuter in den Schnabel, Untersuchung mit dem Stab, versiegelte Häuser, Bettzeug wird verbrannt; Mythos „Die Maske schützte“ → FALSE; Faktenkarte 55+ Zutaten im Theriak (National Geographic); Zähler Shift ends in + Houses visited 12/40) | WJ3 | – | Endcard Yes, someone has to / Only with the coat / Never · Loop „So ask yourself:“ | nein |
 | 2026-11-18 | What if you were the King's Groom of the Stool? (groom-of-the-stool, WJ2 Worst Jobs in History, History, 43,5 s, purple, Erzähler Adam, Engine v3.48: interior({ kind: 'tudor' }) (Faltwerk, Wandteppiche, Kamin mit Tudorbogen, Himmelbett; bed: false = Audienzsaal mit Thron), closeStool(), foldScreen(), coffer(), courtProp(), Kostüme courtier + tudorKing, Musikstil tudor, SFX lid, react bow; du trägst Heinrichs VIII. Samt-Leibstuhl, reichst Wasser, Tücher und Becken hinter dem Paravent, berichtest dem Leibarzt – und bist gerade deshalb der mächtigste Mann am Hof: Privy Chamber, Privatschatulle, Lords verbeugen sich; Amt bis 1901) | WJ2 | – | Endcard A/B/C · Loop „So every lord asked:“ | nein |
 | 2026-11-18 | What if you were a Victorian sewer hunter for one day? (sewer-hunter, WJ4 Worst Jobs in History, History, 44,5 s, cyan, Erzähler Adam, Engine v3.49: sewer(), rats(), Kostüm tosher, tosherPole(), coin(), showItem(), warehouse(), backdrop('victorian'), dress('foreshore'), Musikstil victorian; London 1850: Tosher-Trupp geht bei Ebbe durch den Auslass in den Ziegelkanal, harkt Münzen aus dem Schlick, Ratten laufen zum Kollegen, die Flut steigt, ein Gewölbe bröckelt, Flucht übers Straßengitter; Mythos „Riesen-Wildschweine unter Hampstead“ → FALSE; Faktenkarte 6 Shilling am Tag (Mayhew 1851); Zähler Shift ends in 6h + Coins found) | WJ4 | – | Endcard A/B/C · Loop „Next tide:“ | nein |
+| 2026-11-18 | What if you were a leech collector for one day? (leech-collector, WJ5 Worst Jobs in History, History, 42 s, pink, Erzähler Adam, Engine v3.54: pond(), leech(), jar(), Kostüm peasant, interior clinic, AMB marsh, SFX wade/squelch/plop, Musikstil folk; Moorteich 1832: du stehst barfuß als Köder im Wasser, Egel saugen sich fest und schwellen an, am Ufer ziehst du sie ab ins Glas, bei Sonnenuntergang kauft ein Händler, Lohn kaum etwas, Twist 200 Jahre später: Klinik mit medizinischen Egeln; Faktenkarte 57.5M Egel-Import Frankreichs 1832 (Arabacı, Medical History 2023); Zähler Shift ends in 12:00 → 0:00 und Leeches 3 → 5; kein Mythos) | WJ5 | – | Endcard Sure, not squeamish / Only in boots / Absolutely not · Loop „So doctors ask:“ | nein |
