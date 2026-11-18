@@ -51,6 +51,7 @@ Länge: jedes Short höchstens 45 s (Story 38–45 s, Erklär/Conspiracy 35–43
 `<slug>.mp4` (2K, 1440 × 2560), Cover A/B, YouTube-Shorts-Text (Titel, Beschreibung, Tags), Instagram-Caption, TikTok-Text.
 Die Posting-Texte liegen zusätzlich als Textdatei `<slug>-captions.txt` im Release neben MP4 und Cover (Leons Vorgabe ab 15.11.2026): kommt automatisch, sobald `gallery/captions/<slug>.json` gepusht ist (Workflow `captions`, Skript `tools/captions_txt.py`); im Chat den Direktlink mit ausgeben.
 Immer den GitHub-Download-Link mit ausgeben: Release-Seite `https://github.com/Leon1304/what-if-engine/releases/tag/render-<slug>` und direkt `https://github.com/Leon1304/what-if-engine/releases/download/render-<slug>/<slug>.mp4`. Danach `docs/projekt/running-gags.md` und ggf. Themenliste/Trend-Log aktualisieren und committen.
+Zum Schluss jedes Videos aufräumen (Leons Vorgabe ab 18.11.2026, Skill 5c): `bash tools/cleanup.sh --keep <slug>` leert `work/` (außer `<slug>*`, Stimm-Caches und allem aus den letzten 6 h) und entfernt alte Worktrees unter `.claude/worktrees/`; Commits außerhalb von `main` landen vorher als `archiv/<branch>` auf GitHub. Laufende Sitzungen, kürzlich geänderte und nicht eingecheckte Worktrees bleiben. `--dry` zeigt nur an.
 
 ## Spiel „Northwood“ (game/, früher „Waldtank“)
 Survival-Erkundungsspiel (POV, Low-Poly, Three.js), unabhängig von der Video-Engine. Map entsteht aus Blender-Skripten `game/blender/s*.py`
