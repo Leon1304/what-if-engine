@@ -1,5 +1,5 @@
 {
- "updated": "2026-11-17T13:45:36Z",
+ "updated": "2026-11-18T08:07:57Z",
  "videos": [
   {
    "slug": "dday",
@@ -127,70 +127,6 @@
    "auto": true
   },
   {
-   "slug": "groom-of-the-stool",
-   "title": "What if you were the King's Groom of the Stool?",
-   "kind": "history",
-   "dur": 43.5,
-   "aspect": "9:16",
-   "accent": "purple",
-   "series": null,
-   "ending": null,
-   "date": null,
-   "status": "pending",
-   "files": {},
-   "preview": null,
-   "captions": {
-    "youtube": {
-     "title": "What if you were the King's Groom of the Stool?",
-     "description": "The 1530s. Wherever King Henry goes, his toilet follows. Carried by you.\nWould you take this job? A) Yes. Power is power · B) Never. Not for a crown · C) Only for the purse — Comment A, B or C 👇\n\n#shorts #viral #trending #youtubeshorts #fyp",
-     "tags": [
-      "what if you were the kings groom of the stool",
-      "you were the kings groom of the stool",
-      "groom of the stool",
-      "history",
-      "history explained",
-      "history shorts",
-      "what if",
-      "what if scenarios",
-      "what if shorts",
-      "shorts",
-      "3d animation",
-      "animation",
-      "whatifthishappenedscenarios",
-      "hypothetical",
-      "viral",
-      "trending",
-      "fyp",
-      "youtube shorts",
-      "storytime",
-      "groom",
-      "of",
-      "the",
-      "stool",
-      "what if groom",
-      "what if stool",
-      "what would you do",
-      "would you survive",
-      "animated short",
-      "what if video",
-      "what if animation",
-      "scenario",
-      "cartoon",
-      "funny animation"
-     ],
-     "tagChars": 498
-    },
-    "instagram": "What if you were the King's Groom of the Stool?\nWould you take this job? A) Yes. Power is power · B) Never. Not for a crown · C) Only for the purse — Comment A, B or C 👇\n\n#reels #viral #explore #reelsinstagram #trending",
-    "tiktok": "What if you were the King's Groom of the Stool?\nWould you take this job? A) Yes. Power is power · B) Never. Not for a crown · C) Only for the purse — Comment A, B or C 👇\n\n#fyp #foryou #foryoupage #viral #trending",
-    "hooks": [
-     "The 1530s. Wherever King Henry goes, his toilet follows. Carried by you.",
-     "The close stool: a velvet box with a pot inside. You bring water, towels, a bowl.",
-     "Henry sits behind a screen. You report every… result to his doctors. Living the dream."
-    ]
-   },
-   "auto": true
-  },
-  {
    "slug": "zombie-farm-ending",
    "title": "What if zombies attacked your farm?",
    "kind": "story",
@@ -254,6 +190,81 @@
     ]
    },
    "auto": true
+  },
+  {
+   "slug": "groom-of-the-stool",
+   "title": "What if you were the King's Groom of the Stool?",
+   "kind": "history",
+   "dur": 43.5,
+   "aspect": "9:16",
+   "accent": "purple",
+   "series": null,
+   "ending": null,
+   "date": "2026-11-18T08:07:57Z",
+   "status": "ready",
+   "files": {
+    "mp4": {
+     "url": "https://github.com/Leon1304/what-if-engine/releases/download/render-groom-of-the-stool/groom-of-the-stool.mp4",
+     "size": 167216298
+    },
+    "coverA": {
+     "url": "https://github.com/Leon1304/what-if-engine/releases/download/render-groom-of-the-stool/groom-of-the-stool-cover.jpg",
+     "size": 354228,
+     "thumb": "covers/groom-of-the-stool.jpg"
+    },
+    "coverB": {
+     "url": "https://github.com/Leon1304/what-if-engine/releases/download/render-groom-of-the-stool/groom-of-the-stool-cover-b.jpg",
+     "size": 658397,
+     "thumb": "covers/groom-of-the-stool-b.jpg"
+    },
+    "srt": {
+     "url": "https://github.com/Leon1304/what-if-engine/releases/download/render-groom-of-the-stool/groom-of-the-stool.srt",
+     "size": 1505
+    }
+   },
+   "preview": null,
+   "captions": {
+    "youtube": {
+     "title": "What if you were the King's Groom of the Stool?",
+     "description": "Henry VIII's court, 1530s: you carry the king's velvet close stool, hand him the towels – and somehow you're the most powerful man at court. 🚽👑\nWould you take this job? A) Yes. Power is power B) Never. Not for a crown C) Only for the purse – Comment A, B or C 👇\nSources: Historic UK (Groom of the Stool), Wikipedia (Groom of the Stool; Privy Chamber), The Tudor Society (Sarah Bryson, \"The Groom of the Stool\")\n\n#shorts #whatif #henryviii #tudorhistory #history",
+     "tags": [
+      "what if you were the king's groom of the stool",
+      "groom of the stool",
+      "king's groom of the stool",
+      "henry viii toilet",
+      "henry the eighth",
+      "tudor court",
+      "close stool",
+      "royal toilet attendant",
+      "worst jobs in history",
+      "worst job in history",
+      "privy chamber",
+      "privy purse",
+      "hampton court palace",
+      "tudor history",
+      "tudor england",
+      "king henry viii",
+      "groom of the stole",
+      "toilet job king",
+      "weirdest jobs in history",
+      "history facts",
+      "grooom of the stool",
+      "henry 8",
+      "what if",
+      "what if scenarios",
+      "history shorts"
+     ],
+     "tagChars": 500
+    },
+    "instagram": "The worst job at Henry VIII's court… was also the most powerful. 🚽👑\nThe Groom of the Stool carried the king's toilet, held the towels – and ran his Privy Chamber and private purse.\nWould you take this job? Comment A, B or C 👇\n\n#whatif #henryviii #tudorhistory #historyfacts #history",
+    "tiktok": "You carry the king's toilet. And everyone at court envies you 👑\nHenry VIII's Groom of the Stool: worst job, most power. The post lasted until 1901.\nWould you take it? Comment A, B or C 👇\n\n#whatif #henryviii #tudorhistory #historytok #history",
+    "hooks": [
+     "The worst job at court came with the most power.",
+     "He handed the king his towels. Dukes envied him.",
+     "This toilet job lasted until 1901."
+    ]
+   },
+   "auto": false
   },
   {
    "slug": "plague-doctor-1656",
