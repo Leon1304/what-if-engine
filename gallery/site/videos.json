@@ -1,5 +1,5 @@
 {
- "updated": "2026-11-18T19:18:31Z",
+ "updated": "2026-11-18T20:55:17Z",
  "videos": [
   {
    "slug": "dday",
@@ -127,6 +127,68 @@
    "auto": true
   },
   {
+   "slug": "gta6-economy",
+   "title": "What happens to the world economy when GTA 6 drops?",
+   "kind": "explain",
+   "dur": 0.0,
+   "aspect": "9:16",
+   "accent": "green",
+   "series": null,
+   "ending": null,
+   "date": null,
+   "status": "pending",
+   "files": {},
+   "preview": null,
+   "captions": {
+    "youtube": {
+     "title": "What happens to the world economy when GTA 6 drops?",
+     "description": "One video game vs the entire world economy. 💸\nIts older brother made $1 billion in three days, one delay wiped billions off the stock market, and launch day could cost a billion dollars in sick days.\nWhat's your launch day plan? Comment A, B or C 👇\n\nSources: Guinness World Records / Take-Two (first game: $1B in 3 days, 2013) · DFC Intelligence via Financial Times ($3.2B first-year forecast) · José Montalvo, Pompeu Fabra University (≈1.5M sick days ≈ $1B, estimate) · World Bank / NSB Bhutan (GDP ≈ $3.3B, 2024)\n\n#shorts #whatif #worldeconomy #launchday #economics",
+     "tags": [
+      "what happens to the world economy",
+      "world economy",
+      "global economy",
+      "economy",
+      "economics",
+      "economics explained",
+      "video game economy",
+      "biggest game launch",
+      "biggest launch ever",
+      "game launch day",
+      "launch day",
+      "video game sales",
+      "billion dollar game",
+      "stock market",
+      "stock market crash",
+      "stock crash",
+      "sick day",
+      "calling in sick",
+      "lost productivity",
+      "bhutan",
+      "bhutan economy",
+      "box office",
+      "video games",
+      "gaming",
+      "gamers",
+      "what if",
+      "what if scenarios",
+      "explained",
+      "3d animation",
+      "shorts",
+      "whatifthishappenedscenarios"
+     ],
+     "tagChars": 499
+    },
+    "instagram": "One game. The whole world economy. 💸🎮\nA billion in three days, billions wiped off the stock market and a billion-dollar sick day.\nWhat's your launch day plan? Comment A, B or C 👇\n\n#whatif #worldeconomy #launchday #economics #stockmarket",
+    "tiktok": "What does one video game do to the world economy? 💸\nBillions in sales, a stock crash and a billion-dollar sick day. Your launch day plan? Comment A, B or C 👇\n\n#whatif #worldeconomy #launchday #economics #fintok",
+    "hooks": [
+     "This game could out-earn an entire country.",
+     "One delay. Billions gone in a day.",
+     "1.5 million people are about to skip work for one game."
+    ]
+   },
+   "auto": false
+  },
+  {
    "slug": "zombie-farm-ending",
    "title": "What if zombies attacked your farm?",
    "kind": "story",
@@ -190,6 +252,86 @@
     ]
    },
    "auto": true
+  },
+  {
+   "slug": "powder-monkey",
+   "title": "What if you were a powder monkey at Trafalgar?",
+   "kind": "history",
+   "dur": 45.0,
+   "aspect": "9:16",
+   "accent": "blue",
+   "series": null,
+   "ending": null,
+   "date": "2026-11-18T20:55:17Z",
+   "status": "ready",
+   "files": {
+    "mp4": {
+     "url": "https://github.com/Leon1304/what-if-engine/releases/download/render-powder-monkey/powder-monkey.mp4",
+     "size": 172971361
+    },
+    "coverA": {
+     "url": "https://github.com/Leon1304/what-if-engine/releases/download/render-powder-monkey/powder-monkey-cover.jpg",
+     "size": 546966,
+     "thumb": "covers/powder-monkey.jpg"
+    },
+    "coverB": {
+     "url": "https://github.com/Leon1304/what-if-engine/releases/download/render-powder-monkey/powder-monkey-cover-b.jpg",
+     "size": 554397,
+     "thumb": "covers/powder-monkey-b.jpg"
+    },
+    "srt": {
+     "url": "https://github.com/Leon1304/what-if-engine/releases/download/render-powder-monkey/powder-monkey.srt",
+     "size": 1500
+    }
+   },
+   "preview": null,
+   "captions": {
+    "youtube": {
+     "title": "What if you were a powder monkey at Trafalgar?",
+     "description": "21 October 1805: you are thirteen, aboard HMS Victory, and your job is to carry gunpowder from the copper-lined magazine below the waterline up to the guns – for five and a half hours. 💥⚓ Ship's boys went to sea as young as twelve.\nCould you do this job? A) Yes, I'm fast B) Only in the magazine C) No way – Comment A, B or C 👇\nSources: Royal Museums Greenwich, \"Battle of Trafalgar\", \"HMS Victory\" and \"Cabin boy\"; Historic UK, \"Powder Monkeys\"; HMS Victory armament (32-pounders, ~2.75 t) per Wikipedia / Goodwin, Nelson's Victory\n\n#shorts #whatif #trafalgar #worstjobs #history",
+     "tags": [
+      "what if you were a powder monkey",
+      "powder monkey",
+      "powder monkey trafalgar",
+      "battle of trafalgar",
+      "trafalgar 1805",
+      "hms victory",
+      "nelson",
+      "royal navy history",
+      "ship of the line",
+      "naval history",
+      "age of sail",
+      "gun deck",
+      "powder magazine",
+      "ship's boy",
+      "cabin boy",
+      "worst jobs in history",
+      "worst job ever",
+      "napoleonic wars",
+      "naval cannon",
+      "broadside",
+      "powder boy",
+      "powder monkeys",
+      "trafalger",
+      "powdermonkey",
+      "1805 sea battle",
+      "history shorts",
+      "what if",
+      "what if scenarios",
+      "3d animation",
+      "shorts"
+     ],
+     "tagChars": 484
+    },
+    "instagram": "Thirteen years old. Gunpowder in your arms. The guns firing all around you. ⚓💥\nAt the Battle of Trafalgar, powder monkeys ran cartridges from the magazine to HMS Victory's guns for five and a half hours. Could you do this job? Comment A, B or C 👇\n\n#whatif #trafalgar #worstjobs #historyfacts #history",
+    "tiktok": "You're 13, on HMS Victory, carrying gunpowder at Trafalgar ⚓💥\nFive and a half hours of cannon fire. Could you do this job? Comment A, B or C 👇\n\n#whatif #trafalgar #worstjobs #historytok #history",
+    "hooks": [
+     "Thirteen years old. Your job: carry gunpowder through a sea battle.",
+     "One spark down here could sink the whole ship.",
+     "Each gun weighs three tons – and it leaps back every time it fires."
+    ]
+   },
+   "auto": false
   },
   {
    "slug": "leech-collector",
