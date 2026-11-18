@@ -1682,6 +1682,8 @@ const BIOMES = {
             grass: ['#7FA64E', '#9AB85A', '#B8C46A'], flowers: ['#FF6FA0', '#FFE15A'] },
   desert: { trees: [['cactus', 0.75], ['dead', 0.25]], near: { dry: 0.7, pebble: 9, rock: 0.35, tuft: 6 }, ring: { tree: 0.55, rock: 0.7, dry: 0.4 },
             grass: ['#B8A060', '#A89050', '#C8B070'], rockColor: '#B98A5A', flowers: ['#FF6FA0', '#FFD84A'] },
+  giza:   { trees: [['palm', 1]], near: { dry: 0.25, pebble: 8, rock: 0.4, tuft: 1 }, ring: { tree: 0.0, rock: 0.6, dry: 0.15 },   // v3.57 ancient Egypt (Giza plateau): no cacti, limestone rocks, pebbles, a dry tuft; backdrop 'nile', dress('giza')
+            grass: ['#C0A468', '#B09458', '#CCB074'], rockColor: '#C9AE80', flowers: [] },
   snow:   { trees: [['snowpine', 0.85], ['dead', 0.15]], near: { drift: 1.2, pebble: 2, rock: 0.2, tuft: 6 }, ring: { tree: 1.6, rock: 0.35 },
             grass: ['#8A9A7A', '#A0AA90'], rockColor: '#8E979F', flowers: ['#FFFFFF'] },
   swamp:  { trees: [['dead', 0.55], ['round', 0.45]], near: { reed: 14, tuft: 30, mushroom: 1, log: 0.1, rock: 0.1, stump: 0.1 }, ring: { tree: 1.3, bush: 0.6 },
@@ -1775,7 +1777,7 @@ function runBiome(kind, o) {
   }
   if (o.lush !== false && B.near.tuft) tries(Math.round(nearA * B.near.tuft * 0.8 * D), () => { const x = rx(), z = rx(); if (!onLand(z, x) || !free(x, z, 0)) return false; put('tuft', x, z, 0.6 + br() * 1.0, bp(grass)); return true; });   // v2.34: denser grass (drawn last → older layouts stay as they were)
   for (const [k, list] of Object.entries(items)) cover(k, list);
-  if (o.backdrop !== false && kind !== 'moon' && kind !== 'reef') backdrop(o.backdrop ?? { forest: 'alps', snow: 'snow', desert: 'mesa', beach: 'islands' }[kind] ?? 'hills', { coast: GROUND.coast });
+  if (o.backdrop !== false && kind !== 'moon' && kind !== 'reef') backdrop(o.backdrop ?? { forest: 'alps', snow: 'snow', desert: 'mesa', giza: 'nile', beach: 'islands' }[kind] ?? 'hills', { coast: GROUND.coast });
   if (o.life !== false) ambientLife(kind, { area: A });
 }
 // v3.5 autoDress: ground() without biome() / city() / backdrop() used to be an endless flat plane to a blurry horizon. At bake time the scene now gets a light
@@ -1920,9 +1922,9 @@ dressProp('sapling',   { fgOk: true, where: ['fg', 'edge'], r: 0.7, h: 2.2, tall
 dressProp('snowsapling', { fgOk: true, where: ['fg', 'edge'], r: 0.7, h: 2.2, tall: true, fn: (p, x, z, ry, R) => tree(p, x, z, { kind: 'snowpine', size: 0.3 + R() * 0.12 }), kinds: { 'suburb-winter': 1.2, alpine: 1.5 } });
 dressProp('bush',      { fgOk: true, where: ['edge', 'fg', 'wall'], r: 0.75, h: 0.95, fn: (p, x, z, ry, R) => bush(p, x, z, { size: 0.55 + R() * 0.4 }), kinds: { suburb: 2, farm: 1.2, beach: 0.5, alpine: 0.5 } });
 dressProp('snowbush',  { fgOk: true, where: ['edge', 'fg', 'wall'], r: 0.75, h: 0.9, fn: (p, x, z, ry, R) => bush(p, x, z, { size: 0.55 + R() * 0.35, color: '#6E8072' }), kinds: { 'suburb-winter': 1.5, alpine: 0.6 } });
-dressProp('drybush',   { where: ['edge', 'fg', 'ground'], r: 0.7, h: 0.8, fn: (p, x, z, ry, R) => bush(p, x, z, { kind: 'dry', size: 0.5 + R() * 0.4 }), kinds: { desert: 2, military: 0.4 } });
-dressProp('rock',      { where: ['edge', 'ground', 'fg'], r: 0.8, h: 0.7, fn: (p, x, z, ry, R, c) => rock(p, x, z, 0.4 + R() * 0.45, c.rock), kinds: { alpine: 2, desert: 1.5, beach: 1, farm: 0.5, tunnel: 0.6, military: 0.6, suburb: 0.3, 'suburb-winter': 0.5 } });
-dressProp('boulder',   { where: ['bg'], r: 2.2, h: 1.8, tall: true, fn: (p, x, z, ry, R, c) => rock(p, x, z, 1.2 + R() * 0.8, c.rock), kinds: { alpine: 1.5, desert: 1.5, beach: 0.6 } });
+dressProp('drybush',   { where: ['edge', 'fg', 'ground'], r: 0.7, h: 0.8, fn: (p, x, z, ry, R) => bush(p, x, z, { kind: 'dry', size: 0.5 + R() * 0.4 }), kinds: { giza: 0.8, desert: 2, military: 0.4 } });
+dressProp('rock',      { where: ['edge', 'ground', 'fg'], r: 0.8, h: 0.7, fn: (p, x, z, ry, R, c) => rock(p, x, z, 0.4 + R() * 0.45, c.rock), kinds: { giza: 1.5, alpine: 2, desert: 1.5, beach: 1, farm: 0.5, tunnel: 0.6, military: 0.6, suburb: 0.3, 'suburb-winter': 0.5 } });
+dressProp('boulder',   { where: ['bg'], r: 2.2, h: 1.8, tall: true, fn: (p, x, z, ry, R, c) => rock(p, x, z, 1.2 + R() * 0.8, c.rock), kinds: { giza: 1, alpine: 1.5, desert: 1.5, beach: 0.6 } });
 dressProp('stump',     { where: ['edge', 'ground', 'wall'], r: 0.45, h: 0.5, fn: (p, x, z, ry, R) => stump(p, x, z, 0.8 + R() * 0.5), kinds: { alpine: 0.8, farm: 0.6, 'suburb-winter': 0.6 } });
 dressProp('log',       { where: ['edge', 'bg', 'wall'], r: 1.35, h: 0.5, face: 'wall', fn: (p, x, z, ry, R, c) => { const g = log(p, x, z, 0.7 + R() * 0.3, c.kind === 'beach' ? '#B8A68A' : undefined); g.rotation.y = ry + Math.PI / 2; return g; }, kinds: { alpine: 0.8, farm: 0.4, beach: 0.5, 'suburb-winter': 0.5, tunnel: 0.4 } });
 dressProp('haybale',   { where: ['bg', 'edge', 'wall'], r: 0.95, h: 1.3, fn: (p, x, z, ry) => haybale(p, x, z, ry), kinds: { farm: 2 } });
@@ -1959,7 +1961,7 @@ dressProp('floorLamp', { where: ['wall'], r: 0.3, h: 1.7, face: 'wall', y0: true
 dressProp('shelf',     { where: ['wall'], r: 0.9, h: 1.9, face: 'wall', fn: (p, x, z, ry) => FURN.shelf(p, x, z, ry, { w: 1.2 }), kinds: { room: 0.8, cell: 0.2 } });
 dressProp('toys',      { where: ['ground'], r: 0.35, h: 0.25, fn: (p, x, z, ry) => FURN.toys(p, x, z, ry), kinds: { room: 0.4 } });
 // ground cover (instanced, a few per spot) and decals
-for (const [n, c, kinds, col] of [['tufts', 'tuft', { suburb: 3, farm: 3, beach: 1, alpine: 0.6, military: 1 }, ['#5C8A3A', '#6E9A44', '#4E7A34']], ['pebbles', 'pebble', { alpine: 2, desert: 3, beach: 1.5, tunnel: 2, military: 1.5, farm: 0.8, apron: 0.6, 'suburb-winter': 0.8, suburb: 0.6 }, null],
+for (const [n, c, kinds, col] of [['tufts', 'tuft', { suburb: 3, farm: 3, beach: 1, alpine: 0.6, military: 1 }, ['#5C8A3A', '#6E9A44', '#4E7A34']], ['pebbles', 'pebble', { giza: 3, alpine: 2, desert: 3, beach: 1.5, tunnel: 2, military: 1.5, farm: 0.8, apron: 0.6, 'suburb-winter': 0.8, suburb: 0.6 }, null],
   ['drifts', 'drift', { 'suburb-winter': 2.5, alpine: 2 }, ['#F2F6FA']], ['shells', 'shell', { beach: 2 }, ['#F4E6D8', '#F2C9B8', '#E8D2A8']], ['reeds', 'reed', { beach: 1.5, farm: 0.4 }, ['#9AB85A', '#B8C46A']], ['flowers', 'bloom', { suburb: 1, farm: 1 }, ['#FFE15A', '#FFFFFF', '#E86AA8', '#9C7CE8']]])
   dressProp(n, { where: ['ground'], r: 0.5, h: 0.12, cover: c, colors: col, kinds });
 dressProp('leaves',  { where: ['ground'], r: 1.0, h: 0.03, flat: true, leaves: true, kinds: { suburb: 1.5, farm: 0.6, city: 0.4 } });
@@ -2032,12 +2034,16 @@ for (const k of ['buckets', 'tools', 'debris', 'cable']) dressProp('tunnel' + k[
 dressProp('paperLitter', { where: ['ground'], r: 1.0, h: 0.06, flat: true, fn: (p, x, z, ry, R) => debris(p, x, z, { kind: 'paper', r: 0.9, n: 8 + Math.floor(R() * 8), seed: _sd(R) }), kinds: { city: 0.8, cell: 0.6, room: 0.3, tunnel: 0.3, apron: 0.2 } });
 dressProp('leafLitter',  { where: ['ground'], r: 1.0, h: 0.03, flat: true, dry: true, fn: (p, x, z, ry, R) => debris(p, x, z, { kind: 'leaves', r: 1.0, seed: _sd(R) }), kinds: { suburb: 0.6, farm: 0.3, city: 0.2 } });
 dressProp('rubble',      { where: ['ground', 'wall'], r: 1.0, h: 0.15, flat: true, fn: (p, x, z, ry, R) => debris(p, x, z, { kind: 'rubble', r: 0.8, n: 25 + Math.floor(R() * 20), seed: _sd(R) }), kinds: { tunnel: 1.0, military: 0.8, desert: 0.4, city: 0.2 } });
+// v3.57 ancient Egypt set dressing (dress('giza')): a spare limestone block (sometimes two stacked), clay jars, a coil of palm-fibre rope
+dressProp('limeBlock',  { where: ['edge', 'bg'], r: 1.0, h: 1.0, fn: (p, x, z, ry, R) => { const g = stat(grp(p, x, groundH(x, z), z, ry)), c = shade('#D8C8A4', (R() - 0.5) * 0.1); bbox(g, 1.2, 0.7, 1.0, 0.04, c, 0, 0, 0, {}); if (R() < 0.4) bbox(g, 1.1, 0.68, 0.9, 0.04, shade(c, 0.03), 0.06, 0.7, -0.04, {}); return g; }, kinds: { giza: 1.4 } });
+dressProp('clayJars',   { where: ['wall', 'edge', 'fg'], r: 0.5, h: 0.5, fn: (p, x, z, ry, R) => { const g = stat(grp(p, x, groundH(x, z), z, ry)), n = 1 + Math.floor(R() * 3); for (let i = 0; i < n; i++) { const hh = 0.32 + R() * 0.16; cyl(g, 0.08, 0.13, hh, shade('#B06A40', (R() - 0.5) * 0.12), i * 0.27 - 0.27, 0, (R() - 0.5) * 0.2, { seg: 9 }); cyl(g, 0.065, 0.065, 0.04, '#8A4428', i * 0.27 - 0.27, hh, 0, { seg: 9, cast: false }); } return g; }, kinds: { giza: 1.2 } });
+dressProp('ropeCoil',   { where: ['ground', 'edge'], r: 0.5, h: 0.15, flat: true, fn: (p, x, z, ry, R) => { const g = stat(grp(p, x, groundH(x, z), z, ry)); for (let i = 0; i < 4; i++) mesh(g, G('rcoil' + i, () => new THREE.TorusGeometry(0.28 - i * 0.045, 0.025, 5, 18).rotateX(Math.PI / 2)), mat('#A8844E'), 0, 0.03 + i * 0.02, 0, { cast: false }); return g; }, kinds: { giza: 0.25 } });
 dressProp('puddle',      { where: ['ground'], r: 0.9, h: 0.02, flat: true, on: 'road', dry: true, y0: true, fn: (p, x, z, ry, R) => groundDecal(p, x, z, { kind: 'puddle', y: 0, r: 0.6 + R() * 0.5, seed: _sd(R) }), kinds: { city: 0.6, suburb: 0.4 } });
 dressProp('oilStain',    { where: ['ground'], r: 0.5, h: 0.02, flat: true, on: 'road', y0: true, fn: (p, x, z, ry, R) => groundDecal(p, x, z, { kind: 'oilStain', y: 0, r: 0.35 + R() * 0.25, seed: _sd(R) }), kinds: { city: 0.6, suburb: 0.3 } });
 dressProp('crack',       { where: ['ground'], r: 0.9, h: 0.02, flat: true, on: 'road', dry: true, y0: true, fn: (p, x, z, ry, R) => groundDecal(p, x, z, { kind: 'crack', y: 0, len: 1.0 + R() * 0.8, seed: _sd(R) }), kinds: { city: 0.5, suburb: 0.4 } });
 dressProp('apronStain',  { where: ['ground'], r: 0.6, h: 0.02, flat: true, fn: (p, x, z, ry, R) => groundDecal(p, x, z, { kind: 'oilStain', r: 0.4 + R() * 0.35, seed: _sd(R) }), kinds: { apron: 1.0, military: 0.3, deck: 0.3 } });
 dressKind('suburb', { indoor: false }); dressKind('suburb-winter', { indoor: false, rock: '#8E979F' }); dressKind('city', { indoor: false }); dressKind('alpine', { indoor: false, rock: '#8E979F' });
-dressKind('farm', { indoor: false }); dressKind('beach', { indoor: false }); dressKind('desert', { indoor: false, rock: '#B98A5A' }); dressKind('apron', { indoor: false }); dressKind('deck', { indoor: false });
+dressKind('farm', { indoor: false }); dressKind('beach', { indoor: false }); dressKind('desert', { indoor: false, rock: '#B98A5A' }); dressKind('giza', { indoor: false, rock: '#C9AE80' }); dressKind('apron', { indoor: false }); dressKind('deck', { indoor: false });
 dressKind('military', { indoor: false }); dressKind('tunnel', { indoor: true, rock: '#6A5A48', budget: { wall: 5, ground: 4, edge: 2, bg: 1, fg: 0 } }); dressKind('cell', { indoor: true, budget: { wall: 3, ground: 1, edge: 1, bg: 0, fg: 0 } });
 dressKind('room', { indoor: true, budget: { wall: 4, ground: 1, edge: 1, bg: 0, fg: 0 } });
 // v3.47 medieval / Tudor street: buckets, wooden barrels and crates, sacks, a handcart, woodpiles and straw — nothing modern (no cars, bins, lamps, signs)
@@ -2048,7 +2054,7 @@ dressProp('medCrate', { where: ['wall', 'edge', 'bg'], r: 0.5, h: 0.8, face: 'wa
 dressProp('sack', { where: ['wall', 'edge', 'ground'], r: 0.5, h: 0.75, fn: (p, x, z, ry, R) => sack(p, x, z, { ry, n: R() < 0.5 ? 1 : 3 }), kinds: { medieval: 1.1, farm: 0.3 } });
 dressProp('handcart', { where: ['bg', 'edge'], r: 1.5, h: 1.2, tall: true, face: 'wall', y0: true, fn: (p, x, z, ry) => { const C = cart(p, x, z, { kind: 'hand', ry, load: 'empty' }); C.g.userData.dyn = false; stat(C.g); return C.g; }, kinds: { medieval: 0.45, farm: 0.15 } });
 for (const [n, w] of [['woodpile', 0.8], ['haybale', 0.35], ['stump', 0.3]]) if (DRESS.props[n]) dressProp(n, { ...DRESS.props[n], kinds: { medieval: w } });   // v3.47
-const BIOME_DRESS = { farm: 'farm', forest: 'alpine', beach: 'beach', desert: 'desert', snow: 'alpine', swamp: 'farm', city: 'city', plain: 'suburb', 'plain-snow': 'suburb-winter', 'plain-sand': 'desert' };
+const BIOME_DRESS = { giza: 'giza', farm: 'farm', forest: 'alpine', beach: 'beach', desert: 'desert', snow: 'alpine', swamp: 'farm', city: 'city', plain: 'suburb', 'plain-snow': 'suburb-winter', 'plain-sand': 'desert' };
 
 // dress(kind, { area, density, keep, wall, ground, fg, bg, edge, seed, assets }): runs after the scene is built (DEFER, like biome()), own random numbers.
 //   area: [x0, z0, x1, z1] or [x, z, r] — only shots whose subject is inside, only props inside (default: every shot that fits the kind: indoor kinds take shots under a roof
@@ -2272,6 +2278,13 @@ function backdrop(kind = 'hills', o = {}) {   // v3.5 o.also: an extra layer (e.
     band(480 * rs, 70, a => 10 + 18 * fH(a), '#A8765A', '#C49A72', { haze: 0.66 });
     ring(450 * rs, 70, 22, () => mesa(40 + R() * 60, 28 + R() * 38, '#A8664A', '#C48A62'), 0.66, sea);
   } else if (kind === 'skyline') skyline(g, (o.r0 ?? 150) * rs, R, o.sector);
+  else if (kind === 'nile') {   // v3.57 Giza plateau: low sand swells, the green Nile valley with palm groves in one sector (o.valley, angle like heading; default +x), a far escarpment
+    const nH = per([[4, 0.7], [7, 1], [13, 0.6], [23, 0.4], [41, 0.25]]), fH = per([[3, 0.6], [5, 1], [9, 0.7], [17, 0.4], [31, 0.25]]), va = o.valley ?? Math.PI / 2, inV = a => { const d = Math.atan2(Math.sin(a - va), Math.cos(a - va)); return 1 - sm01((Math.abs(d) - 0.55) / 0.35); };
+    band(330 * rs, 60, a => 3 + 7 * nH(a) * (1 - 0.7 * inV(a)), '#C9A876', '#DDBF8C', { haze: 0.42 });
+    band(470 * rs, 80, a => 14 + 22 * fH(a), '#B49A78', '#CDB592', { haze: 0.66 });
+    ring(345 * rs, 30, 90, () => { const hg = 9 + R() * 7, tr = new THREE.CylinderGeometry(0.25, 0.4, hg, 5).translate(0, hg / 2, 0), cr = new THREE.IcosahedronGeometry(2.6 + R(), 0).scale(1.3, 0.5, 1.3).translate(0, hg, 0);
+      return paint(mergeGeometries([tr.toNonIndexed(), cr.toNonIndexed()].map(q => { q.deleteAttribute('uv'); q.deleteAttribute('normal'); return q; })), '#5A5434', '#5E7A3A'); }, 0.45, (x, z) => inV(Math.atan2(x, z)) < 0.5);
+  }
   else if (kind === 'victorian') victorianSkyline(g, (o.r0 ?? 170) * rs, R, o, hazeMat);
   else {
     const A = kind === 'alps' || kind === 'snow', near = kind === 'snow' ? ['#C9D4DE', '#EEF3F8'] : A ? ['#3F5E44', '#587A56'] : kind === 'islands' ? ['#4E7A44', '#6E9A54'] : ['#4E7446', '#6C925A'];
@@ -6744,6 +6757,7 @@ function wreath(p, x, y, z, o = {}) {
 
 // sled(p, x, z, { kind: 'wood' | 'plastic', color, rope: true, ry, seed }) — wooden sledge on bent steel runners with slats and a tow rope, or a plastic toboggan with grips
 function sled(p, x, z, o = {}) {
+  if (o.kind === 'sledge') return _sledge(p, x, z, o);   // v3.57 Egyptian timber sledge with a stone block (see haul())
   const k = o.kind ?? 'wood', { g, hv, NC } = _prop(p, x, z, o, 'sled', [0.48, 1.1]), MT = { kind: 'metal' };
   if (k === 'plastic') { const c = o.color ?? pick2(['#D8342A', '#2E86AB', '#3E8E3A', '#F2B33A'], hv(1)), PL = { kind: 'plastic' }; bbox(g, 0.5, 0.04, 1.0, 0.02, c, 0, 0, 0, PL); for (const s of [-1, 1]) bbox(g, 0.04, 0.12, 0.95, 0.02, shade(c, -0.05), s * 0.23, 0.02, 0, PL);
     const nose = bbox(g, 0.5, 0.04, 0.22, 0.02, c, 0, 0.0, 0.55, PL); nose.rotation.x = -0.6; nose.position.y = 0.08; for (const s of [-1, 1]) box(g, 0.012, 0.04, 0.1, '#1E1E20', s * 0.254, 0.08, 0.15, NC); return g; }
@@ -18421,6 +18435,244 @@ function cartridge(p, x = 0, y = 0, z = 0, o = {}) {
   return g;
 }
 
+// ---- v3.57 pyramid builders (Giza, c. 2560 BC): pyramidSite() (pyramid under construction + supply ramp + working front) · sled({ kind: 'sledge' }) + haul()
+//   (gang hauling a block on a wooden sledge, water poured on the sand in front) · mudbrick() (house / bakery / gallery / tomb of the workers' town) · splint() ·
+//   food 'conebread' / 'beerjar' · costumes egyptworker / egyptoverseer (elsewhere) · backdrop('nile') · AMB worksite · SFX sledge / heave / thud ----
+// pyramidSite(p, x, z, { base: 230, full: 146.6, h: 30, course: 0.72, ry, seed, colors: { core, casing, top },
+//   ramp: { w: 6, stairs: 1.3, wall: 0.7, slope: 0.2, x: 0 } | false, place: { at: [lx, lz], cols: 8, rows: 5, pre: 14, t0, every: 2.4, slide: 1.4 } | false,
+//   start: 0, rate: 0, rateT0: 0, debris: true }) → S
+//   A pyramid half built: stepped courses up to h (each course a ring of blocks — outer casing in white Tura limestone, every block its own shade, steps 0.72 m),
+//   a flat plateau of core blocks on top (walk surface: figures stand on it) and, on the +z face, a supply ramp up to the plateau edge (mudbrick retaining walls with
+//   a batter, rubble core, tafla clay track with timber sleepers, a stair on each side with posts in post holes for rope belays — the Hatnub ramp; walk surface).
+//   place: a working front on the plateau — a patch of the next course whose blocks are levered in one by one (pure in t, dust, thud); limestone chip heaps round the base.
+//   S.H (height) · S.hw(y) (half width at height y) · S.rampAt(u, dx) → [x, y, z] (u 0 = foot … 1 = top, dx across) · S.rampFoot / S.rampTop [x, z] · S.rampYaw (heading uphill) ·
+//   S.slot(i) → [x, y, z] (centre of block i of the working front) · S.placed(t) (blocks of the front in place) · S.count(t) = start + rate·(t − rateT0) + placed(t) · S.keep
+function pyramidSite(p, x = 0, z = 0, o = {}) {
+  const B = o.base ?? 230, HF = o.full ?? 146.6, ch = o.course ?? 0.72, nC = Math.max(1, Math.round((o.h ?? 30) / ch)), H = nC * ch, ry = o.ry ?? 0, sd = o.seed ?? 5, y0 = groundH(x, z);
+  const hw = y => B / 2 * (1 - y / HF), cs = Math.cos(ry), sn = Math.sin(ry), W = (lx, ly, lz) => [x + lx * cs + lz * sn, y0 + ly, z - lx * sn + lz * cs], h = n => hash(n * 1.37 + sd * 11.3);
+  const CO = { core: '#C9AE82', casing: '#E0D3B6', top: '#CDB68C', ...(o.colors ?? {}) };
+  const g = stat(grp(p ?? world, x, y0, z, ry)); g.name = 'pyramidSite'; g.userData.bld = false;
+  // ---- stepped courses + plateau: one vertex-coloured mesh, a quad per block ----
+  const pos = [], col = [], C = new THREE.Color(), cc = { core: new THREE.Color(CO.core), cas: new THREE.Color(CO.casing), top: new THREE.Color(CO.top) };
+  const quad = (a, b, c2, d, cl) => { pos.push(...a, ...b, ...c2, ...a, ...c2, ...d); for (let i = 0; i < 6; i++) col.push(cl.r, cl.g, cl.b); };
+  const tint = (base, n, amt = 0.07) => { C.copy(base); const v = h(n); C.offsetHSL((h(n * 3.1) - 0.5) * 0.012, (h(n * 5.3) - 0.5) * 0.05, (v - 0.5) * amt * 2 - (v > 0.94 ? 0.09 : 0)); return C; };
+  const ramp = o.ramp === false ? null : { w: 6, stairs: 1.3, wall: 0.7, slope: 0.2, x: 0, ...(o.ramp ?? {}) };
+  const RW = ramp ? ramp.w / 2 + ramp.stairs + ramp.wall : 0;
+  for (let i = 0; i < nC; i++) {
+    const ya = i * ch, yb = ya + ch, w = hw(ya), wn = i + 1 < nC ? hw(yb) : 0;
+    for (let s = 0; s < 4; s++) {   // the four faces: +z, +x, −z, −x (rotate the local frame)
+      const R = (u, y, d) => s === 0 ? [u, y, d] : s === 1 ? [d, y, -u] : s === 2 ? [-u, y, -d] : [-d, y, u];
+      let u = -w + (i % 2) * 0.55; const parts = [-w];
+      while (u < w - 0.4) { u += 1.05 + h(i * 977 + s * 131 + parts.length) * 0.9; parts.push(Math.min(u, w)); } if (parts[parts.length - 1] < w) parts.push(w);
+      for (let k = 0; k < parts.length - 1; k++) { const u0 = parts[k], u1 = parts[k + 1]; if (s === 0 && ramp && yb < H - 0.01 && Math.abs((u0 + u1) / 2 - ramp.x) < RW - 0.4) continue;   // hidden behind the ramp
+        quad(R(u0, ya, w), R(u1, ya, w), R(u1, yb, w), R(u0, yb, w), tint(cc.cas, i * 7919 + s * 613 + k)); }
+      if (wn) { const tc = tint(cc.cas, i * 31 + s * 17 + 5, 0.05).clone().lerp(cc.core, 0.35); quad(R(-w, yb, w), R(w, yb, w), R(wn, yb, wn), R(-wn, yb, wn), tc); }   // tread of the step
+    }
+  }
+  const wt = hw(H - ch), bl = 1.4, bd = 1.1, nx = Math.ceil(2 * wt / bl), nz = Math.ceil(2 * wt / bd);
+  for (let j = 0; j < nz; j++) { const za = -wt + j * bd, zb = Math.min(wt, za + bd), off = (j % 2) * 0.7;   // plateau: rows of core blocks, staggered
+    for (let i = -1; i < nx; i++) { const xa = Math.max(-wt, -wt + i * bl + off), xb = Math.min(wt, -wt + (i + 1) * bl + off); if (xb - xa < 0.05) continue; quad([xa, H, zb], [xb, H, zb], [xb, H, za], [xa, H, za], tint(cc.top, j * 4099 + i * 7 + 3, 0.06)); } }
+  const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); geo.setAttribute('color', new THREE.Float32BufferAttribute(col, 3)); geo.computeVertexNormals();
+  const pm = new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.92 }); mesh(g, geo, pm, 0, 0, 0, { cast: true });
+  const S = { g, H, base: B, hw, keep: [[x, z, B * 0.72]] };
+  const tri = [-wt, H, -wt, wt, H, wt, wt, H, -wt, -wt, H, -wt, -wt, H, wt, wt, H, wt];   // walk surface: the plateau
+  // ---- supply ramp on the +z face ----
+  if (ramp) { const zt = hw(H) - 0.02, L = H / ramp.slope, zf = zt + L, rw = ramp.w / 2, st = ramp.stairs, wl = ramp.wall, rx = ramp.x, batter = 0.12;
+    const rg = grp(g, rx, 0, 0), yAt = lz => clamp((zf - lz) / L) * H;
+    for (const sx of [-1, 1]) {   // outer wall faces as real geometry with a brick pattern (near shots), courses of mudbrick
+      const xo = sx * (rw + st + wl), sh = new THREE.Shape([new THREE.Vector2(zt, 0), new THREE.Vector2(zf, 0), new THREE.Vector2(zt, H)]), eg = new THREE.ExtrudeGeometry(sh, { depth: wl, bevelEnabled: false });
+      eg.rotateY(-Math.PI / 2); const me = mesh(rg, eg, mat('#94744F', { surf: 'brick' }), sx > 0 ? xo : xo + wl, 0, 0, {}); void me; }
+    // track (tafla) and the stairs
+    const tg = new THREE.PlaneGeometry(2 * rw, Math.hypot(L, H), 1, 1); tg.rotateX(-Math.PI / 2 + Math.atan2(H, L)); mesh(rg, tg, mat('#8E7656', { rough: 0.95 }), 0, H / 2 + 0.03, (zt + zf) / 2, { cast: false });
+    const nS = Math.max(4, Math.round(H / 0.2)), rise = H / nS, run = L / nS;
+    for (const sx of [-1, 1]) { const sp = [], sc = []; for (let i = 0; i < nS; i++) { const za = zf - i * run, ya = i * rise, x0 = sx * rw, x1 = sx * (rw + st), cl = new THREE.Color(shade('#B89C74', (h(i * 3 + sx) - 0.5) * 0.08));
+        const add = (a, b, c2, d) => { sp.push(...a, ...b, ...c2, ...a, ...c2, ...d); for (let k = 0; k < 6; k++) sc.push(cl.r, cl.g, cl.b); };
+        add([x0, ya, za], [x1, ya, za], [x1, ya + rise, za], [x0, ya + rise, za]); add([x0, ya + rise, za], [x1, ya + rise, za], [x1, ya + rise, za - run], [x0, ya + rise, za - run]); }
+      const sg = new THREE.BufferGeometry(); sg.setAttribute('position', new THREE.Float32BufferAttribute(sp, 3)); sg.setAttribute('color', new THREE.Float32BufferAttribute(sc, 3)); sg.computeVertexNormals();
+      mesh(rg, sg, new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.95, side: THREE.DoubleSide }), 0, 0.005, 0, { cast: false });
+      for (let zz = zf - 1.6; zz > zt + 1; zz -= 3.2) { const yy = yAt(zz); cyl(rg, 0.12, 0.14, 0.95, '#6A4A2E', sx * (rw + st * 0.62), yy - 0.15, zz, { seg: 7 }); cyl(rg, 0.2, 0.2, 0.03, '#5A4632', sx * (rw + st * 0.62), yy + 0.005, zz, { seg: 9, cast: false }); } }
+    const sl = Math.atan2(H, L);
+    for (let zz = zf - 0.8; zz > zt + 0.6; zz -= 1.6) { const yy = yAt(zz); box(rg, 2 * rw - 0.3, 0.12, 0.2, shade('#6E4E30', (h(zz) - 0.5) * 0.12), 0, yy - 0.05, zz, { rx: sl, cast: false }); }   // timber sleepers set in the clay
+    for (const sx of [-1, 1]) for (let zz = zf - 2; zz > zt + 1; zz -= 2.6) { const yy = yAt(zz); box(rg, wl + 0.08, 0.14, 0.42, '#A08460', sx * (rw + st + wl / 2), yy - 0.02, zz, { rx: sl, cast: false }); }   // coping bricks
+    const wx = rw + st + wl;
+    tri.push(...[[-wx, 0, zf], [wx, 0, zf], [wx, H, zt], [-wx, 0, zf], [wx, H, zt], [-wx, H, zt]].flatMap(([a, b, c2]) => [a + rx, b, c2]));
+    S.rampAt = (u, dx = 0) => W(rx + dx, lerp(0, H, clamp(u)) + 0.0, lerp(zf, zt, clamp(u))); S.rampFoot = [W(rx, 0, zf)[0], W(rx, 0, zf)[2]]; S.rampTop = [W(rx, 0, zt)[0], W(rx, 0, zt)[2]];
+    S.rampYaw = ry + Math.PI; S.rampLen = Math.hypot(L, H); S.keep.push([...S.rampFoot, 8], [(S.rampFoot[0] + S.rampTop[0]) / 2, (S.rampFoot[1] + S.rampTop[1]) / 2, L / 2 + 6]);
+  }
+  WALKSURF.push({ root: g, tri, k: 1 }); if (WALKSURF.length === 1) DEFER.unshift(_walkSurf);
+  // ---- working front: blocks of the next course levered in one by one ----
+  const P = o.place === false ? null : { at: [ramp ? ramp.x : 0, wt - 6], cols: 8, rows: 5, pre: 14, t0: 0, every: 2.4, slide: 1.4, ...(o.place ?? {}) };
+  S.placed = () => 0; S.slot = () => W(0, H, 0);
+  if (P) { const N = P.cols * P.rows, BW = 1.32, BD = 1.06, wg = dyn(grp(p ?? world, x, y0, z, ry)), tAt = i => i < P.pre ? -1e9 : P.t0 + (i - P.pre) * P.every;
+    const loc = i => { const c = i % P.cols, r = Math.floor(i / P.cols); return [P.at[0] + (c - (P.cols - 1) / 2) * BW, H, P.at[1] - r * BD]; };
+    const im = new THREE.InstancedMesh(G('pyrBlock', () => new RoundedBoxGeometry(1.28, ch - 0.02, 1.02, 1, 0.05)), new THREE.MeshStandardMaterial({ color: CO.top, roughness: 0.9, flatShading: true }), N);
+    im.frustumCulled = false; im.castShadow = im.receiveShadow = true; wg.add(dyn(im)); for (let i = 0; i < N; i++) im.setColorAt(i, new THREE.Color(tint(cc.top, i * 53 + 9, 0.06)));
+    const Mx = new THREE.Matrix4(), Qq = new THREE.Quaternion(), Sv = new THREE.Vector3(1, 1, 1), Pv = new THREE.Vector3(), Z0 = new THREE.Matrix4().makeScale(0, 0, 0);
+    tick(t => { for (let i = 0; i < N; i++) { const t1 = tAt(i); if (t < t1) { im.setMatrixAt(i, Z0); continue; } const [lx, , lz] = loc(i), u = clamp((t - t1) / P.slide), e = 1 - (1 - u) ** 2;
+        Pv.set(lx + (h(i * 7) - 0.5) * 0.04, H + (ch - 0.02) / 2 + 0.06 * (1 - sm01(clamp((t - t1 - P.slide * 0.8) / 0.2))) * (u > 0.8 ? 1 : 0), lz + 1.8 * (1 - e)); Qq.setFromAxisAngle(_AY, (h(i * 13) - 0.5) * 0.03 * (1 - e)); im.setMatrixAt(i, Mx.compose(Pv, Qq, Sv)); }
+      im.instanceMatrix.needsUpdate = true; });
+    for (let i = P.pre; i < N; i++) { const t1 = tAt(i) + P.slide; if (t1 > DUR + 1) break; const q = W(...loc(i)); sfx(t1, 'thud', 0.35); emit('dust', { at: [q[0], q[1] + 0.1, q[2]], t0: t1, t1: t1 + 0.1, burst: 4, size: 0.07, colors: ['#D8C8A4', '#C8B48C'], opacity: 0.25 }); }
+    S.placed = t => { let n = 0; for (let i = P.pre; i < N; i++) if (t >= tAt(i) + P.slide) n++; return n; }; S.slot = i => { const q = loc(i); return W(q[0], q[1] + ch, q[2]); }; S.slotT = tAt;
+    for (let k = 0; k < 4; k++) { const lx = P.at[0] + (k - 1.5) * 2.6, lz = P.at[1] - P.rows * BD - 1.2 - h(k) * 0.8;   // levers and a mortar trough at the front
+      _seg(wg, [lx, H + 0.02, lz], [lx + 0.4, H + 0.95, lz + 1.4], 0.045, 0.04, '#7A5A3A', { seg: 6 }); }
+    box(wg, 1.2, 0.3, 0.5, '#8A6A48', P.at[0] + P.cols * BW / 2 + 1.0, H, P.at[1], { surf: 'plank' }); box(wg, 1.05, 0.04, 0.38, '#E8E2D2', P.at[0] + P.cols * BW / 2 + 1.0, H + 0.24, P.at[1], { cast: false });   // gypsum mortar
+  }
+  S.count = t => (o.start ?? 0) + (o.rate ?? 0) * Math.max(0, t - (o.rateT0 ?? 0)) + S.placed(t);
+  // ---- limestone chips heaped along the base (and at the ramp foot) ----
+  if (o.debris !== false) { const parts = [];
+    for (let i = 0; i < 46; i++) { const s = i % 4, u = (h(i * 17 + 1) - 0.5) * B * 0.9, d = B / 2 + 2 + h(i * 29) * 9, r = 1.6 + h(i * 5) * 3.2;
+      const R2 = s === 0 ? [u, d] : s === 1 ? [d, -u] : s === 2 ? [-u, -d] : [-d, u]; if (ramp && s === 0 && Math.abs(u - ramp.x) < RW + r + 1) continue;
+      parts.push(new THREE.IcosahedronGeometry(r, 1).scale(1.3, 0.32, 1).translate(R2[0], 0, R2[1])); }
+    if (parts.length) { const dg = mergeGeometries(parts.map(q => { q.deleteAttribute('uv'); return q; })); mesh(g, dg, mat('#D2C29E', { rough: 1 }), 0, -0.15, 0, { cast: false }); } }
+  return S;
+}
+
+// sled(p, x, z, { kind: 'sledge', load: 'block' | false, block: { w: 1.2, h: 0.8, d: 1.15, color }, marks: true, ry, seed }) — Egyptian timber sledge (two runners with
+//   upturned noses, cross-bearers, a front deck for the man with the water jar), a limestone block lashed on with ropes over leather pads (marks: red-ochre levelling line,
+//   a cartouche and a gang sign on both sides), two hauling ropes made fast at the noses. → the group, with g.block, g.L, g.deckY, g.ropeAt(side) (local point, side ±1)
+function _sledge(p, x, z, o = {}) {
+  const g = dyn(grp(p ?? world, x, groundH(x, z), z, o.ry ?? 0)), L = 3.0, NC = { cast: false }, wd = o.color ?? '#8A6440', sd = o.seed ?? 3;
+  g.rotation.order = 'YXZ'; g.name = 'sledge'; Object.assign(g.userData, { prop: 'sledge', foot: [1.5, L] });
+  for (const sx of [-1, 1]) { box(g, 0.2, 0.24, L - 0.4, wd, sx * 0.52, 0, -0.2, { surf: 'plank' });   // runners with bent-up noses
+    for (let k = 0; k < 4; k++) { const a0 = k / 4 * 1.1, a1 = (k + 1) / 4 * 1.1, R = 0.55, P0 = [sx * 0.52, 0.12 + R - Math.cos(a0) * R, L / 2 - 0.4 + Math.sin(a0) * R], P1 = [sx * 0.52, 0.12 + R - Math.cos(a1) * R, L / 2 - 0.4 + Math.sin(a1) * R]; _seg(g, P0, P1, 0.11, 0.11, shade(wd, -0.04), { seg: 6 }); }
+    cyl(g, 0.05, 0.05, 0.22, '#5A3E26', sx * 0.52, 0.39, L / 2 - 0.02, { rz: Math.PI / 2, seg: 6, ...NC }); }   // peg for the rope
+  for (const zz of [-1.15, -0.55, 0.05, 0.6]) box(g, 1.46, 0.14, 0.18, shade(wd, (hash(zz + sd) - 0.5) * 0.1), 0, 0.24, zz, { surf: 'plank' });
+  for (let i = 0; i < 4; i++) box(g, 1.3, 0.05, 0.16, shade(wd, 0.05 + (hash(i * 3 + sd) - 0.5) * 0.08), 0, 0.38, 0.86 + i * 0.17, NC);   // front deck
+  box(g, 1.3, 0.14, 0.18, shade(wd, -0.06), 0, 0.24, 1.1, {});
+  const deckY = 0.43, B = { w: 1.2, h: 0.8, d: 1.15, color: '#DCCFB0', ...(o.block ?? {}) }; let blk = null;
+  if (o.load !== false) { blk = grp(g, 0, 0.38, -0.3); bbox(blk, B.w, B.h, B.d, 0.04, B.color, 0, 0, 0, {});
+    for (let i = 0; i < 5; i++) box(blk, 0.012, 0.18 + hash(i + sd) * 0.3, 0.06, shade(B.color, -0.1), (hash(i * 7 + sd) - 0.5) * B.w * 0.8, B.h * 0.3, B.d / 2 + 0.003, { rz: 0.3 + hash(i) * 0.4, ...NC });   // chisel strokes
+    for (const zz of [-B.d * 0.28, B.d * 0.28]) { const pts = [[-0.62, -0.02], [-B.w / 2 - 0.03, 0.15], [-B.w / 2 - 0.02, B.h + 0.02], [B.w / 2 + 0.02, B.h + 0.02], [B.w / 2 + 0.03, 0.15], [0.62, -0.02]];   // lashing over pads
+      for (let k = 0; k < pts.length - 1; k++) _seg(blk, [pts[k][0], pts[k][1], zz], [pts[k + 1][0], pts[k + 1][1], zz], 0.022, 0.022, '#B8945C', { seg: 5, ...NC });
+      for (const sx of [-1, 1]) rbox(blk, 0.1, 0.14, 0.2, '#6A4A30', sx * (B.w / 2 + 0.02), B.h - 0.1, zz, { rf: 0.4 }); }
+    if (o.marks !== false) { const tx = canvasTex(256, 128, (c, w, hh) => { c.clearRect(0, 0, w, hh); c.strokeStyle = c.fillStyle = '#A3402A'; c.lineWidth = 5; c.lineCap = 'round';
+        c.globalAlpha = 0.85; c.beginPath(); c.moveTo(6, 22); c.lineTo(w - 6, 20); c.stroke();   // levelling line
+        c.beginPath(); c.ellipse(70, 74, 50, 30, 0, 0, TAU); c.stroke(); c.beginPath(); c.moveTo(126, 50); c.lineTo(126, 98); c.stroke();   // cartouche (on its side) + tie
+        c.lineWidth = 3; c.beginPath(); c.arc(35, 74, 11, 0, TAU); c.stroke(); for (const yy of [69, 74, 79]) { c.beginPath(); c.moveTo(27, yy); c.lineTo(43, yy); c.stroke(); }   // sieve
+        const chick = (cx) => { c.beginPath(); c.ellipse(cx, 78, 8, 6, 0, 0, TAU); c.fill(); c.beginPath(); c.arc(cx + 7, 69, 4, 0, TAU); c.fill(); c.beginPath(); c.moveTo(cx - 2, 84); c.lineTo(cx - 4, 92); c.moveTo(cx + 3, 84); c.lineTo(cx + 3, 92); c.stroke(); };
+        chick(58); chick(102); c.beginPath(); c.moveTo(70, 88); c.bezierCurveTo(76, 66, 82, 92, 88, 70); c.stroke(); c.beginPath(); c.moveTo(86, 70); c.lineTo(84, 64); c.moveTo(89, 70); c.lineTo(91, 64); c.stroke();   // chick, viper, chick
+        c.lineWidth = 6; for (const [a, b2, d] of [[160, 50, 40], [182, 44, 52], [205, 58, 30], [226, 46, 48]]) { c.beginPath(); c.moveTo(a, b2); c.quadraticCurveTo(a + 8, b2 + d / 2, a - 2, b2 + d); c.stroke(); } });   // gang sign in hieratic strokes
+      for (const sx of [-1, 1]) { const m = mesh(blk, G('blkMark', () => new THREE.PlaneGeometry(0.9, 0.45)), new THREE.MeshStandardMaterial({ map: tx, transparent: true, roughness: 0.9, polygonOffset: true, polygonOffsetFactor: -2 }), sx * (B.w / 2 + 0.004), B.h * 0.55, 0, { ry: sx * Math.PI / 2, cast: false }); m.renderOrder = 2; } } }
+  g.block = blk; g.L = L; g.deckY = deckY; g.ropeAt = s => [s * 0.52, 0.5, L / 2 + 0.02];
+  return g;
+}
+// haul(sledge, { crew: [rig …], pts: [[x, z] …], t0, speed: 0.45, ramp: 0.8, gap: 1.15, lead: 2.6, spread: 0.65, water: rig, pour: [t0, t1], wet: true, chant: true, sound: true })
+//   A gang drags a sledge along pts (sand, then up a ramp: groundH incl. walk surfaces, the sledge pitches with the slope): the crew walks ahead in two files, one on each
+//   rope, leaning into it, both hands on the rope at the chest, heaving in rhythm (a 'heave' call every 1.6 s); the ropes run from the sledge noses through every hand.
+//   water: a man rides on the front deck and pours water from a jar onto the sand in front of the runners (pour window), which leaves a dark wet strip that dries
+//   slowly (the Djehutihotep painting; wet sand halves the pull). Pure in t. → { tEnd, front(t) (metres the nose has gone), at(t) → [x, y, z] }
+function haul(sl, o = {}) {
+  const crew = o.crew ?? [], pts = o.pts, t0 = o.t0 ?? 0, v = o.speed ?? 0.45, ra = o.ramp ?? 0.8, gap = o.gap ?? 1.15, lead = o.lead ?? 2.6, spr = o.spread ?? 0.65;
+  const P = new Path(pts), L = P.len, nb = Math.ceil(crew.length / 2), ext = lead + nb * gap + 2, a = pts[pts.length - 2], b = pts[pts.length - 1], dl = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1;
+  const E = new Path([...pts, [b[0] + (b[0] - a[0]) / dl * ext, b[1] + (b[1] - a[1]) / dl * ext]]), yaw0 = (() => { const d = P.dir(0); return Math.atan2(d.x, d.z); })();
+  const tEnd = t0 + L / v + ra; sl.position.set(pts[0][0], groundH(pts[0][0], pts[0][1]), pts[0][1]); sl.rotation.y = yaw0;
+  walk(sl, pts, { t0, speed: v, ramp: ra }); noHit(sl);
+  const half = sl.L / 2, pitchOf = (X, Z, yw) => { const fx = Math.sin(yw), fz = Math.cos(yw), hf = groundH(X + fx * half, Z + fz * half), hb = groundH(X - fx * half, Z - fz * half); return [Math.atan2(hf - hb, sl.L), Math.min(hf, hb) + Math.abs(hf - hb) * 0.5]; };
+  late(t => { const [pi, yy] = pitchOf(sl.position.x, sl.position.z, sl.rotation.y); sl.rotation.x = -pi; sl.position.y = yy; });
+  const travelled = t => { const X = sl.position.x, Z = sl.position.z; let best = 0, bd = 1e9; for (let s = 0; s <= L; s += 0.2) { const q = P.at(s), d = (q.x - X) ** 2 + (q.z - Z) ** 2; if (d < bd) { bd = d; best = s; } } return best; };
+  // crew: two files, one per rope
+  const files = [[], []];
+  crew.forEach((f, i) => { const sd = i % 2 ? 1 : -1, slot = Math.floor(i / 2), ah = lead + slot * gap + half, cp = [];
+    const nS = Math.max(2, Math.ceil(L)); for (let k = 0; k <= nS; k++) { const s = L * k / nS, q = E.at(s + ah), d = E.dir(s + ah), l = Math.hypot(d.x, d.z) || 1; cp.push([q.x + d.z / l * spr * sd, q.z - d.x / l * spr * sd]); }
+    if (!f.root.parent) world.add(f.root); f.root.position.set(cp[0][0], groundH(cp[0][0], cp[0][1]), cp[0][1]); f.root.rotation.y = yaw0;
+    walk(f, cp, { t0, speed: v, ramp: ra }); files[sd > 0 ? 1 : 0].push(f);
+    const ph = hash(i * 3.7) * 0.25;
+    (f.fx ??= []).push((t, S) => { const e = env3(t, (o.pose?.[0] ?? -1e9), (o.pose?.[1] ?? 1e9), 0.4, 0.4); if (!e) return; const hv = 0.5 + 0.5 * Math.sin(TAU * ((t - t0) / 1.6 + ph)), on = t > t0 - 0.3 && t < tEnd + 0.3 ? 1 : 0.4;
+      S.crx += (0.3 + 0.12 * hv * on) * e; S.nrx -= 0.22 * e; S.hrx = (S.hrx ?? 0) + 0.05 * e;
+      const A = sd > 0 ? { ras: -0.95, rae: -1.25, raz: 0.18, las: -1.05, lae: -1.05, laz: -0.42 } : { las: -0.95, lae: -1.25, laz: -0.18, ras: -1.05, rae: -1.05, raz: 0.42 };
+      for (const k in A) if (S[k] != null) S[k] = lerp(S[k], A[k], e); _hset(S, 'L', HANDP.grip, e); _hset(S, 'R', HANDP.grip, e); }); });
+  const hv = new THREE.Vector3();
+  files.forEach((F, j) => { const sd = j ? 1 : -1, side = sd > 0 ? 'R' : 'L';
+    let prev = t => { sl.updateWorldMatrix(true, false); return sl.localToWorld(v3(...sl.ropeAt(sd))).toArray(); };
+    for (const f of F) { const cur = t => { f.root.updateWorldMatrix(true, true); return handAt(f, side, hv).toArray(); }; rope(prev, cur, { sag: 0.12, r: 0.022, color: '#B8945C', segs: 8 }); prev = cur; }
+    const last = F[F.length - 1]; if (last) rope(prev, t => { const P2 = last.root.position, yw = last.root.rotation.y; return [P2.x + Math.sin(yw) * 0.9 - Math.cos(yw) * 0.15 * sd, groundH(P2.x, P2.z) + 0.03, P2.z + Math.cos(yw) * 0.9]; }, { sag: 0.05, r: 0.022, color: '#B8945C', segs: 6 }); });
+  // the water man on the front deck
+  if (o.water) { const f = o.water, [p0, p1] = o.pour ?? [t0 - 2, tEnd], jr = jar(world, 0, -40, 0, { kind: 'crock', h: 0.4, r: 0.13, color: '#B4643C', water: 0 }); noHit(f); sl.waterJar = jr; dyn(f.root); if (!f.root.parent) world.add(f.root);
+    late(t => { sl.updateWorldMatrix(true, false); const q = sl.localToWorld(v3(0, sl.deckY, sl.L / 2 - 0.42)); f.root.position.copy(q); f.root.rotation.set(0, sl.rotation.y, 0); });
+    (f.fx ??= []).push((t, S) => { const e = env3(t, p0 - 0.5, p1 + 0.4, 0.4, 0.4); S.crx += 0.2 * e; S.nrx += 0.15 * e; S.las = lerp(S.las, -0.62, e); S.ras = lerp(S.ras, -0.62, e); S.lae = lerp(S.lae, -0.95, e); S.rae = lerp(S.rae, -0.95, e);
+      S.laz = lerp(S.laz, -0.32, e); S.raz = lerp(S.raz, 0.32, e); _hset(S, 'L', HANDP.grip, e); _hset(S, 'R', HANDP.grip, e); });
+    const ha = new THREE.Vector3(), hb2 = new THREE.Vector3(), tilt = t => 0.2 + 0.85 * env3(t, p0, p1, 0.4, 0.4) + 0.06 * Math.sin(t * 2.3);
+    void ha; void hb2; late(t => { const yw = f.root.rotation.y; jr.g.position.copy(f.root.position).add(v3(Math.sin(yw) * 0.42, 0.92, Math.cos(yw) * 0.42)); jr.g.rotation.set(tilt(t), yw, 0, 'YXZ'); });   // held in front of the belly
+    const mouth = t => { const yw = sl.rotation.y, d = sl.L / 2 + 0.38; return [sl.position.x + Math.sin(yw) * d, sl.position.y + sl.deckY + 1.12, sl.position.z + Math.cos(yw) * d]; };   // from the sledge (set by walk() this frame), not from the jar (placed later in the frame)
+    stream(mouth, p0 + 0.3, p1, { dir: t => { const yw = sl.rotation.y; return [Math.sin(yw) * 0.5, -0.4, Math.cos(yw) * 0.5]; }, speed: 1.2, n: 240, size: 0.06, life: 0.7, color: '#BFE2F2', opacity: 0.9, spread: 0.07 });
+    emit('spray', { at: t => { const yw = sl.rotation.y, X = sl.position.x + Math.sin(yw) * (half + 0.55), Z = sl.position.z + Math.cos(yw) * (half + 0.55); return [X, groundH(X, Z) + 0.03, Z]; }, t0: p0 + 0.6, t1: p1, rate: 10, size: 0.04 });
+    sfx(p0 + 0.3, 'spray', 0.3); AUDIO.hits[AUDIO.hits.length - 1].dur = Math.max(0.5, p1 - p0 - 0.3);
+    if (o.wet !== false) { const ds = 0.25, n = Math.ceil((L + half + 1.4) / ds), tex = canvasTex(64, 8, (c, w, hh) => { const gr = c.createLinearGradient(0, 0, w, 0); gr.addColorStop(0, 'rgba(255,255,255,0)'); gr.addColorStop(0.18, 'rgba(255,255,255,0.9)'); gr.addColorStop(0.82, 'rgba(255,255,255,0.9)'); gr.addColorStop(1, 'rgba(255,255,255,0)'); c.fillStyle = gr; c.fillRect(0, 0, w, hh); });
+      const wmat = new THREE.MeshStandardMaterial({ color: '#FFFFFF', alphaMap: tex, transparent: true, depthWrite: false, roughness: 0.32, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4 });
+      const im = new THREE.InstancedMesh(G('wetQ', () => new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2)), wmat, n); im.frustumCulled = false; im.castShadow = false; im.receiveShadow = true; im.renderOrder = 1; world.add(dyn(im));
+      const Mx = new THREE.Matrix4(), Qq = new THREE.Quaternion(), Sv = new THREE.Vector3(), Pv = new THREE.Vector3(), Z0 = new THREE.Matrix4().makeScale(0, 0, 0), wet = new THREE.Color('#6E5232'), dry = new THREE.Color('#B89A6A'), cl = new THREE.Color(), tAtS = [];
+      tick(t => { const fr = travelled(t) + half + 0.55 * clamp((t - p0 - 0.6) / 0.4); for (let i = 0; i < n; i++) { const s = i * ds; if (t < p0 + 0.6 || s > fr) { im.setMatrixAt(i, Z0); continue; }
+          if (s > L + half + 1.2) { im.setMatrixAt(i, Z0); continue; }
+          const q = E.at(s), d = E.dir(s); Qq.setFromAxisAngle(_AY, Math.atan2(d.x, d.z)); Pv.set(q.x, groundH(q.x, q.z) + 0.012, q.z); Sv.set(1.25 + 0.2 * (hash(i * 3.3) - 0.5), 1, ds * 1.15);
+          im.setMatrixAt(i, Mx.compose(Pv, Qq, Sv)); const age = clamp((fr - s) / 40); im.setColorAt(i, cl.copy(wet).lerp(dry, 0.15 + 0.35 * age)); }
+        im.instanceMatrix.needsUpdate = true; if (im.instanceColor) im.instanceColor.needsUpdate = true; }); } }
+  if (o.sound !== false) { sfx(t0, 'sledge', 0.45); AUDIO.hits[AUDIO.hits.length - 1].dur = Math.max(1, tEnd - t0); }
+  if (o.chant !== false) for (let tt = t0; tt < tEnd; tt += 1.6) sfx(tt, 'heave', 0.4);
+  return { tEnd, front: t => travelled(t) + half, at: () => sl.position.toArray() };
+}
+
+// mudbrick(p, x, z, { kind: 'house' | 'bakery' | 'gallery' | 'tomb', w, d, h, ry, color, seed, style: 'mastaba' | 'pyramid' | 'dome' (tomb), fire: [t0, t1] (bakery) })
+//   Buildings of the pyramid builders' town (Heit el-Ghurab) and its cemetery, sun-dried mudbrick: plastered walls with the bricks showing where the plaster fell,
+//   flat roofs of palm logs under reed mats and mud, door with a wooden lintel, high vents, jars by the door. bakery: open court with bell-shaped bread moulds (bedja)
+//   stacked over glowing embers (smoke from fire[0]), dough vats, a saddle quern and racks of bread. gallery: long workers' barracks with a colonnade inside and roof vents.
+//   tomb: a worker's tomb — mastaba (battered, white plastered, false-door niche, offering basin), little pyramid or beehive dome. → { g, door: [x, z], keep: [x, z, r] }
+function mudbrick(p, x, z, o = {}) {
+  const k = o.kind ?? 'house', ry = o.ry ?? 0, sd = o.seed ?? 3, h = n => hash(n * 2.17 + sd * 5.3), g = stat(grp(p ?? world, x, groundH(x, z), z, ry)), NC = { cast: false };
+  const Pl = o.color ?? '#B8956A', Br = '#8E6A46', Wd = '#6E4E30', cs = Math.cos(ry), sn = Math.sin(ry), Wd2 = (lx, lz) => [x + lx * cs + lz * sn, z - lx * sn + lz * cs];
+  g.name = 'mudbrick'; g.userData.bld = k !== 'tomb';
+  const patches = (wx, wy, wz, w, hh, face, n) => { for (let i = 0; i < n; i++) { const pw = 0.4 + h(i * 3 + face) * 0.7, ph = 0.25 + h(i * 5 + face) * 0.4, u = (h(i * 7 + face) - 0.5) * (w - pw), v = 0.2 + h(i * 11 + face) * (hh - ph - 0.4);
+      box(g, face < 2 ? pw : 0.02, ph, face < 2 ? 0.02 : pw, Br, wx + (face < 2 ? u : 0), wy + v, wz + (face < 2 ? 0 : u), { surf: 'brick', cast: false }); } };
+  if (k === 'tomb') { const st = o.style ?? ['mastaba', 'pyramid', 'dome'][Math.floor(h(1) * 3)], Wt = '#E6DCC6';
+    if (st === 'mastaba') { const w = o.w ?? 2.2, d = o.d ?? 1.5, hh = o.h ?? 1.15; tbox(g, w * 0.86, w, d * 0.82, d, hh, Wt, 0, 0, 0, { surf: 'plaster' }); box(g, 0.4, 0.75, 0.06, '#8A7A60', 0, 0.08, d / 2 - 0.05, NC); box(g, 0.24, 0.62, 0.08, '#4A3A2A', 0, 0.1, d / 2 - 0.04, NC);
+      box(g, 0.44, 0.08, 0.3, '#CFC2A4', 0, 0, d / 2 + 0.25, {}); box(g, 0.3, 0.02, 0.18, '#7A6A50', 0, 0.075, d / 2 + 0.25, NC); }
+    else if (st === 'pyramid') { const s = o.w ?? 1.7; mesh(g, G('tombPyr' + s, () => new THREE.ConeGeometry(s * 0.72, s, 4).rotateY(Math.PI / 4)), mat(Wt, { surf: 'plaster' }), 0, s / 2, 0, {}); box(g, s * 1.04, 0.28, s * 1.04, '#CFC2A4', 0, 0, 0, { surf: 'brick' }); box(g, 0.26, 0.42, 0.06, '#4A3A2A', 0, 0.3, s * 0.36, NC); }
+    else { const r = (o.w ?? 1.6) / 2; mesh(g, G('tombDome' + r, () => new THREE.SphereGeometry(r, 12, 6, 0, TAU, 0, Math.PI / 2)), mat('#B89870', { surf: 'brick' }), 0, 0.3, 0, {}); cyl(g, r, r, 0.3, '#B89870', 0, 0, 0, { seg: 12, surf: 'brick' }); box(g, 0.28, 0.36, 0.06, '#4A3A2A', 0, 0.05, r - 0.02, NC); }
+    for (let i = 0; i < 3; i++) { const a = h(i + 20) * TAU, rr = 1.2 + h(i + 30) * 0.6; cyl(g, 0.06, 0.08, 0.16, '#A85A34', Math.cos(a) * rr, 0, Math.sin(a) * rr, { seg: 7 }); }   // offering pots
+    return { g, door: Wd2(0, 1.6), keep: [x, z, 2.2] }; }
+  const w = o.w ?? (k === 'gallery' ? 8 : k === 'bakery' ? 6 : 5.5), d = o.d ?? (k === 'gallery' ? 26 : k === 'bakery' ? 5 : 4.5), hh = o.h ?? (k === 'bakery' ? 1.9 : 2.7), t = 0.45;
+  for (const [wx, wz, ww, wd2, f] of [[0, d / 2 - t / 2, w, t, 0], [0, -d / 2 + t / 2, w, t, 1], [w / 2 - t / 2, 0, t, d - 2 * t, 2], [-w / 2 + t / 2, 0, t, d - 2 * t, 3]]) {
+    if (f === 0) { const dw = k === 'bakery' ? 1.6 : 1.0, sw = (w - dw) / 2; for (const sx of [-1, 1]) box(g, sw, hh, t, Pl, sx * (dw / 2 + sw / 2), 0, wz, { surf: 'plaster' }); box(g, dw + 0.3, 0.16, t + 0.1, Wd, 0, Math.min(hh, 2.0), wz, {}); if (hh > 2.16) box(g, dw, hh - 2.16, t, Pl, 0, 2.16, wz, { surf: 'plaster' });
+      box(g, dw, 0.06, t, '#7A6448', 0, 0, wz, NC); patches(0, 0, wz + t / 2 + 0.012, w, hh, 0, 3); }
+    else { box(g, ww, hh, wd2, Pl, wx, 0, wz, { surf: 'plaster' }); if (f === 1) patches(0, 0, wz - t / 2 - 0.012, w, hh, 1, 2); else patches(wx + (f === 2 ? 1 : -1) * (t / 2 + 0.012), 0, 0, d, hh, f, 2); }
+    if (f >= 2) for (let i = 0; i < Math.floor(d / 3); i++) box(g, t + 0.04, 0.22, 0.5, '#3A2C20', wx, hh - 0.42, -d / 2 + 1.5 + i * 3, NC); }   // high vents
+  box(g, w, 0.14, t, shade(Pl, 0.05), 0, hh, d / 2 - t / 2, NC);
+  if (k !== 'bakery') { const nL = Math.floor(w / 0.3); for (let i = 0; i < nL; i++) cyl(g, 0.11, 0.11, d - 0.2, shade('#7A5A36', (h(i) - 0.5) * 0.15), -w / 2 + 0.15 + i * (w - 0.3) / (nL - 1), hh - 0.06 - (d - 0.2) / 2, 0, { rx: Math.PI / 2, seg: 6, cast: true });   // palm-log roof
+    box(g, w - 0.1, 0.12, d - 0.1, '#A88A5E', 0, hh + 0.08, 0, { surf: 'plaster' }); for (let i = 0; i < 6; i++) box(g, 0.5, 0.06, 0.8, '#C8AE78', (h(i + 40) - 0.5) * (w - 1), hh + 0.2, (h(i + 50) - 0.5) * (d - 1.2), NC);   // reed bundles
+    for (let i = 0; i < (k === 'gallery' ? 5 : 1); i++) box(g, 0.7, 0.35, 0.7, '#9A7C54', (h(i + 60) - 0.5) * w * 0.4, hh + 0.2, -d / 2 + (i + 0.6) * d / 5.2, { surf: 'plaster' }); }
+  else { for (let i = 0; i < 5; i++) cyl(g, 0.09, 0.09, w * 0.5, '#7A5A36', -w * 0.22, hh - 0.04 - w * 0.25, -d / 2 + 0.5 + i * 0.28, { rz: Math.PI / 2, seg: 6 });   // half roof over the back
+    box(g, w * 0.5, 0.08, 1.4, '#C8AE78', -w * 0.22, hh + 0.05, -d / 2 + 1.1, NC); }
+  for (let i = 0; i < 3; i++) { const jx = w / 2 - 0.3 - i * 0.32 + (k === 'bakery' ? -1.4 : 0); cyl(g, 0.1, 0.14, 0.42 + h(i) * 0.1, '#A85A34', jx, 0, d / 2 + 0.28, { seg: 9 }); cyl(g, 0.07, 0.07, 0.04, '#8A4428', jx, 0.44, d / 2 + 0.28, { seg: 9, ...NC }); }   // jars by the door
+  if (k === 'gallery') for (let i = 0; i < Math.floor(d / 3.2); i++) { const zz = -d / 2 + 1.8 + i * 3.2; box(g, 0.45, 0.2, 0.45, '#BFB08E', 0, 0, zz, {}); cyl(g, 0.12, 0.13, hh - 0.2, '#6E4E30', 0, 0.2, zz, { seg: 8 }); }
+  if (k === 'bakery') { const fire = o.fire ?? [-1, 1e9];
+    for (let i = 0; i < 7; i++) { const bx = -w / 2 + 0.9 + (i % 4) * 0.62, bz = -0.6 + Math.floor(i / 4) * 0.7;   // bread moulds over embers
+      cyl(g, 0.17, 0.08, 0.34, '#A0583A', bx, 0.1, bz, { seg: 9, rx: 0.15 * (h(i) - 0.5) }); cyl(g, 0.18, 0.18, 0.03, '#8A4428', bx, 0.44, bz, { seg: 9, ...NC }); }
+    box(g, 2.6, 0.1, 1.5, '#2A1A12', -w / 2 + 1.85, 0, -0.25, NC); const em = box(g, 2.4, 0.04, 1.3, '#FF6A1A', -w / 2 + 1.85, 0.08, -0.25, { em: '#FF5A10', ei: 1.4, ...NC }); void em;
+    const sq = Wd2(-w / 2 + 1.85, -0.25); emit('steam', { at: [sq[0], groundH(x, z) + 0.5, sq[1]], t0: fire[0], t1: fire[1], rate: 3, size: 0.12 });
+    for (let i = 0; i < 2; i++) { cyl(g, 0.42, 0.32, 0.55, '#B06A40', w / 2 - 1.0, 0, -d / 2 + 1.0 + i * 1.0, { seg: 12 }); cyl(g, 0.36, 0.36, 0.02, '#E8D6AE', w / 2 - 1.0, 0.5, -d / 2 + 1.0 + i * 1.0, { seg: 12, ...NC }); }   // dough vats
+    box(g, 0.9, 0.2, 0.42, '#8A8070', w / 2 - 1.1, 0, 0.9, {}); rbox(g, 0.36, 0.1, 0.22, '#6A6258', w / 2 - 1.1, 0.2, 0.9, { rf: 0.5 });   // saddle quern
+    box(g, 1.6, 0.06, 0.4, Wd, -0.2, 1.1, -d / 2 + t + 0.25, {}); for (let i = 0; i < 4; i++) food(g, 'conebread', -0.75 + i * 0.36, 1.16, -d / 2 + t + 0.25, { still: true }); }
+  return { g, door: Wd2(0, d / 2 + 1.2), keep: [x, z, Math.hypot(w, d) / 2 + 1] };
+}
+
+// splint(rig, { side: 'L', t0: 0, t1, wrap: [a, b], sling: true }) — a broken forearm set the Old Kingdom way: two wooden splints along the forearm bound with linen
+//   bands (wrap: the bands appear one by one between a and b, e.g. while a doctor works on it), from t0 the arm is carried bent across the chest in a linen sling.
+function splint(f, o = {}) {
+  const sL = (o.side ?? 'L') === 'L', fa = sL ? f.foreL : f.foreR, t0 = o.t0 ?? 0, t1 = o.t1 ?? 1e9, [wa, wb] = o.wrap ?? [t0 - 1, t0 - 0.5], g = dyn(grp(fa, 0, 0, 0)), NC = { cast: false };
+  for (const sx of [-1, 1]) box(g, 0.025, 0.3, 0.05, '#B08A5A', sx * 0.075, -0.33, 0, NC);
+  const bands = []; for (let i = 0; i < 5; i++) { const b = cyl(g, 0.088, 0.088, 0.035, '#EEE8D8', 0, -0.32 + i * 0.065, 0, { seg: 10, ...NC }); dyn(b); bands.push(b); }
+  tick(t => { g.visible = t >= wa && t < t1 + 0.3; bands.forEach((b, i) => { b.visible = t >= wa + (wb - wa) * (i + 0.5) / 5; }); });
+  if (o.sling !== false) { const sg = dyn(grp(f.chest, 0, 0, 0)); plate(sg, [[-0.18, 0], [0.18, 0], [0.02, 0.26]], 0.02, '#E8E0CC', sL ? 0.04 : -0.04, 0.2, 0.17, { rx: Math.PI / 2, ...NC }); _seg(sg, [sL ? 0.1 : -0.1, 0.58, 0.1], [sL ? 0.16 : -0.16, 0.3, 0.16], 0.02, 0.02, '#E8E0CC', { seg: 5, ...NC });
+    tick(t => { sg.visible = t >= t0 && t < t1; });
+    (f.fx ??= []).push((t, S) => { const e = env3(t, t0, t1, 0.4, 0.4); if (!e) return; const A = sL ? { las: -0.45, lae: -1.75, laz: 0.32 } : { ras: -0.45, rae: -1.75, raz: -0.32 }; for (const k in A) if (S[k] != null) S[k] = lerp(S[k], A[k], e); }); }
+  return g;
+}
+FD.B.conebread = (b, o) => { const c = o.color ?? '#B87A3E', pr = [[0.001, 0], [0.085, 0], [0.09, 0.03], [0.07, 0.11], [0.04, 0.18], [0.012, 0.21], [0.001, 0.215]].map(([a, q]) => new THREE.Vector2(a, q));   // bedja loaf: bell-shaped, baked in a clay mould
+  mesh(b, G('coneBread', () => new THREE.LatheGeometry(pr, 12)), mat(c, { rough: 0.85 }), 0, 0, 0, {}); cyl(b, 0.086, 0.086, 0.012, '#E2C28A', 0, 0, 0, { seg: 12, cast: false }); for (let i = 0; i < 4; i++) box(b, 0.02, 0.01, 0.004, shade(c, -0.12), Math.cos(i * 1.6) * 0.07, 0.06 + i * 0.03, Math.sin(i * 1.6) * 0.07 - 0.003, { ry: i * 1.6, cast: false });
+  return { r: 0.09, w: 0.18, h: 0.215, inner: '#F0D8A8' }; };
+FD.B.beerjar = (b, o) => { const c = o.color ?? '#B4643C', pr = [[0.001, 0], [0.04, 0.0], [0.09, 0.06], [0.12, 0.17], [0.11, 0.28], [0.07, 0.35], [0.055, 0.37], [0.065, 0.4]].map(([a, q]) => new THREE.Vector2(a, q));   // Old Kingdom beer jar, Nile clay, mud stopper (open: true = foamy beer, no stopper)
+  mesh(b, G('beerJar', () => new THREE.LatheGeometry(pr, 14)), mat(c, { rough: 0.8 }), 0, 0, 0, {}); cyl(b, 0.122, 0.122, 0.02, shade(c, -0.1), 0, 0.2, 0, { seg: 14, cast: false });
+  if (o.open) cyl(b, 0.056, 0.056, 0.004, '#C8A24E', 0, 0.385, 0, { seg: 12, cast: false }); else ball(b, 0.07, '#8A7A62', 0, 0.39, 0, { detail: 1 }).scale.set(1, 0.6, 1);
+  return { r: 0.12, w: 0.24, h: 0.41, inner: '#B8862E', drink: true }; };
 // ---- ropes ----
 // rope(a, b, { sag, segs, r, color }) — a hanging rope between two points / rigs (hand) / objects, recomputed every frame; returns { mid(t) }
 function rope(a, b, o = {}) {
@@ -19407,6 +19659,8 @@ const COSTUME_BASE = {
   sailor1805: { shirt: '#E8E2D4', pants: '#E4DED0', shoes: '#B98A68', beard: 'stubble', hair: '#3A2A1E', hairStyle: 'short', soles: false },
   plaguedoctor: { shirt: '#23201C', pants: '#23201C', dress: '#23201C', skirtLen: 0.8, legs: '#1E1B18', shoes: '#1A1410', hair: '#2A2420', soles: false },
   peasant: { shirt: '#E2D8BE', pants: '#6A5238', shoes: '#C99A78', soles: false, beard: 'stubble', hair: '#4A3426', sleeves: 'long' },
+  egyptworker: { bare: 'all', skirt: '#ECE4CE', skirtLen: 0.26, shoes: '#9A6A44', hair: '#141210', hairStyle: 'buzz', soles: false },
+  egyptoverseer: { bare: 'all', skirt: '#F2EEE2', skirtLen: 0.5, shoes: '#C9A060', hair: '#141210', hairStyle: 'buzz', soles: false },
 };
 for (const k in COSTUME_BASE) { const { skin, ...rest } = COSTUME_BASE[k]; OUTFITS[k] ??= { costume: k, ...rest }; }   // char('you', { outfit: 'santa' }) keeps the character's skin
 
@@ -19702,6 +19956,27 @@ const COSTUMES = (() => {
       hide(f); const h = hat(f, 0.33), Fe = '#3A322A'; cyl(h, 0.29, 0.3, 0.025, Fe, 0, -0.03, 0.01, { seg: 14, rz: 0.08, rx: -0.05 }); cyl(h, 0.19, 0.21, 0.15, Fe, 0, -0.01, 0, { seg: 12 });
       cyl(h, 0.212, 0.212, 0.04, '#241E1A', 0, 0.0, 0, { seg: 12, ...NC }); box(h, 0.12, 0.03, 0.16, shade(Fe, -0.12), 0, 0.12, 0, { rz: 0.2, ...NC });
       if (K.lamp !== false) { const lo = typeof K.lamp === 'object' ? K.lamp : {}; DEFER.push(() => glow(0, 0, 0, { at: tt => { const P = worldAt(lens, [0, 0, 0.35], tt); return [P.x, P.y, P.z]; }, intensity: lo.intensity ?? 6.5, dist: lo.dist ?? 8, color: lo.color ?? '#FFC883', flicker: lo.flicker ?? 0.15, rampIn: 0.01 })); }
+    },
+    egyptworker(f, K) {   // v3.57 Old Kingdom labourer (pyramid builders, c. 2560 BC): short white linen kilt wrapped with the overlap in front, sash tied at the waist with hanging
+      // ends, bare chest, a cord with an amulet, bare feet, a linen kerchief over the head (headcloth: false = cropped hair only; a colour tints it)
+      const z = fz(f), sk = f.FC?.skull ? _hexOf(f.FC.skull) : '#B07850', Kl = K.skirt ?? '#ECE4CE', Sa = K.sash ?? '#D8CDB2';
+      plate(f.hips, [[-0.2, 0], [0.12, 0], [0.04, 0.3], [-0.2, 0.3]], 0.012, shade(Kl, 0.03), 0, -0.2, 0.168, { rx: Math.PI / 2, ...NC });
+      rbox(f.hips, 0.47, 0.06, 0.31, Sa, 0, 0.05, 0, { rf: 0.4 }); ball(f.hips, 0.035, Sa, 0.07, 0.07, 0.16, { detail: 0, ...NC }); for (const dx of [0.05, 0.09]) box(f.hips, 0.03, 0.14, 0.012, Sa, dx, -0.08, 0.165, { rz: (dx - 0.07) * 3, ...NC });
+      for (let i = 0; i < 9; i++) { const a = -1.2 + i * 0.3; ball(f.chest, 0.008, '#3A2A1E', Math.sin(a) * 0.14, 0.58 - Math.cos(a) * 0.05, Math.cos(a) * 0.14 + 0.01, { detail: 0, ...NC }); }
+      ball(f.chest, 0.022, K.amulet ?? '#3AA6A0', 0, 0.45, z + 0.008, { detail: 0, ...NC });
+      for (const ft of [f.footL, f.footR]) recol(ft, sk);
+      if (K.headcloth !== false) { hide(f); const hc = K.headcloth && K.headcloth !== true ? K.headcloth : '#EEE8D8', h = hat(f, 0.24); rbox(h, 0.45, 0.14, 0.46, hc, 0, -0.03, -0.01, { rf: 0.45 }); box(h, 0.44, 0.03, 0.03, shade(hc, -0.08), 0, 0.0, 0.215, NC);
+        rbox(h, 0.36, 0.24, 0.06, hc, 0, -0.27, -0.21, { rf: 0.4 }); ball(h, 0.04, shade(hc, -0.05), 0, 0.0, -0.24, { detail: 0, ...NC }); }
+    },
+    egyptoverseer(f, K) {   // v3.57 Old Kingdom overseer / scribe / doctor: longer pleated kilt with a starched apron, broad linen sash, shoulder-length black wig, collar of faience beads, armlets
+      const z = fz(f), Kl = K.skirt ?? '#F2EEE2';
+      for (let i = 0; i < 7; i++) box(f.hips, 0.008, 0.4, 0.01, shade(Kl, -0.07), -0.15 + i * 0.05, -0.42, 0.17, NC);
+      plate(f.hips, [[-0.1, 0], [0.1, 0], [0.14, 0.34], [-0.14, 0.34]], 0.014, shade(Kl, 0.04), 0, -0.22, 0.175, { rx: Math.PI / 2, ...NC });
+      rbox(f.hips, 0.48, 0.08, 0.32, '#E8E0CC', 0, 0.04, 0, { rf: 0.4 });
+      [[0.56, 0.34, '#3AA6A0'], [0.51, 0.4, '#E0B04A'], [0.46, 0.46, '#2A4C9A']].forEach(([y, w, c], i) => box(f.chest, w + 0.12, 0.045, 0.012, c, 0, y - 0.04, z + 0.003 + i * 0.001, NC));
+      for (const ua of [f.armL, f.armR]) box(ua, 0.17, 0.035, 0.17, '#E0B04A', 0, -0.12, 0, NC);
+      hide(f, true); const h = hat(f, 0.18); rbox(h, 0.46, 0.24, 0.46, '#141210', 0, -0.02, -0.02, { rf: 0.4 }); for (const sx of [-1, 1]) rbox(h, 0.1, 0.3, 0.16, '#141210', sx * 0.21, -0.3, -0.02, { rf: 0.4 }); rbox(h, 0.4, 0.32, 0.1, '#141210', 0, -0.32, -0.2, { rf: 0.4 });
+      for (const ft of [f.footL, f.footR]) box(ft, 0.18, 0.02, 0.06, '#C9A060', 0, -ANK + 0.06, 0.12, NC);
     },
     peasant(f, K) {   // v3.54 rural labourer c. 1800–1850 (England / France), dressed for wading: coarse linen shirt with an open neck and the sleeves rolled up, neckerchief,
       // brown waistcoat with horn buttons (men; K.waistcoat: false = none), patched trousers rolled above the knee, a rope belt, bare shins and feet with mud to the ankles,
@@ -22508,6 +22783,10 @@ const SND = (() => {
       slosh: (t, v, d = 0.8) => { if (!(d > 0) || !isFinite(d)) d = 0.8; for (let k = 0; k < 3; k++) nz(t + k * d / 3, 0.05, d / 5, d / 4, 0.16 * v, fx, 'lowpass', 900 - k * 150, 300 + ar() * 100, 2); },   // v3.47 liquid sloshing in a bucket / barrel
       gunrun: (t, v, d = 0.9) => { if (!(d > 0) || !isFinite(d)) d = 0.9; nz(t, 0.05, Math.max(0, d - 0.2), 0.15, 0.24 * v, fx, 'lowpass', 260, 120, 0.8); for (let k = 0; k < d * 11; k++) tone('sine', 68 + ar() * 26, t + k / 11 + ar() * 0.02, 0.003, 0.02, 0.09, 0.13 * v, fx, { to: 44, glide: 0.08 }); },   // v3.55 wooden trucks of a gun carriage rumbling over the planks
       felt: (t, v) => { nz(t, 0.08, 0.14, 0.3, 0.16 * v, fx, 'bandpass', 650, 1100, 0.8); nz(t + 0.05, 0.02, 0.05, 0.22, 0.07 * v, fx, 'lowpass', 300, 200, 0.8); },   // v3.55 heavy wet felt screen pushed aside
+      sledge: (t, v, d = 6) => { if (!(d > 0) || !isFinite(d)) d = 6; nz(t, 0.5, Math.max(0, d - 1), 0.5, 0.1 * v, fx, 'bandpass', 520, 0, 0.7); nz(t, 0.5, Math.max(0, d - 1), 0.5, 0.05 * v, fx, 'lowpass', 160, 0, 0.8);   // v3.57 wooden sledge dragged over sand / clay: hiss of the runners, a surge with every heave, creaking lashings
+        for (let tt = t + 0.4; tt < t + d - 0.5; tt += 1.6) { tone('sawtooth', 70 + ar() * 20, tt + 0.15, 0.05, 0.25, 0.2, 0.05 * v, fx, { to: 55, glide: 0.4, lp: 400 }); for (let k = 0; k < 2; k++) tone('sawtooth', 150 + ar() * 60, tt + 0.3 + k * 0.2, 0.03, 0.12, 0.08, 0.025 * v, fx, { to: 230 + ar() * 60, glide: 0.2, lp: 900 }); } },
+      heave: (t, v) => { for (let k = 0; k < 4; k++) { const f0 = 105 + ar() * 40, tk = t + ar() * 0.06; tone('sawtooth', f0, tk, 0.03, 0.14, 0.12, 0.06 * v, fx, { to: f0 * 0.82, glide: 0.25, lp: 750 + ar() * 300, q: 3 }); } nz(t, 0.02, 0.1, 0.12, 0.05 * v, fx, 'bandpass', 900, 0, 3); },   // v3.57 a gang's call on the pull ("hup!"), several voices
+      thud: (t, v) => { tone('sine', 62, t, 0.004, 0.04, 0.35, 0.3 * v, fx, { to: 38, glide: 0.3 }); nz(t, 0.005, 0.03, 0.2, 0.12 * v, fx, 'lowpass', 400, 120, 0.8); nz(t + 0.03, 0.02, 0.1, 0.3, 0.04 * v, fx, 'bandpass', 2400, 0, 0.6); },   // v3.57 a stone block settling into its bed, grit
       cart: (t, v, d = 4) => { if (!(d > 0) || !isFinite(d)) d = 4; nz(t, 0.4, Math.max(0, d - 0.8), 0.4, 0.08 * v, fx, 'lowpass', 220, 0, 0.8); const ts = []; for (let tt = t + 0.1; tt < t + d - 0.2; tt += 0.07 + ar() * 0.09) ts.push(tt); pulses(ts, 0.03, 0.12 * v, fx, 'bandpass', 1300, 2); },   // v3.47 iron-shod wheels on cobbles
       churchBell: (t, v, d = 4) => { if (!(d > 0) || !isFinite(d)) d = 4; for (const [r, a] of [[0.5, 0.5], [1, 1], [1.19, 0.45], [1.5, 0.3], [2, 0.35], [2.66, 0.18], [3.0, 0.1]]) tone('sine', 220 * r, t, 0.004, 0.05, d * (1.2 - r * 0.25), 0.16 * v * a, fx); },   // v3.47 church bell toll (v3.53.1: own key, so the v2.40.27 fight-cage/shop bell stays intact)
       hooves: (t, v, d = 2, p = 1) => { const r = p === 2 ? 7.5 : 5.2; for (let k = 0; k < d * r; k++) { const tk = t + k / r + (k % 2) * 0.04 + ar() * 0.012; tone('sine', 210 + ar() * 50, tk, 0.001, 0.01, 0.05, 0.12 * v, fx, { to: 110, glide: 0.04 }); nz(tk, 0.001, 0.005, 0.03, 0.12 * v, fx, 'bandpass', 1800, 0, 1.5); } }
@@ -22617,6 +22896,11 @@ const SND = (() => {
         every(a, b, 4.5, 3, t => nz(t, 0.7, 0.3, 1.2, 0.035 * v, amb, 'lowpass', 600, 300, 0.8)); every(a, b, 2.7, 2, t => tone('sine', 1500 + ar() * 500, t, 0.002, 0, 0.12, 0.018 * v, amb, { to: 900, glide: 0.07 })); },
       seabattle: (a, b, v) => { AMB.ocean(a, b, 0.8 * v); AMB.wind(a, b, 0.35 * v);   // v3.55 Age of Sail fleet action from outside: sea, wind in the rigging, broadsides rolling across the water
         every(a, b, 1.1, 1.6, t => { const n = ar() < 0.4 ? 3 + Math.floor(ar() * 5) : 1; for (let k = 0; k < n; k++) { const tk = t + k * (0.12 + ar() * 0.1); tone('sine', 62 + ar() * 20, tk, 0.003, 0.05, 1.5, 0.15 * v, amb, { to: 28, glide: 1.1 }); nz(tk, 0.01, 0.05, 1.4, 0.06 * v, amb, 'lowpass', 520, 90, 0.8); } }); },
+      worksite: (a, b, v) => { AMB.wind(a, b, 0.45 * v); bed(a, b, 0.03 * v, 'bandpass', 600, 0.8);   // v3.57 ancient building site in the desert: wind, a far crowd of workers, chisels and mallets on stone, a far gang's call, a kite overhead
+        every(a, b, 0.35, 0.5, t => { const f = 2600 + ar() * 1800; tone('triangle', f, t, 0.001, 0.005, 0.07, 0.012 * v, amb, { to: f * 0.96, glide: 0.05 }); });
+        every(a, b, 1.4, 1.8, t => nz(t, 0.005, 0.03, 0.15, 0.03 * v, amb, 'lowpass', 300, 120, 0.8));
+        every(a, b, 4, 4, t => { for (let k = 0; k < 6; k++) { const f0 = 100 + ar() * 50; tone('sawtooth', f0, t + ar() * 0.1, 0.05, 0.2, 0.2, 0.012 * v, amb, { to: f0 * 0.85, glide: 0.3, lp: 600 }); } });
+        every(a, b, 9, 8, t => tone('sine', 2400, t, 0.05, 0.35, 0.3, 0.01 * v, amb, { to: 1900, glide: 0.6 })); },
       cave: (a, b, v) => { tone('sine', 45, a, 0.6, Math.max(0, b - a - 1.2), 0.6, 0.035 * v, amb); bed(a, b, 0.02 * v, 'lowpass', 160);   // deep room, drips with echoes, distant rumble
         every(a, b, 1.6, 2.2, t => { const f = 1500 + ar() * 600; for (let e = 0; e < 3; e++) tone('sine', f, t + e * 0.19, 0.002, 0, 0.14, 0.035 * v * 0.45 ** e, amb, { to: f * 0.6, glide: 0.07 }); });
         every(a, b, 8, 8, t => nz(t, 0.8, 0.6, 1.8, 0.06 * v, amb, 'lowpass', 140, 70)); }
