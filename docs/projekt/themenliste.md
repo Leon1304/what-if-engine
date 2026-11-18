@@ -86,7 +86,7 @@ Du stehst als Maßstab im Bild, die Kamera fährt hoch/runter, ein Zähler (METE
 ### Worst Jobs in History WJ1–WJ8 (Kategorie History, Du-Perspektive, 38–45 s)
 „What if you had this job for one day?“ Schicht-Uhr als Zähler (SHIFT ENDS IN), Faktenkarte mit Quelle, Mythos-Karte nur bei echtem Mythos. Leicht humorvoll, wo es passt (Erzähler genervt), ernst bei Kindern und Tod. Braucht Mittelalter-/Viktorianik-Bausteine (Kleidung, Gassen, Kanäle).
 - ★ WJ1 What if you were a gong farmer for one night? – Tudor-England, Latrinen nachts leeren, gut bezahlt, durfte nur nachts arbeiten; Gestank-Zähler. ✅ auf GitHub (gong-farmer, 16.11.)
-- ★ WJ2 What if you were the King's Groom of the Stool? – Henry VIII., hilft dem König auf dem Klo, aber einer der mächtigsten Posten am Hof; Twist: alle beneiden dich.
+- ★ WJ2 What if you were the King's Groom of the Stool? – Henry VIII., hilft dem König auf dem Klo, aber einer der mächtigsten Posten am Hof; Twist: alle beneiden dich. ✅ auf GitHub (groom-of-the-stool, 18.11.)
 - WJ3 What if you were a plague doctor in 1656? – Rom/Neapel, Schnabelmaske mit Kräutern, Mythos „Maske schützte“ → FALSE (Wachsmantel half eher); Maske erst im 17. Jh. ✅ auf GitHub (plague-doctor-1656, 17.11.)
 - WJ4 What if you were a Victorian sewer hunter? – Londoner „Toshers“, suchen Münzen im Kanal, Ratten, Gasblasen; Mythos Riesen-Kanalschweine → FALSE.
 - WJ5 What if you were a leech collector? – Watet in Sümpfen, Blutegel beißen ins Bein; 1800er, Ärzte brauchten Millionen.

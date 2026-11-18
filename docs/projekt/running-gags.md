@@ -76,6 +76,7 @@ Wird vom /whatif-Skill vor jedem Video gelesen und danach aktualisiert.
 | asteroid-la (Einzelvideo, Miniatur-/Tilt-Shift-Look, gerendert 15.11.) | orange |
 | how-high-can-you-go (GV1, Erklärvideo, gerendert 17.11.) | yellow |
 | gong-farmer (WJ1, History, gerendert 16.11.) | lime |
+| groom-of-the-stool (WJ2, History, gerendert 18.11.) | purple |
 | plague-doctor-1656 (WJ3, History, ernst, gerendert 17.11.) | green |
 
 ## Dr. Steve (nur Serien)
@@ -287,6 +288,7 @@ MB1 Megalodon in your pool ✔ gebaut → Abstimmung: A T. rex in the city · B 
 - asteroid-la (15.11.): „And you’re stuck in traffic.“ · „The rock isn’t what gets you. The air is.“ · „Six thousand Hiroshimas, in one parking lot.“ · „L.A. traffic just saved your life.“
 - how-high-can-you-go (GV1, 17.11.): „Your spit.“ · „Your balloons quit next.“ · „Bold plan.“
 - gong-farmer (WJ1, 16.11.): „Nobody wants to smell you.“ · „Two years of waste. And the smell is the safe part.“ · „Worst job in London — and well paid.“
+- groom-of-the-stool (WJ2, 18.11.): „Carried by you.“ · „You report every… result to his doctors. Living the dream.“ · „Everyone envies you.“
 - plague-doctor-1656 (WJ3, 17.11., ernst): „The city pays you to go where nobody will.“ · „Your mask? Built on a mistake.“
 
 ## Benutzte Dr.-Steve-Tipps
@@ -337,6 +339,7 @@ MB1 Megalodon in your pool ✔ gebaut → Abstimmung: A T. rex in the city · B 
 - asteroid-la: – (kein Slang)
 - how-high-can-you-go: – (kein Slang)
 - gong-farmer: – (kein Slang)
+- groom-of-the-stool: – (kein Slang)
 - plague-doctor-1656: – (kein Slang)
 
 ## Gerald-Momente
@@ -382,6 +385,7 @@ Die Bewertungskarte ist seit 11.11.2026 abgeschafft; jedes Video endet mit Endca
 - asteroid-la: „Which is why L.A. still asks —“
 - how-high-can-you-go: „So, once more:“
 - gong-farmer: „So ask yourself:“
+- groom-of-the-stool: „So every lord asked:“
 - plague-doctor-1656: „So ask yourself:“ (versehentlich gleich wie gong-farmer; nicht noch einmal verwenden)
 - Archiv der alten Bewertungskarten (Pointen nicht wiederverwenden): ZF1 „Barn: gone. Vibes: immaculate.“ · ZF2 „Great acoustics. Terrible neighbors.“ · ZF3 „Corn every day. Would not recommend.“ · ZF4 „Loud. Smelly. Better than walking.“ · ZF5 „Warm. Way too warm.“ · ZF6 „Great views. Zero fuel.“ · NL1 „Great weather. Zero free will.“ · E19 „Forty-two minutes. No snacks.“ · E24 „Twenty years. Zero lasers.“ · E1 „Perfect landing. Terrible snacks.“ · E6 „Sixty hours, lost to a grandma.“ · Bouncing Betty „Built to jump. Still in the ground.“ · Groundskeeper „Great traps. Cellar smells terrible.“
 
@@ -435,3 +439,4 @@ Die Bewertungskarte ist seit 11.11.2026 abgeschafft; jedes Video endet mit Endca
 | 2026-11-17 | How high can you go before you die? (how-high-can-you-go, GV1 Größenvergleich, Erklärvideo, 41,6 s, yellow, Erzähler Adam, Engine v3.51: `balloonChair()` (Gartenstuhl an Ballons mit Fahrer, Ballons platzen), `mountain()` (Gipfel mit Bergsteigern), `cloudSea()`, Himmel `high`/`strato`, `faceFx('boil')`; „you“ steigt im Ballonstuhl auf: Everest/Todeszone → Linienflug (30 s bis Bewusstlosigkeit) → Armstrong-Grenze ~19 km, Speichel kocht, Blut nicht; Ballons platzen lange vor dem Weltraum; Faktenkarte ~19 km (NASA · Armstrong limit); Thumbnails A/B) | GV1 | – | Endcard Everest / Jet height / Never · Loop „So, once more:“ | nein |
 | 2026-11-16 | What if you were a gong farmer for one night? (gong-farmer, WJ1 Worst Jobs in History, History, 41 s, lime, Erzähler Adam, Engine v3.47/v3.47.1: tudorHouse, cobbleLane, lantern, bucket, sack, cesspit, cart, stink, shovel, Kostüm tudor, dress('medieval'); Tudor-London bei Nacht: Bohlen runter, Leiter in die Abortgrube, Dämpfe lassen die Kerze schrumpfen, Fässer auf den Pferdekarren, im Morgengrauen Lohn und der Karren verlässt die Stadt; Faktenkarte 13s 4d Strafe vor 21 Uhr (Laws of the Market); Zähler Shift ends in 8:00 → 0:00 und Stench 12 → 96 %) | WJ1 | – | Endcard A/B/C · Loop „So ask yourself:“ | nein |
 | 2026-11-17 | What if you were a plague doctor in 1656? (plague-doctor-1656, WJ3 Worst Jobs in History, History, 44,7 s, green, Erzähler Adam, Engine v3.53: townhouse()/alley() (italienische Altstadt, Sampietrini `surf: 'setts'`, Bogen), doorMark() (versiegelte Tür), herbs(), belltower() (SFX `toll`), Kostüm plaguedoctor, Musikstil baroque; Rom bei Nacht: Pestarzt mit Schnabelmaske in verrauchter Gasse, Kräuter in den Schnabel, Untersuchung mit dem Stab, versiegelte Häuser, Bettzeug wird verbrannt; Mythos „Die Maske schützte“ → FALSE; Faktenkarte 55+ Zutaten im Theriak (National Geographic); Zähler Shift ends in + Houses visited 12/40) | WJ3 | – | Endcard Yes, someone has to / Only with the coat / Never · Loop „So ask yourself:“ | nein |
+| 2026-11-18 | What if you were the King's Groom of the Stool? (groom-of-the-stool, WJ2 Worst Jobs in History, History, 43,5 s, purple, Erzähler Adam, Engine v3.48: interior({ kind: 'tudor' }) (Faltwerk, Wandteppiche, Kamin mit Tudorbogen, Himmelbett; bed: false = Audienzsaal mit Thron), closeStool(), foldScreen(), coffer(), courtProp(), Kostüme courtier + tudorKing, Musikstil tudor, SFX lid, react bow; du trägst Heinrichs VIII. Samt-Leibstuhl, reichst Wasser, Tücher und Becken hinter dem Paravent, berichtest dem Leibarzt – und bist gerade deshalb der mächtigste Mann am Hof: Privy Chamber, Privatschatulle, Lords verbeugen sich; Amt bis 1901) | WJ2 | – | Endcard A/B/C · Loop „So every lord asked:“ | nein |
