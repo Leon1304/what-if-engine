@@ -13983,7 +13983,8 @@ function _hull(p, o) {   // lofted hull, waterline at y = 0, keel at −T, bow +
     const P = [[w * (o.flare ?? 1.04), dy], [w, Math.min(dy, 0.25 * (dy - ky) + ky + (dy - ky) * 0.6)], [w * 0.98, lerp(ky, 0, 0.55)], [w * 0.86, lerp(ky, 0, 0.18)], [w * (o.flat ? 0.75 : 0.5), ky + (o.flat ? 0.02 : 0.08) * T], [0, ky]];
     return P.map(([x, y]) => [x, y, z0 + (rk + rs) * (y - ky)]); };
   const S = []; for (let j = 0; j <= NS; j++) S.push(sec(j / NS));
-  const colAt = (y, u) => { if (y < -0.02) return o.bot; if (y < (o.bootH ?? Math.max(0.15, T * 0.12))) return o.boot ?? o.bot; if (o.planks && Math.floor((y + 50) / o.planks) % 2) return shade(o.top, -0.07); if (o.band && y > deckY(u) - o.band[0]) return o.band[1]; return o.top; };
+  const colAt = (y, u) => { if (y < -0.02) return o.bot; if (y < (o.bootH ?? Math.max(0.15, T * 0.12))) return o.boot ?? o.bot; if (o.bands) for (const q of o.bands) if (y > q[0] && y < q[1]) return q[2];   // v3.55 painted strakes at absolute heights (Nelson chequer)
+    if (o.planks && Math.floor((y + 50) / o.planks) % 2) return shade(o.top, -0.07); if (o.band && y > deckY(u) - o.band[0]) return o.band[1]; return o.top; };
   for (let j = 0; j < NS; j++) { const A = S[j], Bq = S[j + 1], u = (j + 0.5) / NS;
     for (let i = 0; i < A.length - 1; i++) for (const s of [-1, 1]) { const a = [s * A[i][0], A[i][1], A[i][2]], b = [s * Bq[i][0], Bq[i][1], Bq[i][2]], c = [s * Bq[i + 1][0], Bq[i + 1][1], Bq[i + 1][2]], d = [s * A[i + 1][0], A[i + 1][1], A[i + 1][2]], hx = colAt((a[1] + b[1] + c[1] + d[1]) / 4, u); tri(a, b, c, hx); tri(a, c, d, hx); }
     if (o.deck !== false) { const dc = o.deckC ?? o.deck ?? '#8A8E92', a = A[0], b = Bq[0]; tri([-a[0], a[1] - 0.02, a[2]], [a[0], a[1] - 0.02, a[2]], [b[0], b[1] - 0.02, b[2]], dc); tri([-a[0], a[1] - 0.02, a[2]], [b[0], b[1] - 0.02, b[2]], [-b[0], b[1] - 0.02, b[2]], dc); } }
@@ -14018,6 +14019,8 @@ const SHIPS = {
   landing:    { L: 11, B: 3.3, D: 2.0, T: 0.9, bow: 'flat', stern: 'transom', sheer: 0, rake: 0, fb: 0.9, open: 1, deck: false, top: '#59654A', bot: '#3E4636', boot: '#2A2E26', deck: '#4A5040', flat: 1 },
   viking:     { L: 22, B: 5, D: 2.0, T: 0.8, bow: 'viking', stern: 'viking', sheer: 1.6, sheerAft: 1.6, fb: 0.6, fs: 0.4, rake: 0.4, top: '#7A5434', bot: '#5A3A22', boot: '#5A3A22', deck: '#9A7A50', planks: 0.28 },
   galleon:    { L: 38, B: 10, D: 6.5, T: 3.5, bow: 'round', stern: 'transom', sheer: 2.4, sheerAft: 3.0, rake: 0.5, fs: 0.12, top: '#6A4428', bot: '#3E2A1A', boot: '#2A1A10', deck: '#A88A5A', planks: 0.45, band: [1.2, '#C8A040'] },
+  firstrate:  { L: 57, B: 15.8, D: 15.4, T: 6.4, bow: 'round', stern: 'transom', sheer: 1.2, sheerAft: 2.4, rake: 0.5, fs: 0.1, fb: 0.7, top: '#1E1B18', bot: '#A86A40', boot: '#2A2622', deck: '#B8986A', planks: 0.45,
+    bands: [[1.45, 2.7, '#D2A04A'], [3.55, 4.8, '#D2A04A'], [5.65, 6.9, '#D2A04A']] },   // v3.55 first-rate ship of the line, 1805 (Victory class: 57 m gun deck, 104 guns)
   junk:       { L: 30, B: 8.6, D: 4.0, T: 2.0, bow: 'flat', stern: 'transom', sheer: 1.3, sheerAft: 3.0, rake: 1.6, fb: 0.74, fs: 0.13, open: 0, top: '#74503A', bot: '#2C2118', boot: '#1E1812', deck: '#8C6C46', planks: 0.34, band: [0.55, '#7A2E20'] },   // v3.27: Yuan war junk 1281 (third Takashima wreck ≈ 30 m)
   ferry:      { L: 120, B: 22, D: 10, T: 5, bow: 'sharp', stern: 'transom', sheer: 2, rake: 0.4, top: '#F4F4F2', bot: '#1E3A6A', boot: '#C0392B', deck: '#8A8E92', band: [2, '#2E6FD9'] },
   cruise:     { L: 250, B: 32, D: 14, T: 8, bow: 'sharp', stern: 'transom', sheer: 2.5, rake: 0.5, top: '#F6F6F4', bot: '#1E2A4A', boot: '#2E6FD9', deck: '#B8A07A' },
@@ -14107,6 +14110,52 @@ function ship(p, kind = 'fishing', x = 0, z = 0, o = {}) {   // kind: see SHIPS 
         for (const s of [-1, 1]) for (let i = 0; i < 4; i++) _seg(b, [s * Bm * 0.48, my + 0.2, mz - 2 + i * 1.3], [s * 0.3, my + h * 0.78, mz], 0.025, 0.025, '#2A2018', NC); }
       const fl = dyn(grp(b, 0, dk(0.5) + 28 - 1, zz(0.5))); box(fl, 0.05, 1.6, 2.6, '#141414', 0, 0, -1.3); ball(fl, 0.35, '#F2F2EE', 0, 0.85, -1.2, { detail: 0, ...NC }).scale.set(0.2, 1, 1); S.flag = fl;
       for (const zl of [zs - 0.3, zz(0.95)]) S.lights.push(ball(b, 0.25, '', 0, ys + 3.4, zl, { mat: glow, detail: 0, ...NC })); break; }
+    case 'firstrate': {   // v3.55 first rate of 1805: three gun decks in the 'Nelson chequer' (ochre bands, black strakes, black port lids raised, red inside), guns run out,
+      // quarterdeck and forecastle bulwarks with hammock nettings, stern galleries with lit windows, quarter galleries, beakhead with a gilt figurehead, bowsprit + jib-boom, catheads
+      // with anchors, channels and shrouds, three masts with tops, yards and battle sail (courses brailed up, topsails and topgallants set), stern lanterns, ensign. S.ports → broadside()
+      const OC = '#D2A04A', BK = '#1E1B18', RD = '#8A2E22', Ir = '#2A2A2C', ports = [], hw = u => H.W(u) * Bm / 2;
+      const TI = [[1.65, 15], [3.75, 14], [5.85, 15]].slice(0, o.tiers ?? 3), PS = [];
+      TI.forEach(([py, n], ti) => { for (let i = 0; i < n; i++) PS.push([0.17 + (i + (ti === 1 ? 0.5 : 0)) / 15 * 0.69, py, ti]); });
+      PS.sort((a, b) => b[0] - a[0] || a[2] - b[2]);   // bow → stern, all tiers: a broadside ripples along the ship
+      for (const [u, py] of PS) for (const s of [-1, 1]) { const xw = hw(u) + 0.02, zp = zz(u);
+        box(b, 0.1, 0.82, 0.86, '#0C0A08', s * xw, py, zp, NC); const ld = grp(b, s * (xw + 0.05), py + 0.88, zp); ld.rotation.z = s * 1.2; box(ld, 0.07, 0.86, 0.9, BK, s * 0.035, -0.86, 0, NC); box(ld, 0.01, 0.8, 0.84, RD, -s * 0.005, -0.83, 0, NC);
+        cyl(b, 0.2, 0.24, 1.0, Ir, s * (xw + 0.4), py + 0.42 - 0.5, zp, { rz: Math.PI / 2, seg: 10, metal: 0.5, ...NC }); cyl(b, 0.23, 0.23, 0.12, Ir, s * (xw + 0.86), py + 0.42 - 0.06, zp, { rz: Math.PI / 2, seg: 10, ...NC });
+        ports.push([s * (xw + 0.95), py + 0.42, zp, s]); }
+      S.ports = ports;
+      // bulwarks + hammock nettings along the upper deck, quarterdeck and forecastle
+      for (let j = 0; j < 19; j++) { const u0 = 0.04 + j * 0.05, u = u0 + 0.025, h0 = (u < 0.36 || u > 0.8) ? 1.6 : 1.15; for (const s of [-1, 1]) { const e = H.edge(u);
+        box(b, 0.3, h0, L * 0.05 + 0.05, BK, s * (e[0] - 0.12), dk(u), zz(u)); box(b, 0.36, 0.08, L * 0.05 + 0.05, OC, s * (e[0] - 0.12), dk(u) + h0, zz(u), NC); box(b, 0.42, 0.5, L * 0.05 + 0.05, '#D8D0BC', s * (e[0] - 0.12), dk(u) + h0 + 0.08, zz(u), NC); } }
+      box(b, Bm * 0.86, 0.25, L * 0.3, shade('#B8986A', -0.05), 0, dk(0.2) + 0.9, zz(0.2), NC); box(b, Bm * 0.8, 0.25, L * 0.18, shade('#B8986A', -0.05), 0, dk(0.9) + 0.8, zz(0.88), NC);   // quarterdeck, forecastle
+      // stern: transom with three galleries of windows, balcony rails, quarter galleries, lanterns
+      { const zt = zz(0) - 0.05, yb = dk(0.02); box(b, Bm * 0.82, 7.2, 0.5, BK, 0, yb - 5.2, zt - 0.1); for (let r = 0; r < 3; r++) { const yr = yb - 4.2 + r * 2.2;
+          box(b, Bm * 0.84, 0.18, 1.1, OC, 0, yr - 0.25, zt - 0.5, NC); for (let k = 0; k < 9; k++) box(b, 0.08, 0.7, 0.08, OC, -Bm * 0.4 + k * Bm * 0.1, yr - 0.07, zt - 1.0, NC);
+          _wins(b, [...Array(7)].map((_, k) => [-Bm * 0.33 + k * Bm * 0.11, yr + 0.15, zt - 0.38, 0.7, 1.1, 0.04]), '#FFD890', { glow: 0.45 });
+          for (let k = 0; k < 8; k++) box(b, 0.12, 1.4, 0.06, OC, -Bm * 0.385 + k * Bm * 0.11, yr, zt - 0.4, NC); }
+        for (const s of [-1, 1]) { const e = H.edge(0.05); box(b, 1.2, 4.6, 3.4, BK, s * (e[0] + 0.3), yb - 3.6, zz(0.06)); box(b, 1.3, 0.16, 3.6, OC, s * (e[0] + 0.3), yb - 1.5, zz(0.06), NC);
+          _wins(b, _winRow(s * (e[0] + 0.92), yb - 2.8, zz(0.06) - 1.1, zz(0.06) + 1.1, 3, 0.9, 0.6, true), '#FFD890', { glow: 0.4 }); cone(b, 0.9, 1.4, OC, s * (e[0] + 0.3), yb - 5.6, zz(0.06), { rx: Math.PI, seg: 8, ...NC }); }
+        for (const lx of [-1.6, 0, 1.6]) { cyl(b, 0.04, 0.04, 1.6, '#2A2A2A', lx, yb + 1.8, zt - 0.3, { seg: 5, ...NC }); _ell(b, '', lx, yb + 3.7, zt - 0.4, 0.32, 0.5, 0.32, { mat: glow, ...NC }); cone(b, 0.36, 0.35, OC, lx, yb + 4.15, zt - 0.4, { seg: 8, ...NC }); } }
+      // bow: beakhead bulkhead, figurehead, catheads + anchors, bowsprit and jib-boom
+      { const e = H.edge(0.93), eb = H.edge(0.995); box(b, Bm * 0.62, 2.6, 0.3, OC, 0, dk(0.93) - 1.6, zz(0.93));
+        const fg = grp(b, 0, eb[1] - 2.6, eb[2] + 0.6); _ell(fg, '#D8B04A', 0, 0.6, 0.2, 0.55, 0.9, 0.45, { kind: 'metal' }); _ell(fg, '#E8D8B8', 0, 1.6, 0.35, 0.3, 0.35, 0.3, {}); box(fg, 1.6, 0.3, 0.4, '#D8B04A', 0, 0.2, 0, { rz: 0.15, ...NC });
+        _seg(b, [0, dk(0.94) + 0.6, zz(0.94)], [0, dk(0.97) + 7, zz(1) + 15], 0.48, 0.3, '#5A3A22'); _seg(b, [0, dk(0.97) + 6.2, zz(1) + 13], [0, dk(0.97) + 10.5, zz(1) + 25], 0.22, 0.12, '#5A3A22');
+        for (const s of [-1, 1]) { const ec = H.edge(0.9); box(b, 0.4, 0.4, 2.2, '#5A3A22', s * (ec[0] + 0.4), dk(0.9) - 0.3, zz(0.9), { ry: s * 0.6, ...NC });
+          const an = grp(b, s * (ec[0] + 0.25), dk(0.9) - 3.2, zz(0.88)); box(an, 0.16, 3.0, 0.16, Ir, 0, 0, 0, NC); for (const k of [-1, 1]) box(an, 0.12, 0.9, 0.12, Ir, 0, 0.1, k * 0.38, { rx: -k * 0.9, ...NC }); box(an, 0.14, 0.14, 1.6, '#5A3A22', 0, 2.8, 0, NC); }
+        e; }
+      // channels + masts: lower mast, top, topmast, topgallant; yards; sails (courses brailed, topsails + topgallants set); shrouds
+      for (const [u, H0, W0] of [[0.76, 50, 26], [0.5, 60, 30], [0.25, 43, 20]]) { const mz = zz(u), my = dk(u);
+        for (const s of [-1, 1]) box(b, 0.7, 0.22, 7, BK, s * (hw(u) + 0.35), my - 1.2, mz, NC);
+        cyl(b, 0.55, 0.62, H0 * 0.5, '#7A5A3A', 0, my - 1, mz, { seg: 10 }); box(b, 4.4, 0.3, 3.6, '#5A3A22', 0, my + H0 * 0.5 - 1.3, mz, NC); cyl(b, 0.32, 0.4, H0 * 0.32, '#7A5A3A', 0, my + H0 * 0.47, mz - 0.3, { seg: 8 });
+        box(b, 2.4, 0.18, 1.6, '#5A3A22', 0, my + H0 * 0.78 - 1.1, mz - 0.3, NC); cyl(b, 0.16, 0.24, H0 * 0.26, '#7A5A3A', 0, my + H0 * 0.76, mz - 0.4, { seg: 7 }); _ell(b, '#5A3A22', 0, my + H0 * 1.02, mz - 0.4, 0.22, 0.22, 0.22, NC);
+        for (const [k, yf, wf, set] of [[0, 0.44, 1, 0], [1, 0.72, 0.78, 1], [2, 0.95, 0.52, 1]]) { const yy = my + H0 * yf, sw = W0 * wf, zy = mz - 0.3 * k + 0.6; box(b, sw, 0.36, 0.36, '#4A3020', 0, yy, zy, NC);
+          if (set) { const sh = H0 * (k === 1 ? 0.24 : 0.17), sl = dyn(grp(b, 0, yy, zy + 0.3)); const sm = box(sl, sw * 0.9, sh, 0.08, '#ECE4D0', 0, -sh, 0); for (let r = 1; r < 3; r++) box(sl, sw * 0.9, 0.05, 0.1, '#D8D0BC', 0, -sh * r / 3, 0, NC); S.sails.push(sl); sl.userData.m = sm; }
+          else for (let r = 0; r < 3; r++) _ell(b, '#E4DCC8', -sw * 0.3 + r * sw * 0.3, yy - 0.25, zy + 0.25, sw * 0.16, 0.35, 0.35, NC); }   // course brailed up under its yard
+        for (const s of [-1, 1]) for (let i = 0; i < 6; i++) _seg(b, [s * (hw(u) + 0.6), my - 1.0, mz - 2.6 + i * 1.05], [s * 1.8, my + H0 * 0.5 - 1.3, mz - 1.4 + i * 0.5], 0.035, 0.035, '#2A2018', NC);
+        for (const s of [-1, 1]) for (let i = 0; i < 3; i++) _seg(b, [s * 2.0, my + H0 * 0.5 - 1.2, mz - 1 + i], [s * 0.4, my + H0 * 0.76, mz - 0.4], 0.025, 0.025, '#2A2018', NC); }
+      _seg(b, [0, dk(0.76) + 50 * 0.5, zz(0.76)], [0, dk(0.97) + 8, zz(1) + 16], 0.05, 0.05, '#2A2018', NC); _seg(b, [0, dk(0.5) + 60 * 0.5, zz(0.5)], [0, dk(0.76) + 4, zz(0.76) + 1.5], 0.05, 0.05, '#2A2018', NC);   // stays
+      // ensign on the stern staff (white field with the red cross) — flutters
+      { const fy = dk(0.02) + 4.6, fs2 = _seg(b, [0, dk(0.02) + 1, zz(0) - 0.8], [0, fy + 2, zz(0) - 2.4], 0.07, 0.05, '#5A3A22', NC); fs2;
+        const fl = dyn(grp(b, 0, fy + 1.9, zz(0) - 2.3)); box(fl, 0.05, 3.2, 5.2, '#F2EEE4', 0, -3.2, -2.6); box(fl, 0.06, 0.6, 5.2, '#B8282A', 0, -1.9, -2.6, NC); box(fl, 0.06, 3.2, 0.6, '#B8282A', 0, -3.2, -2.6, NC); S.flag = fl; }
+      break; }
     case 'junk': {   // v3.27 Yuan war junk (1281): raked flat bow with painted eyes, high stern castle with lattice windows and lanterns, three masts with battened lug sails
       // (fanned sheets), hanging rudder, bow windlass + wooden anchor with stone stock, bulwarks with arrow slits, sweeps, cargo, spears and shields, pennants
       const wood = '#5E3E26', dark = '#3A2818', red = '#7A2E20', mat2 = '#A8763E', sailC = o.sail ?? '#9A6A3E', zs = zz(0.07), ys = dk(0.07);
@@ -18014,6 +18063,265 @@ function warehouse(p, x = 0, z = 0, o = {}) {
   collider(g); return { g, hook };
 }
 
+// ---- v3.55 Age of Sail warship (Trafalgar 1805): navalGun() · gunDeck() · powderMagazine() · cartridgeCase() · cartridge() (ship('firstrate'), costumes powderboy /
+//      sailor1805, AMB gundeck / hold / seabattle and SFX gunrun live with their kind) ----
+// _sailLine(par, n, r, color) → upd(A, B, sag): a rope of n straight pieces between two local points, sagging by `sag` m in the middle (recomputed per frame by the caller)
+function _sailLine(par, n, r, c) {
+  const seg = [...Array(n)].map(() => cyl(par, r, r, 1, c, 0, 0, 0, { seg: 5, cast: false })), P = [], _a = new THREE.Vector3(), _d = new THREE.Vector3(), _q = new THREE.Quaternion();
+  seg.forEach(m => dyn(m));
+  return (A, B, sag) => { for (let i = 0; i <= n; i++) { const u = i / n; P[i] = [lerp(A[0], B[0], u), lerp(A[1], B[1], u) - sag * 4 * u * (1 - u), lerp(A[2], B[2], u)]; }
+    seg.forEach((m, i) => { const a = P[i], b = P[i + 1]; _d.set(b[0] - a[0], b[1] - a[1], b[2] - a[2]); const l = Math.max(1e-4, _d.length()); _a.set((a[0] + b[0]) / 2, (a[1] + b[1]) / 2, (a[2] + b[2]) / 2);
+      _q.setFromUnitVectors(_AY, _d.multiplyScalar(1 / l)); m.quaternion.copy(_q); m.scale.set(1, l * 1.04, 1); m.position.copy(_a); }); };
+}
+// navalGun(p, x, z, { ry, y, len: 2.9, axis: 0.74, color, wood, fire: [t …], recoil: 1.25, runOut: 2.6, runDur: 1.4, wall: 0.86, tackle: true, smoke: true, inside: true,
+//   sfx: true, vol: 0.7, seed }) → G = { g, car, barrel, fire(t), off(t), muzzle(t), vent(t), dir, at(lx, ly, lz, t) }
+//   A muzzle-loading naval long gun of 1805 (Blomefield 32-pounder: 2.9 m, ≈ 2.75 t) on a stepped wooden truck carriage: lathe-turned iron barrel (base ring, first and second
+//   reinforce, chase, muzzle swell, dark bore), cascabel with the breeching loop, flintlock on the vent, trunnions under iron cap squares; two stepped cheeks
+//   with bolts and straps, front and rear axletrees, four solid trucks with iron hubs, bed and quoin under the breech, eye bolts. Breeching rope from two ring bolts in the side
+//   (o.wall = local z of the inner face of the side) to the cascabel — slack when run out, taut at full recoil — and two side tackles with blocks.
+//   fire(t) / o.fire: flash, flame and a big powder-smoke cloud out of the muzzle (beyond the port), a wisp blown back in through the port and a puff from the vent (o.inside),
+//   cannon sound; the gun leaps back o.recoil m in 0.22 s (trucks roll, the breeching snaps taut and the gun rebounds a little), stands while it is reloaded and is hauled
+//   out again from t + o.runOut over o.runDur s (rumble of the trucks, 'gunrun'). Local +z = muzzle: set ry so the gun points out through its port. Pure in t (also several shots).
+function navalGun(p, x = 0, z = 0, o = {}) {
+  const L = o.len ?? 2.9, y0 = o.y ?? groundH(x, z), NC = { cast: false }, Ir = o.color ?? '#2B2B2D', Wd = o.wood ?? '#7A4A2C', hy = o.axis ?? 0.74, WZ = o.wall ?? 0.86;
+  const g = grp(p ?? world, x, y0, z, o.ry ?? 0), car = dyn(grp(g)), FI = [].concat(o.fire ?? []).sort((a, b) => a - b), REC = o.recoil ?? 1.25, RO = o.runOut ?? 2.6, RD = o.runDur ?? 1.4;
+  g.name = 'navalGun'; Object.assign(g.userData, { prop: 'navalGun', foot: [1.0, 1.6] });
+  const WK = { kind: 'wood' }, IK = { metal: 0.55, rough: 0.55 }, tz = 0.3, zb = tz - 0.42 * L;   // trunnions at carriage z 0.3, breech face at zb
+  // ---- carriage ----
+  const cg = grp(car);
+  for (const sx of [-1, 1]) { const cx = sx * 0.335;
+    box(cg, 0.11, 0.62, 0.62, Wd, cx, 0.12, 0.42, WK); box(cg, 0.11, 0.48, 0.44, shade(Wd, -0.03), cx, 0.12, -0.11, WK); box(cg, 0.11, 0.34, 0.42, shade(Wd, 0.02), cx, 0.12, -0.54, WK);   // stepped cheek
+    for (const [zz, yy] of [[0.62, 0.62], [0.25, 0.62], [-0.15, 0.48], [-0.5, 0.36], [0.62, 0.22], [-0.5, 0.2]]) ball(cg, 0.017, '#1A1A1A', cx + sx * 0.058, yy, zz, { detail: 0, ...NC });   // bolt heads
+    box(cg, 0.116, 0.025, 0.66, '#2A2A2A', cx, 0.715, 0.42, { ...IK, ...NC }); box(cg, 0.116, 0.05, 0.03, '#2A2A2A', cx, 0.36, 0.72, { ...IK, ...NC });   // iron strap on the cheek top, front plate
+    box(cg, 0.13, 0.06, 0.2, '#242424', cx, hy + 0.02, tz, IK);   // cap square over the trunnion
+    const eb = grp(cg, sx * 0.405, 0.42, 0.5); mesh(eb, G('ngEye', () => new THREE.TorusGeometry(0.035, 0.009, 5, 10)), mat('#222222', IK), 0, 0, 0, { ry: Math.PI / 2, ...NC });   // eye bolt for the side tackle
+  }
+  box(cg, 0.5, 0.2, 0.1, shade(Wd, -0.05), 0, 0.28, 0.68, WK);   // transom
+  for (const [zz, w] of [[0.52, 0.98], [-0.55, 0.92]]) box(cg, w, 0.13, 0.16, shade(Wd, -0.08), 0, 0.1, zz, WK);   // axletrees
+  box(cg, 0.5, 0.06, 0.95, shade(Wd, 0.04), 0, 0.3, -0.32, WK); { const q = box(cg, 0.3, 0.1, 0.36, shade(Wd, 0.1), 0, 0.36, zb + 0.32, WK); q.rotation.x = 0.12; box(cg, 0.06, 0.06, 0.1, shade(Wd, -0.1), 0, 0.42, zb + 0.1, NC); }   // bed + quoin
+  const trucks = [];
+  for (const [zz, r] of [[0.52, 0.2], [-0.55, 0.17]]) for (const sx of [-1, 1]) { const tq = dyn(grp(car, sx * 0.47, r, zz)); cyl(tq, r, r, 0.1, shade(Wd, -0.12), 0, -0.05, 0, { rz: Math.PI / 2, seg: 14, ...WK });
+    cyl(tq, 0.05, 0.05, 0.12, '#2A2A2A', 0, -0.06, 0, { rz: Math.PI / 2, seg: 8, ...IK, ...NC }); box(tq, 0.104, r * 1.6, 0.03, shade(Wd, -0.2), 0, -r * 0.8, 0, NC); trucks.push([tq, r]); }
+  // ---- barrel (lathe along +z, breech at zb) ----
+  const prof = G('ngBar' + L, () => { const k = L / 2.9, P = [[0.0, -0.2], [0.05, -0.19], [0.062, -0.15], [0.05, -0.12], [0.032, -0.1], [0.04, -0.075], [0.17, -0.045], [0.25, -0.012], [0.278, 0.0], [0.278, 0.07], [0.265, 0.08],
+      [0.265, 0.4 * L], [0.276, 0.405 * L], [0.276, 0.43 * L], [0.25, 0.44 * L], [0.25, 0.62 * L], [0.26, 0.625 * L], [0.26, 0.645 * L], [0.232, 0.655 * L], [0.205, 0.9 * L], [0.195, 0.925 * L], [0.218, 0.965 * L], [0.228, 0.985 * L], [0.228, L], [0.085, L], [0.085, L - 0.5]];
+    return new THREE.LatheGeometry(P.map(([r, y]) => new THREE.Vector2(r * (0.8 + 0.2 * k), y)), 18); });
+  const bar = grp(car, 0, hy, zb); const bm = mesh(bar, prof, mat(Ir, { ...IK, flat: false }), 0, 0, 0, { rx: Math.PI / 2 });
+  mesh(bar, G('ngBore', () => new THREE.CircleGeometry(0.086, 14)), mat('#060606', { basic: true }), 0, 0, L - 0.45, NC);
+  mesh(bar, G('ngCasc', () => new THREE.TorusGeometry(0.06, 0.018, 6, 12)), mat(Ir, IK), 0, 0.0, -0.13, { ry: Math.PI / 2, ...NC });   // breeching loop on the cascabel
+  cyl(bar, 0.075, 0.075, 0.78, Ir, 0, -0.39, 0.42 * L, { rz: Math.PI / 2, seg: 10, ...IK, ...NC });   // trunnions
+  { const lk = grp(bar, 0.04, 0.27, 0.16); box(lk, 0.05, 0.05, 0.13, '#3A3A3A', 0, 0, 0, IK); box(lk, 0.015, 0.07, 0.03, '#2A2A2A', 0.0, 0.04, -0.04, { rx: -0.5, ...NC }); box(lk, 0.03, 0.02, 0.05, '#8A7A5A', 0, 0.05, 0.06, NC); }   // flintlock on the vent
+  box(bar, 0.2, 0.012, 0.22, '#5A5A58', 0, 0.272, 0.1, { rx: -0.02, ...NC });   // lead apron over the vent
+  // ---- ropes: breeching (ring bolts in the side → cascabel) and side tackles (side → carriage eye bolts) ----
+  const rp = dyn(grp(g)), rc = o.rope ?? '#B89A6A', ROPES = [];
+  if (o.tackle !== false) { for (const sx of [-1, 1]) { ROPES.push(['b', sx, _sailLine(rp, 5, 0.022, rc)]); ROPES.push(['t', sx, _sailLine(rp, 2, 0.012, rc)]);
+      const rb = grp(g, sx * 0.62, 0.62, WZ - 0.02); mesh(rb, G('ngRing', () => new THREE.TorusGeometry(0.05, 0.012, 5, 10)), mat('#1E1E1E', IK), 0, 0, 0, NC);   // ring bolt in the side
+      box(g, 0.07, 0.13, 0.05, '#5A3A22', sx * 0.82, 0.48, WZ - 0.06, NC); } }   // tackle block hooked to the side
+  fuse(cg); fuse(bar);
+  // ---- motion: recoil, rebound, haul-out ----
+  const seg = (f, t, v0) => { const d = t - f; if (d < 0.22) return lerp(v0, REC, 1 - (1 - d / 0.22) ** 3); if (d < RO) return REC * (1 - 0.05 * Math.exp(-(d - 0.22) * 5) * Math.sin(Math.min(Math.PI, (d - 0.22) * 9)));
+    return REC * (1 - sm01((d - RO) / RD)); };
+  const off = t => { let v0 = 0, f = null; for (const q of FI) { if (q > t) break; if (f != null) v0 = seg(f, q, v0); f = q; } return f == null ? 0 : seg(f, t, v0); };
+  const casc = [0, hy, zb - 0.15], LB = Math.hypot(0.62, WZ - (zb - 0.15 - REC)) + 0.02;
+  tick(t => { const d = off(t); car.position.z = -d; for (const [tq, r] of trucks) tq.rotation.x = -d / r;
+    for (const [k, sx, up] of ROPES) { if (k === 'b') { const A = [sx * 0.62, 0.62, WZ - 0.04], B = [casc[0] + sx * 0.05, casc[1], casc[2] - d], dd = Math.hypot(B[0] - A[0], B[1] - A[1], B[2] - A[2]); up(A, B, Math.sqrt(Math.max(0, LB * LB - dd * dd)) * 0.42 + 0.01); }
+      else up([sx * 0.82, 0.55, WZ - 0.1], [sx * 0.405, 0.42, 0.5 - d], 0.03 + 0.02 * d); } });
+  g.updateWorldMatrix(true, false);
+  const at = (lx, ly, lz, t = 0) => worldAt(g, [lx, ly, lz - off(t)], t).toArray();
+  const dir = v3(0, 0, 1).transformDirection(g.matrixWorld);
+  const G2 = { g, car, barrel: bar, off, dir, at, muzzle: t => at(0, hy, zb + L, t), vent: t => at(0, hy + 0.3, zb + 0.15, t), fires: FI };
+  G2.fire = (t, oo = {}) => { if (!FI.includes(t)) { FI.push(t); FI.sort((a, b) => a - b); }
+    const M = v3(...at(0, hy, zb + L + 0.1, t - 1e-3)), dv = dir.clone();
+    cbFlash([M, dv], t, { size: 1.8, dur: 0.12, light: oo.light ?? 70, dist: 16 }); cbBurst('flame', M, t, { n: 10, dir: dv, cone: 0.25, speed: 10, size: 0.8, life: 0.2 });
+    if ((oo.smoke ?? o.smoke) !== false) { cbBurst('smoke', M, t + 0.02, { n: 18, dir: dv, cone: 0.55, speed: 5.5, size: 1.9, life: 5, opacity: 0.62, drag: 1.5, grow: 1.2, colors: ['#DCD8D0', '#C6C0B6', '#B2ACA2'] });
+      if ((oo.inside ?? o.inside) !== false) { const Pi = v3(...at(0, hy + 0.15, WZ - 0.1, t - 1e-3)), Vn = v3(...G2.vent(t - 1e-3));
+        cbBurst('smoke', Pi, t + 0.25, { n: 12, dir: dv.clone().multiplyScalar(-1).add(v3(0, 0.3, 0)), cone: 0.7, speed: 1.6, size: 0.8, life: 4, opacity: 0.42, drag: 0.9, grow: 1.5, colors: ['#D6D2CA', '#BEB8AE'] });
+        cbBurst('smoke', Vn, t, { n: 4, dir: [0, 1, 0], cone: 0.4, speed: 0.8, size: 0.22, life: 2.2, opacity: 0.4, drag: 0.9, grow: 1.6, colors: ['#CFCAC0'] }); } }
+    if (o.sfx !== false) { sfx(t, 'cannon', oo.vol ?? o.vol ?? 0.7); sfx(t + 0.02, 'gunrun', 0.35); sfx(t + RO + 0.1, 'gunrun', 0.45); }
+    return G2; };
+  for (const t of FI.slice()) G2.fire(t);
+  return G2;
+}
+// gunDeck(p, x, z, { len: 22, beam: 13, y: 2.4, h: 2.0, ry, guns: 6, gap, sides: [-1, 1], gun: { …navalGun options }, hatch: { x, z, w, d, depth } | false, mast: [z …],
+//   pillars: true, lanterns: [[x, z] …], lids: 1.15 (open angle, 0 = shut), haze: 0.6 | t => 0..1, beams: true, color, wood, seed }) → D
+//   The lower gun deck of a ship of the line, seen from inside (bow −z … stern +z, sides at x = ±beam / 2, floor at o.y): plank floor strewn with sand (a walk surface: figures
+//   stand at o.y everywhere on it, groundH), the ship's sides lined with ochre planking and pierced by square gun ports (sill, lintel, the hinged lids raised outside — red on the
+//   inside), daylight slanting in through every port (soft beams, stronger in smoke: o.haze), the deck above with heavy beams, hanging knees and carlings, centre-line pillars,
+//   the mast with iron hoops and wedges, a hatch with coaming, a ladder and a well down to the deck below (dim lantern light, D.hatch.climb for climb()), hanging lanterns behind
+//   horn and glass (lantern(), real light), a navalGun() at every port (D.gun(side, i) → G, G.fire(t)), shot garlands with round shot, rammers and sponges stowed overhead,
+//   leather fire buckets and match tubs with glowing slow match. The camera inside counts as a room (fill light, dust in the air).
+//   D.at(lx, lz) → world [x, y, z] of a deck spot · D.port(side, i) → world [x, y, z] of a port (inner face) · D.gun(side, i) · D.hatch = { at: [x, z], climb, top: [x, z] } · D.y
+const DECKS = [];
+function gunDeck(p, x = 0, z = 0, o = {}) {
+  const L = o.len ?? 22, B = o.beam ?? 13, Y = o.y ?? 2.4, H = o.h ?? 2.15, ry = o.ry ?? 0, hb = B / 2, n = o.guns ?? 6, gap = o.gap ?? Math.min(3.4, (L - 3) / n), sd = o.seed ?? 5, NC = { cast: false };
+  const g = grp(p ?? world, x, Y, z, ry), sg = stat(grp(g)), pr = () => stat(grp(g)), hs = k => hash(k * 1.37 + sd * 9.1), Oc = o.color ?? '#D2AE72', Wd = o.wood ?? '#6E4A2C', Fl = '#A88A60', WK = { kind: 'wood' };
+  const PS = 0.55, PH = 0.8, PW = 0.98, T = 0.55, sides = o.sides ?? [-1, 1], pz = i => (i - (n - 1) / 2) * gap;
+  const HT = o.hatch === false ? null : { x: 1.7, z: 2.6, w: 1.1, d: 1.5, depth: 2.2, ...(o.hatch ?? {}) };
+  const W = (lx, ly, lz) => { const c = Math.cos(ry), s = Math.sin(ry); return [x + lx * c + lz * s, Y + ly, z - lx * s + lz * c]; };
+  // ---- floor (around the hatch), sand, planks ----
+  const fl = (x0, x1, z0, z1) => { if (x1 - x0 > 0.01 && z1 - z0 > 0.01) box(sg, x1 - x0, 0.1, z1 - z0, Fl, (x0 + x1) / 2, -0.1, (z0 + z1) / 2, { surf: 'boards', recv: true, cast: false }); };
+  if (HT) { const a = HT.x - HT.w / 2, b = HT.x + HT.w / 2, c = HT.z - HT.d / 2, d = HT.z + HT.d / 2; fl(-hb - 0.05, a, -L / 2, L / 2); fl(b, hb + 0.05, -L / 2, L / 2); fl(a, b, -L / 2, c); fl(a, b, d, L / 2); }
+  else fl(-hb - 0.05, hb + 0.05, -L / 2, L / 2);
+  for (let i = 0; i < 26; i++) { const sx = (hs(i) - 0.5) * (B - 2), szz = (hs(i + 40) - 0.5) * (L - 1); if (HT && Math.abs(sx - HT.x) < HT.w / 2 + 0.6 && Math.abs(szz - HT.z) < HT.d / 2 + 0.6) continue;
+    const sp = box(sg, 0.5 + hs(i + 3) * 0.7, 0.004, 0.35 + hs(i + 5) * 0.5, shade(Fl, 0.05 + hs(i + 7) * 0.04), sx, 0.0, szz, NC); sp.rotation.y = hs(i + 9) * 3; }   // sand strewn for grip (a slightly paler, rougher wash on the planks)
+  // ---- the sides with gun ports ----
+  for (const s of sides) { const xc = s * (hb + T / 2), ports = [...Array(n)].map((_, i) => pz(i));
+    box(sg, T, PS, L, Oc, xc, 0, 0, { surf: 'plank' }); box(sg, T, H - PS - PH, L, Oc, xc, PS + PH, 0, { surf: 'plank' });
+    const edges = [-L / 2, ...ports.flatMap(q => [q - PW / 2, q + PW / 2]), L / 2]; for (let k = 0; k < edges.length; k += 2) { const a = edges[k], b = edges[k + 1]; if (b - a > 0.02) box(sg, T, PH, b - a, Oc, xc, PS, (a + b) / 2, { surf: 'plank' }); }
+    box(sg, 0.08, 0.06, L, shade(Oc, -0.12), s * (hb - 0.02), PS - 0.06, 0, NC); box(sg, 0.06, 0.1, L, shade(Wd, -0.05), s * (hb - 0.02), H - 0.32, 0, NC);   // waterway strake, clamp under the beams
+    for (const q of ports) { box(sg, T + 0.02, 0.06, PW + 0.12, shade(Wd, 0.06), xc, PS - 0.05, q, NC); box(sg, T + 0.02, 0.07, PW + 0.12, shade(Wd, 0.02), xc, PS + PH, q, NC);   // sill, lintel
+      for (const e of [-1, 1]) box(sg, T + 0.01, PH, 0.05, shade(Wd, 0.02), xc, PS, q + e * (PW / 2 + 0.02), NC);
+      const lid = grp(sg, s * (hb + T + 0.02), PS + PH + 0.05, q); lid.rotation.z = s * (o.lids ?? 1.15); box(lid, 0.07, PH + 0.1, PW + 0.1, '#1C1A18', s * 0.035, -(PH + 0.1), 0, NC); box(lid, 0.012, PH, PW, '#8A2E22', -s * 0.004, -(PH + 0.05), 0, NC);   // raised port lid: black outside, red inside
+      _seg(sg, [s * (hb + T + 0.02), PS + PH + 0.05, q], [s * (hb + T - 0.2), PS + PH + 0.55, q + 0.3], 0.008, 0.008, '#B89A6A', NC); } }   // lid tackle
+  // ---- ends: bulkheads (aft with a door) ----
+  for (const e of [-1, 1]) { box(sg, B + 2 * T, H, 0.14, shade(Oc, -0.18), 0, 0, e * (L / 2 + 0.07), { surf: 'plank' }); for (let i = 0; i < 9; i++) box(sg, 0.07, H, 0.04, shade(Wd, -0.05), -hb + (i + 0.5) * B / 9, 0, e * (L / 2 - 0.01), NC); }
+  box(sg, 0.92, 1.72, 0.04, '#1A120C', -2.6, 0, L / 2 - 0.035, NC); box(sg, 1.04, 0.08, 0.06, shade(Wd, 0.05), -2.6, 1.72, L / 2 - 0.04, NC);
+  // ---- the deck above: planks, beams, hanging knees, carlings ----
+  box(sg, B + 2 * T, 0.1, L + 0.3, shade(Fl, -0.18), 0, H, 0, { surf: 'boards', cast: true });
+  const BS = o.beamGap ?? 1.15; for (let zb = -L / 2 + 0.5; zb < L / 2 - 0.3; zb += BS) { box(sg, B, 0.22, 0.24, Wd, 0, H - 0.22, zb, WK);
+    for (const s of sides) { box(sg, 0.14, 0.55, 0.2, shade(Wd, -0.06), s * (hb - 0.07), H - 0.75, zb, WK); const kn = box(sg, 0.12, 0.42, 0.18, shade(Wd, -0.06), s * (hb - 0.3), H - 0.5, zb, NC); kn.rotation.z = s * 0.7; } }
+  for (const cx of [-2.3, 2.3]) box(sg, 0.14, 0.12, L, shade(Wd, 0.05), cx, H - 0.34, 0, NC);
+  // ---- pillars, mast, hatch ----
+  const MS = o.mast ?? [-4.6];
+  for (const mz of MS) { const mg = pr(); cyl(mg, 0.42, 0.44, H + 0.6, '#8A6A44', 0, -0.4, mz, { seg: 16, ...WK }); for (let k = 0; k < 4; k++) cyl(mg, 0.445, 0.445, 0.05, '#2A2A2A', 0, 0.25 + k * 0.42, mz, { seg: 16, metal: 0.5, ...NC });
+    for (const yy of [0, H - 0.16]) { box(sg, 1.3, 0.16, 1.3, shade(Wd, 0.04), 0, yy, mz, NC); for (let k = 0; k < 10; k++) { const a = k / 10 * TAU; box(sg, 0.12, 0.14, 0.12, shade(Wd, 0.08), Math.sin(a) * 0.5, yy + 0.08, mz + Math.cos(a) * 0.5, { ry: a, ...NC }); } } }
+  if (o.pillars !== false) for (let pzz = -L / 2 + 1.6; pzz < L / 2 - 1; pzz += 3.3) { if (MS.some(m => Math.abs(m - pzz) < 1.2) || (HT && Math.abs(HT.x) < 0.9 && Math.abs(pzz - HT.z) < HT.d)) continue;
+    const pg = pr(); cyl(pg, 0.07, 0.08, H - 0.22, '#7A5A3A', 0, 0, pzz, { seg: 8, ...WK }); box(pg, 0.2, 0.12, 0.2, shade(Wd, 0.05), 0, 0, pzz, NC); for (const yy of [0.5, 1.2]) cyl(pg, 0.09, 0.09, 0.05, '#7A5A3A', 0, yy, pzz, { seg: 8, ...NC }); }
+  let hatch = null;
+  if (HT) { const { x: hx, z: hz, w: hw, d: hd, depth: dp } = HT;
+    for (const e of [-1, 1]) { box(sg, hw + 0.24, 0.12, 0.12, shade(Wd, 0.06), hx, 0, hz + e * (hd / 2 + 0.06), WK); box(sg, 0.12, 0.12, hd, shade(Wd, 0.06), hx + e * (hw / 2 + 0.06), 0, hz, WK); }   // coaming
+    for (const e of [-1, 1]) { box(sg, hw, dp, 0.08, '#3A2A1C', hx, -dp, hz + e * (hd / 2 + 0.04), { recv: true }); box(sg, 0.08, dp, hd, '#3A2A1C', hx + e * (hw / 2 + 0.04), -dp, hz, { recv: true }); }   // well
+    box(sg, hw + 1.6, 0.08, hd + 1.6, '#4A3826', hx, -dp - 0.08, hz, { surf: 'boards' });   // the deck below
+    const lz = hz - hd / 2 + 0.07; for (const sx of [-1, 1]) box(sg, 0.06, dp + 0.02, 0.06, '#6A4A2E', hx + sx * 0.24, -dp, lz, WK); for (let yy = -dp + 0.28; yy < -0.05; yy += 0.28) box(sg, 0.48, 0.04, 0.06, '#7A5A3A', hx, yy, lz, NC);   // ladder
+    glow(...W(hx, -dp + 1.1, hz + 0.3), { intensity: 4, dist: 4, color: '#FFB060', flicker: 0.15 });   // a steady lantern on the deck below
+    const LB = W(hx, 0, lz), HC = W(hx, 0, lz - 0.5), cl = { at: [LB[0], LB[2]], ry: ry + Math.PI, y0: Y - dp, y1: Y, ladder: false, gap: 0.42 };
+    hatch = { at: [W(hx, 0, hz)[0], W(hx, 0, hz)[2]], climb: cl, top: [HC[0], HC[2]], depth: dp }; }
+  // ---- stowed gear: shot garlands, rammers and sponges overhead, fire buckets, match tubs ----
+  for (const s of sides) for (let i = 0; i <= n; i++) { const zm = i === n ? pz(n - 1) + gap / 2 : pz(i) - gap / 2; if (Math.abs(zm) > L / 2 - 0.6) continue;
+    const ga = grp(pr(), s * (hb - 0.14), 0, zm); box(ga, 0.14, 0.14, 0.9, shade(Wd, 0.08), 0, 0, 0, WK); for (let k = 0; k < 5; k++) ball(ga, 0.08, '#202022', -s * 0.0, 0.17, -0.36 + k * 0.18, { metal: 0.4, rough: 0.6, detail: 1 });
+    if (i < n) { const yy = H - 0.36, xx = s * (hb - 0.9 - (i % 2) * 0.25); rod(sg, 0.025, 0.025, 2.9, '#9A7A50', xx, yy, pz(i) + gap / 2, { seg: 6, ...NC }); for (const e of [-1.3, 1.3]) box(sg, 0.03, 0.12, 0.03, '#2A2A2A', xx, yy, pz(i) + gap / 2 + e, NC);
+      rod(sg, 0.075, 0.075, 0.24, i % 2 ? '#3A3632' : '#8A7A62', xx, yy, pz(i) + gap / 2 + 1.55, { seg: 10, ...NC }); } }
+  for (let i = 0; i < 4; i++) { const zt = pz(Math.min(n - 1, 1 + i)) + gap / 2, sx = i % 2 ? 1 : -1; if (Math.abs(zt) > L / 2 - 1) continue; const tub = grp(pr(), sx * 1.15, 0, zt);
+    cyl(tub, 0.22, 0.2, 0.42, '#7A5434', 0, 0, 0, { seg: 12, ...WK }); for (const yy of [0.06, 0.32]) cyl(tub, 0.225, 0.215, 0.03, '#2A2A2A', 0, yy, 0, { seg: 12, ...NC }); cyl(tub, 0.19, 0.19, 0.01, '#2A3A44', 0, 0.38, 0, { seg: 12, rough: 0.2, ...NC });
+    for (let k = 0; k < 2; k++) { const a = k * 2.4 + i; cyl(tub, 0.008, 0.008, 0.3, '#8A7A5A', Math.sin(a) * 0.2, 0.32, Math.cos(a) * 0.2, { rz: Math.sin(a) * 0.9, rx: -Math.cos(a) * 0.9, seg: 4, ...NC });
+      ball(tub, 0.012, '', Math.sin(a) * 0.32, 0.43, Math.cos(a) * 0.32, { mat: mat('#FF8A30', { basic: true, glow: 2 }), detail: 0, ...NC }); } }   // match tub with two glowing slow matches
+  for (let i = 0; i < 3; i++) bucket(pr(), (i % 2 ? 0.45 : -0.45), 0, pz(i * 2) + 0.9, { kind: 'leather', dyn: false, ry: i });
+  fuse(sg); sg.traverse(m => { if (m.isMesh) m.userData.noHit = true; });   // the hull shell (floor, sides, deck above): a set you are inside, not a hitbox
+  // ---- daylight beams through the ports (additive, stronger in smoke) ----
+  const hz2 = typeof o.haze === 'function' ? o.haze : (() => o.haze ?? 0.6), BM = [];
+  if (o.beams !== false) { const geo = G('gdBeam', () => { const c = new THREE.BoxGeometry(1, 1, 1, 1, 1, 1).translate(0.5, 0, 0), P2 = c.attributes.position, cl = []; for (let i = 0; i < P2.count; i++) { const k = 1 - P2.getX(i); cl.push(k, k, k); } c.setAttribute('color', new THREE.Float32BufferAttribute(cl, 3)); return c; });
+    for (const s of sides) for (let i = 0; i < n; i++) { const m = new THREE.MeshBasicMaterial({ color: new THREE.Color(o.beamColor ?? '#FFE6C0'), vertexColors: true, transparent: true, opacity: 0.05, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, fog: false });
+      const bp = dyn(grp(g, s * (hb + T * 0.5), PS + PH * 0.62, pz(i), s > 0 ? Math.PI : 0)), bm = new THREE.Mesh(geo, m); bm.scale.set(3.4, PH * 0.85, PW * 0.85); bm.rotation.z = -(o.beamTilt ?? 0.3);
+      bm.renderOrder = 4; bm.castShadow = false; bm.receiveShadow = false; bm.userData.noHit = bm.userData.cover = true; bp.add(dyn(bm)); BM.push([m, i, s]); }
+    tick(t => { const hz = clamp(hz2(t)); for (const [m, i, s] of BM) m.opacity = (0.05 + 0.13 * hz) * (0.85 + 0.15 * noise1(t * 0.4 + i * 1.3 + s)); }); }
+  // ---- lanterns (lit), guns ----
+  const LT = o.lanterns ?? [[0.9, pz(1) + gap / 2], [-0.9, pz(2) + gap / 2], [0.9, pz(3) + gap / 2], [-0.9, pz(n - 2) + gap / 2]];
+  const lamps = LT.map(([lx, lz], i) => lantern(g, lx, H - 0.24, lz, { kind: 'hang', seed: sd * 10 + i, light: { intensity: o.lamp ?? 2.4, dist: 8, color: '#FFBE78' } }));
+  const GUNS = { '-1': [], '1': [] }, go = o.gun ?? {};
+  for (const s of sides) for (let i = 0; i < n; i++) { const q = pz(i), G2 = navalGun(g, s * (hb - 1.2), q, { ...go, y: 0, ry: s > 0 ? Math.PI / 2 : -Math.PI / 2, wall: 1.2, seed: sd * 31 + i * 3 + s, fire: [] }); GUNS[s].push(G2); }
+  if (p === world || !p) DUSTROOMS.push([x, Y, z, B, L, H, ry]);
+  DECKS.push({ x, z, ry, hl: L / 2, hb: hb, y: Y });
+  if (DECKS.length === 1) DEFER.unshift(() => { const g0 = groundH; groundH = (X, Z) => { for (const d of DECKS) { const c = Math.cos(d.ry), s = Math.sin(d.ry), dx = X - d.x, dz = Z - d.z, lx = dx * c - dz * s, lz = dx * s + dz * c;
+    if (Math.abs(lx) <= d.hb && Math.abs(lz) <= d.hl) return d.y; } return g0(X, Z); }; });
+  return { g, y: Y, len: L, beam: B, h: H, guns: GUNS, lamps, hatch, gun: (s, i) => GUNS[s > 0 ? 1 : -1][i], at: (lx, lz) => W(lx, 0, lz), port: (s, i) => W(s * hb, PS + PH / 2, pz(i)), pz };
+}
+// powderMagazine(p, x, z, { w: 3.6, d: 3.0, h: 1.95, ry, y, pass: [t …], lightRoom: true, barrels: 6, passage: 2.4, seed }) → M
+//   The grand magazine of a ship of the line, below the waterline (front = +z): walls, floor and ceiling sheathed in copper (overlapping sheets with seams and rows of copper nails,
+//   verdigris low down), powder casks chocked on two-tier racks, shelves of filled flannel cartridges, a filling bench with a copper scoop, measures and an open cask; behind the
+//   back wall the light room — a lantern burns behind a thick glazed window with iron bars (no flame ever enters the magazine). The doorway in the front wall is closed by the
+//   wet fearnought screen (heavy felt, dark with water, a round hand hole for passing cartridges out) which sways and bulges outwards when a cartridge goes through (`pass`
+//   times, pure in t). In front of it a low, dim passage (o.passage m) with deck beams. The camera inside or in the passage counts as a room.
+//   M.hole → world [x, y, z] of the hand hole (outside face) · M.inside(lx, lz) / M.out(lx, lz) → world [x, z] · M.lamp (lantern()) · M.screen · M.g
+function powderMagazine(p, x = 0, z = 0, o = {}) {
+  const w = o.w ?? 3.6, d = o.d ?? 3.0, h = o.h ?? 1.95, ry = o.ry ?? 0, Y = o.y ?? 0.06, sd = o.seed ?? 3, NC = { cast: false }, hs = k => hash(k * 2.11 + sd * 5.3);
+  const g = grp(p ?? world, x, Y, z, ry), sg = stat(grp(g)), pr = () => stat(grp(g)), Cu = '#C98A52', CuK = { metal: 0.35, rough: 0.45 }, Wd = '#5E4028', WK = { kind: 'wood' }, DW = 0.82, DH = 1.5, PL = o.passage ?? 2.4;
+  const W = (lx, ly, lz) => { const c = Math.cos(ry), s = Math.sin(ry); return [x + lx * c + lz * s, Y + ly, z - lx * s + lz * c]; };
+  const CK = G('pmCask', () => { const P = []; for (let i = 0; i <= 8; i++) { const u = i / 8; P.push(new THREE.Vector2(0.21 + 0.05 * Math.sin(Math.PI * u), u * 0.62 - 0.31)); } return new THREE.LatheGeometry(P, 12); }), LX = -0.6, LY = 1.12, GW = 0.6, GH = 0.46;
+  // ---- copper shell: floor, ceiling, walls (front wall with the doorway) ----
+  const cu = (gq, ww, hh, dd, px, py, pz, k) => box(gq, ww, hh, dd, shade(Cu, (hs(k) - 0.5) * 0.06), px, py, pz, CuK);
+  cu(sg, w, 0.06, d, 0, -0.06, 0, 1); cu(sg, w + 0.3, 0.08, d + 0.3, 0, h, 0, 2);
+  { const zb = -d / 2 - 0.07, a = LX - GW / 2, b = LX + GW / 2; cu(sg, a + w / 2 + 0.15, h, 0.14, (a - w / 2 - 0.15) / 2, 0, zb, 3); cu(sg, w / 2 + 0.15 - b, h, 0.14, (b + w / 2 + 0.15) / 2, 0, zb, 3.5); cu(sg, GW, LY, 0.14, LX, 0, zb, 3.7); cu(sg, GW, h - LY - GH, 0.14, LX, LY + GH, zb, 3.9); } for (const s of [-1, 1]) cu(sg, 0.14, h, d, s * (w / 2 + 0.07), 0, 0, 4 + s);
+  for (const s of [-1, 1]) cu(sg, (w - DW) / 2 + 0.15, h, 0.14, s * ((w + DW) / 4 + 0.075), 0, d / 2 + 0.07, 7 + s); cu(sg, DW, h - DH, 0.14, 0, DH, d / 2 + 0.07, 9);
+  // sheet seams + nail rows on every wall, verdigris along the floor
+  const seams = (q, ww, hh, ax) => { for (let u = -ww / 2 + 0.6; u < ww / 2; u += 0.6) { box(q, ax ? 0.02 : 0.012, hh, ax ? 0.012 : 0.02, shade(Cu, -0.14), ax ? u : 0, 0, ax ? 0 : u, NC);
+      for (let v = 0.12; v < hh; v += 0.16) ball(q, 0.007, '#8A4E28', ax ? u + 0.025 : 0, v, ax ? 0 : u + 0.025, { detail: 0, ...NC }); }
+    for (let v = 0.45; v < hh; v += 0.45) box(q, ax ? ww : 0.01, 0.01, ax ? 0.01 : ww, shade(Cu, -0.1), 0, v, 0, NC); };
+  seams(grp(sg, 0, 0, -d / 2 + 0.002), w, h, true); for (const s of [-1, 1]) seams(grp(sg, s * (w / 2 - 0.002), 0, 0), d, h, false);
+  for (const s of [-1, 1]) seams(grp(sg, s * ((w + DW) / 4 + 0.07), 0, d / 2 - 0.002), (w - DW) / 2, h, true);
+  for (let i = 0; i < 14; i++) { const a = i / 14; _ell(sg, '#4E8A72', a < 0.5 ? -w / 2 + 0.01 : w / 2 - 0.01, 0.05, -d / 2 + (a % 0.5) * 2 * d, 0.01, 0.06 + hs(i) * 0.05, 0.12 + hs(i + 3) * 0.15, { ...NC, detail: 0 }); }
+  for (let i = 0; i < 8; i++) box(sg, w - 0.1, 0.012, 0.012, shade(Cu, -0.12), 0, 0.001, -d / 2 + (i + 0.5) * d / 8, NC);   // floor seams
+  // ---- light room behind the back wall: glazed window with bars, a lantern behind it ----
+  { const zf = -d / 2;   // frame, thick glass, iron bars; behind it the light room (whitewashed box with a shelf)
+    for (const e of [-1, 1]) { box(sg, 0.07, GH + 0.14, 0.05, '#4A3420', LX + e * (GW / 2 + 0.035), LY - 0.07, zf + 0.02, NC); box(sg, GW + 0.14, 0.07, 0.05, '#4A3420', LX, e < 0 ? LY - 0.07 : LY + GH, zf + 0.02, NC); }
+    box(sg, GW, GH, 0.02, '', LX, LY, zf - 0.07, { mat: mat('#D8E4E0', { opacity: 0.14, rough: 0.1 }), ...NC });
+    for (let k = 1; k < 4; k++) box(sg, 0.02, GH, 0.02, '#1E1C1A', LX - GW / 2 + k * GW / 4, LY, zf + 0.03, { metal: 0.5, ...NC }); box(sg, GW, 0.02, 0.02, '#1E1C1A', LX, LY + GH / 2, zf + 0.03, NC);
+    const lr = grp(sg, LX, 0, zf - 0.6); box(lr, GW + 0.5, 1.9, 0.06, '#6A5A44', 0, 0, -0.45, NC); for (const e of [-1, 1]) box(lr, 0.06, 1.9, 0.9, '#5E5040', e * (GW / 2 + 0.25), 0, 0, NC); box(lr, GW + 0.5, 0.06, 0.9, '#5A4430', 0, LY - 0.1, 0, NC); box(lr, GW + 0.5, 0.06, 0.9, '#2A2018', 0, 1.9, 0, NC); }
+  const lamp = lantern(g, LX, 1.74, -d / 2 - 0.5, { kind: 'hang', seed: sd * 7, light: { intensity: 2.4, dist: 6.5, color: '#FFB868' } });
+  // ---- powder casks on racks, cartridge shelves, filling bench ----
+  for (const s of [-1, 1]) { const rk = grp(pr(), s * (w / 2 - 0.42), 0, -0.25); for (const yy of [0.02, 0.62]) { box(rk, 0.7, 0.06, 2.2, Wd, 0, yy, 0, WK); for (const e of [-1, 1]) for (const ez of [-1.05, 1.05]) box(rk, 0.06, 0.6, 0.06, Wd, e * 0.32, yy, ez, NC); }
+    for (let k = 0; k < Math.ceil((o.barrels ?? 6) / 2); k++) for (const yy of [0.02, 0.62]) { if (k === 2 && yy > 0.5) continue; const cz = -0.75 + k * 0.72, ck = grp(rk, 0, yy + 0.33, cz); ck.rotation.x = Math.PI / 2;
+      mesh(ck, CK, mat(shade('#8A5E36', (hs(k + yy * 10) - 0.5) * 0.1), WK), 0, 0, 0); for (const yh of [-0.25, -0.12, 0.12, 0.25]) { const rr = 0.21 + 0.05 * Math.sin(Math.PI * (yh + 0.31) / 0.62) + 0.007; cyl(ck, rr, rr, 0.025, '#6E8A4A', 0, yh - 0.012, 0, { seg: 12, ...NC }); }   // wooden hoops (no iron in the magazine)
+      for (const e of [-1, 1]) box(rk, 0.08, 0.06, 0.1, Wd, e * 0.22, yy + 0.06, cz, NC); } }
+  { const sh = grp(pr(), 0.5, 0, -d / 2 + 0.23); for (const yy of [0.55, 1.0, 1.42]) { box(sh, 0.9, 0.04, 0.42, Wd, 0, yy, 0, WK); for (let k = 0; k < 6; k++) cartridge(sh, -0.36 + k * 0.145, yy + 0.106, -0.16, { rx: Math.PI / 2, dyn: false, seed: k + yy * 7 }); }
+    for (const e of [-1, 1]) box(sh, 0.04, 1.5, 0.42, Wd, e * 0.47, 0, 0, NC); }
+  { const bn = grp(pr(), -0.4, 0, 0.35); box(bn, 1.2, 0.05, 0.55, shade(Wd, 0.05), 0, 0.78, 0, WK); for (const [ex, ez] of [[-0.55, -0.24], [0.55, -0.24], [-0.55, 0.24], [0.55, 0.24]]) box(bn, 0.06, 0.78, 0.06, Wd, ex, 0, ez, NC);
+    cyl(bn, 0.08, 0.06, 0.12, Cu, -0.3, 0.83, 0.05, { seg: 10, ...CuK, ...NC }); cyl(bn, 0.06, 0.06, 0.18, Cu, 0.1, 0.83, -0.1, { seg: 10, ...CuK, ...NC }); box(bn, 0.04, 0.02, 0.22, Cu, -0.15, 0.84, 0.15, { ry: 0.4, ...CuK, ...NC });   // measures, scoop
+    cartridge(bn, 0.38, 0.9, 0.05, { rz: Math.PI / 2, dyn: false, seed: 9 }); cartridge(bn, 0.36, 0.9, -0.12, { rz: Math.PI / 2 + 0.2, dyn: false, seed: 8 });
+    const oc = grp(bn, 0.3, 0, -0.75); mesh(oc, CK, mat('#8A5E36', WK), 0, 0.31, 0); cyl(oc, 0.2, 0.2, 0.01, '#2A2420', 0, 0.6, 0, { seg: 12, ...NC }); }   // open cask of powder (black inside)
+  // ---- doorway frame, the passage outside ----
+  box(sg, DW + 0.16, 0.1, 0.18, Wd, 0, DH, d / 2 + 0.07, WK); for (const e of [-1, 1]) box(sg, 0.08, DH, 0.18, Wd, e * (DW / 2 + 0.04), 0, d / 2 + 0.07, WK);
+  const pg = grp(sg, 0, 0, d / 2 + 0.14 + PL / 2); box(pg, 1.8, 0.06, PL, '#4A3826', 0, -0.06, 0, { surf: 'boards' }); box(pg, 2.4, 0.08, PL, '#3A2A1C', 0, h + 0.1, 0, NC);
+  for (const e of [-1, 1]) box(pg, 0.12, h + 0.1, PL, '#5A4430', e * 0.96, 0, 0, { surf: 'plank' }); for (let k = 0; k < 3; k++) box(pg, 2.0, 0.16, 0.18, '#3A2A1C', 0, h - 0.06, -PL / 2 + 0.4 + k * 0.8, NC);
+  box(pg, 1.8, 2.1, 0.1, '#1A120C', 0, 0, PL / 2 + 0.05, NC);
+  glow(...W(0.4, 1.3, d / 2 + 0.14 + PL * 0.8), { t0: -5, t1: 1e5, intensity: 0.9, dist: 3.4, color: '#FFB060', flicker: 0.12 });   // dim lantern light in the passage
+  fuse(sg); sg.traverse(m => { if (m.isMesh) m.userData.noHit = true; });
+  // ---- the fearnought screen: wet felt over the doorway, hand hole, sways, bulges when a cartridge goes out ----
+  const SW = DW + 0.24, SH = DH + 0.12, NX = 8, NY = 10, sz0 = d / 2 + 0.16, hu = 0, hv = 0.42, PASS = [].concat(o.pass ?? []);
+  const sgeo = new THREE.PlaneGeometry(SW, SH, NX, NY), SP = sgeo.attributes.position, base = Float32Array.from(SP.array);
+  const smat = new THREE.MeshStandardMaterial({ color: o.screen ?? '#6A7262', roughness: 0.5, metalness: 0.05, side: THREE.DoubleSide, flatShading: false });
+  const scr = new THREE.Mesh(sgeo, smat); scr.position.set(0, DH + 0.12 - SH / 2, sz0); scr.castShadow = false; scr.receiveShadow = true; scr.userData.noHit = true; g.add(dyn(scr));
+  const hg = dyn(grp(g, 0, 0, 0)); mesh(hg, G('pmHoleR', () => new THREE.TorusGeometry(0.11, 0.022, 6, 16)), mat('#2A2018', { rough: 0.6 }), 0, 0, 0, NC); mesh(hg, G('pmHole', () => new THREE.CircleGeometry(0.1, 16)), mat('#070605', { basic: true, side: THREE.DoubleSide }), 0, 0, 0, NC);
+  box(g, SW + 0.1, 0.06, 0.08, '#3A2A1C', 0, DH + 0.1, sz0, NC);   // batten the screen hangs from
+  const ph = hs(9) * 10, disp = (u, v, t) => { v = clamp(v); let q = v ** 1.4 * (0.012 * Math.sin(t * 1.3 + u * 4 + ph) + 0.008 * Math.sin(t * 2.3 - u * 7 + ph));
+    for (const tp of PASS) { const k = Math.exp(-(((t - tp) / 0.32) ** 2)); if (k > 1e-3) q += 0.13 * k * Math.exp(-((u - hu) ** 2 + (v - hv) ** 2) / 0.04) + 0.03 * k * v; } return q; };
+  tick(t => { for (let i = 0; i < SP.count; i++) { const bx = base[i * 3], by = base[i * 3 + 1], u = bx / SW, v = (SH / 2 - by) / SH; SP.array[i * 3 + 2] = disp(u, v, t); }
+    SP.needsUpdate = true; sgeo.computeVertexNormals(); const hy2 = DH + 0.12 - hv * SH; hg.position.set(0, hy2, sz0 + disp(hu, hv, t) + 0.012); });
+  if (p === world || !p) { const PC = W(0, 0, d / 2 + 0.14 + PL / 2); DUSTROOMS.push([x, Y, z, w, d, h, ry], [PC[0], Y, PC[2], 2, PL, h, ry]); }
+  for (const tp of PASS) sfx(tp - 0.15, 'felt', 0.5);
+  return { g, lamp, screen: scr, hole: W(0, DH + 0.12 - hv * SH, sz0 + 0.05), inside: (lx, lz) => { const P = W(lx, 0, lz); return [P[0], P[2]]; }, out: (lx, lz) => { const P = W(lx, 0, d / 2 + 0.14 + lz); return [P[0], P[2]]; }, y: Y };
+}
+// cartridgeCase(p, x, y, z, { kind: 'wood' | 'leather', ry, size: 1, open: [[t0, t1] …], cart: true | false | t => bool, color }) → C = { g, lid, cart, isOpen(t) }
+//   The closed case a powder boy carried one cartridge in (no powder ever travelled uncovered): a coopered wooden cylinder with copper hoops (or black leather with stitched
+//   seams), a hinged lid with a leather hinge and thumb tab, a rope becket to carry it. o.open: the lid swings up over 0.25 s at each t0 and shuts at t1; the filled flannel
+//   cartridge inside shows while it is open (o.cart: t => bool = when one is in it). Works with carry() / holdItem(). Pure in t.
+function cartridgeCase(p, x = 0, y = 0, z = 0, o = {}) {
+  const s = o.size ?? 1, lea = o.kind === 'leather', c = o.color ?? (lea ? '#241E1A' : '#7A5434'), r = 0.085 * s, h = 0.46 * s, NC = { cast: false };
+  const g = dyn(grp(p ?? world, x, y, z, o.ry ?? 0)); g.name = 'cartridgeCase'; Object.assign(g.userData, { prop: 'cartridgeCase', foot: [r * 2, r * 2] });
+  if (lea) { cyl(g, r, r * 0.96, h, c, 0, 0, 0, { seg: 14, rough: 0.45 }); for (const yy of [0.04, h - 0.06]) cyl(g, r + 0.004, r + 0.004, 0.02, shade(c, -0.1), 0, yy, 0, { seg: 14, ...NC }); box(g, 0.006, h - 0.04, 0.012, '#8A7A5A', 0, 0.02, r - 0.002, NC); }
+  else { for (let i = 0; i < 12; i++) { const a = (i + 0.5) / 12 * TAU; box(g, TAU * r / 12 * 1.05, h, 0.014 * s, shade(c, (hash(i * 3.3 + x) - 0.5) * 0.14), Math.sin(a) * (r - 0.007), 0, Math.cos(a) * (r - 0.007), { ry: a, ...NC, cast: i % 3 === 0 }); }
+    cyl(g, r - 0.01, r - 0.01, 0.02, shade(c, -0.2), 0, 0.005, 0, { seg: 12, ...NC });
+    for (const yy of [0.04, h * 0.5, h - 0.07]) cyl(g, r + 0.006, r + 0.006, 0.025, '#B07040', 0, yy, 0, { seg: 14, metal: 0.6, rough: 0.4, ...NC }); }
+  { const bk = grp(g, 0, h * 0.62, -r); for (const yy of [-0.06, 0.06]) _seg(bk, [0, yy, 0], [0, yy * 0.4, -0.06], 0.008, 0.008, '#B89A6A', NC); }   // rope becket
+  const lp = dyn(grp(g, 0, h, -r)), lid = grp(lp, 0, 0, r); cyl(lid, r + 0.01, r + 0.01, 0.035 * s, lea ? shade(c, 0.05) : shade(c, 0.06), 0, 0, 0, { seg: 14, rough: 0.5 }); box(lid, 0.05, 0.012, 0.04, '#3A2A1C', 0, 0.03, -r + 0.01, NC);   // lid + leather hinge
+  box(lid, 0.035, 0.05, 0.012, '#3A2A1C', 0, -0.03, r + 0.012, NC);   // thumb tab
+  const cart = cartridge(g, 0, h - 0.33 * s, 0, { len: 0.3 * s, r: 0.066 * s, seed: x + z });
+  const OP = [].concat(o.open ?? []).map(q => Array.isArray(q) ? q : [q, 1e9]), cf = typeof o.cart === 'function' ? o.cart : (() => o.cart !== false);
+  const opn = t => { let v = 0; for (const [a, b] of OP) v = Math.max(v, sm01((t - a) / 0.25) * (1 - sm01((t - b) / 0.25))); return v; };
+  tick(t => { const k = opn(t); lp.rotation.x = -1.9 * k; cart.visible = cf(t); });
+  for (const [a, b] of OP) { sfx(a, 'lid', 0.25); if (b < 1e8) sfx(b + 0.2, 'thunk', 0.2); }
+  return { g, lid: lp, cart, isOpen: opn };
+}
+// cartridge(p, x, y, z, { r: 0.066, len: 0.3, color, rx, ry, rz, dyn: true, seed }) → g: a filled powder cartridge of 1805 — a flannel bag (cream wool, side seam, rounded
+//   bottom) choked at the neck with twine and a frilled top. Hand it on with holdItem().
+function cartridge(p, x = 0, y = 0, z = 0, o = {}) {
+  const r = o.r ?? 0.066, L = o.len ?? 0.3, c = o.color ?? shade('#E4D8BA', (hash((o.seed ?? 0) * 3.7) - 0.5) * 0.06), NC = { cast: false };
+  const g = (o.dyn === false ? (q => q) : dyn)(grp(p ?? world, x, y, z, o.ry ?? 0)); if (o.rx) g.rotation.x = o.rx; if (o.rz) g.rotation.z = o.rz;
+  cyl(g, r, r * 0.97, L * 0.78, c, 0, L * 0.06, 0, { seg: 12, rough: 0.95 }); _ell(g, c, 0, L * 0.07, 0, r, L * 0.08, r, { detail: 1, ...NC });
+  cyl(g, r * 0.97, r * 0.55, L * 0.08, shade(c, -0.04), 0, L * 0.84, 0, { seg: 12, ...NC }); cyl(g, r * 0.5, r * 0.5, L * 0.03, '#6A5A40', 0, L * 0.9, 0, { seg: 10, ...NC });
+  cone(g, r * 0.6, L * 0.08, shade(c, 0.03), 0, L * 0.92, 0, { seg: 9, ...NC }); box(g, 0.004, L * 0.76, 0.006, shade(c, -0.12), 0, L * 0.07, r - 0.001, NC);
+  return g;
+}
+
 // ---- ropes ----
 // rope(a, b, { sag, segs, r, color }) — a hanging rope between two points / rigs (hand) / objects, recomputed every frame; returns { mid(t) }
 function rope(a, b, o = {}) {
@@ -18996,6 +19304,8 @@ const COSTUME_BASE = {
   courtier: { shirt: '#3E2A52', pants: '#2A2230', shoes: '#1A1410', coat: true, coatLen: 0.22, beard: 'goatee', hair: '#4A3020', hairStyle: 'short', sleeves: 'long' },
   tudorKing: { shirt: '#7A1A26', pants: '#EEE8DA', shoes: '#D8CBA8', coat: true, coatLen: 0.42, build: 'tudorKing', beard: 'full', hair: '#B5622A', beardColor: '#A8562A', hairStyle: 'short', sleeves: 'long' },
   tosher: { shirt: '#4E3D2E', pants: '#B5AA8E', shoes: '#2A2018', coat: true, coatLen: 0.44, beard: 'stubble', hair: '#3A2A1E', belt: '#3A2A1C' },
+  powderboy: { shirt: '#E2DCCB', pants: '#D6CFBE', shoes: '#C99A78', hair: '#5C3F2A', hairStyle: 'short', build: 'teen', height: 0.93, soles: false },
+  sailor1805: { shirt: '#E8E2D4', pants: '#E4DED0', shoes: '#B98A68', beard: 'stubble', hair: '#3A2A1E', hairStyle: 'short', soles: false },
   plaguedoctor: { shirt: '#23201C', pants: '#23201C', dress: '#23201C', skirtLen: 0.8, legs: '#1E1B18', shoes: '#1A1410', hair: '#2A2420', soles: false },
   peasant: { shirt: '#E2D8BE', pants: '#6A5238', shoes: '#C99A78', soles: false, beard: 'stubble', hair: '#4A3426', sleeves: 'long' },
 };
@@ -19459,6 +19769,33 @@ const COSTUMES = (() => {
       for (const H of f.hands ?? []) for (const k of [0, 1]) ball(H.hd, 0.016, k ? Jw[1] : Au, H.sx * 0.02 + (k ? 0.03 : -0.01), -0.1, 0.05, { detail: 1, ...gm, ...NC });   // rings
       _tudorLegs(f, K.pants ?? '#EEE8DA', K.garter ?? '#2A4A8A', K.shoes ?? '#D8CBA8', true);
       _tudorCap(f, K.cap ?? '#141218', W, Au, 0.3, true);
+    },
+    powderboy(f, K) {   // v3.55 ship's boy / powder monkey, Royal Navy 1805: loose checked shirt, sleeves pushed up, black neckerchief, white duck trousers rolled to the calf,
+      // bare feet, a faded kerchief tied round the head against the noise of the guns, soot on the face (teen build, a little shorter)
+      const z = fz(f), sk = f.FC?.skull ? _hexOf(f.FC.skull) : '#E8B892', Ck = K.check ?? '#8FA2BE', Pn = K.pants ?? '#D6CFBE', Bd = K.band ?? '#9A3A2E';
+      for (let i = -2; i <= 2; i++) for (const zz of [z + 0.002, -z - 0.002]) box(f.chest, 0.01, 0.48, 0.005, Ck, i * 0.075, 0.05, zz, NC);
+      for (let j = 0; j < 4; j++) for (const zz of [z + 0.003, -z - 0.003]) box(f.chest, 0.3, 0.01, 0.005, Ck, 0, 0.12 + j * 0.11, zz, NC);   // faint blue check
+      box(f.chest, 0.24, 0.06, 0.05, '#1A1A1E', 0, 0.54, z - 0.02, NC); cone(f.chest, 0.045, 0.1, '#1A1A1E', 0.02, 0.45, z + 0.012, { seg: 4, rx: Math.PI, ...NC });   // neckerchief
+      for (const fa of [f.foreL, f.foreR]) { recol(fa, sk); box(fa, 0.15, 0.06, 0.15, shade('#E2DCCB', -0.04), 0, -0.07, 0, NC); }   // sleeves pushed up
+      for (const sh of [f.shinL, f.shinR]) { recol(sh, sk); box(sh, 0.2, 0.15, 0.21, Pn, 0, -0.15, 0, NC); box(sh, 0.215, 0.05, 0.225, shade(Pn, -0.07), 0, -0.17, 0, NC); }   // rolled trousers
+      for (const ft of [f.footL, f.footR]) { recol(ft, sk); for (let i = 0; i < 4; i++) box(ft, 0.028, 0.028, 0.03, sk, -0.055 + i * 0.037, -ANK, 0.18, NC); }   // bare feet
+      cyl(f.head, 0.224, 0.224, 0.055, Bd, 0, 0.255, -0.005, { seg: 16, ...NC }); ball(f.head, 0.04, Bd, 0, 0.29, -0.23, { detail: 0, ...NC });
+      for (const sx of [-1, 1]) box(f.head, 0.04, 0.14, 0.012, shade(Bd, -0.05), sx * 0.03, 0.16, -0.235, { rz: sx * 0.25, ...NC });   // kerchief round the head, knot + ends at the back
+      for (const [x, y, zz, w] of [[0.11, 0.1, 0.19, 0.06], [-0.09, 0.14, 0.195, 0.04], [0.04, 0.32, 0.2, 0.05]]) box(f.head, w, 0.03, 0.01, shade(sk, -0.3), x, y, zz, NC);   // soot
+    },
+    sailor1805(f, K) {   // v3.55 Royal Navy seaman / gun crew 1805: shirt in blue or red stripes (seeded), black silk neckerchief, sometimes a red waistcoat, bare forearms, wide white duck
+      // trousers to the ankle, bare feet, a kerchief tied round the head over the ears (gun crews, against the noise) or a low tarred round hat, a tarred queue (pigtail)
+      const z = fz(f), sk = f.FC?.skull ? _hexOf(f.FC.skull) : '#D8A882', hv = k => hash((K.seed ?? 3) * 7.31 + k * 1.7), St = hv(1) < 0.5 ? '#5A78A8' : '#A85A50', Pn = K.pants ?? '#E4DED0';
+      for (let i = -3; i <= 3; i++) for (const zz of [z + 0.002, -z - 0.002]) box(f.chest, 0.013, 0.5, 0.006, St, i * 0.052, 0.04, zz, NC);
+      box(f.chest, 0.24, 0.06, 0.05, '#141416', 0, 0.54, z - 0.02, NC); cone(f.chest, 0.05, 0.12, '#141416', -0.02, 0.43, z + 0.012, { seg: 4, rx: Math.PI, ...NC });
+      if (hv(2) < 0.5) { for (const sx of [-1, 1]) box(f.chest, 0.14, 0.42, 0.014, '#9A2A22', sx * 0.14, 0.08, z + 0.005, NC); buttons(f, '#C8A040', 4, 0.42, 0.1, 0.06, 0.012); }   // red waistcoat
+      if (hv(3) < 0.7) for (const fa of [f.foreL, f.foreR]) { recol(fa, sk); box(fa, 0.15, 0.06, 0.15, shade('#E8E2D4', -0.05), 0, -0.07, 0, NC); }   // sleeves rolled
+      for (const sh of [f.shinL, f.shinR]) box(sh, 0.235, 0.07, 0.245, Pn, 0, -0.43, 0, NC);   // wide trouser hems
+      for (const ft of [f.footL, f.footR]) { recol(ft, sk); for (let i = 0; i < 4; i++) box(ft, 0.03, 0.03, 0.032, sk, -0.06 + i * 0.04, -ANK, 0.19, NC); }
+      if (hv(4) < 0.72) { const Bd = ['#8A2A22', '#2A3A5A', '#1A1A1A', '#D8D0C0', '#6A5A2A'][Math.floor(hv(5) * 5)];
+        cyl(f.head, 0.226, 0.226, 0.1, Bd, 0, 0.17, -0.01, { seg: 16, ...NC }); ball(f.head, 0.045, Bd, 0, 0.23, -0.235, { detail: 0, ...NC }); for (const sx of [-1, 1]) box(f.head, 0.045, 0.16, 0.012, shade(Bd, -0.05), sx * 0.035, 0.08, -0.24, { rz: sx * 0.3, ...NC }); }
+      else { hide(f); const h = hat(f, 0.33); cyl(h, 0.3, 0.3, 0.025, '#141210', 0, -0.03, 0, { seg: 14 }); cyl(h, 0.2, 0.22, 0.13, '#141210', 0, -0.01, 0, { seg: 12 }); cyl(h, 0.222, 0.222, 0.03, '#2A2A3A', 0, 0.0, 0, { seg: 12, ...NC }); }
+      box(f.head, 0.04, 0.24, 0.04, '#141210', 0, -0.06, -0.21, { rx: 0.25, ...NC });   // tarred queue
     },
     plaguedoctor(f, K) {   // v3.53 17th-century plague doctor (Rome / Naples 1656, cf. the engraving "Doctor Schnabel von Rom", 1656): ankle-length waxed coat (dress key, glossy wax sheen),
       // leather hood with a shoulder cape, beaked mask (leather beak with stitched seams and two breathing holes, round glass eye lenses in metal rims, straps round the head),
@@ -22070,6 +22407,8 @@ const SND = (() => {
       creak: (t, v, d = 0.6) => { if (!(d > 0) || !isFinite(d)) d = 0.6; for (let k = 0; k < 3; k++) { const tk = t + k * d / 3 + ar() * 0.03; tone('sawtooth', 140 + ar() * 60, tk, 0.02, d / 4, 0.08, 0.05 * v, fx, { to: 220 + ar() * 90, glide: d / 3, lp: 900 }); } nz(t, 0.02, d * 0.6, 0.1, 0.06 * v, fx, 'bandpass', 700, 1100, 6); },   // v3.47 wooden board / door creak
       shovel: (t, v) => { nz(t, 0.01, 0.12, 0.12, 0.22 * v, fx, 'bandpass', 2400, 900, 1.4); nz(t + 0.25, 0.005, 0.03, 0.18, 0.3 * v, fx, 'lowpass', 700, 200); tone('sine', 180, t + 0.26, 0.002, 0.02, 0.12, 0.2 * v, fx, { to: 70, glide: 0.1 }); },   // v3.47 spade scrape + wet slop
       slosh: (t, v, d = 0.8) => { if (!(d > 0) || !isFinite(d)) d = 0.8; for (let k = 0; k < 3; k++) nz(t + k * d / 3, 0.05, d / 5, d / 4, 0.16 * v, fx, 'lowpass', 900 - k * 150, 300 + ar() * 100, 2); },   // v3.47 liquid sloshing in a bucket / barrel
+      gunrun: (t, v, d = 0.9) => { if (!(d > 0) || !isFinite(d)) d = 0.9; nz(t, 0.05, Math.max(0, d - 0.2), 0.15, 0.24 * v, fx, 'lowpass', 260, 120, 0.8); for (let k = 0; k < d * 11; k++) tone('sine', 68 + ar() * 26, t + k / 11 + ar() * 0.02, 0.003, 0.02, 0.09, 0.13 * v, fx, { to: 44, glide: 0.08 }); },   // v3.55 wooden trucks of a gun carriage rumbling over the planks
+      felt: (t, v) => { nz(t, 0.08, 0.14, 0.3, 0.16 * v, fx, 'bandpass', 650, 1100, 0.8); nz(t + 0.05, 0.02, 0.05, 0.22, 0.07 * v, fx, 'lowpass', 300, 200, 0.8); },   // v3.55 heavy wet felt screen pushed aside
       cart: (t, v, d = 4) => { if (!(d > 0) || !isFinite(d)) d = 4; nz(t, 0.4, Math.max(0, d - 0.8), 0.4, 0.08 * v, fx, 'lowpass', 220, 0, 0.8); const ts = []; for (let tt = t + 0.1; tt < t + d - 0.2; tt += 0.07 + ar() * 0.09) ts.push(tt); pulses(ts, 0.03, 0.12 * v, fx, 'bandpass', 1300, 2); },   // v3.47 iron-shod wheels on cobbles
       churchBell: (t, v, d = 4) => { if (!(d > 0) || !isFinite(d)) d = 4; for (const [r, a] of [[0.5, 0.5], [1, 1], [1.19, 0.45], [1.5, 0.3], [2, 0.35], [2.66, 0.18], [3.0, 0.1]]) tone('sine', 220 * r, t, 0.004, 0.05, d * (1.2 - r * 0.25), 0.16 * v * a, fx); },   // v3.47 church bell toll (v3.53.1: own key, so the v2.40.27 fight-cage/shop bell stays intact)
       hooves: (t, v, d = 2, p = 1) => { const r = p === 2 ? 7.5 : 5.2; for (let k = 0; k < d * r; k++) { const tk = t + k / r + (k % 2) * 0.04 + ar() * 0.012; tone('sine', 210 + ar() * 50, tk, 0.001, 0.01, 0.05, 0.12 * v, fx, { to: 110, glide: 0.04 }); nz(tk, 0.001, 0.005, 0.03, 0.12 * v, fx, 'bandpass', 1800, 0, 1.5); } }
@@ -22169,6 +22508,16 @@ const SND = (() => {
         every(a, b, 3, 2.5, t => nz(t, 0.7, 0.3, 1.0, 0.03 * v, amb, 'bandpass', 3000, 4600, 0.7));
         every(a, b, 8, 7, t => { tone('sine', 1500, t, 0.08, 0.25, 0.15, 0.022 * v, amb, { to: 2300, glide: 0.35 }); tone('sine', 2200, t + 0.5, 0.05, 0.2, 0.2, 0.018 * v, amb, { to: 2600, glide: 0.25 }); });
         every(a, b, 5, 6, t => { for (let k = 0; k < 6; k++) { const f = 2800 + ar() * 1600; tone('square', f, t + k * 0.09, 0.003, 0.02, 0.03, 0.006 * v, amb, { lp: 5000 }); } }); },
+      gundeck: (a, b, v) => { bed(a, b, 0.06 * v, 'lowpass', 220); bed(a, b, 0.012 * v, 'bandpass', 900, 0.6);   // v3.55 gun deck in action: timbers groaning, the other guns firing muffled along the ship, water against the hull
+        every(a, b, 2.4, 2.4, t => { for (let k = 0; k < 2; k++) tone('sawtooth', 120 + ar() * 70, t + k * 0.25, 0.05, 0.25, 0.15, 0.03 * v, amb, { to: 190 + ar() * 80, glide: 0.4, lp: 700 }); });
+        every(a, b, 1.3, 1.6, t => { tone('sine', 58 + ar() * 18, t, 0.004, 0.05, 1.2, 0.16 * v, amb, { to: 30, glide: 0.9 }); nz(t, 0.01, 0.06, 1.0, 0.06 * v, amb, 'lowpass', 380, 90, 0.8); });
+        every(a, b, 3.5, 2, t => nz(t, 0.6, 0.3, 1.0, 0.04 * v, amb, 'bandpass', 500, 900, 0.9)); },
+      hold: (a, b, v) => { tone('sine', 48, a, 0.6, Math.max(0, b - a - 1.2), 0.6, 0.03 * v, amb); bed(a, b, 0.04 * v, 'lowpass', 160);   // v3.55 below the waterline: muffled thuds through the hull, creaks, water on the planks, a drip
+        every(a, b, 1.6, 1.8, t => { tone('sine', 44 + ar() * 12, t, 0.01, 0.06, 1.0, 0.12 * v, amb, { to: 26, glide: 0.8 }); nz(t, 0.02, 0.05, 0.8, 0.04 * v, amb, 'lowpass', 200, 70, 0.8); });
+        every(a, b, 3.2, 2.5, t => tone('sawtooth', 100 + ar() * 50, t, 0.08, 0.3, 0.2, 0.022 * v, amb, { to: 150 + ar() * 60, glide: 0.5, lp: 500 }));
+        every(a, b, 4.5, 3, t => nz(t, 0.7, 0.3, 1.2, 0.035 * v, amb, 'lowpass', 600, 300, 0.8)); every(a, b, 2.7, 2, t => tone('sine', 1500 + ar() * 500, t, 0.002, 0, 0.12, 0.018 * v, amb, { to: 900, glide: 0.07 })); },
+      seabattle: (a, b, v) => { AMB.ocean(a, b, 0.8 * v); AMB.wind(a, b, 0.35 * v);   // v3.55 Age of Sail fleet action from outside: sea, wind in the rigging, broadsides rolling across the water
+        every(a, b, 1.1, 1.6, t => { const n = ar() < 0.4 ? 3 + Math.floor(ar() * 5) : 1; for (let k = 0; k < n; k++) { const tk = t + k * (0.12 + ar() * 0.1); tone('sine', 62 + ar() * 20, tk, 0.003, 0.05, 1.5, 0.15 * v, amb, { to: 28, glide: 1.1 }); nz(tk, 0.01, 0.05, 1.4, 0.06 * v, amb, 'lowpass', 520, 90, 0.8); } }); },
       cave: (a, b, v) => { tone('sine', 45, a, 0.6, Math.max(0, b - a - 1.2), 0.6, 0.035 * v, amb); bed(a, b, 0.02 * v, 'lowpass', 160);   // deep room, drips with echoes, distant rumble
         every(a, b, 1.6, 2.2, t => { const f = 1500 + ar() * 600; for (let e = 0; e < 3; e++) tone('sine', f, t + e * 0.19, 0.002, 0, 0.14, 0.035 * v * 0.45 ** e, amb, { to: f * 0.6, glide: 0.07 }); });
         every(a, b, 8, 8, t => nz(t, 0.8, 0.6, 1.8, 0.06 * v, amb, 'lowpass', 140, 70)); }
@@ -22717,11 +23066,11 @@ function qaDirect() {
     for (let i = 1; i < L.length; i++) { let d = 0; for (let j = 0; j < L[i].length; j++) d += Math.abs(L[i][j] - L[i - 1][j]); mv = Math.max(mv, d / L[i].length); }
     if (mv < (CFG.hookMotion ?? 0.012)) out.push(`HOOK – the first 0.5 s barely move (frame change ${(mv * 100).toFixed(1)} % per 0.25 s, limit ${((CFG.hookMotion ?? 0.012) * 100).toFixed(1)} %; no shake, flash or cut) – open on motion: a fast push-in or crash zoom, something already falling / running / exploding on frame 0, SHAKES at 0`); }
   // YOU: a "you" line over a close-up of somebody else
-  const you = RIGS.find(f => f.who === 'you' && f.head);
+  const you = RIGS.find(f => f.who === 'you' && f.head), YOUS = RIGS.filter(f => f.who === 'you' && f.head);   // v3.55: every char('you') counts (the same hero in another set, e.g. hook / flash-forward / magazine)
   if (you) { const seen = new Set();
     for (const w of narrWords().filter(w => w.you)) { const t = w.t + 0.15; if (t >= endT) continue; const run = dirRuns(CUTS).findIndex(r => t >= r.a && t < r.b); if (seen.has(run)) continue;
       stepScene(teaseV(t)); if (POV_ON === you) continue; const F = qalFaces().filter(x => x.f), big = F.filter(x => x.fh >= 0.1).sort((a, b) => b.fh - a.fh)[0];
-      if (big && big.f !== you && !F.some(x => x.f === you)) { seen.add(run); const i = RIGS.indexOf(big.f);
+      if (big && !YOUS.includes(big.f) && !F.some(x => YOUS.includes(x.f))) { seen.add(run); const i = RIGS.indexOf(big.f);
         out.push(`YOU – "${w.w}" at ${t.toFixed(1)} s while ${big.f.who ? `'${big.f.who}'` : 'figure'} #${i} fills the frame (face ${(big.fh * 100).toFixed(0)} % of the height) and 'you' is not in it – one protagonist: show char('you') on "you" lines (reactCut('you', …); CFG.autoCut cuts to 'you' by itself) or make that figure 'you'`); } } }
   // MISMATCH: spoken numbers vs the counters on screen around that line
   const fmtS = v => v >= 60 ? fmtClock(v) : `${Math.round(v)} s`, M = [];
