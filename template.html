@@ -6513,7 +6513,7 @@ function pallet(p, x, z, o = {}) {
   const top = n * T; let lh = 0;
   if (o.load === 'boxes') { for (let r = 0; r < 2; r++) for (let i = 0; i < 3; i++) for (let j = 0; j < 2; j++) { const c = shade('#B08A5A', (hv(40 + r * 6 + i * 2 + j) - 0.5) * 0.08); box(g, 0.39, 0.34, 0.39, c, -0.4 + i * 0.4, top + r * 0.34, -0.2 + j * 0.4); box(g, 0.39, 0.004, 0.06, '#C8A878', -0.4 + i * 0.4, top + r * 0.34 + 0.34, -0.2 + j * 0.4, NC); } lh = 0.68; }
   else if (o.load === 'bags') { for (let r = 0; r < 4; r++) for (let i = 0; i < 2; i++) { const b = bbox(g, r % 2 ? 0.75 : 0.55, 0.13, r % 2 ? 0.38 : 0.7, 0.06, shade('#E4DCC8', (hv(50 + r * 2 + i) - 0.5) * 0.06), r % 2 ? 0 : (i - 0.5) * 0.6, top + r * 0.13, r % 2 ? (i - 0.5) * 0.4 : 0, { kind: 'fabric' }); void b; } lh = 0.52; }
-  else if (o.load === 'cash') { const L = o.layers ?? 5, bh = 0.11;   // v3.54 banded bricks of bills (seven straps per row), top faces with portrait panels
+  else if (o.load === 'cash') { const L = o.layers ?? 5, bh = 0.11;   // v3.56 banded bricks of bills (seven straps per row), top faces with portrait panels
     for (let r = 0; r < L; r++) { const y = top + r * bh; box(g, 1.1, bh, 0.72, shade('#5E9A4C', (hv(70 + r) - 0.5) * 0.08), 0, y, 0);
       for (let i = 0; i < 7; i++) box(g, 0.03, bh + 0.002, 0.722, '#F1EDE0', -0.47 + i * 0.157, y, 0, NC);
       for (let j = 1; j < 5; j++) box(g, 1.102, bh * 0.92, 0.004, '#3E6E34', 0, y + bh * 0.04, -0.36 + j * 0.144, NC); }
@@ -7234,7 +7234,7 @@ function countdownScreen(p, w, h, o = {}) {   // big LED screen: label + countdo
   if (o.sound !== false) { for (const tt of o.ticks ?? []) sfx(tt, 'tick', 0.6); for (const q of segs) sfx(q.at + 0.15, 'glitch', 0.8); }
   return P;
 }
-// ---- v3.54 market kit: stockScreen() (stock-market board: price line, change, breaking news, ticker tape); pallet({ load: 'cash' }) ----
+// ---- v3.56 market kit: stockScreen() (stock-market board: price line, change, breaking news, ticker tape); pallet({ load: 'cash' }) ----
 // stockScreen(p, w, h, { keys: [[t, price]], base, span, label, sym, news: [[t, text, 'bad' | 'good']], ticker: [[sym, pct]], accent, up, down, jitter, sound, … screenPanel options })
 function stockScreen(p, w, h, o = {}) {
   const keys = o.keys ?? [[0, 100], [10, 120]], span = o.span ?? 8, base = o.base ?? keys[0][1], jit = o.jitter ?? 0.006, fps = o.fps ?? 20;
@@ -7313,7 +7313,7 @@ function cinema(p, x, z, o = {}) {
   const W2 = (lx, ly, lz) => { const v = new THREE.Vector3(lx, ly, lz); g.updateWorldMatrix(true, false); return g.localToWorld(v).toArray(); };
   return { g, door: W2(0, 0, 1.6), booth: W2(bx, 0, bz + 1.1) };
 }
-// gameCase(p, x, y, z, { color, accent, title: 'OPEN WORLD', ry, rx, rz, s }) → g — v3.54 generic boxed video game (no brand): plastic case, cover art (sunset, skyline, palm), spine stripe; hold with holdItem(f, g, t0, t1)
+// gameCase(p, x, y, z, { color, accent, title: 'OPEN WORLD', ry, rx, rz, s }) → g — v3.56 generic boxed video game (no brand): plastic case, cover art (sunset, skyline, palm), spine stripe; hold with holdItem(f, g, t0, t1)
 function gameCase(p, x = 0, y = 0, z = 0, o = {}) {
   const g = grp(p ?? world, x, y, z, o.ry ?? 0), s = o.s ?? 1, col = o.color ?? '#1E3A8A', acc = o.accent ?? '#FF4FB0', NC = { cast: false }; g.rotation.x = o.rx ?? 0; g.rotation.z = o.rz ?? 0;
   const key = 'gc' + col + acc + (o.title ?? ''); const tx = (gameCase.tx ??= {})[key] ??= canvasTex(256, 320, (c, w, h) => {
