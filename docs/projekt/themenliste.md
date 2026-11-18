@@ -68,6 +68,7 @@ Einzelvideos zum Launch, ohne Gerald/Steve, ohne Logos oder Figuren aus dem Spie
 - L1 What if the whole world called in sick for GTA 6? – Story, Krankmeldungen, Schlange, leere Stadt, Stromausfall, Pizzabote mit Aggregat ✅ auf GitHub (sick-day-launch, 14.11.)
 - L2 What if GTA 6 got delayed again, live on launch day? – Story, Countdown springt auf „Delayed to 2027“, Zelt Kevin, ein Jahr später 2028 ✅ auf GitHub (delayed-launch-day, 14.11.)
 - L3 What if Vice City was real for 24 hours? – Erklärvideo über das echte Miami: Kreuzfahrthafen, Alligatoren, fallende Leguane ✅ auf GitHub (vice-city-real, 14.11.)
+- L4 What happens to the world economy when GTA 6 drops? – Erklärvideo: 1 Mrd. $ in 3 Tagen (Vorgänger), Kurssturz nach der Verschiebung, ~1,5 Mio. Krankmeldungen ≈ 1 Mrd. $, Jahr 1 ≈ $3,2 Mrd. ≈ Bhutans Wirtschaft (gta6-economy, 18.11., Render läuft)
 
 ## Neue Nischen-Blöcke (Recherche 15.11.2026, von Leon gewünscht)
 Vier Nischen für TikTok, die mit der Engine machbar sind, plus True Crime als eigene Nische weiterführen. ★ = zuerst. Zahlen vor dem Skript noch einmal prüfen.
